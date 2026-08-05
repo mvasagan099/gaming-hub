@@ -3,6 +3,7 @@ import BoardManager from "../managers/BoardManager";
 import PlayerManager from "../managers/PlayerManager";
 import DiceManager from "../managers/DiceManager";
 import GameManager from "../managers/GameManager";
+import MultiplayerDriver from "../managers/MultiplayerDriver";
 import { SnakeManager } from "../managers/SnakeManager";
 import { LadderManager } from "../managers/LadderManager";
 import { HUDManager } from "../managers/HUDManager";
@@ -17,6 +18,7 @@ export default class SnakeLadderScene extends Phaser.Scene {
   private playerManager!: PlayerManager;
   private dice!: DiceManager;
   private gameManager!: GameManager;
+  private multiplayerDriver!: MultiplayerDriver;
   private hud!: HUDManager;
   private snakeManager!: SnakeManager;
   private ladderManager!: LadderManager;
@@ -31,6 +33,8 @@ export default class SnakeLadderScene extends Phaser.Scene {
   create(): void {
     const mode  = (this.registry.get("mode")  as "ai" | "pvp") ?? "ai";
     const count = (this.registry.get("players") as number) ?? 2;
+    const mySeat = (this.registry.get("seat") as number | null | undefined) ?? null;
+    const names = (this.registry.get("names") as string[] | undefined) ?? [];
 
     // ── 1. Board (depth 0–3) ─────────────────────────────────────────────
     this.board = new BoardManager(this, 800);
@@ -48,6 +52,7 @@ export default class SnakeLadderScene extends Phaser.Scene {
     // ── 4. Players (depth 50) ────────────────────────────────────────────
     this.playerManager = new PlayerManager(this, this.board);
     this.playerManager.createPlayers(count);
+    if (names.length > 0) this.playerManager.setNames(names);
 
     // ── 5. HUD sidebar (depth 10, below dice) ───────────────────────────
     this.hud = new HUDManager(this);
@@ -65,17 +70,30 @@ export default class SnakeLadderScene extends Phaser.Scene {
     this.audio = new AudioManager(this);
     this.audio.init();
 
-    // ── 9. Game Manager — wire everything together ────────────────────────
-    this.gameManager = new GameManager(
-      this,
-      this.board,
-      this.playerManager,
-      this.dice,
-      this.snakeManager,
-      this.ladderManager,
-      this.hud
-    );
-    this.gameManager.init(mode, count);
+    // ── 9. Game logic — server-driven in multiplayer, local otherwise ────
+    if (mode === "pvp") {
+      this.multiplayerDriver = new MultiplayerDriver(
+        this,
+        this.board,
+        this.playerManager,
+        this.dice,
+        this.hud,
+        this.winnerPopup,
+        mySeat,
+      );
+      this.multiplayerDriver.start();
+    } else {
+      this.gameManager = new GameManager(
+        this,
+        this.board,
+        this.playerManager,
+        this.dice,
+        this.snakeManager,
+        this.ladderManager,
+        this.hud
+      );
+      this.gameManager.init(mode, count);
+    }
 
     // ── 10. Event bindings ────────────────────────────────────────────────
     this.events.on(GameEvents.DICE_ROLL_STARTED, () => {

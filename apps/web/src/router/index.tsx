@@ -7,6 +7,7 @@ import {
   LeaderboardPage,
   SettingsPage
 } from "../pages";
+import { LobbyPage } from "../pages/Lobby/LobbyPage";
 import NotFoundPage from "../pages/NotFoundPage";
 
 export const router = createBrowserRouter([
@@ -17,6 +18,7 @@ export const router = createBrowserRouter([
       { index: true, element: <HomePage /> },
       { path: "games/:slug", element: <GamePage /> },
       { path: "game/:slug", element: <GamePage /> },
+      { path: "lobby/:slug", element: <LobbyPage /> },
       { path: "profile", element: <ProfilePage /> },
       { path: "leaderboard", element: <LeaderboardPage /> },
       { path: "settings", element: <SettingsPage /> },

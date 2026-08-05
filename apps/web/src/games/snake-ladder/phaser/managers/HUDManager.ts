@@ -152,4 +152,14 @@ export class HUDManager {
     const first = this.logLines[0];
     if (first) first.setText(`› ${message}`);
   }
+
+  /** Replace the visible move log with authoritative server lines. */
+  setLogs(logs: string[]): void {
+    const lines = logs.slice(0, HUDManager.MAX_LOG);
+    for (let i = 0; i < HUDManager.MAX_LOG; i++) {
+      const line = lines[i];
+      const target = this.logLines[i];
+      if (target) target.setText(line ? `› ${line}` : "");
+    }
+  }
 }

@@ -132,7 +132,11 @@ export const Home: React.FC = () => {
 
   const handleStartGame = (gameId: GameId, mode: 'ai' | 'multiplayer', stake: number) => {
     setModalGame(null);
-    navigate(`/games/${gameId}`, { state: { mode, stake } });
+    if (mode === 'multiplayer') {
+      navigate(`/lobby/${gameId}`, { state: { mode, stake } });
+    } else {
+      navigate(`/games/${gameId}`, { state: { mode, stake } });
+    }
   };
 
   return (

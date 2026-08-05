@@ -60,3 +60,18 @@ html.dark .glass-panel {
 .glow-gold {
   box-shadow: 0 0 25px rgba(245, 158, 11, 0.35);
 }
+
+@keyframes emojiFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-90px) scale(1.3);
+  }
+}

@@ -21,6 +21,7 @@ export default class DiceManager {
   private value = 1;
   private rolling = false;
   private enabled = true;
+  private onRollOverride: (() => void) | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -138,6 +139,11 @@ export default class DiceManager {
   /** Human player click — requires enabled state */
   roll(): void {
     if (this.rolling || !this.enabled) return;
+    // Server-authoritative mode: the click is forwarded instead of rolled locally.
+    if (this.onRollOverride) {
+      this.onRollOverride();
+      return;
+    }
     this.startRoll();
   }
 
@@ -148,7 +154,30 @@ export default class DiceManager {
     this.startRoll();
   }
 
-  private startRoll(): void {
+  /** Route human clicks to an external handler (multiplayer driver). */
+  setOnRoll(handler: (() => void) | null): void {
+    this.onRollOverride = handler;
+  }
+
+  /** Set the dice face instantly from an authoritative value. */
+  setValue(value: number): void {
+    this.value = Phaser.Math.Clamp(Math.round(value), 1, 6);
+    this.drawDiceFace(this.value);
+  }
+
+  /** Animate a shuffle that lands on an authoritative value. */
+  rollTo(value: number): void {
+    this.rolling = false;
+    this.startRoll(Phaser.Math.Clamp(Math.round(value), 1, 6));
+  }
+
+  /** Override the roll button label (e.g. "Player 2's turn…"). */
+  setPrompt(text: string): void {
+    this.rollBtnLabel.setText(text);
+    this.rollBtnLabel.setAlpha(1);
+  }
+
+  private startRoll(forced?: number): void {
     this.rolling = true;
     this.disable();
     this.scene.events.emit(GameEvents.DICE_ROLL_STARTED);
@@ -171,7 +200,7 @@ export default class DiceManager {
       if (count < totalFrames) {
         this.scene.time.delayedCall(65, tick);
       } else {
-        this.finishRoll();
+        this.finishRoll(forced);
       }
     };
 
@@ -184,12 +213,16 @@ export default class DiceManager {
      this.bias = bias;
   }
 
-  private finishRoll(): void {
-    if (this.bias === 'high') {
-       this.value = Phaser.Math.Between(4, 6);
+  private finishRoll(forced?: number): void {
+    let value: number;
+    if (forced !== undefined) {
+      value = forced;
+    } else if (this.bias === 'high') {
+      value = Phaser.Math.Between(4, 6);
     } else {
-       this.value = Phaser.Math.Between(1, 6);
+      value = Phaser.Math.Between(1, 6);
     }
+    this.value = value;
     this.drawDiceFace(this.value);
 
     // Landing bounce

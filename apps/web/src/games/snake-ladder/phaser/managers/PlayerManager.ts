@@ -103,6 +103,33 @@ export default class PlayerManager {
     return this.players.find((p) => p.id === id);
   }
 
+  /** Instantly place a token on a tile (used for authoritative sync). */
+  placeAt(playerId: number, tile: number): void {
+    const player = this.getPlayer(playerId);
+    if (!player) return;
+    player.tile = tile;
+    const pos = this.board.getTilePosition(tile);
+    const offset = OFFSETS[(player.id - 1) % OFFSETS.length] ?? { x: 0, y: 0 };
+    player.container.setPosition(pos.x + offset.x, pos.y + offset.y);
+  }
+
+  /** Override token names + initials with real display names (multiplayer). */
+  setNames(names: string[]): void {
+    this.players.forEach((player, index) => {
+      const name = names[index];
+      if (!name) return;
+      player.name = name;
+      const initials =
+        name
+          .split(/\s+/)
+          .map((word) => word.charAt(0))
+          .join("")
+          .slice(0, 2)
+          .toUpperCase() || `P${player.id}`;
+      player.label.setText(initials);
+    });
+  }
+
   /**
    * Animate token moving tile-by-tile from current position.
    * Calls onComplete when done.

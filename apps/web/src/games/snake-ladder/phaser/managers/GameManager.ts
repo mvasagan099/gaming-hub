@@ -139,59 +139,45 @@ export default class GameManager {
     const player = this.players.getPlayer(playerId);
     if (!player) return;
 
-    // Check win condition first
-    if (landedTile === 100) {
-      player.tile = 100;
-      this.triggerWin(player.name);
-      return;
-    }
+    let finalTile = landedTile;
+    let event: "normal" | "snake" | "ladder" = "normal";
 
-    // Check snake
+    // Resolve snakes and ladders first — a ladder can carry a token onto tile
+    // 100, which must count as a win (e.g. ladder 80 → 100).
     if (this.snakeManager.hasSnake(landedTile)) {
-      const tailTile = this.snakeManager.getTail(landedTile) ?? landedTile;
-      this.hud.addLog(`🐍 ${player.name} got bitten! Slides to ${tailTile}`);
-      this.moveHistory.push({ playerName: player.name, rolled, from: fromTile, to: tailTile, event: "snake" });
-
-      // Emit snake event for audio/particles
-      this.scene.events.emit(GameEvents.SNAKE_HIT, playerId, landedTile, tailTile);
-
-      // Animate slide to tail
-      this.players.snapToTile(playerId, tailTile, () => {
-        if (rolled === 6) this.hud.addLog(`${player.name} gets an extra turn!`);
-        this.handleBump(playerId, tailTile, () => {
-           this.scene.time.delayedCall(300, () => this.changeTurn(rolled === 6));
-        });
-      });
-      return;
+      finalTile = this.snakeManager.getTail(landedTile) ?? landedTile;
+      event = "snake";
+      this.hud.addLog(`🐍 ${player.name} got bitten! Slides to ${finalTile}`);
+      this.moveHistory.push({ playerName: player.name, rolled, from: fromTile, to: finalTile, event: "snake" });
+      this.scene.events.emit(GameEvents.SNAKE_HIT, playerId, landedTile, finalTile);
+    } else if (this.ladderManager.hasLadder(landedTile)) {
+      finalTile = this.ladderManager.getTop(landedTile) ?? landedTile;
+      event = "ladder";
+      this.hud.addLog(`🪜 ${player.name} climbs ladder to ${finalTile}!`);
+      this.moveHistory.push({ playerName: player.name, rolled, from: fromTile, to: finalTile, event: "ladder" });
+      this.scene.events.emit(GameEvents.LADDER_CLIMB, playerId, landedTile, finalTile);
+    } else {
+      this.moveHistory.push({ playerName: player.name, rolled, from: fromTile, to: landedTile, event: "normal" });
+      this.hud.updatePlayerTile(playerId, landedTile);
     }
 
-    // Check ladder
-    if (this.ladderManager.hasLadder(landedTile)) {
-      const topTile = this.ladderManager.getTop(landedTile) ?? landedTile;
-      this.hud.addLog(`🪜 ${player.name} climbs ladder to ${topTile}!`);
-      this.moveHistory.push({ playerName: player.name, rolled, from: fromTile, to: topTile, event: "ladder" });
-
-      // Emit ladder event for audio/particles
-      this.scene.events.emit(GameEvents.LADDER_CLIMB, playerId, landedTile, topTile);
-
-      // Animate climb to top
-      this.players.snapToTile(playerId, topTile, () => {
-        if (rolled === 6) this.hud.addLog(`${player.name} gets an extra turn!`);
-        this.handleBump(playerId, topTile, () => {
-           this.scene.time.delayedCall(300, () => this.changeTurn(rolled === 6));
-        });
+    const finish = () => {
+      if (finalTile === 100) {
+        this.triggerWin(player.name);
+        return;
+      }
+      if (rolled === 6) this.hud.addLog(`${player.name} gets an extra turn!`);
+      this.handleBump(playerId, finalTile, () => {
+        const delay = event === "normal" ? 200 : 300;
+        this.scene.time.delayedCall(delay, () => this.changeTurn(rolled === 6));
       });
-      return;
-    }
+    };
 
-    // Normal move
-    this.moveHistory.push({ playerName: player.name, rolled, from: fromTile, to: landedTile, event: "normal" });
-    this.hud.updatePlayerTile(playerId, landedTile);
-    
-    if (rolled === 6) this.hud.addLog(`${player.name} gets an extra turn!`);
-    this.handleBump(playerId, landedTile, () => {
-       this.scene.time.delayedCall(200, () => this.changeTurn(rolled === 6));
-    });
+    if (event === "snake" || event === "ladder") {
+      this.players.snapToTile(playerId, finalTile, finish);
+    } else {
+      finish();
+    }
   }
 
   private handleBump(actingPlayerId: number, tile: number, onComplete: () => void): void {

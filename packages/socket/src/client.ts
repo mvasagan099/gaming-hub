@@ -8,7 +8,12 @@ export type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 export interface CreateSocketOptions {
   url: string;
-  token: string;
+  /**
+   * Static token, or a live getter that returns the most recent token. A
+   * getter is recommended so Supabase access-token refreshes are picked up on
+   * every reconnection attempt without recreating the socket.
+   */
+  token: string | (() => string | null);
   /** Reconnect delay base in ms (socket.io default is 1000). */
   reconnectionDelay?: number;
   /** Max reconnect delay in ms. */
@@ -29,6 +34,9 @@ export function createTypedSocket(options: CreateSocketOptions): TypedSocket {
     reconnectionAttempts: options.reconnectionAttempts ?? Number.POSITIVE_INFINITY,
     reconnectionDelay: options.reconnectionDelay ?? 1000,
     reconnectionDelayMax: options.reconnectionDelayMax ?? 10000,
-    auth: (cb) => cb({ token: options.token }),
+    auth: (cb) => {
+      const token = typeof options.token === "function" ? options.token() : options.token;
+      cb({ token: token ?? undefined });
+    },
   });
 }

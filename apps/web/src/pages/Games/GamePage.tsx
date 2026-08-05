@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { useParams, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { SnakeLadder } from '../../games/snake-ladder';
 import { LudoGame } from '../../games/ludo/LudoGame';
 import { ChessGame } from '../../games/chess/ChessGame';
@@ -9,6 +9,7 @@ import { BubbleShooterGame } from '../../games/bubble-shooter/BubbleShooterGame'
 import { TableTennisGame } from '../../games/table-tennis/TableTennisGame';
 import { SnakeVsWormsGame } from '../../games/snake-vs-worms/SnakeVsWormsGame';
 import { CricketGame } from '../../games/cricket/CricketGame';
+import { useMultiplayerStore } from '../../store/multiplayerStore';
 
 export const GamePage: React.FC = () => {
   const params = useParams<{ gameId?: string; slug?: string }>();
@@ -20,7 +21,20 @@ export const GamePage: React.FC = () => {
   const mode = state?.mode || 'ai';
   const stake = state?.stake || 100;
 
-  const onBack = () => navigate('/');
+  const room = useMultiplayerStore((s) => s.room);
+
+  const onBack = () => {
+    if (mode === 'multiplayer') navigate(`/lobby/${gameId}`);
+    else navigate('/');
+  };
+
+  if (mode === 'multiplayer') {
+    const canPlayOnline =
+      !!room && room.gameId === gameId && (room.status === 'playing' || room.status === 'ended');
+    if (!canPlayOnline) {
+      return <Navigate to={`/lobby/${gameId}`} replace state={{ mode, stake }} />;
+    }
+  }
 
   switch (gameId) {
     case 'snake-ladder': return <SnakeLadder mode={mode} stake={stake} onBack={onBack} />;

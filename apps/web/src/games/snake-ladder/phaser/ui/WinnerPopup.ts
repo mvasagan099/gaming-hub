@@ -2,12 +2,19 @@ import Phaser from "phaser";
 import type { MoveHistoryEntry } from "../managers/GameManager";
 import type ParticleManager from "../managers/ParticleManager";
 
+export interface WinnerPopupOptions {
+  mode?: "ai" | "multiplayer";
+  won?: boolean;
+}
+
 export default class WinnerPopup {
   private scene: Phaser.Scene;
   private container!: Phaser.GameObjects.Container;
   private titleText!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
   private particles: ParticleManager | null;
+  private playAgainAction: (() => void) | null = null;
+  private closeAction: (() => void) | null = null;
 
   constructor(scene: Phaser.Scene, particles: ParticleManager | null = null) {
     this.scene = scene;
@@ -102,19 +109,34 @@ export default class WinnerPopup {
     this.container.setScale(0);
   }
 
-  show(playerName: string, history: MoveHistoryEntry[] = []): void {
-    const isHuman = playerName.toLowerCase() === "player 1";
-    
-    if (isHuman) {
-      this.titleText.setText(`🎉 YOU WON! (+50 Coins)`);
-      this.titleText.setColor("#4ade80");
-      // Import dynamically to avoid cyclic dependency issues or phaser build issues
-      import("../../../../store/useUserStore").then(({ useUserStore }) => {
-        useUserStore.getState().addCoins(50);
-      });
+  show(playerName: string, history: MoveHistoryEntry[] = [], options: WinnerPopupOptions = {}): void {
+    const isMultiplayer = options.mode === "multiplayer";
+
+    if (isMultiplayer) {
+      this.titleText.setText(options.won ? `🏆 YOU WON!` : `🏆 ${playerName} WON!`);
+      this.titleText.setColor(options.won ? "#4ade80" : "#f59e0b");
+      if (options.won) {
+        this.particles?.winFireworks();
+      }
     } else {
-      this.titleText.setText(`🤖 SORRY, AI WON...`);
-      this.titleText.setColor("#f87171");
+      const isHuman = playerName.toLowerCase() === "player 1";
+
+      if (isHuman) {
+        this.titleText.setText(`🎉 YOU WON! (+50 Coins)`);
+        this.titleText.setColor("#4ade80");
+        // Import dynamically to avoid cyclic dependency issues or phaser build issues
+        import("../../../../store/useUserStore").then(({ useUserStore }) => {
+          useUserStore.getState().addCoins(50);
+        });
+      } else {
+        this.titleText.setText(`🤖 SORRY, AI WON...`);
+        this.titleText.setColor("#f87171");
+      }
+
+      // Fireworks only if human wins
+      if (isHuman) {
+        this.particles?.winFireworks();
+      }
     }
 
     // Compute stats
@@ -134,11 +156,12 @@ export default class WinnerPopup {
       duration: 450,
       ease: "Back.Out",
     });
+  }
 
-    // Fireworks only if human wins
-    if (isHuman) {
-      this.particles?.winFireworks();
-    }
+  /** Override the REPLAY / CLOSE button behaviour (multiplayer driver). */
+  setActions(onPlayAgain?: (() => void) | null, onClose?: (() => void) | null): void {
+    this.playAgainAction = onPlayAgain ?? null;
+    this.closeAction = onClose ?? null;
   }
 
   hide(): void {
@@ -152,10 +175,18 @@ export default class WinnerPopup {
   }
 
   private onPlayAgain(): void {
+    if (this.playAgainAction) {
+      this.playAgainAction();
+      return;
+    }
     this.scene.scene.restart();
   }
 
   private onClose(): void {
+    if (this.closeAction) {
+      this.closeAction();
+      return;
+    }
     // Navigate back to lobby
     window.location.href = "/";
   }
