@@ -1,0 +1,396 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum FriendStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+enum RoomStatus {
+  WAITING
+  STARTING
+  PLAYING
+  ENDED
+}
+
+enum ConnectionStatus {
+  CONNECTED
+  DISCONNECTED
+  RECONNECTING
+}
+
+enum MatchStatus {
+  CREATED
+  ACTIVE
+  FINISHED
+  ABORTED
+}
+
+enum MatchPlayerResult {
+  PENDING
+  WIN
+  LOSS
+  DRAW
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+  ADJUST
+}
+
+enum TransactionReferenceType {
+  MATCH_WAGER
+  MATCH_PAYOUT
+  ADMIN
+  BONUS
+}
+
+enum NotificationType {
+  MATCH_INVITE
+  FRIEND_REQUEST
+  FRIEND_ACCEPTED
+  MATCH_RESULT
+  TOURNAMENT
+  SYSTEM
+}
+
+enum TournamentStatus {
+  UPCOMING
+  LIVE
+  ENDED
+  CANCELLED
+}
+
+model User {
+  id          String   @id
+  email       String?  @unique
+  username    String   @unique
+  displayName String
+  avatarUrl   String?
+  role        UserRole @default(USER)
+  isOnline    Boolean  @default(false)
+  lastSeenAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  profile            Profile?
+  wallet             Wallet?
+  playerStatistics   PlayerStatistic[]
+  leaderboards       Leaderboard[]
+  friendsRequested   Friend[]       @relation("FriendRequester")
+  friendsReceived    Friend[]       @relation("FriendAddressee")
+  roomsOwned         Room[]         @relation("RoomHost")
+  roomPlayers        RoomPlayer[]
+  matchPlayers       MatchPlayer[]
+  moves              Move[]
+  walletTransactions Transaction[]
+  notifications      AppNotification[]
+  chatMessages       ChatMessage[]
+  userAchievements   UserAchievement[]
+  tournamentPlayers  TournamentPlayer[]
+
+  @@index([role])
+}
+
+model Profile {
+  userId  String  @id
+  bio     String?
+  country String?
+  coins   Int     @default(2500)
+  gems    Int     @default(45)
+  xp      Int     @default(0)
+  level   Int     @default(1)
+  wins    Int     @default(0)
+  losses  Int     @default(0)
+  draws   Int     @default(0)
+
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Friend {
+  id           String       @id @default(uuid())
+  requesterId  String
+  addresseeId  String
+  status       FriendStatus @default(PENDING)
+  createdAt    DateTime     @default(now())
+  respondedAt  DateTime?
+
+  requester User @relation("FriendRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId])
+}
+
+model Room {
+  id         String     @id @default(uuid())
+  code       String     @unique
+  gameId     String
+  hostId     String
+  status     RoomStatus @default(WAITING)
+  isPrivate  Boolean    @default(false)
+  stake      Int
+  minPlayers Int
+  maxPlayers Int
+  settings   Json       @default("{}")
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  host         User          @relation("RoomHost", fields: [hostId], references: [id], onDelete: Cascade)
+  players      RoomPlayer[]
+  chatMessages ChatMessage[]
+  match        Match?
+
+  @@index([code])
+  @@index([gameId, status])
+}
+
+model RoomPlayer {
+  id               String           @id @default(uuid())
+  roomId           String
+  userId           String
+  seat             Int?
+  isReady          Boolean          @default(false)
+  isHost           Boolean          @default(false)
+  isSpectator      Boolean          @default(false)
+  connectionStatus ConnectionStatus @default(CONNECTED)
+  joinedAt         DateTime         @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([userId])
+}
+
+model Match {
+  id        String      @id @default(uuid())
+  roomId    String?     @unique
+  gameId    String
+  status    MatchStatus @default(CREATED)
+  winnerIds Json        @default("[]")
+  stake     Int         @default(0)
+  startedAt DateTime?
+  endedAt   DateTime?
+  createdAt DateTime    @default(now())
+
+  room      Room?         @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  players   MatchPlayer[]
+  moves     Move[]
+  gameState GameState?
+  replay    Replay?
+
+  @@index([gameId, status])
+}
+
+model MatchPlayer {
+  id           String            @id @default(uuid())
+  matchId      String
+  userId       String
+  seat         Int
+  result       MatchPlayerResult @default(PENDING)
+  score        Int               @default(0)
+  ratingBefore Int?
+  ratingAfter  Int?
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, userId])
+}
+
+model GameState {
+  id         String   @id @default(uuid())
+  matchId    String   @unique
+  state      Json
+  turnNumber Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+}
+
+model Move {
+  id         String   @id @default(uuid())
+  matchId    String
+  userId     String
+  seat       Int
+  turnNumber Int
+  action     Json
+  appliedAt  DateTime @default(now())
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([matchId])
+}
+
+model Leaderboard {
+  id          String   @id @default(uuid())
+  gameId      String
+  userId      String
+  score       Int      @default(0)
+  wins        Int      @default(0)
+  gamesPlayed Int      @default(0)
+  winRate     Float    @default(0)
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, userId])
+  @@index([gameId, score(sort: Desc)])
+}
+
+model Wallet {
+  userId   String  @id
+  balance  Int     @default(2500)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Transaction {
+  id            String                  @id @default(uuid())
+  userId        String
+  type          TransactionType
+  amount        Int
+  balanceAfter  Int
+  referenceType TransactionReferenceType
+  referenceId   String?
+  meta          Json                    @default("{}")
+  createdAt     DateTime                @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model AppNotification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+model ChatMessage {
+  id         String   @id @default(uuid())
+  roomId     String
+  userId     String?
+  senderName String
+  body       String
+  isSystem   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  room Room  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, createdAt])
+}
+
+model Replay {
+  id        String  @id @default(uuid())
+  matchId   String  @unique
+  gameId    String
+  fileUrl   String?
+  payload   Json?
+  sizeBytes Int     @default(0)
+  createdAt DateTime @default(now())
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+}
+
+model Achievement {
+  id          String  @id @default(uuid())
+  code        String  @unique
+  title       String
+  description String
+  icon        String
+  gameId      String?
+  xpReward    Int     @default(0)
+  condition   Json?
+
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  userId        String
+  achievementId String
+  unlockedAt    DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@id([userId, achievementId])
+}
+
+model PlayerStatistic {
+  id          String   @id @default(uuid())
+  userId      String
+  gameId      String
+  gamesPlayed Int      @default(0)
+  wins        Int      @default(0)
+  losses      Int      @default(0)
+  draws       Int      @default(0)
+  bestScore   Int      @default(0)
+  totalXp     Int      @default(0)
+  rating      Int      @default(1000)
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameId])
+  @@index([gameId, rating(sort: Desc)])
+}
+
+model Tournament {
+  id          String           @id @default(uuid())
+  gameId      String
+  title       String
+  description String
+  prizePool   Int              @default(0)
+  entryFee    Int              @default(0)
+  maxPlayers  Int              @default(8)
+  startTime   DateTime
+  status      TournamentStatus @default(UPCOMING)
+  createdAt   DateTime         @default(now())
+
+  players TournamentPlayer[]
+
+  @@index([status, startTime])
+}
+
+model TournamentPlayer {
+  id           String   @id @default(uuid())
+  tournamentId String
+  userId       String
+  registeredAt DateTime @default(now())
+  seed         Int?
+  result       Int?
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, userId])
+}

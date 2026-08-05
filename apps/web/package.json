@@ -1,0 +1,41 @@
+{
+  "name": "@gaming-hub/web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@gaming-hub/shared": "*",
+    "@gaming-hub/socket": "*",
+    "@supabase/supabase-js": "^2.112.0",
+    "canvas-confetti": "^1.9.4",
+    "chess.js": "^1.4.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.28.0",
+    "phaser": "^4.2.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-hot-toast": "^2.6.0",
+    "react-router-dom": "^7.18.2",
+    "socket.io-client": "^4.8.3",
+    "tailwind-merge": "^3.6.0",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "autoprefixer": "^10.5.4",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0"
+  }
+}

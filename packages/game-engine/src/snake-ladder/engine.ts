@@ -1,0 +1,234 @@
+import type { JsonObject } from "@gaming-hub/shared";
+import { ServerGameEngine } from "../base/ServerGameEngine";
+import type { EngineActionResult, EngineEvent, EnginePlayer, GameAction, RandomSource } from "../types";
+import { BOARD_SIZE, resolveDestination } from "./board";
+import type { SnakeLadderLastMove, SnakeLadderPlayerState, SnakeLadderSettings, SnakeLadderState, RollAction } from "./types";
+
+const MAX_LOGS = 6;
+
+/**
+ * Server-authoritative Snake & Ladder engine.
+ *
+ * Rules mirror the rendered Phaser client (`apps/web/src/games/snake-ladder`):
+ * - Players start on tile 1 and must land exactly on tile 100 to win.
+ * - Rolling a 6 grants an extra turn.
+ * - Three consecutive 6s cancel the turn and snap the token back to the tile
+ *   where the turn started.
+ * - Landing (after snakes/ladders) on a tile occupied by an opponent bumps
+ *   that opponent back to tile 1. Tiles 1 and 100 are safe.
+ * - A ladder or snake is only resolved after a legal dice landing; winning is
+ *   determined by the final resolved tile (so ladder 80 → 100 wins).
+ */
+export class SnakeLadderEngine extends ServerGameEngine<SnakeLadderState, RollAction> {
+  readonly gameId = "snake-ladder" as const;
+  private readonly settings: Required<SnakeLadderSettings>;
+
+  constructor(players: EnginePlayer[], rng?: RandomSource, settings: SnakeLadderSettings = {}) {
+    super(players, rng);
+    this.settings = {
+      boardSize: settings.boardSize ?? BOARD_SIZE,
+      extraTurnOnSix: settings.extraTurnOnSix ?? true,
+      threeSixesCancel: settings.threeSixesCancel ?? true,
+      bumpOnLanding: settings.bumpOnLanding ?? true,
+    };
+    if (players.length < 2) {
+      throw new Error("Snake & Ladder requires at least 2 players");
+    }
+  }
+
+  protected initState(): SnakeLadderState {
+    const players: SnakeLadderPlayerState[] = this.players.map((p) => ({
+      seat: p.seat,
+      position: 1,
+      finished: false,
+    }));
+    return {
+      phase: "waiting-for-roll",
+      currentSeat: 0,
+      dice: null,
+      players,
+      lastMove: null,
+      winnerSeats: [],
+      extraTurn: false,
+      finished: false,
+      consecutiveSixes: 0,
+      turnStartTile: null,
+      logs: ["Game started! Roll dice to move."],
+    };
+  }
+
+  protected validateAction(action: RollAction, seat: number): string | null {
+    if (action.type !== "roll") {
+      return "Unknown action for Snake & Ladder";
+    }
+    const state = this.state;
+    if (state.phase === "finished") {
+      return "This match has already finished";
+    }
+    if (seat !== state.currentSeat) {
+      return "It is not your turn";
+    }
+    return null;
+  }
+
+  protected applyValidatedAction(
+    _action: RollAction,
+    seat: number,
+    state: SnakeLadderState,
+  ): EngineActionResult<SnakeLadderState> {
+    const events: EngineEvent[] = [];
+    const dice = this.randomInt(1, 6);
+    const isSix = dice === 6;
+    const player = state.players.find((p) => p.seat === seat)!;
+    const startPos = player.position;
+
+    // Capture the tile the turn started on (first roll of the turn).
+    if (state.consecutiveSixes === 0) {
+      state = { ...state, turnStartTile: startPos };
+    }
+
+    const streak = isSix ? state.consecutiveSixes + 1 : 0;
+    const extraTurn = this.settings.extraTurnOnSix && isSix;
+    const cancelThreeSixes = this.settings.threeSixesCancel && isSix && streak === 3;
+
+    events.push({ type: "roll", seat, dice });
+
+    // ── Three consecutive 6s: turn cancelled, snap back to turn start ────────
+    if (cancelThreeSixes) {
+      const fromPos = startPos;
+      const turnStart = state.turnStartTile ?? 1;
+      const updatedPlayers = state.players.map((p) =>
+        p.seat === seat ? { ...p, position: turnStart } : p,
+      );
+      const nextSeat = (seat + 1) % this.players.length;
+      const log = `${this.seatName(seat)} rolled three 6s! Turn cancelled.`;
+      const nextState: SnakeLadderState = {
+        ...state,
+        phase: "moved",
+        dice,
+        players: updatedPlayers,
+        lastMove: { from: fromPos, to: turnStart, via: "rollback" },
+        winnerSeats: [],
+        currentSeat: nextSeat,
+        consecutiveSixes: 0,
+        extraTurn: false,
+        logs: [log, ...state.logs].slice(0, MAX_LOGS),
+      };
+      events.push({ type: "three-sixes", seat, from: fromPos, to: turnStart });
+      return {
+        ok: true,
+        state: nextState,
+        events,
+        finished: false,
+        winnerSeats: [],
+      };
+    }
+
+    // ── Cannot overshoot tile 100 ────────────────────────────────────────────
+    const rawTarget = startPos + dice;
+    let moved = false;
+    let via: SnakeLadderLastMove["via"] = "dice";
+    let finalPos = rawTarget;
+
+    if (rawTarget > this.settings.boardSize) {
+      finalPos = startPos;
+      via = "rollback";
+      events.push({ type: "move-blocked", seat, from: startPos, to: startPos, dice });
+    } else {
+      const resolved = resolveDestination(rawTarget);
+      finalPos = resolved.final;
+      via = resolved.via;
+      moved = true;
+      events.push({ type: "move", seat, from: startPos, to: rawTarget, dice });
+      if (via === "ladder") {
+        events.push({ type: "ladder", seat, from: rawTarget, to: finalPos });
+      } else if (via === "snake") {
+        events.push({ type: "snake", seat, from: rawTarget, to: finalPos });
+      }
+    }
+
+    let updatedPlayers = state.players.map((p) =>
+      p.seat === seat ? { ...p, position: finalPos } : p,
+    );
+
+    // ── Bump: landing on an occupied tile (1 and 100 are safe) ───────────────
+    if (this.settings.bumpOnLanding && moved && finalPos !== 1 && finalPos !== this.settings.boardSize) {
+      const bumped = updatedPlayers.find(
+        (p) => p.seat !== seat && p.position === finalPos && !p.finished,
+      );
+      if (bumped) {
+        updatedPlayers = updatedPlayers.map((p) =>
+          p.seat === bumped.seat ? { ...p, position: 1 } : p,
+        );
+        events.push({ type: "bump", seat, bumpedSeat: bumped.seat, from: finalPos, to: 1 });
+      }
+    }
+
+    const isWinner = moved && finalPos === this.settings.boardSize;
+    const winnerSeats = isWinner ? [seat] : [];
+    const phase: SnakeLadderState["phase"] = isWinner ? "finished" : "moved";
+
+    if (isWinner) {
+      events.push({ type: "win", seat });
+      updatedPlayers = updatedPlayers.map((p) =>
+        p.seat === seat ? { ...p, position: this.settings.boardSize, finished: true } : p,
+      );
+    }
+
+    const log = this.buildLog(seat, dice, startPos, finalPos, via, isWinner, streak, state.consecutiveSixes);
+    // Overshoot with a 6 keeps the turn (matches client); otherwise pass on non-extra turns.
+    const keepsTurn = rawTarget <= this.settings.boardSize ? extraTurn && !isWinner : isSix;
+    const nextSeat = isWinner ? seat : keepsTurn ? seat : (seat + 1) % this.players.length;
+
+    const nextState: SnakeLadderState = {
+      ...state,
+      phase,
+      dice,
+      players: updatedPlayers,
+      lastMove: { from: startPos, to: finalPos, via },
+      winnerSeats,
+      currentSeat: nextSeat,
+      consecutiveSixes: keepsTurn ? streak : 0,
+      extraTurn: !isWinner && extraTurn,
+      finished: isWinner,
+      logs: [log, ...state.logs].slice(0, MAX_LOGS),
+    };
+
+    return {
+      ok: true,
+      state: nextState,
+      events,
+      finished: isWinner,
+      winnerSeats,
+    };
+  }
+
+  private seatName(seat: number): string {
+    return `P${seat + 1}`;
+  }
+
+  private buildLog(
+    seat: number,
+    dice: number,
+    from: number,
+    to: number,
+    via: SnakeLadderLastMove["via"],
+    isWinner: boolean,
+    streak: number,
+    previousStreak: number,
+  ): string {
+    const name = this.seatName(seat);
+    if (isWinner) return `🏆 ${name} rolled ${dice} and reached cell ${to}. Wins the match!`;
+    if (via === "rollback") return `${name} rolled ${dice} but couldn't move past cell ${from}.`;
+    if (via === "ladder") return `🪜 ${name} rolled ${dice} and climbed a ladder to cell ${to}!`;
+    if (via === "snake") return `🐍 ${name} rolled ${dice} and got bitten down to cell ${to}.`;
+    if (previousStreak >= 1 && dice === 6) return `${name} rolled a ${dice} (six #${streak})!`;
+    return `${name} rolled ${dice} and moved to cell ${to}.`;
+  }
+}
+
+export type SnakeLadderAction = RollAction;
+
+export function isSnakeLadderState(state: JsonObject): state is SnakeLadderState {
+  return state.phase !== undefined && Array.isArray(state.players);
+}
