@@ -31,11 +31,21 @@ function toErrorPayload(error: unknown): SocketErrorPayload {
 }
 
 async function main(): Promise<void> {
-  const httpServer: HttpServer = createServer();
+  const httpServer: HttpServer = createServer((req, res) => {
+    if (req.url === "/health/live" || req.url === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
 
   const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents>(httpServer, {
     cors: { origin: parseOrigins(env.CORS_ORIGIN), credentials: true },
     transports: ["websocket", "polling"],
+    // Chat and game actions are small; cap incoming packets to limit abuse.
+    maxHttpBufferSize: 32 * 1024,
   });
 
   if (env.REDIS_URL) {

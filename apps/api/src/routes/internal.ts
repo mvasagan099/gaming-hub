@@ -16,13 +16,15 @@ export async function internalRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/internal/matches/:id/hold-wagers", async (request) => {
+  const RATE_LIMIT = { max: 60, timeWindow: "1 minute" };
+
+  app.post("/internal/matches/:id/hold-wagers", { config: { rateLimit: RATE_LIMIT } }, async (request) => {
     const { id } = routeParams(request);
     const match = await holdMatchWagers(id);
     return { ok: true, status: match.status };
   });
 
-  app.post("/internal/matches/:id/settle", async (request) => {
+  app.post("/internal/matches/:id/settle", { config: { rateLimit: RATE_LIMIT } }, async (request) => {
     const { id } = routeParams(request);
     const result = await settleMatch(id);
     return { ok: true, result };

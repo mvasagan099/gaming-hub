@@ -23,6 +23,10 @@ export async function authenticateToken(token: string): Promise<AuthenticatedUse
     throw new Error("Token is missing subject");
   }
 
+  if (env.requireEmailVerification && payload.email_verified !== true) {
+    throw new Error("EMAIL_NOT_VERIFIED");
+  }
+
   const user = await ensureUser(
     payload.sub,
     typeof payload.email === "string" ? payload.email : null,

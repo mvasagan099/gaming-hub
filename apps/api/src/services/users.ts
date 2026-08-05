@@ -1,6 +1,6 @@
 import { prisma, Prisma } from "@gaming-hub/db";
 import type { User } from "@gaming-hub/db";
-import type { PublicProfile } from "@gaming-hub/shared";
+import { AppError, type PublicProfile } from "@gaming-hub/shared";
 
 const USERNAME_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -77,6 +77,9 @@ export async function ensureUser(
 ): Promise<User> {
   const existing = await prisma.user.findUnique({ where: { id: sub } });
   if (existing) {
+    if (existing.deletedAt) {
+      throw new AppError("ACCOUNT_DELETED", "This account has been deleted", 403);
+    }
     if (existing.email !== email) {
       return prisma.user.update({ where: { id: sub }, data: { email } });
     }

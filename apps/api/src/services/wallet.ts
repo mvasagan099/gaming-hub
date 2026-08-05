@@ -2,6 +2,7 @@ import { prisma } from "@gaming-hub/db";
 import type { Prisma, Wallet } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
 import type { TransactionReferenceType, TransactionType } from "@gaming-hub/shared";
+import { audit } from "./audit";
 
 export async function getWallet(userId: string): Promise<Wallet> {
   const wallet = await prisma.wallet.findUnique({ where: { userId } });
@@ -67,6 +68,20 @@ export async function applyTransaction(
     if (!exists) {
       throw new AppError("NOT_FOUND", "Wallet not found", 404);
     }
+    audit({
+      actorType: "user",
+      actorId: userId,
+      action: "wallet.transaction.rejected",
+      category: "wallet",
+      targetType: "user",
+      targetId: userId,
+      meta: {
+        amount,
+        referenceType,
+        referenceId,
+        reason: "insufficient_balance",
+      },
+    });
     throw new AppError("INSUFFICIENT_BALANCE", "Insufficient balance");
   }
 
@@ -81,6 +96,23 @@ export async function applyTransaction(
       referenceType,
       referenceId,
       meta: meta as Prisma.InputJsonValue,
+    },
+  });
+
+  audit({
+    actorType: "user",
+    actorId: userId,
+    action: "wallet.transaction.created",
+    category: "wallet",
+    targetType: "user",
+    targetId: userId,
+    meta: {
+      type: isDebit ? "DEBIT" : "CREDIT",
+      amount: Math.abs(amount),
+      balanceAfter: wallet.balance,
+      referenceType,
+      referenceId,
+      ...meta,
     },
   });
 

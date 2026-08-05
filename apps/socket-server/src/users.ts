@@ -12,6 +12,9 @@ export async function ensureUser(
 ) {
   const existing = await prisma.user.findUnique({ where: { id: sub } });
   if (existing) {
+    if (existing.deletedAt) {
+      throw new Error("ACCOUNT_DELETED");
+    }
     if (existing.email !== email && email !== null) {
       return prisma.user.update({ where: { id: sub }, data: { email } });
     }

@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { MoveHistoryEntry } from "../managers/GameManager";
 import type ParticleManager from "../managers/ParticleManager";
+import { claimPracticeReward } from "../../../../services/api/practiceReward";
 
 export interface WinnerPopupOptions {
   mode?: "ai" | "multiplayer";
@@ -124,10 +125,7 @@ export default class WinnerPopup {
       if (isHuman) {
         this.titleText.setText(`🎉 YOU WON! (+50 Coins)`);
         this.titleText.setColor("#4ade80");
-        // Import dynamically to avoid cyclic dependency issues or phaser build issues
-        import("../../../../services/api/practiceReward").then(({ claimPracticeReward }) => {
-          void claimPracticeReward("snake-ladder");
-        });
+        void claimPracticeReward("snake-ladder");
       } else {
         this.titleText.setText(`🤖 SORRY, AI WON...`);
         this.titleText.setColor("#f87171");

@@ -11,6 +11,11 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default("*"),
   REDIS_URL: z.string().optional().default(""),
   LOG_LEVEL: z.string().default("info"),
+  // "true" (default in production) rejects sockets whose email is unverified.
+  REQUIRE_EMAIL_VERIFICATION: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "true")),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -20,4 +25,8 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-export const env = parsed.data;
+export const env = {
+  ...parsed.data,
+  requireEmailVerification:
+    parsed.data.REQUIRE_EMAIL_VERIFICATION ?? parsed.data.NODE_ENV === "production",
+};

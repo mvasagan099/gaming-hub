@@ -25,3 +25,8 @@ npm-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+# Database backups
+backups/
+packages/db/src/generated/
+apps/web/dist/
