@@ -23,8 +23,25 @@ function readMetadata(metadata: Record<string, unknown> | null | undefined): {
   username: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  phone: string | null;
+  dateOfBirth: Date | null;
+  gender: string | null;
+  country: string | null;
+  currency: string | null;
+  referredBy: string | null;
 } {
-  if (!metadata) return { username: null, displayName: null, avatarUrl: null };
+  const empty = {
+    username: null,
+    displayName: null,
+    avatarUrl: null,
+    phone: null,
+    dateOfBirth: null,
+    gender: null,
+    country: null,
+    currency: null,
+    referredBy: null,
+  };
+  if (!metadata) return empty;
   const pick = (keys: string[]): string | null => {
     for (const key of keys) {
       const value = metadata[key];
@@ -32,10 +49,20 @@ function readMetadata(metadata: Record<string, unknown> | null | undefined): {
     }
     return null;
   };
+
+  const rawDob = pick(["date_of_birth", "dob", "birth_date"]);
+  const dob = rawDob ? new Date(rawDob) : null;
+
   return {
     username: sanitizeUsername(pick(["username", "user_name", "nickname"])),
     displayName: pick(["display_name", "full_name", "name"]),
     avatarUrl: pick(["avatar_url", "picture"]),
+    phone: pick(["phone", "phone_number", "mobile"]),
+    dateOfBirth: dob && !Number.isNaN(dob.getTime()) ? dob : null,
+    gender: pick(["gender", "sex"]),
+    country: pick(["country", "country_code", "region"]),
+    currency: pick(["currency", "currency_code"]),
+    referredBy: pick(["referred_by", "referral_code", "invite_code"]),
   };
 }
 
@@ -73,7 +100,15 @@ export async function ensureUser(
           },
         });
         await tx.profile.create({
-          data: { userId: sub },
+          data: {
+            userId: sub,
+            phone: meta.phone,
+            dateOfBirth: meta.dateOfBirth,
+            gender: meta.gender,
+            country: meta.country,
+            currency: meta.currency,
+            referredBy: meta.referredBy,
+          },
         });
         await tx.wallet.create({
           data: { userId: sub },

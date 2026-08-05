@@ -26,6 +26,13 @@ export interface MePayload {
     wins: number;
     losses: number;
     draws: number;
+    bio: string | null;
+    country: string | null;
+    phone: string | null;
+    dateOfBirth: string | null;
+    gender: string | null;
+    currency: string | null;
+    referredBy: string | null;
   } | null;
   wallet: MeWallet | null;
   unreadNotifications: number;

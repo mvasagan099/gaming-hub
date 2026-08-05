@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, Settings2, ShieldCheck, Trophy, Wallet } from "lucide-react";
+import { LogOut, Settings2, ShieldCheck, Trophy, Wallet, MapPin, Banknote, Phone, Gift } from "lucide-react";
+import { getCountry, getCurrency } from "@gaming-hub/shared";
 import { useAuthStore } from "../../store/authStore";
 import { useMe } from "../../services/api/useMe";
 import { Skeleton, SkeletonCircle, SkeletonText } from "../../components/Skeleton";
@@ -113,6 +114,23 @@ export const ProfilePage: React.FC = () => {
         </div>
       </div>
 
+      {stats && (
+        <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 transition-colors duration-300">
+          <h3 className="text-sm font-black text-slate-900 dark:text-white">Account details</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <Detail icon={<MapPin className="w-3.5 h-3.5" />} label="Country" value={stats.country ? getCountry(stats.country)?.name ?? stats.country : "—"} />
+            <Detail icon={<Banknote className="w-3.5 h-3.5" />} label="Currency" value={stats.currency ? `${getCurrency(stats.currency)?.symbol ?? ""} ${stats.currency}`.trim() : "—"} />
+            <Detail icon={<Phone className="w-3.5 h-3.5" />} label="Phone" value={stats.phone ?? "—"} />
+            <Detail icon={<Gift className="w-3.5 h-3.5" />} label="Referral" value={stats.referredBy ?? "—"} />
+          </div>
+          {stats.dateOfBirth && (
+            <p className="text-[10px] text-slate-400 dark:text-slate-500">
+              Date of birth: {new Date(stats.dateOfBirth).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+      )}
+
       {session?.user && (
         <p className="text-center text-[10px] text-slate-400 dark:text-slate-500">
           Member since {new Date(me.user.createdAt).toLocaleDateString()}
@@ -121,3 +139,17 @@ export const ProfilePage: React.FC = () => {
     </div>
   );
 };
+
+function Detail({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0">
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">{label}</p>
+        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{value}</p>
+      </div>
+    </div>
+  );
+}
