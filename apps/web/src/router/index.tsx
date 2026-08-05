@@ -1,11 +1,13 @@
 import { createBrowserRouter } from "react-router-dom";
 import { lazy, Suspense, type ReactNode } from "react";
 import MainLayout from "../layouts/MainLayout";
+import { AdminLayout } from "../layouts/AdminLayout";
 import { LobbyPage } from "../pages/Lobby/LobbyPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import { ErrorPage } from "../pages/ErrorPage";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { PublicOnlyRoute } from "../components/auth/PublicOnlyRoute";
+import { AdminRoute } from "../components/admin/AdminRoute";
 
 // Route-level code splitting: heavy pages (Phaser games, chess.js) load on
 // demand instead of inflating the initial bundle.
@@ -19,6 +21,12 @@ const LoginPage = lazy(() => import("../pages/Auth/LoginPage").then((m) => ({ de
 const SignupPage = lazy(() => import("../pages/Auth/SignupPage").then((m) => ({ default: m.SignupPage })));
 const ForgotPasswordPage = lazy(() => import("../pages/Auth/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import("../pages/Auth/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
+const AdminOverviewPage = lazy(() => import("../pages/admin/AdminOverviewPage").then((m) => ({ default: m.AdminOverviewPage })));
+const AdminUsersPage = lazy(() => import("../pages/admin/AdminUsersPage").then((m) => ({ default: m.AdminUsersPage })));
+const AdminMatchesPage = lazy(() => import("../pages/admin/AdminMatchesPage").then((m) => ({ default: m.AdminMatchesPage })));
+const AdminRoomsPage = lazy(() => import("../pages/admin/AdminRoomsPage").then((m) => ({ default: m.AdminRoomsPage })));
+const AdminAuditPage = lazy(() => import("../pages/admin/AdminAuditPage").then((m) => ({ default: m.AdminAuditPage })));
+const AdminSettingsPage = lazy(() => import("../pages/admin/AdminSettingsPage").then((m) => ({ default: m.AdminSettingsPage })));
 
 const SuspensePage = ({ children }: { children: ReactNode }) => (
   <Suspense
@@ -62,6 +70,24 @@ export const router = createBrowserRouter([
       },
       { path: "leaderboard", element: <SuspensePage><LeaderboardPage /></SuspensePage> },
       { path: "*", element: <SuspensePage><NotFoundPage /></SuspensePage> },
+    ],
+  },
+  {
+    element: <AdminRoute />,
+    errorElement: <ErrorPage />,
+    children: [
+      {
+        path: "/admin",
+        element: <AdminLayout />,
+        children: [
+          { index: true, element: <SuspensePage><AdminOverviewPage /></SuspensePage> },
+          { path: "users", element: <SuspensePage><AdminUsersPage /></SuspensePage> },
+          { path: "matches", element: <SuspensePage><AdminMatchesPage /></SuspensePage> },
+          { path: "rooms", element: <SuspensePage><AdminRoomsPage /></SuspensePage> },
+          { path: "audit", element: <SuspensePage><AdminAuditPage /></SuspensePage> },
+          { path: "settings", element: <SuspensePage><AdminSettingsPage /></SuspensePage> },
+        ],
+      },
     ],
   },
 ]);

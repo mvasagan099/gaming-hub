@@ -11,3 +11,4 @@ export * from "./validation";
 export * from "./json";
 export * from "./countries";
 export * from "./permissions";
+export * from "./settings";

@@ -3,6 +3,7 @@ import type { Prisma, Wallet } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
 import type { TransactionReferenceType, TransactionType } from "@gaming-hub/shared";
 import { audit } from "./audit";
+import { getCategorySettings } from "./settings";
 
 export async function getWallet(userId: string): Promise<Wallet> {
   const wallet = await prisma.wallet.findUnique({ where: { userId } });
@@ -58,6 +59,45 @@ export async function applyTransaction(
   meta: Record<string, unknown> = {},
 ): Promise<Wallet> {
   const isDebit = amount < 0;
+
+  if (referenceType === "ADMIN" && !isDebit) {
+    const walletLimits = await getCategorySettings("wallet");
+    const absAmount = Math.abs(amount);
+    if (absAmount < walletLimits.minDeposit) {
+      throw new AppError(
+        "WALLET_LIMIT_EXCEEDED",
+        `Minimum deposit is ${walletLimits.minDeposit}`,
+        400,
+      );
+    }
+    if (walletLimits.maxDeposit > 0 && absAmount > walletLimits.maxDeposit) {
+      throw new AppError(
+        "WALLET_LIMIT_EXCEEDED",
+        `Maximum deposit is ${walletLimits.maxDeposit}`,
+        400,
+      );
+    }
+  }
+
+  if (referenceType === "ADMIN" && isDebit) {
+    const walletLimits = await getCategorySettings("wallet");
+    const absAmount = Math.abs(amount);
+    if (absAmount < walletLimits.minWithdrawal) {
+      throw new AppError(
+        "WALLET_LIMIT_EXCEEDED",
+        `Minimum withdrawal is ${walletLimits.minWithdrawal}`,
+        400,
+      );
+    }
+    if (walletLimits.maxWithdrawal > 0 && absAmount > walletLimits.maxWithdrawal) {
+      throw new AppError(
+        "WALLET_LIMIT_EXCEEDED",
+        `Maximum withdrawal is ${walletLimits.maxWithdrawal}`,
+        400,
+      );
+    }
+  }
+
   const result = await tx.wallet.updateMany({
     where: { userId, ...(isDebit ? { balance: { gte: -amount } } : {}) },
     data: { balance: { increment: amount } },
@@ -126,9 +166,6 @@ export async function assertSufficientBalance(userId: string, stake: number): Pr
   }
 }
 
-export const PRACTICE_REWARD_AMOUNT = 50;
-export const PRACTICE_DAILY_LIMIT = 200;
-
 export interface PracticeRewardResult {
   claimed: boolean;
   amount: number;
@@ -140,6 +177,12 @@ export async function claimPracticeReward(
   userId: string,
   gameId: string,
 ): Promise<PracticeRewardResult> {
+  const gameSettings = await getCategorySettings("game");
+
+  if (!gameSettings.practiceModeEnabled) {
+    throw new AppError("FEATURE_DISABLED", "Practice mode is currently disabled", 403);
+  }
+
   const now = new Date();
   const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
@@ -149,7 +192,7 @@ export async function claimPracticeReward(
   });
   const earned = daily._sum.amount ?? 0;
 
-  if (earned >= PRACTICE_DAILY_LIMIT) {
+  if (earned >= gameSettings.practiceDailyLimit) {
     return {
       claimed: false,
       amount: 0,
@@ -159,13 +202,13 @@ export async function claimPracticeReward(
   }
 
   const wallet = await prisma.$transaction(async (tx) => {
-    return applyTransaction(tx, userId, PRACTICE_REWARD_AMOUNT, "PRACTICE", null, { gameId });
+    return applyTransaction(tx, userId, gameSettings.practiceRewardAmount, "PRACTICE", null, { gameId });
   });
 
   return {
     claimed: true,
-    amount: PRACTICE_REWARD_AMOUNT,
+    amount: gameSettings.practiceRewardAmount,
     balance: wallet.balance,
-    remainingToday: Math.max(0, PRACTICE_DAILY_LIMIT - earned - PRACTICE_REWARD_AMOUNT),
+    remainingToday: Math.max(0, gameSettings.practiceDailyLimit - earned - gameSettings.practiceRewardAmount),
   };
 }

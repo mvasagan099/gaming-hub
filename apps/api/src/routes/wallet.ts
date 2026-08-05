@@ -3,7 +3,8 @@ import { z } from "zod";
 import { AppError, clampPagination, isGameId } from "@gaming-hub/shared";
 import { authenticate } from "../plugins/authenticate";
 import { parseSchema, requireUser } from "../lib/http";
-import { claimPracticeReward, getWallet, listTransactions } from "../services/wallet";
+import { claimPracticeReward, getWallet, listTransactions, applyTransaction } from "../services/wallet";
+import { getCategorySettings } from "../services/settings";
 
 const practiceRewardSchema = z.object({
   gameId: z.string().min(1).max(40),

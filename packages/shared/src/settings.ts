@@ -1,0 +1,344 @@
+import { z } from "zod";
+
+/**
+ * Centralized site configuration.
+ *
+ * Every setting lives in the `SiteSetting` table as a JSON value keyed by a
+ * dotted identifier (`<category>.<field>`). This module is the single source
+ * of truth for the shape, validation, defaults, and UI metadata of those
+ * settings. Both the API (enforcement + admin CRUD) and the web app
+ * (rendering + public display) import from here so the model can never drift.
+ *
+ * Adding a new setting = add it to the relevant category schema + defaults +
+ * (optionally) metadata. No migration required — unknown rows are ignored and
+ * missing rows fall back to the defaults below.
+ */
+
+// ---------------------------------------------------------------------------
+// Category schemas
+// ---------------------------------------------------------------------------
+
+export const generalSettingsSchema = z.object({
+  siteName: z.string().trim().min(1).max(80).default("Gaming Hub"),
+  logoUrl: z.string().trim().max(500).default("").or(z.literal("")),
+  faviconUrl: z.string().trim().max(500).default(""),
+  theme: z.enum(["light", "dark", "system"]).default("dark"),
+  primaryColor: z
+    .string()
+    .regex(/^#?[0-9a-fA-F]{6}$/, "Use a 6-digit hex color, e.g. #6366f1")
+    .default("#6366f1"),
+  timezone: z.string().trim().max(60).default("UTC"),
+  dateFormat: z.enum(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]).default("YYYY-MM-DD"),
+  timeFormat: z.enum(["12h", "24h"]).default("24h"),
+  defaultLanguage: z.string().trim().min(2).max(8).default("en"),
+  defaultCurrency: z.string().trim().min(3).max(3).default("USD"),
+  maintenanceEnabled: z.boolean().default(false),
+  maintenanceMessage: z.string().trim().max(280).default(""),
+  contactEmail: z.string().trim().max(160).default(""),
+  socialLinks: z
+    .record(z.string().trim().max(200), z.string().trim().max(500))
+    .default({}),
+});
+
+export const authSettingsSchema = z.object({
+  signupEnabled: z.boolean().default(true),
+  emailVerificationRequired: z.boolean().default(true),
+  mobileVerificationEnabled: z.boolean().default(false),
+  googleLoginEnabled: z.boolean().default(false),
+  appleLoginEnabled: z.boolean().default(false),
+  discordLoginEnabled: z.boolean().default(false),
+  twoFactorRequired: z.boolean().default(false),
+  passwordMinLength: z.number().int().min(6).max(128).default(8),
+  passwordRequireUppercase: z.boolean().default(true),
+  passwordRequireNumber: z.boolean().default(true),
+  passwordRequireSymbol: z.boolean().default(false),
+  sessionTimeoutMinutes: z.number().int().min(1).max(10080).default(10080),
+  maxLoginAttempts: z.number().int().min(1).max(100).default(15),
+  accountLockDurationMinutes: z.number().int().min(1).max(1440).default(15),
+  rememberMeEnabled: z.boolean().default(true),
+});
+
+export const securitySettingsSchema = z.object({
+  rateLimitMax: z.number().int().min(1).max(100000).default(300),
+  allowedCountries: z.array(z.string().trim().min(2).max(2)).default([]),
+  blockedCountries: z.array(z.string().trim().min(2).max(2)).default([]),
+  allowedIpAllowlist: z.array(z.string().trim().max(45)).default([]),
+  blockedIps: z.array(z.string().trim().max(45)).default([]),
+  vpnDetectionEnabled: z.boolean().default(false),
+  proxyDetectionEnabled: z.boolean().default(false),
+  deviceTrustEnabled: z.boolean().default(false),
+  cspEnabled: z.boolean().default(true),
+  fileUploadEnabled: z.boolean().default(true),
+  maxUploadBytes: z.number().int().min(1).max(100 * 1024 * 1024).default(5 * 1024 * 1024),
+  auditLoggingEnabled: z.boolean().default(true),
+  captchaEnabled: z.boolean().default(false),
+  csrfProtectionEnabled: z.boolean().default(true),
+});
+
+export const walletSettingsSchema = z.object({
+  minDeposit: z.number().int().min(0).max(10_000_000).default(0),
+  maxDeposit: z.number().int().min(0).max(100_000_000).default(100_000),
+  minWithdrawal: z.number().int().min(0).max(10_000_000).default(100),
+  maxWithdrawal: z.number().int().min(0).max(100_000_000).default(50_000),
+  withdrawalFeePercent: z.number().min(0).max(100).default(0),
+  dailyWithdrawalLimit: z.number().int().min(0).max(100_000_000).default(20_000),
+  currencyConversionEnabled: z.boolean().default(false),
+  bonusWalletEnabled: z.boolean().default(true),
+  referralReward: z.number().int().min(0).max(100_000).default(500),
+  cashbackPercent: z.number().min(0).max(100).default(0),
+});
+
+export const paymentSettingsSchema = z.object({
+  stripeEnabled: z.boolean().default(false),
+  stripeSecretKey: z.string().trim().max(200).default(""),
+  stripePublishableKey: z.string().trim().max(200).default(""),
+  stripeWebhookSecret: z.string().trim().max(200).default(""),
+  paypalEnabled: z.boolean().default(false),
+  paypalClientId: z.string().trim().max(200).default(""),
+  paypalClientSecret: z.string().trim().max(200).default(""),
+  paypalWebhookId: z.string().trim().max(200).default(""),
+  razorpayEnabled: z.boolean().default(false),
+  razorpayKeyId: z.string().trim().max(200).default(""),
+  razorpayKeySecret: z.string().trim().max(200).default(""),
+  razorpayWebhookSecret: z.string().trim().max(200).default(""),
+  manualPaymentsEnabled: z.boolean().default(false),
+  exchangeRateProvider: z.enum(["none", "fixer", "openexchangerates"]).default("none"),
+  paymentTimeoutSeconds: z.number().int().min(10).max(3600).default(300),
+  retryAttempts: z.number().int().min(0).max(20).default(3),
+});
+
+export const gameSettingsSchema = z.object({
+  disabledGames: z.array(z.string().trim().min(1).max(40)).default([]),
+  featuredGames: z.array(z.string().trim().min(1).max(40)).default([]),
+  matchmakingTimeoutSeconds: z.number().int().min(5).max(600).default(120),
+  turnTimerSeconds: z.number().int().min(0).max(600).default(45),
+  spectatorModeEnabled: z.boolean().default(true),
+  reconnectTimeoutSeconds: z.number().int().min(5).max(600).default(90),
+  xpRewardPerWin: z.number().int().min(0).max(10_000).default(50),
+  coinRewardPerWin: z.number().int().min(0).max(100_000).default(25),
+  dailyRewardEnabled: z.boolean().default(true),
+  dailyRewardAmount: z.number().int().min(0).max(10_000).default(100),
+  aiDifficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
+  defaultStake: z.number().int().min(0).max(100_000).default(100),
+  defaultMaxPlayers: z.number().int().min(2).max(8).default(4),
+  practiceModeEnabled: z.boolean().default(true),
+  practiceRewardAmount: z.number().int().min(0).max(10_000).default(50),
+  practiceDailyLimit: z.number().int().min(0).max(100_000).default(200),
+});
+
+export const lotterySettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  ticketPrice: z.number().int().min(0).max(100_000).default(100),
+  drawScheduleCron: z.string().trim().max(120).default("0 20 * * *"),
+  prizeDistribution: z
+    .array(z.object({ place: z.number().int().min(1).max(100), percent: z.number().min(0).max(100) }))
+    .default([]),
+  jackpotEnabled: z.boolean().default(false),
+  jackpotSeed: z.number().int().min(0).max(1_000_000_000).default(0),
+  drawTimezone: z.string().trim().max(60).default("UTC"),
+  drawAutomated: z.boolean().default(true),
+  winnerAnnouncementEnabled: z.boolean().default(true),
+});
+
+export const couponSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  defaultExpiryDays: z.number().int().min(1).max(365).default(30),
+  maxRedemptionsPerCoupon: z.number().int().min(1).max(1_000_000).default(1000),
+  countryRestrictionsEnabled: z.boolean().default(false),
+  autoGenerateEnabled: z.boolean().default(false),
+});
+
+export const notificationSettingsSchema = z.object({
+  emailNotificationsEnabled: z.boolean().default(true),
+  smsNotificationsEnabled: z.boolean().default(false),
+  pushNotificationsEnabled: z.boolean().default(false),
+  inAppNotificationsEnabled: z.boolean().default(true),
+  broadcastNotificationsEnabled: z.boolean().default(true),
+  scheduledNotificationsEnabled: z.boolean().default(false),
+});
+
+export const storageSettingsSchema = z.object({
+  provider: z.enum(["supabase", "s3"]).default("supabase"),
+  s3Bucket: z.string().trim().max(200).default(""),
+  s3Region: z.string().trim().max(80).default(""),
+  s3AccessKeyId: z.string().trim().max(200).default(""),
+  s3SecretAccessKey: z.string().trim().max(200).default(""),
+  maxUploadBytes: z.number().int().min(1).max(100 * 1024 * 1024).default(5 * 1024 * 1024),
+  allowedFileTypes: z.array(z.string().trim().max(40)).default([
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/gif",
+  ]),
+  backupStoragePath: z.string().trim().max(500).default(""),
+});
+
+export const emailSettingsSchema = z.object({
+  smtpHost: z.string().trim().max(200).default(""),
+  smtpPort: z.number().int().min(1).max(65535).default(587),
+  smtpSecure: z.boolean().default(false),
+  smtpUsername: z.string().trim().max(200).default(""),
+  smtpPassword: z.string().trim().max(200).default(""),
+  senderEmail: z.string().trim().max(200).default(""),
+  senderName: z.string().trim().max(120).default("Gaming Hub"),
+  verificationTemplateEnabled: z.boolean().default(true),
+  passwordResetTemplateEnabled: z.boolean().default(true),
+});
+
+export const apiSettingsSchema = z.object({
+  webhooksEnabled: z.boolean().default(false),
+  webhookSecret: z.string().trim().max(200).default(""),
+  apiVersion: z.string().trim().max(20).default("v1"),
+  perKeyRateLimit: z.number().int().min(1).max(100000).default(300),
+});
+
+export const backupSettingsSchema = z.object({
+  automaticBackupsEnabled: z.boolean().default(false),
+  backupScheduleCron: z.string().trim().max(120).default("0 3 * * *"),
+  backupRetentionDays: z.number().int().min(1).max(3650).default(30),
+  lastBackupAt: z.string().trim().max(40).default(""),
+});
+
+export const localizationSettingsSchema = z.object({
+  enabledLanguages: z.array(z.string().trim().min(2).max(8)).default(["en"]),
+  enabledCountries: z.array(z.string().trim().min(2).max(2)).default([]),
+  enabledCurrencies: z.array(z.string().trim().min(3).max(3)).default(["USD"]),
+  translationManagementEnabled: z.boolean().default(false),
+});
+
+export const developerSettingsSchema = z.object({
+  debugMode: z.boolean().default(false),
+  featureFlags: z.record(z.string().trim().max(80), z.boolean()).default({}),
+  experimentalFeaturesEnabled: z.boolean().default(false),
+  apiTestingEnabled: z.boolean().default(false),
+  queueMonitorEnabled: z.boolean().default(false),
+});
+
+// ---------------------------------------------------------------------------
+// Aggregate
+// ---------------------------------------------------------------------------
+
+export const SETTINGS_CATEGORIES = {
+  general: generalSettingsSchema,
+  auth: authSettingsSchema,
+  security: securitySettingsSchema,
+  wallet: walletSettingsSchema,
+  payment: paymentSettingsSchema,
+  game: gameSettingsSchema,
+  lottery: lotterySettingsSchema,
+  coupon: couponSettingsSchema,
+  notification: notificationSettingsSchema,
+  storage: storageSettingsSchema,
+  email: emailSettingsSchema,
+  api: apiSettingsSchema,
+  backup: backupSettingsSchema,
+  localization: localizationSettingsSchema,
+  developer: developerSettingsSchema,
+} as const;
+
+export type SettingsCategoryName = keyof typeof SETTINGS_CATEGORIES;
+
+export type SettingsShape = {
+  general: z.infer<typeof generalSettingsSchema>;
+  auth: z.infer<typeof authSettingsSchema>;
+  security: z.infer<typeof securitySettingsSchema>;
+  wallet: z.infer<typeof walletSettingsSchema>;
+  payment: z.infer<typeof paymentSettingsSchema>;
+  game: z.infer<typeof gameSettingsSchema>;
+  lottery: z.infer<typeof lotterySettingsSchema>;
+  coupon: z.infer<typeof couponSettingsSchema>;
+  notification: z.infer<typeof notificationSettingsSchema>;
+  storage: z.infer<typeof storageSettingsSchema>;
+  email: z.infer<typeof emailSettingsSchema>;
+  api: z.infer<typeof apiSettingsSchema>;
+  backup: z.infer<typeof backupSettingsSchema>;
+  localization: z.infer<typeof localizationSettingsSchema>;
+  developer: z.infer<typeof developerSettingsSchema>;
+};
+
+/** Full aggregated settings object (all categories). */
+export const siteSettingsSchema = z.object(SETTINGS_CATEGORIES);
+
+function extractDefaults<K extends SettingsCategoryName>(category: K): SettingsShape[K] {
+  return SETTINGS_CATEGORIES[category].parse({}) as SettingsShape[K];
+}
+
+/** Defaults derived from the schemas themselves (`.default(...)` applied). */
+export const DEFAULT_SETTINGS: SettingsShape = {
+  general: extractDefaults("general"),
+  auth: extractDefaults("auth"),
+  security: extractDefaults("security"),
+  wallet: extractDefaults("wallet"),
+  payment: extractDefaults("payment"),
+  game: extractDefaults("game"),
+  lottery: extractDefaults("lottery"),
+  coupon: extractDefaults("coupon"),
+  notification: extractDefaults("notification"),
+  storage: extractDefaults("storage"),
+  email: extractDefaults("email"),
+  api: extractDefaults("api"),
+  backup: extractDefaults("backup"),
+  localization: extractDefaults("localization"),
+  developer: extractDefaults("developer"),
+};
+
+export type SiteSettings = SettingsShape;
+
+/**
+ * Keys whose values must never be returned to non-admin clients (the public
+ * `/api/settings` endpoint strips these). Listed by dotted key path.
+ */
+export const SECRET_SETTING_KEYS: ReadonlySet<string> = new Set([
+  "payment.stripeSecretKey",
+  "payment.stripeWebhookSecret",
+  "payment.paypalClientSecret",
+  "payment.paypalWebhookId",
+  "payment.razorpayKeySecret",
+  "payment.razorpayWebhookSecret",
+  "storage.s3SecretAccessKey",
+  "email.smtpPassword",
+  "api.webhookSecret",
+]);
+
+/** Human-readable category metadata for UI rendering. */
+export const SETTINGS_CATEGORY_META: Record<
+  SettingsCategoryName,
+  { label: string; description: string; icon: string }
+> = {
+  general: { label: "General", description: "Branding, locale, and maintenance.", icon: "Globe" },
+  auth: { label: "Authentication", description: "Sign-in methods and password policy.", icon: "ShieldCheck" },
+  security: { label: "Security", description: "Rate limits, geo/IP rules, hardening.", icon: "Lock" },
+  wallet: { label: "Wallet", description: "Deposit and withdrawal limits and rewards.", icon: "Wallet" },
+  payment: { label: "Payments", description: "Gateways, webhooks, and retry rules.", icon: "CreditCard" },
+  game: { label: "Games", description: "Game enablement, matchmaking, and rewards.", icon: "Gamepad2" },
+  lottery: { label: "Lottery", description: "Draws, jackpots, and prize splits.", icon: "Ticket" },
+  coupon: { label: "Coupons", description: "Coupon expiry and redemption rules.", icon: "TicketPercent" },
+  notification: { label: "Notifications", description: "Email, SMS, push, and broadcast.", icon: "Bell" },
+  storage: { label: "Storage", description: "Object store and upload limits.", icon: "Database" },
+  email: { label: "Email", description: "SMTP and transactional templates.", icon: "Mail" },
+  api: { label: "API", description: "Webhooks, versioning, and rate limits.", icon: "Webhook" },
+  backup: { label: "Backup", description: "Schedule and retention of backups.", icon: "Archive" },
+  localization: { label: "Localization", description: "Languages, countries, currencies.", icon: "Languages" },
+  developer: { label: "Developer", description: "Debug, feature flags, experiments.", icon: "Terminal" },
+};
+
+/**
+ * Flatten a settings object into dotted key/value pairs, e.g.
+ * `{ auth: { signupEnabled: true } }` -> `[{ key: "auth.signupEnabled", value: true, category: "auth" }]`.
+ */
+export function flattenSettings(settings: Partial<SiteSettings>): Array<{
+  key: string;
+  value: unknown;
+  category: SettingsCategoryName;
+}> {
+  const out: Array<{ key: string; value: unknown; category: SettingsCategoryName }> = [];
+  for (const [category, group] of Object.entries(settings) as Array<
+    [SettingsCategoryName, Record<string, unknown>]
+  >) {
+    if (!group || typeof group !== "object") continue;
+    for (const [field, value] of Object.entries(group)) {
+      out.push({ key: `${category}.${field}`, value, category });
+    }
+  }
+  return out;
+}

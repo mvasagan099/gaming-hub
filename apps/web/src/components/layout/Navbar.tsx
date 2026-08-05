@@ -1,7 +1,8 @@
-import { Search, Bell, UserCircle2, Sun, Moon, Contrast, LogOut, Gamepad2, Loader2 } from "lucide-react";
+import { Search, Bell, UserCircle2, Sun, Moon, Contrast, LogOut, Gamepad2, Loader2, Image } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "../../contexts/ThemeProvider";
 import { useAuthStore } from "../../store/authStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import { useUIStore } from "../../store/uiStore";
 import { useMe } from "../../services/api/useMe";
 import { Skeleton } from "../Skeleton";
@@ -16,7 +17,11 @@ export default function Navbar({ onLogoClick }: NavbarProps) {
   const setPaletteOpen = useUIStore((s) => s.setPaletteOpen);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
+  const settings = useSettingsStore((s) => s.settings);
   const { me, loading } = useMe();
+
+  const siteName = settings?.general?.siteName || "Gaming Hub";
+  const logoUrl = settings?.general?.logoUrl || "";
 
   const handleSignOut = async () => {
     await signOut();
@@ -32,11 +37,15 @@ export default function Navbar({ onLogoClick }: NavbarProps) {
             else navigate('/');
           }}
           className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-          aria-label="Gaming Hub home"
+          aria-label={`${siteName} home`}
         >
-          <Gamepad2 className="w-7 h-7 text-accent-500" />
+          {logoUrl ? (
+            <img src={logoUrl} alt={siteName} className="w-7 h-7 object-cover" />
+          ) : (
+            <Gamepad2 className="w-7 h-7 text-accent-500" />
+          )}
           <h1 className="hidden sm:block text-xl font-bold text-slate-900 dark:text-white transition-colors duration-300">
-            Gaming Hub
+            {siteName}
           </h1>
         </button>
 

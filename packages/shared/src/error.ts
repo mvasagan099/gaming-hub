@@ -23,6 +23,8 @@ export const ERROR_CODES = [
   "ACCOUNT_LOCKED",
   "RATE_LIMITED",
   "INTERNAL_ERROR",
+  "FEATURE_DISABLED",
+  "WALLET_LIMIT_EXCEEDED",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

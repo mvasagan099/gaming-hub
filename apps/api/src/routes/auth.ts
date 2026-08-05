@@ -9,6 +9,7 @@ import { ensureUser, getAuthenticatedUserData } from "../services/users";
 import { authenticate } from "../plugins/authenticate";
 import { requireUser } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
+import { getCategorySettings } from "../services/settings";
 
 // Failed sign-in lockout: more than this many failed session exchanges for an
 // email within the window rejects further attempts, even with a valid token.
@@ -71,6 +72,18 @@ export async function authRoutes(app: FastifyInstance) {
           meta: { reason: "invalid_token", email: hintEmail },
         });
         throw new AppError("UNAUTHORIZED", "Invalid or expired token", 401);
+      }
+
+      // Check if platform is under maintenance mode
+      const general = await getCategorySettings("general");
+      if (general.maintenanceEnabled) {
+        auditFromRequest(request, {
+          actorType: "system",
+          action: "auth.session.failed",
+          category: "auth",
+          meta: { reason: "maintenance", email: verified.email },
+        });
+        throw new AppError("FEATURE_DISABLED", "The platform is currently under maintenance. Please try again later.", 403);
       }
 
       if (env.requireEmailVerification && !verified.emailVerified) {

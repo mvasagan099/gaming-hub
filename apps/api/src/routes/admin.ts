@@ -1,12 +1,22 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { prisma } from "@gaming-hub/db";
-import { AppError, clampPagination } from "@gaming-hub/shared";
+import {
+  AppError,
+  clampPagination,
+  SETTINGS_CATEGORIES,
+  type SettingsCategoryName,
+} from "@gaming-hub/shared";
 import { authenticate } from "../plugins/authenticate";
 import { requireUser, parseSchema, routeParams, queryParams, queryString } from "../lib/http";
 import { requirePermission } from "../lib/permissions";
 import { applyTransaction } from "../services/wallet";
 import { auditFromRequest } from "../services/audit";
-import { z } from "zod";
+import {
+  getSettings,
+  setSetting,
+  setCategorySettings,
+} from "../services/settings";
 
 const walletAdjustSchema = z.object({
   amount: z.number().int().min(-1_000_000).max(1_000_000),
@@ -148,5 +158,77 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     return { ok: true, user: { id, role } };
+  });
+
+  // ---- Site settings -------------------------------------------------------
+  // Returns the full validated configuration including secret values. Requires
+  // the read permission; non-admin clients use the public /api/settings route.
+  app.get("/api/admin/settings", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:settings:view");
+    return getSettings();
+  });
+
+  const singleSettingSchema = z.object({
+    value: z.unknown(),
+  });
+
+  // Patch a single dotted setting key (e.g. `auth.signupEnabled`).
+  app.patch("/api/admin/settings/:key", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:settings:edit");
+    const { key } = routeParams(request);
+    const { value } = parseSchema(singleSettingSchema, request.body);
+    await setSetting(key, value, admin.id);
+    auditFromRequest(request, {
+      actorType: "user",
+      actorId: admin.id,
+      action: "admin.settings.updated",
+      category: "admin",
+      targetType: "system",
+      targetId: key,
+      meta: { key },
+    });
+    return { ok: true, key };
+  });
+
+  const categoryUpdateSchema = z.object({
+    category: z.enum(Object.keys(SETTINGS_CATEGORIES) as [SettingsCategoryName, ...SettingsCategoryName[]]),
+    values: z.record(z.string(), z.unknown()),
+  });
+
+  // Replace an entire category (e.g. all `wallet.*` keys) in one transaction.
+  app.put("/api/admin/settings/category", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:settings:edit");
+    const { category, values } = parseSchema(categoryUpdateSchema, request.body);
+    const saved = await setCategorySettings(category, values, admin.id);
+    auditFromRequest(request, {
+      actorType: "user",
+      actorId: admin.id,
+      action: "admin.settings.category.updated",
+      category: "admin",
+      targetType: "system",
+      targetId: category,
+      meta: { category, fields: Object.keys(values) },
+    });
+    return { ok: true, category, values: saved };
+  });
+
+  // Reset a category back to built-in defaults (deletes all stored rows).
+  app.delete("/api/admin/settings/category/:category", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:settings:edit");
+    const { category } = routeParams(request);
+    if (!(category in SETTINGS_CATEGORIES)) {
+      throw new AppError("VALIDATION_ERROR", `Unknown category "${category}"`, 422);
+    }
+    await prisma.siteSetting.deleteMany({ where: { category } });
+    auditFromRequest(request, {
+      actorType: "user",
+      actorId: admin.id,
+      action: "admin.settings.category.reset",
+      category: "admin",
+      targetType: "system",
+      targetId: category,
+      meta: { category },
+    });
+    return { ok: true, category };
   });
 }

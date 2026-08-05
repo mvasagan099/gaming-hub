@@ -423,3 +423,22 @@ model TournamentPlayer {
 
   @@unique([tournamentId, userId])
 }
+
+/// Site-wide configuration store. One row per setting key. Values are stored as
+/// JSON so the schema can evolve without migrations; secrets (API keys, SMTP
+/// passwords) are marked `secret` and never exposed via the public endpoint.
+model SiteSetting {
+  /// Dotted key, e.g. `general.siteName`, `auth.signupEnabled`.
+  key       String   @id
+  /// Top-level category, derived from the key prefix. Indexed for fast filtering.
+  category  String
+  /// JSON-encoded value (validated against the shared settings schema).
+  value     Json
+  /// True for sensitive values (secrets/keys) never returned by /api/settings.
+  secret    Boolean  @default(false)
+  /// Last editor (admin user id). Null for seeded defaults.
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}

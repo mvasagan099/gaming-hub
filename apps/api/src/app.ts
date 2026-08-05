@@ -16,6 +16,7 @@ import { walletRoutes } from "./routes/wallet";
 import { notificationsRoutes } from "./routes/notifications";
 import { achievementsRoutes } from "./routes/achievements";
 import { adminRoutes } from "./routes/admin";
+import { settingsRoutes } from "./routes/settings";
 import { internalRoutes } from "./routes/internal";
 import { accountRoutes } from "./routes/account";
 import { metricsRoutes } from "./routes/metrics";
@@ -85,6 +86,7 @@ export function buildApp() {
   void app.register(notificationsRoutes);
   void app.register(achievementsRoutes);
   void app.register(adminRoutes);
+  void app.register(settingsRoutes);
   void app.register(internalRoutes);
   void app.register(accountRoutes);
   void app.register(metricsRoutes);
