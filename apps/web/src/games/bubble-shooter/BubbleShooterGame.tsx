@@ -2,12 +2,32 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GameWrapper } from '../../components/GameWrapper';
 import { useUserStore } from '../../store/useUserStore';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
+import { useMultiplayerStore } from '../../store/multiplayerStore';
 
 interface BubbleShooterProps {
   mode: 'ai' | 'multiplayer';
   stake: number;
   onBack: () => void;
 }
+
+// Server-authoritative state mirror (see packages/game-engine/src/bubble-shooter).
+type RemoteBubble = { row: number; col: number; color: string; type: 'normal' | 'bomb' | 'rainbow' };
+type RemotePlayer = {
+  seat: number;
+  name: string;
+  grid: RemoteBubble[];
+  topOffset: number;
+  shotsFired: number;
+  nextBubble: { color: string; type: 'normal' | 'bomb' | 'rainbow' };
+  score: number;
+  status: 'playing' | 'won' | 'eliminated';
+};
+type RemoteState = {
+  players: RemotePlayer[];
+  winnerSeats: number[];
+  finished: boolean;
+  result: 'none' | 'win' | 'draw';
+};
 
 // Brighter colors
 const COLORS = ['#fb7185', '#818cf8', '#34d399', '#fbbf24', '#c084fc']; // Brighter versions of rose, indigo, emerald, amber, purple
@@ -37,12 +57,20 @@ function getGridY(row: number, topOffset: number) {
 }
 
 export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, onBack }) => {
+  const isMultiplayer = mode === 'multiplayer';
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const addCoins = useUserStore((state) => state.addCoins);
+
+  const gameState = useMultiplayerStore((s) => s.gameState);
+  const winner = useMultiplayerStore((s) => s.winner);
+  const mySeat = useMultiplayerStore((s) => s.mySeat);
+  const isSpectator = useMultiplayerStore((s) => s.isSpectator);
+  const roomPlayers = useMultiplayerStore((s) => s.room?.players ?? []);
   
   const [score, setScore] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [win, setWin] = useState(false);
+  const [lose, setLose] = useState(false);
   const [rewardClaimed, setRewardClaimed] = useState(false);
   const [showRules, setShowRules] = useState(true);
 
@@ -59,6 +87,7 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   const mousePosRef = useRef({ x: SHOOTER_X, y: 0 });
   const topOffsetRef = useRef(0);
   const screenShakeRef = useRef(0);
+  const shootingRef = useRef(false);
 
   const getNextBubble = useCallback((): {color: string, type: 'normal' | 'bomb' | 'rainbow'} => {
     // 3% chance for a bomb, 3% chance for a rainbow
@@ -101,8 +130,50 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   }, [getNextBubble]);
 
   useEffect(() => {
-    initGrid();
-  }, [initGrid]);
+    if (!isMultiplayer) {
+      initGrid();
+    }
+  }, [initGrid, isMultiplayer]);
+
+  // In multiplayer the board, score and next bubble are authoritative from the
+  // server. Apply my player's board on every `game:state` / `game:over`.
+  useEffect(() => {
+    if (!isMultiplayer || !gameState || mySeat == null) return;
+    const s = gameState as unknown as RemoteState;
+    const me = (s.players ?? []).find((p) => p.seat === mySeat);
+    if (!me) return;
+
+    gridRef.current = me.grid.map((b) => ({
+      ...b,
+      x: getGridX(b.row, b.col),
+      y: getGridY(b.row, me.topOffset),
+    }));
+    topOffsetRef.current = me.topOffset;
+    shotsFiredRef.current = me.shotsFired;
+    nextBubbleRef.current = me.nextBubble;
+    movingBubbleRef.current = null;
+    shootingRef.current = false;
+    setScore(me.score);
+
+    const won = me.status === 'won' || s.winnerSeats.includes(mySeat);
+    if (won) {
+      setWin(true);
+      setGameOver(false);
+      setLose(false);
+    } else if (me.status === 'eliminated' && !s.finished) {
+      setGameOver(true);
+      setWin(false);
+      setLose(false);
+    } else if (s.finished) {
+      setLose(true);
+      setWin(false);
+      setGameOver(false);
+    } else {
+      setWin(false);
+      setGameOver(false);
+      setLose(false);
+    }
+  }, [gameState, mySeat, isMultiplayer]);
 
   useGameLoop((dt) => {
     const canvas = canvasRef.current;
@@ -344,7 +415,11 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
         if (b.x + RADIUS > CANVAS_WIDTH) { b.x = CANVAS_WIDTH - RADIUS; b.vx *= -1; }
         if (b.y - RADIUS < 0) {
           b.y = RADIUS;
-          snapBubble(b);
+          // Multiplayer: the server resolves the shot; the local flight is a
+          // prediction only, so stop here without mutating the board.
+          if (!isMultiplayer) {
+            snapBubble(b);
+          }
           movingBubbleRef.current = null;
           return;
         }
@@ -360,7 +435,9 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
         }
 
         if (hit) {
-          snapBubble(b);
+          if (!isMultiplayer) {
+            snapBubble(b);
+          }
           movingBubbleRef.current = null;
         }
       }
@@ -560,10 +637,10 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
 
     update();
     draw();
-  }, !(gameOver || win || showRules));
+  }, !(gameOver || win || lose || showRules));
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || movingBubbleRef.current || gameOver || win) return;
+    if (!canvasRef.current || movingBubbleRef.current || gameOver || win || lose) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     
@@ -582,12 +659,43 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
     mousePosRef.current = { x: SHOOTER_X + dx, y: SHOOTER_Y + dy };
   };
 
+  const canShoot = useCallback(() => {
+    if (mySeat == null || isSpectator) return false;
+    const s = gameState as unknown as RemoteState | null;
+    if (!s || s.finished) return false;
+    const me = (s.players ?? []).find((p) => p.seat === mySeat);
+    return !!me && me.status === 'playing';
+  }, [gameState, mySeat, isSpectator]);
+
   const handleShoot = () => {
-    if (movingBubbleRef.current || gameOver || win || showRules) return;
+    if (movingBubbleRef.current || gameOver || win || lose || showRules) return;
 
     const dx = mousePosRef.current.x - SHOOTER_X;
     const dy = mousePosRef.current.y - SHOOTER_Y;
     const angle = Math.atan2(dy, dx);
+
+    // Multiplayer: the server owns the board. Fire the current next bubble and
+    // animate a local prediction while the authoritative state round-trips.
+    if (isMultiplayer) {
+      if (shootingRef.current || !canShoot()) return;
+      shootingRef.current = true;
+      movingBubbleRef.current = {
+        x: SHOOTER_X,
+        y: SHOOTER_Y,
+        vx: Math.cos(angle) * SPEED,
+        vy: Math.sin(angle) * SPEED,
+        color: nextBubbleRef.current.color,
+        type: nextBubbleRef.current.type
+      };
+
+      void useMultiplayerStore.getState().sendGameAction({ type: 'shoot', angle }).then((res) => {
+        if (!res.ok) {
+          shootingRef.current = false;
+          movingBubbleRef.current = null;
+        }
+      });
+      return;
+    }
 
     movingBubbleRef.current = {
       x: SHOOTER_X,
@@ -602,22 +710,44 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   };
 
   useEffect(() => {
-    if (win && !rewardClaimed) {
+    if (win && !rewardClaimed && !isMultiplayer) {
       addCoins(50);
       setRewardClaimed(true);
     }
-  }, [win, rewardClaimed, addCoins]);
+  }, [win, rewardClaimed, addCoins, isMultiplayer]);
 
   const handleReplay = () => {
+    if (isMultiplayer) {
+      void useMultiplayerStore.getState().rematch();
+      return;
+    }
     setScore(0);
     setGameOver(false);
     setWin(false);
+    setLose(false);
     setRewardClaimed(false);
     movingBubbleRef.current = null;
     particlesRef.current = [];
     floatingTextsRef.current = [];
     initGrid();
   };
+
+  const remoteState = gameState as unknown as RemoteState | null;
+  const serverPlayers = isMultiplayer && remoteState ? remoteState.players ?? [] : [];
+  const winnerSeats = isMultiplayer
+    ? remoteState?.winnerSeats ?? winner?.winnerSeats ?? []
+    : [];
+  const matchFinished = isMultiplayer
+    ? Boolean(remoteState?.finished || winner)
+    : false;
+  const namesBySeat: Record<number, string> = {};
+  for (const p of roomPlayers) {
+    if (p.seat != null) namesBySeat[p.seat] = p.displayName;
+  }
+  const winnerSeat = winnerSeats[0] != null ? winnerSeats[0] : null;
+  const winnerName = winnerSeat != null
+    ? (namesBySeat[winnerSeat] ?? `Player ${winnerSeat + 1}`)
+    : null;
 
   return (
     <GameWrapper title="Bubble Shooter Master" gameId="bubble-shooter" mode={mode} stake={stake} onBack={onBack} isFullscreen>
@@ -670,30 +800,44 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
           )}
 
           {/* WIN/LOSS OVERLAY */}
-          {(gameOver || win) && (
+          {(gameOver || win || lose) && (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in rounded-3xl">
               <div className="bg-slate-900 border border-amber-500/30 p-8 rounded-3xl shadow-2xl flex flex-col items-center max-w-[280px] w-full mx-4">
-                <div className="text-6xl mb-4">{win ? '🏆' : '❌'}</div>
+                <div className="text-6xl mb-4">{win ? '🏆' : gameOver ? '⏳' : winnerSeats.length === 0 ? '🤝' : '❌'}</div>
                 <h2 className={`text-3xl font-black uppercase tracking-widest text-center mb-2 ${win ? 'text-emerald-400' : 'text-rose-500'}`}>
-                  {win ? 'YOU WIN!' : 'GAME OVER'}
+                  {win ? 'YOU WIN!' : gameOver ? "YOU'RE OUT!" : winnerSeats.length === 0 ? 'DRAW!' : 'GAME OVER'}
                 </h2>
                 <p className="text-slate-300 text-sm text-center mb-6 font-bold">
                   Final Score: {score}
                 </p>
-                
-                {win && (
+
+                {lose && winnerName && (
+                  <div className="bg-indigo-950/50 border border-indigo-500/30 text-indigo-300 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 mb-6">
+                    🏁 {winnerName} cleared their board!
+                  </div>
+                )}
+
+                {win && !isMultiplayer && (
                   <div className="bg-emerald-950/50 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 mb-6">
                     🪙 +50 Coins Added!
                   </div>
                 )}
 
+                {gameOver && !matchFinished && (
+                  <p className="text-slate-400 text-xs text-center mb-6 font-bold">
+                    Waiting for the match to end...
+                  </p>
+                )}
+
                 <div className="flex gap-3 w-full">
-                  <button
-                    onClick={handleReplay}
-                    className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg text-sm"
-                  >
-                    Replay
-                  </button>
+                  {!(gameOver && !matchFinished) && (
+                    <button
+                      onClick={handleReplay}
+                      className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg text-sm"
+                    >
+                      {isMultiplayer ? 'Rematch' : 'Replay'}
+                    </button>
+                  )}
                   <button
                     onClick={onBack}
                     className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-all border border-slate-700 text-sm"
@@ -715,13 +859,46 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
           />
         </div>
 
-        {/* RIGHT SIDEBAR: SHOTS TILL DROP */}
-        <div className="flex flex-col items-center gap-6 glass-panel p-8 rounded-3xl border border-slate-800 w-full max-w-xs shrink-0 order-3 shadow-2xl">
-          <div className="text-center w-full bg-slate-900/80 p-6 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
-             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-rose-500 to-transparent"></div>
-             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Shots Till Drop</span>
-             <p className="text-3xl font-black text-rose-500 mt-2 filter drop-shadow-md">Every 2</p>
-          </div>
+          {/* RIGHT SIDEBAR: SHOTS TILL DROP / SCOREBOARD */}
+          <div className="flex flex-col items-center gap-6 glass-panel p-8 rounded-3xl border border-slate-800 w-full max-w-xs shrink-0 order-3 shadow-2xl">
+            {isMultiplayer ? (
+              <div className="text-center w-full bg-slate-900/80 p-6 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
+                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent"></div>
+                 <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Scoreboard</span>
+                 <div className="w-full mt-3 space-y-2">
+                   {serverPlayers.length === 0 && (
+                     <p className="text-xs text-slate-500 font-bold">Waiting for the match to start...</p>
+                   )}
+                   {serverPlayers.map((p) => {
+                     const isMe = p.seat === mySeat;
+                     const statusColor =
+                       p.status === 'won' ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/40'
+                       : p.status === 'eliminated' ? 'text-rose-400 border-rose-500/40 bg-rose-950/40'
+                       : 'text-slate-300 border-slate-700 bg-slate-800/60';
+                     const statusLabel =
+                       p.status === 'won' ? 'Won' : p.status === 'eliminated' ? 'Out' : 'Playing';
+                     return (
+                       <div key={p.seat} className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-left ${isMe ? 'border-indigo-500/50 bg-indigo-950/40' : 'border-slate-800 bg-slate-900/40'}`}>
+                         <span className="text-xs font-bold text-slate-200 truncate">
+                           {isMe ? 'You' : (namesBySeat[p.seat] ?? p.name)}
+                           {isMe && <span className="ml-1 text-indigo-400">•</span>}
+                         </span>
+                         <span className="flex items-center gap-2 shrink-0">
+                           <span className="text-xs font-black text-amber-400">{p.score}</span>
+                           <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${statusColor}`}>{statusLabel}</span>
+                         </span>
+                       </div>
+                     );
+                   })}
+                 </div>
+              </div>
+            ) : (
+              <div className="text-center w-full bg-slate-900/80 p-6 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
+                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-rose-500 to-transparent"></div>
+                 <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Shots Till Drop</span>
+                 <p className="text-3xl font-black text-rose-500 mt-2 filter drop-shadow-md">Every 2</p>
+              </div>
+            )}
           
           <div className="w-full mt-4 space-y-3 bg-slate-900/40 p-4 rounded-2xl border border-slate-800/50">
              <h3 className="text-white font-bold mb-3 uppercase tracking-wider text-xs">Power-Ups</h3>
