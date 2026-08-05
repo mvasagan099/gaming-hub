@@ -1,6 +1,6 @@
 export type TransactionType = "CREDIT" | "DEBIT" | "ADJUST";
 
-export type TransactionReferenceType = "MATCH_WAGER" | "MATCH_PAYOUT" | "ADMIN" | "BONUS";
+export type TransactionReferenceType = "MATCH_WAGER" | "MATCH_PAYOUT" | "ADMIN" | "BONUS" | "PRACTICE";
 
 export interface Wallet {
   userId: string;

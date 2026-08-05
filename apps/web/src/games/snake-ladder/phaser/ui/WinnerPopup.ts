@@ -125,8 +125,8 @@ export default class WinnerPopup {
         this.titleText.setText(`🎉 YOU WON! (+50 Coins)`);
         this.titleText.setColor("#4ade80");
         // Import dynamically to avoid cyclic dependency issues or phaser build issues
-        import("../../../../store/useUserStore").then(({ useUserStore }) => {
-          useUserStore.getState().addCoins(50);
+        import("../../../../services/api/practiceReward").then(({ claimPracticeReward }) => {
+          void claimPracticeReward("snake-ladder");
         });
       } else {
         this.titleText.setText(`🤖 SORRY, AI WON...`);

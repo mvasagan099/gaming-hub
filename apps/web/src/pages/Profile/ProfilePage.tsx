@@ -1,31 +1,123 @@
-import React from 'react';
-import { useUserStore } from '../../store/useUserStore';
-import { Award, ShieldCheck, Trophy } from 'lucide-react';
+import { Link, useNavigate } from "react-router-dom";
+import { LogOut, Settings2, ShieldCheck, Trophy, Wallet } from "lucide-react";
+import { useAuthStore } from "../../store/authStore";
+import { useMe } from "../../services/api/useMe";
+import { Skeleton, SkeletonCircle, SkeletonText } from "../../components/Skeleton";
 
 export const ProfilePage: React.FC = () => {
-  const { username, avatar, coins, gems, level } = useUserStore();
+  const navigate = useNavigate();
+  const session = useAuthStore((s) => s.session);
+  const signOut = useAuthStore((s) => s.signOut);
+  const { me, loading } = useMe();
 
-  return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div className="glass-panel p-8 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-4 transition-colors duration-300">
-        <div className="w-24 h-24 rounded-3xl bg-indigo-100 dark:bg-indigo-600/20 border-2 border-indigo-500 flex items-center justify-center text-5xl mx-auto shadow-2xl transition-colors duration-300">
-          {avatar}
-        </div>
-        <div>
-          <h2 className="text-2xl font-black text-slate-900 dark:text-white transition-colors duration-300">{username}</h2>
-          <p className="text-xs text-indigo-400 font-bold uppercase tracking-wider">Level {level} Competitor</p>
-        </div>
-        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 dark:border-slate-800 transition-colors duration-300">
-          <div className="bg-slate-50 dark:bg-slate-900/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 transition-colors duration-300">
-            <p className="text-slate-500 dark:text-slate-400 text-xs transition-colors duration-300">Coins Balance</p>
-            <p className="text-xl font-black text-amber-400 mt-1">🪙 {coins.toLocaleString()}</p>
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
+
+  if (loading || !me) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div className="p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center space-y-4">
+          <SkeletonCircle className="w-24 h-24 mx-auto" />
+          <div className="space-y-2">
+            <SkeletonText className="w-40 mx-auto h-6" />
+            <SkeletonText className="w-24 mx-auto" />
           </div>
-          <div className="bg-slate-50 dark:bg-slate-900/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 transition-colors duration-300">
-            <p className="text-slate-500 dark:text-slate-400 text-xs transition-colors duration-300">Gems</p>
-            <p className="text-xl font-black text-cyan-400 mt-1">💎 {gems}</p>
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
           </div>
         </div>
       </div>
+    );
+  }
+
+  const displayName = me.user.displayName || me.user.username || "Player";
+  const avatarUrl = me.user.avatarUrl;
+  const balance = me.wallet?.balance ?? 0;
+  const stats = me.profile;
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div className="p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center space-y-4 transition-colors duration-300">
+        <div className="w-24 h-24 rounded-3xl bg-indigo-600/20 border-2 border-indigo-500 flex items-center justify-center text-4xl font-black text-indigo-400 mx-auto shadow-2xl overflow-hidden">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            displayName.slice(0, 1).toUpperCase()
+          )}
+        </div>
+        <div>
+          <h2 className="text-2xl font-black text-slate-900 dark:text-white">{displayName}</h2>
+          <p className="text-xs text-indigo-400 font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 mt-0.5">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Level {stats?.level ?? 1} Competitor • {me.user.role}
+          </p>
+          {me.user.email && (
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{me.user.email}</p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <p className="text-slate-500 dark:text-slate-400 text-xs flex items-center justify-center gap-1">
+              <Wallet className="w-3.5 h-3.5" /> Wallet Balance
+            </p>
+            <p className="text-xl font-black text-amber-400 mt-1">🪙 {balance.toLocaleString()}</p>
+          </div>
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <p className="text-slate-500 dark:text-slate-400 text-xs">Gems</p>
+            <p className="text-xl font-black text-cyan-400 mt-1">💎 {stats?.gems ?? 0}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2 pt-2">
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <p className="text-lg font-black text-emerald-500">{stats?.wins ?? 0}</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Wins</p>
+          </div>
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <p className="text-lg font-black text-rose-500">{stats?.losses ?? 0}</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Losses</p>
+          </div>
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <p className="text-lg font-black text-slate-400">{stats?.draws ?? 0}</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Draws</p>
+          </div>
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <p className="text-lg font-black text-indigo-400">{stats?.xp ?? 0}</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">XP</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <Link
+            to="/settings"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-800 dark:text-white transition-colors"
+          >
+            <Settings2 className="w-4 h-4" /> Settings
+          </Link>
+          <Link
+            to="/leaderboard"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition-colors"
+          >
+            <Trophy className="w-4 h-4" /> Leaderboard
+          </Link>
+          <button
+            onClick={() => void handleSignOut()}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600/10 hover:bg-rose-600 hover:text-white text-xs font-bold text-rose-500 border border-rose-500/40 transition-colors"
+          >
+            <LogOut className="w-4 h-4" /> Sign out
+          </button>
+        </div>
+      </div>
+
+      {session?.user && (
+        <p className="text-center text-[10px] text-slate-400 dark:text-slate-500">
+          Member since {new Date(me.user.createdAt).toLocaleDateString()}
+        </p>
+      )}
     </div>
   );
 };

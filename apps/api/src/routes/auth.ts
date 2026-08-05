@@ -19,7 +19,7 @@ export async function authRoutes(app: FastifyInstance) {
     } catch {
       throw new AppError("UNAUTHORIZED", "Invalid or expired token", 401);
     }
-    await ensureUser(verified.sub, verified.email);
+    await ensureUser(verified.sub, verified.email, verified.userMetadata);
     return { status: "ok" };
   });
 }

@@ -57,6 +57,7 @@ enum TransactionReferenceType {
   MATCH_PAYOUT
   ADMIN
   BONUS
+  PRACTICE
 }
 
 enum NotificationType {

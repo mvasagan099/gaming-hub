@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { GameWrapper } from '../../components/GameWrapper';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
-import { useUserStore } from '../../store/useUserStore';
+import { claimPracticeReward } from '../../services/api/practiceReward';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
 
 interface CarromGameProps {
@@ -114,8 +114,6 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
   });
   const turnScoreRef = useRef({ white: 0, black: 0, queen: false, foul: false });
 
-  const { addCoins } = useUserStore();
-
   useEffect(() => {
     if (gameOver || isTurnActive || showRules || currentPlayer !== 'ai') return;
     
@@ -195,9 +193,9 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
     const rules = rulesRef.current;
     if (rules.queenStatus === 'covered' && (score.white >= 9 || score.black >= 9) && !rewardClaimed) {
       setRewardClaimed(true);
-      if (score.white >= 9) setTimeout(() => addCoins(50), 1000);
+      if (score.white >= 9) setTimeout(() => void claimPracticeReward('carrom'), 1000);
     }
-  }, [gameOver, score, rewardClaimed, addCoins, uiTrigger]);
+  }, [gameOver, score, rewardClaimed, uiTrigger]);
 
   useEffect(() => {
     if (gameOver || isTurnActive || showRules || currentPlayer === 'ai') {

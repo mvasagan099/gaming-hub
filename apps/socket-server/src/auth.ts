@@ -23,7 +23,13 @@ export async function authenticateToken(token: string): Promise<AuthenticatedUse
     throw new Error("Token is missing subject");
   }
 
-  const user = await ensureUser(payload.sub, typeof payload.email === "string" ? payload.email : null);
+  const user = await ensureUser(
+    payload.sub,
+    typeof payload.email === "string" ? payload.email : null,
+    typeof payload.user_metadata === "object" && payload.user_metadata !== null
+      ? (payload.user_metadata as Record<string, unknown>)
+      : null,
+  );
   return {
     userId: user.id,
     username: user.username,

@@ -19,11 +19,35 @@ function sanitizeUsername(candidate: string | null): string | null {
   return cleaned;
 }
 
+function readMetadata(metadata: Record<string, unknown> | null | undefined): {
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+} {
+  if (!metadata) return { username: null, displayName: null, avatarUrl: null };
+  const pick = (keys: string[]): string | null => {
+    for (const key of keys) {
+      const value = metadata[key];
+      if (typeof value === "string" && value.trim().length > 0) return value.trim();
+    }
+    return null;
+  };
+  return {
+    username: sanitizeUsername(pick(["username", "user_name", "nickname"])),
+    displayName: pick(["display_name", "full_name", "name"]),
+    avatarUrl: pick(["avatar_url", "picture"]),
+  };
+}
+
 /**
  * Upserts the authenticated Supabase user into our user table and creates the
  * default gaming resources (profile + wallet) on first sign-in.
  */
-export async function ensureUser(sub: string, email: string | null): Promise<User> {
+export async function ensureUser(
+  sub: string,
+  email: string | null,
+  userMetadata?: Record<string, unknown> | null,
+): Promise<User> {
   const existing = await prisma.user.findUnique({ where: { id: sub } });
   if (existing) {
     if (existing.email !== email) {
@@ -32,7 +56,8 @@ export async function ensureUser(sub: string, email: string | null): Promise<Use
     return existing;
   }
 
-  const baseUsername = sanitizeUsername(email?.split("@")[0] ?? null) ?? "player";
+  const meta = readMetadata(userMetadata);
+  const baseUsername = sanitizeUsername(meta.username) ?? sanitizeUsername(email?.split("@")[0] ?? null) ?? "player";
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const username = attempt === 0 ? baseUsername : `${baseUsername}_${randomSuffix()}`;
@@ -43,8 +68,8 @@ export async function ensureUser(sub: string, email: string | null): Promise<Use
             id: sub,
             email,
             username,
-            displayName: username,
-            avatarUrl: null,
+            displayName: meta.displayName ?? username,
+            avatarUrl: meta.avatarUrl,
           },
         });
         await tx.profile.create({

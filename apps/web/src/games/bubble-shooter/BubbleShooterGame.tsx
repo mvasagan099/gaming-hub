@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GameWrapper } from '../../components/GameWrapper';
-import { useUserStore } from '../../store/useUserStore';
+import { claimPracticeReward } from '../../services/api/practiceReward';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 
@@ -59,7 +59,6 @@ function getGridY(row: number, topOffset: number) {
 export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, onBack }) => {
   const isMultiplayer = mode === 'multiplayer';
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const addCoins = useUserStore((state) => state.addCoins);
 
   const gameState = useMultiplayerStore((s) => s.gameState);
   const winner = useMultiplayerStore((s) => s.winner);
@@ -711,10 +710,10 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
 
   useEffect(() => {
     if (win && !rewardClaimed && !isMultiplayer) {
-      addCoins(50);
+      void claimPracticeReward('bubble-shooter');
       setRewardClaimed(true);
     }
-  }, [win, rewardClaimed, addCoins, isMultiplayer]);
+  }, [win, rewardClaimed, isMultiplayer]);
 
   const handleReplay = () => {
     if (isMultiplayer) {

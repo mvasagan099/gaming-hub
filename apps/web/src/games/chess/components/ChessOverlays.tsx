@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import Phaser from "phaser";
 import { ChessEvents } from "../phaser/events/ChessEvents";
 import { Trophy, Shield, XCircle, RotateCcw } from "lucide-react";
-import { useUserStore } from "../../../store/useUserStore";
+import { claimPracticeReward } from "../../../services/api/practiceReward";
 
 interface ChessOverlaysProps {
   game: Phaser.Game | null;
@@ -21,7 +21,6 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
   const [mpResult, setMpResult] = useState<MpResult | null>(null);
   const [promotionData, setPromotionData] = useState<{ from: string; to: string } | null>(null);
   const [hasRewarded, setHasRewarded] = useState(false);
-  const { addCoins } = useUserStore();
 
   useEffect(() => {
     if (!game) return;
@@ -51,7 +50,7 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
           if (msg.includes("White Wins") && !hasRewarded) {
             setHasRewarded(true);
             setTimeout(() => {
-              addCoins(50);
+              void claimPracticeReward("chess");
             }, 1000);
           }
         });
@@ -65,7 +64,7 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
     return () => {
       clearInterval(timer);
     };
-  }, [game, hasRewarded, addCoins]);
+  }, [game, hasRewarded]);
 
   const handlePromotion = (pieceType: "q" | "r" | "b" | "n") => {
     if (!game || !promotionData) return;

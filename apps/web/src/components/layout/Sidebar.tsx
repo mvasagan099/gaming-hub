@@ -1,10 +1,11 @@
-import { Home, Trophy, User, Settings } from "lucide-react";
+import { Home, Trophy, User, Settings, Wallet } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 const menus = [
   { name: "Home", icon: Home, path: "/" },
   { name: "Leaderboard", icon: Trophy, path: "/leaderboard" },
   { name: "Profile", icon: User, path: "/profile" },
+  { name: "Wallet", icon: Wallet, path: "/wallet" },
   { name: "Settings", icon: Settings, path: "/settings" },
 ];
 

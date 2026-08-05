@@ -10,6 +10,8 @@ export interface VerifiedSupabaseToken {
   email: string | null;
   emailVerified: boolean;
   issuedAt: number;
+  /** Raw `user_metadata` claim (e.g. username chosen at signup). */
+  userMetadata: Record<string, unknown> | null;
 }
 
 /**
@@ -32,5 +34,9 @@ export async function verifyAccessToken(token: string): Promise<VerifiedSupabase
     email: typeof payload.email === "string" ? payload.email : null,
     emailVerified: payload.email_verified === true,
     issuedAt: typeof payload.iat === "number" ? payload.iat : Date.now() / 1000,
+    userMetadata:
+      typeof payload.user_metadata === "object" && payload.user_metadata !== null
+        ? (payload.user_metadata as Record<string, unknown>)
+        : null,
   };
 }

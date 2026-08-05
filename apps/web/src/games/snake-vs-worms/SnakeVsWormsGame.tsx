@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { GameWrapper } from '../../components/GameWrapper';
-import { useUserStore } from '../../store/useUserStore';
+import { claimPracticeReward } from '../../services/api/practiceReward';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
 
 interface SnakeVsWormsProps {
@@ -66,8 +66,6 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
   const [kills, setKills] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [rewardClaimed, setRewardClaimed] = useState(false);
-  
-  const { addCoins } = useUserStore();
 
   const inputRef = useRef({
     mouseX: CANVAS_WIDTH / 2,
@@ -87,9 +85,9 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
   useEffect(() => {
     if (gameOver && kills >= 3 && !rewardClaimed) {
       setRewardClaimed(true);
-      setTimeout(() => addCoins(50), 1000);
+      setTimeout(() => void claimPracticeReward('snake-vs-worms'), 1000);
     }
-  }, [gameOver, kills, rewardClaimed, addCoins]);
+  }, [gameOver, kills, rewardClaimed]);
 
   // Input Listeners for Boost
   useEffect(() => {

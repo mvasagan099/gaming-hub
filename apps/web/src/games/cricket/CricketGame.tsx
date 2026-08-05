@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameWrapper } from '../../components/GameWrapper';
-import { useUserStore } from '../../store/useUserStore';
+import { claimPracticeReward } from '../../services/api/practiceReward';
 import { CricketPhaserGame } from './CricketPhaserGame';
 
 interface CricketProps {
@@ -17,15 +17,13 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
   const [finalWickets, setFinalWickets] = useState(0);
   const [isWin, setIsWin] = useState(false);
   
-  const { addCoins } = useUserStore();
-
   const handleGameOver = (runs: number, wickets: number, won: boolean) => {
     setFinalRuns(runs);
     setFinalWickets(wickets);
     setIsWin(won);
     setGameOver(true);
     if (won) {
-      setTimeout(() => addCoins(50), 1000);
+      setTimeout(() => void claimPracticeReward('cricket'), 1000);
     }
   };
 

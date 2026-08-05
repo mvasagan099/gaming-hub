@@ -1,6 +1,9 @@
-import { Search, Bell, UserCircle2, Sun, Moon } from "lucide-react";
+import { Search, Bell, UserCircle2, Sun, Moon, LogOut, Gamepad2, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "../../contexts/ThemeProvider";
+import { useAuthStore } from "../../store/authStore";
+import { useMe } from "../../services/api/useMe";
+import { Skeleton } from "../Skeleton";
 
 interface NavbarProps {
   onLogoClick?: () => void;
@@ -9,26 +12,32 @@ interface NavbarProps {
 export default function Navbar({ onLogoClick }: NavbarProps) {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+  const session = useAuthStore((s) => s.session);
+  const signOut = useAuthStore((s) => s.signOut);
+  const { me, loading } = useMe();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   return (
     <header className="sticky top-0 z-50 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 transition-colors duration-300">
-      <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-6">
-
-        <button 
+      <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-3 px-6">
+        <button
           onClick={() => {
             if (onLogoClick) onLogoClick();
             else navigate('/');
-          }} 
+          }}
           className="flex items-center gap-3 hover:opacity-80 transition-opacity"
         >
-          <span className="text-3xl">🎮</span>
-
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white transition-colors duration-300">
+          <Gamepad2 className="w-7 h-7 text-indigo-500" />
+          <h1 className="hidden sm:block text-xl font-bold text-slate-900 dark:text-white transition-colors duration-300">
             Gaming Hub
           </h1>
         </button>
 
-        <div className="hidden md:flex items-center w-96 rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 border border-slate-200 dark:border-slate-700/50 transition-colors duration-300">
+        <div className="hidden md:flex items-center w-72 lg:w-96 rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 border border-slate-200 dark:border-slate-700/50 transition-colors duration-300">
           <Search size={18} className="text-slate-400" />
           <input
             placeholder="Search games..."
@@ -37,19 +46,85 @@ export default function Navbar({ onLogoClick }: NavbarProps) {
           />
         </div>
 
-        <div className="flex items-center gap-4 text-slate-500 dark:text-slate-300">
-          <button 
+        <div className="flex items-center gap-2 sm:gap-4 text-slate-500 dark:text-slate-300">
+          <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label="Toggle theme"
           >
             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </button>
-          <Bell className="cursor-pointer hover:text-slate-900 dark:hover:text-white transition" size={20} />
-          <Link to="/profile">
-            <UserCircle2 className="cursor-pointer hover:text-white transition text-indigo-400" size={34} />
-          </Link>
-        </div>
 
+          {session && (
+            <button
+              onClick={() => navigate('/profile')}
+              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
+              aria-label="Notifications"
+              title="View profile"
+            >
+              <Bell size={20} />
+              {me && me.unreadNotifications > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
+                  {me.unreadNotifications > 9 ? "9+" : me.unreadNotifications}
+                </span>
+              )}
+            </button>
+          )}
+
+          {!session ? (
+            <Link
+              to="/login"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors"
+            >
+              <UserCircle2 size={18} />
+              Sign in
+            </Link>
+          ) : loading ? (
+            <div className="flex items-center gap-2">
+              <Skeleton className="w-16 h-6" />
+              <Skeleton className="w-8 h-8 rounded-full" />
+            </div>
+          ) : me ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/wallet')}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 hover:border-amber-500/50 transition-colors"
+                title="Wallet"
+              >
+                <span className="text-xs font-semibold text-amber-500">🪙</span>
+                <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                  {me.wallet ? me.wallet.balance.toLocaleString() : "…"}
+                </span>
+              </button>
+              <button
+                onClick={() => navigate('/profile')}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500/50 transition-colors"
+                title="Profile"
+              >
+                <span className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[11px] font-black text-white">
+                  {me.user.avatarUrl ? (
+                    <img src={me.user.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+                  ) : (me.user.displayName || me.user.username || "?").slice(0, 1).toUpperCase()}
+                </span>
+                <span className="hidden sm:flex flex-col items-start leading-tight">
+                  <span className="text-xs font-bold text-slate-900 dark:text-white">
+                    {me.user.displayName || me.user.username}
+                  </span>
+                </span>
+              </button>
+              <button
+                onClick={() => void handleSignOut()}
+                className="p-2 rounded-full hover:bg-rose-100 dark:hover:bg-rose-500/10 text-slate-500 dark:text-slate-300 hover:text-rose-500 transition-colors"
+                aria-label="Sign out"
+                title="Sign out"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
+          ) : (
+            <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+          )}
+        </div>
       </div>
     </header>
   );

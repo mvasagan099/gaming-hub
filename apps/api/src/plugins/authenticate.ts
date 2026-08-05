@@ -22,6 +22,6 @@ export async function authenticate(request: FastifyRequest, _reply: FastifyReply
     throw new AppError("UNAUTHORIZED", "Invalid or expired token", 401);
   }
 
-  const user = await ensureUser(verified.sub, verified.email);
+  const user = await ensureUser(verified.sub, verified.email, verified.userMetadata);
   request.user = user;
 }
