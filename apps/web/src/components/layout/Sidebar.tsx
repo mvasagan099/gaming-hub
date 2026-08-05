@@ -26,7 +26,7 @@ export default function Sidebar({ isExpanded }: SidebarProps) {
             className={({ isActive }) =>
               `flex items-center rounded-lg p-3 transition-colors duration-300 ${
                 isActive
-                  ? "bg-indigo-600 text-white font-bold"
+                  ? "bg-accent-500 text-white font-bold shadow-sm shadow-accent-500/30"
                   : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
               } ${isExpanded ? 'gap-3 justify-start' : 'justify-center'}`
             }

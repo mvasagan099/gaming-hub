@@ -5,6 +5,7 @@ import { useAuthStore } from "../store/authStore";
 import { apiClient } from "../services/api/client";
 import { Skeleton } from "./Skeleton";
 import { EmptyState } from "./EmptyState";
+import { Button } from "./ui/Button";
 
 interface LeaderboardItem {
   rank: number;
@@ -63,15 +64,12 @@ export const LeaderboardView: React.FC = () => {
 
       {!session ? (
         <EmptyState
-          icon={<LogIn className="w-6 h-6 text-indigo-400" />}
+          icon={<LogIn className="w-6 h-6 text-accent-400" />}
           title="Sign in to view the leaderboard"
           description="Leaderboards are tied to your account. Sign in to see the top players."
           action={
-            <Link
-              to="/login"
-              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold transition-colors"
-            >
-              Sign in
+            <Link to="/login">
+              <Button variant="primary" size="sm">Sign in</Button>
             </Link>
           }
         />
@@ -81,12 +79,9 @@ export const LeaderboardView: React.FC = () => {
           title="Could not load the leaderboard"
           description={error}
           action={
-            <button
-              onClick={() => setNonce((n) => n + 1)}
-              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold transition-colors"
-            >
+            <Button variant="primary" size="sm" onClick={() => setNonce((n) => n + 1)}>
               Retry
-            </button>
+            </Button>
           }
         />
       ) : items === null ? (
@@ -139,7 +134,7 @@ export const LeaderboardView: React.FC = () => {
                         className="w-10 h-10 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-sm font-black text-indigo-400">
+                      <div className="w-10 h-10 rounded-full bg-accent-500/20 border border-accent-500/30 flex items-center justify-center text-sm font-black text-accent-400">
                         {(entry.displayName || entry.username || "?").slice(0, 1).toUpperCase()}
                       </div>
                     )}

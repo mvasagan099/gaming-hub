@@ -6,6 +6,7 @@ import { supabase } from './services/supabase';
 import { useAuthStore } from './store/authStore';
 import { ThemeProvider } from './contexts/ThemeProvider';
 import { AppErrorBoundary } from './components/ErrorBoundary';
+import CommandPalette from './components/CommandPalette';
 
 export function App() {
   const setSession = useAuthStore((s) => s.setSession);
@@ -41,6 +42,7 @@ export function App() {
       <AppErrorBoundary>
         <RouterProvider router={router} />
         <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+        <CommandPalette />
       </AppErrorBoundary>
     </ThemeProvider>
   );

@@ -12,6 +12,7 @@ import type { Transaction, TransactionPage, TransactionReferenceType, Wallet } f
 import { apiClient, ApiError } from "../../services/api/client";
 import { Skeleton } from "../../components/Skeleton";
 import { EmptyState } from "../../components/EmptyState";
+import { Button } from "../../components/ui/Button";
 
 const PAGE_SIZE = 10;
 
@@ -82,7 +83,7 @@ export function WalletPage() {
       {loading && !wallet ? (
         <Skeleton className="h-32 w-full" />
       ) : wallet ? (
-        <div className="rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 p-6 text-white shadow-lg">
+        <div className="rounded-3xl bg-gradient-to-br from-accent-600 via-accent-500 to-accent-700 p-6 text-white shadow-lg">
           <div className="flex items-center gap-2 text-indigo-100 text-xs font-bold uppercase tracking-widest">
             <WalletIcon size={16} /> Balance
           </div>
@@ -93,7 +94,7 @@ export function WalletPage() {
 
       <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
-          <Receipt size={16} className="text-indigo-500" /> Transaction history
+          <Receipt size={16} className="text-accent-500" /> Transaction history
         </div>
 
         {loading ? (
@@ -113,11 +114,8 @@ export function WalletPage() {
               title="No transactions yet"
               description="Wager on a match or beat the AI in practice mode to see activity here."
               action={
-                <Link
-                  to="/"
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors"
-                >
-                  Browse games
+                <Link to="/">
+                  <Button variant="primary" size="sm">Browse games</Button>
                 </Link>
               }
             />
@@ -131,23 +129,25 @@ export function WalletPage() {
             </ul>
 
             <div className="px-6 py-4 flex items-center justify-between border-t border-slate-200 dark:border-slate-800">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
               >
                 Previous
-              </button>
+              </Button>
               <span className="text-xs text-slate-500 dark:text-slate-400">
                 Page {page} of {totalPages}
               </span>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={page >= totalPages}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
               >
                 Next
-              </button>
+              </Button>
             </div>
           </>
         )}
