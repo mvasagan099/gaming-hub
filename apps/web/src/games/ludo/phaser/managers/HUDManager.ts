@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { PlayerColor } from "../types/ludo.types";
 
 const PANEL_X = 912;
 const PANEL_W = 224;
@@ -21,8 +22,12 @@ export default class HUDManager {
   private scene: Phaser.Scene;
   private turnText!: Phaser.GameObjects.Text;
   private cards: Phaser.GameObjects.Rectangle[] = [];
+  private dots: Phaser.GameObjects.Arc[] = [];
+  private nameTexts: Phaser.GameObjects.Text[] = [];
   private logLines: Phaser.GameObjects.Text[] = [];
   private progressTexts: Phaser.GameObjects.Text[] = [];
+  private colors: PlayerColor[] = ["red", "blue", "green", "yellow"];
+  private mySeat = 0;
   private static readonly MAX_LOG = 5;
 
   constructor(scene: Phaser.Scene) {
@@ -82,15 +87,17 @@ export default class HUDManager {
       const dot = this.scene.add.circle(PANEL_X - 74, cy, 11, hexColor);
       dot.setStrokeStyle(1.5, 0xffffff);
       dot.setDepth(depth + 1);
+      this.dots.push(dot);
 
       // Player title text
       const name = i === 0 ? "Player 1 (You)" : `Player ${i + 1} (AI)`;
-      this.scene.add.text(PANEL_X - 52, cy - 14, name, {
+      const nameTxt = this.scene.add.text(PANEL_X - 52, cy - 14, name, {
         fontSize:   "11px",
         color:      "#" + hexColor.toString(16),
         fontFamily: "Outfit, sans-serif",
         fontStyle:  "bold",
       }).setDepth(depth + 1);
+      this.nameTexts.push(nameTxt);
 
       // Progress text (e.g. Done: 0 / 4)
       const prog = this.scene.add.text(PANEL_X - 52, cy + 2, "Home: 0 / 4", {
@@ -132,8 +139,9 @@ export default class HUDManager {
   }
 
   updateTurn(playerIndex: number): void {
-    const colName = ORDERED_COLORS[playerIndex % 4]!;
-    const nameStr = playerIndex === 0 ? "YOUR TURN" : `PLAYER ${playerIndex + 1}'S TURN`;
+    const color = this.colors[playerIndex % this.colors.length] ?? "red";
+    const colName = color as keyof typeof COLORS;
+    const nameStr = playerIndex === this.mySeat ? "YOUR TURN" : `PLAYER ${playerIndex + 1}'S TURN`;
 
     this.turnText.setText(nameStr);
     this.turnText.setColor("#" + COLORS[colName].toString(16));
@@ -143,9 +151,40 @@ export default class HUDManager {
       if (idx === playerIndex) {
         card.setStrokeStyle(3, COLORS[colName]);
       } else {
-        const otherCol = ORDERED_COLORS[idx % 4]!;
-        card.setStrokeStyle(1.5, COLORS[otherCol]);
+        const otherColor = this.colors[idx % this.colors.length] ?? "red";
+        card.setStrokeStyle(1.5, COLORS[otherColor]);
       }
+    });
+  }
+
+  /** Which seat is "you" (for turn labels). Defaults to seat 0 (local play). */
+  setMySeat(seat: number): void {
+    this.mySeat = seat;
+  }
+
+  /** Replace the per-player name labels (online players). */
+  setNames(names: string[]): void {
+    names.forEach((name, idx) => {
+      const txt = this.nameTexts[idx];
+      if (txt) txt.setText(name);
+    });
+  }
+
+  /** Re-style the player cards to match the actual seat colours. */
+  applyColors(colors: PlayerColor[]): void {
+    this.colors = [...colors];
+    colors.forEach((color, idx) => {
+      const hex = COLORS[color];
+      this.cards[idx]?.setStrokeStyle(2, hex);
+      this.dots[idx]?.setFillStyle(hex, 1);
+      this.nameTexts[idx]?.setColor("#" + hex.toString(16));
+    });
+  }
+
+  /** Show the authoritative action log (newest first). */
+  setLogs(logs: string[]): void {
+    this.logLines.forEach((t, i) => {
+      t.setText(i < logs.length ? `› ${logs[i]}` : "");
     });
   }
 

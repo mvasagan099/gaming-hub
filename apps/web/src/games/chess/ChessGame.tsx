@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { GameWrapper } from "../../components/GameWrapper";
 import { ChessPhaserGame } from "./ChessPhaserGame";
+import { useMultiplayerStore } from "../../store/multiplayerStore";
 import { Trophy, RefreshCcw, Shield, Cpu, Zap } from "lucide-react";
 
 interface ChessGameProps {
@@ -10,10 +11,23 @@ interface ChessGameProps {
 }
 
 export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, onBack }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playMode, setPlayMode] = useState<"ai" | "pvp">("ai");
+  const isMultiplayer = initialMode === "multiplayer";
+  const room = useMultiplayerStore((s) => s.room);
+  const mySeat = useMultiplayerStore((s) => s.mySeat);
+  const isSpectator = useMultiplayerStore((s) => s.isSpectator);
+
+  const [isPlaying, setIsPlaying] = useState(isMultiplayer);
+  const [playMode, setPlayMode] = useState<"ai" | "pvp">(isMultiplayer ? "pvp" : "ai");
   const [aiLevel, setAiLevel] = useState<number>(2); // 1, 2, 3
   const [theme, setTheme] = useState<"classic" | "wood" | "cyber">("classic");
+
+  const participants = room?.players ?? [];
+  const seat = isMultiplayer ? (isSpectator ? null : mySeat) : null;
+  const names = isMultiplayer
+    ? [...participants]
+        .sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0))
+        .map((p) => p.displayName)
+    : [];
 
   const startGame = () => {
     setIsPlaying(true);
@@ -23,17 +37,25 @@ export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, 
     setIsPlaying(false);
   };
 
+  const handleReplay = () => {
+    if (isMultiplayer) {
+      void useMultiplayerStore.getState().rematch();
+    } else {
+      resetGame();
+    }
+  };
+
   if (isPlaying) {
     return (
-      <GameWrapper title="Chess Master" gameId="chess" mode={initialMode} stake={stake} onBack={resetGame} isFullscreen>
+      <GameWrapper title="Chess Master" gameId="chess" mode={initialMode} stake={stake} onBack={isMultiplayer ? onBack : resetGame} isFullscreen>
         <div className="relative flex flex-col items-center justify-center w-full max-w-5xl mx-auto my-4">
-          <ChessPhaserGame mode={playMode} level={aiLevel} theme={theme} onBack={onBack} onReplay={resetGame} />
+          <ChessPhaserGame mode={playMode} level={aiLevel} theme={theme} online={isMultiplayer} players={participants.length || 2} seat={seat} names={names} onBack={onBack} onReplay={handleReplay} />
           
           <button
-            onClick={resetGame}
+            onClick={handleReplay}
             className="mt-4 px-6 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-bold text-rose-400 text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg transition-all"
           >
-            <RefreshCcw className="w-4 h-4" /> Reset Match
+            <RefreshCcw className="w-4 h-4" /> {isMultiplayer ? "Rematch" : "Reset Match"}
           </button>
         </div>
       </GameWrapper>

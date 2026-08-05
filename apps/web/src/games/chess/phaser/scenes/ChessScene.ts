@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import BoardManager from "../managers/BoardManager";
 import PieceManager from "../managers/PieceManager";
 import GameManager from "../managers/GameManager";
+import ChessMultiplayerDriver from "../managers/ChessMultiplayerDriver";
 import HUDManager from "../managers/HUDManager";
 import ThemeManager from "../managers/ThemeManager";
 import AudioManager from "../../../snake-ladder/phaser/managers/AudioManager";
@@ -13,6 +14,7 @@ export default class ChessScene extends Phaser.Scene {
   private board!: BoardManager;
   private pieceManager!: PieceManager;
   private gameManager!: GameManager;
+  private multiplayerDriver!: ChessMultiplayerDriver;
   private hud!: HUDManager;
   private themeManager!: ThemeManager;
   private audio!: AudioManager;
@@ -23,8 +25,11 @@ export default class ChessScene extends Phaser.Scene {
 
   create(): void {
     const mode   = (this.registry.get("mode") as "ai" | "pvp") ?? "ai";
+    const online = (this.registry.get("online") as boolean) ?? false;
     const level  = (this.registry.get("aiLevel") as number) ?? 2;
     const theme  = (this.registry.get("theme") as any) ?? "classic";
+    const seat   = (this.registry.get("seat") as number | null | undefined) ?? null;
+    const names  = (this.registry.get("names") as string[] | undefined) ?? [];
 
     const settings: ChessSettings = {
       mode,
@@ -41,7 +46,7 @@ export default class ChessScene extends Phaser.Scene {
 
     // 2. Board Manager (depth 0–3)
     this.board = new BoardManager(this, this.themeManager);
-    this.board.drawBoard();
+    this.board.drawBoard(online && seat === 1);
 
     // 3. Piece Manager (depth 50)
     this.pieceManager = new PieceManager(this, this.board);
@@ -50,16 +55,29 @@ export default class ChessScene extends Phaser.Scene {
     this.hud = new HUDManager(this);
     this.hud.create();
 
-    // 5. Game Manager
-    this.gameManager = new GameManager(
-      this,
-      this.board,
-      this.pieceManager,
-      this.hud,
-      this.audio,
-      settings
-    );
-    this.gameManager.init();
+    // 5. Game logic — server-driven in multiplayer, local otherwise
+    if (online) {
+      this.multiplayerDriver = new ChessMultiplayerDriver(
+        this,
+        this.board,
+        this.pieceManager,
+        this.hud,
+        this.audio,
+        seat,
+        names,
+      );
+      this.multiplayerDriver.start();
+    } else {
+      this.gameManager = new GameManager(
+        this,
+        this.board,
+        this.pieceManager,
+        this.hud,
+        this.audio,
+        settings
+      );
+      this.gameManager.init();
+    }
 
     // Click on empty board squares listener
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {

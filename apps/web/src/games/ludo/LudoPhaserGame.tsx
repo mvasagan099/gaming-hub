@@ -4,10 +4,13 @@ import { LudoScene } from "./phaser/scenes/LudoScene";
 
 interface LudoPhaserGameProps {
   mode: "ai" | "pvp";
-  players: 2 | 4;
+  players: number;
+  online?: boolean;
+  seat?: number | null;
+  names?: string[];
 }
 
-export const LudoPhaserGame: React.FC<LudoPhaserGameProps> = ({ mode, players }) => {
+export const LudoPhaserGame: React.FC<LudoPhaserGameProps> = ({ mode, players, online = false, seat = null, names = [] }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
 
@@ -35,12 +38,15 @@ export const LudoPhaserGame: React.FC<LudoPhaserGameProps> = ({ mode, players })
 
     game.registry.set("mode", mode);
     game.registry.set("players", players);
+    game.registry.set("online", online);
+    game.registry.set("seat", seat);
+    game.registry.set("names", names);
 
     return () => {
       game.destroy(true);
       gameRef.current = null;
     };
-  }, [mode, players]);
+  }, [mode, players, online, seat, names]);
 
   return (
     <div className="relative mx-auto w-full max-w-[1024px] aspect-[1024/800] h-auto max-h-[85vh] bg-[#090d16] rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex justify-center items-center">

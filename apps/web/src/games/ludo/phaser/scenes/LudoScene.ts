@@ -4,10 +4,12 @@ import TokenManager from "../managers/TokenManager";
 import DiceManager from "../managers/DiceManager";
 import GameManager from "../managers/GameManager";
 import HUDManager from "../managers/HUDManager";
+import LudoMultiplayerDriver from "../managers/LudoMultiplayerDriver";
 import { LudoRuleEngine } from "../engine/LudoRuleEngine";
 import { LudoAI } from "../ai/LudoAI";
-import { DEFAULT_SETTINGS } from "../types/ludo.types";
+import { DEFAULT_SETTINGS, type LudoSettings, type PlayerColor } from "../types/ludo.types";
 import { LudoEvents } from "../events/LudoEvents";
+import { PLAYER_COLORS_ORDER } from "../data/boardLayout";
 import WinnerPopup from "../ui/WinnerPopup";
 import ParticleManager from "../../../snake-ladder/phaser/managers/ParticleManager";
 import AudioManager from "../../../snake-ladder/phaser/managers/AudioManager";
@@ -17,6 +19,7 @@ export default class LudoScene extends Phaser.Scene {
   private tokenManager!: TokenManager;
   private dice!: DiceManager;
   private gameManager!: GameManager;
+  private multiplayerDriver!: LudoMultiplayerDriver;
   private hud!: HUDManager;
   private ruleEngine!: LudoRuleEngine;
   private ai!: LudoAI;
@@ -30,15 +33,17 @@ export default class LudoScene extends Phaser.Scene {
 
   create(): void {
     const mode        = (this.registry.get("mode") as "ai" | "pvp") ?? "ai";
-    const playerCount = (this.registry.get("players") as 2 | 4) ?? 4;
+    const playerCount = (this.registry.get("players") as number) ?? 4;
+    const mySeat      = (this.registry.get("seat") as number | null | undefined) ?? null;
+    const names       = (this.registry.get("names") as string[] | undefined) ?? [];
+    const online      = (this.registry.get("online") as boolean | undefined) ?? false;
 
     // Settings
-    const settings = {
+    const settings: LudoSettings = {
       ...DEFAULT_SETTINGS,
-      playerCount,
+      playerCount: playerCount === 2 ? 2 : 4,
       mode,
     };
-
     // 1. Board
     this.board = new BoardManager(this);
     this.board.drawBoard();
@@ -52,16 +57,30 @@ export default class LudoScene extends Phaser.Scene {
     this.audio.init();
     this.particles = new ParticleManager(this);
 
-    // 4. Token Manager
+    // 4. Token Manager — created for the active colors so token ids always
+    //    match the server-authoritative state in online matches.
     this.tokenManager = new TokenManager(this);
-    const initialState = this.ruleEngine.createInitialState(playerCount);
-    // Flatten players' tokens
-    const initialTokens = initialState.players.flatMap((p) => p.tokens);
+    const activeColors: PlayerColor[] =
+      playerCount === 2 ? ["red", "green"] : PLAYER_COLORS_ORDER.slice(0, playerCount);
+    const initialTokens = activeColors.flatMap((color) =>
+      Array.from({ length: 4 }, (_, ti) => ({
+        id: `${color}-${ti}`,
+        color,
+        index: ti,
+        position: -1,
+        state: "yard" as const,
+      })),
+    );
     this.tokenManager.createTokens(initialTokens);
 
     // 5. HUD & UI
     this.hud = new HUDManager(this);
     this.hud.create(playerCount);
+    this.hud.setMySeat(online ? (mySeat ?? 0) : 0);
+    if (online) {
+      if (names.length > 0) this.hud.setNames(names);
+      this.hud.applyColors(activeColors);
+    }
 
     // 6. Dice
     this.dice = new DiceManager(this);
@@ -71,17 +90,30 @@ export default class LudoScene extends Phaser.Scene {
     this.winnerPopup = new WinnerPopup(this, this.particles);
     this.winnerPopup.create();
 
-    // 8. GameManager
-    this.gameManager = new GameManager(
-      this,
-      this.board,
-      this.tokenManager,
-      this.dice,
-      this.hud,
-      this.ruleEngine,
-      this.ai
-    );
-    this.gameManager.init(mode, playerCount);
+    // 8. Game logic — server-driven when online, local otherwise
+    if (online) {
+      this.multiplayerDriver = new LudoMultiplayerDriver(
+        this,
+        this.tokenManager,
+        this.dice,
+        this.hud,
+        this.winnerPopup,
+        mySeat,
+        names,
+      );
+      this.multiplayerDriver.start();
+    } else {
+      this.gameManager = new GameManager(
+        this,
+        this.board,
+        this.tokenManager,
+        this.dice,
+        this.hud,
+        this.ruleEngine,
+        this.ai
+      );
+      this.gameManager.init(mode, playerCount === 2 ? 2 : 4);
+    }
 
     // ─── Event Bindings ───────────────────────────────────────────────────────
 

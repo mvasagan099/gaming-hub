@@ -20,6 +20,7 @@ export default class DiceManager {
   private value    = 1;
   private rolling  = false;
   private enabled  = true;
+  private onRollCb: (() => void) | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -109,11 +110,49 @@ export default class DiceManager {
     this.rollLabel.setText("Select a token").setAlpha(1);
   }
 
+  /** Override the roll button label without changing enabled state. */
+  setPrompt(label: string): void {
+    this.rollLabel.setText(label);
+    if (this.enabled) {
+      this.rollLabel.setAlpha(1);
+    } else {
+      this.rollLabel.setAlpha(0.7);
+    }
+  }
+
+  /**
+   * Hook for the online driver: when set, clicking the dice/button forwards
+   * to the callback instead of rolling locally (server-authoritative).
+   */
+  setOnRoll(cb: (() => void) | null): void {
+    this.onRollCb = cb;
+  }
+
+  /** Instantly display a value without animation (reconnect / remote sync). */
+  setValue(value: number): void {
+    const clamped = Math.max(1, Math.min(6, value));
+    this.value = clamped;
+    this.drawFace(clamped, clamped === 6);
+  }
+
+  /**
+   * Play the roll animation but settle on the given authoritative value.
+   * Used when a `game:state` broadcast reports a server-side roll.
+   */
+  rollTo(value: number): void {
+    if (this.rolling) return;
+    this.startRoll(Math.max(1, Math.min(6, value)));
+  }
+
   // ─── Roll ─────────────────────────────────────────────────────────────────────
 
   /** Human click — requires enabled state */
   roll(): void {
     if (this.rolling || !this.enabled) return;
+    if (this.onRollCb) {
+      this.onRollCb();
+      return;
+    }
     this.startRoll();
   }
 
@@ -123,7 +162,7 @@ export default class DiceManager {
     this.startRoll();
   }
 
-  private startRoll(): void {
+  private startRoll(finalValue?: number): void {
     this.rolling = true;
     this.disable();
     this.scene.events.emit(LudoEvents.DICE_ROLL_STARTED);
@@ -144,14 +183,14 @@ export default class DiceManager {
       if (count < totalFrames) {
         this.scene.time.delayedCall(65, tick);
       } else {
-        this.finishRoll();
+        this.finishRoll(finalValue);
       }
     };
     tick();
   }
 
-  private finishRoll(): void {
-    this.value = Phaser.Math.Between(1, 6);
+  private finishRoll(finalValue?: number): void {
+    this.value = finalValue ?? Phaser.Math.Between(1, 6);
     const isSix = this.value === 6;
     this.drawFace(this.value, isSix);
 

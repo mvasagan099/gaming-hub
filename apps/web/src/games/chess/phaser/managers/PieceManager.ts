@@ -158,6 +158,35 @@ export class PieceManager {
     });
   }
 
+  /**
+   * Rebuild all pieces from a snapshot, then animate the piece that just moved
+   * sliding from its previous square to its current one (server-authoritative
+   * sync). Everything else renders instantly.
+   */
+  syncPieces(pieceList: ChessPiece[], animateMove?: { from: string; to: string } | null): void {
+    this.clearAll();
+    for (const p of pieceList) {
+      this.createPiece(p);
+    }
+
+    if (animateMove?.from && animateMove.to) {
+      const target = pieceList.find((p) => p.square === animateMove.to);
+      const sprite = target ? this.pieces.get(target.id) : undefined;
+      const fromPos = this.board.getPixelCoords(animateMove.from);
+      const toPos = this.board.getPixelCoords(animateMove.to);
+      if (sprite && fromPos && toPos) {
+        sprite.container.setPosition(fromPos.x, fromPos.y);
+        this.scene.tweens.add({
+          targets:    sprite.container,
+          x:          toPos.x,
+          y:          toPos.y,
+          duration:   300,
+          ease:       "Quad.Out",
+        });
+      }
+    }
+  }
+
   clearAll(): void {
     for (const sprite of this.pieces.values()) {
       sprite.container.destroy();

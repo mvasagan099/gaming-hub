@@ -2,6 +2,8 @@ import type { GameId } from "@gaming-hub/shared";
 import type { EngineInstance, EnginePlayer, RandomSource } from "./types";
 import { SnakeLadderEngine } from "./snake-ladder/engine";
 import { ChessEngine } from "./chess/engine";
+import { LudoEngine } from "./ludo/engine";
+import { BubbleShooterEngine } from "./bubble-shooter/engine";
 
 /**
  * Game engines that have been migrated to the server-authoritative engine
@@ -10,6 +12,8 @@ import { ChessEngine } from "./chess/engine";
 const ENGINES: Record<string, new (players: EnginePlayer[], rng?: RandomSource) => EngineInstance> = {
   "snake-ladder": SnakeLadderEngine,
   chess: ChessEngine,
+  ludo: LudoEngine,
+  "bubble-shooter": BubbleShooterEngine,
 };
 
 export function isGameEngineAvailable(gameId: GameId): boolean {

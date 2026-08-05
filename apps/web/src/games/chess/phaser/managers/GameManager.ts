@@ -1,7 +1,8 @@
 import Phaser from "phaser";
 import { Chess } from "chess.js";
-import type { ChessGameState, ChessPiece, ChessMove, PieceType, PieceColor, ChessSettings } from "../types/chess.types";
+import type { ChessMove, PieceType, ChessSettings } from "../types/chess.types";
 import { ChessEvents } from "../events/ChessEvents";
+import { fenToPieces, computeCaptures } from "../utils/chessUtils";
 import type BoardManager from "./BoardManager";
 import type PieceManager from "./PieceManager";
 import type HUDManager from "./HUDManager";
@@ -197,42 +198,13 @@ export default class GameManager {
   private syncBoardState(): void {
     this.board.clearOverlay();
 
-    // Map chess.js board layout to ChessPiece list
-    const boardState = this.chessEngine.board();
-    const pieces: ChessPiece[] = [];
-
-    const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
-    const ranks = ["8", "7", "6", "5", "4", "3", "2", "1"];
-
-    let wCount = 0;
-    let bCount = 0;
-
-    for (let r = 0; r < 8; r++) {
-      const row = boardState[r];
-      if (!row) continue;
-      for (let c = 0; c < 8; c++) {
-        const item = row[c];
-        if (!item) continue;
-
-        const squareName = (files[c] || "") + (ranks[r] || "");
-        const id = `${item.color}-${item.type}-${item.color === "w" ? wCount++ : bCount++}`;
-
-        pieces.push({
-          id,
-          type: item.type,
-          color: item.color,
-          square: squareName,
-        });
-      }
-    }
-
-    this.pieceManager.createPieces(pieces);
+    this.pieceManager.createPieces(fenToPieces(this.chessEngine.fen()));
     this.hud.updateStatus(
       this.chessEngine.turn() === "w" ? "White's Turn" : "Black's Turn"
     );
 
     // Sync captures
-    this.hud.updateCaptures(this.getCapturedPieces());
+    this.hud.updateCaptures(computeCaptures(this.chessEngine));
 
     // AI Turn Trigger
     if (
@@ -287,28 +259,7 @@ export default class GameManager {
   }
 
   private getCapturedPieces(): { w: PieceType[]; b: PieceType[] } {
-    // Deduct active pieces from full starting inventory
-    const fullSet: PieceType[] = ["p","p","p","p","p","p","p","p","r","r","n","n","b","b","q","k"];
-    const active = { w: [] as PieceType[], b: [] as PieceType[] };
-
-    for (const row of this.chessEngine.board()) {
-      for (const item of row) {
-        if (item) active[item.color].push(item.type);
-      }
-    }
-
-    const removeOne = (arr: PieceType[], val: PieceType) => {
-      const idx = arr.indexOf(val);
-      if (idx !== -1) arr.splice(idx, 1);
-    };
-
-    const capturedW = [...fullSet];
-    active.w.forEach((p) => removeOne(capturedW, p));
-
-    const capturedB = [...fullSet];
-    active.b.forEach((p) => removeOne(capturedB, p));
-
-    return { w: capturedW, b: capturedB };
+    return computeCaptures(this.chessEngine);
   }
 
   private handleGameOver(): void {

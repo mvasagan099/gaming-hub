@@ -7,11 +7,25 @@ interface ChessPhaserGameProps {
   mode: "ai" | "pvp";
   level: number;
   theme: "classic" | "wood" | "cyber";
+  online?: boolean;
+  players?: number;
+  seat?: number | null;
+  names?: string[];
   onBack: () => void;
   onReplay: () => void;
 }
 
-export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({ mode, level, theme, onBack, onReplay }) => {
+export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
+  mode,
+  level,
+  theme,
+  online = false,
+  players = 2,
+  seat = null,
+  names = [],
+  onBack,
+  onReplay,
+}) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [gameInstance, setGameInstance] = React.useState<Phaser.Game | null>(null);
 
@@ -41,6 +55,10 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({ mode, level, t
     game.registry.set("mode", mode);
     game.registry.set("aiLevel", level);
     game.registry.set("theme", theme);
+    game.registry.set("online", online);
+    game.registry.set("players", players);
+    game.registry.set("seat", seat);
+    game.registry.set("names", names);
 
     return () => {
       game.destroy(true);
@@ -53,6 +71,7 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({ mode, level, t
       <div ref={containerRef} className="w-full h-full" />
       <ChessOverlays 
         game={gameInstance} 
+        online={online}
         onReplay={onReplay} 
         onClose={onBack} 
       />

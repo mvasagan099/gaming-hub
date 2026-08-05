@@ -246,6 +246,26 @@ export default class TokenManager {
     }
   }
 
+  /**
+   * Snap a token to its authoritative server position and reflect its state
+   * (used by the online driver after every `game:state` broadcast).
+   */
+  syncFromServer(token: Token): void {
+    const obj = this.tokenObjects.get(token.id);
+    if (!obj) return;
+
+    obj.token = token;
+    const { x, y } = this.getPixelForToken(token);
+    obj.container.setPosition(x, y);
+
+    if (token.state === "finished") {
+      this.stopIdleAnimation(obj);
+      this.scene.tweens.add({ targets: obj.container, scale: 0.7, duration: 300 });
+    } else if (token.state === "yard" && !obj.idleTween) {
+      this.startIdleAnimation(obj);
+    }
+  }
+
   // ─── Private helpers ──────────────────────────────────────────────────────────
 
   private getPixelForToken(token: Token): { x: number; y: number } {

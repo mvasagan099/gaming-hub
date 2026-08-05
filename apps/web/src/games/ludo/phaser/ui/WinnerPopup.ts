@@ -8,6 +8,7 @@ export default class WinnerPopup {
   private titleText!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
   private particles: ParticleManager | null;
+  private onPlayAgain: (() => void) | null = null;
 
   constructor(scene: Phaser.Scene, particles: ParticleManager | null = null) {
     this.scene = scene;
@@ -50,7 +51,7 @@ export default class WinnerPopup {
     btnBg.setInteractive({ useHandCursor: true });
     btnBg.on("pointerover", () => btnBg.setFillStyle(0x15803d));
     btnBg.on("pointerout",  () => btnBg.setFillStyle(0x16a34a));
-    btnBg.on("pointerdown", () => this.onPlayAgain());
+    btnBg.on("pointerdown", () => this.handlePlayAgain());
 
     const btnLabel = this.scene.add.text(0, 95, "▶  PLAY AGAIN", {
       fontSize:   "13px",
@@ -75,8 +76,20 @@ export default class WinnerPopup {
     this.container.setScale(0);
   }
 
-  show(playerName: string, history: LudoHistoryEntry[] = []): void {
-    this.titleText.setText(`${playerName.toUpperCase()} WINS!`);
+  /**
+   * Override the play-again button behaviour (online driver). When unset the
+   * button restarts the local scene.
+   */
+  setActions(onPlayAgain: () => void): void {
+    this.onPlayAgain = onPlayAgain;
+  }
+
+  show(
+    playerName: string,
+    history: LudoHistoryEntry[] = [],
+    opts?: { multiplayer?: boolean; won?: boolean },
+  ): void {
+    this.titleText.setText(opts?.won ? "🎉 YOU WIN!" : `${playerName.toUpperCase()} WINS!`);
 
     const totalRolls = history.length;
     const captures   = history.filter((h) => h.message.includes("⚔️")).length;
@@ -104,7 +117,11 @@ export default class WinnerPopup {
     });
   }
 
-  private onPlayAgain(): void {
+  private handlePlayAgain(): void {
+    if (this.onPlayAgain) {
+      this.onPlayAgain();
+      return;
+    }
     this.scene.scene.restart();
   }
 }
