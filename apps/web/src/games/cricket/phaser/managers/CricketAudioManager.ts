@@ -9,7 +9,7 @@ export class CricketAudioManager {
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       this.ctx = new AudioContext();
-    } catch (e) {
+    } catch (_e) {
       console.warn("Web Audio API not supported in this browser");
     }
   }
@@ -241,7 +241,7 @@ export class CricketAudioManager {
       this.ambientGain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 1);
       setTimeout(() => {
         if (this.ambientOsc) {
-          try { this.ambientOsc.stop(); } catch(e) {}
+          try { this.ambientOsc.stop(); } catch(_e) {}
           this.ambientOsc = null;
         }
       }, 1000);

@@ -549,12 +549,37 @@ export class RoomManager {
   private emitGameState(room: RoomRuntime, events: { type: string }[]) {
     if (!room.match) return;
     const state = room.match.engine.serialize();
-    this.io.to(room.ioName).emit("game:state", {
+    const payload = {
       roomId: room.id,
       matchId: room.match.matchId,
       state,
       events,
-    });
+    };
+
+    // Get all active socket IDs for players in this room
+    const targetSocketIds: string[] = [];
+    for (const player of room.players.values()) {
+      for (const socketId of player.socketIds) {
+        const socket = this.io.sockets.sockets.get(socketId);
+        if (socket && socket.connected) {
+          targetSocketIds.push(socketId);
+        }
+      }
+    }
+
+    console.log(`[RoomManager] Emitting game:state to ${targetSocketIds.length} sockets in room ${room.id}`);
+    
+    // Emit directly to each connected socket and log issues
+    for (const socketId of targetSocketIds) {
+      const socket = this.io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit("game:state", payload);
+      }
+    }
+    
+    // Also broadcast to room for safety as fallback
+    this.io.to(room.ioName).emit("game:state", payload);
+    console.log(`[RoomManager] game:state broadcast to room ${room.ioName} for match ${room.match.matchId}`);
   }
 
   // ---------------------------------------------------------------- clock flag
@@ -614,19 +639,24 @@ export class RoomManager {
     action: { type: string } & JsonObject,
     socket: Socket,
   ): Promise<GameActionResult> {
+    console.log(`[RoomManager] applyGameAction: User ${user.userId}, Room ${roomId}, Action`, action);
     const room = this.getRoomOrThrow(roomId);
     if (room.status !== "playing" || !room.match) {
+      console.log(`[RoomManager] applyGameAction rejected: Game not started, status: ${room.status}`);
       throw new AppError("GAME_NOT_STARTED", "The game has not started");
     }
     const player = this.getPlayerOrThrow(room, user.userId);
     if (player.isSpectator || player.seat === null) {
+      console.log(`[RoomManager] applyGameAction rejected: User is spectator or has no seat`);
       throw new AppError("FORBIDDEN", "Spectators cannot play");
     }
 
     const session = new GameSession(room.match);
+    console.log(`[RoomManager] Applying action via GameSession for user ${user.userId}, seat ${player.seat}`);
     const result = await session.apply(user.userId, player.seat, action);
 
     if (!result.ok) {
+      console.log(`[RoomManager] Action rejected:`, result.error);
       const firstEvent = result.events[0];
       return {
         ok: false,
@@ -638,6 +668,7 @@ export class RoomManager {
       };
     }
 
+    console.log(`[RoomManager] Action accepted, emitting game:state with ${result.events.length} events`);
     this.emitGameState(room, result.events);
 
     if (result.finished) {
@@ -829,7 +860,20 @@ export class RoomManager {
 
       // Re-emit the live game state to the rejoining player's socket only.
       if (room.match) {
-        this.emitGameState(room, [{ type: "reconnected" }]);
+        // Force full state emission to the reconnected socket
+        const userSocket = this.io.sockets.sockets.get(socket.id);
+        if (userSocket) {
+          const payload = {
+            roomId: room.id,
+            matchId: room.match.matchId,
+            state: room.match.engine.serialize(),
+            events: [{ type: "reconnected" }],
+          };
+          userSocket.emit("game:state", payload);
+          console.log(`[RoomManager] Emitted game state to reconnected user ${user.userId} in room ${room.id}`);
+        } else {
+          console.error(`[RoomManager] Failed to find socket for reconnected user ${user.userId}`);
+        }
         this.scheduleClockCheck(room);
       }
     }

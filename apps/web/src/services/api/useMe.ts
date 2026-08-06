@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuthStore } from "../../store/authStore";
 import { apiClient, ApiError } from "./client";
 import { WALLET_CHANGED_EVENT } from "./practiceReward";
+import { NOTIFICATION_CHANGED_EVENT } from "./enterprise";
 
 export interface MeWallet {
   userId: string;
@@ -84,11 +85,15 @@ export function useMe(): UseMeResult {
     };
   }, [session, nonce]);
 
-  // Refresh the balance whenever the wallet changes (e.g. practice rewards).
+  // Refresh the balance / notifications whenever wallet or notifications change.
   useEffect(() => {
     const handler = () => setNonce((n) => n + 1);
     window.addEventListener(WALLET_CHANGED_EVENT, handler);
-    return () => window.removeEventListener(WALLET_CHANGED_EVENT, handler);
+    window.addEventListener(NOTIFICATION_CHANGED_EVENT, handler);
+    return () => {
+      window.removeEventListener(WALLET_CHANGED_EVENT, handler);
+      window.removeEventListener(NOTIFICATION_CHANGED_EVENT, handler);
+    };
   }, []);
 
   return { me, loading, error, reload: () => setNonce((n) => n + 1) };

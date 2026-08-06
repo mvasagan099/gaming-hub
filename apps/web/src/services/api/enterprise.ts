@@ -112,12 +112,22 @@ export const friendsApi = {
 // Notifications
 // ---------------------------------------------------------------------------
 
+export const NOTIFICATION_CHANGED_EVENT = "gaming-hub:notifications-changed";
+
+export function notifyNotificationChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(NOTIFICATION_CHANGED_EVENT));
+  }
+}
+
 export const notificationsApi = {
   list: (page = 1, pageSize = 25) =>
     apiClient.get<Page<AppNotification>>(`/notifications?page=${page}&pageSize=${pageSize}`),
   unreadCount: () => apiClient.get<{ count: number }>('/notifications/unread-count'),
-  markRead: (id: string) => apiClient.post(`/notifications/${id}/read`),
-  markAllRead: () => apiClient.post('/notifications/read-all'),
+  markRead: (id: string) => apiClient.post(`/notifications/${id}/read`, {}),
+  markAllRead: () => apiClient.post('/notifications/read-all', {}),
+  delete: (id: string) => apiClient.delete(`/notifications/${id}`),
+  deleteAll: () => apiClient.delete('/notifications/clear-all'),
 };
 
 // ---------------------------------------------------------------------------

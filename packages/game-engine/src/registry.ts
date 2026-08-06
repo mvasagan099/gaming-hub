@@ -4,6 +4,7 @@ import { SnakeLadderEngine } from "./snake-ladder/engine";
 import { ChessEngine } from "./chess/engine";
 import { LudoEngine } from "./ludo/engine";
 import { BubbleShooterEngine } from "./bubble-shooter/engine";
+import { CarromEngine } from "./carrom/engine";
 
 /**
  * Game engines that have been migrated to the server-authoritative engine
@@ -24,6 +25,7 @@ const ENGINES: Record<string, EngineConstructor> = {
   chess: ChessEngine,
   ludo: LudoEngine,
   "bubble-shooter": BubbleShooterEngine,
+  carrom: CarromEngine,
 };
 
 export function isGameEngineAvailable(gameId: GameId): boolean {

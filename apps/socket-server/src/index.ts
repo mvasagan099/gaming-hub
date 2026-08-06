@@ -149,9 +149,15 @@ async function main(): Promise<void> {
 
     socket.on("game:action", (payload, ack) =>
       void guard(ack, async () => {
+        console.log(`[SocketServer] game:action received from user ${user.userId} in room ${payload.roomId} with action:`, payload.action);
         const result = await roomManager.applyGameAction(user, payload.roomId, payload.action, socket);
+        console.log(`[SocketServer] game:action processed for user ${user.userId}, result:`, result.ok, result.error);
         ack?.({ ok: true, data: result });
       }),
+
+    socket.on("game:state:ack", (payload) => {
+      console.log(`[SocketServer] game:state:ack received from user ${user.userId} for match ${payload.matchId}`);
+    }),
     );
 
     socket.on("game:rematch", (payload, ack) =>

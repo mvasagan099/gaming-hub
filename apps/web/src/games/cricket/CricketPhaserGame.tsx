@@ -47,7 +47,8 @@ export function CricketPhaserGame({ mode, role, overs, onGameOver }: CricketPhas
         gameRef.current = null;
       }
     };
-  }, [mode, role, onGameOver]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, role, overs, onGameOver]);
 
   return (
     <div className="relative mx-auto w-full max-w-[924px] aspect-[924/680] h-auto max-h-[85vh] bg-[#090d16] rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex justify-center items-center">

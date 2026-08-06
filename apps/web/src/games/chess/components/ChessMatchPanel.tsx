@@ -3,10 +3,10 @@ import {
   Flag
 } from "lucide-react";
 import type {
-  ChessRemoteState,
   ChessTimeControlConfig,
   MatchSettings
 } from "@gaming-hub/shared";
+import type { ChessRemoteState } from "../phaser/managers/ChessMultiplayerDriver";
 import { useMultiplayerStore } from "../../../store/multiplayerStore";
 import {
   liveRemainingMs,
@@ -21,7 +21,11 @@ import { ChessEvents } from "../phaser/events/ChessEvents";
 interface ChessMatchPanelProps {}
 
 export function ChessMatchPanel(props: ChessMatchPanelProps) {
-  const gameState = useMultiplayerStore((s) => s.gameState) as ChessRemoteState | null;
+  const gameState = useMultiplayerStore((s) => s.gameState) as unknown as ChessRemoteState | null;
+  const renderKey = useMultiplayerStore((s) => s.renderKey); // Force re-render on state changes
+  
+  console.log("[ChessMatchPanel] Render called, renderKey:", renderKey, "gameState exists:", !!gameState, "FEN:", gameState?.fen?.substring(0, 20) + "...");
+  
   const lastEvents = useMultiplayerStore((s) => s.lastEvents);
   const winner = useMultiplayerStore((s) => s.winner);
   const mySeat = useMultiplayerStore((s) => s.mySeat);
@@ -48,7 +52,10 @@ export function ChessMatchPanel(props: ChessMatchPanelProps) {
   const timeControl = s.timeControl;
   const clocks = s.clocks;
   const isMyTurn = s.currentSeat === mySeat;
-  const canInteract = !s.finished && isMyTurn && socketStatus === "connected";
+  // Draw offers should be available anytime, not just on your turn (standard chess behavior)
+  const canMakeMoves = !s.finished && isMyTurn && socketStatus === "connected";
+  const canOfferDraw = !s.finished && socketStatus === "connected"; // Allow draw offers anytime
+  const canInteract = canMakeMoves; // For moving pieces only
   const drawOfferedByMe = s.drawOfferedBy === mySeat;
   const canAcceptDraw = s.drawOfferedBy != null && s.drawOfferedBy !== mySeat;
 
@@ -71,6 +78,7 @@ export function ChessMatchPanel(props: ChessMatchPanelProps) {
   const handleResign = () => sendGameAction && sendGameAction({ type: "resign" });
   const handleOfferDraw = () => sendGameAction && sendGameAction({ type: "draw-offer" });
   const handleAcceptDraw = () => sendGameAction && sendGameAction({ type: "draw-accept" });
+  const handleDeclineDraw = () => sendGameAction && sendGameAction({ type: "draw-decline" });
 
   const enterReplay = (idx: number) => setReplayIdx(idx);
   const exitReplay = () => {
@@ -168,25 +176,37 @@ export function ChessMatchPanel(props: ChessMatchPanelProps) {
         </div>
       )}
 
-      {!s.finished && canInteract && (
+      {!s.finished && socketStatus === "connected" && (
         <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700 pointer-events-auto">
           <p className="font-bold text-slate-800 dark:text-slate-200">Actions</p>
           <div className="flex flex-wrap gap-2">
-            {drawOfferedByMe ? (
+            {canAcceptDraw ? (
               <>
                 <button
                   onClick={handleAcceptDraw}
-                  disabled={!canAcceptDraw}
-                  className="flex-1 px-2 py-1 rounded-lg bg-emerald-600 text-white disabled:opacity-40 text-[10px] font-bold"
+                  className="flex-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold transition-all shadow-md shadow-emerald-600/20"
                 >
                   Accept Draw
                 </button>
+                <button
+                  onClick={handleDeclineDraw}
+                  className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold transition-colors"
+                >
+                  Decline
+                </button>
               </>
+            ) : drawOfferedByMe ? (
+              <button
+                disabled
+                className="flex-1 px-2.5 py-1.5 rounded-lg bg-amber-500/30 text-amber-300 text-[10px] font-bold border border-amber-500/30 cursor-not-allowed"
+              >
+                Draw Offered...
+              </button>
             ) : (
               <button
                 onClick={handleOfferDraw}
                 disabled={s.drawOfferedBy != null}
-                className="flex-1 px-2 py-1 rounded-lg bg-amber-500 text-white disabled:opacity-40 text-[10px] font-bold"
+                className="flex-1 px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white disabled:opacity-40 text-[10px] font-bold transition-colors shadow-sm"
               >
                 Draw?
               </button>
@@ -194,7 +214,7 @@ export function ChessMatchPanel(props: ChessMatchPanelProps) {
             <button
               onClick={handleResign}
               disabled={s.drawOfferedBy != null}
-              className="flex-1 px-2 py-1 rounded-lg bg-rose-600 text-white disabled:opacity-40 text-[10px] font-bold"
+              className="flex-1 px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-40 text-[10px] font-bold transition-colors shadow-sm"
             >
               Resign
             </button>

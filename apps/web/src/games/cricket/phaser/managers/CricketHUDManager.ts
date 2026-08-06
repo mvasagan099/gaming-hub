@@ -322,7 +322,7 @@ export class CricketHUDManager {
 
 
 
-  public updateScore(runs: number, wickets: number) {
+  public updateScore(runs: number, _wickets: number) {
     const runsStr = runs.toString().padStart(3, '0');
     this.runsText.setText(runsStr);
   }

@@ -26,12 +26,14 @@ export const FruitNinjaGame: React.FC<FruitNinjaProps> = ({ mode: initialMode, s
         <div className="flex flex-col lg:flex-row items-center justify-center gap-6 w-full max-w-5xl">
           <div className="flex flex-col items-center gap-4">
             <FruitNinjaPhaserGame mode={playMode} />
-            <button
-              onClick={resetGame}
-              className="px-6 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-bold text-rose-400 text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg transition-all"
-            >
-              <RefreshCcw className="w-4 h-4" /> Reset Match
-            </button>
+            {!isMultiplayer && (
+              <button
+                onClick={resetGame}
+                className="px-6 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-bold text-rose-400 text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg transition-all"
+              >
+                <RefreshCcw className="w-4 h-4" /> Reset Match
+              </button>
+            )}
           </div>
           {isMultiplayer && (
             <div className="hidden lg:block flex-shrink-0">

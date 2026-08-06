@@ -62,6 +62,7 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const gameState = useMultiplayerStore((s) => s.gameState);
+  const renderKey = useMultiplayerStore((s) => s.renderKey); // Force re-render on state changes
   const winner = useMultiplayerStore((s) => s.winner);
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const isSpectator = useMultiplayerStore((s) => s.isSpectator);

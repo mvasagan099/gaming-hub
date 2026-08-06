@@ -64,6 +64,8 @@ interface MultiplayerState {
   lastEvents: { type: string }[];
   matchId: string | null;
   winner: WinnerInfo | null;
+  // Force re-render counter for deep state changes
+  renderKey: number;
 
   connect: () => void;
   disconnect: () => void;
@@ -129,6 +131,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   lastEvents: [],
   matchId: null,
   winner: null,
+  renderKey: 0,
 
   connect: () => {
     if (get().socket) return;
@@ -177,17 +180,39 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         set({ status: "error", error: "Could not reach the game server" });
       });
 
-      socket.on("room:update", (room) => applyRoom(set, room));
+      socket.on("room:update", (room) => {
+        console.log("[MultiplayerStore] room:update received", room.id, "gameId:", room.gameId, "status:", room.status);
+        applyRoom(set, room);
+      });
 
       socket.on("room:closed", () => clearRoom(set));
 
       socket.on("game:state", (payload) => {
+        console.log("[MultiplayerStore] game:state received", payload.matchId, "with", payload.events.length, "events");
+        const gameState = payload.state as any;
+        if (gameState?.fen) {
+          console.log("[MultiplayerStore] Chess FEN:", gameState.fen.substring(0, 20) + "...", "turn:", gameState.turn);
+        }
+        if (gameState?.history) {
+          console.log("[MultiplayerStore] Chess move count:", gameState.history.length, "last move:", gameState.lastMove);
+        }
+        
+        // Always increment renderKey and ensure proper state update
         set({
           gameState: payload.state,
           lastEvents: payload.events,
           matchId: payload.matchId,
           winner: null,
+          renderKey: (get().renderKey || 0) + 1, // Always force re-render
         });
+
+        // Acknowledgment to server
+        socket.emit("game:state:ack", {
+          roomId: payload.roomId,
+          matchId: payload.matchId,
+          timestamp: Date.now(),
+        });
+        console.log("[MultiplayerStore] Sent game:state:ack for match", payload.matchId);
       });
 
       socket.on("game:over", (payload) => {
@@ -196,6 +221,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           gameState: payload.state,
           lastEvents: [],
           matchId: payload.matchId,
+          renderKey: get().renderKey + 1, // Force re-render
         });
       });
 
@@ -364,9 +390,20 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const socket = get().socket;
     const room = get().room;
     if (!socket || !room) return { ok: false, error: "You are not in a room" };
+    
+    console.log("[MultiplayerStore] Client sending game:action to room", room.id, "with action:", action);
     const res = await socket.emitWithAck("game:action", { roomId: room.id, action });
-    if (!res.ok) return { ok: false, error: res.error.message };
-    if (!res.data.ok) return { ok: false, error: res.data.error ?? "Action rejected" };
+    
+    if (!res.ok) {
+      console.log("[MultiplayerStore] Game action failed:", res.error.message);
+      return { ok: false, error: res.error.message };
+    }
+    if (!res.data.ok) {
+      console.log("[MultiplayerStore] Game action rejected by server:", res.data.error);
+      return { ok: false, error: res.data.error ?? "Action rejected" };
+    }
+    
+    console.log("[MultiplayerStore] Game action accepted by server, awaiting game:state broadcast");
     // State arrives via the `game:state` broadcast; applying it here too would
     // double-render the same event set on the acting client.
     return { ok: true };

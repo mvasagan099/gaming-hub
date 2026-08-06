@@ -1,0 +1,120 @@
+import type { JsonObject } from "@gaming-hub/shared";
+import type { GameAction } from "../types";
+
+export const CARROM_BOARD_WIDTH = 600;
+export const CARROM_BOARD_HEIGHT = 600;
+export const POCKET_RADIUS = 35;
+export const STRIKER_RADIUS = 18;
+export const COIN_RADIUS = 15;
+export const QUEEN_RADIUS = 15;
+
+export const POCKETS = [
+  { x: POCKET_RADIUS, y: POCKET_RADIUS },
+  { x: CARROM_BOARD_WIDTH - POCKET_RADIUS, y: POCKET_RADIUS },
+  { x: POCKET_RADIUS, y: CARROM_BOARD_HEIGHT - POCKET_RADIUS },
+  { x: CARROM_BOARD_WIDTH - POCKET_RADIUS, y: CARROM_BOARD_HEIGHT - POCKET_RADIUS },
+];
+
+export const BASE_LINE_Y = CARROM_BOARD_HEIGHT - 60;
+export const BASE_LINE_X_START = 100;
+export const BASE_LINE_X_END = CARROM_BOARD_WIDTH - 100;
+
+export type CoinType = "white" | "black" | "queen";
+export type CarromColor = "white" | "black";
+
+export interface CarromCoin extends JsonObject {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  type: CoinType;
+  pocketed: boolean;
+  pocketedBy: number | null;
+  pocketedAtTurn: number | null;
+}
+
+export interface CarromStriker extends JsonObject {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  placed: boolean;
+  pocketed: boolean;
+  placedBy: number | null;
+}
+
+export interface CarromPlayer extends JsonObject {
+  seat: number;
+  color: CarromColor;
+  score: number;
+  queenPocketed: boolean;
+  queenCovered: boolean;
+  fouls: number;
+  consecutiveFouls: number;
+}
+
+export interface TurnTimerConfig extends JsonObject {
+  turnDurationMs: number;
+  warningThresholdMs: number;
+}
+
+export interface MatchTimerConfig extends JsonObject {
+  matchDurationMs: number;
+  warningThresholdMs: number;
+}
+
+export type CarromAction =
+  | { type: "place-striker"; x: number }
+  | { type: "strike"; angle: number; power: number }
+  | { type: "resign" }
+  | { type: "draw-offer" }
+  | { type: "draw-accept" }
+  | { type: "draw-decline" }
+  | { type: "pause" }
+  | { type: "resume" };
+
+export type CarromActionType = CarromAction["type"];
+
+export interface CarromState extends JsonObject {
+  coins: CarromCoin[];
+  striker: CarromStriker;
+  players: CarromPlayer[];
+  currentSeat: number;
+  finished: boolean;
+  winnerSeats: number[];
+  turnNumber: number;
+  turnStartedAtMs: number | null;
+  matchStartedAtMs: number | null;
+  drawOfferedBy: number | null;
+  paused: boolean;
+  pausedAtMs: number | null;
+  pausedBy: number | null;
+  lastAction: CarromAction | null;
+  lastActionSeat: number | null;
+  lastActionAtMs: number | null;
+  strikerPlacementPhase: boolean;
+  strikerPlacementSeat: number | null;
+  foulThisTurn: boolean;
+  queenOnBoard: boolean;
+  turnTimerConfig: TurnTimerConfig | null;
+  matchTimerConfig: MatchTimerConfig | null;
+  gameOver: boolean;
+  endReason: string | null;
+}
+
+export interface CarromEngineOptions {
+  turnTimer?: TurnTimerConfig;
+  matchTimer?: MatchTimerConfig;
+  enableResign?: boolean;
+  enableDraw?: boolean;
+  enablePause?: boolean;
+  enableRematch?: boolean;
+  now?: () => number;
+}
+
+export interface CarromEvent {
+  type: string;
+  seat?: number;
+  [key: string]: unknown;
+}

@@ -9,7 +9,7 @@ import type PieceManager from "./PieceManager";
 import type HUDManager from "./HUDManager";
 import type AudioManager from "../../../snake-ladder/phaser/managers/AudioManager";
 
-interface ChessRemoteState {
+export interface ChessRemoteState {
   fen?: string;
   turn?: "w" | "b";
   inCheck?: boolean;
@@ -35,7 +35,7 @@ interface ChessRemoteState {
   lastMoveAtMs?: number | null;
   drawOfferedBy?: number | null;
   result?: "1-0" | "0-1" | "1/2-1/2" | "*";
-  endReason:
+  endReason?:
     | "checkmate"
     | "stalemate"
     | "insufficient"
@@ -48,6 +48,9 @@ interface ChessRemoteState {
     | string;
   players?: { seat: number; color: "w" | "b" }[];
 }
+
+// ...
+
 
 interface ChessRemoteEvent {
   type: string;
@@ -108,12 +111,41 @@ export default class ChessMultiplayerDriver {
     this.scene.events.on(ChessEvents.REPLAY_EXIT, this.handleReplayExit, this);
     this.scene.events.on(ChessEvents.PROMOTION_NEEDED, this.handlePromotionNeeded, this);
     this.scene.events.on(ChessEvents.PROMOTION_CHOSEN, this.onPromotionChosen, this);
+    this.scene.events.emit("CUSTOM:CHECK_STATE"); // Force initial state check
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.stop());
 
+    // Setup both subscription-based and event-based state detection
+    console.log("[ChessMultiplayerDriver] Setting up subscription and event listeners");
+    
     this.unsubscribe = useMultiplayerStore.subscribe((state, prev) => {
-      if (this.destroyed) return;
-      if (state.gameState !== prev.gameState || state.winner !== prev.winner) {
+      console.log("[ChessMultiplayerDriver] Subscription callback fired! prev.renderKey:", prev.renderKey, "->", state.renderKey);
+      if (this.destroyed) {
+        console.log("[ChessMultiplayerDriver] Subscription callback skipped: driver destroyed");
+        return;
+      }
+      // Use renderKey to detect actual state changes instead of shallow comparison
+      if (state.renderKey !== prev.renderKey || state.winner !== prev.winner) {
+        console.log("[ChessMultiplayerDriver] State changed, applying new state");
+        const gameState = state.gameState as unknown as ChessRemoteState | null;
+        console.log("[ChessMultiplayerDriver] Applying new state with FEN:", gameState?.fen?.substring(0, 20) + "...");
         this.applyState(state.gameState, state.lastEvents, state.winner);
+        this.scene.events.emit("CUSTOM:STATE_SYNCED", state.gameState);
+      } else {
+        console.log("[ChessMultiplayerDriver] State unchanged, renderKey:", state.renderKey);
+      }
+    });
+
+    // Actively poll for state changes as fallback
+    this.scene.time.addEvent({
+      delay: 100,
+      loop: true,
+      callback: () => {
+        const current = useMultiplayerStore.getState();
+        const currentFen = (current.gameState as any)?.fen;
+        if (currentFen && this.lastState?.fen !== currentFen) {
+          console.log("[ChessMultiplayerDriver] Poll detected FEN change");
+          this.applyState(current.gameState, current.lastEvents, current.winner);
+        }
       }
     });
 
@@ -123,17 +155,23 @@ export default class ChessMultiplayerDriver {
   }
 
   stop(): void {
+    console.log("[ChessMultiplayerDriver] stop called, destroyed:", this.destroyed);
     this.destroyed = true;
     this.unsubscribe?.();
     this.unsubscribe = null;
+    
     this.scene.events.off(ChessEvents.PIECE_SELECTED, this.onPieceSelected, this);
     this.scene.events.off(ChessEvents.MOVE_MADE, this.onMoveMade, this);
     this.scene.events.off(ChessEvents.SQUARE_CLICKED, this.onSquareClicked, this);
     this.scene.events.off(ChessEvents.REPLAY_FEN, this.handleReplayFen, this);
     this.scene.events.off(ChessEvents.REPLAY_EXIT, this.handleReplayExit, this);
     this.scene.events.off(ChessEvents.PROMOTION_CHOSEN, this.onPromotionChosen, this);
-    this.scene.events.off(ChessEvents.PROMOTION_NEEDED, this.handlePromotionNeeded, this);
-    this.scene.input.enabled = true;
+    this.scene.events.off(ChessEvents.PROMOTION_NEEDED, this.handlePromotionNeeded);
+    
+    // Stop the intro scene if exists
+    this.scene.scene.stop("IntroScene");
+    
+    console.log("[ChessMultiplayerDriver] All event listeners cleaned up");
   }
 
   // ─── Input routing ──────────────────────────────────────────────────────────
@@ -236,15 +274,21 @@ export default class ChessMultiplayerDriver {
   }
 
   // ─── State application ──────────────────────────────────────────────────────
-
+  
   private applyState(
     state: unknown,
     events: { type: string }[] | undefined,
     winner: WinnerInfo | null,
   ): void {
+    console.log("[ChessMultiplayerDriver] applyState called, destroyed:", this.destroyed, "gameState exists:", !!state);
     if (!state || this.destroyed) return;
     const s = state as ChessRemoteState;
-    if (!s.fen) return;
+    if (!s.fen) {
+      console.log("[ChessMultiplayerDriver] applyState skipped: no FEN in state");
+      return;
+    }
+
+    console.log("[ChessMultiplayerDriver] Applying state with FEN:", s.fen?.substring(0, 20) + "...", "finished:", s.finished);
 
     // A fresh match means a rematch happened — clear the previous result.
     if (this.winnerShown && !s.finished) {
@@ -254,6 +298,7 @@ export default class ChessMultiplayerDriver {
 
     this.lastState = s;
     this.mirror.load(s.fen);
+    console.log("[ChessMultiplayerDriver] Mirror engine loaded, current turn:", this.mirror.turn());
 
     const lastMove =
       s.lastMove && s.lastMove.from && s.lastMove.to

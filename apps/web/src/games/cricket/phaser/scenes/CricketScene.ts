@@ -1164,7 +1164,7 @@ export class CricketScene extends Phaser.Scene {
         btnBg.fillRoundedRect(CENTER_X - 100, CENTER_Y + 80, 200, 50, 8);
         btnBg.setDepth(depth + 1);
         
-        const btnTxt = this.add.text(CENTER_X, CENTER_Y + 105, "FINISH", {
+        this.add.text(CENTER_X, CENTER_Y + 105, "FINISH", {
           fontSize: "20px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
         }).setOrigin(0.5).setDepth(depth + 2);
         

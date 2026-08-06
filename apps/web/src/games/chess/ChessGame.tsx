@@ -51,12 +51,14 @@ export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, 
         <div className="relative flex flex-col items-center justify-center w-full max-w-5xl mx-auto my-4">
           <ChessPhaserGame mode={playMode} level={aiLevel} theme={theme} online={isMultiplayer} players={participants.length || 2} seat={seat} names={names} onBack={onBack} onReplay={handleReplay} />
           
-          <button
-            onClick={handleReplay}
-            className="mt-4 px-6 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-bold text-rose-400 text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg transition-all"
-          >
-            <RefreshCcw className="w-4 h-4" /> {isMultiplayer ? "Rematch" : "Reset Match"}
-          </button>
+          {!isMultiplayer && (
+            <button
+              onClick={handleReplay}
+              className="mt-4 px-6 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-bold text-rose-400 text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg transition-all"
+            >
+              <RefreshCcw className="w-4 h-4" /> Reset Match
+            </button>
+          )}
         </div>
       </GameWrapper>
     );

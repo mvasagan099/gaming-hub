@@ -4,6 +4,8 @@ import { authenticate } from "../plugins/authenticate";
 import { requireUser, routeParams, queryParams, queryString } from "../lib/http";
 import {
   countUnread,
+  deleteAllNotifications,
+  deleteNotification,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -31,4 +33,21 @@ export async function notificationsRoutes(app: FastifyInstance) {
     await markAllNotificationsRead(requireUser(request).id);
     return { ok: true };
   });
+
+  app.delete("/api/notifications/clear-all", { preHandler: authenticate }, async (request) => {
+    await deleteAllNotifications(requireUser(request).id);
+    return { ok: true };
+  });
+
+  app.delete("/api/notifications", { preHandler: authenticate }, async (request) => {
+    await deleteAllNotifications(requireUser(request).id);
+    return { ok: true };
+  });
+
+  app.delete("/api/notifications/:id", { preHandler: authenticate }, async (request) => {
+    const { id } = routeParams(request);
+    await deleteNotification(requireUser(request).id, id);
+    return { ok: true };
+  });
 }
+

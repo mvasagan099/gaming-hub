@@ -64,3 +64,16 @@ export async function markAllNotificationsRead(userId: string) {
 export async function countUnread(userId: string): Promise<number> {
   return prisma.appNotification.count({ where: { userId, readAt: null } });
 }
+
+export async function deleteNotification(userId: string, notificationId: string) {
+  return prisma.appNotification.deleteMany({
+    where: { id: notificationId, userId },
+  });
+}
+
+export async function deleteAllNotifications(userId: string) {
+  return prisma.appNotification.deleteMany({
+    where: { userId },
+  });
+}
+

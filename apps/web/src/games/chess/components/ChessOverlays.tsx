@@ -24,7 +24,22 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
   const [hasRewarded, setHasRewarded] = useState(false);
   const [showDrawOffer, setShowDrawOffer] = useState(false);
   const gameState = useMultiplayerStore((s) => s.gameState);
+  const mySeat = useMultiplayerStore((s) => s.mySeat);
+  const renderKey = useMultiplayerStore((s) => s.renderKey); // Force re-render on state changes
   const sendGameAction = useMultiplayerStore((s) => s.sendGameAction);
+
+  const drawOfferedBySeat = gameState?.drawOfferedBy;
+  const isDrawOfferedByOpponent =
+    online &&
+    drawOfferedBySeat != null &&
+    drawOfferedBySeat !== mySeat &&
+    !gameState?.finished;
+
+  const isDrawOfferedByMe =
+    online &&
+    drawOfferedBySeat != null &&
+    drawOfferedBySeat === mySeat &&
+    !gameState?.finished;
 
   useEffect(() => {
     if (!game) return;
@@ -135,30 +150,58 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
         </div>
       )}
 
-      {/* DRAW OFFER MODAL */}
-      {showDrawOffer && online && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#0f172a] border border-amber-500/30 p-6 rounded-2xl shadow-2xl flex flex-col items-center max-w-md w-full mx-4">
-            <h3 className="text-amber-400 font-bold uppercase tracking-wider mb-4">Draw Offer</h3>
-            <p className="text-slate-300 text-sm mb-6 text-center">
-              {gameState?.drawOfferedBy != null ? "Your opponent offered a draw. Accept?" : "Offer a draw to your opponent?"}
+      {/* DRAW OFFER MODAL / BANNER */}
+      {(showDrawOffer || isDrawOfferedByOpponent) && online && !gameOverMsg && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#0f172a] border border-amber-500/40 p-6 rounded-2xl shadow-2xl flex flex-col items-center max-w-md w-full mx-4">
+            <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 mb-3 border border-amber-500/40 animate-pulse">
+              <Handshake className="w-6 h-6" />
+            </div>
+            <h3 className="text-amber-400 font-black uppercase tracking-wider text-base mb-2">
+              {isDrawOfferedByOpponent ? "Draw Offer Received" : "Offer a Draw"}
+            </h3>
+            <p className="text-slate-300 text-xs mb-6 text-center leading-relaxed">
+              {isDrawOfferedByOpponent
+                ? "Your opponent has offered a draw. Would you like to accept or decline?"
+                : isDrawOfferedByMe
+                ? "You offered a draw. Waiting for opponent to respond..."
+                : "Offer a draw to your opponent for this match?"}
             </p>
             <div className="flex gap-3 w-full">
-              {gameState?.drawOfferedBy != null ? (
+              {isDrawOfferedByOpponent ? (
                 <>
-                  <button onClick={handleAcceptDraw} className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/20">
+                  <button
+                    onClick={handleAcceptDraw}
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-emerald-600/20"
+                  >
                     Accept Draw
                   </button>
-                  <button onClick={handleDeclineDraw} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-all border border-slate-700">
+                  <button
+                    onClick={handleDeclineDraw}
+                    className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-rose-600/20"
+                  >
                     Decline
                   </button>
                 </>
+              ) : isDrawOfferedByMe ? (
+                <button
+                  onClick={handleDeclineDraw}
+                  className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all border border-slate-700"
+                >
+                  Withdraw Offer
+                </button>
               ) : (
                 <>
-                  <button onClick={handleOfferDraw} className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-amber-600/20">
+                  <button
+                    onClick={handleOfferDraw}
+                    className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-amber-600/20"
+                  >
                     Offer Draw
                   </button>
-                  <button onClick={() => setShowDrawOffer(false)} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-all border border-slate-700">
+                  <button
+                    onClick={() => setShowDrawOffer(false)}
+                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all border border-slate-700"
+                  >
                     Cancel
                   </button>
                 </>
@@ -171,10 +214,40 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
       {/* IN-GAME ACTIONS (bottom overlay) */}
       {online && !gameOverMsg && !promotionData && !showDrawOffer && (
         <div className="absolute bottom-4 right-4 z-40 flex gap-2">
-          <button onClick={() => setShowDrawOffer(true)} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-amber-600/20 flex items-center gap-2">
-            <Handshake className="w-4 h-4" /> Draw
-          </button>
-          <button onClick={handleResign} className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-rose-600/20 flex items-center gap-2">
+          {isDrawOfferedByOpponent ? (
+            <>
+              <button
+                onClick={handleAcceptDraw}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/30 flex items-center gap-2 animate-bounce"
+              >
+                <Handshake className="w-4 h-4" /> Accept Draw
+              </button>
+              <button
+                onClick={handleDeclineDraw}
+                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-all border border-slate-700"
+              >
+                Decline
+              </button>
+            </>
+          ) : isDrawOfferedByMe ? (
+            <button
+              disabled
+              className="px-4 py-2 bg-amber-600/50 text-amber-200 text-xs font-bold rounded-xl border border-amber-500/30 flex items-center gap-2 cursor-not-allowed"
+            >
+              <Handshake className="w-4 h-4 animate-pulse" /> Draw Offered...
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowDrawOffer(true)}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-amber-600/20 flex items-center gap-2"
+            >
+              <Handshake className="w-4 h-4" /> Draw
+            </button>
+          )}
+          <button
+            onClick={handleResign}
+            className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-rose-600/20 flex items-center gap-2"
+          >
             <Flag className="w-4 h-4" /> Resign
           </button>
         </div>
