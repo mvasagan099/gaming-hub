@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { GameWrapper } from '../../components/GameWrapper';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
+import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 
 interface TableTennisProps {
   mode: 'ai' | 'multiplayer';
@@ -449,6 +450,13 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
             </ul>
           </div>
         </div>
+
+        {/* Multiplayer Panel */}
+        {mode === 'multiplayer' && (
+          <div className="hidden xl:block flex-shrink-0 self-start">
+            <MultiplayerMatchPanel compact />
+          </div>
+        )}
 
       </div>
     </GameWrapper>

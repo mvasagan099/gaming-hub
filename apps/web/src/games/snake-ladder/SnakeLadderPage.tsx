@@ -1,6 +1,7 @@
 import { GameWrapper } from "../../components/GameWrapper";
 import PhaserGame from "./components/PhaserGame";
 import { useMultiplayerStore } from "../../store/multiplayerStore";
+import { MultiplayerMatchPanel } from "../shared/components/MultiplayerMatchPanel";
 
 interface SnakeLadderPageProps {
   mode?: "ai" | "multiplayer";
@@ -25,8 +26,15 @@ export function SnakeLadderPage({ mode = 'ai', stake = 10, onBack = () => {} }: 
 
   return (
     <GameWrapper title="Snake & Ladder" gameId="snake-ladder" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="w-full h-full flex items-center justify-center overflow-hidden">
-        <PhaserGame mode={isMultiplayer ? "pvp" : "ai"} players={players} seat={seat} names={names} />
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-6 w-full h-full">
+        <div className="flex items-center justify-center overflow-hidden">
+          <PhaserGame mode={isMultiplayer ? "pvp" : "ai"} players={players} seat={seat} names={names} />
+        </div>
+        {isMultiplayer && (
+          <div className="hidden lg:block flex-shrink-0">
+            <MultiplayerMatchPanel compact />
+          </div>
+        )}
       </div>
     </GameWrapper>
   );

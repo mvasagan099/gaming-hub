@@ -10,6 +10,8 @@ import {
   LogIn,
   LogOut,
   Play,
+  Shield,
+  Star,
   Swords,
   Trophy,
   Users,
@@ -25,20 +27,37 @@ import {
   type GameId,
   type MatchSettings,
   type RoomFull,
+  type PublicProfile,
 } from "@gaming-hub/shared";
 import { supabase } from "../../services/supabase";
 import { useAuthStore } from "../../store/authStore";
 import { useMultiplayerStore } from "../../store/multiplayerStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useMe } from "../../services/api/useMe";
+import { usePublicProfile } from "../../services/api/usePublicProfile";
 import { RoomChat } from "./RoomChat";
 
 const SEAT_COLORS = [
-  { ring: "border-rose-500", text: "text-rose-400", bg: "bg-rose-500" },
-  { ring: "border-emerald-500", text: "text-emerald-400", bg: "bg-emerald-500" },
-  { ring: "border-sky-500", text: "text-sky-400", bg: "bg-sky-500" },
-  { ring: "border-amber-500", text: "text-amber-400", bg: "bg-amber-500" },
+  { ring: "border-rose-500", text: "text-rose-400", bg: "bg-rose-500", glow: "shadow-rose-500/20", badge: "bg-rose-500/20 text-rose-300" },
+  { ring: "border-emerald-500", text: "text-emerald-400", bg: "bg-emerald-500", glow: "shadow-emerald-500/20", badge: "bg-emerald-500/20 text-emerald-300" },
+  { ring: "border-sky-500", text: "text-sky-400", bg: "bg-sky-500", glow: "shadow-sky-500/20", badge: "bg-sky-500/20 text-sky-300" },
+  { ring: "border-amber-500", text: "text-amber-400", bg: "bg-amber-500", glow: "shadow-amber-500/20", badge: "bg-amber-500/20 text-amber-300" },
 ];
+
+function countryFlag(code: string | null | undefined): string {
+  if (!code || code.length !== 2) return "";
+  const offset = 0x1f1e6 - 0x41;
+  return code.toUpperCase().split("").map(c => String.fromCodePoint(c.codePointAt(0)! + offset)).join("");
+}
+
+function xpForNextLevel(level: number): number {
+  return Math.round(100 * Math.pow(level, 1.5));
+}
+
+function winRate(wins: number, total: number): number {
+  if (total === 0) return 0;
+  return Math.round((wins / total) * 100);
+}
 
 function connectionLabel(status: RoomFull["players"][number]["connectionStatus"]) {
   switch (status) {
@@ -49,6 +68,149 @@ function connectionLabel(status: RoomFull["players"][number]["connectionStatus"]
     case "disconnected":
       return { label: "Offline", dot: "bg-rose-500" };
   }
+}
+
+// ─── Premium Player Card ──────────────────────────────────────────────────
+
+interface LobbyPlayerCardProps {
+  player: RoomFull["players"][number];
+  isMe: boolean;
+  userId: string | null;
+  index: number;
+  meProfile: PublicProfile | null;
+}
+
+function LobbyPlayerCard({ player, isMe, index, meProfile }: LobbyPlayerCardProps) {
+  const color = SEAT_COLORS[index % SEAT_COLORS.length];
+  const conn = connectionLabel(player.connectionStatus);
+
+  // Fetch profile for opponents; use meProfile for self
+  const { profile: fetchedProfile } = usePublicProfile(isMe ? null : player.id);
+  const profile = isMe ? meProfile : fetchedProfile;
+
+  const wins = profile?.wins ?? 0;
+  const losses = profile?.losses ?? 0;
+  const draws = profile?.draws ?? 0;
+  const total = wins + losses + draws;
+  const wr = winRate(wins, total);
+  const level = profile?.level ?? 1;
+  const xp = profile?.xp ?? 0;
+  const country = profile?.country ?? null;
+  const needed = xpForNextLevel(level);
+  const xpPct = Math.min(100, Math.round((xp / needed) * 100));
+  const isVerified = level >= 10;
+
+  return (
+    <div
+      className={`relative flex flex-col gap-2.5 p-3.5 rounded-2xl border-2 transition-all duration-300 ${
+        player.isReady
+          ? `${color.ring} bg-slate-800/80 shadow-md ${color.glow}`
+          : "border-slate-700 bg-slate-800/50"
+      }`}
+    >
+      {/* Ready glow ring */}
+      {player.isReady && (
+        <div className={`absolute inset-0 rounded-2xl opacity-10 ${color.bg} pointer-events-none`} />
+      )}
+
+      {/* Top row */}
+      <div className="flex items-start gap-3 relative">
+        {/* Avatar */}
+        <div className="relative flex-shrink-0">
+          <div className={`w-12 h-12 rounded-xl border-2 ${color.ring} overflow-hidden bg-slate-700 flex items-center justify-center text-xl font-black text-white`}>
+            {player.avatarUrl
+              ? <img src={player.avatarUrl} alt="" className="w-full h-full object-cover" />
+              : (player.displayName || player.username || "?").slice(0, 1).toUpperCase()
+            }
+          </div>
+          {/* Online dot */}
+          <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-800 ${conn.dot} ${
+            player.connectionStatus !== "disconnected" ? "animate-pulse" : ""
+          }`} />
+        </div>
+
+        {/* Name block */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-sm font-black text-white truncate">
+              {player.displayName || player.username}
+            </p>
+            {isMe && (
+              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-bold uppercase">you</span>
+            )}
+            {player.isHost && <Crown className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
+            {isVerified && (
+              <span title="Verified" className="flex items-center">
+                <Shield className="w-3 h-3 text-sky-400 flex-shrink-0" />
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] text-slate-400 mt-0.5">
+            @{player.username} {countryFlag(country)}
+          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-black ${color.badge}`}>
+              Lv {level}
+            </span>
+            {profile && (
+              <span className="text-[9px] text-amber-400 font-bold flex items-center gap-0.5">
+                <Star className="w-2.5 h-2.5" />{wr}% WR
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Right: ready + ping */}
+        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+          {player.connectionStatus === "connected"
+            ? <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+            : <WifiOff className="w-3.5 h-3.5 text-rose-400" />
+          }
+          <span className={`text-[9px] font-bold ${
+            player.connectionStatus === "connected" ? "text-emerald-400" : player.connectionStatus === "reconnecting" ? "text-amber-400" : "text-rose-400"
+          }`}>
+            {player.connectionStatus === "connected" ? "Good" : player.connectionStatus === "reconnecting" ? "High" : "Lost"}
+          </span>
+          {player.isReady
+            ? <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">Ready ✓</span>
+            : <span className="text-[8px] text-slate-500">Not ready</span>
+          }
+        </div>
+      </div>
+
+      {/* XP bar */}
+      <div>
+        <div className="flex justify-between text-[8px] font-bold text-slate-600 mb-0.5">
+          <span>XP</span>
+          <span>{xp.toLocaleString()} / {needed.toLocaleString()}</span>
+        </div>
+        <div className="h-1.5 rounded-full bg-slate-700 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-400 transition-all duration-700"
+            style={{ width: `${xpPct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Mini stats row */}
+      {profile && (
+        <div className="grid grid-cols-3 gap-1 text-center">
+          <div className="rounded-lg bg-slate-900/60 py-1">
+            <p className="text-[8px] text-slate-500">Wins</p>
+            <p className="text-[10px] font-black text-emerald-400">{wins}</p>
+          </div>
+          <div className="rounded-lg bg-slate-900/60 py-1">
+            <p className="text-[8px] text-slate-500">Games</p>
+            <p className="text-[10px] font-black text-slate-200">{total}</p>
+          </div>
+          <div className="rounded-lg bg-slate-900/60 py-1">
+            <p className="text-[8px] text-slate-500">XP</p>
+            <p className="text-[10px] font-black text-violet-400">{xp >= 1000 ? `${(xp / 1000).toFixed(1)}k` : xp}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export const LobbyPage: React.FC = () => {
@@ -371,7 +533,7 @@ export const LobbyPage: React.FC = () => {
                       key={tc.label}
                       onClick={() => setSettings({ ...settings, timeControl: tc })}
                       className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${
-                        settings.timeControl?.label === tc.label
+                        (settings.timeControl as Record<string, unknown> | null)?.label === tc.label
                           ? "bg-indigo-600 text-white border-indigo-500"
                           : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-300"
                       }`}
@@ -467,21 +629,45 @@ export const LobbyPage: React.FC = () => {
       )}
 
       {session && matchmaking.queued && (
-        <div className="glass-panel dark:bg-transparent border border-slate-200 dark:border-slate-800 rounded-3xl p-10 flex flex-col items-center text-center">
-          <div className="w-14 h-14 rounded-full bg-indigo-500/15 flex items-center justify-center mb-4">
-            <Swords className="w-7 h-7 text-indigo-400 animate-pulse" />
+        <div className="relative overflow-hidden glass-panel dark:bg-transparent border border-slate-800 rounded-3xl p-10 flex flex-col items-center text-center">
+          {/* Animated radar rings */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            {[1, 2, 3].map(i => (
+              <div
+                key={i}
+                className="absolute rounded-full border border-indigo-500/20"
+                style={{
+                  width: `${i * 80}px`,
+                  height: `${i * 80}px`,
+                  animation: `ping ${i * 0.8 + 0.8}s cubic-bezier(0,0,0.2,1) infinite`,
+                  animationDelay: `${i * 0.2}s`,
+                }}
+              />
+            ))}
           </div>
-          <h3 className="text-lg font-black text-slate-900 dark:text-white">Looking for opponents…</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Matchmaking for {def.name} • 🪙 {matchmaking.stake ?? stake} stake
-            {matchmaking.position > 0 && ` • Queue position ${matchmaking.position}`}
-            {secondsRemaining > 0 && ` • Auto-cancels in ${secondsRemaining}s`}
+          <div className="relative z-10 w-16 h-16 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center mb-5 shadow-lg shadow-indigo-500/20">
+            <Swords className="w-8 h-8 text-indigo-400 animate-pulse" />
+          </div>
+          <h3 className="relative z-10 text-lg font-black text-slate-900 dark:text-white">Finding opponents…</h3>
+          <p className="relative z-10 text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-1">
+            <span className="block">{def.name} · 🪙 {matchmaking.stake ?? stake} stake</span>
+            {matchmaking.position > 0 && <span className="block">Queue position: #{matchmaking.position}</span>}
+            {secondsRemaining > 0 && (
+              <span className="block font-semibold text-amber-400">Auto-cancels in {secondsRemaining}s</span>
+            )}
           </p>
+          {/* Progress bar */}
+          <div className="relative z-10 w-48 mt-4 h-1 rounded-full bg-slate-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-1000"
+              style={{ width: `${Math.min(100, (waitElapsed / matchmakingTimeout) * 100)}%` }}
+            />
+          </div>
           <button
             onClick={() => void leaveMatchmaking()}
-            className="mt-5 px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors"
+            className="relative z-10 mt-6 px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors shadow-lg"
           >
-            Cancel
+            Cancel Search
           </button>
         </div>
       )}
@@ -524,45 +710,44 @@ export const LobbyPage: React.FC = () => {
 
               <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {participants.map((player, index) => {
-                  const color = SEAT_COLORS[index % SEAT_COLORS.length];
-                  const conn = connectionLabel(player.connectionStatus);
                   const isMe = player.id === userId;
+                  const mePublicProfile: PublicProfile | null = isMe && me ? {
+                    wins: me.profile?.wins ?? 0,
+                    losses: me.profile?.losses ?? 0,
+                    draws: me.profile?.draws ?? 0,
+                    xp: me.profile?.xp ?? 0,
+                    level: me.profile?.level ?? 1,
+                    country: me.profile?.country ?? null,
+                    userId: me.user.id,
+                    bio: null,
+                    coins: 0,
+                    gems: 0,
+                    isOnline: true,
+                    lastSeenAt: null,
+                    username: me.user.username,
+                    displayName: me.user.displayName,
+                    avatarUrl: me.user.avatarUrl ?? null,
+                  } : null;
                   return (
-                    <div
+                    <LobbyPlayerCard
                       key={player.id}
-                      className={`flex items-center gap-3 p-3 rounded-2xl border ${color.ring} bg-slate-100 dark:bg-slate-800/60`}
-                    >
-                      <div className={`w-8 h-8 rounded-full ${color.bg} flex items-center justify-center text-xs font-black text-white`}>
-                        {player.seat != null ? player.seat + 1 : "–"}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate flex items-center gap-1">
-                          {player.displayName}
-                          {isMe && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400">you</span>}
-                          {player.isHost && <Crown className="w-3.5 h-3.5 text-amber-400" />}
-                        </p>
-                        <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                          <span className={`w-1.5 h-1.5 rounded-full ${conn.dot}`} /> {conn.label}
-                          {player.isReady ? (
-                            <span className="ml-1 text-emerald-500 font-bold">• Ready</span>
-                          ) : (
-                            <span className="ml-1 text-slate-400">• Not ready</span>
-                          )}
-                        </p>
-                      </div>
-                      {player.isReady && <Check className="w-4 h-4 text-emerald-500" />}
-                    </div>
+                      player={player}
+                      isMe={isMe}
+                      userId={userId}
+                      index={index}
+                      meProfile={mePublicProfile}
+                    />
                   );
                 })}
                 {Array.from({ length: Math.max(0, room.maxPlayers - participants.length) }).map((_, i) => (
                   <div
                     key={`empty-${i}`}
-                    className="flex items-center gap-3 p-3 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30"
+                    className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 border-dashed border-slate-700 bg-slate-800/30"
                   >
-                    <div className="w-8 h-8 rounded-full bg-slate-300 dark:bg-slate-700 flex items-center justify-center text-xs font-black text-slate-500">
+                    <div className="w-10 h-10 rounded-full bg-slate-700/60 flex items-center justify-center text-xl">
                       +
                     </div>
-                    <p className="text-xs text-slate-400">Waiting for player…</p>
+                    <p className="text-[10px] text-slate-500 font-semibold">Waiting for player…</p>
                   </div>
                 ))}
               </div>

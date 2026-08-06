@@ -3,6 +3,7 @@ import { GameWrapper } from '../../components/GameWrapper';
 import { claimPracticeReward } from '../../services/api/practiceReward';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
+import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 
 interface BubbleShooterProps {
   mode: 'ai' | 'multiplayer';
@@ -921,6 +922,11 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
         </div>
 
       </div>
+      {mode === 'multiplayer' && (
+        <div className="hidden xl:block flex-shrink-0 self-start">
+          <MultiplayerMatchPanel compact />
+        </div>
+      )}
     </GameWrapper>
   );
 };

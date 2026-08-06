@@ -4,6 +4,7 @@ import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
 import { claimPracticeReward } from '../../services/api/practiceReward';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
+import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 
 interface CarromGameProps {
   mode: 'ai' | 'multiplayer';
@@ -876,6 +877,14 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
             </p>
           </div>
         </div>
+
+        {/* Multiplayer Panel */}
+        {mode === 'multiplayer' && (
+          <div className="hidden xl:block flex-shrink-0 self-start mt-4">
+            <MultiplayerMatchPanel compact />
+          </div>
+        )}
+
       </div>
     </GameWrapper>
   );

@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { GameWrapper } from '../../components/GameWrapper';
 import { claimPracticeReward } from '../../services/api/practiceReward';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
+import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 
 interface SnakeVsWormsProps {
   mode: 'ai' | 'multiplayer';
@@ -669,6 +670,14 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
              </div>
           </div>
         </div>
+
+        {/* Multiplayer Panel */}
+        {mode === 'multiplayer' && (
+          <div className="hidden xl:block flex-shrink-0 self-start">
+            <MultiplayerMatchPanel compact />
+          </div>
+        )}
+
       </div>
     </GameWrapper>
   );
