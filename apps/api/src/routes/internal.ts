@@ -31,7 +31,8 @@ export async function internalRoutes(app: FastifyInstance) {
 
   app.post("/internal/matches/:id/settle", { config: { rateLimit: RATE_LIMIT } }, async (request) => {
     const { id } = routeParams(request);
-    const result = await settleMatch(id);
+    const body = (request.body ?? {}) as { rated?: boolean };
+    const result = await settleMatch(id, body.rated);
     return { ok: true, result };
   });
 }

@@ -1,5 +1,6 @@
 import type { GameId } from "./games";
 import type { User } from "./player";
+import type { ChessTimeControlConfig } from "./chess";
 
 export type RoomStatus = "waiting" | "starting" | "playing" | "ended";
 
@@ -35,11 +36,19 @@ export interface RoomFull extends RoomSummary {
   matchId: string | null;
 }
 
+export type MatchSettings = {
+  /** Chess time control. Absent for games without clocks. */
+  timeControl?: ChessTimeControlConfig | null;
+  /** Rating-affecting match. Defaults to true when absent. */
+  rated?: boolean;
+};
+
 export interface CreateRoomInput {
   gameId: GameId;
   isPrivate: boolean;
   stake: number;
   maxPlayers: number;
+  settings?: MatchSettings;
 }
 
 export interface JoinRoomInput {

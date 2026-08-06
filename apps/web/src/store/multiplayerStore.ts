@@ -5,6 +5,7 @@ import type {
   ErrorCode,
   GameId,
   JsonObject,
+  MatchSettings,
   RoomFull,
 } from "@gaming-hub/shared";
 import { createTypedSocket, type TypedSocket } from "@gaming-hub/socket";
@@ -26,6 +27,7 @@ interface MatchmakingInfo {
   position: number;
   gameId: GameId | null;
   stake: number | null;
+  settings: MatchSettings;
 }
 
 const IDLE_MATCHMAKING: MatchmakingInfo = {
@@ -33,6 +35,7 @@ const IDLE_MATCHMAKING: MatchmakingInfo = {
   position: 0,
   gameId: null,
   stake: null,
+  settings: {},
 };
 
 const MATCHMAKING_ERROR_CODES = new Set([
@@ -56,7 +59,7 @@ interface MultiplayerState {
   emojis: ChatEmoji[];
   matchmaking: MatchmakingInfo;
   /** Queue intent preserved across transient reconnects so it can be re-joined. */
-  pendingRequeue: { gameId: GameId; stake: number } | null;
+  pendingRequeue: { gameId: GameId; stake: number; settings: MatchSettings } | null;
   gameState: JsonObject | null;
   lastEvents: { type: string }[];
   matchId: string | null;
@@ -64,13 +67,13 @@ interface MultiplayerState {
 
   connect: () => void;
   disconnect: () => void;
-  createRoom: (gameId: GameId, isPrivate: boolean, stake: number, maxPlayers?: number) => Promise<RoomFull>;
+  createRoom: (gameId: GameId, isPrivate: boolean, stake: number, maxPlayers?: number, settings?: MatchSettings) => Promise<RoomFull>;
   joinRoom: (input: { roomId?: string; code?: string; asSpectator?: boolean }) => Promise<RoomFull>;
   leaveRoom: () => Promise<void>;
   setReady: (ready: boolean) => Promise<RoomFull | null>;
   startGame: () => Promise<RoomFull | null>;
   rematch: () => Promise<void>;
-  joinMatchmaking: (gameId: GameId, stake: number) => Promise<void>;
+  joinMatchmaking: (gameId: GameId, stake: number, settings?: MatchSettings) => Promise<void>;
   leaveMatchmaking: () => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
   sendEmoji: (emoji: string) => Promise<void>;
@@ -150,7 +153,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         const requeue = get().pendingRequeue;
         if (requeue) {
           set({ pendingRequeue: null });
-          void get().joinMatchmaking(requeue.gameId, requeue.stake).catch(() => undefined);
+          void get().joinMatchmaking(requeue.gameId, requeue.stake, requeue.settings).catch(() => undefined);
         }
       });
 
@@ -159,12 +162,13 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         const queued = get().matchmaking.queued;
         const gameId = get().matchmaking.gameId;
         const stake = get().matchmaking.stake;
+        const settings = get().matchmaking.settings;
         set({
           status: intentional ? "idle" : "reconnecting",
           matchmaking: { ...IDLE_MATCHMAKING },
           pendingRequeue:
             !intentional && queued && gameId && stake != null
-              ? { gameId, stake }
+              ? { gameId, stake, settings: settings ?? {} }
               : null,
         });
       });
@@ -210,6 +214,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
             position: payload.position,
             gameId: s.matchmaking.gameId,
             stake: s.matchmaking.stake,
+            settings: s.matchmaking.settings,
           },
         }));
       });
@@ -248,10 +253,10 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     clearRoom(set);
   },
 
-  createRoom: async (gameId, isPrivate, stake, maxPlayers) => {
+  createRoom: async (gameId, isPrivate, stake, maxPlayers, settings) => {
     const socket = get().socket;
     if (!socket) throw new Error("Not connected to the game server");
-    const res = await socket.emitWithAck("room:create", { gameId, isPrivate, stake, maxPlayers });
+    const res = await socket.emitWithAck("room:create", { gameId, isPrivate, stake, maxPlayers, settings });
     const room = unwrapAck<RoomFull>(res);
     applyRoom(set, room);
     set({ winner: null, matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
@@ -317,13 +322,13 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     applyRoom(set, updated);
   },
 
-  joinMatchmaking: async (gameId, stake) => {
+  joinMatchmaking: async (gameId, stake, settings) => {
     const socket = get().socket;
     if (!socket) throw new Error("Not connected to the game server");
-    const res = await socket.emitWithAck("matchmaking:join", { gameId, stake });
+    const res = await socket.emitWithAck("matchmaking:join", { gameId, stake, settings });
     const data = unwrapAck<{ position: number }>(res);
     set({
-      matchmaking: { queued: true, position: data.position, gameId, stake },
+      matchmaking: { queued: true, position: data.position, gameId, stake, settings: settings ?? {} },
       pendingRequeue: null,
     });
   },

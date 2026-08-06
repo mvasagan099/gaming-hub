@@ -12,6 +12,10 @@ export const ChessEvents = {
   DRAW:             "chess:draw",
   GAME_OVER:        "chess:game-over",
 
+  // Replay (server state to Phaser board for move-by-move view)
+  REPLAY_FEN:       "chess:replay-fen",
+  REPLAY_EXIT:      "chess:replay-exit",
+
   // Settings
   THEME_CHANGED:    "chess:theme-changed",
   BOARD_FLIPPED:    "chess:board-flipped",

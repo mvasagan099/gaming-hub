@@ -23,6 +23,29 @@ interface ChessRemoteState {
   finished?: boolean;
   lastMove?: { from: string; to: string; promotion?: string; san?: string } | null;
   moveCount?: number;
+  history?: string[];
+  timeControl?: {
+    baseSeconds: number;
+    incrementSeconds: number;
+    delaySeconds: number;
+  } | null;
+  clocks?: {
+    [seat: string]: { remainingMs: number; startedAtMs: number | null };
+  } | null;
+  lastMoveAtMs?: number | null;
+  drawOfferedBy?: number | null;
+  result?: "1-0" | "0-1" | "1/2-1/2" | "*";
+  endReason:
+    | "checkmate"
+    | "stalemate"
+    | "insufficient"
+    | "repetition"
+    | "fifty-move"
+    | "agreement"
+    | "resign"
+    | "flag"
+    | null
+    | string;
   players?: { seat: number; color: "w" | "b" }[];
 }
 
@@ -56,6 +79,7 @@ export default class ChessMultiplayerDriver {
   private winnerShown = false;
   private destroyed = false;
   private unsubscribe: (() => void) | null = null;
+  private isInReplay = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -80,6 +104,10 @@ export default class ChessMultiplayerDriver {
     this.scene.events.on(ChessEvents.PIECE_SELECTED, this.onPieceSelected, this);
     this.scene.events.on(ChessEvents.MOVE_MADE, this.onMoveMade, this);
     this.scene.events.on(ChessEvents.SQUARE_CLICKED, this.onSquareClicked, this);
+    this.scene.events.on(ChessEvents.REPLAY_FEN, this.handleReplayFen, this);
+    this.scene.events.on(ChessEvents.REPLAY_EXIT, this.handleReplayExit, this);
+    this.scene.events.on(ChessEvents.PROMOTION_NEEDED, this.handlePromotionNeeded, this);
+    this.scene.events.on(ChessEvents.PROMOTION_CHOSEN, this.onPromotionChosen, this);
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.stop());
 
     this.unsubscribe = useMultiplayerStore.subscribe((state, prev) => {
@@ -101,6 +129,10 @@ export default class ChessMultiplayerDriver {
     this.scene.events.off(ChessEvents.PIECE_SELECTED, this.onPieceSelected, this);
     this.scene.events.off(ChessEvents.MOVE_MADE, this.onMoveMade, this);
     this.scene.events.off(ChessEvents.SQUARE_CLICKED, this.onSquareClicked, this);
+    this.scene.events.off(ChessEvents.REPLAY_FEN, this.handleReplayFen, this);
+    this.scene.events.off(ChessEvents.REPLAY_EXIT, this.handleReplayExit, this);
+    this.scene.events.off(ChessEvents.PROMOTION_CHOSEN, this.onPromotionChosen, this);
+    this.scene.events.off(ChessEvents.PROMOTION_NEEDED, this.handlePromotionNeeded, this);
     this.scene.input.enabled = true;
   }
 
@@ -171,9 +203,16 @@ export default class ChessMultiplayerDriver {
       return;
     }
 
-    // Pawn promotion: auto-promote to Queen (no promotion UI in this build).
-    const promotion = match.flags.includes("p") ? "q" : undefined;
-    this.sendMove(from, actualTo, promotion);
+    // Pawn promotion: emit event to trigger the modal.
+    if (match.flags.includes("p")) {
+      this.waitingForServer = true;
+      this.activeSquare = null;
+      this.scene.input.enabled = false;
+      this.board.clearOverlay();
+      this.scene.events.emit(ChessEvents.PROMOTION_NEEDED, from, actualTo);
+      return;
+    }
+    this.sendMove(from, actualTo);
   }
 
   private sendMove(from: string, to: string, promotion?: string): void {
@@ -231,6 +270,8 @@ export default class ChessMultiplayerDriver {
       this.audio.play("roll");
     }
 
+    if (s.finished) this.isInReplay = false;
+    if (!this.isInReplay && lastMove) this.board.highlightLastMove(lastMove.from, lastMove.to);
     this.render(s);
 
     if (s.finished && !this.winnerShown) {
@@ -255,20 +296,32 @@ export default class ChessMultiplayerDriver {
       return;
     }
 
+    if (s.drawOfferedBy != null) {
+      const offerer = this.seatName(s.drawOfferedBy);
+      const status = s.drawOfferedBy === this.mySeat
+        ? "You offered a draw"
+        : `${offerer} offered a draw`;
+      this.hud.updateStatus(status);
+      return;
+    }
+
     let status: string;
     if (s.checkmate) {
       const winner = s.turn === "w" ? this.seatName(1) : this.seatName(0);
-      status = `Checkmate! ${winner} wins`;
+      status = `Checkmate! ${winner ?? "Opponent"} wins (by ${s.endReason || "checkmate"})`;
     } else if (s.stalemate) {
-      status = "Draw by stalemate";
+      status = `Draw by stalemate`;
+    } else if (s.insufficientMaterial) {
+      status = "Draw by insufficient material";
     } else if (s.draw) {
       status = "Draw";
     } else if (s.finished) {
-      status = "Game over";
+      const reason = s.endReason || s.result === "1/2-1/2" ? "Draw" : "Game over";
+      status = `${s.result === "*" ? "Game over" : s.result} (${reason})`;
     } else if (s.inCheck) {
-      status = s.currentSeat === this.mySeat ? "Check! Your turn" : "Check! Opponent's turn";
+      status = s.currentSeat === this.mySeat ? "Check! Your turn" : "Check! Opponent\'s turn";
     } else {
-      status = s.currentSeat === this.mySeat ? "Your turn" : `${this.seatName(s.currentSeat ?? 0)}'s turn`;
+      status = s.currentSeat === this.mySeat ? "Your turn" : `${this.seatName(s.currentSeat ?? 0)}\'s turn`;
     }
 
     this.hud.updateStatus(status);
@@ -302,5 +355,38 @@ export default class ChessMultiplayerDriver {
         this.scene.events.emit(ChessEvents.GAME_OVER, "MP|draw|Draw");
       }
     });
+  }
+
+  private onPromotionChosen(from: string, to: string, pieceType: "q" | "r" | "b" | "n"): void {
+    this.sendMove(from, to, pieceType);
+  }
+
+  private handleReplayFen(fen: string): void {
+    this.isInReplay = true;
+    this.pieceManager.syncPieces(fenToPieces(fen), null);
+    this.board.clearLastMove();
+    this.hud.updateStatus("Replay mode");
+    this.scene.input.enabled = false;
+  }
+
+  private handleReplayExit(): void {
+    this.isInReplay = false;
+    if (this.lastState) {
+      this.board.clearLastMove();
+      this.pieceManager.syncPieces(fenToPieces(this.lastState.fen), this.lastState.lastMove);
+      this.render(this.lastState);
+    }
+  }
+
+  private handlePromotionNeeded(from: string, to: string): void {
+    this.waitingForServer = true;
+    this.activeSquare = null;
+    this.scene.input.enabled = false;
+    this.board.clearOverlay();
+    this.scene.events.emit(ChessEvents.PROMOTION_NEEDED, from, to);
+  }
+
+  getLatestState(): ChessRemoteState | null {
+    return this.lastState;
   }
 }

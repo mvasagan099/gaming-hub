@@ -8,8 +8,10 @@ import {
 import type {
   ChatEmoji,
   ChatMessage,
+  ChessTimeControlConfig,
   GameId,
   JsonObject,
+  MatchSettings,
   RoomFull,
   RoomPlayer,
 } from "@gaming-hub/shared";
@@ -31,12 +33,14 @@ export interface CreateMatchInput {
   isPrivate: boolean;
   stake: number;
   maxPlayers: number;
+  settings?: MatchSettings;
 }
 
 export class RoomManager {
   private readonly rooms = new Map<string, RoomRuntime>();
   private readonly roomsByCode = new Map<string, RoomRuntime>();
   private readonly disconnectTimers = new Map<string, NodeJS.Timeout>();
+  private readonly clockTimers = new Map<string, NodeJS.Timeout>();
   private readonly io: Server;
 
   constructor(io: Server) {
@@ -169,6 +173,7 @@ export class RoomManager {
     this.io.in(room.ioName).socketsLeave(room.ioName);
     this.rooms.delete(room.id);
     this.roomsByCode.delete(room.code);
+    this.clearClockTimer(room.id);
     for (const player of room.players.values()) {
       this.clearDisconnectTimer(room.id, player.userId);
     }
@@ -227,7 +232,7 @@ export class RoomManager {
       ]),
       match: null,
       createdAt: now,
-      settings: {},
+      settings: input.settings ?? {},
     };
 
     this.rooms.set(id, room);
@@ -246,6 +251,7 @@ export class RoomManager {
         stake: input.stake,
         minPlayers: def.minPlayers,
         maxPlayers,
+        settings: (input.settings ?? {}) as object,
       },
     });
     await prisma.roomPlayer.create({
@@ -433,6 +439,7 @@ export class RoomManager {
 
     // Reset every participant back to the lobby.
     room.match = null;
+    this.clearClockTimer(room.id);
     room.status = "waiting";
     for (const player of room.players.values()) {
       if (player.isSpectator) continue;
@@ -480,6 +487,7 @@ export class RoomManager {
       room.gameId,
       participants.map((p) => ({ userId: p.userId, seat: p.seat! })),
       secureRandomSource(),
+      this.engineOptions(room),
     );
 
     // Persist the match row and players first; hold-wagers then moves it to ACTIVE.
@@ -513,10 +521,9 @@ export class RoomManager {
 
     room.match = { matchId, engine, turnNumber: 0 };
     room.status = "playing";
-    room.settings = {};
     await prisma.room.update({
       where: { id: room.id },
-      data: { status: "PLAYING", settings: {} },
+      data: { status: "PLAYING" },
     });
 
     const startedBy = room.players.get(starter.userId);
@@ -527,7 +534,14 @@ export class RoomManager {
     void this.logSystemMessage(room, `${room.gameId} match started`);
     this.broadcastRoomUpdate(room);
     this.emitGameState(room, []);
+    this.scheduleClockCheck(room);
     return this.toRoomFull(room);
+  }
+
+  private engineOptions(room: RoomRuntime): { timeControl?: ChessTimeControlConfig } | undefined {
+    const timeControl = room.settings.timeControl as ChessTimeControlConfig | undefined;
+    if (!timeControl || timeControl.baseSeconds <= 0) return undefined;
+    return { timeControl };
   }
 
   // ------------------------------------------------------------------- games
@@ -535,18 +549,62 @@ export class RoomManager {
   private emitGameState(room: RoomRuntime, events: { type: string }[]) {
     if (!room.match) return;
     const state = room.match.engine.serialize();
-    for (const player of room.players.values()) {
-      for (const socketId of player.socketIds) {
-        const socket = this.socketOf(socketId);
-        if (!socket) continue;
-        socket.emit("game:state", {
-          roomId: room.id,
-          matchId: room.match.matchId,
-          state,
-          seat: player.isSpectator ? null : player.seat,
-          events,
-        });
+    this.io.to(room.ioName).emit("game:state", {
+      roomId: room.id,
+      matchId: room.match.matchId,
+      state,
+      events,
+    });
+  }
+
+  // ---------------------------------------------------------------- clock flag
+
+  /**
+   * Schedules the authoritative flag timer for the current seat. Only
+   * clock-capable engines (chess with a time control) expose a deadline; for
+   * every other game this is a no-op. The timer is re-armed after every
+   * accepted action and cleared when the match ends.
+   */
+  private scheduleClockCheck(room: RoomRuntime) {
+    this.clearClockTimer(room.id);
+    if (!room.match) return;
+    const deadline = room.match.engine.currentClockDeadline;
+    if (deadline == null) return;
+    const delay = Math.max(0, deadline - Date.now());
+    const timer = setTimeout(() => {
+      void this.handleClockDeadline(room.id);
+    }, delay + 50);
+    timer.unref?.();
+    this.clockTimers.set(room.id, timer);
+  }
+
+  private clearClockTimer(roomId: string) {
+    const timer = this.clockTimers.get(roomId);
+    if (timer) {
+      clearTimeout(timer);
+      this.clockTimers.delete(roomId);
+    }
+  }
+
+  private async handleClockDeadline(roomId: string) {
+    const room = this.rooms.get(roomId);
+    if (!room || room.status !== "playing" || !room.match) return;
+    const seat = room.match.engine.currentSeat;
+    const entry = [...room.players.values()].find((p) => p.seat === seat && !p.isSpectator);
+    if (!entry) return;
+
+    const session = new GameSession(room.match);
+    const result = await session.apply(entry.userId, seat, { type: "flag" });
+
+    if (result.ok) {
+      this.emitGameState(room, result.events);
+      if (result.finished) {
+        await this.finishMatch(room, result.winnerSeats);
+      } else {
+        this.scheduleClockCheck(room);
       }
+    } else {
+      this.scheduleClockCheck(room);
     }
   }
 
@@ -584,6 +642,8 @@ export class RoomManager {
 
     if (result.finished) {
       await this.finishMatch(room, result.winnerSeats);
+    } else {
+      this.scheduleClockCheck(room);
     }
 
     return {
@@ -597,6 +657,7 @@ export class RoomManager {
 
   private async finishMatch(room: RoomRuntime, winnerSeats: number[]) {
     if (!room.match) return;
+    this.clearClockTimer(room.id);
     const matchId = room.match.matchId;
     const winnerIds = winnerSeats
       .map((seat) => {
@@ -611,7 +672,7 @@ export class RoomManager {
     });
 
     try {
-      await settleMatch(matchId);
+      await settleMatch(matchId, room.settings.rated !== false);
     } catch (error) {
       console.error(`Settlement failed for match ${matchId}`, error);
     }
@@ -633,6 +694,7 @@ export class RoomManager {
 
   private async abortMatch(room: RoomRuntime, reason: string) {
     if (!room.match) return;
+    this.clearClockTimer(room.id);
     const matchId = room.match.matchId;
     const state = room.match.engine.serialize();
 
@@ -642,7 +704,7 @@ export class RoomManager {
       data: { winnerIds: [] },
     });
     try {
-      await settleMatch(matchId);
+      await settleMatch(matchId, room.settings.rated !== false);
     } catch (error) {
       console.error(`Settlement failed for aborted match ${matchId}`, error);
     }
@@ -768,6 +830,7 @@ export class RoomManager {
       // Re-emit the live game state to the rejoining player's socket only.
       if (room.match) {
         this.emitGameState(room, [{ type: "reconnected" }]);
+        this.scheduleClockCheck(room);
       }
     }
 
@@ -844,7 +907,13 @@ export class RoomManager {
   }
 
   /** Creates a pre-filled, auto-starting room for matchmaking. */
-  async createMatchmakingRoom(users: AuthenticatedUser[], sockets: Socket[], gameId: GameId, stake: number): Promise<RoomFull> {
+  async createMatchmakingRoom(
+    users: AuthenticatedUser[],
+    sockets: Socket[],
+    gameId: GameId,
+    stake: number,
+    settings?: MatchSettings,
+  ): Promise<RoomFull> {
     const def = getGameDefinition(gameId);
     if (users.length < def.minPlayers || users.length > def.maxPlayers) {
       throw new AppError("INVALID_ACTION", "Wrong number of matchmaking players");
@@ -874,7 +943,7 @@ export class RoomManager {
       players: new Map(),
       match: null,
       createdAt: now,
-      settings: {},
+      settings: settings ?? {},
     };
 
     users.forEach((user, index) => {
@@ -899,6 +968,7 @@ export class RoomManager {
           stake,
           minPlayers: def.minPlayers,
           maxPlayers: def.maxPlayers,
+          settings: (settings ?? {}) as object,
         },
       });
       await prisma.roomPlayer.createMany({

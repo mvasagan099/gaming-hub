@@ -9,6 +9,7 @@ import type HUDManager from "./HUDManager";
 import type AudioManager from "../../../snake-ladder/phaser/managers/AudioManager";
 import type { LudoHistoryEntry } from "../../../ludo/phaser/managers/GameManager";
 import { ChessAI } from "../ai/ChessAI";
+import type ChessMultiplayerDriver from "./ChessMultiplayerDriver";
 
 export default class GameManager {
   private scene: Phaser.Scene;
@@ -17,6 +18,7 @@ export default class GameManager {
   private hud: HUDManager;
   private audio: AudioManager;
   private settings: ChessSettings;
+  private driver?: ChessMultiplayerDriver;
 
   private chessEngine!: Chess;
   private activePieceSquare: string | null = null;
@@ -38,6 +40,10 @@ export default class GameManager {
     this.settings = settings;
   }
 
+  setDriver(driver: ChessMultiplayerDriver): void {
+    this.driver = driver;
+  }
+
   init(): void {
     this.chessEngine = new Chess();
     this.activePieceSquare = null;
@@ -48,11 +54,15 @@ export default class GameManager {
     this.scene.events.off(ChessEvents.MOVE_MADE);
     this.scene.events.off(ChessEvents.PROMOTION_CHOSEN);
     this.scene.events.off(ChessEvents.SQUARE_CLICKED);
+    this.scene.events.off(ChessEvents.REPLAY_FEN);
+    this.scene.events.off(ChessEvents.REPLAY_EXIT);
 
     this.scene.events.on(ChessEvents.PIECE_SELECTED, this.onPieceSelected, this);
     this.scene.events.on(ChessEvents.MOVE_MADE, this.onMoveMade, this);
     this.scene.events.on(ChessEvents.PROMOTION_CHOSEN, this.onPromotionChosen, this);
     this.scene.events.on(ChessEvents.SQUARE_CLICKED, this.onSquareClicked, this);
+    this.scene.events.on(ChessEvents.REPLAY_FEN, this.handleReplayFen, this);
+    this.scene.events.on(ChessEvents.REPLAY_EXIT, this.handleReplayExit, this);
 
     this.syncBoardState();
   }
@@ -109,7 +119,10 @@ export default class GameManager {
 
     // Pawn promotion handling
     if (match.flags.includes("p")) {
-      // Auto-promote to Queen to prevent game freeze, since promotion UI is missing
+      if (this.driver) {
+        this.scene.events.emit(ChessEvents.PROMOTION_NEEDED, from, actualTo);
+        return;
+      }
       this.executeEngineMove({ from, to: actualTo, promotion: "q" });
       return;
     }
@@ -169,9 +182,11 @@ export default class GameManager {
         }
       } else if (res.flags.includes("k") || res.flags.includes("q")) {
         this.audio.play("ladder"); // castle sound
+        this.animateCastlingRook(res);
       } else {
         this.audio.play("move"); // standard move
       }
+      this.board.highlightLastMove(res.from, res.to);
 
       // Animate sliding piece
       this.pieceManager.movePiece(fromPiece.id, move.to, () => {
@@ -287,6 +302,42 @@ export default class GameManager {
 
   getEngine(): Chess {
     return this.chessEngine;
+  }
+
+  private animateCastlingRook(move: { from: string; to: string; flags: string }): void {
+    if (!move.flags.includes("k") && !move.flags.includes("q")) return;
+    
+    const rank = move.from[1];
+    let rookFrom: string;
+    let rookTo: string;
+    
+    if (move.flags.includes("k")) {
+      rookFrom = `h${rank}`;
+      rookTo = `f${rank}`;
+    } else {
+      rookFrom = `a${rank}`;
+      rookTo = `d${rank}`;
+    }
+    
+    const rook = this.pieceManager.getPieceAtSquare(rookFrom);
+    if (rook) {
+      this.pieceManager.movePiece(rook.id, rookTo);
+    }
+  }
+
+  private handleReplayFen(fen: string): void {
+    this.activePieceSquare = null;
+    this.board.clearOverlay();
+    this.board.haltLastMoveHighlight();
+    const engine = new Chess(fen);
+    this.chessEngine = engine;
+    this.pieceManager.createPieces(fenToPieces(fen));
+  }
+
+  private handleReplayExit(): void {
+    if (this.driver) {
+      this.driver.applyState(this.driver.getLatestState());
+    }
   }
 }
 export { GameManager };

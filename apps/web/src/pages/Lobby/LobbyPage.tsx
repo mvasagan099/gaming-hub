@@ -17,7 +17,15 @@ import {
   WifiOff,
   Zap,
 } from "lucide-react";
-import { GAME_BY_ID, type GameId, type RoomFull } from "@gaming-hub/shared";
+import {
+  CHESS_TIME_CONTROLS,
+  DEFAULT_TIME_CONTROL,
+  UNLIMITED_TIME_CONTROL,
+  GAME_BY_ID,
+  type GameId,
+  type MatchSettings,
+  type RoomFull,
+} from "@gaming-hub/shared";
 import { supabase } from "../../services/supabase";
 import { useAuthStore } from "../../store/authStore";
 import { useMultiplayerStore } from "../../store/multiplayerStore";
@@ -61,6 +69,17 @@ export const LobbyPage: React.FC = () => {
   const siteSettings = useSettingsStore((s) => s.settings);
   const matchmakingTimeout = siteSettings?.game?.matchmakingTimeoutSeconds ?? 120;
   const [waitElapsed, setWaitElapsed] = useState(0);
+  
+  const isChess = def?.id === "chess";
+  const [settings, setSettings] = useState<MatchSettings>({
+    timeControl: isChess ? DEFAULT_TIME_CONTROL : null,
+    rated: true,
+  });
+
+  useEffect(() => {
+    setSettings({ timeControl: isChess ? DEFAULT_TIME_CONTROL : null, rated: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
 
   const socketStatus = useMultiplayerStore((s) => s.status);
   const socketError = useMultiplayerStore((s) => s.error);
@@ -157,7 +176,7 @@ export const LobbyPage: React.FC = () => {
   const handleCreatePrivate = async () => {
     if (!def) return;
     try {
-      await createRoom(def.id, true, stake, def.maxPlayers);
+      await createRoom(def.id, true, stake, def.maxPlayers, settings);
       toast.success("Private room created");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create room");
@@ -167,7 +186,7 @@ export const LobbyPage: React.FC = () => {
   const handleQuickMatch = async () => {
     if (!def) return;
     try {
-      await joinMatchmaking(def.id, stake);
+      await joinMatchmaking(def.id, stake, settings);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not join matchmaking");
     }
@@ -339,6 +358,51 @@ export const LobbyPage: React.FC = () => {
                 </p>
               )}
             </div>
+
+            {/* Chess time control selector */}
+            {isChess && (
+              <div className="mt-4 space-y-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Time Control
+                </h4>
+                <div className="grid grid-cols-4 gap-2 flex flex-wrap">
+                  {CHESS_TIME_CONTROLS.map((tc) => (
+                    <button
+                      key={tc.label}
+                      onClick={() => setSettings({ ...settings, timeControl: tc })}
+                      className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${
+                        settings.timeControl?.label === tc.label
+                          ? "bg-indigo-600 text-white border-indigo-500"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-300"
+                      }`}
+                    >
+                      {tc.label}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setSettings({ ...settings, timeControl: UNLIMITED_TIME_CONTROL })}
+                    className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${
+                      settings.timeControl === UNLIMITED_TIME_CONTROL
+                        ? "bg-indigo-600 text-white border-indigo-500"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-300"
+                    }`}
+                  >
+                    ∞
+                  </button>
+                </div>
+                <div className="flex items-center justify-between text-[10px]">
+                  <label className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={settings.rated !== false}
+                      onChange={(e) => setSettings({ ...settings, rated: e.target.checked })}
+                      className="w-3.5 h-3.5 accent-indigo-600"
+                    />
+                    Rated (affects rating)
+                  </label>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <button

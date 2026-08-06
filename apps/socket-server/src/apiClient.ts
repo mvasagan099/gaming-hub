@@ -9,6 +9,7 @@ interface ApiResponse<T> {
 async function internalRequest<T>(
   method: "POST",
   path: string,
+  data: Record<string, unknown> = {},
 ): Promise<T> {
   const response = await fetch(`${env.API_URL}${path}`, {
     method,
@@ -16,6 +17,7 @@ async function internalRequest<T>(
       "x-internal-key": env.INTERNAL_API_KEY,
       "content-type": "application/json",
     },
+    body: JSON.stringify(data),
     signal: AbortSignal.timeout(10_000),
   });
 
@@ -38,7 +40,7 @@ export function holdWagers(matchId: string) {
 }
 
 /** Credits winners, updates stats/achievements and marks the match FINISHED. */
-export function settleMatch(matchId: string) {
+export function settleMatch(matchId: string, rated = true) {
   return internalRequest<{
     ok: true;
     result: {
@@ -47,5 +49,5 @@ export function settleMatch(matchId: string) {
       payouts: { userId: string; amount: number }[];
       newlyUnlocked: { code: string; title: string; icon: string }[];
     };
-  }>("POST", `/internal/matches/${matchId}/settle`);
+  }>("POST", `/internal/matches/${matchId}/settle`, { rated });
 }

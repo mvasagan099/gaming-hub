@@ -49,8 +49,11 @@ export interface SettlementResult {
  * Settles a finished match: distributes the prize pool to winners (or refunds
  * on a draw), updates profiles/statistics/leaderboards, evaluates achievements
  * and fires result notifications. Runs atomically for the money movement.
+ *
+ * `rated` controls whether rating (and thus leaderboard score) is updated;
+ * casual matches still earn XP and count toward statistics.
  */
-export async function settleMatch(matchId: string): Promise<SettlementResult> {
+export async function settleMatch(matchId: string, rated = true): Promise<SettlementResult> {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     include: { players: true },
@@ -101,6 +104,7 @@ export async function settleMatch(matchId: string): Promise<SettlementResult> {
         gameId: match.gameId,
         result,
         score: 0,
+        rated,
       });
     }
 

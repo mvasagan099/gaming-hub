@@ -17,6 +17,7 @@ export class BoardManager {
   private selectionGraphics!: Phaser.GameObjects.Graphics;
   private checkGraphics!: Phaser.GameObjects.Graphics;
   private validMoveGraphics!: Phaser.GameObjects.Graphics;
+  private lastMoveGraphics!: Phaser.GameObjects.Graphics;
   private checkTween: Phaser.Tweens.Tween | null = null;
   private coordTexts: Phaser.GameObjects.Text[] = [];
   private flipped = false;
@@ -179,6 +180,33 @@ export class BoardManager {
     if (this.checkTween) {
       this.checkTween.stop();
       this.checkTween = null;
+    }
+  }
+
+  highlightLastMove(from: string, to: string): void {
+    this.clearLastMove();
+    const f = this.squareToGrid(from);
+    const t = this.squareToGrid(to);
+    if (!f || !t) return;
+
+    const colors = this.themeManager.getColors();
+    if (!this.lastMoveGraphics) {
+      this.lastMoveGraphics = this.scene.add.graphics().setDepth(1.5);
+    }
+    this.lastMoveGraphics.clear();
+    this.lastMoveGraphics.lineStyle(2, colors.validStroke, 0.6);
+    this.lastMoveGraphics.fillStyle(colors.validDot, 0.2);
+    [f, t].forEach(coords => {
+      const x = BOARD_OFFSET_X + coords.col * CELL_SIZE;
+      const y = BOARD_OFFSET_Y + coords.row * CELL_SIZE;
+      this.lastMoveGraphics.strokeRect(x + 2, y + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+      this.lastMoveGraphics.fillRect(x + 2, y + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+    });
+  }
+
+  clearLastMove(): void {
+    if (this.lastMoveGraphics) {
+      this.lastMoveGraphics.clear();
     }
   }
 

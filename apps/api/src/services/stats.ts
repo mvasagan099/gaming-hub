@@ -28,6 +28,8 @@ export interface MatchResultInput {
   gameId: string;
   result: "win" | "loss" | "draw";
   score: number;
+  /** When false, rating/leaderboard score are untouched (casual matches). */
+  rated?: boolean;
 }
 
 /** Updates profile, per-game statistics and the per-game leaderboard row. */
@@ -38,7 +40,7 @@ export async function recordMatchResult(
   const xpGained =
     input.result === "win" ? XP_WIN : input.result === "draw" ? XP_DRAW : XP_LOSS;
   const ratingDelta =
-    input.result === "win" ? RATING_WIN : input.result === "draw" ? RATING_DRAW : RATING_LOSS;
+    input.rated === false ? 0 : input.result === "win" ? RATING_WIN : input.result === "draw" ? RATING_DRAW : RATING_LOSS;
 
   const profile = await tx.profile.findUnique({ where: { userId: input.userId } });
   if (!profile) {

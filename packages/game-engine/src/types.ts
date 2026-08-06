@@ -1,9 +1,15 @@
 import type { GameId, JsonObject } from "@gaming-hub/shared";
+import type { ChessTimeControlConfig } from "@gaming-hub/shared";
 
 /** A participant in a match. Seats are 0-indexed and stable for the whole match. */
 export interface EnginePlayer {
   userId: string;
   seat: number;
+}
+
+/** Per-game engine construction options (e.g. chess time controls). */
+export interface EngineOptions {
+  timeControl?: ChessTimeControlConfig | null;
 }
 
 /** Anything a client can submit to the engine. */
@@ -41,4 +47,6 @@ export interface EngineInstance {
   seatOf(userId: string): number | null;
   serialize(): JsonObject;
   setRandomSource(rng: RandomSource): void;
+  /** Wall-clock deadline for the current seat's flag, for clock-capable games. */
+  readonly currentClockDeadline?: number | null;
 }

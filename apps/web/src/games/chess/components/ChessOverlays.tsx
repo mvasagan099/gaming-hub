@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import Phaser from "phaser";
 import { ChessEvents } from "../phaser/events/ChessEvents";
-import { Trophy, Shield, XCircle, RotateCcw } from "lucide-react";
+import { Trophy, Shield, XCircle, RotateCcw, Flag, Handshake } from "lucide-react";
 import { claimPracticeReward } from "../../../services/api/practiceReward";
+import { useMultiplayerStore } from "../../../store/multiplayerStore";
 
 interface ChessOverlaysProps {
   game: Phaser.Game | null;
@@ -21,6 +22,9 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
   const [mpResult, setMpResult] = useState<MpResult | null>(null);
   const [promotionData, setPromotionData] = useState<{ from: string; to: string } | null>(null);
   const [hasRewarded, setHasRewarded] = useState(false);
+  const [showDrawOffer, setShowDrawOffer] = useState(false);
+  const gameState = useMultiplayerStore((s) => s.gameState);
+  const sendGameAction = useMultiplayerStore((s) => s.sendGameAction);
 
   useEffect(() => {
     if (!game) return;
@@ -75,6 +79,25 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
     }
   };
 
+  const handleResign = () => {
+    sendGameAction?.({ type: "resign" });
+  };
+
+  const handleOfferDraw = () => {
+    sendGameAction?.({ type: "draw-offer" });
+    setShowDrawOffer(false);
+  };
+
+  const handleAcceptDraw = () => {
+    sendGameAction?.({ type: "draw-accept" });
+    setShowDrawOffer(false);
+  };
+
+  const handleDeclineDraw = () => {
+    sendGameAction?.({ type: "draw-decline" });
+    setShowDrawOffer(false);
+  };
+
   return (
     <>
       {/* PAWN PROMOTION MODAL */}
@@ -83,25 +106,25 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
           <div className="bg-[#0f172a] border border-sky-500/30 p-6 rounded-2xl shadow-2xl flex flex-col items-center">
             <h3 className="text-sky-400 font-bold uppercase tracking-wider mb-4">Promote Pawn</h3>
             <div className="flex gap-4">
-              <button 
+              <button
                 onClick={() => handlePromotion("q")}
                 className="w-16 h-16 bg-slate-800 hover:bg-sky-900/50 rounded-xl border border-slate-700 hover:border-sky-500 transition-all flex items-center justify-center text-4xl text-white"
               >
                 ♕
               </button>
-              <button 
+              <button
                 onClick={() => handlePromotion("r")}
                 className="w-16 h-16 bg-slate-800 hover:bg-sky-900/50 rounded-xl border border-slate-700 hover:border-sky-500 transition-all flex items-center justify-center text-4xl text-white"
               >
                 ♖
               </button>
-              <button 
+              <button
                 onClick={() => handlePromotion("b")}
                 className="w-16 h-16 bg-slate-800 hover:bg-sky-900/50 rounded-xl border border-slate-700 hover:border-sky-500 transition-all flex items-center justify-center text-4xl text-white"
               >
                 ♗
               </button>
-              <button 
+              <button
                 onClick={() => handlePromotion("n")}
                 className="w-16 h-16 bg-slate-800 hover:bg-sky-900/50 rounded-xl border border-slate-700 hover:border-sky-500 transition-all flex items-center justify-center text-4xl text-white"
               >
@@ -109,6 +132,51 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* DRAW OFFER MODAL */}
+      {showDrawOffer && online && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#0f172a] border border-amber-500/30 p-6 rounded-2xl shadow-2xl flex flex-col items-center max-w-md w-full mx-4">
+            <h3 className="text-amber-400 font-bold uppercase tracking-wider mb-4">Draw Offer</h3>
+            <p className="text-slate-300 text-sm mb-6 text-center">
+              {gameState?.drawOfferedBy != null ? "Your opponent offered a draw. Accept?" : "Offer a draw to your opponent?"}
+            </p>
+            <div className="flex gap-3 w-full">
+              {gameState?.drawOfferedBy != null ? (
+                <>
+                  <button onClick={handleAcceptDraw} className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/20">
+                    Accept Draw
+                  </button>
+                  <button onClick={handleDeclineDraw} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-all border border-slate-700">
+                    Decline
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={handleOfferDraw} className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-amber-600/20">
+                    Offer Draw
+                  </button>
+                  <button onClick={() => setShowDrawOffer(false)} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-all border border-slate-700">
+                    Cancel
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* IN-GAME ACTIONS (bottom overlay) */}
+      {online && !gameOverMsg && !promotionData && !showDrawOffer && (
+        <div className="absolute bottom-4 right-4 z-40 flex gap-2">
+          <button onClick={() => setShowDrawOffer(true)} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-amber-600/20 flex items-center gap-2">
+            <Handshake className="w-4 h-4" /> Draw
+          </button>
+          <button onClick={handleResign} className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-rose-600/20 flex items-center gap-2">
+            <Flag className="w-4 h-4" /> Resign
+          </button>
         </div>
       )}
 

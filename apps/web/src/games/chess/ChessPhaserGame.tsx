@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { ChessScene } from "./phaser/scenes/ChessScene";
 import { ChessOverlays } from "./components/ChessOverlays";
+import { ChessMatchPanel } from "./components/ChessMatchPanel";
 
 interface ChessPhaserGameProps {
   mode: "ai" | "pvp";
@@ -67,13 +68,14 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
   }, [mode, level, theme]);
 
   return (
-    <div className="relative mx-auto w-full max-w-[924px] aspect-[924/680] h-auto max-h-[75vh] bg-[#090d16] rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex justify-center items-center">
-      <div ref={containerRef} className="w-full h-full" />
-      <ChessOverlays 
-        game={gameInstance} 
+    <div className="relative mx-auto w-full max-w-6xl aspect-auto h-[75vh] max-h-[800px] bg-[#090d16] rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex gap-4 p-4">
+      <div ref={containerRef} className="flex-1 h-full" />
+      {online && <ChessMatchPanel />}
+      <ChessOverlays
+        game={gameInstance}
         online={online}
-        onReplay={onReplay} 
-        onClose={onBack} 
+        onReplay={onReplay}
+        onClose={onBack}
       />
     </div>
   );

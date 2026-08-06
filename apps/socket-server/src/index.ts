@@ -106,6 +106,7 @@ async function main(): Promise<void> {
             isPrivate: payload.isPrivate,
             stake: payload.stake,
             maxPlayers: payload.maxPlayers ?? 4,
+            settings: payload.settings,
           },
           socket,
         );
@@ -185,10 +186,11 @@ async function main(): Promise<void> {
           parsed.data.gameId,
           parsed.data.stake,
           socket,
+          parsed.data.settings,
         );
         ack?.({ ok: true, data: { position } });
         // Pair after the ack so queued/found always arrive in order.
-        await matchmaking.pair(parsed.data.gameId, parsed.data.stake);
+        await matchmaking.pair(parsed.data.gameId, parsed.data.stake, parsed.data.settings);
       }),
     );
 

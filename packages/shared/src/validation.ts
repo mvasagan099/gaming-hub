@@ -7,11 +7,23 @@ export const authSessionSchema = z.object({
   token: z.string().min(20, "A valid Supabase access token is required"),
 });
 
+export const chessTimeControlSchema = z.object({
+  baseSeconds: z.number().int().min(0).max(7_200),
+  incrementSeconds: z.number().int().min(0).max(300),
+  delaySeconds: z.number().int().min(0).max(300),
+});
+
+export const matchSettingsSchema = z.object({
+  timeControl: chessTimeControlSchema.nullable().optional(),
+  rated: z.boolean().optional(),
+});
+
 export const createRoomSchema = z.object({
   gameId: z.enum(GAME_IDS),
   isPrivate: z.boolean().default(false),
   stake: z.number().int().min(1).max(1_000_000).default(100),
   maxPlayers: z.number().int().min(2).max(8).optional(),
+  settings: matchSettingsSchema.optional(),
 });
 
 export const joinRoomSchema = z.object({
@@ -60,6 +72,7 @@ export const chatEmojiSchema = z.object({
 export const matchmakingJoinSchema = z.object({
   gameId: z.enum(GAME_IDS),
   stake: z.number().int().min(1).max(1_000_000).default(100),
+  settings: matchSettingsSchema.optional(),
 });
 
 export const updateProfileSchema = z.object({

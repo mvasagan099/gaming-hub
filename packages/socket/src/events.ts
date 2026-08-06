@@ -4,6 +4,7 @@ import type {
   ErrorCode,
   GameId,
   JsonObject,
+  MatchSettings,
   RoomFull,
   RoomPlayer,
 } from "@gaming-hub/shared";
@@ -24,7 +25,7 @@ export interface SocketErrorPayload {
 
 export interface ClientToServerEvents {
   "room:create": (
-    payload: { gameId: GameId; isPrivate: boolean; stake: number; maxPlayers?: number },
+    payload: { gameId: GameId; isPrivate: boolean; stake: number; maxPlayers?: number; settings?: MatchSettings },
     ack: Ack<RoomFull>,
   ) => void;
 
@@ -40,7 +41,7 @@ export interface ClientToServerEvents {
   "room:start": (payload: { roomId: string }, ack: Ack<RoomFull>) => void;
 
   "matchmaking:join": (
-    payload: { gameId: GameId; stake: number },
+    payload: { gameId: GameId; stake: number; settings?: MatchSettings },
     ack: Ack<{ position: number }>,
   ) => void;
 

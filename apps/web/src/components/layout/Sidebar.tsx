@@ -24,9 +24,9 @@ interface SidebarProps {
 
 export default function Sidebar({ isExpanded }: SidebarProps) {
   return (
-    <aside className={`hidden md:block bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-shrink-0 transition-all duration-300 ${isExpanded ? 'w-64' : 'w-20'}`}>
+    <aside className={`hidden md:flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-shrink-0 transition-all duration-300 overflow-y-auto h-full ${isExpanded ? 'w-64' : 'w-20'}`}>
 
-      <nav className={`space-y-2 mt-6 ${isExpanded ? 'px-4' : 'px-2'}`}>
+      <nav className={`space-y-2 py-6 ${isExpanded ? 'px-4' : 'px-2'}`}>
 
         {menus.map((menu) => (
           <NavLink
