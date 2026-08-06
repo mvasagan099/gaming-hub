@@ -328,7 +328,7 @@ export default class GameManager {
   private handleReplayFen(fen: string): void {
     this.activePieceSquare = null;
     this.board.clearOverlay();
-    this.board.haltLastMoveHighlight();
+    this.board.clearLastMove();
     const engine = new Chess(fen);
     this.chessEngine = engine;
     this.pieceManager.createPieces(fenToPieces(fen));

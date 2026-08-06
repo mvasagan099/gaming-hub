@@ -11,7 +11,15 @@ import type {
 import { createTypedSocket, type TypedSocket } from "@gaming-hub/socket";
 import { useAuthStore } from "./authStore";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL as string;
+function getSocketUrl(): string {
+  const envUrl = (import.meta.env.VITE_SOCKET_URL as string | undefined) || "http://localhost:4001";
+  if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+    return envUrl.replace("localhost", window.location.hostname).replace("127.0.0.1", window.location.hostname);
+  }
+  return envUrl;
+}
+
+const SOCKET_URL = getSocketUrl();
 
 export type MultiplayerStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
 
@@ -86,8 +94,8 @@ function sessionToken(): string | null {
 }
 
 function unwrapAck<T>(res: AckResult<T>): T {
-  if (res.ok) return res.data;
-  throw new Error(res.error.message);
+  if (!res.ok) throw new Error((res as { error: { message: string } }).error.message);
+  return res.data;
 }
 
 let wired = false;
@@ -395,8 +403,9 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const res = await socket.emitWithAck("game:action", { roomId: room.id, action });
     
     if (!res.ok) {
-      console.log("[MultiplayerStore] Game action failed:", res.error.message);
-      return { ok: false, error: res.error.message };
+      const errMsg = (res as { error?: { message: string } }).error?.message ?? "Action failed";
+      console.log("[MultiplayerStore] Game action failed:", errMsg);
+      return { ok: false, error: errMsg };
     }
     if (!res.data.ok) {
       console.log("[MultiplayerStore] Game action rejected by server:", res.data.error);

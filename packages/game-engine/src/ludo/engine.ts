@@ -1,4 +1,4 @@
-import { ServerGameEngine } from "../base/ServerGameEngine";
+import { MultiplayerGameEngine } from "../base/MultiplayerGameEngine";
 import type { EngineActionResult, EngineEvent, EnginePlayer, RandomSource } from "../types";
 import {
   HOME_COL_BASE,
@@ -35,38 +35,50 @@ interface LudoMove {
   isSafe: boolean;
 }
 
+export interface LudoEngineOptions {
+  turnTimer?: { turnDurationMs: number; warningThresholdMs: number };
+  matchTimer?: { matchDurationMs: number; warningThresholdMs: number };
+  enableResign?: boolean;
+  enableDraw?: boolean;
+  enablePause?: boolean;
+  enableRematch?: boolean;
+  allowThreeSixRule?: boolean;
+  allowStacking?: boolean;
+  now?: () => number;
+}
+
 /**
- * Server-authoritative Ludo engine.
- *
- * Rules mirror the rendered Phaser client (`apps/web/src/games/ludo`):
- * - Roll a 6 to bring a token out of the yard onto its start tile.
- * - A token must land exactly on the final home step to finish.
- * - Landing on a single enemy token (non-safe tile) captures it back to the
- *   yard. Safe tiles and home columns can never be captured.
- * - A friendly/enemy stack of 2+ forms a blockade (safe tiles excepted).
- * - Rolling a 6 grants an extra turn; three consecutive 6s forfeit the turn.
- * - The first player to finish all 4 tokens wins.
- *
- * Protocol: the current seat sends `{ type: "roll" }`, then `{ type: "move",
- * tokenId }` when multiple tokens can move (the engine auto-applies when only
- * one move is possible).
+ * Server-authoritative Ludo engine with multiplayer features.
  */
-export class LudoEngine extends ServerGameEngine<LudoServerState, LudoAction> {
+export class LudoEngine extends MultiplayerGameEngine<
+  LudoServerState,
+  LudoAction | { type: "resign" } | { type: "draw-offer" } | { type: "draw-accept" } | { type: "draw-decline" } | { type: "pause" } | { type: "resume" }
+> {
   readonly gameId = "ludo" as const;
   private readonly settings: LudoSettings;
 
-  constructor(players: EnginePlayer[], rng?: RandomSource, settings: Partial<LudoSettings> = {}) {
-    super(players, rng);
+  constructor(players: EnginePlayer[], rng?: RandomSource, options?: LudoEngineOptions) {
+    const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 5000 };
+    const matchTimer = options?.matchTimer ?? { matchDurationMs: 600000, warningThresholdMs: 30000 };
+    super(players, rng, {
+      turnTimer,
+      matchTimer,
+      enableResign: options?.enableResign ?? true,
+      enableDraw: options?.enableDraw ?? true,
+      enablePause: options?.enablePause ?? true,
+      enableRematch: options?.enableRematch ?? true,
+      now: options?.now,
+    });
     if (players.length < 2) {
       throw new Error("Ludo requires at least 2 players");
     }
     this.settings = {
-      allowThreeSixRule: settings.allowThreeSixRule ?? true,
-      allowStacking: settings.allowStacking ?? true,
+      allowThreeSixRule: options?.allowThreeSixRule ?? true,
+      allowStacking: options?.allowStacking ?? true,
     };
   }
 
-  protected initState(): LudoServerState {
+  protected initBaseState(): Omit<LudoServerState, keyof import("../base/MultiplayerGameEngine").BaseState> {
     const colors = colorsForPlayerCount(this.players.length);
     const players: LudoPlayerState[] = this.players.map((p, index) => {
       const color = colors[index] ?? colors[0];
@@ -91,7 +103,6 @@ export class LudoEngine extends ServerGameEngine<LudoServerState, LudoAction> {
       consecutiveSixes: 0,
       phase: "rolling",
       winnerSeats: [],
-      finished: false,
       turnCount: 0,
       legalMoves: [],
       lastMove: null,
@@ -99,8 +110,11 @@ export class LudoEngine extends ServerGameEngine<LudoServerState, LudoAction> {
     };
   }
 
-  protected validateAction(action: LudoAction, seat: number): string | null {
-    const state = this.state;
+  protected validateGameAction(
+    action: LudoAction | { type: "resign" } | { type: "draw-offer" } | { type: "draw-accept" } | { type: "draw-decline" } | { type: "pause" } | { type: "resume" },
+    seat: number,
+    state: LudoServerState,
+  ): string | null {
     if (state.phase === "finished") {
       return "This match has already finished";
     }
@@ -125,21 +139,29 @@ export class LudoEngine extends ServerGameEngine<LudoServerState, LudoAction> {
       }
       return null;
     }
-    return "Unknown action for Ludo";
+    return null;
   }
 
-  protected applyValidatedAction(
-    action: LudoAction,
+  protected applyGameAction(
+    action: LudoAction | { type: "resign" } | { type: "draw-offer" } | { type: "draw-accept" } | { type: "draw-decline" } | { type: "pause" } | { type: "resume" },
     seat: number,
     state: LudoServerState,
   ): EngineActionResult<LudoServerState> {
     if (action.type === "roll") {
       return this.applyRoll(state, seat);
     }
-    return this.applyMoveChoice(state, seat, action.tokenId);
+    if (action.type === "move") {
+      return this.applyMoveChoice(state, seat, action.tokenId);
+    }
+    return {
+      ok: false,
+      error: "Unknown action for Ludo",
+      state,
+      events: [],
+      finished: state.finished,
+      winnerSeats: state.winnerSeats,
+    };
   }
-
-  // ─── Actions ──────────────────────────────────────────────────────────────
 
   private applyRoll(state: LudoServerState, seat: number): EngineActionResult<LudoServerState> {
     const events: EngineEvent[] = [];
@@ -148,7 +170,6 @@ export class LudoEngine extends ServerGameEngine<LudoServerState, LudoAction> {
 
     const streak = dice === 6 ? state.consecutiveSixes + 1 : 0;
 
-    // Three consecutive 6s forfeit the turn.
     if (this.settings.allowThreeSixRule && streak >= 3) {
       const nextSeat = this.nextPlayerIndex(state);
       const nextState: LudoServerState = {
@@ -318,8 +339,6 @@ export class LudoEngine extends ServerGameEngine<LudoServerState, LudoAction> {
     return { ok: true, state: nextState, events, finished: false, winnerSeats: [] };
   }
 
-  // ─── Rules ─────────────────────────────────────────────────────────────────
-
   private legalMovesFor(state: LudoServerState, seat: number, dice: number): LudoMove[] {
     const player = this.playerBySeat(state, seat);
     const moves: LudoMove[] = [];
@@ -460,8 +479,6 @@ export class LudoEngine extends ServerGameEngine<LudoServerState, LudoAction> {
     }
     return (state.currentSeat + 1) % total;
   }
-
-  // ─── Helpers ───────────────────────────────────────────────────────────────
 
   private playerBySeat(state: LudoServerState, seat: number): LudoPlayerState {
     const player = state.players.find((p) => p.seat === seat);

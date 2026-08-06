@@ -56,8 +56,11 @@ export function fenAtPly(initialFen: string, history: string[], plyIndex: number
   const count = Math.min(plyIndex + 1, history.length);
   for (let i = 0; i < count; i++) {
     const san = history[i];
-    const match = chess.move({ san });
-    if (!match) break;
+    try {
+      chess.move(san);
+    } catch {
+      break;
+    }
   }
   return chess.fen();
 }

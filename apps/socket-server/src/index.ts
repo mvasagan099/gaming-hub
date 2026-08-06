@@ -154,11 +154,11 @@ async function main(): Promise<void> {
         console.log(`[SocketServer] game:action processed for user ${user.userId}, result:`, result.ok, result.error);
         ack?.({ ok: true, data: result });
       }),
+    );
 
     socket.on("game:state:ack", (payload) => {
       console.log(`[SocketServer] game:state:ack received from user ${user.userId} for match ${payload.matchId}`);
-    }),
-    );
+    });
 
     socket.on("game:rematch", (payload, ack) =>
       void guard(ack, async () => {
@@ -213,7 +213,7 @@ async function main(): Promise<void> {
     });
   });
 
-  httpServer.listen(env.PORT, () => {
+  httpServer.listen(env.PORT, "0.0.0.0", () => {
     logger.info(`Socket server listening on port ${env.PORT}`);
   });
 

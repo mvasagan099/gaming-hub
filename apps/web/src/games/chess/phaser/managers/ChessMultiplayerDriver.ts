@@ -273,12 +273,16 @@ export default class ChessMultiplayerDriver {
     });
   }
 
+  public getLatestState(): ChessRemoteState | null {
+    return this.lastState;
+  }
+
   // ─── State application ──────────────────────────────────────────────────────
   
-  private applyState(
+  public applyState(
     state: unknown,
-    events: { type: string }[] | undefined,
-    winner: WinnerInfo | null,
+    events: { type: string }[] | undefined = [],
+    winner: WinnerInfo | null = null,
   ): void {
     console.log("[ChessMultiplayerDriver] applyState called, destroyed:", this.destroyed, "gameState exists:", !!state);
     if (!state || this.destroyed) return;
@@ -416,7 +420,7 @@ export default class ChessMultiplayerDriver {
 
   private handleReplayExit(): void {
     this.isInReplay = false;
-    if (this.lastState) {
+    if (this.lastState && this.lastState.fen) {
       this.board.clearLastMove();
       this.pieceManager.syncPieces(fenToPieces(this.lastState.fen), this.lastState.lastMove);
       this.render(this.lastState);
@@ -429,9 +433,5 @@ export default class ChessMultiplayerDriver {
     this.scene.input.enabled = false;
     this.board.clearOverlay();
     this.scene.events.emit(ChessEvents.PROMOTION_NEEDED, from, to);
-  }
-
-  getLatestState(): ChessRemoteState | null {
-    return this.lastState;
   }
 }

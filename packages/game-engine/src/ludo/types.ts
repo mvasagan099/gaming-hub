@@ -1,4 +1,5 @@
 import type { JsonObject } from "@gaming-hub/shared";
+import type { BaseState } from "../base/MultiplayerGameEngine";
 
 export type LudoColor = "red" | "blue" | "green" | "yellow";
 export type LudoTokenState = "yard" | "active" | "finished";
@@ -43,7 +44,7 @@ export interface LudoServerStateBase {
   logs: string[];
 }
 
-export type LudoServerState = JsonObject & LudoServerStateBase;
+export type LudoServerState = BaseState & LudoServerStateBase;
 
 export type LudoAction = { type: "roll" } | { type: "move"; tokenId: string };
 

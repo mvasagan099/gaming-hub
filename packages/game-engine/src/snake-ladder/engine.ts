@@ -1,42 +1,59 @@
 import type { JsonObject } from "@gaming-hub/shared";
-import { ServerGameEngine } from "../base/ServerGameEngine";
+import { MultiplayerGameEngine } from "../base/MultiplayerGameEngine";
 import type { EngineActionResult, EngineEvent, EnginePlayer, GameAction, RandomSource } from "../types";
 import { BOARD_SIZE, resolveDestination } from "./board";
-import type { SnakeLadderLastMove, SnakeLadderPlayerState, SnakeLadderSettings, SnakeLadderState, RollAction } from "./types";
+import type {
+  SnakeLadderLastMove,
+  SnakeLadderPlayerState,
+  SnakeLadderSettings,
+  SnakeLadderState,
+  RollAction,
+} from "./types";
 
 const MAX_LOGS = 6;
 
+export interface SnakeLadderEngineOptions {
+  settings?: SnakeLadderSettings;
+  turnTimer?: { turnDurationMs: number; warningThresholdMs: number };
+  matchTimer?: { matchDurationMs: number; warningThresholdMs: number };
+  enableResign?: boolean;
+  enableDraw?: boolean;
+  enablePause?: boolean;
+  enableRematch?: boolean;
+  now?: () => number;
+}
+
 /**
- * Server-authoritative Snake & Ladder engine.
- *
- * Rules mirror the rendered Phaser client (`apps/web/src/games/snake-ladder`):
- * - Players start on tile 1 and must land exactly on tile 100 to win.
- * - Rolling a 6 grants an extra turn.
- * - Three consecutive 6s cancel the turn and snap the token back to the tile
- *   where the turn started.
- * - Landing (after snakes/ladders) on a tile occupied by an opponent bumps
- *   that opponent back to tile 1. Tiles 1 and 100 are safe.
- * - A ladder or snake is only resolved after a legal dice landing; winning is
- *   determined by the final resolved tile (so ladder 80 → 100 wins).
+ * Server-authoritative Snake & Ladder engine with multiplayer features.
  */
-export class SnakeLadderEngine extends ServerGameEngine<SnakeLadderState, RollAction> {
+export class SnakeLadderEngine extends MultiplayerGameEngine<SnakeLadderState, RollAction | { type: "resign" } | { type: "draw-offer" } | { type: "draw-accept" } | { type: "draw-decline" } | { type: "pause" } | { type: "resume" }> {
   readonly gameId = "snake-ladder" as const;
   private readonly settings: Required<SnakeLadderSettings>;
 
-  constructor(players: EnginePlayer[], rng?: RandomSource, settings: SnakeLadderSettings = {}) {
-    super(players, rng);
+  constructor(players: EnginePlayer[], rng?: RandomSource, options?: SnakeLadderEngineOptions) {
+    const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 5000 };
+    const matchTimer = options?.matchTimer ?? { matchDurationMs: 600000, warningThresholdMs: 30000 };
+    super(players, rng, {
+      turnTimer,
+      matchTimer,
+      enableResign: options?.enableResign ?? true,
+      enableDraw: options?.enableDraw ?? true,
+      enablePause: options?.enablePause ?? true,
+      enableRematch: options?.enableRematch ?? true,
+      now: options?.now,
+    });
     this.settings = {
-      boardSize: settings.boardSize ?? BOARD_SIZE,
-      extraTurnOnSix: settings.extraTurnOnSix ?? true,
-      threeSixesCancel: settings.threeSixesCancel ?? true,
-      bumpOnLanding: settings.bumpOnLanding ?? true,
+      boardSize: options?.settings?.boardSize ?? BOARD_SIZE,
+      extraTurnOnSix: options?.settings?.extraTurnOnSix ?? true,
+      threeSixesCancel: options?.settings?.threeSixesCancel ?? true,
+      bumpOnLanding: options?.settings?.bumpOnLanding ?? true,
     };
     if (players.length < 2) {
       throw new Error("Snake & Ladder requires at least 2 players");
     }
   }
 
-  protected initState(): SnakeLadderState {
+  protected initBaseState(): Omit<SnakeLadderState, keyof import("../base/MultiplayerGameEngine").BaseState> {
     const players: SnakeLadderPlayerState[] = this.players.map((p) => ({
       seat: p.seat,
       position: 1,
@@ -50,39 +67,51 @@ export class SnakeLadderEngine extends ServerGameEngine<SnakeLadderState, RollAc
       lastMove: null,
       winnerSeats: [],
       extraTurn: false,
-      finished: false,
       consecutiveSixes: 0,
       turnStartTile: null,
       logs: ["Game started! Roll dice to move."],
     };
   }
 
-  protected validateAction(action: RollAction, seat: number): string | null {
-    if (action.type !== "roll") {
-      return "Unknown action for Snake & Ladder";
-    }
-    const state = this.state;
-    if (state.phase === "finished") {
-      return "This match has already finished";
-    }
-    if (seat !== state.currentSeat) {
-      return "It is not your turn";
+  protected validateGameAction(
+    action: RollAction | { type: "resign" } | { type: "draw-offer" } | { type: "draw-accept" } | { type: "draw-decline" } | { type: "pause" } | { type: "resume" },
+    seat: number,
+    state: SnakeLadderState,
+  ): string | null {
+    if (action.type === "roll") {
+      if (state.phase === "finished") {
+        return "This match has already finished";
+      }
+      if (seat !== state.currentSeat) {
+        return "It is not your turn";
+      }
+      return null;
     }
     return null;
   }
 
-  protected applyValidatedAction(
-    _action: RollAction,
+  protected applyGameAction(
+    action: RollAction | { type: "resign" } | { type: "draw-offer" } | { type: "draw-accept" } | { type: "draw-decline" } | { type: "pause" } | { type: "resume" },
     seat: number,
     state: SnakeLadderState,
   ): EngineActionResult<SnakeLadderState> {
+    if (action.type !== "roll") {
+      return {
+        ok: false,
+        error: "Unknown action for Snake & Ladder",
+        state,
+        events: [],
+        finished: state.finished,
+        winnerSeats: state.winnerSeats,
+      };
+    }
+
     const events: EngineEvent[] = [];
     const dice = this.randomInt(1, 6);
     const isSix = dice === 6;
     const player = state.players.find((p) => p.seat === seat)!;
     const startPos = player.position;
 
-    // Capture the tile the turn started on (first roll of the turn).
     if (state.consecutiveSixes === 0) {
       state = { ...state, turnStartTile: startPos };
     }
@@ -93,7 +122,6 @@ export class SnakeLadderEngine extends ServerGameEngine<SnakeLadderState, RollAc
 
     events.push({ type: "roll", seat, dice });
 
-    // ── Three consecutive 6s: turn cancelled, snap back to turn start ────────
     if (cancelThreeSixes) {
       const fromPos = startPos;
       const turnStart = state.turnStartTile ?? 1;
@@ -124,7 +152,6 @@ export class SnakeLadderEngine extends ServerGameEngine<SnakeLadderState, RollAc
       };
     }
 
-    // ── Cannot overshoot tile 100 ────────────────────────────────────────────
     const rawTarget = startPos + dice;
     let moved = false;
     let via: SnakeLadderLastMove["via"] = "dice";
@@ -151,7 +178,6 @@ export class SnakeLadderEngine extends ServerGameEngine<SnakeLadderState, RollAc
       p.seat === seat ? { ...p, position: finalPos } : p,
     );
 
-    // ── Bump: landing on an occupied tile (1 and 100 are safe) ───────────────
     if (this.settings.bumpOnLanding && moved && finalPos !== 1 && finalPos !== this.settings.boardSize) {
       const bumped = updatedPlayers.find(
         (p) => p.seat !== seat && p.position === finalPos && !p.finished,
@@ -176,7 +202,6 @@ export class SnakeLadderEngine extends ServerGameEngine<SnakeLadderState, RollAc
     }
 
     const log = this.buildLog(seat, dice, startPos, finalPos, via, isWinner, streak, state.consecutiveSixes);
-    // Overshoot with a 6 keeps the turn (matches client); otherwise pass on non-extra turns.
     const keepsTurn = rawTarget <= this.settings.boardSize ? extraTurn && !isWinner : isSix;
     const nextSeat = isWinner ? seat : keepsTurn ? seat : (seat + 1) % this.players.length;
 
@@ -227,7 +252,7 @@ export class SnakeLadderEngine extends ServerGameEngine<SnakeLadderState, RollAc
   }
 }
 
-export type SnakeLadderAction = RollAction;
+export type SnakeLadderAction = RollAction | { type: "resign" } | { type: "draw-offer" } | { type: "draw-accept" } | { type: "draw-decline" } | { type: "pause" } | { type: "resume" };
 
 export function isSnakeLadderState(state: JsonObject): state is SnakeLadderState {
   return state.phase !== undefined && Array.isArray(state.players);

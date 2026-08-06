@@ -1,4 +1,5 @@
 import type { JsonObject } from "@gaming-hub/shared";
+import type { BaseState } from "../base/MultiplayerGameEngine";
 
 export type SnakeLadderPhase = "waiting-for-roll" | "rolling" | "moved" | "finished";
 
@@ -14,7 +15,7 @@ export type SnakeLadderLastMove = {
   via: "dice" | "ladder" | "snake" | "rollback";
 };
 
-export type SnakeLadderState = JsonObject & {
+export type SnakeLadderState = BaseState & {
   phase: SnakeLadderPhase;
   currentSeat: number;
   dice: number | null;

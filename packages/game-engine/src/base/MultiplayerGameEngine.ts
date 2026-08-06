@@ -10,14 +10,14 @@ import type {
 } from "../types";
 import { ServerGameEngine } from "./ServerGameEngine";
 
-export interface TurnTimerConfig {
+export interface TurnTimerConfig extends JsonObject {
   turnDurationMs: number;
-  warningThresholdMs?: number;
+  warningThresholdMs: number;
 }
 
-export interface MatchTimerConfig {
+export interface MatchTimerConfig extends JsonObject {
   matchDurationMs: number;
-  warningThresholdMs?: number;
+  warningThresholdMs: number;
 }
 
 export interface TimeControlConfig {
@@ -119,7 +119,7 @@ export abstract class MultiplayerGameEngine<
       gameOver: false,
       endReason: null,
     };
-    return initialState as S;
+    return initialState as unknown as S;
   }
 
   protected getInitialSeat(): number {
@@ -339,13 +339,13 @@ export abstract class MultiplayerGameEngine<
 
     if (copy.turnTimerConfig && copy.turnStartedAtMs !== null && !copy.paused) {
       const elapsed = Math.max(0, now - copy.turnStartedAtMs);
-      (copy as Record<string, unknown>).turnRemainingMs = Math.max(0, copy.turnTimerConfig.turnDurationMs - elapsed);
+      (copy as Record<string, JsonValue>).turnRemainingMs = Math.max(0, copy.turnTimerConfig.turnDurationMs - elapsed);
       copy.turnStartedAtMs = now;
     }
 
     if (copy.matchTimerConfig && copy.matchStartedAtMs !== null && !copy.paused) {
       const elapsed = Math.max(0, now - copy.matchStartedAtMs);
-      (copy as Record<string, unknown>).matchRemainingMs = Math.max(0, copy.matchTimerConfig.matchDurationMs - elapsed);
+      (copy as Record<string, JsonValue>).matchRemainingMs = Math.max(0, copy.matchTimerConfig.matchDurationMs - elapsed);
     }
 
     return copy;

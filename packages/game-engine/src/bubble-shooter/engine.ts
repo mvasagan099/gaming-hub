@@ -1,4 +1,4 @@
-import { ServerGameEngine } from "../base/ServerGameEngine";
+import { MultiplayerGameEngine } from "../base/MultiplayerGameEngine";
 import type { EngineActionResult, EngineEvent, EnginePlayer, RandomSource } from "../types";
 import type {
   BubbleShooterAction,
@@ -10,13 +10,12 @@ import type {
   BubbleShooterShotResult,
 } from "./types";
 
-// Constants mirror the rendered canvas game (`apps/web/src/games/bubble-shooter`).
 const COLORS = ["#fb7185", "#818cf8", "#34d399", "#fbbf24", "#c084fc"];
 const RADIUS = 11;
 const DIAMETER = RADIUS * 2;
 const COLS = 13;
 const ROW_HEIGHT = RADIUS * Math.sqrt(3);
-const CANVAS_WIDTH = COLS * DIAMETER; // 286
+const CANVAS_WIDTH = COLS * DIAMETER;
 const CANVAS_HEIGHT = 460;
 const SHOOTER_X = CANVAS_WIDTH / 2;
 const SHOOTER_Y = CANVAS_HEIGHT - 25;
@@ -46,34 +45,40 @@ function colsInRow(row: number): number {
   return Math.abs(row % 2) === 0 ? COLS : COLS - 1;
 }
 
-/**
- * Server-authoritative Bubble Shooter engine.
- *
- * Mode: `score-race` (2-8 players). Every player owns an independent board and
- * races to clear it first. The shot physics, grid snapping, match-3 popping,
- * floating drops, row drops and win/overflow checks mirror the canvas client
- * exactly, but are resolved deterministically with a fixed-timestep simulation
- * so replay and reconnect reproduce the same state for the same action stream.
- *
- * Protocol: any active seat sends `{ type: "shoot", angle }`. The fired bubble
- * is the player's current `nextBubble`; the server resolves the landing cell
- * and broadcasts the new board. First player to clear their board wins; if
- * every player is eliminated before anyone clears, the match is a draw.
- */
-export class BubbleShooterEngine extends ServerGameEngine<
+export interface BubbleShooterEngineOptions {
+  turnTimer?: { turnDurationMs: number; warningThresholdMs: number };
+  matchTimer?: { matchDurationMs: number; warningThresholdMs: number };
+  enableResign?: boolean;
+  enableDraw?: boolean;
+  enablePause?: boolean;
+  enableRematch?: boolean;
+  now?: () => number;
+}
+
+export class BubbleShooterEngine extends MultiplayerGameEngine<
   BubbleShooterServerState,
-  BubbleShooterAction
+  BubbleShooterAction | { type: "resign" } | { type: "draw-offer" } | { type: "draw-accept" } | { type: "draw-decline" } | { type: "pause" } | { type: "resume" }
 > {
   readonly gameId = "bubble-shooter" as const;
 
-  constructor(players: EnginePlayer[], rng?: RandomSource) {
-    super(players, rng);
+  constructor(players: EnginePlayer[], rng?: RandomSource, options?: BubbleShooterEngineOptions) {
+    const turnTimer = options?.turnTimer ?? { turnDurationMs: 10000, warningThresholdMs: 3000 };
+    const matchTimer = options?.matchTimer ?? { matchDurationMs: 300000, warningThresholdMs: 30000 };
+    super(players, rng, {
+      turnTimer,
+      matchTimer,
+      enableResign: options?.enableResign ?? true,
+      enableDraw: options?.enableDraw ?? true,
+      enablePause: options?.enablePause ?? true,
+      enableRematch: options?.enableRematch ?? true,
+      now: options?.now,
+    });
     if (players.length < 2) {
       throw new Error("Bubble Shooter requires at least 2 players");
     }
   }
 
-  protected initState(): BubbleShooterServerState {
+  protected initBaseState(): Omit<BubbleShooterServerState, keyof import("../base/MultiplayerGameEngine").BaseState> {
     const players: BubbleShooterPlayerState[] = this.players.map((p) => {
       const grid = this.makeInitialGrid();
       return {
@@ -92,14 +97,16 @@ export class BubbleShooterEngine extends ServerGameEngine<
       players,
       currentSeat: 0,
       winnerSeats: [],
-      finished: false,
       turnCount: 0,
       result: "none",
     };
   }
 
-  protected validateAction(action: BubbleShooterAction, seat: number): string | null {
-    const state = this.state;
+  protected validateGameAction(
+    action: BubbleShooterAction | { type: "resign" } | { type: "draw-offer" } | { type: "draw-accept" } | { type: "draw-decline" } | { type: "pause" } | { type: "resume" },
+    seat: number,
+    state: BubbleShooterServerState,
+  ): string | null {
     if (state.finished) {
       return "This match has already finished";
     }
@@ -113,22 +120,29 @@ export class BubbleShooterEngine extends ServerGameEngine<
     if (typeof action.angle !== "number" || !Number.isFinite(action.angle)) {
       return "A valid angle is required";
     }
-    // The cannon must point upward, mirroring the client's input clamp.
     if (Math.sin(action.angle) >= -0.01) {
       return "Aim upward";
     }
     return null;
   }
 
-  protected applyValidatedAction(
-    action: BubbleShooterAction,
+  protected applyGameAction(
+    action: BubbleShooterAction | { type: "resign" } | { type: "draw-offer" } | { type: "draw-accept" } | { type: "draw-decline" } | { type: "pause" } | { type: "resume" },
     seat: number,
     state: BubbleShooterServerState,
   ): EngineActionResult<BubbleShooterServerState> {
-    return this.applyShot(state, seat, action.angle);
+    if (action.type === "shoot") {
+      return this.applyShot(state, seat, action.angle);
+    }
+    return {
+      ok: false,
+      error: "Unknown action for Bubble Shooter",
+      state,
+      events: [],
+      finished: state.finished,
+      winnerSeats: state.winnerSeats,
+    };
   }
-
-  // ─── Shot resolution ───────────────────────────────────────────────────────
 
   private applyShot(
     state: BubbleShooterServerState,
@@ -223,7 +237,6 @@ export class BubbleShooterEngine extends ServerGameEngine<
       points,
     });
 
-    // Win: board fully cleared. Overflow: player is eliminated.
     if (player.grid.length === 0) {
       player.status = "won";
       next.finished = true;
@@ -261,10 +274,6 @@ export class BubbleShooterEngine extends ServerGameEngine<
     return grid.some((b) => getGridY(b.row, topOffset) + RADIUS >= OVERFLOW_LINE);
   }
 
-  /**
-   * Fixed-timestep flight simulation mirroring the client's per-frame
-   * integration, wall bounces and collision radius (DIAMETER - 2).
-   */
   private simulateShot(
     grid: BubbleShooterBubbleView[],
     topOffset: number,
@@ -288,7 +297,7 @@ export class BubbleShooterEngine extends ServerGameEngine<
         vx *= -1;
       }
       if (y - RADIUS < 0) {
-        y = RADIUS;
+        x = RADIUS;
         break;
       }
 
@@ -306,7 +315,6 @@ export class BubbleShooterEngine extends ServerGameEngine<
     return { x, y };
   }
 
-  /** Nearest empty grid cell to the stopped bubble. */
   private snapCell(
     grid: BubbleShooterBubbleView[],
     topOffset: number,
@@ -380,7 +388,6 @@ export class BubbleShooterEngine extends ServerGameEngine<
     return matched;
   }
 
-  /** Cells within two neighbor rings of the target (bomb blast radius). */
   private getBombRadius(grid: BubbleShooterBubbleView[], startRow: number, startCol: number): BubbleShooterBubbleView[] {
     const allN = new Set<string>([`${startRow},${startCol}`]);
     const ring1 = this.getGridNeighbors(startRow, startCol);
@@ -395,7 +402,6 @@ export class BubbleShooterEngine extends ServerGameEngine<
     return grid.filter((b) => allN.has(`${b.row},${b.col}`));
   }
 
-  /** Removes bubbles not connected (via occupied neighbors) to the top row. */
   private dropFloating(grid: BubbleShooterBubbleView[], topOffset: number): { grid: BubbleShooterBubbleView[]; dropped: number } {
     const visited = new Set<string>();
     const toCheck: GridCell[] = grid.filter((b) => b.row === -topOffset).map((b) => ({ r: b.row, c: b.col }));

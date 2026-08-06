@@ -43,7 +43,9 @@ export function buildApp() {
     // no file-upload surface yet; raise via env.BODY_LIMIT when one is added.
     bodyLimit: env.BODY_LIMIT,
     // Cap route parameter length to prevent pathological URLs/ReDoS.
-    maxParamLength: 100,
+    routerOptions: {
+      maxParamLength: 100,
+    },
   });
 
   // Security headers. This service returns JSON only, so a fully locked-down

@@ -1,16 +1,15 @@
 import type { EngineActionResult, EngineEvent, EnginePlayer, RandomSource } from "../types";
 import { MultiplayerGameEngine } from "../base/MultiplayerGameEngine";
-import type {
-  CarromState,
-  CarromAction,
-  CarromPlaceStrikerAction,
-  CarromStrikeAction,
-  CarromEngineOptions,
-  CarromEvent,
-  CarromCoin,
-  CarromPlayer,
-  CarromStriker,
-  CoinType,
+import {
+  BASE_LINE_Y,
+  type CarromState,
+  type CarromAction,
+  type CarromEngineOptions,
+  type CarromEvent,
+  type CarromCoin,
+  type CarromPlayer,
+  type CarromStriker,
+  type CoinType,
 } from "./types";
 import {
   createInitialCoins,
@@ -19,7 +18,6 @@ import {
   simulatePhysics,
   calculateScore,
   checkWinCondition,
-  BASE_LINE_Y,
 } from "./physics";
 
 export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromAction> {
@@ -107,10 +105,10 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
 
     switch (action.type) {
       case "place-striker":
-        return this.applyPlaceStriker(action as CarromPlaceStrikerAction, seat, state, now, events);
+        return this.applyPlaceStriker(action, seat, state, now, events);
 
       case "strike":
-        return this.applyStrike(action as CarromStrikeAction, seat, state, now, events);
+        return this.applyStrike(action, seat, state, now, events);
 
       default:
         return {
@@ -125,7 +123,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
   }
 
   private applyPlaceStriker(
-    action: CarromPlaceStrikerAction,
+    action: CarromAction & { type: "place-striker"; x: number },
     seat: number,
     state: CarromState,
     now: number,
@@ -164,7 +162,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
   }
 
   private applyStrike(
-    action: CarromStrikeAction,
+    action: CarromAction & { type: "strike"; angle: number; power: number },
     seat: number,
     state: CarromState,
     now: number,

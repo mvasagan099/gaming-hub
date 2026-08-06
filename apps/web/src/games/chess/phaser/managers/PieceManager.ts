@@ -106,9 +106,10 @@ export class PieceManager {
       }
     });
 
-    // Add click-to-move support
-    zone.on("pointerdown", () => {
-      this.scene.events.emit(ChessEvents.PIECE_SELECTED, p.square);
+    // Add click-to-move and attack support
+    zone.on("pointerdown", (_pointer: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+      event?.stopPropagation();
+      this.scene.events.emit(ChessEvents.SQUARE_CLICKED, p.square);
     });
 
     const sprite: PieceSprite = { piece: p, container, glyphText: text };

@@ -54,6 +54,8 @@ export interface ClientToServerEvents {
   "chat:message": (payload: { roomId: string; text: string }, ack: Ack<ChatMessage>) => void;
 
   "chat:emoji": (payload: { roomId: string; emoji: string }, ack: Ack<{ sent: true }>) => void;
+
+  "game:state:ack": (payload: { roomId: string; matchId: string; timestamp: number }) => void;
 }
 
 export interface ServerToClientEvents {

@@ -51,6 +51,17 @@ export interface BubbleShooterServerStateBase {
   finished: boolean;
   turnCount: number;
   result: BubbleShooterMatchResult;
+  turnNumber: number;
+  turnStartedAtMs: number | null;
+  matchStartedAtMs: number | null;
+  drawOfferedBy: number | null;
+  paused: boolean;
+  pausedAtMs: number | null;
+  pausedBy: number | null;
+  turnTimerConfig: import("../base/MultiplayerGameEngine").TurnTimerConfig | null;
+  matchTimerConfig: import("../base/MultiplayerGameEngine").MatchTimerConfig | null;
+  gameOver: boolean;
+  endReason: string | null;
 }
 
 export type BubbleShooterServerState = JsonObject & BubbleShooterServerStateBase;

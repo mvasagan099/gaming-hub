@@ -14,6 +14,7 @@ import {
   type CoinType,
 } from "./types";
 
+export { BASE_LINE_Y } from "./types";
 export const FRICTION = 0.985;
 export const MIN_VELOCITY = 0.05;
 export const MAX_VELOCITY = 800;
