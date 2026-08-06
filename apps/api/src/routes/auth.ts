@@ -10,6 +10,7 @@ import { authenticate } from "../plugins/authenticate";
 import { requireUser } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
 import { getCategorySettings } from "../services/settings";
+import { recordLoginSession } from "../services/sessions";
 
 // Failed sign-in lockout: more than this many failed session exchanges for an
 // email within the window rejects further attempts, even with a valid token.
@@ -74,8 +75,12 @@ export async function authRoutes(app: FastifyInstance) {
         throw new AppError("UNAUTHORIZED", "Invalid or expired token", 401);
       }
 
+      const [general, authSettings] = await Promise.all([
+        getCategorySettings("general"),
+        getCategorySettings("auth"),
+      ]);
+
       // Check if platform is under maintenance mode
-      const general = await getCategorySettings("general");
       if (general.maintenanceEnabled) {
         auditFromRequest(request, {
           actorType: "system",
@@ -84,6 +89,28 @@ export async function authRoutes(app: FastifyInstance) {
           meta: { reason: "maintenance", email: verified.email },
         });
         throw new AppError("FEATURE_DISABLED", "The platform is currently under maintenance. Please try again later.", 403);
+      }
+
+      // Signup gate: existing users can always sign in, but if registrations are
+      // disabled a brand-new account is not auto-provisioned.
+      if (!authSettings.signupEnabled) {
+        const existing = await prisma.user.findUnique({
+          where: { id: verified.sub },
+          select: { id: true, deletedAt: true },
+        });
+        if (!existing) {
+          auditFromRequest(request, {
+            actorType: "system",
+            action: "auth.session.rejected",
+            category: "auth",
+            meta: { reason: "signup_disabled", email: verified.email },
+          });
+          throw new AppError(
+            "FEATURE_DISABLED",
+            "New registrations are currently disabled. Please try again later.",
+            403,
+          );
+        }
       }
 
       if (env.requireEmailVerification && !verified.emailVerified) {
@@ -97,6 +124,12 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       await ensureUser(verified.sub, verified.email, verified.userMetadata);
+      await recordLoginSession({
+        userId: verified.sub,
+        token,
+        ip: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
       auditFromRequest(request, {
         actorType: "user",
         actorId: verified.sub,

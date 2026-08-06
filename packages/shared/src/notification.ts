@@ -6,7 +6,16 @@ export type NotificationType =
   | "FRIEND_ACCEPTED"
   | "MATCH_RESULT"
   | "TOURNAMENT"
-  | "SYSTEM";
+  | "SYSTEM"
+  | "REFERRAL"
+  | "COUPON"
+  | "ANNOUNCEMENT"
+  | "MESSAGE"
+  | "SUPPORT"
+  | "PROMOTION"
+  | "WALLET"
+  | "ACHIEVEMENT"
+  | "SYSTEM_ALERT";
 
 export interface AppNotification {
   id: string;

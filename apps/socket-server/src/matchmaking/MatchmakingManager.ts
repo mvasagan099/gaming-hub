@@ -3,6 +3,7 @@ import { AppError, getGameDefinition } from "@gaming-hub/shared";
 import type { GameId } from "@gaming-hub/shared";
 import type { AuthenticatedUser } from "../auth";
 import type { RoomManager } from "../rooms/RoomManager";
+import { assertGameEnabled, getMatchmakingTimeoutSeconds } from "../settings";
 
 interface QueuedPlayer {
   user: AuthenticatedUser;
@@ -11,6 +12,7 @@ interface QueuedPlayer {
 }
 
 const MAX_QUEUE_SIZE = 50;
+const SWEEP_INTERVAL_MS = 30_000;
 
 /**
  * Per-(game, stake) FIFO queues. When a bucket reaches the game's required
@@ -24,6 +26,10 @@ export class MatchmakingManager {
   constructor(io: Server, roomManager: RoomManager) {
     this.io = io;
     this.roomManager = roomManager;
+    const sweep = setInterval(() => {
+      this.sweepExpired().catch(() => undefined);
+    }, SWEEP_INTERVAL_MS);
+    sweep.unref?.();
   }
 
   private bucketKey(gameId: GameId, stake: number): string {
@@ -49,6 +55,7 @@ export class MatchmakingManager {
   }
 
   async join(user: AuthenticatedUser, gameId: GameId, stake: number, socket: Socket): Promise<number> {
+    await assertGameEnabled(gameId);
     if (this.bucketOf(user.userId)) {
       throw new AppError("ALREADY_QUEUED", "You are already in the queue");
     }
@@ -64,8 +71,17 @@ export class MatchmakingManager {
     this.queues.set(key, bucket);
 
     socket.emit("matchmaking:queued", { position });
-    await this.tryPair(key);
     return position;
+  }
+
+  /**
+   * Pulls a full group out of a bucket and auto-starts a match. Invoked by the
+   * event handler after the joining client has been acked, so queued/found
+   * arrive in order and every client has an up-to-date socket to be wired into
+   * the room.
+   */
+  pair(gameId: GameId, stake: number): Promise<void> {
+    return this.tryPair(this.bucketKey(gameId, stake));
   }
 
   private async tryPair(key: string) {
@@ -83,21 +99,43 @@ export class MatchmakingManager {
     try {
       const room = await this.roomManager.createMatchmakingRoom(
         group.map((q) => q.user),
+        group.map((q) => q.socket),
         gameId as GameId,
         stake,
-        group[0].socket,
       );
       for (const queued of group) {
         queued.socket.emit("matchmaking:found", { roomId: room.id });
       }
-    } catch (error) {
-      const requeue = this.queues.get(key) ?? [];
-      requeue.unshift(...group);
-      this.queues.set(key, requeue);
+    } catch (error: any) {
+      console.error("[Matchmaking Error]", error);
+      const code = error?.code || "MATCHMAKING_OFFLINE";
+      const message = error?.message || "Could not start a match, please try again";
       for (const queued of group) {
         queued.socket.emit("error", {
-          code: "MATCHMAKING_OFFLINE",
-          message: "Could not start a match, please try again",
+          code,
+          message,
+        });
+      }
+    }
+  }
+
+  /** Evicts players who have been waiting longer than the configured timeout. */
+  private async sweepExpired() {
+    const timeoutMs = (await getMatchmakingTimeoutSeconds()) * 1000;
+    const now = Date.now();
+
+    for (const [key, bucket] of this.queues) {
+      const expired = bucket.filter((q) => now - q.queuedAt >= timeoutMs);
+      if (expired.length === 0) continue;
+
+      const remaining = bucket.filter((q) => now - q.queuedAt < timeoutMs);
+      if (remaining.length === 0) this.queues.delete(key);
+      else this.queues.set(key, remaining);
+
+      for (const queued of expired) {
+        queued.socket.emit("error", {
+          code: "MATCHMAKING_TIMEOUT",
+          message: "Timed out waiting for opponents — please try again",
         });
       }
     }

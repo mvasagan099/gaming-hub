@@ -1,5 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { X } from 'lucide-react';
 import { apiClient } from '../../services/api/client';
+import { adminApi } from '../../services/api/enterprise';
+import type { AdminCustomerDetail } from '@gaming-hub/shared';
 
 interface User {
   id: string;
@@ -32,6 +36,21 @@ export function AdminUsersPage() {
   const [walletReason, setWalletReason] = useState('');
   const [newRole, setNewRole] = useState<'USER' | 'MODERATOR' | 'ADMIN'>('USER');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [detail, setDetail] = useState<AdminCustomerDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const openDetail = useCallback(async (userId: string) => {
+    setDetailLoading(true);
+    setError(null);
+    try {
+      setDetail(await adminApi.customerDetail(userId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load customer detail');
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
 
   const loadUsers = async () => {
     setIsLoading(true);
@@ -50,6 +69,14 @@ export function AdminUsersPage() {
   useEffect(() => {
     loadUsers();
   }, []);
+
+  const userIdParam = searchParams.get('userId');
+
+  useEffect(() => {
+    if (!userIdParam) return;
+    setSearchParams({}, { replace: true });
+    void openDetail(userIdParam);
+  }, [userIdParam, setSearchParams, openDetail]);
 
   const handleWalletAdjust = async () => {
     if (!selectedUser) return;
@@ -168,6 +195,12 @@ export function AdminUsersPage() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
+                    <button
+                      onClick={() => void openDetail(user.id)}
+                      className="rounded bg-emerald-500 px-2 py-1 text-xs text-white hover:bg-emerald-600"
+                    >
+                      360 View
+                    </button>
                     <button
                       onClick={() => {
                         setSelectedUser(user);
@@ -302,6 +335,193 @@ export function AdminUsersPage() {
           </div>
         </div>
       )}
+
+      {detail && (
+        <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setDetail(null)}>
+          <div
+            className="fixed right-0 top-0 h-full w-full max-w-xl overflow-y-auto border-l border-border bg-background p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-xl font-bold">{detail.user.displayName}</h2>
+                <p className="text-sm text-muted-foreground">
+                  @{detail.user.username} · {detail.user.email ?? 'no email'} · {detail.user.role}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Joined {new Date(detail.user.createdAt).toLocaleDateString()} ·{' '}
+                  {detail.user.isOnline ? 'Online' : `Last seen ${detail.user.lastSeenAt ? new Date(detail.user.lastSeenAt).toLocaleDateString() : 'never'}`}
+                </p>
+              </div>
+              <button onClick={() => setDetail(null)} className="rounded-md border border-border p-1.5 hover:bg-muted" aria-label="Close">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {detailLoading ? (
+              <p className="mt-6 text-sm text-muted-foreground">Loading…</p>
+            ) : (
+              <div className="mt-6 space-y-6">
+                {detail.profile && (
+                  <StatGrid
+                    items={[
+                      { label: 'Level', value: String(detail.profile.level) },
+                      { label: 'XP', value: detail.profile.xp.toLocaleString() },
+                      { label: 'W / L / D', value: `${detail.profile.wins} / ${detail.profile.losses} / ${detail.profile.draws}` },
+                      { label: 'Country', value: detail.profile.country ?? '—' },
+                    ]}
+                  />
+                )}
+
+                {detail.wallet && (
+                  <Section title="Wallet">
+                    <StatGrid
+                      items={[
+                        { label: 'Main', value: detail.wallet.balance.toLocaleString() },
+                        { label: 'Bonus', value: detail.wallet.bonusBalance.toLocaleString() },
+                        { label: 'Locked', value: detail.wallet.lockedBalance.toLocaleString() },
+                        { label: 'Reward', value: detail.wallet.rewardBalance.toLocaleString() },
+                        { label: 'Cashback', value: detail.wallet.cashbackBalance.toLocaleString() },
+                      ]}
+                    />
+                  </Section>
+                )}
+
+                {detail.statistics.length > 0 && (
+                  <Section title={`Game stats (${detail.statistics.length})`}>
+                    <Table
+                      headers={['Game', 'Played', 'Wins', 'Rating']}
+                      rows={detail.statistics.map((s) => [s.gameId ?? 'all', String(s.gamesPlayed), String(s.wins), String(s.rating)])}
+                    />
+                  </Section>
+                )}
+
+                {detail.transactions.length > 0 && (
+                  <Section title={`Transactions (${detail.transactions.length})`}>
+                    <Table
+                      headers={['Date', 'Type', 'Amount', 'Wallet']}
+                      rows={detail.transactions.map((t) => [
+                        new Date(t.createdAt).toLocaleDateString(),
+                        t.referenceType,
+                        `${t.amount > 0 ? '+' : ''}${t.amount.toLocaleString()}`,
+                        t.walletType,
+                      ])}
+                    />
+                  </Section>
+                )}
+
+                {detail.tickets.length > 0 && (
+                  <Section title={`Support tickets (${detail.tickets.length})`}>
+                    <Table
+                      headers={['Subject', 'Status', 'Priority']}
+                      rows={detail.tickets.map((t) => [t.subject, t.status, t.priority])}
+                    />
+                  </Section>
+                )}
+
+                {detail.referrals.length > 0 && (
+                  <Section title={`Referrals (${detail.referrals.length})`}>
+                    <Table
+                      headers={['Referral', 'Status', 'Commission']}
+                      rows={detail.referrals.map((r) => [
+                        r.referredUser.username ?? '—',
+                        r.status,
+                        r.commission.toLocaleString(),
+                      ])}
+                    />
+                  </Section>
+                )}
+
+                {detail.matches.length > 0 && (
+                  <Section title={`Recent matches (${detail.matches.length})`}>
+                    <Table
+                      headers={['Game', 'Result', 'Stake', 'Date']}
+                      rows={detail.matches.map((m) => [
+                        m.gameId,
+                        m.result,
+                        m.stake.toLocaleString(),
+                        new Date(m.createdAt).toLocaleDateString(),
+                      ])}
+                    />
+                  </Section>
+                )}
+
+                {detail.achievements.length > 0 && (
+                  <Section title={`Achievements (${detail.achievements.length})`}>
+                    <div className="flex flex-wrap gap-1.5">
+                      {detail.achievements.map((a) => (
+                        <span key={a.code} className="rounded-full bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-400">
+                          {a.icon} {a.title}
+                        </span>
+                      ))}
+                    </div>
+                  </Section>
+                )}
+
+                {detail.sessions.length > 0 && (
+                  <Section title={`Active sessions (${detail.sessions.length})`}>
+                    <Table
+                      headers={['Device', 'IP', 'Created']}
+                      rows={detail.sessions.map((s) => [
+                        `${s.deviceName ?? 'Unknown'}${s.isCurrent ? ' (current)' : ''}`,
+                        s.ip ?? '—',
+                        new Date(s.createdAt).toLocaleDateString(),
+                      ])}
+                    />
+                  </Section>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-bold text-muted-foreground">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function StatGrid({ items }: { items: Array<{ label: string; value: string }> }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {items.map((item) => (
+        <div key={item.label} className="rounded-lg border border-border bg-card p-3">
+          <p className="text-[11px] font-medium text-muted-foreground">{item.label}</p>
+          <p className="mt-0.5 text-sm font-bold">{item.value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border">
+      <table className="w-full">
+        <thead className="border-b border-border bg-muted/50">
+          <tr className="text-left text-xs text-muted-foreground">
+            {headers.map((h) => (
+              <th key={h} className="px-3 py-2">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className="border-b border-border last:border-0">
+              {row.map((cell, j) => (
+                <td key={j} className="px-3 py-2 text-sm">{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

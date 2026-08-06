@@ -1,19 +1,24 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { LogIn, Mail, Lock, Sparkles, Loader2 } from "lucide-react";
+import { LogIn, Mail, Lock, Sparkles, Loader2, Wrench } from "lucide-react";
 import { supabase } from "../../services/supabase";
 import { AuthLayout } from "./AuthLayout";
+import { useSettingsStore } from "../../store/settingsStore";
 
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: { pathname?: string; state?: unknown } } | null)?.from;
+  const settings = useSettingsStore((s) => s.settings);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [useMagicLink, setUseMagicLink] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const maintenanceEnabled = settings?.general?.maintenanceEnabled ?? false;
+  const maintenanceMessage = settings?.general?.maintenanceMessage ?? "";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +57,24 @@ export function LoginPage() {
       setSubmitting(false);
     }
   };
+
+  if (maintenanceEnabled) {
+    return (
+      <AuthLayout
+        title="Under Maintenance"
+        subtitle="We're working hard to improve the experience"
+      >
+        <div className="text-center space-y-4 py-2">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+            <Wrench className="w-7 h-7 text-amber-400" />
+          </div>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            {maintenanceMessage || "We are performing scheduled maintenance. Please check back soon."}
+          </p>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout

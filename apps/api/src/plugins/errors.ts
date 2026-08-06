@@ -34,6 +34,30 @@ export function registerErrorHandler(app: FastifyInstance): void {
     }
 
     request.log.error({ error }, "Unhandled error");
+
+    // Capture unhandled errors to the error center for operator triage
+    // (fire-and-forget; gated by the infra.errorCapture feature flag).
+    void import("../services/errors").then(async ({ captureError }) => {
+      const { isFeatureEnabled } = await import("../services/featureFlags");
+      const enabled = await isFeatureEnabled("infra.errorCapture").catch(() => true);
+      if (!enabled) return;
+      await captureError({
+        code: "INTERNAL_ERROR",
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : null,
+        severity: "HIGH",
+        source: "api",
+        path: request.url,
+        method: request.method,
+        userId: request.user?.id ?? null,
+        ip: request.ip,
+        userAgent:
+          typeof request.headers["user-agent"] === "string"
+            ? request.headers["user-agent"]
+            : null,
+      }).catch(() => undefined);
+    });
+
     return reply.status(500).send(toApiError(error));
   });
 

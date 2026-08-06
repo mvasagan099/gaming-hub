@@ -2,6 +2,8 @@ import { buildApp } from "./app";
 import { env } from "./env";
 import { prisma } from "@gaming-hub/db";
 
+const SCHEDULE_INTERVAL_MS = 15 * 60 * 1000;
+
 async function main() {
   const app = buildApp();
 
@@ -20,8 +22,20 @@ async function main() {
     process.exit(1);
   }
 
+  // Scheduled maintenance (tournament statuses, expired coupons, etc.). The
+  // automation service guards against overlap, so a slow run is safe.
+  const scheduler = setInterval(() => {
+    void import("./services/automation")
+      .then(({ runScheduledJobs }) => runScheduledJobs())
+      .catch((error) => app.log.error({ error }, "scheduled jobs: failed"));
+  }, SCHEDULE_INTERVAL_MS);
+  void import("./services/automation")
+    .then(({ runScheduledJobs }) => runScheduledJobs())
+    .catch((error) => app.log.error({ error }, "scheduled jobs: initial run failed"));
+
   const shutdown = async (signal: string) => {
     app.log.info({ signal }, "Shutting down");
+    clearInterval(scheduler);
     await app.close();
     await prisma.$disconnect();
     process.exit(0);

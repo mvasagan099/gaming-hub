@@ -121,49 +121,65 @@ export class CricketScene extends Phaser.Scene {
   private drawBackground() {
     const graphics = this.add.graphics();
 
-    // Sky
-    graphics.fillStyle(0x0f172a, 1); // Dark professional night sky
+    // Sky with gradient
+    graphics.fillGradientStyle(0x020617, 0x020617, 0x0f172a, 0x0f172a, 1);
     graphics.fillRect(0, 0, GAME_W, HORIZON_Y);
 
-    // Stadium Lights
-    graphics.fillStyle(0xffffff, 0.9);
-    graphics.fillCircle(100, 50, 15);
-    graphics.fillCircle(200, 30, 15);
-    graphics.fillCircle(GAME_W - 100, 50, 15);
-    graphics.fillCircle(GAME_W - 200, 30, 15);
+    // Starry night subtle effect
+    graphics.fillStyle(0xffffff, 0.5);
+    for (let i = 0; i < 50; i++) {
+      graphics.fillCircle(Math.random() * GAME_W, Math.random() * HORIZON_Y, Math.random() * 1.5);
+    }
+
+    // Stadium Lights (Glowing)
+    const drawLight = (x: number, y: number) => {
+      // Glow
+      graphics.fillStyle(0xffffff, 0.1);
+      graphics.fillCircle(x, y, 40);
+      graphics.fillStyle(0xffffff, 0.2);
+      graphics.fillCircle(x, y, 25);
+      // Core
+      graphics.fillStyle(0xffffff, 1);
+      graphics.fillCircle(x, y, 12);
+    };
+    
+    drawLight(100, 50);
+    drawLight(200, 30);
+    drawLight(GAME_W - 100, 50);
+    drawLight(GAME_W - 200, 30);
     
     // Light beams
-    graphics.fillStyle(0xffffff, 0.1);
+    graphics.fillGradientStyle(0xffffff, 0xffffff, 0xffffff, 0xffffff, 0.15, 0.15, 0, 0);
     graphics.fillTriangle(100, 50, 0, HORIZON_Y, 200, HORIZON_Y);
     graphics.fillTriangle(GAME_W - 100, 50, GAME_W - 200, HORIZON_Y, GAME_W, HORIZON_Y);
 
     // Stadium stands (layered behind crowd)
-    graphics.fillStyle(0x1e293b, 1); // Slate 800
-    graphics.fillRect(0, HORIZON_Y - 60, GAME_W, 60);
-    graphics.lineStyle(1, 0xffffff, 0.2);
+    graphics.fillStyle(0x0f172a, 1); // Darker stands
+    graphics.fillRect(0, HORIZON_Y - 70, GAME_W, 70);
+    graphics.lineStyle(2, 0x334155, 0.4);
     graphics.beginPath();
-    graphics.moveTo(0, HORIZON_Y - 15); graphics.lineTo(GAME_W, HORIZON_Y - 15);
-    graphics.moveTo(0, HORIZON_Y - 30); graphics.lineTo(GAME_W, HORIZON_Y - 30);
-    graphics.moveTo(0, HORIZON_Y - 45); graphics.lineTo(GAME_W, HORIZON_Y - 45);
+    graphics.moveTo(0, HORIZON_Y - 20); graphics.lineTo(GAME_W, HORIZON_Y - 20);
+    graphics.moveTo(0, HORIZON_Y - 40); graphics.lineTo(GAME_W, HORIZON_Y - 40);
+    graphics.moveTo(0, HORIZON_Y - 60); graphics.lineTo(GAME_W, HORIZON_Y - 60);
     graphics.strokePath();
 
     // Grass with professional stadium stripes
     for (let y = HORIZON_Y; y < GAME_H; y += 40) {
       const isDark = Math.floor((y - HORIZON_Y) / 40) % 2 === 0;
-      graphics.fillStyle(isDark ? 0x4d7c0f : 0x65a30d, 1); // Dark green vs vibrant green
+      // Using rich emerald/green hues
+      graphics.fillStyle(isDark ? 0x064e3b : 0x047857, 1);
       graphics.fillRect(0, y, GAME_W, 40);
     }
 
     // Horizon line (a white line representing stadium boundary)
-    graphics.lineStyle(4, 0xffffff, 1);
+    graphics.lineStyle(4, 0xffffff, 0.8);
     graphics.beginPath();
     graphics.moveTo(0, HORIZON_Y);
     graphics.lineTo(GAME_W, HORIZON_Y);
     graphics.strokePath();
-    // Crowd is drawn separately with sprites
 
-    // Pitch (Trapezoid)
-    graphics.fillStyle(0xd97706, 1); // amber dirt color
+    // Pitch (Trapezoid) with gradient
+    graphics.fillGradientStyle(0xb45309, 0xb45309, 0xd97706, 0xd97706, 1); // Rich amber/dirt color
     graphics.beginPath();
     graphics.moveTo(CENTER_X - PITCH_TOP_W / 2, PITCH_TOP_Y);
     graphics.lineTo(CENTER_X + PITCH_TOP_W / 2, PITCH_TOP_Y);
@@ -173,19 +189,17 @@ export class CricketScene extends Phaser.Scene {
     graphics.fillPath();
 
     // Creases (Perspective lines)
-    graphics.lineStyle(3, 0xffffff, 0.8);
+    graphics.lineStyle(4, 0xffffff, 0.9);
     // Top crease
     graphics.beginPath();
-    graphics.moveTo(CENTER_X - PITCH_TOP_W/2 - 10, PITCH_TOP_Y + 20);
-    graphics.lineTo(CENTER_X + PITCH_TOP_W/2 + 10, PITCH_TOP_Y + 20);
+    graphics.moveTo(CENTER_X - PITCH_TOP_W/2 - 15, PITCH_TOP_Y + 20);
+    graphics.lineTo(CENTER_X + PITCH_TOP_W/2 + 15, PITCH_TOP_Y + 20);
     graphics.strokePath();
     // Bottom crease
     graphics.beginPath();
-    graphics.moveTo(CENTER_X - PITCH_BOT_W/2 + 20, PITCH_BOT_Y - 40);
-    graphics.lineTo(CENTER_X + PITCH_BOT_W/2 - 20, PITCH_BOT_Y - 40);
+    graphics.moveTo(CENTER_X - PITCH_BOT_W/2 + 25, PITCH_BOT_Y - 40);
+    graphics.lineTo(CENTER_X + PITCH_BOT_W/2 - 25, PITCH_BOT_Y - 40);
     graphics.strokePath();
-
-    // Stumps and bails are now drawn as separate objects in createPlayers()
   }
 
   private generateTextures() {
@@ -1041,6 +1055,7 @@ export class CricketScene extends Phaser.Scene {
   }
 
   private playWicketAnimation() {
+    this.cameras.main.shake(300, 0.02); // Add screen shake for impact
     // Dramatic Bails and Stumps falling animation
     const bailsTargetY = this.role === 'bowling' ? PITCH_TOP_Y - 40 : PITCH_BOT_Y - 80;
     const bailsGroundY = this.role === 'bowling' ? PITCH_TOP_Y + 10 : PITCH_BOT_Y + 20;

@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Check, Palette, Volume2 } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Check, Palette, Volume2, ShieldCheck, MonitorSmartphone, LogOut } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Switch } from '../../components/ui/Switch';
 import { Select } from '../../components/ui/Select';
+import { Button } from '../../components/ui/Button';
+import type { LoginSession } from '@gaming-hub/shared';
+import { sessionsApi } from '../../services/api/enterprise';
 import {
   ACCENTS,
   ACCENT_SWATCHES,
@@ -146,6 +149,133 @@ export const SettingsPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      <SessionsCard />
     </div>
   );
 };
+
+function SessionsCard() {
+  const [sessions, setSessions] = useState<LoginSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setSessions(await sessionsApi.list());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load sessions');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const revoke = async (id: string) => {
+    setBusyId(id);
+    try {
+      await sessionsApi.revoke(id);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke session');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const revokeAll = async () => {
+    setBusyId('all');
+    try {
+      await sessionsApi.revokeAll();
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke sessions');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-accent-500" /> Account & Security
+        </CardTitle>
+        <CardDescription>
+          Devices currently signed into your account. Revoke any session you don't recognize.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-3">
+        {error && (
+          <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-600 dark:text-rose-400">
+            {error}
+          </p>
+        )}
+
+        {loading ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">Loading sessions…</p>
+        ) : sessions.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            No active sessions found.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {sessions.map((s) => (
+              <li
+                key={s.id}
+                className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 p-4"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <MonitorSmartphone className="w-4 h-4 shrink-0 text-slate-400" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">
+                      {s.deviceName ?? 'Unknown device'}
+                      {s.isCurrent && (
+                        <span className="ml-2 rounded-full bg-accent-500/10 px-2 py-0.5 text-[10px] font-bold text-accent-600 dark:text-accent-400">
+                          This device
+                        </span>
+                      )}
+                    </p>
+                    <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                      {s.ip ?? 'Unknown IP'} · {formatSessionDate(s.createdAt)}
+                      {s.expiresAt ? ` · expires ${formatSessionDate(s.expiresAt)}` : ''}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => revoke(s.id)}
+                  disabled={busyId !== null || s.isCurrent}
+                  title={s.isCurrent ? 'This is the session you are using' : 'Revoke session'}
+                >
+                  <LogOut className="w-3.5 h-3.5 mr-1" />
+                  {busyId === s.id ? 'Revoking…' : 'Revoke'}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {sessions.length > 1 && (
+          <Button variant="outline" size="sm" onClick={revokeAll} disabled={busyId !== null}>
+            <ShieldCheck className="w-3.5 h-3.5 mr-1" />
+            {busyId === 'all' ? 'Revoking…' : 'Sign out all other devices'}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatSessionDate(iso: string | null): string {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString();
+}

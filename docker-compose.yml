@@ -41,7 +41,7 @@ services:
     command:
       - sh
       - -c
-      - npx prisma db push --schema packages/db/prisma/schema.prisma --skip-generate
+      - npx prisma db push --schema packages/db/prisma/schema.prisma --skip-generate --accept-data-loss
     environment:
       DATABASE_URL: postgresql://gaming:gaming@postgres:5432/gaming_hub
     depends_on:

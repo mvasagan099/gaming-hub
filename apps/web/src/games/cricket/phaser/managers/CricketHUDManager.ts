@@ -84,75 +84,79 @@ export class CricketHUDManager {
   private createScorecard() {
     const depth = 20;
 
-    // Best Score Badge
+    // Best Score Badge (Sleek pill)
     const bestBg = this.scene.add.graphics();
-    bestBg.fillStyle(0xf59e0b, 1);
-    bestBg.fillRoundedRect(CENTER_X - 50, 5, 100, 25, 6);
-    bestBg.setDepth(depth + 2); // above blue box
+    bestBg.fillStyle(0x0f172a, 0.9); // Dark slate
+    bestBg.fillRoundedRect(CENTER_X - 60, 5, 120, 25, 12);
+    bestBg.lineStyle(2, 0xf59e0b, 0.5); // Amber glow border
+    bestBg.strokeRoundedRect(CENTER_X - 60, 5, 120, 25, 12);
+    bestBg.setDepth(depth + 2);
     
     this.bestScoreText = this.scene.add.text(CENTER_X, 17, "BEST: 0", {
-      fontSize: "16px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+      fontSize: "14px", color: "#f59e0b", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
     }).setOrigin(0.5).setDepth(depth + 3);
 
-    // Card background
+    // Card background (Broadcast style)
     const bg = this.scene.add.graphics();
-    bg.fillStyle(0x3b82f6, 1); // blue-500
-    bg.fillRoundedRect(CENTER_X - 75, 20, 150, 80, 8);
-    bg.lineStyle(4, 0xffffff, 1);
-    bg.strokeRoundedRect(CENTER_X - 75, 20, 150, 80, 8);
+    bg.fillGradientStyle(0x1e3a8a, 0x1e3a8a, 0x0f172a, 0x0f172a, 0.9); // Blue gradient
+    bg.fillRoundedRect(CENTER_X - 90, 20, 180, 85, 12);
+    bg.lineStyle(2, 0x60a5fa, 0.6); // Light blue border
+    bg.strokeRoundedRect(CENTER_X - 90, 20, 180, 85, 12);
     bg.setDepth(depth);
 
     // Runs
     this.runsText = this.scene.add.text(CENTER_X, 60, "000", {
-      font: "bold 60px Arial", color: "#ffffff"
+      fontSize: "64px", fontFamily: "Outfit, sans-serif", fontStyle: "900", color: "#ffffff", stroke: "#000000", strokeThickness: 4
     }).setOrigin(0.5).setDepth(depth + 1);
+    this.runsText.setShadow(0, 4, 'rgba(0,0,0,0.5)', 8, true, false);
 
     // Status Text
-    this.statusText = this.scene.add.text(CENTER_X, 120, this.role === 'batting' ? "Ready for First Ball!" : "Your turn to bowl!", {
-      fontSize: "24px", color: COLORS.text, fontFamily: "Outfit, sans-serif", fontStyle: "bold",
-      align: "center", stroke: "#000000", strokeThickness: 4
+    this.statusText = this.scene.add.text(CENTER_X, 125, this.role === 'batting' ? "Ready for First Ball!" : "Your turn to bowl!", {
+      fontSize: "20px", color: COLORS.accent, fontFamily: "Outfit, sans-serif", fontStyle: "bold",
+      align: "center", stroke: "#000000", strokeThickness: 3
     }).setOrigin(0.5).setDepth(depth);
+    this.statusText.setShadow(0, 2, 'rgba(0,0,0,0.8)', 4, true, false);
 
     // Target Box
     const targetBg = this.scene.add.graphics();
-    targetBg.fillStyle(0x0f172a, 0.8);
-    targetBg.fillRoundedRect(20, 20, 140, 50, 8);
-    targetBg.lineStyle(2, 0x475569, 1);
-    targetBg.strokeRoundedRect(20, 20, 140, 50, 8);
+    targetBg.fillGradientStyle(0x0f172a, 0x0f172a, 0x1e293b, 0x1e293b, 0.85);
+    targetBg.fillRoundedRect(20, 20, 150, 55, 10);
+    targetBg.lineStyle(2, 0xfbbf24, 0.4);
+    targetBg.strokeRoundedRect(20, 20, 150, 55, 10);
     targetBg.setDepth(depth);
 
-    this.targetText = this.scene.add.text(90, 45, "TARGET: --", {
-      fontSize: "18px", color: "#fbbf24", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+    this.targetText = this.scene.add.text(95, 47, "TARGET: --", {
+      fontSize: "20px", color: "#fbbf24", fontStyle: "900", fontFamily: "Outfit, sans-serif"
     }).setOrigin(0.5).setDepth(depth + 1);
 
     // Balls Box
     const ballsBg = this.scene.add.graphics();
-    ballsBg.fillStyle(0x0f172a, 0.8);
-    ballsBg.fillRoundedRect(GAME_W - 160, 20, 140, 50, 8);
-    ballsBg.lineStyle(2, 0x475569, 1);
-    ballsBg.strokeRoundedRect(GAME_W - 160, 20, 140, 50, 8);
+    ballsBg.fillGradientStyle(0x0f172a, 0x0f172a, 0x1e293b, 0x1e293b, 0.85);
+    ballsBg.fillRoundedRect(GAME_W - 170, 20, 150, 55, 10);
+    ballsBg.lineStyle(2, 0x60a5fa, 0.4);
+    ballsBg.strokeRoundedRect(GAME_W - 170, 20, 150, 55, 10);
     ballsBg.setDepth(depth);
 
-    this.ballsText = this.scene.add.text(GAME_W - 90, 45, "BALLS: 0/0", {
-      fontSize: "18px", color: "#60a5fa", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+    this.ballsText = this.scene.add.text(GAME_W - 95, 47, "BALLS: 0/0", {
+      fontSize: "20px", color: "#60a5fa", fontStyle: "900", fontFamily: "Outfit, sans-serif"
     }).setOrigin(0.5).setDepth(depth + 1);
 
-    // Over History Strip
+    // Over History Strip (Sleek modern boxes)
     const stripY = 160;
-    const stripWidth = 6 * 40; // 6 boxes, 40px each
+    const stripWidth = 6 * 44; // 6 boxes, 44px each (with spacing)
     const startX = CENTER_X - stripWidth / 2;
     for (let i = 0; i < 6; i++) {
-      const bx = startX + i * 40;
+      const bx = startX + i * 44;
       
       const box = this.scene.add.graphics();
-      box.fillStyle(0x1e293b, 0.8);
-      box.fillRoundedRect(bx, stripY, 32, 32, 4);
-      box.lineStyle(2, 0x334155, 1);
-      box.strokeRoundedRect(bx, stripY, 32, 32, 4);
+      box.fillStyle(0x0f172a, 0.8);
+      box.fillRoundedRect(bx, stripY, 36, 36, 6);
+      box.lineStyle(2, 0x334155, 0.8);
+      box.strokeRoundedRect(bx, stripY, 36, 36, 6);
       box.setDepth(depth);
       
-      const txt = this.scene.add.text(bx + 16, stripY + 16, "-", {
-        fontSize: "16px", color: "#94a3b8", fontStyle: "bold"
+      const txt = this.scene.add.text(bx + 18, stripY + 18, "-", {
+        fontSize: "20px", color: "#94a3b8", fontStyle: "900", fontFamily: "Outfit, sans-serif"
       }).setOrigin(0.5).setDepth(depth + 1);
       
       this.overHistoryBoxes.push(box);
@@ -162,62 +166,70 @@ export class CricketHUDManager {
 
 
   private createPowerBar() {
-    const barWidth = 300;
-    const barHeight = 20;
+    const barWidth = 340;
+    const barHeight = 24;
     const barX = CENTER_X - barWidth / 2;
-    const barY = GAME_H - 160; // Just above the buttons
+    const barY = GAME_H - 170; // Adjusted for new design
     const depth = 20;
 
-    // Bar background
+    // Bar background with glowing border
     const bg = this.scene.add.graphics();
-    bg.fillStyle(0x1e293b, 1); // slate-800
-    bg.fillRoundedRect(barX, barY, barWidth, barHeight, 10);
-    bg.lineStyle(3, 0x475569, 1); // slate-600 outline
-    bg.strokeRoundedRect(barX, barY, barWidth, barHeight, 10);
+    bg.fillStyle(0x0f172a, 0.9);
+    bg.fillRoundedRect(barX - 4, barY - 4, barWidth + 8, barHeight + 8, 14);
+    bg.lineStyle(2, 0x38bdf8, 0.5); // Sky blue border
+    bg.strokeRoundedRect(barX - 4, barY - 4, barWidth + 8, barHeight + 8, 14);
     bg.setDepth(depth);
 
-    // Gradient or colored sections could be added here, but let's keep it simple
-    // Green in middle, red on edges
-    bg.fillStyle(0xf43f5e, 1); // red
-    bg.fillRoundedRect(barX + 5, barY + 5, 40, barHeight - 10, 5);
-    bg.fillRoundedRect(barX + barWidth - 45, barY + 5, 40, barHeight - 10, 5);
+    // Gradient Power Sections
+    bg.fillGradientStyle(0xf43f5e, 0xf43f5e, 0x9f1239, 0x9f1239, 1); // Red edges
+    bg.fillRoundedRect(barX, barY, 40, barHeight, 8);
+    bg.fillRoundedRect(barX + barWidth - 40, barY, 40, barHeight, 8);
     
-    bg.fillStyle(0xeab308, 1); // yellow
-    bg.fillRoundedRect(barX + 45, barY + 5, 50, barHeight - 10, 5);
-    bg.fillRoundedRect(barX + barWidth - 95, barY + 5, 50, barHeight - 10, 5);
+    bg.fillGradientStyle(0xeab308, 0xeab308, 0x854d0e, 0x854d0e, 1); // Yellow transition
+    bg.fillRoundedRect(barX + 35, barY, 50, barHeight, 4);
+    bg.fillRoundedRect(barX + barWidth - 85, barY, 50, barHeight, 4);
     
-    bg.fillStyle(0x22c55e, 1); // green (sweet spot)
-    bg.fillRoundedRect(barX + 95, barY + 5, barWidth - 190, barHeight - 10, 5);
+    bg.fillGradientStyle(0x22c55e, 0x22c55e, 0x166534, 0x166534, 1); // Green sweet spot
+    bg.fillRoundedRect(barX + 80, barY, barWidth - 160, barHeight, 4);
 
-    // Indicator
+    // Glowing Indicator
     this.powerBarIndicator = this.scene.add.graphics();
     this.powerBarIndicator.fillStyle(0xffffff, 1);
-    this.powerBarIndicator.fillRoundedRect(barX, barY - 5, 10, barHeight + 10, 4);
+    this.powerBarIndicator.fillRoundedRect(barX, barY - 6, 8, barHeight + 12, 4);
     this.powerBarIndicator.setDepth(depth + 1);
 
+    // Add a glowing halo to the indicator
+    const glow = this.scene.add.graphics();
+    glow.fillStyle(0xffffff, 0.4);
+    glow.fillCircle(barX + 4, barY + barHeight/2, 12);
+    glow.setDepth(depth);
+
     // Tween to move indicator back and forth
-    // We use a dummy object to tween a value, then update the graphics position
     const dummy = { val: 0 };
     this.powerBarTween = this.scene.tweens.add({
       targets: dummy,
       val: 1,
-      duration: 800, // speed of the bar
+      duration: 700, // Slightly faster for excitement
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
       onUpdate: () => {
         this.currentPower = dummy.val;
         if (this.powerBarIndicator) {
+          const xPos = barX + (barWidth - 8) * this.currentPower;
+          
           this.powerBarIndicator.clear();
           this.powerBarIndicator.fillStyle(0xffffff, 1);
-          // 0 = leftmost, 1 = rightmost
-          const xPos = barX + (barWidth - 10) * this.currentPower;
-          this.powerBarIndicator.fillRoundedRect(xPos, barY - 5, 10, barHeight + 10, 4);
+          this.powerBarIndicator.fillRoundedRect(xPos, barY - 6, 8, barHeight + 12, 4);
+          
+          glow.clear();
+          glow.fillStyle(0xffffff, 0.4);
+          glow.fillCircle(xPos + 4, barY + barHeight/2, 12);
         }
       }
     });
 
-    this.controlElements.push(bg, this.powerBarIndicator);
+    this.controlElements.push(bg, this.powerBarIndicator, glow);
   }
 
   private createControls() {

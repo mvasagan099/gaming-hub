@@ -91,6 +91,21 @@ html[data-accent="cyan"] {
   --color-accent-900: #164e63;
 }
 
+/* Custom brand accent: shades are derived from --custom-accent (a 6-digit hex
+   set by the site settings → general.primaryColor admin configuration). */
+html[data-accent="custom"] {
+  --color-accent-500: var(--custom-accent, #6366f1);
+  --color-accent-600: color-mix(in srgb, var(--color-accent-500) 82%, black);
+  --color-accent-700: color-mix(in srgb, var(--color-accent-500) 64%, black);
+  --color-accent-800: color-mix(in srgb, var(--color-accent-500) 46%, black);
+  --color-accent-900: color-mix(in srgb, var(--color-accent-500) 28%, black);
+  --color-accent-400: color-mix(in srgb, var(--color-accent-500) 82%, white);
+  --color-accent-300: color-mix(in srgb, var(--color-accent-500) 64%, white);
+  --color-accent-200: color-mix(in srgb, var(--color-accent-500) 46%, white);
+  --color-accent-100: color-mix(in srgb, var(--color-accent-500) 28%, white);
+  --color-accent-50: color-mix(in srgb, var(--color-accent-500) 14%, white);
+}
+
 body {
   margin: 0;
   font-family: 'Outfit', sans-serif;

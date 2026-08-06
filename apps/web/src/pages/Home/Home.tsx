@@ -7,6 +7,7 @@ import { CategoryCard } from '../../components/CategoryCard/CategoryCard';
 import { GAMES_DATA } from '../../data/games';
 import { Sparkles, Clock, Flame, Trophy, Play, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useSettingsStore } from '../../store/settingsStore';
 
 const gamesList: GameMetadata[] = GAMES_DATA.map(g => ({
   id: g.id as GameId,
@@ -83,6 +84,10 @@ const banners = [
 export const Home: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const settings = useSettingsStore((s) => s.settings);
+
+  const disabledGames = new Set(settings?.game?.disabledGames ?? []);
+  const playableGamesList = gamesList.filter((g) => !disabledGames.has(g.id));
 
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState(() => {
@@ -121,10 +126,10 @@ export const Home: React.FC = () => {
 
 
 
-  const recentlyPlayed = gamesList.slice(0, 3);
-  const popularGames = gamesList.filter(g => g.isHot);
+  const recentlyPlayed = playableGamesList.slice(0, 3);
+  const popularGames = playableGamesList.filter(g => g.isHot);
 
-  const filteredGames = gamesList.filter(g => {
+  const filteredGames = playableGamesList.filter(g => {
     const matchesCat = selectedCategory === 'All' || g.category === selectedCategory;
     const matchesSearch = g.title.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCat && matchesSearch;
@@ -132,6 +137,7 @@ export const Home: React.FC = () => {
 
   const handleStartGame = (gameId: GameId, mode: 'ai' | 'multiplayer', stake: number) => {
     setModalGame(null);
+    if (disabledGames.has(gameId)) return;
     if (mode === 'multiplayer') {
       navigate(`/lobby/${gameId}`, { state: { mode, stake } });
     } else {
@@ -168,7 +174,7 @@ export const Home: React.FC = () => {
             <button
               onClick={() => {
                 if (banners[currentBannerIndex].targetGame) {
-                  const target = gamesList.find(g => g.id === banners[currentBannerIndex].targetGame);
+                  const target = playableGamesList.find(g => g.id === banners[currentBannerIndex].targetGame);
                   if (target) setModalGame(target);
                 } else {
                   // For the browse all games button, scroll to games grid

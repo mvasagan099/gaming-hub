@@ -16,6 +16,15 @@ import {
   Play,
   Check,
   CornerDownLeft,
+  Swords,
+  MessageCircle,
+  Megaphone,
+  Gift,
+  Ticket as TicketIcon,
+  LifeBuoy,
+  Users,
+  Bell,
+  Medal,
 } from 'lucide-react';
 import { router } from '../router';
 import { GAMES_DATA } from '../data/games';
@@ -94,6 +103,78 @@ export default function CommandPalette() {
         group: 'Navigate',
         icon: <Settings className={ICON_CLS} />,
         onSelect: () => (session ? go('/settings') : go('/login')),
+      },
+      {
+        id: 'nav-tournaments',
+        label: 'Tournaments',
+        keywords: 'tournament compete prize brackets',
+        group: 'Navigate',
+        icon: <Swords className={ICON_CLS} />,
+        onSelect: () => (session ? go('/tournaments') : go('/login')),
+      },
+      {
+        id: 'nav-messages',
+        label: 'Messages',
+        keywords: 'messages chat dm inbox',
+        group: 'Navigate',
+        icon: <MessageCircle className={ICON_CLS} />,
+        onSelect: () => (session ? go('/messages') : go('/login')),
+      },
+      {
+        id: 'nav-friends',
+        label: 'Friends',
+        keywords: 'friends add invite players',
+        group: 'Navigate',
+        icon: <Users className={ICON_CLS} />,
+        onSelect: () => (session ? go('/friends') : go('/login')),
+      },
+      {
+        id: 'nav-achievements',
+        label: 'Achievements',
+        keywords: 'achievements badges trophies rewards xp',
+        group: 'Navigate',
+        icon: <Medal className={ICON_CLS} />,
+        onSelect: () => (session ? go('/achievements') : go('/login')),
+      },
+      {
+        id: 'nav-notifications',
+        label: 'Notifications',
+        keywords: 'notifications alerts bell unread',
+        group: 'Navigate',
+        icon: <Bell className={ICON_CLS} />,
+        onSelect: () => (session ? go('/notifications') : go('/login')),
+      },
+      {
+        id: 'nav-announcements',
+        label: 'Announcements',
+        keywords: 'announcements news updates alerts',
+        group: 'Navigate',
+        icon: <Megaphone className={ICON_CLS} />,
+        onSelect: () => (session ? go('/announcements') : go('/login')),
+      },
+      {
+        id: 'nav-referrals',
+        label: 'Referrals',
+        keywords: 'referrals invite friends earn',
+        group: 'Navigate',
+        icon: <Gift className={ICON_CLS} />,
+        onSelect: () => (session ? go('/referrals') : go('/login')),
+      },
+      {
+        id: 'nav-coupons',
+        label: 'Coupons',
+        keywords: 'coupons promo codes redeem',
+        group: 'Navigate',
+        icon: <TicketIcon className={ICON_CLS} />,
+        onSelect: () => (session ? go('/coupons') : go('/login')),
+      },
+      {
+        id: 'nav-support',
+        label: 'Support',
+        keywords: 'support tickets help contact',
+        group: 'Navigate',
+        icon: <LifeBuoy className={ICON_CLS} />,
+        onSelect: () => (session ? go('/tickets') : go('/login')),
       },
       {
         id: 'theme-toggle',
@@ -178,12 +259,13 @@ export default function CommandPalette() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = q
+    let list = q
       ? items.filter(
           (item) =>
             item.label.toLowerCase().includes(q) || item.keywords.toLowerCase().includes(q)
         )
-      : items;
+      : items.filter((item) => item.group !== 'Actions');
+    if (list.length === 0 && q) list = items;
     return list.slice(0, 40);
   }, [items, query]);
 

@@ -1,5 +1,6 @@
 import { prisma } from "@gaming-hub/db";
 import type { Achievement } from "@gaming-hub/shared";
+import { applyTransaction } from "./wallet";
 
 /**
  * Data-driven achievement evaluation. Each seeded definition carries a
@@ -12,7 +13,21 @@ type AchievementCondition =
   | { rule: "games"; count: number }
   | { rule: "game-win"; gameId: string }
   | { rule: "game-games"; gameId: string; count: number }
-  | { rule: "level"; level: number };
+  | { rule: "level"; level: number }
+  | { rule: "referrals"; count: number }
+  | { rule: "friends"; count: number }
+  | { rule: "wallet-balance"; min: number }
+  | { rule: "tournament-wins"; count: number }
+  | { rule: "referral-rewards"; count: number }
+  | { rule: "xp"; count: number };
+
+interface AchievementReward {
+  reward?: { coins?: number; title?: string };
+}
+
+function rewardOf(condition: AchievementCondition): AchievementReward["reward"] {
+  return (condition as AchievementCondition & AchievementReward).reward;
+}
 
 export async function listAchievementDefinitions(): Promise<Achievement[]> {
   const rows = await prisma.achievement.findMany({ orderBy: { xpReward: "desc" } });
@@ -45,14 +60,20 @@ export async function getMyAchievements(userId: string) {
 export interface AchievementContext {
   userId: string;
   matchResult?: { won: boolean; gameId: string };
+  referralCount?: number;
+  referralRewards?: number;
+  friendsCount?: number;
+  tournamentWins?: number;
+  walletBalance?: number;
 }
 
 export async function checkAndUnlock(userId: string, ctx: AchievementContext) {
-  const [definitions, unlocked, statistics, profile] = await Promise.all([
+  const [definitions, unlocked, statistics, profile, wallet] = await Promise.all([
     prisma.achievement.findMany(),
     prisma.userAchievement.findMany({ where: { userId }, select: { achievementId: true } }),
     prisma.playerStatistic.findMany({ where: { userId } }),
     prisma.profile.findUnique({ where: { userId } }),
+    prisma.wallet.findUnique({ where: { userId } }),
   ]);
 
   const unlockedIds = new Set(unlocked.map((u) => u.achievementId));
@@ -60,14 +81,35 @@ export async function checkAndUnlock(userId: string, ctx: AchievementContext) {
   const totalGames = statistics.reduce((sum, s) => sum + s.gamesPlayed, 0);
   const totalWins = statistics.reduce((sum, s) => sum + s.wins, 0);
 
-  const newlyUnlocked: { code: string; title: string; description: string; icon: string; xpReward: number }[] = [];
+  const newlyUnlocked: {
+    code: string;
+    title: string;
+    description: string;
+    icon: string;
+    xpReward: number;
+    coinReward: number;
+  }[] = [];
 
   const toUnlock: string[] = [];
+
+  const env: ConditionEnv = {
+    statsByGame,
+    totalGames,
+    totalWins,
+    level: profile?.level ?? 1,
+    xp: profile?.xp ?? 0,
+    referrals: ctx.referralCount ?? 0,
+    referralRewards: ctx.referralRewards ?? 0,
+    friends: ctx.friendsCount ?? 0,
+    tournamentWins: ctx.tournamentWins ?? 0,
+    walletBalance: ctx.walletBalance ?? wallet?.balance ?? 0,
+    ctx,
+  };
 
   for (const def of definitions) {
     if (unlockedIds.has(def.id)) continue;
     const condition = (def.condition as unknown as AchievementCondition) ?? { rule: "level", level: 99 };
-    if (evaluateCondition(condition, { statsByGame, totalGames, totalWins, level: profile?.level ?? 1, ctx })) {
+    if (evaluateCondition(condition, env)) {
       toUnlock.push(def.id);
       newlyUnlocked.push({
         code: def.code,
@@ -75,20 +117,29 @@ export async function checkAndUnlock(userId: string, ctx: AchievementContext) {
         description: def.description,
         icon: def.icon,
         xpReward: def.xpReward,
+        coinReward: rewardOf(condition)?.coins ?? 0,
       });
     }
   }
 
   if (toUnlock.length > 0) {
-    await prisma.$transaction([
-      ...toUnlock.map((achievementId) =>
-        prisma.userAchievement.create({ data: { userId, achievementId } }),
-      ),
-      prisma.profile.update({
-        where: { userId },
-        data: { xp: { increment: newlyUnlocked.reduce((sum, a) => sum + a.xpReward, 0) } },
-      }),
-    ]);
+    const xpTotal = newlyUnlocked.reduce((sum, a) => sum + a.xpReward, 0);
+    const coinTotal = newlyUnlocked.reduce((sum, a) => sum + a.coinReward, 0);
+
+    await prisma.$transaction(async (tx) => {
+      for (const achievementId of toUnlock) {
+        await tx.userAchievement.create({ data: { userId, achievementId } });
+      }
+      if (xpTotal > 0) {
+        await tx.profile.update({
+          where: { userId },
+          data: { xp: { increment: xpTotal } },
+        });
+      }
+      if (coinTotal > 0) {
+        await applyTransaction(tx, userId, coinTotal, "REWARD_CREDIT", null, { via: "achievement" }, "REWARD");
+      }
+    });
   }
 
   return newlyUnlocked;
@@ -99,6 +150,12 @@ interface ConditionEnv {
   totalGames: number;
   totalWins: number;
   level: number;
+  xp: number;
+  referrals: number;
+  referralRewards: number;
+  friends: number;
+  tournamentWins: number;
+  walletBalance: number;
   ctx: AchievementContext;
 }
 
@@ -120,5 +177,17 @@ function evaluateCondition(condition: AchievementCondition, env: ConditionEnv): 
     }
     case "level":
       return env.level >= condition.level;
+    case "xp":
+      return env.xp >= condition.count;
+    case "referrals":
+      return env.referrals >= condition.count;
+    case "referral-rewards":
+      return env.referralRewards >= condition.count;
+    case "friends":
+      return env.friends >= condition.count;
+    case "tournament-wins":
+      return env.tournamentWins >= condition.count;
+    case "wallet-balance":
+      return env.walletBalance >= condition.min;
   }
 }

@@ -1,4 +1,4 @@
-import { Home, Trophy, User, Settings, Wallet } from "lucide-react";
+import { Home, Trophy, User, Settings, Wallet, Gift, Ticket, Megaphone, MessageCircle, Swords, LifeBuoy, Bell, Users, Medal } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 const menus = [
@@ -6,6 +6,15 @@ const menus = [
   { name: "Leaderboard", icon: Trophy, path: "/leaderboard" },
   { name: "Profile", icon: User, path: "/profile" },
   { name: "Wallet", icon: Wallet, path: "/wallet" },
+  { name: "Tournaments", icon: Swords, path: "/tournaments" },
+  { name: "Messages", icon: MessageCircle, path: "/messages" },
+  { name: "Friends", icon: Users, path: "/friends" },
+  { name: "Achievements", icon: Medal, path: "/achievements" },
+  { name: "Notifications", icon: Bell, path: "/notifications" },
+  { name: "Announcements", icon: Megaphone, path: "/announcements" },
+  { name: "Referrals", icon: Gift, path: "/referrals" },
+  { name: "Coupons", icon: Ticket, path: "/coupons" },
+  { name: "Support", icon: LifeBuoy, path: "/tickets" },
   { name: "Settings", icon: Settings, path: "/settings" },
 ];
 

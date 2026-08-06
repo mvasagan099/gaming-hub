@@ -4,6 +4,7 @@ import { AppError, respondFriendRequestSchema, sendFriendRequestSchema } from "@
 import { authenticate } from "../plugins/authenticate";
 import { requireUser, parseSchema, routeParams } from "../lib/http";
 import { toPublicProfile } from "../services/users";
+import { checkAndUnlock } from "../services/achievements";
 
 export async function friendsRoutes(app: FastifyInstance) {
   app.get("/api/friends", { preHandler: authenticate }, async (request) => {
@@ -99,6 +100,16 @@ export async function friendsRoutes(app: FastifyInstance) {
       prisma.user.findUnique({ where: { id: rel.addresseeId }, include: { profile: true } }),
     ]);
 
+    // Evaluate social achievements for both sides of the new friendship.
+    await Promise.all([
+      countAcceptedFriends(rel.requesterId).then((count) =>
+        checkAndUnlock(rel.requesterId, { userId: rel.requesterId, friendsCount: count }),
+      ),
+      countAcceptedFriends(rel.addresseeId).then((count) =>
+        checkAndUnlock(rel.addresseeId, { userId: rel.addresseeId, friendsCount: count }),
+      ),
+    ]);
+
     return { ok: true, friend: requester ? toPublicProfile(requester) : null };
   });
 
@@ -121,5 +132,14 @@ export async function friendsRoutes(app: FastifyInstance) {
 
     await prisma.friend.delete({ where: { id: rel.id } });
     return { ok: true };
+  });
+}
+
+async function countAcceptedFriends(userId: string): Promise<number> {
+  return prisma.friend.count({
+    where: {
+      status: "ACCEPTED",
+      OR: [{ requesterId: userId }, { addresseeId: userId }],
+    },
   });
 }

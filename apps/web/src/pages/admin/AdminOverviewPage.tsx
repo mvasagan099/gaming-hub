@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../../services/api/client';
+import { adminApi } from '../../services/api/enterprise';
+import type { HealthCheckResult } from '@gaming-hub/shared';
 
 interface Stats {
   totalUsers: number;
@@ -9,6 +11,20 @@ interface Stats {
   activeRooms: number;
 }
 
+const HEALTH_LABELS: Record<string, string> = {
+  api: 'API Server',
+  database: 'Database',
+  socket: 'Socket Server',
+  redis: 'Redis Cache',
+  disk: 'Disk Space',
+};
+
+const STATUS_STYLES: Record<HealthCheckResult['status'], string> = {
+  up: 'bg-green-500/10 text-green-600',
+  degraded: 'bg-yellow-500/10 text-yellow-600',
+  down: 'bg-red-500/10 text-red-600',
+};
+
 export function AdminOverviewPage() {
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,
@@ -16,15 +32,17 @@ export function AdminOverviewPage() {
     totalMatches: 0,
     activeRooms: 0,
   });
+  const [health, setHealth] = useState<HealthCheckResult[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function loadStats() {
       try {
-        const [users, matches, rooms] = await Promise.all([
+        const [users, matches, rooms, checks] = await Promise.all([
           apiClient.get<{ total: number }>('/admin/users?page=1&pageSize=1').catch(() => ({ total: 0 })),
           apiClient.get<{ total: number }>('/admin/matches?page=1&pageSize=1').catch(() => ({ total: 0 })),
           apiClient.get<any[]>('/admin/rooms').catch(() => []),
+          adminApi.monitoringHealth().catch(() => null),
         ]);
 
         setStats({
@@ -33,6 +51,7 @@ export function AdminOverviewPage() {
           totalMatches: matches.total,
           activeRooms: Array.isArray(rooms) ? rooms.length : 0,
         });
+        setHealth(checks);
       } catch {
         setStats({ totalUsers: 0, activeUsers: 0, totalMatches: 0, activeRooms: 0 });
       } finally {
@@ -41,6 +60,8 @@ export function AdminOverviewPage() {
     }
     loadStats();
   }, []);
+
+  const allUp = health ? health.every((h) => h.status === 'up') : null;
 
   return (
     <div>
@@ -121,33 +142,73 @@ export function AdminOverviewPage() {
             >
               View Audit Logs
             </Link>
+            <Link
+              to="/admin/analytics"
+              className="block rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              View Analytics
+            </Link>
+            <Link
+              to="/admin/monitoring"
+              className="block rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              System Monitoring
+            </Link>
+            <Link
+              to="/admin/crm"
+              className="block rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Support (CRM)
+            </Link>
           </div>
         </div>
 
         <div className="rounded-lg border border-border bg-card p-6">
           <h2 className="text-lg font-semibold">System Status</h2>
           <div className="mt-4 space-y-3">
-            <div>
-              <div className="text-sm font-medium">Database</div>
-              <div className="text-xs text-muted-foreground">PostgreSQL: Connected ✓</div>
-            </div>
-            <div>
-              <div className="text-sm font-medium">API Server</div>
-              <div className="text-xs text-muted-foreground">Fastify: Running ✓</div>
-            </div>
-            <div>
-              <div className="text-sm font-medium">Socket Server</div>
-              <div className="text-xs text-muted-foreground">Socket.io: Running ✓</div>
-            </div>
-            <div>
-              <div className="text-sm font-medium">Redis Cache</div>
-              <div className="text-xs text-muted-foreground">Active (rate limits) ✓</div>
-            </div>
+            {health === null ? (
+              <>
+                <div className="animate-pulse space-y-2">
+                  <div className="h-4 w-2/3 rounded bg-muted" />
+                  <div className="h-4 w-1/2 rounded bg-muted" />
+                  <div className="h-4 w-3/4 rounded bg-muted" />
+                </div>
+              </>
+            ) : health.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No health checks available</div>
+            ) : (
+              health.map((h) => (
+                <div key={h.name} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">{HEALTH_LABELS[h.name] ?? h.name}</div>
+                    {h.detail && (
+                      <div className="truncate text-xs text-muted-foreground">{h.detail}</div>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{h.latencyMs}ms</span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_STYLES[h.status]}`}>
+                      {h.status}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
           <div className="mt-4 border-t border-border pt-4">
             <div className="flex items-center text-sm">
-              <div className="mr-2 size-2 rounded-full bg-green-500" />
-              <span className="text-muted-foreground">System operational</span>
+              <div
+                className={`mr-2 size-2 rounded-full ${
+                  allUp === null ? 'bg-gray-400' : allUp ? 'bg-green-500' : 'bg-red-500'
+                }`}
+              />
+              <span className="text-muted-foreground">
+                {allUp === null
+                  ? 'Checking system health…'
+                  : allUp
+                    ? 'System operational'
+                    : 'Some services need attention'}
+              </span>
             </div>
           </div>
         </div>

@@ -19,6 +19,7 @@ import {
 import { COUNTRIES, CURRENCIES, countryToCurrency } from "@gaming-hub/shared";
 import { supabase } from "../../services/supabase";
 import { AuthLayout } from "./AuthLayout";
+import { useSettingsStore } from "../../store/settingsStore";
 
 const GENDERS = ["Female", "Male", "Other", "Prefer not to say"];
 
@@ -60,10 +61,15 @@ const initialForm: SignupForm = {
 
 export function SignupPage() {
   const navigate = useNavigate();
+  const settings = useSettingsStore((s) => s.settings);
   const [form, setForm] = useState<SignupForm>(initialForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [confirmationSent, setConfirmationSent] = useState(false);
+
+  const signupEnabled = settings?.auth?.signupEnabled ?? true;
+  const maintenanceEnabled = settings?.general?.maintenanceEnabled ?? false;
+  const maintenanceMessage = settings?.general?.maintenanceMessage ?? "";
 
   const set = <K extends keyof SignupForm>(key: K, value: SignupForm[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -158,6 +164,34 @@ export function SignupPage() {
       setSubmitting(false);
     }
   };
+
+  if (maintenanceEnabled || !signupEnabled) {
+    return (
+      <AuthLayout
+        title={maintenanceEnabled ? "Under Maintenance" : "Registrations Closed"}
+        subtitle={maintenanceEnabled ? "We're working hard to improve the experience" : "New accounts are currently not being accepted"}
+      >
+        <div className="text-center space-y-4 py-2">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+            <ShieldCheck className="w-7 h-7 text-amber-400" />
+          </div>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            {maintenanceEnabled && maintenanceMessage
+              ? maintenanceMessage
+              : maintenanceEnabled
+                ? "We are performing scheduled maintenance. Please check back soon."
+                : "We're not accepting new registrations at this time."}
+          </p>
+          <Link
+            to="/login"
+            className="inline-block px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold transition-colors"
+          >
+            Go to sign in
+          </Link>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   if (confirmationSent) {
     return (

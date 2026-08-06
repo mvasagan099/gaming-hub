@@ -21,6 +21,7 @@ import { GAME_BY_ID, type GameId, type RoomFull } from "@gaming-hub/shared";
 import { supabase } from "../../services/supabase";
 import { useAuthStore } from "../../store/authStore";
 import { useMultiplayerStore } from "../../store/multiplayerStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import { useMe } from "../../services/api/useMe";
 import { RoomChat } from "./RoomChat";
 
@@ -57,6 +58,9 @@ export const LobbyPage: React.FC = () => {
   const session = useAuthStore((s) => s.session);
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const { me } = useMe();
+  const siteSettings = useSettingsStore((s) => s.settings);
+  const matchmakingTimeout = siteSettings?.game?.matchmakingTimeoutSeconds ?? 120;
+  const [waitElapsed, setWaitElapsed] = useState(0);
 
   const socketStatus = useMultiplayerStore((s) => s.status);
   const socketError = useMultiplayerStore((s) => s.error);
@@ -87,6 +91,27 @@ export const LobbyPage: React.FC = () => {
       navigate(`/games/${slug}`, { state: { mode: "multiplayer", stake: room.stake } });
     }
   }, [room, slug, navigate]);
+
+  // Client-side queue timeout: gives feedback even if the server eviction
+  // event is missed (e.g. while disconnected).
+  useEffect(() => {
+    if (!matchmaking.queued) {
+      setWaitElapsed(0);
+      return;
+    }
+    const interval = setInterval(() => setWaitElapsed((v) => v + 1), 1000);
+    return () => clearInterval(interval);
+  }, [matchmaking.queued]);
+
+  useEffect(() => {
+    if (matchmaking.queued && waitElapsed >= matchmakingTimeout) {
+      setWaitElapsed(0);
+      void leaveMatchmaking();
+      toast.error("No opponents found in time — please try again");
+    }
+  }, [matchmaking.queued, waitElapsed, matchmakingTimeout, leaveMatchmaking]);
+
+  const secondsRemaining = Math.max(0, matchmakingTimeout - waitElapsed);
 
   if (!def) {
     return (
@@ -384,8 +409,9 @@ export const LobbyPage: React.FC = () => {
           </div>
           <h3 className="text-lg font-black text-slate-900 dark:text-white">Looking for opponents…</h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Matchmaking for {def.name} • 🪙 {stake} stake
+            Matchmaking for {def.name} • 🪙 {matchmaking.stake ?? stake} stake
             {matchmaking.position > 0 && ` • Queue position ${matchmaking.position}`}
+            {secondsRemaining > 0 && ` • Auto-cancels in ${secondsRemaining}s`}
           </p>
           <button
             onClick={() => void leaveMatchmaking()}

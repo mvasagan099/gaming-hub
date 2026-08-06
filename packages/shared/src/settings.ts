@@ -214,6 +214,82 @@ export const developerSettingsSchema = z.object({
   queueMonitorEnabled: z.boolean().default(false),
 });
 
+export const referralSettingsSchema = z.object({
+  enabled: z.boolean().default(true),
+  referrerReward: z.number().int().min(0).max(100_000).default(500),
+  referredReward: z.number().int().min(0).max(100_000).default(250),
+  commissionPercent: z.number().min(0).max(100).default(5),
+  minDepositToReward: z.number().int().min(0).max(100_000).default(0),
+  leaderboardEnabled: z.boolean().default(true),
+  codeAutoGenerate: z.boolean().default(true),
+});
+
+export const tournamentSettingsSchema = z.object({
+  enabled: z.boolean().default(true),
+  autoScheduling: z.boolean().default(false),
+  defaultMaxPlayers: z.number().int().min(2).max(256).default(16),
+  defaultEntryFee: z.number().int().min(0).max(100_000).default(0),
+  defaultPrizePool: z.number().int().min(0).max(1_000_000).default(1000),
+  entryFeeEnabled: z.boolean().default(true),
+  refundOnCancel: z.boolean().default(true),
+  maxPerUserPerDay: z.number().int().min(1).max(100).default(10),
+});
+
+export const messagingSettingsSchema = z.object({
+  enabled: z.boolean().default(true),
+  dmEnabled: z.boolean().default(true),
+  maxMessageLength: z.number().int().min(1).max(4000).default(1000),
+  rateLimitPerMinute: z.number().int().min(1).max(1000).default(60),
+  attachmentsEnabled: z.boolean().default(false),
+  readReceiptsEnabled: z.boolean().default(true),
+  blockEnabled: z.boolean().default(true),
+});
+
+export const supportSettingsSchema = z.object({
+  enabled: z.boolean().default(true),
+  autoReplyEnabled: z.boolean().default(false),
+  autoReplyText: z.string().trim().max(1000).default(""),
+  categories: z
+    .array(z.string().trim().min(1).max(60))
+    .default(["GENERAL", "PAYMENT", "ACCOUNT", "TECHNICAL", "REPORT"]),
+  maxTicketsPerUserPerDay: z.number().int().min(1).max(100).default(5),
+});
+
+export const automationSettingsSchema = z.object({
+  enabled: z.boolean().default(true),
+  cleanupRetentionDays: z.number().int().min(1).max(3650).default(90),
+  sessionRevocationEnabled: z.boolean().default(false),
+  sessionRevocationAfterDays: z.number().int().min(1).max(365).default(30),
+  expiredCouponCleanupEnabled: z.boolean().default(true),
+  expiredAnnouncementCleanupEnabled: z.boolean().default(true),
+  backupEnabled: z.boolean().default(false),
+  backupScheduleCron: z.string().trim().max(120).default("0 3 * * *"),
+});
+
+export const searchSettingsSchema = z.object({
+  enabled: z.boolean().default(true),
+  saveHistory: z.boolean().default(true),
+  maxResults: z.number().int().min(1).max(200).default(50),
+  userSearchEnabled: z.boolean().default(true),
+  tournamentSearchEnabled: z.boolean().default(true),
+  ticketSearchEnabled: z.boolean().default(true),
+  couponSearchEnabled: z.boolean().default(true),
+});
+
+export const leaderboardSettingsSchema = z.object({
+  enabled: z.boolean().default(true),
+  refreshIntervalMinutes: z.number().int().min(1).max(1440).default(30),
+  topPlayersCount: z.number().int().min(1).max(1000).default(100),
+  weeklyResetEnabled: z.boolean().default(true),
+  showWinnings: z.boolean().default(true),
+  gameEnabled: z.boolean().default(true),
+  countryEnabled: z.boolean().default(true),
+  regionEnabled: z.boolean().default(true),
+  friendsEnabled: z.boolean().default(true),
+  tournamentEnabled: z.boolean().default(true),
+  periodsEnabled: z.boolean().default(true),
+});
+
 // ---------------------------------------------------------------------------
 // Aggregate
 // ---------------------------------------------------------------------------
@@ -234,6 +310,13 @@ export const SETTINGS_CATEGORIES = {
   backup: backupSettingsSchema,
   localization: localizationSettingsSchema,
   developer: developerSettingsSchema,
+  referral: referralSettingsSchema,
+  tournament: tournamentSettingsSchema,
+  messaging: messagingSettingsSchema,
+  support: supportSettingsSchema,
+  automation: automationSettingsSchema,
+  search: searchSettingsSchema,
+  leaderboard: leaderboardSettingsSchema,
 } as const;
 
 export type SettingsCategoryName = keyof typeof SETTINGS_CATEGORIES;
@@ -254,6 +337,13 @@ export type SettingsShape = {
   backup: z.infer<typeof backupSettingsSchema>;
   localization: z.infer<typeof localizationSettingsSchema>;
   developer: z.infer<typeof developerSettingsSchema>;
+  referral: z.infer<typeof referralSettingsSchema>;
+  tournament: z.infer<typeof tournamentSettingsSchema>;
+  messaging: z.infer<typeof messagingSettingsSchema>;
+  support: z.infer<typeof supportSettingsSchema>;
+  automation: z.infer<typeof automationSettingsSchema>;
+  search: z.infer<typeof searchSettingsSchema>;
+  leaderboard: z.infer<typeof leaderboardSettingsSchema>;
 };
 
 /** Full aggregated settings object (all categories). */
@@ -280,6 +370,13 @@ export const DEFAULT_SETTINGS: SettingsShape = {
   backup: extractDefaults("backup"),
   localization: extractDefaults("localization"),
   developer: extractDefaults("developer"),
+  referral: extractDefaults("referral"),
+  tournament: extractDefaults("tournament"),
+  messaging: extractDefaults("messaging"),
+  support: extractDefaults("support"),
+  automation: extractDefaults("automation"),
+  search: extractDefaults("search"),
+  leaderboard: extractDefaults("leaderboard"),
 };
 
 export type SiteSettings = SettingsShape;
@@ -320,6 +417,13 @@ export const SETTINGS_CATEGORY_META: Record<
   backup: { label: "Backup", description: "Schedule and retention of backups.", icon: "Archive" },
   localization: { label: "Localization", description: "Languages, countries, currencies.", icon: "Languages" },
   developer: { label: "Developer", description: "Debug, feature flags, experiments.", icon: "Terminal" },
+  referral: { label: "Referrals", description: "Rewards, commissions, and code rules.", icon: "Users" },
+  tournament: { label: "Tournaments", description: "Entry fees, prizes, and scheduling.", icon: "Trophy" },
+  messaging: { label: "Messaging", description: "DMs, rate limits, and attachments.", icon: "MessageSquare" },
+  support: { label: "Support", description: "Tickets, categories, and auto-replies.", icon: "Headset" },
+  automation: { label: "Automation", description: "Cleanup, sessions, and backups.", icon: "Bot" },
+  search: { label: "Search", description: "Discovery scope and history.", icon: "Search" },
+  leaderboard: { label: "Leaderboard", description: "Scope, period, and refresh options.", icon: "BarChart3" },
 };
 
 /**
@@ -342,3 +446,99 @@ export function flattenSettings(settings: Partial<SiteSettings>): Array<{
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Feature flags
+// ---------------------------------------------------------------------------
+
+/**
+ * Enterprise feature-flag catalog. Stored in `developer.featureFlags` as a
+ * flat `Record<string, boolean>`. Admin UI renders groups from here; the API
+ * and socket server enforce the flags via `assertFeatureEnabled`.
+ */
+export interface FeatureFlagDef {
+  key: string;
+  label: string;
+  description: string;
+  default: boolean;
+}
+
+export const FEATURE_FLAG_GROUPS: Array<{
+  group: string;
+  label: string;
+  description: string;
+  flags: FeatureFlagDef[];
+}> = [
+  {
+    group: "games",
+    label: "Games & Betting",
+    description: "Core game features, real-money play, and matchmaking.",
+    flags: [
+      { key: "games.enabled", label: "Games", description: "Master toggle for all game play.", default: true },
+      { key: "games.realMoney", label: "Real-money play", description: "Allow wagering real wallet balances.", default: true },
+      { key: "games.practice", label: "Practice mode", description: "Allow free practice games.", default: true },
+      { key: "games.matchmaking", label: "Matchmaking", description: "Allow queue-based matchmaking.", default: true },
+      { key: "games.spectator", label: "Spectator mode", description: "Allow watching live matches.", default: true },
+    ],
+  },
+  {
+    group: "payments",
+    label: "Payments & Wallet",
+    description: "Deposits, withdrawals, and bonus wallets.",
+    flags: [
+      { key: "payments.deposits", label: "Deposits", description: "Allow users to add funds.", default: true },
+      { key: "payments.withdrawals", label: "Withdrawals", description: "Allow users to cash out.", default: true },
+      { key: "payments.bonusWallet", label: "Bonus wallet", description: "Enable the separate bonus balance.", default: true },
+      { key: "payments.lockedWallet", label: "Locked wallet", description: "Enable locked/vesting balances.", default: true },
+      { key: "payments.cashback", label: "Cashback", description: "Enable cashback balance credits.", default: true },
+    ],
+  },
+  {
+    group: "social",
+    label: "Social & Engagement",
+    description: "Friends, messaging, leaderboards, and referrals.",
+    flags: [
+      { key: "social.friends", label: "Friends", description: "Enable friend requests and lists.", default: true },
+      { key: "social.messaging", label: "Messaging", description: "Enable direct messages.", default: true },
+      { key: "social.leaderboards", label: "Leaderboards", description: "Enable leaderboard views.", default: true },
+      { key: "social.referrals", label: "Referrals", description: "Enable the referral program.", default: true },
+      { key: "social.profiles", label: "Public profiles", description: "Allow viewing other users' profiles.", default: true },
+    ],
+  },
+  {
+    group: "content",
+    label: "Content & Commerce",
+    description: "Coupons, tournaments, announcements, and store.",
+    flags: [
+      { key: "content.coupons", label: "Coupons", description: "Enable coupon redemption.", default: true },
+      { key: "content.tournaments", label: "Tournaments", description: "Enable tournament registration.", default: true },
+      { key: "content.announcements", label: "Announcements", description: "Enable the announcement center.", default: true },
+      { key: "content.store", label: "Item store", description: "Enable the in-app store.", default: true },
+    ],
+  },
+  {
+    group: "support",
+    label: "Support & Trust",
+    description: "Tickets, KYC, and account protection.",
+    flags: [
+      { key: "support.tickets", label: "Support tickets", description: "Enable the help desk.", default: true },
+      { key: "support.kyc", label: "KYC verification", description: "Enable identity verification.", default: true },
+      { key: "support.chat", label: "Live chat", description: "Enable live agent chat.", default: true },
+    ],
+  },
+  {
+    group: "infrastructure",
+    label: "Infrastructure",
+    description: "Platform-level operational toggles.",
+    flags: [
+      { key: "infra.maintenance", label: "Maintenance mode", description: "Read-only maintenance for all users.", default: false },
+      { key: "infra.beta", label: "Beta channel", description: "Expose beta-only builds/features.", default: false },
+      { key: "infra.auditLogging", label: "Audit logging", description: "Record audit events.", default: true },
+      { key: "infra.errorCapture", label: "Error capture", description: "Record errors to the error center.", default: true },
+    ],
+  },
+];
+
+export const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = Object.fromEntries(
+  FEATURE_FLAG_GROUPS.flatMap((g) => g.flags.map((f) => [f.key, f.default] as const)),
+);

@@ -20,6 +20,14 @@ import { settingsRoutes } from "./routes/settings";
 import { internalRoutes } from "./routes/internal";
 import { accountRoutes } from "./routes/account";
 import { metricsRoutes } from "./routes/metrics";
+import { referralsRoutes } from "./routes/referrals";
+import { couponsRoutes } from "./routes/coupons";
+import { announcementsRoutes } from "./routes/announcements";
+import { tournamentsRoutes } from "./routes/tournaments";
+import { ticketsRoutes } from "./routes/tickets";
+import { messagesRoutes } from "./routes/messages";
+import { searchRoutes } from "./routes/search";
+import { adminEnterpriseRoutes } from "./routes/adminEnterprise";
 import { instrument } from "./services/metrics";
 
 export function buildApp() {
@@ -90,6 +98,14 @@ export function buildApp() {
   void app.register(internalRoutes);
   void app.register(accountRoutes);
   void app.register(metricsRoutes);
+  void app.register(referralsRoutes);
+  void app.register(couponsRoutes);
+  void app.register(announcementsRoutes);
+  void app.register(tournamentsRoutes);
+  void app.register(ticketsRoutes);
+  void app.register(messagesRoutes);
+  void app.register(searchRoutes);
+  void app.register(adminEnterpriseRoutes);
 
   return app;
 }

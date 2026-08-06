@@ -9,6 +9,15 @@ const STATIC_TITLES: Record<string, string> = {
   '/wallet': 'Wallet',
   '/profile': 'Profile',
   '/settings': 'Settings',
+  '/achievements': 'Achievements',
+  '/friends': 'Friends',
+  '/tournaments': 'Tournaments',
+  '/messages': 'Messages',
+  '/notifications': 'Notifications',
+  '/announcements': 'Announcements',
+  '/referrals': 'Referrals',
+  '/coupons': 'Coupons',
+  '/tickets': 'Support',
 };
 
 export default function PageHeader() {

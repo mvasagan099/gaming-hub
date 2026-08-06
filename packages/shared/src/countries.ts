@@ -122,6 +122,34 @@ export const CURRENCIES: Currency[] = [
 
 export const DEFAULT_CURRENCY = "USD";
 
+/**
+ * Coarse geographic regions used by region-scoped leaderboards. Every country
+ * code from {@link COUNTRIES} appears in exactly one group.
+ */
+export const REGION_GROUPS: Record<string, string[]> = {
+  Asia: ["IN", "PK", "BD", "LK", "NP", "CN", "HK", "TW", "JP", "KR", "TH", "VN", "PH", "ID", "SG", "MY"],
+  Europe: ["GB", "DE", "FR", "ES", "IT", "NL", "BE", "PT", "GR", "SE", "NO", "DK", "FI", "CH", "PL", "CZ", "UA", "RU", "TR"],
+  "Middle East": ["AE", "SA", "QA", "BH", "OM", "KW", "IL"],
+  Africa: ["NG", "ZA", "KE", "EG"],
+  Americas: ["US", "CA", "MX", "BR", "AR"],
+  Oceania: ["AU", "NZ"],
+};
+
+export const REGIONS: string[] = Object.keys(REGION_GROUPS);
+
+const COUNTRY_TO_REGION: Record<string, string> = Object.entries(REGION_GROUPS).reduce<
+  Record<string, string>
+>((acc, [region, codes]) => {
+  for (const code of codes) acc[code] = region;
+  return acc;
+}, {});
+
+/** Resolves a country code to its region, or null when unknown. */
+export function regionOf(country: string | null | undefined): string | null {
+  if (!country) return null;
+  return COUNTRY_TO_REGION[country] ?? null;
+}
+
 export function getCountry(code: string): Country | undefined {
   return COUNTRIES.find((c) => c.code === code);
 }

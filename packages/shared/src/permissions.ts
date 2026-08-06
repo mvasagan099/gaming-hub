@@ -14,11 +14,38 @@ export type Permission =
   | "admin:matches:view"
   | "admin:wallet:adjust"
   | "admin:settings:view"
-  | "admin:settings:edit";
+  | "admin:settings:edit"
+  | "admin:audit:view"
+  | "admin:monitoring:view"
+  | "admin:analytics:view"
+  | "admin:errors:view"
+  | "admin:errors:manage"
+  | "admin:features:view"
+  | "admin:features:edit"
+  | "admin:tournaments:view"
+  | "admin:tournaments:manage"
+  | "admin:coupons:view"
+  | "admin:coupons:manage"
+  | "admin:announcements:view"
+  | "admin:announcements:manage"
+  | "admin:crm:view"
+  | "admin:crm:manage"
+  | "admin:automation:view"
+  | "admin:automation:manage"
+  | "admin:referrals:view";
 
 export const ROLE_PERMISSIONS: Record<DbUserRole, readonly Permission[]> = {
   USER: [],
-  MODERATOR: ["admin:users:view", "admin:rooms:view", "admin:matches:view"],
+  MODERATOR: [
+    "admin:users:view",
+    "admin:rooms:view",
+    "admin:matches:view",
+    "admin:audit:view",
+    "admin:monitoring:view",
+    "admin:errors:view",
+    "admin:crm:view",
+    "admin:crm:manage",
+  ],
   ADMIN: [
     "admin:users:view",
     "admin:users:manage",
@@ -27,6 +54,24 @@ export const ROLE_PERMISSIONS: Record<DbUserRole, readonly Permission[]> = {
     "admin:wallet:adjust",
     "admin:settings:view",
     "admin:settings:edit",
+    "admin:audit:view",
+    "admin:monitoring:view",
+    "admin:analytics:view",
+    "admin:errors:view",
+    "admin:errors:manage",
+    "admin:features:view",
+    "admin:features:edit",
+    "admin:tournaments:view",
+    "admin:tournaments:manage",
+    "admin:coupons:view",
+    "admin:coupons:manage",
+    "admin:announcements:view",
+    "admin:announcements:manage",
+    "admin:crm:view",
+    "admin:crm:manage",
+    "admin:automation:view",
+    "admin:automation:manage",
+    "admin:referrals:view",
   ],
 };
 

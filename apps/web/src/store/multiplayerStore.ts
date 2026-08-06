@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type {
   ChatEmoji,
   ChatMessage,
+  ErrorCode,
   GameId,
   JsonObject,
   RoomFull,
@@ -23,7 +24,24 @@ export interface WinnerInfo {
 interface MatchmakingInfo {
   queued: boolean;
   position: number;
+  gameId: GameId | null;
+  stake: number | null;
 }
+
+const IDLE_MATCHMAKING: MatchmakingInfo = {
+  queued: false,
+  position: 0,
+  gameId: null,
+  stake: null,
+};
+
+const MATCHMAKING_ERROR_CODES = new Set([
+  "ALREADY_QUEUED",
+  "NOT_IN_QUEUE",
+  "MATCHMAKING_OFFLINE",
+  "MATCHMAKING_TIMEOUT",
+  "FEATURE_DISABLED",
+] as ErrorCode[]);
 
 type GameAction = { type: string } & JsonObject;
 
@@ -37,6 +55,8 @@ interface MultiplayerState {
   messages: ChatMessage[];
   emojis: ChatEmoji[];
   matchmaking: MatchmakingInfo;
+  /** Queue intent preserved across transient reconnects so it can be re-joined. */
+  pendingRequeue: { gameId: GameId; stake: number } | null;
   gameState: JsonObject | null;
   lastEvents: { type: string }[];
   matchId: string | null;
@@ -100,7 +120,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   isSpectator: false,
   messages: [],
   emojis: [],
-  matchmaking: { queued: false, position: 0 },
+  matchmaking: { ...IDLE_MATCHMAKING },
+  pendingRequeue: null,
   gameState: null,
   lastEvents: [],
   matchId: null,
@@ -124,13 +145,27 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       wired = true;
 
       socket.on("connect", () => {
-        set({ status: "connected", error: null, matchmaking: { queued: false, position: 0 } });
+        set({ status: "connected", error: null, matchmaking: { ...IDLE_MATCHMAKING } });
+        // A transient disconnect while queued should resume the queue.
+        const requeue = get().pendingRequeue;
+        if (requeue) {
+          set({ pendingRequeue: null });
+          void get().joinMatchmaking(requeue.gameId, requeue.stake).catch(() => undefined);
+        }
       });
 
       socket.on("disconnect", (reason) => {
+        const intentional = reason === "io client disconnect";
+        const queued = get().matchmaking.queued;
+        const gameId = get().matchmaking.gameId;
+        const stake = get().matchmaking.stake;
         set({
-          status: reason === "io client disconnect" ? "idle" : "reconnecting",
-          matchmaking: { queued: false, position: 0 },
+          status: intentional ? "idle" : "reconnecting",
+          matchmaking: { ...IDLE_MATCHMAKING },
+          pendingRequeue:
+            !intentional && queued && gameId && stake != null
+              ? { gameId, stake }
+              : null,
         });
       });
 
@@ -169,15 +204,28 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("matchmaking:queued", (payload) => {
-        set({ matchmaking: { queued: true, position: payload.position } });
+        set((s) => ({
+          matchmaking: {
+            queued: true,
+            position: payload.position,
+            gameId: s.matchmaking.gameId,
+            stake: s.matchmaking.stake,
+          },
+        }));
       });
 
       socket.on("matchmaking:found", () => {
-        set({ matchmaking: { queued: false, position: 0 } });
+        set({ matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
       });
 
       socket.on("error", (payload) => {
-        set({ error: payload.message });
+        const isMatchmakingError = MATCHMAKING_ERROR_CODES.has(payload.code);
+        set({
+          error: payload.message,
+          ...(isMatchmakingError
+            ? { matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null }
+            : {}),
+        });
       });
     };
 
@@ -190,7 +238,13 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const socket = get().socket;
     if (socket) socket.disconnect();
     wired = false;
-    set({ socket: null, status: "idle", error: null });
+    set({
+      socket: null,
+      status: "idle",
+      error: null,
+      matchmaking: { ...IDLE_MATCHMAKING },
+      pendingRequeue: null,
+    });
     clearRoom(set);
   },
 
@@ -200,7 +254,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const res = await socket.emitWithAck("room:create", { gameId, isPrivate, stake, maxPlayers });
     const room = unwrapAck<RoomFull>(res);
     applyRoom(set, room);
-    set({ winner: null });
+    set({ winner: null, matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
     return room;
   },
 
@@ -214,7 +268,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     });
     const room = unwrapAck<RoomFull>(res);
     applyRoom(set, room);
-    set({ winner: null });
+    set({ winner: null, matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
     return room;
   },
 
@@ -268,7 +322,10 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     if (!socket) throw new Error("Not connected to the game server");
     const res = await socket.emitWithAck("matchmaking:join", { gameId, stake });
     const data = unwrapAck<{ position: number }>(res);
-    set({ matchmaking: { queued: true, position: data.position } });
+    set({
+      matchmaking: { queued: true, position: data.position, gameId, stake },
+      pendingRequeue: null,
+    });
   },
 
   leaveMatchmaking: async () => {
@@ -278,7 +335,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       const res = await socket.emitWithAck("matchmaking:leave", {});
       unwrapAck(res);
     } finally {
-      set({ matchmaking: { queued: false, position: 0 } });
+      set({ matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
     }
   },
 

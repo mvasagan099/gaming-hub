@@ -89,10 +89,12 @@ export async function ensureUser(
   const meta = readMetadata(userMetadata);
   const baseUsername = sanitizeUsername(meta.username) ?? sanitizeUsername(email?.split("@")[0] ?? null) ?? "player";
 
+  let created: User | null = null;
+
   for (let attempt = 0; attempt < 5; attempt++) {
     const username = attempt === 0 ? baseUsername : `${baseUsername}_${randomSuffix()}`;
     try {
-      return await prisma.$transaction(async (tx) => {
+      created = await prisma.$transaction(async (tx) => {
         const user = await tx.user.create({
           data: {
             id: sub,
@@ -118,6 +120,7 @@ export async function ensureUser(
         });
         return user;
       });
+      break;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -129,7 +132,21 @@ export async function ensureUser(
     }
   }
 
-  throw new Error("Could not allocate a unique username");
+  if (!created) {
+    throw new Error("Could not allocate a unique username");
+  }
+
+  // Apply the invite/referral code from signup metadata (settings-driven
+  // rewards, fire-and-forget so a bad code never blocks sign-in).
+  if (meta.referredBy) {
+    void import("./referrals")
+      .then(({ applyReferral }) => applyReferral(created!.id, meta.referredBy!))
+      .catch((error) => {
+        console.error("referral: failed to apply at signup", error);
+      });
+  }
+
+  return created;
 }
 
 export function toPublicProfile(

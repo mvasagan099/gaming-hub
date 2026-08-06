@@ -22,6 +22,7 @@ import { generateRoomCode } from "../roomCode";
 import { secureRandomSource } from "../games/rng";
 import { GameSession } from "../games/GameSession";
 import { holdWagers, settleMatch } from "../apiClient";
+import { assertGameEnabled } from "../settings";
 
 const DISCONNECT_GRACE_MS = 90_000;
 
@@ -194,6 +195,7 @@ export class RoomManager {
     if (!isGameEngineAvailable(input.gameId)) {
       throw new AppError("INVALID_ACTION", "This game is not playable online yet");
     }
+    await assertGameEnabled(input.gameId);
     const def = getGameDefinition(input.gameId);
     const maxPlayers = input.maxPlayers ?? def.maxPlayers;
     if (maxPlayers < def.minPlayers || maxPlayers > def.maxPlayers) {
@@ -502,12 +504,11 @@ export class RoomManager {
 
     try {
       await holdWagers(matchId);
-    } catch (error) {
+    } catch (error: any) {
+      console.error("[holdWagers error]", error);
       await prisma.match.delete({ where: { id: matchId } }).catch(() => undefined);
-      throw new AppError(
-        "INSUFFICIENT_BALANCE",
-        "One or more players do not have enough coins for this stake",
-      );
+      const message = error?.message || "One or more players do not have enough coins for this stake";
+      throw new AppError("INSUFFICIENT_BALANCE", message);
     }
 
     room.match = { matchId, engine, turnNumber: 0 };
@@ -843,11 +844,17 @@ export class RoomManager {
   }
 
   /** Creates a pre-filled, auto-starting room for matchmaking. */
-  async createMatchmakingRoom(users: AuthenticatedUser[], gameId: GameId, stake: number, socket: Socket): Promise<RoomFull> {
+  async createMatchmakingRoom(users: AuthenticatedUser[], sockets: Socket[], gameId: GameId, stake: number): Promise<RoomFull> {
     const def = getGameDefinition(gameId);
     if (users.length < def.minPlayers || users.length > def.maxPlayers) {
       throw new AppError("INVALID_ACTION", "Wrong number of matchmaking players");
     }
+    if (sockets.length !== users.length) {
+      throw new AppError("INVALID_ACTION", "Matchmaking players are not connected");
+    }
+
+    // Leave any lobby room a player may still be in before locking them in.
+    await Promise.all(users.map((user, index) => this.ejectFromAllRooms(user, sockets[index])));
 
     const id = randomUUID();
     const code = this.uniqueCode();
@@ -872,39 +879,56 @@ export class RoomManager {
 
     users.forEach((user, index) => {
       const player = this.makePlayer(user, index, index === 0, true, false);
-      player.socketIds.add(socket.id);
+      player.socketIds.add(sockets[index].id);
       room.players.set(user.userId, player);
+      sockets[index].join(room.ioName);
     });
-    socket.join(room.ioName);
 
     this.rooms.set(id, room);
     this.roomsByCode.set(code, room);
 
-    await prisma.room.create({
-      data: {
-        id,
-        code,
-        gameId,
-        hostId: users[0].userId,
-        status: "WAITING",
-        isPrivate: true,
-        stake,
-        minPlayers: def.minPlayers,
-        maxPlayers: def.maxPlayers,
-      },
-    });
-    await prisma.roomPlayer.createMany({
-      data: users.map((user, index) => ({
-        roomId: id,
-        userId: user.userId,
-        seat: index,
-        isHost: index === 0,
-        isReady: true,
-        isSpectator: false,
-        connectionStatus: "CONNECTED",
-      })),
-    });
+    try {
+      await prisma.room.create({
+        data: {
+          id,
+          code,
+          gameId,
+          hostId: users[0].userId,
+          status: "WAITING",
+          isPrivate: true,
+          stake,
+          minPlayers: def.minPlayers,
+          maxPlayers: def.maxPlayers,
+        },
+      });
+      await prisma.roomPlayer.createMany({
+        data: users.map((user, index) => ({
+          roomId: id,
+          userId: user.userId,
+          seat: index,
+          isHost: index === 0,
+          isReady: true,
+          isSpectator: false,
+          connectionStatus: "CONNECTED",
+        })),
+      });
 
-    return this.launchMatch(room, users[0], socket);
+      return await this.launchMatch(room, users[0], sockets[0]);
+    } catch (error) {
+      // Roll back a room that never reached ACTIVE so nobody gets stuck.
+      for (const socket of sockets) socket.leave(room.ioName);
+      this.rooms.delete(id);
+      this.roomsByCode.delete(code);
+      for (const player of room.players.values()) {
+        this.clearDisconnectTimer(id, player.userId);
+      }
+      if (room.status === "waiting") {
+        await prisma.roomPlayer
+          .deleteMany({ where: { roomId: id } })
+          .catch(() => undefined);
+        await prisma.room.delete({ where: { id } }).catch(() => undefined);
+      }
+      throw error;
+    }
   }
 }

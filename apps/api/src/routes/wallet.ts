@@ -21,7 +21,32 @@ export async function walletRoutes(app: FastifyInstance) {
     const user = requireUser(request);
     const query = request.query as Record<string, unknown>;
     const { page, pageSize } = clampPagination(query.page, query.pageSize);
-    return listTransactions(user.id, page, pageSize);
+    const walletType = (typeof query.walletType === "string" ? query.walletType : undefined) as
+      | "MAIN"
+      | "BONUS"
+      | "LOCKED"
+      | "REWARD"
+      | "CASHBACK"
+      | undefined;
+    const referenceType = (typeof query.referenceType === "string" ? query.referenceType : undefined) as
+      | "MATCH_WAGER"
+      | "MATCH_PAYOUT"
+      | "ADMIN"
+      | "BONUS"
+      | "PRACTICE"
+      | "DEPOSIT"
+      | "WITHDRAWAL"
+      | "REFERRAL"
+      | "COUPON"
+      | "TOURNAMENT_ENTRY"
+      | "TOURNAMENT_PRIZE"
+      | "LOCKED_CREDIT"
+      | "REWARD_CREDIT"
+      | "CASHBACK_CREDIT"
+      | "WAGER_REFUND"
+      | "REVERSAL"
+      | undefined;
+    return listTransactions(user.id, page, pageSize, walletType, referenceType);
   });
 
   app.post("/api/wallet/practice-reward", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {

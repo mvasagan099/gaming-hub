@@ -4,6 +4,7 @@ import { Redis } from "ioredis";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { AppError } from "@gaming-hub/shared";
 import type { ErrorCode } from "@gaming-hub/shared";
+import { matchmakingJoinSchema } from "@gaming-hub/shared";
 import type {
   ClientToServerEvents,
   InterServerEvents,
@@ -175,8 +176,19 @@ async function main(): Promise<void> {
 
     socket.on("matchmaking:join", (payload, ack) =>
       void guard(ack, async () => {
-        const position = await matchmaking.join(user, payload.gameId, payload.stake, socket);
+        const parsed = matchmakingJoinSchema.safeParse(payload);
+        if (!parsed.success) {
+          throw new AppError("VALIDATION_ERROR", "Invalid matchmaking request");
+        }
+        const position = await matchmaking.join(
+          user,
+          parsed.data.gameId,
+          parsed.data.stake,
+          socket,
+        );
         ack?.({ ok: true, data: { position } });
+        // Pair after the ack so queued/found always arrive in order.
+        await matchmaking.pair(parsed.data.gameId, parsed.data.stake);
       }),
     );
 

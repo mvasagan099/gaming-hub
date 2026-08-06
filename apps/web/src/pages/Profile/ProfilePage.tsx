@@ -1,8 +1,11 @@
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, Settings2, ShieldCheck, Trophy, Wallet, MapPin, Banknote, Phone, Gift } from "lucide-react";
+import { LogOut, Settings2, ShieldCheck, Trophy, Wallet, MapPin, Banknote, Phone, Gift, Ticket, Megaphone, MessageCircle, Swords, LifeBuoy, Users, Bell, Ban } from "lucide-react";
 import { getCountry, getCurrency } from "@gaming-hub/shared";
 import { useAuthStore } from "../../store/authStore";
 import { useMe } from "../../services/api/useMe";
+import { messagesApi } from "../../services/api/enterprise";
+import type { BlockedUser } from "@gaming-hub/shared";
 import { Skeleton, SkeletonCircle, SkeletonText } from "../../components/Skeleton";
 
 export const ProfilePage: React.FC = () => {
@@ -10,6 +13,34 @@ export const ProfilePage: React.FC = () => {
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
   const { me, loading } = useMe();
+  const [blocked, setBlocked] = useState<BlockedUser[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [blockedError, setBlockedError] = useState<string | null>(null);
+
+  const loadBlocked = async () => {
+    try {
+      setBlocked(await messagesApi.blocked());
+    } catch {
+      setBlocked([]);
+    }
+  };
+
+  useEffect(() => {
+    if (session) void loadBlocked();
+  }, [session]);
+
+  const handleUnblock = async (blockedId: string) => {
+    setBusyId(blockedId);
+    setBlockedError(null);
+    try {
+      await messagesApi.unblock(blockedId);
+      await loadBlocked();
+    } catch (err) {
+      setBlockedError(err instanceof Error ? err.message : "Failed to unblock user");
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -114,6 +145,58 @@ export const ProfilePage: React.FC = () => {
         </div>
       </div>
 
+      <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 transition-colors duration-300">
+        <h3 className="text-sm font-black text-slate-900 dark:text-white">My stuff</h3>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <MenuLink to="/tournaments" icon={<Swords className="w-4 h-4" />} label="Tournaments" />
+          <MenuLink to="/messages" icon={<MessageCircle className="w-4 h-4" />} label="Messages" />
+          <MenuLink to="/friends" icon={<Users className="w-4 h-4" />} label="Friends" />
+          <MenuLink to="/achievements" icon={<Trophy className="w-4 h-4" />} label="Achievements" />
+          <MenuLink to="/notifications" icon={<Bell className="w-4 h-4" />} label="Notifications" />
+          <MenuLink to="/announcements" icon={<Megaphone className="w-4 h-4" />} label="Announcements" />
+          <MenuLink to="/referrals" icon={<Gift className="w-4 h-4" />} label="Referrals" />
+          <MenuLink to="/coupons" icon={<Ticket className="w-4 h-4" />} label="Coupons" />
+          <MenuLink to="/tickets" icon={<LifeBuoy className="w-4 h-4" />} label="Support" />
+        </div>
+      </div>
+
+      <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 transition-colors duration-300">
+        <h3 className="text-sm font-black text-slate-900 dark:text-white">
+          Blocked users <span className="text-slate-400 dark:text-slate-500 font-semibold">({blocked.length})</span>
+        </h3>
+        {blockedError && (
+          <p className="text-xs text-rose-500">{blockedError}</p>
+        )}
+        {blocked.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            You haven't blocked anyone. Blocked users can't message you.
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {blocked.map((b) => (
+              <li key={b.id} className="flex items-center gap-3 py-3">
+                <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center text-sm font-black text-rose-500 overflow-hidden shrink-0">
+                  {b.avatarUrl ? (
+                    <img src={b.avatarUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (b.displayName || b.username || '?').slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{b.displayName}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">@{b.username}</p>
+                </div>
+                <button
+                  onClick={() => void handleUnblock(b.blockedId)}
+                  disabled={busyId === b.blockedId}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-1.5 text-xs font-bold text-rose-500 transition-colors hover:border-rose-500/50 disabled:opacity-50"
+                >
+                  <Ban size={12} /> {busyId === b.blockedId ? "Unblocking..." : "Unblock"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {stats && (
         <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 transition-colors duration-300">
           <h3 className="text-sm font-black text-slate-900 dark:text-white">Account details</h3>
@@ -151,5 +234,17 @@ function Detail({ icon, label, value }: { icon: React.ReactNode; label: string; 
         <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{value}</p>
       </div>
     </div>
+  );
+}
+
+function MenuLink({ to, icon, label }: { to: string; icon: React.ReactNode; label: string }) {
+  return (
+    <Link
+      to={to}
+      className="flex items-center gap-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-4 py-3 text-sm font-bold text-slate-800 dark:text-white transition-colors hover:border-accent-500/50"
+    >
+      <span className="text-accent-500">{icon}</span>
+      {label}
+    </Link>
   );
 }
