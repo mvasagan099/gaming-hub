@@ -81,6 +81,10 @@ export default class ChessScene extends Phaser.Scene {
 
     // Click on empty board squares listener
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      // Ignore if pointer clicked over an interactive piece zone (handled by PieceManager)
+      const hitObjects = this.input.hitTestPointer(pointer);
+      if (hitObjects && hitObjects.length > 0) return;
+
       const px = pointer.x - 20; // BOARD_OFFSET_X
       const py = pointer.y - 20; // BOARD_OFFSET_Y
       // Board dimensions are 640x640

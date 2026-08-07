@@ -124,6 +124,25 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       await ensureUser(verified.sub, verified.email, verified.userMetadata);
+      
+      const profile = await prisma.profile.findUnique({
+        where: { userId: verified.sub },
+        select: { twoFactorEnabled: true },
+      });
+      
+      if (profile?.twoFactorEnabled) {
+        auditFromRequest(request, {
+          actorType: "user",
+          actorId: verified.sub,
+          action: "auth.session.2fa_required",
+          category: "auth",
+          targetType: "user",
+          targetId: verified.sub,
+          meta: { email: verified.email },
+        });
+        return { status: "2fa_required", userId: verified.sub };
+      }
+      
       await recordLoginSession({
         userId: verified.sub,
         token,

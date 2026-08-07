@@ -30,19 +30,26 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const isSpectator = useMultiplayerStore((s) => s.isSpectator);
   const roomPlayers = useMultiplayerStore((s) => s.room?.players ?? []);
+  const rematchState = useMultiplayerStore((s) => s.rematchState);
+  const myUserId = roomPlayers.find((p) => p.seat === mySeat)?.id;
+  const myRematchRequested = Boolean(myUserId && rematchState?.requestedBy?.includes(myUserId));
 
   const remoteState = isMultiplayer ? (gameState as unknown as CricketState | null) : null;
   
   useEffect(() => {
     if (isMultiplayer && remoteState) {
-      if (remoteState.currentActor === 'toss' && !tossComplete) {
-        setShowTossUI(true);
-      } else if (remoteState.tossWinner != null) {
+      if (!remoteState.finished && !winner) {
+        if (remoteState.currentActor === 'toss' && remoteState.tossWinner == null) {
+          setShowTossUI(true);
+          setTossComplete(false);
+        }
+      }
+      if (remoteState.tossWinner != null) {
         setShowTossUI(false);
         setTossComplete(true);
       }
     }
-  }, [isMultiplayer, remoteState, tossComplete]);
+  }, [isMultiplayer, remoteState, winner]);
 
   const matchStarted = isMultiplayer ? Boolean(remoteState) : Boolean(playerRole);
   const matchFinished = isMultiplayer
@@ -61,7 +68,11 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
 
   const handleReplay = () => {
     if (isMultiplayer) {
-      void useMultiplayerStore.getState().requestRematch();
+      if (rematchState?.active && rematchState.requestedBy.length > 0 && !myRematchRequested) {
+        void useMultiplayerStore.getState().acceptRematch();
+      } else {
+        void useMultiplayerStore.getState().requestRematch();
+      }
       return;
     }
     setAiGameOver(false);
@@ -223,9 +234,18 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
               <div className="flex gap-4 w-full relative z-10">
                 <button
                   onClick={handleReplay}
-                  className="flex-1 py-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-900 font-black tracking-widest uppercase rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-amber-500/50 hover:scale-105 duration-300"
+                  disabled={isMultiplayer && myRematchRequested}
+                  className={`flex-1 py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 font-black tracking-widest uppercase rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-amber-500/50 duration-300 ${
+                    isMultiplayer && myRematchRequested
+                      ? 'opacity-70 cursor-not-allowed'
+                      : 'hover:from-amber-400 hover:to-amber-500 hover:scale-105'
+                  }`}
                 >
-                  Rematch
+                  {isMultiplayer && myRematchRequested
+                    ? 'Rematch Requested...'
+                    : isMultiplayer && rematchState?.active && rematchState.requestedBy.length > 0
+                    ? 'Accept Rematch'
+                    : 'Rematch'}
                 </button>
                 <button
                   onClick={onBack}

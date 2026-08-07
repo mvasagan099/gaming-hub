@@ -31,6 +31,7 @@ const LoginPage = lazy(() => import("../pages/Auth/LoginPage").then((m) => ({ de
 const SignupPage = lazy(() => import("../pages/Auth/SignupPage").then((m) => ({ default: m.SignupPage })));
 const ForgotPasswordPage = lazy(() => import("../pages/Auth/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import("../pages/Auth/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
+const TwoFactorPage = lazy(() => import("../pages/Auth/TwoFactorPage").then((m) => ({ default: m.TwoFactorPage })));
 const AdminOverviewPage = lazy(() => import("../pages/admin/AdminOverviewPage").then((m) => ({ default: m.AdminOverviewPage })));
 const AdminUsersPage = lazy(() => import("../pages/admin/AdminUsersPage").then((m) => ({ default: m.AdminUsersPage })));
 const AdminMatchesPage = lazy(() => import("../pages/admin/AdminMatchesPage").then((m) => ({ default: m.AdminMatchesPage })));
@@ -66,6 +67,7 @@ export const router = createBrowserRouter([
     errorElement: <ErrorPage />,
     children: [
       { path: "/login", element: <SuspensePage><LoginPage /></SuspensePage> },
+      { path: "/2fa", element: <SuspensePage><TwoFactorPage /></SuspensePage> },
       { path: "/signup", element: <SuspensePage><SignupPage /></SuspensePage> },
       { path: "/forgot-password", element: <SuspensePage><ForgotPasswordPage /></SuspensePage> },
       { path: "/reset-password", element: <SuspensePage><ResetPasswordPage /></SuspensePage> },

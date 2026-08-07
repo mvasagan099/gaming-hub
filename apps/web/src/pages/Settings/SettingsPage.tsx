@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Palette, Volume2, ShieldCheck, MonitorSmartphone, LogOut } from 'lucide-react';
+import { Check, Palette, Volume2, Shield, MonitorSmartphone, LogOut } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Switch } from '../../components/ui/Switch';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import type { LoginSession } from '@gaming-hub/shared';
 import { sessionsApi } from '../../services/api/enterprise';
+import { TwoFactorSetup } from '../../components/settings/TwoFactorSetup';
 import {
   ACCENTS,
   ACCENT_SWATCHES,
@@ -150,6 +151,8 @@ export const SettingsPage: React.FC = () => {
         </CardContent>
       </Card>
 
+      <TwoFactorSetup />
+
       <SessionsCard />
     </div>
   );
@@ -205,7 +208,7 @@ function SessionsCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-accent-500" /> Account & Security
+          <Shield className="w-4 h-4 text-accent-500" /> Account & Security
         </CardTitle>
         <CardDescription>
           Devices currently signed into your account. Revoke any session you don't recognize.
@@ -266,8 +269,8 @@ function SessionsCard() {
 
         {sessions.length > 1 && (
           <Button variant="outline" size="sm" onClick={revokeAll} disabled={busyId !== null}>
-            <ShieldCheck className="w-3.5 h-3.5 mr-1" />
-            {busyId === 'all' ? 'Revoking…' : 'Sign out all other devices'}
+            <Shield className="w-3.5 h-3.5 mr-1" />
+            {busyId === "all" ? "Revoking…" : "Sign out all other devices"}
           </Button>
         )}
       </CardContent>

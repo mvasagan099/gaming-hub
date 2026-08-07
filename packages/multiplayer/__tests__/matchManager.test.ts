@@ -69,6 +69,19 @@ describe("MatchManager pipeline", () => {
     expect(stats!.movesMade).toBe(1);
   });
 
+  it("broadcasts a room update so non-host clients see the room move to playing", async () => {
+    const roomId = await setupChessRoom(framework);
+
+    const roomUpdateSpy = vi.spyOn(framework.syncManager, "broadcastRoomUpdate");
+
+    await framework.matchManager.startMatch({ roomId, startedBy: "p1" });
+
+    expect(roomUpdateSpy).toHaveBeenCalledTimes(1);
+    const broadcastRoom = roomUpdateSpy.mock.calls[0][0];
+    expect(broadcastRoom.status).toBe("playing");
+    expect(broadcastRoom.match?.matchId).toBeTruthy();
+  });
+
   it("rejects out-of-turn and spectator actions in the pipeline", async () => {
     const roomId = await setupChessRoom(framework);
     await framework.matchManager.startMatch({ roomId, startedBy: "p1" });

@@ -98,6 +98,15 @@ export const setup2FASchema = z.object({
   enable: z.boolean(),
 });
 
+export const verify2FASchema = z.object({
+  token: z.string().length(6, "Token must be 6 digits").regex(/^\d+$/, "Token must be digits only"),
+  userId: z.string().uuid().optional(),
+});
+
+export const disable2FASchema = z.object({
+  token: z.string().length(6, "Token must be 6 digits").regex(/^\d+$/, "Token must be digits only"),
+});
+
 export const sendFriendRequestSchema = z.object({
   username: requiredString(40),
 });

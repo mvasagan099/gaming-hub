@@ -72,9 +72,9 @@ async function main(): Promise<void> {
             res.end(JSON.stringify({ ok: false, error: "VALIDATION_ERROR" }));
             return;
           }
-          const emitted = io.to(`user:${userId}`).emit(event, parsed.payload);
+          const emitted = io.to(`user:${userId}`).emit(event as any, parsed.payload);
           res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ ok: true, emitted: emitted > 0 }));
+          res.end(JSON.stringify({ ok: true, emitted: Boolean(emitted) }));
         } catch {
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: false, error: "INTERNAL_ERROR" }));
@@ -279,78 +279,59 @@ async function main(): Promise<void> {
       }),
     );
 
+    const handleRematchConsent = async (roomId: string) => {
+      const room = framework.roomManager.getRoom(roomId);
+      if (!room) throw new Error("Room not found");
+
+      if (!room.rematch) {
+        room.rematch = {
+          requestedBy: [],
+          active: true,
+          expiresAt: Date.now() + 60000,
+        };
+      }
+
+      if (!room.rematch.requestedBy.includes(user.userId)) {
+        room.rematch.requestedBy.push(user.userId);
+      }
+
+      const requestedBy = [...room.rematch.requestedBy];
+      const active = room.rematch.active;
+
+      const participants = [...room.players.values()].filter((p) => !p.isSpectator).map((p) => p.userId);
+      const allAccepted = participants.length > 0 && participants.every((id) => requestedBy.includes(id));
+
+      framework.syncManager.broadcastToRoom(room, "rematch:update", {
+        roomId,
+        requestedBy,
+        active,
+      });
+
+      if (allAccepted) {
+        room.status = "waiting";
+        for (const p of room.players.values()) {
+          if (!p.isSpectator) p.isReady = true;
+        }
+        await framework.matchManager.startMatch({
+          roomId,
+          startedBy: room.hostId,
+        });
+      }
+
+      return { roomId, requestedBy, active };
+    };
+
     socket.on("game:rematch-request", (payload, ack) =>
       void guard(ack, async () => {
-        const room = framework.roomManager.getRoom(payload.roomId);
-        if (!room) throw new Error("Room not found");
-        
-        if (!room.rematch) {
-          room.rematch = {
-            requestedBy: [],
-            active: true,
-            expiresAt: Date.now() + 60000,
-          };
-        }
-        
-        if (!room.rematch.requestedBy.includes(user.userId)) {
-          room.rematch.requestedBy.push(user.userId);
-        }
-        
-        framework.syncManager.broadcastToRoom(room, "rematch:update", {
-          roomId: payload.roomId,
-          requestedBy: room.rematch.requestedBy,
-          active: room.rematch.active,
-        });
-        
-        ack?.({ ok: true, data: { roomId: payload.roomId, requestedBy: room.rematch.requestedBy, active: room.rematch.active } });
+        const data = await handleRematchConsent(payload.roomId);
+        ack?.({ ok: true, data });
       }),
     );
 
     socket.on("game:rematch-accept", (payload, ack) =>
       void guard(ack, async () => {
-        const room = framework.roomManager.getRoom(payload.roomId);
-        if (!room) throw new Error("Room not found");
-        if (!room.rematch) throw new Error("No rematch requested");
-        
-        if (!room.rematch.requestedBy.includes(user.userId)) {
-          room.rematch.requestedBy.push(user.userId);
-        }
-        
-        // Snapshot rematch state before it may be cleared below
-        const requestedBy = [...room.rematch.requestedBy];
-        const active = room.rematch.active;
-        
-        // Check if everyone accepted
-        const participants = [...room.players.values()].filter(p => !p.isSpectator).map(p => p.id);
-        const allAccepted = participants.every(id => room.rematch?.requestedBy.includes(id));
-        
-        if (allAccepted) {
-          // Reset room for rematch
-          room.status = "waiting";
-          room.match = null;
-          room.rematch = null;
-          
-          for (const player of room.players.values()) {
-            player.isReady = false;
-            player.seat = null;
-          }
-          
-          // Reassign seats
-          let seat = 0;
-          for (const player of room.players.values()) {
-            if (!player.isSpectator) {
-              player.seat = seat++;
-            }
-          }
-        }
-        
-        framework.syncManager.broadcastToRoom(room, "rematch:update", {
-          roomId: payload.roomId,
-          requestedBy,
-          active,
-        });
-        
-        ack?.({ ok: true, data: { roomId: payload.roomId, requestedBy, active } });
+        const data = await handleRematchConsent(payload.roomId);
+        ack?.({ ok: true, data });
       }),
     );
 

@@ -73,10 +73,13 @@ export default class GameManager {
     if (this.isProcessingMove || this.chessEngine.isGameOver()) return;
 
     const piece = this.chessEngine.get(square as any);
-    if (!piece) return;
-
-    // Can only select own color
-    if (piece.color !== this.chessEngine.turn()) return;
+    if (!piece || piece.color !== this.chessEngine.turn()) {
+      if (this.activePieceSquare && piece && piece.color !== this.chessEngine.turn()) {
+        this.onSquareClicked(square);
+        return;
+      }
+      return;
+    }
 
     this.activePieceSquare = square;
     this.board.highlightSquare(square);
@@ -325,7 +328,12 @@ export default class GameManager {
     }
   }
 
+  private liveEngine: Chess | null = null;
+
   private handleReplayFen(fen: string): void {
+    if (!this.liveEngine) {
+      this.liveEngine = this.chessEngine;
+    }
     this.activePieceSquare = null;
     this.board.clearOverlay();
     this.board.clearLastMove();
@@ -335,8 +343,10 @@ export default class GameManager {
   }
 
   private handleReplayExit(): void {
-    if (this.driver) {
-      this.driver.applyState(this.driver.getLatestState());
+    if (this.liveEngine) {
+      this.chessEngine = this.liveEngine;
+      this.liveEngine = null;
+      this.syncBoardState();
     }
   }
 }

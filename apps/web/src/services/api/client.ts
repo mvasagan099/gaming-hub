@@ -29,8 +29,8 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit): Promise<T> {
-  const token = useAuthStore.getState().session?.access_token;
+async function request<T>(path: string, init: RequestInit, tokenOverride?: string): Promise<T> {
+  const token = tokenOverride ?? useAuthStore.getState().session?.access_token;
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -60,8 +60,8 @@ export const apiClient = {
   get<T>(path: string): Promise<T> {
     return request<T>(path, { method: "GET" });
   },
-  post<T>(path: string, body?: unknown): Promise<T> {
-    return request<T>(path, { method: "POST", body: body === undefined ? "{}" : JSON.stringify(body) });
+  post<T>(path: string, body?: unknown, tokenOverride?: string): Promise<T> {
+    return request<T>(path, { method: "POST", body: body === undefined ? "{}" : JSON.stringify(body) }, tokenOverride);
   },
   put<T>(path: string, body?: unknown): Promise<T> {
     return request<T>(path, { method: "PUT", body: body === undefined ? "{}" : JSON.stringify(body) });

@@ -1,13 +1,17 @@
 import { randomBytes, scrypt } from "node:crypto";
 import { promisify } from "node:util";
 import type { FastifyInstance } from "fastify";
+import { generateSecret, generateURI, verify, NobleCryptoPlugin, ScureBase32Plugin } from "otplib";
 import { prisma } from "@gaming-hub/db";
-import { AppError, changePasswordSchema, setup2FASchema } from "@gaming-hub/shared";
+import { AppError, changePasswordSchema, setup2FASchema, verify2FASchema, disable2FASchema } from "@gaming-hub/shared";
 import { authenticate } from "../plugins/authenticate";
 import { requireUser, parseSchema } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
 
 const scryptAsync = promisify(scrypt);
+
+const cryptoPlugin = new NobleCryptoPlugin();
+const base32Plugin = new ScureBase32Plugin();
 
 async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
@@ -23,7 +27,30 @@ async function verifyPassword(password: string, stored: string): Promise<boolean
 }
 
 function generateTOTPSecret(): string {
-  return randomBytes(20).toString("base64");
+  return generateSecret();
+}
+
+async function verifyTOTP(token: string, secret: string): Promise<boolean> {
+  try {
+    const result = await verify({
+      token,
+      secret,
+      crypto: cryptoPlugin,
+      base32: base32Plugin,
+      epochTolerance: 30,
+    });
+    return result.valid;
+  } catch {
+    return false;
+  }
+}
+
+function getTOTPAuthUrl(userEmail: string, secret: string, issuer: string = "Gaming Hub"): string {
+  return generateURI({
+    secret,
+    label: userEmail,
+    issuer,
+  });
 }
 
 export async function securityRoutes(app: FastifyInstance) {
@@ -86,7 +113,7 @@ export async function securityRoutes(app: FastifyInstance) {
     
     const profile = await prisma.profile.findUnique({
       where: { userId: user.id },
-      select: { twoFactorEnabled: true, passwordHash: true },
+      select: { twoFactorEnabled: true, passwordHash: true, email: true },
     });
     
     if (!profile) {
@@ -102,19 +129,20 @@ export async function securityRoutes(app: FastifyInstance) {
     }
     
     const secret = generateTOTPSecret();
+    const email = profile.email ?? user.email ?? "user";
+    const authUrl = getTOTPAuthUrl(email, secret);
     
     await prisma.profile.update({
       where: { userId: user.id },
       data: {
         twoFactorSecret: secret,
-        twoFactorEnabled: data.enable,
       },
     });
     
     await auditFromRequest(request, {
       actorType: "user",
       actorId: user.id,
-      action: data.enable ? "security.2fa.enabled" : "security.2fa.disabled",
+      action: "security.2fa.setup_initiated",
       category: "security",
       targetType: "user",
       targetId: user.id,
@@ -122,21 +150,86 @@ export async function securityRoutes(app: FastifyInstance) {
     
     return {
       ok: true,
-      enabled: data.enable,
-      secret: data.enable ? secret : undefined,
+      secret,
+      authUrl,
     };
   });
   
-  app.post("/api/security/2fa/disable", { preHandler: authenticate }, async (request) => {
+  app.post("/api/security/2fa/verify", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
+    const data = parseSchema(verify2FASchema, request.body);
     
     const profile = await prisma.profile.findUnique({
       where: { userId: user.id },
       select: { twoFactorEnabled: true, twoFactorSecret: true },
     });
     
+    if (!profile) {
+      throw new AppError("NOT_FOUND", "Profile not found", 404);
+    }
+    
+    if (profile.twoFactorEnabled) {
+      throw new AppError("VALIDATION_ERROR", "2FA is already enabled", 400);
+    }
+    
+    if (!profile.twoFactorSecret) {
+      throw new AppError("VALIDATION_ERROR", "2FA setup not initiated. Call /setup first", 400);
+    }
+    
+    if (!(await verifyTOTP(data.token, profile.twoFactorSecret))) {
+      await auditFromRequest(request, {
+        actorType: "user",
+        actorId: user.id,
+        action: "security.2fa.verify_failed",
+        category: "security",
+        targetType: "user",
+        targetId: user.id,
+        meta: { reason: "invalid_totp" },
+      });
+      throw new AppError("VALIDATION_ERROR", "Invalid verification code", 400);
+    }
+    
+    await prisma.profile.update({
+      where: { userId: user.id },
+      data: { twoFactorEnabled: true },
+    });
+    
+    await auditFromRequest(request, {
+      actorType: "user",
+      actorId: user.id,
+      action: "security.2fa.enabled",
+      category: "security",
+      targetType: "user",
+      targetId: user.id,
+    });
+    
+    return { ok: true, enabled: true };
+  });
+  
+  app.post("/api/security/2fa/disable", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const data = parseSchema(disable2FASchema, request.body);
+    
+    const profile = await prisma.profile.findUnique({
+      where: { userId: user.id },
+      select: { twoFactorEnabled: true, twoFactorSecret: true, passwordHash: true },
+    });
+    
     if (!profile?.twoFactorEnabled) {
       throw new AppError("VALIDATION_ERROR", "2FA is not enabled", 400);
+    }
+    
+    if (!(await verifyTOTP(data.token, profile.twoFactorSecret!))) {
+      await auditFromRequest(request, {
+        actorType: "user",
+        actorId: user.id,
+        action: "security.2fa.disable_failed",
+        category: "security",
+        targetType: "user",
+        targetId: user.id,
+        meta: { reason: "invalid_totp" },
+      });
+      throw new AppError("VALIDATION_ERROR", "Invalid verification code", 400);
     }
     
     await prisma.profile.update({
@@ -154,6 +247,47 @@ export async function securityRoutes(app: FastifyInstance) {
       category: "security",
       targetType: "user",
       targetId: user.id,
+    });
+    
+    return { ok: true };
+  });
+  
+  app.post("/api/security/2fa/verify-login", async (request) => {
+    const data = parseSchema(verify2FASchema, request.body);
+    
+    if (!data.userId || !data.token) {
+      throw new AppError("VALIDATION_ERROR", "userId and token are required", 400);
+    }
+    
+    const profile = await prisma.profile.findUnique({
+      where: { userId: data.userId },
+      select: { twoFactorSecret: true, twoFactorEnabled: true },
+    });
+    
+    if (!profile || !profile.twoFactorEnabled || !profile.twoFactorSecret) {
+      throw new AppError("VALIDATION_ERROR", "2FA is not enabled for this account", 400);
+    }
+    
+    if (!(await verifyTOTP(data.token, profile.twoFactorSecret))) {
+      await auditFromRequest(request, {
+        actorType: "user",
+        actorId: data.userId,
+        action: "security.2fa.login_failed",
+        category: "security",
+        targetType: "user",
+        targetId: data.userId,
+        meta: { reason: "invalid_totp" },
+      });
+      throw new AppError("VALIDATION_ERROR", "Invalid verification code", 400);
+    }
+    
+    await auditFromRequest(request, {
+      actorType: "user",
+      actorId: data.userId,
+      action: "security.2fa.login_success",
+      category: "security",
+      targetType: "user",
+      targetId: data.userId,
     });
     
     return { ok: true };

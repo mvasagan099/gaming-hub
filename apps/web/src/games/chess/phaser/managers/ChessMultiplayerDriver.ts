@@ -188,6 +188,10 @@ export default class ChessMultiplayerDriver {
 
     const piece = this.mirror.get(square as never);
     if (!piece || piece.color !== this.myColor) {
+      if (this.activeSquare && piece && piece.color !== this.myColor) {
+        this.onSquareClicked(square);
+        return;
+      }
       this.activeSquare = null;
       this.board.clearOverlay();
       return;
@@ -286,6 +290,7 @@ export default class ChessMultiplayerDriver {
   ): void {
     console.log("[ChessMultiplayerDriver] applyState called, destroyed:", this.destroyed, "gameState exists:", !!state);
     if (!state || this.destroyed) return;
+    this.waitingForServer = false;
     const s = state as ChessRemoteState;
     if (!s.fen) {
       console.log("[ChessMultiplayerDriver] applyState skipped: no FEN in state");

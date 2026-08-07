@@ -177,7 +177,9 @@ export class MatchManager {
     // Schedule clock check
     this.scheduleClockCheck(room);
     
-    // Broadcast match start
+    // Broadcast match start (includes the room update so every client sees the
+    // room transition to "playing" and can navigate into the game page).
+    await this.framework.syncManager.broadcastRoomUpdate(room);
     await this.framework.syncManager.broadcastMatchStart(room);
     
     this.framework.log(`Match ${matchId} started in room ${roomId}`);

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { LogIn, Mail, Lock, Sparkles, Loader2, Wrench } from "lucide-react";
 import { supabase } from "../../services/supabase";
+import { apiClient } from "../../services/api/client";
 import { AuthLayout } from "./AuthLayout";
 import { useSettingsStore } from "../../store/settingsStore";
 
@@ -45,6 +46,22 @@ export function LoginPage() {
 
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session) {
+        toast.success("Welcome back!");
+        navigate(from?.pathname ?? "/", { replace: true, state: from?.state });
+        return;
+      }
+      
+      const result = await apiClient.post<{ status: string; userId?: string }>("/auth/session", { token: session.access_token }, session.access_token);
+      
+      if (result.status === "2fa_required" && result.userId) {
+        toast.success("2FA required");
+        navigate("/2fa", { replace: true, state: { userId: result.userId } });
+        return;
+      }
+      
       toast.success("Welcome back!");
       navigate(from?.pathname ?? "/", { replace: true, state: from?.state });
     } catch (err) {

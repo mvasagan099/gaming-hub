@@ -70,7 +70,7 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
   return (
     <div className="relative mx-auto w-full max-w-6xl aspect-auto h-[75vh] max-h-[800px] bg-[#090d16] rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex gap-4 p-4">
       <div ref={containerRef} className="flex-1 h-full" />
-      {online && <ChessMatchPanel />}
+      {online && <ChessMatchPanel game={gameInstance} />}
       <ChessOverlays
         game={gameInstance}
         online={online}

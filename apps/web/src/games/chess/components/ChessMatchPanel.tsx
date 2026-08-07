@@ -18,9 +18,11 @@ import {
 } from "../utils/chessReactUtils";
 import { ChessEvents } from "../phaser/events/ChessEvents";
 
-interface ChessMatchPanelProps {}
+interface ChessMatchPanelProps {
+  game?: Phaser.Game | null;
+}
 
-export function ChessMatchPanel(props: ChessMatchPanelProps) {
+export function ChessMatchPanel({ game }: ChessMatchPanelProps) {
   const gameState = useMultiplayerStore((s) => s.gameState) as unknown as ChessRemoteState | null;
   const renderKey = useMultiplayerStore((s) => s.renderKey); // Force re-render on state changes
   
@@ -86,23 +88,15 @@ export function ChessMatchPanel(props: ChessMatchPanelProps) {
   };
 
   useEffect(() => {
-    const gameDiv = document.querySelector('[id*="chess-game"]');
-    if (!gameDiv) return;
-    const game = (gameDiv as unknown as { scene?: { getScene: (name: string) => any } }).scene?.getScene("ChessScene");
-    if (!game) return;
+    const scene = game?.scene?.getScene("ChessScene");
+    if (!scene) return;
 
     if (replayFen && replayIdx !== null) {
-      game.events.emit(ChessEvents.REPLAY_FEN, replayFen);
+      scene.events.emit(ChessEvents.REPLAY_FEN, replayFen);
     } else {
-      game.events.emit(ChessEvents.REPLAY_EXIT);
+      scene.events.emit(ChessEvents.REPLAY_EXIT);
     }
-    return () => {
-      if (replayFen) {
-        game.events.off(ChessEvents.REPLAY_FEN);
-        game.events.off(ChessEvents.REPLAY_EXIT);
-      }
-    };
-  }, [replayFen, replayIdx]);
+  }, [game, replayFen, replayIdx]);
 
   const getWinnerDisplay = () => {
     if (!s.finished) return null;

@@ -55,8 +55,8 @@ export class PieceManager {
     const text = this.scene.add.text(0, -2, glyph, textStyle).setOrigin(0.5);
     text.setShadow(0, 4, 'rgba(0,0,0,0.4)', 4);
 
-    // Interactive hit-area
-    const zone = this.scene.add.circle(0, 0, size, 0xffffff, 0);
+    // Interactive hit-area (80x80 rectangle for full cell hit testing)
+    const zone = this.scene.add.rectangle(0, 0, CELL_SIZE, CELL_SIZE, 0xffffff, 0);
     zone.setInteractive({ useHandCursor: true });
     this.scene.input.setDraggable(zone);
 
@@ -88,8 +88,8 @@ export class PieceManager {
       container.setDepth(50);
 
       // Resolve landing square
-      const col = Math.round((container.x - BOARD_OFFSET_X - CELL_SIZE / 2) / CELL_SIZE);
-      const row = Math.round((container.y - BOARD_OFFSET_Y - CELL_SIZE / 2) / CELL_SIZE);
+      const col = Math.floor((container.x - BOARD_OFFSET_X) / CELL_SIZE);
+      const row = Math.floor((container.y - BOARD_OFFSET_Y) / CELL_SIZE);
       const targetSq = this.board.gridToSquare(col, row);
 
       if (targetSq && targetSq !== p.square) {

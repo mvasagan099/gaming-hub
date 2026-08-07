@@ -24,8 +24,12 @@ export const GamePage: React.FC = () => {
   const room = useMultiplayerStore((s) => s.room);
 
   const onBack = () => {
-    if (mode === 'multiplayer') navigate(`/lobby/${gameId}`);
-    else navigate('/');
+    if (mode === 'multiplayer') {
+      void useMultiplayerStore.getState().leaveRoom();
+      navigate(`/lobby/${gameId}`);
+    } else {
+      navigate('/');
+    }
   };
 
   if (mode === 'multiplayer') {

@@ -615,6 +615,19 @@ export class RoomManager {
     return true;
   }
 
+  async launchRematch(room: RoomRuntime, starter: Pick<AuthenticatedUser, "userId">, socket: Socket): Promise<RoomFull> {
+    room.status = "waiting";
+    room.match = null;
+    room.rematch = null;
+    let seat = 0;
+    for (const player of room.players.values()) {
+      if (!player.isSpectator) {
+        player.seat = seat++;
+      }
+    }
+    return this.launchMatch(room, starter, socket);
+  }
+
   /**
    * Persists a match row, debits entry stakes, spins up the authoritative
    * engine and flips the room to playing. Called by both host "start" and
