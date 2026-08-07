@@ -14,6 +14,7 @@
     "@gaming-hub/game-engine": "*",
     "@gaming-hub/shared": "*",
     "@gaming-hub/socket": "*",
+    "@gaming-hub/multiplayer": "*",
     "@socket.io/redis-adapter": "^8.3.0",
     "ioredis": "^5.4.1",
     "jose": "^6.0.8",

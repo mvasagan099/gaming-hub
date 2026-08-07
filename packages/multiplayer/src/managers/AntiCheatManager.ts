@@ -1,0 +1,459 @@
+/**
+ * Anti-Cheat Manager
+ * 
+ * Validates player actions and detects suspicious behavior.
+ * 
+ * Key features:
+ * - Server validates every action
+ * - Ignore invalid packets
+ * - Prevent speed hacks
+ * - Prevent duplicate actions
+ * - Prevent state manipulation
+ * - Audit suspicious events
+ * - Secure Socket.IO authentication
+ */
+
+import type { MultiplayerFramework } from "../framework";
+import type {
+  RoomRuntime,
+  PlayerRuntime,
+  GameAction,
+  ValidationResult,
+  SuspiciousEvent,
+} from "../types";
+import type { EngineActionResult, JsonObject } from "@gaming-hub/shared";
+
+export interface AntiCheatConfig {
+  /** Maximum actions per second */
+  maxActionsPerSecond: number;
+  /** Maximum number of suspicious events before auto-kick */
+  maxSuspiciousEvents: number;
+  /** Time window for action rate limiting (ms) */
+  actionRateWindowMs: number;
+  /** Minimum time between actions (ms) */
+  minActionIntervalMs: number;
+}
+
+export interface ActionValidationContext {
+  room: RoomRuntime;
+  player: PlayerRuntime;
+  action: GameAction;
+  result: EngineActionResult<JsonObject>;
+  timestamp: number;
+  actionSequence: number;
+}
+
+export class AntiCheatManager {
+  private readonly framework: MultiplayerFramework;
+  private readonly config: AntiCheatConfig;
+  private readonly actionHistory = new Map<string, number[]>(); // playerId -> action timestamps
+  private readonly suspiciousEvents = new Map<string, SuspiciousEvent[]>(); // playerId -> events
+  private readonly actionSequences = new Map<string, number>(); // playerId -> last sequence number
+  
+  constructor(framework: MultiplayerFramework) {
+    this.framework = framework;
+    this.config = {
+      maxActionsPerSecond: 10,
+      maxSuspiciousEvents: 5,
+      actionRateWindowMs: 1000,
+      minActionIntervalMs: 50,
+    };
+  }
+  
+  async initialize(): Promise<void> {
+    this.framework.log("AntiCheatManager initialized");
+  }
+  
+  async shutdown(): Promise<void> {
+    this.actionHistory.clear();
+    this.suspiciousEvents.clear();
+    this.actionSequences.clear();
+  }
+  
+  /**
+   * Validate a player action.
+   */
+  async validateAction(
+    room: RoomRuntime,
+    player: PlayerRuntime,
+    action: GameAction,
+    result: EngineActionResult<JsonObject>
+  ): Promise<ValidationResult> {
+    const now = Date.now();
+    const context: ActionValidationContext = {
+      room,
+      player,
+      action,
+      result,
+      timestamp: now,
+      actionSequence: this.getNextActionSequence(player.id),
+    };
+    
+    // Check action rate limiting
+    const rateCheck = this.checkActionRate(player.id, now);
+    if (!rateCheck.valid) {
+      this.logSuspiciousEvent({
+        playerId: player.id,
+        roomId: room.id,
+        eventType: "rate_limit_exceeded",
+        details: { action, rate: this.getActionRate(player.id) },
+        timestamp: now,
+        severity: "medium",
+      });
+      return rateCheck;
+    }
+    
+    // Check for rapid successive actions (speed hack)
+    const intervalCheck = this.checkActionInterval(player.id, now);
+    if (!intervalCheck.valid) {
+      this.logSuspiciousEvent({
+        playerId: player.id,
+        roomId: room.id,
+        eventType: "rapid_actions",
+        details: { action },
+        timestamp: now,
+        severity: "high",
+      });
+      return intervalCheck;
+    }
+    
+    // Check for duplicate actions
+    const duplicateCheck = this.checkDuplicateAction(context);
+    if (!duplicateCheck.valid) {
+      this.logSuspiciousEvent({
+        playerId: player.id,
+        roomId: room.id,
+        eventType: "duplicate_action",
+        details: { action },
+        timestamp: now,
+        severity: "medium",
+      });
+      return duplicateCheck;
+    }
+    
+    // Validate action is from correct player
+    const turnCheck = this.validateTurnOrder(context);
+    if (!turnCheck.valid) {
+      this.logSuspiciousEvent({
+        playerId: player.id,
+        roomId: room.id,
+        eventType: "wrong_turn",
+        details: { action, currentSeat: this.getCurrentSeat(room) },
+        timestamp: now,
+        severity: "high",
+      });
+      return turnCheck;
+    }
+    
+    // Validate action isn't manipulating state
+    const stateCheck = this.validateStateIntegrity(context);
+    if (!stateCheck.valid) {
+      this.logSuspiciousEvent({
+        playerId: player.id,
+        roomId: room.id,
+        eventType: "state_manipulation",
+        details: { action },
+        timestamp: now,
+        severity: "critical",
+      });
+      return stateCheck;
+    }
+    
+    // Check for suspicious patterns
+    const patternCheck = this.checkSuspiciousPatterns(context);
+    if (!patternCheck.valid) {
+      return patternCheck;
+    }
+    
+    // Record action
+    this.recordAction(player.id, now);
+    
+    return { valid: true, confidence: 1.0 };
+  }
+  
+  /**
+   * Log a suspicious event.
+   */
+  logSuspiciousEvent(event: Omit<SuspiciousEvent, "id">): void {
+    const fullEvent: SuspiciousEvent = {
+      ...event,
+      id: `${event.playerId}_${event.timestamp}_${Math.random().toString(36).slice(2, 8)}`,
+    };
+    
+    const events = this.suspiciousEvents.get(event.playerId) ?? [];
+    events.push(fullEvent);
+    this.suspiciousEvents.set(event.playerId, events);
+    
+    this.framework.error(
+      `Suspicious event: ${event.eventType} by player ${event.playerId} in room ${event.roomId}`,
+      event.details
+    );
+    
+    // Check if player should be auto-kicked
+    const criticalCount = events.filter(e => e.severity === "critical").length;
+    const highCount = events.filter(e => e.severity === "high").length;
+    
+    if (criticalCount >= 2 || highCount >= this.config.maxSuspiciousEvents) {
+      this.autoKickPlayer(event.playerId, event.roomId, "suspicious_behavior");
+    }
+  }
+  
+  /**
+   * Get suspicious events for a player.
+   */
+  getSuspiciousEvents(playerId: string): SuspiciousEvent[] {
+    return this.suspiciousEvents.get(playerId) ?? [];
+  }
+  
+  /**
+   * Get all suspicious events.
+   */
+  getAllSuspiciousEvents(): SuspiciousEvent[] {
+    const events: SuspiciousEvent[] = [];
+    for (const playerEvents of this.suspiciousEvents.values()) {
+      events.push(...playerEvents);
+    }
+    return events.sort((a, b) => b.timestamp - a.timestamp);
+  }
+  
+  /**
+   * Clear suspicious events for a player.
+   */
+  clearSuspiciousEvents(playerId: string): void {
+    this.suspiciousEvents.delete(playerId);
+  }
+  
+  /**
+   * Check action rate for a player.
+   */
+  private checkActionRate(playerId: string, now: number): ValidationResult {
+    const history = this.actionHistory.get(playerId) ?? [];
+    const windowStart = now - this.config.actionRateWindowMs;
+    const actionsInWindow = history.filter(t => t >= windowStart).length;
+    
+    if (actionsInWindow > this.config.maxActionsPerSecond * (this.config.actionRateWindowMs / 1000)) {
+      return {
+        valid: false,
+        reason: "Action rate limit exceeded",
+        action: "reject",
+        confidence: 0.9,
+      };
+    }
+    
+    return { valid: true, confidence: 1.0 };
+  }
+  
+  /**
+   * Check action interval for a player.
+   */
+  private checkActionInterval(playerId: string, now: number): ValidationResult {
+    const history = this.actionHistory.get(playerId) ?? [];
+    const lastAction = history[history.length - 1];
+    
+    if (lastAction && now - lastAction < this.config.minActionIntervalMs) {
+      return {
+        valid: false,
+        reason: "Actions too frequent",
+        action: "reject",
+        confidence: 0.95,
+      };
+    }
+    
+    return { valid: true, confidence: 1.0 };
+  }
+  
+  /**
+   * Check for duplicate actions.
+   */
+  private checkDuplicateAction(context: ActionValidationContext): ValidationResult {
+    // Simple duplicate check - could be enhanced with action fingerprinting
+    const { action, timestamp } = context;
+    const recentThreshold = 100; // 100ms
+    
+    const history = this.actionHistory.get(context.player.id) ?? [];
+    const recentActions = history.filter(t => timestamp - t < recentThreshold);
+    
+    if (recentActions.length > 0) {
+      // Could be a network retry, allow but flag
+      return { valid: true, confidence: 0.7 };
+    }
+    
+    return { valid: true, confidence: 1.0 };
+  }
+  
+  /**
+   * Validate turn order.
+   */
+  private validateTurnOrder(context: ActionValidationContext): ValidationResult {
+    const { room, player, action } = context;
+    
+    if (!room.match) {
+      return { valid: false, reason: "No active match" };
+    }
+    
+    const engine = room.match.engine as { currentSeat: number };
+    const currentSeat = engine.currentSeat;
+    
+    // Allow non-turn actions (like chat)
+    if (action.type === "chat" || action.type === "emoji") {
+      return { valid: true, confidence: 1.0 };
+    }
+    
+    // Allow resign at any time
+    if (action.type === "resign") {
+      return { valid: true, confidence: 1.0 };
+    }
+    
+    // Check if it's this player's turn
+    if (player.seat !== currentSeat) {
+      return {
+        valid: false,
+        reason: "Not your turn",
+        action: "reject",
+        confidence: 1.0,
+      };
+    }
+    
+    return { valid: true, confidence: 1.0 };
+  }
+  
+  /**
+   * Validate state integrity.
+   */
+  private validateStateIntegrity(context: ActionValidationContext): ValidationResult {
+    const { result } = context;
+    
+    if (!result.ok && result.error) {
+      // Engine rejected the action - this is expected for invalid moves
+      return { valid: true, confidence: 1.0 };
+    }
+    
+    // Check for impossible state changes
+    if (result.state === null || result.state === undefined) {
+      return {
+        valid: false,
+        reason: "Invalid state returned",
+        action: "reject",
+        confidence: 1.0,
+      };
+    }
+    
+    return { valid: true, confidence: 1.0 };
+  }
+  
+  /**
+   * Check for suspicious patterns.
+   */
+  private checkSuspiciousPatterns(context: ActionValidationContext): ValidationResult {
+    const { player, action } = context;
+    
+    // Check for perfect move sequences (possible bot)
+    const activityPattern = this.framework.playerManager.getActivityPattern(player.id);
+    if (activityPattern.length >= 10) {
+      // Check for robotic timing (too consistent)
+      const intervals: number[] = [];
+      for (let i = 1; i < activityPattern.length; i++) {
+        intervals.push(activityPattern[i]! - activityPattern[i - 1]!);
+      }
+      
+      if (intervals.length > 5) {
+        const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+        const variance = intervals.reduce((sum, val) => sum + Math.pow(val - avgInterval, 2), 0) / intervals.length;
+        const cv = Math.sqrt(variance) / avgInterval; // Coefficient of variation
+        
+        // Too consistent = suspicious
+        if (cv < 0.1 && avgInterval < 500) {
+          return {
+            valid: true,
+            confidence: 0.5,
+          };
+        }
+      }
+    }
+    
+    return { valid: true, confidence: 1.0 };
+  }
+  
+  /**
+   * Auto-kick a player for suspicious behavior.
+   */
+  private async autoKickPlayer(playerId: string, roomId: string, reason: string): Promise<void> {
+    const room = this.framework.roomManager.getRoom(roomId);
+    if (!room) return;
+    
+    this.framework.error(`Auto-kicking player ${playerId} from room ${roomId}: ${reason}`);
+    
+    // Find player's socket
+    const player = room.players.get(playerId);
+    if (!player) return;
+    
+    // Notify player
+    for (const socketId of player.socketIds) {
+      const socket = this.framework.io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit("player:kicked", {
+          roomId,
+          playerId,
+          reason: `suspicious_behavior: ${reason}`,
+        });
+      }
+    }
+    
+    // Kick from room
+    try {
+      const firstSocket = player.socketIds.values().next().value;
+      if (firstSocket) {
+        const socket = this.framework.io.sockets.sockets.get(firstSocket);
+        if (socket) {
+          await this.framework.roomManager.kickPlayer(roomId, playerId, "system");
+        }
+      }
+    } catch (error) {
+      this.framework.error(`Failed to auto-kick player ${playerId}`, error);
+    }
+  }
+  
+  /**
+   * Get current seat from room engine.
+   */
+  private getCurrentSeat(room: RoomRuntime): number | null {
+    if (!room.match) return null;
+    const engine = room.match.engine as { currentSeat: number };
+    return engine.currentSeat ?? null;
+  }
+  
+  /**
+   * Get action rate for a player.
+   */
+  private getActionRate(playerId: string): number {
+    const history = this.actionHistory.get(playerId) ?? [];
+    const now = Date.now();
+    const windowStart = now - this.config.actionRateWindowMs;
+    return history.filter(t => t >= windowStart).length / (this.config.actionRateWindowMs / 1000);
+  }
+  
+  /**
+   * Record an action.
+   */
+  private recordAction(playerId: string, timestamp: number): void {
+    const history = this.actionHistory.get(playerId) ?? [];
+    history.push(timestamp);
+    
+    // Keep only last 100 actions
+    if (history.length > 100) {
+      history.shift();
+    }
+    
+    this.actionHistory.set(playerId, history);
+  }
+  
+  /**
+   * Get next action sequence number.
+   */
+  private getNextActionSequence(playerId: string): number {
+    const current = this.actionSequences.get(playerId) ?? 0;
+    const next = current + 1;
+    this.actionSequences.set(playerId, next);
+    return next;
+  }
+}

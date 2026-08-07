@@ -11,7 +11,7 @@ export const CRICKET_OVERS = {
 export type CricketMatchType = keyof typeof CRICKET_OVERS;
 
 /** The delivery the bowler can choose. Mirrors the in-scene pitch types. */
-export type CricketDelivery = "fast" | "slow" | "spin";
+export type CricketDelivery = "fast" | "slow" | "spin" | "yorker" | "bouncer" | "swing";
 
 /** The shot the batsman can choose. */
 export type CricketShot = "straight" | "left" | "right" | "up";
@@ -19,18 +19,35 @@ export type CricketShot = "straight" | "left" | "right" | "up";
 /** How well the batsman connected with the ball. */
 export type CricketTiming = "early" | "good" | "late";
 
-export const CRICKET_DELIVERIES: readonly CricketDelivery[] = ["fast", "slow", "spin"];
+/** Bowling line (horizontal position). */
+export type CricketLine = "off" | "middle" | "leg";
+
+/** Bowling length (vertical position). */
+export type CricketLength = "full" | "good" | "short";
+
+export const CRICKET_LINES: readonly CricketLine[] = ["off", "middle", "leg"];
+export const CRICKET_LENGTHS: readonly CricketLength[] = ["full", "good", "short"];
+export const CRICKET_DELIVERIES: readonly CricketDelivery[] = ["fast", "slow", "spin", "yorker", "bouncer", "swing"];
 export const CRICKET_SHOTS: readonly CricketShot[] = ["straight", "left", "right", "up"];
 
 export type CricketWicketType = "bowled" | "caught" | "lbw" | "runout" | "stumped";
+
+export type CricketExtraType = "no-ball" | "wide" | "bye" | "leg-bye";
 
 export interface CricketBall extends JsonObject {
   over: number;
   ball: number;
   runs: number;
+  extras: number;
+  extraType: CricketExtraType | null;
   wicket: boolean;
   wicketType: CricketWicketType | null;
   comment: string;
+}
+
+export interface OversBalls extends JsonObject {
+  overs: number;
+  balls: number;
 }
 
 export interface CricketPlayer extends JsonObject {
@@ -42,13 +59,17 @@ export interface CricketPlayer extends JsonObject {
   sixes: number;
   wickets: number;
   overs: number;
+  oversBowled: OversBalls;
+  maidens: number;
   runsConceded: number;
+  extras: number;
 }
 
-/** The delivery currently awaiting a shot from the batsman. */
 export interface CricketPendingDelivery extends JsonObject {
   delivery: CricketDelivery;
   power: number;
+  line: string | null;
+  length: string | null;
 }
 
 export interface CricketState extends JsonObject {
@@ -59,17 +80,16 @@ export interface CricketState extends JsonObject {
   inning: 1 | 2;
   battingTeam: number;
   bowlingTeam: number;
-  /** Seat that bats first, decided by the server toss. */
   battingFirst: number;
-  /** Who is allowed to act right now. */
-  currentActor: "bowler" | "batsman";
-  /** Runs needed to win (first innings score + 1); null during the first innings. */
+  currentActor: "bowler" | "batsman" | "toss";
   target: number | null;
   pendingDelivery: CricketPendingDelivery | null;
   team1Score: number;
   team2Score: number;
   team1Wickets: number;
   team2Wickets: number;
+  team1Extras: number;
+  team2Extras: number;
   balls: CricketBall[];
   players: CricketPlayer[];
   currentBatsman: number;
@@ -99,25 +119,35 @@ export interface CricketState extends JsonObject {
   matchTimerConfig: { matchDurationMs: number; warningThresholdMs: number } | null;
   gameOver: boolean;
   endReasonState: string | null;
+  runRate: number | null;
+  requiredRunRate: number | null;
+  tossResult: "heads" | "tails" | null;
+  tossWinner: number | null;
 }
 
 export interface CricketBowlAction extends GameAction {
   type: "bowl";
   delivery: CricketDelivery;
-  /** Power 0..1 from the power bar; defaults to 0.5. */
   power?: number;
+  line?: string;
+  length?: string;
 }
 
 export interface CricketBatAction extends GameAction {
   type: "bat";
   shot: CricketShot;
-  /** Derived client-side from the ball flight; defaults to "good". */
   timing?: CricketTiming;
+}
+
+export interface CricketTossCallAction extends GameAction {
+  type: "toss-call";
+  call: "heads" | "tails";
 }
 
 export type CricketAction =
   | CricketBowlAction
   | CricketBatAction
+  | CricketTossCallAction
   | { type: "resign" }
   | { type: "draw-offer" }
   | { type: "draw-accept" }

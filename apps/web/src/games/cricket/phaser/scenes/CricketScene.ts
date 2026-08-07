@@ -851,14 +851,13 @@ export class CricketScene extends Phaser.Scene {
   }
 
 
-  private executeBowl(type: 'fast' | 'slow' | 'spin', powerMultiplier: number = 1.0) {
+  private executeBowl(type: CricketDelivery, powerMultiplier: number = 1.0) {
     this.isBowling = true;
     this.isHit = false;
     this.aiHasSwung = false;
     this.playerHasSwung = false;
     this.hasSteppedOut = false;
     
-    // Reset batsman, nonStriker, and bat positions and scales
     this.resetBatsmenPositions();
 
     this.ballDepth = this.bowler.y;
@@ -908,13 +907,35 @@ export class CricketScene extends Phaser.Scene {
     } else if (type === 'slow') {
       const speed = (250 + Math.random() * 100) * mult;
       this.ballVelocity = { x: 0, y: this.role === 'bowling' ? -speed : speed };
-      this.ballVelocityZ = 300 * mult; // Arcs high
+      this.ballVelocityZ = 300 * mult;
       this.hud.updateStatus("Slower ball... hold your swing.", "#93c5fd");
+    } else if (type === 'yorker') {
+      const speed = (600 + Math.random() * 100) * mult;
+      this.ballVelocity = { x: 0, y: this.role === 'bowling' ? -speed : speed };
+      this.ballVelocityZ = -150 * mult;
+      this.hud.updateStatus("Yorker! Keep it low!", "#fbbf24");
+      this.trailEmitter.setConfig({ tint: 0xffa500, lifespan: 150, scale: { start: 0.8, end: 0 } });
+      this.trailEmitter.start();
+    } else if (type === 'bouncer') {
+      const speed = (550 + Math.random() * 150) * mult;
+      this.ballVelocity = { x: 0, y: this.role === 'bowling' ? -speed : speed };
+      this.ballVelocityZ = 400 * mult;
+      this.hud.updateStatus("Bouncer! Watch the short ball!", "#ef4444");
+      this.trailEmitter.setConfig({ tint: 0xff0000, lifespan: 180, scale: { start: 1.2, end: 0 } });
+      this.trailEmitter.start();
+    } else if (type === 'swing') {
+      const speed = (450 + Math.random() * 100) * mult;
+      this.spinDirection = Math.random() > 0.5 ? 1 : -1;
+      this.ballVelocity = { x: this.spinDirection * 80, y: this.role === 'bowling' ? -speed : speed };
+      this.ballVelocityZ = 50 * mult;
+      this.hud.updateStatus("Swing bowling! Watch the movement!", "#a855f7");
+      this.trailEmitter.setConfig({ tint: 0x9333ea, lifespan: 200, scale: { start: 1, end: 0 } });
+      this.trailEmitter.start();
     } else {
       const speed = (400 + Math.random() * 100) * mult;
       this.spinDirection = Math.random() > 0.5 ? 1 : -1;
       this.ballVelocity = { x: this.spinDirection * 150, y: this.role === 'bowling' ? -speed : speed };
-      this.ballVelocityZ = 100 * mult; // Normal bounce
+      this.ballVelocityZ = 100 * mult;
       this.hud.updateStatus("Spin! Watch the curve!", "#fde047");
     }
   }

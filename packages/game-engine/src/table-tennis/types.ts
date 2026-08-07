@@ -10,6 +10,15 @@ export interface TableTennisBall extends JsonObject {
   servedBySeat: number;
   lastHitSeat: number | null;
   bounced: number;
+  inPlay: boolean;
+  fromX: number;
+  fromY: number;
+}
+
+export interface TableTennisPointRecord extends JsonObject {
+  pointNumber: number;
+  winnerSeat: number;
+  reason: "serve" | "hit" | "out" | "net" | "timeout";
 }
 
 export interface TableTennisPlayer extends JsonObject {
@@ -18,7 +27,10 @@ export interface TableTennisPlayer extends JsonObject {
   score: number;
   wins: number;
   paddleX: number;
+  pointsWon: number;
 }
+
+export type TableTennisPhase = "serve" | "rally";
 
 export interface TableTennisState extends JsonObject {
   servingSeat: number;
@@ -29,11 +41,15 @@ export interface TableTennisState extends JsonObject {
   };
   sets: number[];
   setPoints: number[];
+  ball: TableTennisBall | null;
+  phase: TableTennisPhase;
+  rallyCount: number;
+  pointHistory: TableTennisPointRecord[];
   winnerSeat: number | null;
   winnerSeats: number[];
   finished: boolean;
-  endReason: "win-by-points" | "win-by-sets" | "time-out" | "match-timeout" | "resign" | null;
-  gamePoints: number ; // Global 5-minute challenge points if applicable
+  endReason: "win-by-sets" | "match-timeout" | "time-out" | "resign" | "agreement" | null;
+  gamePoints: number; // Total points played in the match (tiebreaker / global score)
   currentSeat: number;
   turnNumber: number;
   turnStartedAtMs: number | null;

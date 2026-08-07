@@ -1,0 +1,98 @@
+{
+  "name": "@gaming-hub/enterprise",
+  "version": "1.0.0",
+  "description": "Enterprise-grade services for Gaming Hub platform",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./live-ops": {
+      "import": "./dist/live-ops/index.mjs",
+      "require": "./dist/live-ops/index.js",
+      "types": "./dist/live-ops/index.d.ts"
+    },
+    "./ai": {
+      "import": "./dist/ai/index.mjs",
+      "require": "./dist/ai/index.js",
+      "types": "./dist/ai/index.d.ts"
+    },
+    "./economy": {
+      "import": "./dist/economy/index.mjs",
+      "require": "./dist/economy/index.js",
+      "types": "./dist/economy/index.d.ts"
+    },
+    "./monetization": {
+      "import": "./dist/monetization/index.mjs",
+      "require": "./dist/monetization/index.js",
+      "types": "./dist/monetization/index.d.ts"
+    },
+    "./social": {
+      "import": "./dist/social/index.mjs",
+      "require": "./dist/social/index.js",
+      "types": "./dist/social/index.d.ts"
+    },
+    "./notifications": {
+      "import": "./dist/notifications/index.mjs",
+      "require": "./dist/notifications/index.js",
+      "types": "./dist/notifications/index.d.ts"
+    },
+    "./analytics": {
+      "import": "./dist/analytics/index.mjs",
+      "require": "./dist/analytics/index.js",
+      "types": "./dist/analytics/index.d.ts"
+    },
+    "./compliance": {
+      "import": "./dist/compliance/index.mjs",
+      "require": "./dist/compliance/index.js",
+      "types": "./dist/compliance/index.d.ts"
+    },
+    "./infrastructure": {
+      "import": "./dist/infrastructure/index.mjs",
+      "require": "./dist/infrastructure/index.js",
+      "types": "./dist/infrastructure/index.d.ts"
+    },
+    "./automation": {
+      "import": "./dist/automation/index.mjs",
+      "require": "./dist/automation/index.js",
+      "types": "./dist/automation/index.d.ts"
+    },
+    "./security": {
+      "import": "./dist/security/index.mjs",
+      "require": "./dist/security/index.js",
+      "types": "./dist/security/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gaming-hub/db": "workspace:*",
+    "@gaming-hub/shared": "workspace:*",
+    "@gaming-hub/multiplayer": "workspace:*",
+    "ioredis": "^5.4.1",
+    "bullmq": "^5.0.0",
+    "openai": "^4.0.0",
+    "node-cron": "^3.0.3",
+    "firebase-admin": "^12.0.0",
+    "twilio": "^5.0.0",
+    "nodemailer": "^6.9.0",
+    "web-push": "^3.6.0",
+    "bull-arena": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^6.4.15",
+    "@types/web-push": "^3.6.3",
+    "tsup": "^8.1.0",
+    "typescript": "^5.5.3"
+  }
+}

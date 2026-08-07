@@ -12,6 +12,7 @@ import type {
   CricketWicketType,
   CricketAction,
   CricketEngineOptions,
+  CricketExtraType,
 } from "./types";
 import { CRICKET_OVERS, CRICKET_DELIVERIES, CRICKET_SHOTS } from "./types";
 
@@ -33,11 +34,6 @@ type OutcomeWeights = Record<OutcomeKey, number>;
 
 const OUTCOME_KEYS: readonly OutcomeKey[] = ["0", "1", "2", "4", "6", "W"];
 
-/**
- * Outcome weight table for a well-timed shot, keyed by delivery x shot.
- * Higher weights = more likely. The server rolls against these with its own
- * RNG, so the result is authoritative and replay-safe.
- */
 const GOOD_TIMING: Record<CricketDelivery, Record<CricketShot, OutcomeWeights>> = {
   fast: {
     straight: { 0: 10, 1: 25, 2: 15, 4: 25, 6: 0, W: 3 },
@@ -56,6 +52,24 @@ const GOOD_TIMING: Record<CricketDelivery, Record<CricketShot, OutcomeWeights>> 
     left: { 0: 25, 1: 25, 2: 20, 4: 10, 6: 0, W: 5 },
     right: { 0: 25, 1: 25, 2: 20, 4: 10, 6: 0, W: 5 },
     up: { 0: 10, 1: 15, 2: 15, 4: 25, 6: 15, W: 8 },
+  },
+  yorker: {
+    straight: { 0: 40, 1: 35, 2: 10, 4: 5, 6: 0, W: 15 },
+    left: { 0: 35, 1: 30, 2: 20, 4: 5, 6: 0, W: 12 },
+    right: { 0: 35, 1: 30, 2: 20, 4: 5, 6: 0, W: 12 },
+    up: { 0: 25, 1: 25, 2: 20, 4: 10, 6: 5, W: 18 },
+  },
+  bouncer: {
+    straight: { 0: 25, 1: 20, 2: 10, 4: 15, 6: 10, W: 15 },
+    left: { 0: 30, 1: 25, 2: 15, 4: 10, 6: 5, W: 12 },
+    right: { 0: 30, 1: 25, 2: 15, 4: 10, 6: 5, W: 12 },
+    up: { 0: 15, 1: 15, 2: 15, 4: 25, 6: 20, W: 10 },
+  },
+  swing: {
+    straight: { 0: 20, 1: 25, 2: 15, 4: 15, 6: 5, W: 10 },
+    left: { 0: 25, 1: 25, 2: 20, 4: 10, 6: 0, W: 8 },
+    right: { 0: 25, 1: 25, 2: 20, 4: 10, 6: 0, W: 8 },
+    up: { 0: 15, 1: 15, 2: 15, 4: 20, 6: 15, W: 12 },
   },
 };
 
@@ -107,9 +121,7 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
   }
 
   protected override initBaseState(): Omit<CricketState, keyof import("../base/MultiplayerGameEngine").BaseState> {
-    // Server toss: the random batting-first seat is broadcast as the opening state.
-    const battingFirst = this.random() < 0.5 ? 0 : 1;
-    const players: CricketPlayer[] = this.players.map((p, index) => ({
+    const players: CricketPlayer[] = this.players.map((p) => ({
       seat: p.seat,
       name: `Player ${p.seat + 1}`,
       runs: 0,
@@ -118,48 +130,66 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
       sixes: 0,
       wickets: 0,
       overs: 0,
+      oversBowled: { overs: 0, balls: 0 },
+      maidens: 0,
       runsConceded: 0,
+      extras: 0,
     }));
 
+    const tossCoin = this.random() < 0.5 ? "heads" : "tails";
     return {
       matchType: this.matchType,
       totalOvers: this.totalOvers,
       currentOver: 0,
       currentBall: 0,
       inning: 1,
-      battingTeam: battingFirst,
-      bowlingTeam: 1 - battingFirst,
-      battingFirst,
-      currentActor: "bowler",
+      battingTeam: 0,
+      bowlingTeam: 0,
+      battingFirst: 0,
+      currentActor: "toss",
       target: null,
       pendingDelivery: null,
       team1Score: 0,
       team2Score: 0,
       team1Wickets: 0,
       team2Wickets: 0,
+      team1Extras: 0,
+      team2Extras: 0,
       balls: [],
       players,
-      currentBatsman: battingFirst,
-      currentBowler: 1 - battingFirst,
+      currentBatsman: 0,
+      currentBowler: 0,
       winner: null,
       endReason: null,
       endReasonState: null,
+      runRate: null,
+      requiredRunRate: null,
+      tossResult: tossCoin,
+      tossWinner: null,
     };
   }
 
   protected override initState(): CricketState {
     const state = super.initState();
-    // The bowling side opens the first ball (base initialises currentSeat to 0).
-    state.currentActor = "bowler";
-    state.currentSeat = state.bowlingTeam;
-    this.startTurnTimer(state);
-    this.startMatchTimer(state);
+    if (state.currentActor === "toss") {
+      state.currentSeat = 0;
+    } else {
+      state.currentSeat = state.bowlingTeam;
+      this.startTurnTimer(state);
+      this.startMatchTimer(state);
+    }
     return state;
   }
 
   protected validateGameAction(action: CricketAction, seat: number, state: CricketState): string | null {
     if (state.finished) return "Match is finished";
     if (state.paused) return "Match is paused";
+    if (action.type === "toss-call") {
+      if (state.currentActor !== "toss") return "Toss already completed";
+      if (state.tossWinner != null) return "Toss already completed";
+      return null;
+    }
+    if (state.currentActor === "toss") return "Toss in progress";
     if (seat !== state.currentSeat) return "Not your turn";
 
     switch (action.type) {
@@ -196,13 +226,40 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
     const events: EngineEvent[] = [];
 
     switch (action.type) {
+      case "toss-call": {
+        const next = this.cloneState(state);
+        const won = action.call === state.tossResult;
+        const tossWinner = won ? seat : (1 - seat);
+        next.tossWinner = tossWinner;
+        const battingFirst = this.random() < 0.5 ? tossWinner : (1 - tossWinner);
+        next.battingFirst = battingFirst;
+        next.battingTeam = battingFirst;
+        next.bowlingTeam = 1 - battingFirst;
+        next.currentBatsman = battingFirst;
+        next.currentBowler = 1 - battingFirst;
+        next.currentActor = "bowler";
+        next.currentSeat = next.bowlingTeam;
+        events.push({
+          type: "toss-result",
+          tossResult: state.tossResult!,
+          tossCall: action.call,
+          tossWinner,
+          battingFirst,
+        });
+        return this.advanceTurn(next, now, events);
+      }
       case "bowl": {
         const next = this.cloneState(state);
         const power = clamp(action.power ?? 0.5, 0, 1);
-        next.pendingDelivery = { delivery: action.delivery, power };
+        next.pendingDelivery = { 
+          delivery: action.delivery, 
+          power, 
+          line: action.line ?? null, 
+          length: action.length ?? null 
+        };
         next.currentActor = "batsman";
         next.currentSeat = next.battingTeam;
-        events.push({ type: "ball-bowled", seat, delivery: action.delivery, power });
+        events.push({ type: "ball-bowled", seat, delivery: action.delivery, power, line: action.line, length: action.length });
         return this.advanceTurn(next, now, events);
       }
       case "bat":
@@ -230,17 +287,13 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
 
     const delivery = CRICKET_DELIVERIES[this.randomInt(0, CRICKET_DELIVERIES.length - 1)];
     const next = this.cloneState(state);
-    next.pendingDelivery = { delivery, power: 0.5 };
+    next.pendingDelivery = { delivery, power: 0.5, line: null, length: null };
     next.currentActor = "batsman";
     next.currentSeat = next.battingTeam;
     events.push({ type: "ball-bowled", seat, delivery, power: 0.5, auto: true });
     return this.advanceTurn(next, now, events);
   }
 
-  /**
-   * Resolves a single ball after the batsman's shot: rolls the outcome,
-   * updates stats, advances the over and transitions innings/match.
-   */
   private resolveShot(
     state: CricketState,
     shot: CricketShot,
@@ -249,7 +302,7 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
     events: EngineEvent[],
   ): EngineActionResult<CricketState> {
     const next = this.cloneState(state);
-    const delivery: CricketPendingDelivery = next.pendingDelivery ?? { delivery: "fast", power: 0.5 };
+    const delivery: CricketPendingDelivery = next.pendingDelivery ?? { delivery: "fast", power: 0.5, line: null, length: null };
 
     const weights = this.outcomeWeights(delivery.delivery, shot, timing, delivery.power);
     const outcome = this.rollOutcome(weights);
@@ -260,6 +313,23 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
     const batsman = next.players[next.currentBatsman];
     const bowler = next.players[next.currentBowler];
 
+    let extraType: import("./types").CricketExtraType | null = null;
+    let extras = 0;
+    const extraRoll = this.random();
+    if (!isWicket && extraRoll < 0.03) {
+      extraType = "no-ball";
+      extras = 1;
+    } else if (!isWicket && extraRoll < 0.06) {
+      extraType = "wide";
+      extras = 1;
+    } else if (!isWicket && extraRoll < 0.08) {
+      extraType = "bye";
+      extras = this.randomInt(1, 2);
+    } else if (!isWicket && extraRoll < 0.10) {
+      extraType = "leg-bye";
+      extras = this.randomInt(1, 2);
+    }
+
     batsman.runs += runs;
     batsman.balls += 1;
     if (runs === 4) batsman.fours += 1;
@@ -268,21 +338,36 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
       batsman.wickets += 1;
       bowler.wickets += 1;
     }
-    bowler.overs = Math.floor((bowler.overs * 6 + 1) / 6);
+
+    bowler.oversBowled.balls += 1;
+    if (bowler.oversBowled.balls >= 6) {
+      bowler.oversBowled.overs += 1;
+      bowler.oversBowled.balls = 0;
+      const maidenRuns = next.balls.slice(-6).reduce((sum, b) => sum + b.runs, 0);
+      if (maidenRuns === 0 && next.balls.slice(-6).every(b => !b.wicket)) {
+        bowler.maidens += 1;
+      }
+    }
+    bowler.overs = bowler.oversBowled.overs + bowler.oversBowled.balls / 6;
     bowler.runsConceded += runs;
+    bowler.extras += extras;
 
     const teamScore = next.inning === 1 ? "team1Score" : "team2Score";
     const teamWickets = next.inning === 1 ? "team1Wickets" : "team2Wickets";
-    (next as any)[teamScore] += runs;
+    const teamExtras = next.inning === 1 ? "team1Extras" : "team2Extras";
+    (next as any)[teamScore] += runs + extras;
+    (next as any)[teamExtras] += extras;
     if (isWicket) (next as any)[teamWickets] += 1;
 
     const ball: CricketBall = {
       over: next.currentOver,
       ball: next.currentBall + 1,
       runs,
+      extras,
+      extraType,
       wicket: isWicket,
       wicketType: isWicket ? wicketType : null,
-      comment: this.generateCommentary(runs, isWicket, wicketType),
+      comment: this.generateCommentary(runs, isWicket, wicketType, extraType, extras),
     };
     next.balls.push(ball);
 
@@ -310,8 +395,21 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
     if (next.currentBall >= 6) {
       next.currentOver += 1;
       next.currentBall = 0;
+      events.push({ type: "over-complete", over: next.currentOver });
     }
     next.pendingDelivery = null;
+
+    const totalBalls = next.currentOver * 6 + next.currentBall;
+    if (totalBalls > 0) {
+      next.runRate = ((next.inning === 1 ? next.team1Score : next.team2Score) / totalBalls) * 6;
+    }
+    if (next.inning === 2 && next.target != null && totalBalls > 0) {
+      const remaining = next.target - next.team2Score;
+      const remainingOvers = next.totalOvers - (totalBalls / 6);
+      if (remainingOvers > 0 && remaining > 0) {
+        next.requiredRunRate = remaining / remainingOvers;
+      }
+    }
 
     const battingScore = next.inning === 1 ? next.team1Score : next.team2Score;
 
@@ -436,7 +534,24 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
     return pool[this.randomInt(0, pool.length - 1)];
   }
 
-  private generateCommentary(runs: number, wicket: boolean, wicketType: CricketWicketType | null): string {
+  private generateCommentary(
+    runs: number,
+    wicket: boolean,
+    wicketType: CricketWicketType | null,
+    extraType?: CricketExtraType | null,
+    extras?: number,
+  ): string {
+    if (extraType) {
+      const extraNames: Record<CricketExtraType, string> = {
+        "no-ball": "NO BALL",
+        wide: "WIDE",
+        bye: "BYE",
+        "leg-bye": "LEG BYE",
+      };
+      const base = `${extraNames[extraType]}! ${extras} extra run${extras !== 1 ? "s" : ""}.`;
+      if (runs > 0) return `${base} Plus ${runs} from the bat.`;
+      return base;
+    }
     if (wicket) {
       return wicketType
         ? `${wicketType.toUpperCase()}! ${COMMENTARY[this.randomInt(0, COMMENTARY.length - 1)]}`
