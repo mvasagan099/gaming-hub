@@ -8,7 +8,7 @@ import type {
   MatchSettings,
   RoomFull,
 } from "@gaming-hub/shared";
-import { createTypedSocket, type TypedSocket } from "@gaming-hub/socket";
+import { createTypedSocket, type RematchUpdate, type TypedSocket } from "@gaming-hub/socket";
 import { useAuthStore } from "./authStore";
 
 function getSocketUrl(): string {
@@ -65,6 +65,10 @@ interface MultiplayerState {
   isSpectator: boolean;
   messages: ChatMessage[];
   emojis: ChatEmoji[];
+  /** Users currently typing in the room (auto-cleared a couple of seconds after the event). */
+  typing: { userId: string; senderName: string }[];
+  /** Rematch consent ledger for the current ended room. */
+  rematchState: { requestedBy: string[]; active: boolean } | null;
   matchmaking: MatchmakingInfo;
   /** Queue intent preserved across transient reconnects so it can be re-joined. */
   pendingRequeue: { gameId: GameId; stake: number; settings: MatchSettings } | null;
@@ -82,11 +86,17 @@ interface MultiplayerState {
   leaveRoom: () => Promise<void>;
   setReady: (ready: boolean) => Promise<RoomFull | null>;
   startGame: () => Promise<RoomFull | null>;
+  kickPlayer: (targetUserId: string) => Promise<void>;
+  requestRematch: () => Promise<void>;
+  acceptRematch: () => Promise<void>;
+  declineRematch: () => Promise<void>;
+  /** @deprecated use requestRematch */
   rematch: () => Promise<void>;
   joinMatchmaking: (gameId: GameId, stake: number, settings?: MatchSettings) => Promise<void>;
   leaveMatchmaking: () => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
   sendEmoji: (emoji: string) => Promise<void>;
+  sendTyping: () => Promise<void>;
   sendGameAction: (action: GameAction) => Promise<{ ok: boolean; error?: string }>;}
 
 function sessionToken(): string | null {
@@ -121,6 +131,8 @@ function clearRoom(set: (partial: Partial<MultiplayerState>) => void) {
     lastEvents: [],
     matchId: null,
     winner: null,
+    rematchState: null,
+    typing: [],
   });
 }
 
@@ -133,6 +145,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   isSpectator: false,
   messages: [],
   emojis: [],
+  typing: [],
+  rematchState: null,
   matchmaking: { ...IDLE_MATCHMAKING },
   pendingRequeue: null,
   gameState: null,
@@ -229,6 +243,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           gameState: payload.state,
           lastEvents: [],
           matchId: payload.matchId,
+          rematchState: null,
           renderKey: get().renderKey + 1, // Force re-render
         });
       });
@@ -239,6 +254,29 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
       socket.on("chat:emoji", (emoji) => {
         set({ emojis: [...get().emojis.slice(-9), emoji] });
+      });
+
+      socket.on("chat:typing", (payload) => {
+        if (payload.userId === useAuthStore.getState().user?.id) return;
+        const exists = get().typing.some((t) => t.userId === payload.userId);
+        if (!exists) {
+          set({ typing: [...get().typing, { userId: payload.userId, senderName: payload.senderName }] });
+        }
+        // The server is fire-and-forget; fade the indicator out ourselves.
+        setTimeout(() => {
+          set({ typing: get().typing.filter((t) => t.userId !== payload.userId) });
+        }, 2600);
+      });
+
+      socket.on("rematch:update", (update: RematchUpdate) => {
+        set({ rematchState: { requestedBy: update.requestedBy, active: update.active } });
+      });
+
+      socket.on("player:kicked", (payload) => {
+        set({ error: "You were removed from the room" });
+        if (payload.playerId === useAuthStore.getState().user?.id) {
+          clearRoom(set);
+        }
       });
 
       socket.on("matchmaking:queued", (payload) => {
@@ -347,13 +385,43 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     return updated;
   },
 
-  rematch: async () => {
+  kickPlayer: async (targetUserId) => {
     const socket = get().socket;
     const room = get().room;
     if (!socket || !room) return;
-    const res = await socket.emitWithAck("game:rematch", { roomId: room.id });
-    const updated = unwrapAck<RoomFull>(res);
-    applyRoom(set, updated);
+    const res = await socket.emitWithAck("room:kick", { roomId: room.id, targetUserId });
+    unwrapAck(res);
+  },
+
+  requestRematch: async () => {
+    const socket = get().socket;
+    const room = get().room;
+    if (!socket || !room) return;
+    const res = await socket.emitWithAck("game:rematch-request", { roomId: room.id });
+    const update = unwrapAck<RematchUpdate>(res);
+    set({ rematchState: { requestedBy: update.requestedBy, active: update.active } });
+  },
+
+  acceptRematch: async () => {
+    const socket = get().socket;
+    const room = get().room;
+    if (!socket || !room) return;
+    const res = await socket.emitWithAck("game:rematch-accept", { roomId: room.id });
+    const update = unwrapAck<RematchUpdate>(res);
+    set({ rematchState: { requestedBy: update.requestedBy, active: update.active } });
+  },
+
+  declineRematch: async () => {
+    const socket = get().socket;
+    const room = get().room;
+    if (!socket || !room) return;
+    const res = await socket.emitWithAck("game:rematch-decline", { roomId: room.id });
+    const update = unwrapAck<RematchUpdate>(res);
+    set({ rematchState: { requestedBy: update.requestedBy, active: update.active } });
+  },
+
+  rematch: async () => {
+    await get().requestRematch();
   },
 
   joinMatchmaking: async (gameId, stake, settings) => {
@@ -391,6 +459,14 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const room = get().room;
     if (!socket || !room) return;
     const res = await socket.emitWithAck("chat:emoji", { roomId: room.id, emoji });
+    unwrapAck(res);
+  },
+
+  sendTyping: async () => {
+    const socket = get().socket;
+    const room = get().room;
+    if (!socket || !room) return;
+    const res = await socket.emitWithAck("chat:typing", { roomId: room.id });
     unwrapAck(res);
   },
 

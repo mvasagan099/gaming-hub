@@ -15,7 +15,7 @@ import type {
   RoomFull,
   RoomPlayer,
 } from "@gaming-hub/shared";
-import type { GameActionResult } from "@gaming-hub/socket";
+import type { GameActionResult, RematchUpdate } from "@gaming-hub/socket";
 import { createEngine, isGameEngineAvailable } from "@gaming-hub/game-engine";
 import { prisma } from "@gaming-hub/db";
 import type { AuthenticatedUser } from "../auth";
@@ -233,6 +233,7 @@ export class RoomManager {
       match: null,
       createdAt: now,
       settings: input.settings ?? {},
+      rematch: null,
     };
 
     this.rooms.set(id, room);
@@ -380,6 +381,10 @@ export class RoomManager {
       this.emitToRoom(room, "player:left", { roomId: room.id, playerId: user.userId });
     }
 
+    if (room.rematch && !player.isSpectator) {
+      this.clearRematch(room);
+    }
+
     // Abort an in-progress match when a participant quits.
     if (wasPlaying && room.match && player.seat !== null) {
       await this.abortMatch(room, "player_left");
@@ -404,7 +409,20 @@ export class RoomManager {
       data: { isReady: ready },
     });
     this.broadcastRoomUpdate(room);
-    return this.toRoomFull(room);
+
+    // Auto-start once every participant is ready and connected.
+    const started = await this.maybeAutoStart(room, socket);
+    return started ?? this.toRoomFull(room);
+  }
+
+  /** Launches the match when everyone is ready and connected (used by ready-up auto-start). */
+  private async maybeAutoStart(room: RoomRuntime, socket: Socket): Promise<RoomFull | null> {
+    if (room.status !== "waiting") return null;
+    const participants = [...room.players.values()].filter((p) => !p.isSpectator);
+    if (participants.length < room.minPlayers) return null;
+    if (participants.some((p) => !p.isReady)) return null;
+    if (participants.some((p) => p.connectionStatus !== "connected")) return null;
+    return this.launchMatch(room, { userId: room.hostId }, socket);
   }
 
   async startGame(user: AuthenticatedUser, roomId: string, socket: Socket): Promise<RoomFull> {
@@ -431,40 +449,170 @@ export class RoomManager {
     return this.launchMatch(room, user, socket);
   }
 
-  async rematch(user: AuthenticatedUser, roomId: string, socket: Socket): Promise<RoomFull> {
+  /**
+   * Kicks a player (or spectator) out of the room. Only the host may kick, and
+   * only while the room has not started. The target's own socket(s) get a
+   * dedicated "player:kicked" event so they can show a notice.
+   */
+  async kickPlayer(
+    user: AuthenticatedUser,
+    roomId: string,
+    targetUserId: string,
+    socket: Socket,
+  ): Promise<{ roomId: string; kickedUserId: string }> {
+    const room = this.getRoomOrThrow(roomId);
+    this.assertHost(room, user.userId);
+    const target = room.players.get(targetUserId);
+    if (!target) throw new AppError("NOT_IN_ROOM", "Player is not in this room");
+    if (targetUserId === room.hostId) throw new AppError("INVALID_ACTION", "You cannot kick the host");
+    if (room.status === "playing") {
+      throw new AppError("INVALID_ACTION", "You cannot kick players during a match");
+    }
+
+    this.clearDisconnectTimer(room.id, targetUserId);
+    for (const socketId of target.socketIds) {
+      const targetSocket = this.io.sockets.sockets.get(socketId);
+      targetSocket?.emit("player:kicked", {
+        roomId: room.id,
+        playerId: targetUserId,
+        byUserId: user.userId,
+        reason: "kicked",
+      });
+      targetSocket?.leave(room.ioName);
+    }
+
+    room.players.delete(targetUserId);
+    if (room.rematch && !target.isSpectator) this.clearRematch(room);
+    await prisma.roomPlayer.deleteMany({
+      where: { roomId: room.id, userId: targetUserId },
+    });
+
+    if (room.players.size === 0) {
+      this.closeRoom(room, "all players left");
+      return { roomId: room.id, kickedUserId: targetUserId };
+    }
+
+    if (!target.isSpectator) {
+      this.emitToRoom(room, "player:left", { roomId: room.id, playerId: targetUserId });
+    }
+    this.emitToRoom(room, "player:kicked", {
+      roomId: room.id,
+      playerId: targetUserId,
+      byUserId: user.userId,
+      reason: "kicked",
+    });
+    this.broadcastRoomUpdate(room);
+    return { roomId: room.id, kickedUserId: targetUserId };
+  }
+
+  private participantIds(room: RoomRuntime): string[] {
+    return [...room.players.values()]
+      .filter((p) => !p.isSpectator)
+      .map((p) => p.userId);
+  }
+
+  private rematchUpdateOf(room: RoomRuntime): RematchUpdate {
+    return {
+      roomId: room.id,
+      requestedBy: room.rematch?.requestedBy ?? [],
+      active: room.rematch !== null && room.rematch.requestedBy.length > 0,
+    };
+  }
+
+  private emitRematchUpdate(room: RoomRuntime) {
+    this.emitToRoom(room, "rematch:update", this.rematchUpdateOf(room));
+  }
+
+  private clearRematch(room: RoomRuntime) {
+    room.rematch = null;
+    this.emitRematchUpdate(room);
+  }
+
+  /** Backwards-compatible alias kept for the legacy "game:rematch" event. */
+  async rematch(user: AuthenticatedUser, roomId: string, socket: Socket): Promise<RematchUpdate> {
+    return this.requestRematch(user, roomId, socket);
+  }
+
+  /**
+   * A participant asks to play again. Once every participant has asked, the
+   * match restarts immediately and the room flips back to playing.
+   */
+  async requestRematch(user: AuthenticatedUser, roomId: string, socket: Socket): Promise<RematchUpdate> {
     const room = this.getRoomOrThrow(roomId);
     if (room.status !== "ended") {
       throw new AppError("INVALID_ACTION", "Room is not over yet");
     }
+    const player = this.getPlayerOrThrow(room, user.userId);
+    if (player.isSpectator) {
+      throw new AppError("INVALID_ACTION", "Spectators cannot request a rematch");
+    }
 
-    // Reset every participant back to the lobby.
+    room.rematch ??= { requestedBy: [] };
+    if (!room.rematch.requestedBy.includes(user.userId)) {
+      room.rematch.requestedBy.push(user.userId);
+      await this.logSystemMessage(room, `${player.displayName} wants a rematch`);
+    }
+
+    const started = await this.tryStartRematch(room, socket);
+    if (!started) this.emitRematchUpdate(room);
+    return this.rematchUpdateOf(room);
+  }
+
+  /** Confirms a rematch offer. The match restarts once everyone has confirmed. */
+  async acceptRematch(user: AuthenticatedUser, roomId: string, socket: Socket): Promise<RematchUpdate> {
+    const room = this.getRoomOrThrow(roomId);
+    if (room.status !== "ended") {
+      throw new AppError("INVALID_ACTION", "Room is not over yet");
+    }
+    const player = this.getPlayerOrThrow(room, user.userId);
+    if (player.isSpectator) {
+      throw new AppError("INVALID_ACTION", "Spectators cannot accept a rematch");
+    }
+    if (!room.rematch || room.rematch.requestedBy.length === 0) {
+      throw new AppError("INVALID_ACTION", "Nobody has requested a rematch");
+    }
+    if (!room.rematch.requestedBy.includes(user.userId)) {
+      room.rematch.requestedBy.push(user.userId);
+    }
+
+    const started = await this.tryStartRematch(room, socket);
+    if (!started) this.emitRematchUpdate(room);
+    return this.rematchUpdateOf(room);
+  }
+
+  /** Cancels the rematch offer for everyone. */
+  async declineRematch(user: AuthenticatedUser, roomId: string, socket: Socket): Promise<RematchUpdate> {
+    const room = this.getRoomOrThrow(roomId);
+    if (room.status !== "ended") {
+      throw new AppError("INVALID_ACTION", "Room is not over yet");
+    }
+    const player = this.getPlayerOrThrow(room, user.userId);
+    this.clearRematch(room);
+    await this.logSystemMessage(room, `${player.displayName} declined the rematch`);
+    return this.rematchUpdateOf(room);
+  }
+
+  private async tryStartRematch(room: RoomRuntime, socket: Socket): Promise<boolean> {
+    if (room.status !== "ended" || !room.rematch) return false;
+    const participants = this.participantIds(room);
+    if (participants.length < room.minPlayers) return false;
+    const allRequested = participants.every((id) => room.rematch!.requestedBy.includes(id));
+    if (!allRequested) return false;
+
+    // Everyone confirmed: reset back to the lobby and relaunch immediately.
+    room.rematch = null;
     room.match = null;
     this.clearClockTimer(room.id);
     room.status = "waiting";
     for (const player of room.players.values()) {
-      if (player.isSpectator) continue;
-      player.isReady = false;
+      if (!player.isSpectator) player.isReady = false;
     }
     await prisma.room.update({
       where: { id: room.id },
       data: { status: "WAITING" },
     });
-
-    const participants = [...room.players.values()].filter((p) => !p.isSpectator);
-    const participantsRemain = participants.length >= room.minPlayers;
-
-    if (participantsRemain) {
-      const host = room.players.get(room.hostId);
-      if (host) {
-        await this.launchMatch(room, { userId: host.userId }, socket);
-      } else {
-        this.broadcastRoomUpdate(room);
-      }
-    } else {
-      this.broadcastRoomUpdate(room);
-    }
-
-    return this.toRoomFull(room);
+    await this.launchMatch(room, { userId: room.hostId }, socket);
+    return true;
   }
 
   /**
@@ -585,19 +733,27 @@ export class RoomManager {
   // ---------------------------------------------------------------- clock flag
 
   /**
-   * Schedules the authoritative flag timer for the current seat. Only
-   * clock-capable engines (chess with a time control) expose a deadline; for
+   * Schedules the authoritative flag timer for the current seat and/or the
+   * whole-match deadline. Only clock-capable engines expose deadlines; for
    * every other game this is a no-op. The timer is re-armed after every
    * accepted action and cleared when the match ends.
    */
   private scheduleClockCheck(room: RoomRuntime) {
     this.clearClockTimer(room.id);
     if (!room.match) return;
-    const deadline = room.match.engine.currentClockDeadline;
-    if (deadline == null) return;
-    const delay = Math.max(0, deadline - Date.now());
+    const engine = room.match.engine;
+
+    const deadlines: { at: number; kind: "turn" | "match"; seat?: number }[] = [];
+    const turn = engine.currentClockDeadline;
+    if (turn != null) deadlines.push({ at: turn, kind: "turn", seat: engine.currentSeat });
+    const matchDeadline = engine.currentMatchDeadline;
+    if (matchDeadline != null) deadlines.push({ at: matchDeadline, kind: "match" });
+
+    if (deadlines.length === 0) return;
+    const next = deadlines.reduce((a, b) => (b.at < a.at ? b : a));
+    const delay = Math.max(0, next.at - Date.now());
     const timer = setTimeout(() => {
-      void this.handleClockDeadline(room.id);
+      void this.handleClockDeadline(room.id, next.kind, next.seat);
     }, delay + 50);
     timer.unref?.();
     this.clockTimers.set(room.id, timer);
@@ -611,15 +767,22 @@ export class RoomManager {
     }
   }
 
-  private async handleClockDeadline(roomId: string) {
+  private async handleClockDeadline(roomId: string, kind: "turn" | "match" = "turn", seat?: number) {
     const room = this.rooms.get(roomId);
     if (!room || room.status !== "playing" || !room.match) return;
-    const seat = room.match.engine.currentSeat;
-    const entry = [...room.players.values()].find((p) => p.seat === seat && !p.isSpectator);
-    if (!entry) return;
+    const engine = room.match.engine;
 
-    const session = new GameSession(room.match);
-    const result = await session.apply(entry.userId, seat, { type: "flag" });
+    let result;
+    if (engine.handleTimeout) {
+      result = engine.handleTimeout(kind, seat);
+    } else if (kind === "turn" && seat != null) {
+      const entry = [...room.players.values()].find((p) => p.seat === seat && !p.isSpectator);
+      if (!entry) return;
+      const session = new GameSession(room.match);
+      result = await session.apply(entry.userId, seat, { type: "flag" });
+    } else {
+      return;
+    }
 
     if (result.ok) {
       this.emitGameState(room, result.events);
@@ -710,6 +873,7 @@ export class RoomManager {
 
     const finalState = room.match.engine.serialize();
     room.match = null;
+    room.rematch = null;
     room.status = "ended";
     await prisma.room.update({ where: { id: room.id }, data: { status: "ENDED" } });
 
@@ -793,6 +957,18 @@ export class RoomManager {
       createdAt: new Date().toISOString(),
     };
     this.emitToRoom(room, "chat:emoji", payload);
+  }
+
+  /** Fire-and-forget typing indicator; the client stops it after a short idle. */
+  async typingIndicator(user: AuthenticatedUser, roomId: string, socket: Socket): Promise<void> {
+    const room = this.getRoomOrThrow(roomId);
+    const player = this.getPlayerOrThrow(room, user.userId);
+    this.emitToRoom(room, "chat:typing", {
+      roomId,
+      userId: user.userId,
+      senderName: player.displayName,
+      typing: true,
+    });
   }
 
   private async logSystemMessage(room: RoomRuntime, body: string) {
@@ -988,6 +1164,7 @@ export class RoomManager {
       match: null,
       createdAt: now,
       settings: settings ?? {},
+      rematch: null,
     };
 
     users.forEach((user, index) => {

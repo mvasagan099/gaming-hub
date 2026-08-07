@@ -21,6 +21,10 @@ export interface MatchRuntime {
   turnNumber: number;
 }
 
+export interface RematchRuntime {
+  requestedBy: string[];
+}
+
 export interface RoomRuntime {
   id: string;
   code: string;
@@ -36,4 +40,5 @@ export interface RoomRuntime {
   match: MatchRuntime | null;
   createdAt: number;
   settings: Record<string, unknown>;
+  rematch: RematchRuntime | null;
 }

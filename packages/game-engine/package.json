@@ -12,13 +12,15 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@gaming-hub/shared": "*",
     "chess.js": "^1.4.0"
   },
   "devDependencies": {
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.10"
   }
 }

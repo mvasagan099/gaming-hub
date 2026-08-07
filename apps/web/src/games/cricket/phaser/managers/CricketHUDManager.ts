@@ -19,6 +19,9 @@ export class CricketHUDManager {
   private statusText!: Phaser.GameObjects.Text;
   private runIndicatorText!: Phaser.GameObjects.Text;
   private bestScoreText!: Phaser.GameObjects.Text;
+  private inningsText!: Phaser.GameObjects.Text;
+  private wicketsText!: Phaser.GameObjects.Text;
+  private runRateText!: Phaser.GameObjects.Text;
   
   // New UI
   private targetText!: Phaser.GameObjects.Text;
@@ -29,6 +32,7 @@ export class CricketHUDManager {
   // Power Bar Elements
   private powerBarIndicator?: Phaser.GameObjects.Graphics;
   private powerBarTween?: Phaser.Tweens.Tween;
+  private powerBarElements: Phaser.GameObjects.GameObject[] = [];
   private currentPower: number = 0.5; // Ranges from 0 to 1
 
   private controlElements: Phaser.GameObjects.GameObject[] = [];
@@ -84,17 +88,24 @@ export class CricketHUDManager {
   private createScorecard() {
     const depth = 20;
 
-    // Best Score Badge (Sleek pill)
-    const bestBg = this.scene.add.graphics();
-    bestBg.fillStyle(0x0f172a, 0.9); // Dark slate
-    bestBg.fillRoundedRect(CENTER_X - 60, 5, 120, 25, 12);
-    bestBg.lineStyle(2, 0xf59e0b, 0.5); // Amber glow border
-    bestBg.strokeRoundedRect(CENTER_X - 60, 5, 120, 25, 12);
-    bestBg.setDepth(depth + 2);
-    
-    this.bestScoreText = this.scene.add.text(CENTER_X, 17, "BEST: 0", {
+    // Best Score Badge (Sleek pill) - only relevant for single player practice
+    if (this.mode === "ai") {
+      const bestBg = this.scene.add.graphics();
+      bestBg.fillStyle(0x0f172a, 0.9); // Dark slate
+      bestBg.fillRoundedRect(CENTER_X - 60, 5, 120, 25, 12);
+      bestBg.lineStyle(2, 0xf59e0b, 0.5); // Amber glow border
+      bestBg.strokeRoundedRect(CENTER_X - 60, 5, 120, 25, 12);
+      bestBg.setDepth(depth + 2);
+      
+      this.bestScoreText = this.scene.add.text(CENTER_X, 17, "BEST: 0", {
+        fontSize: "14px", color: "#f59e0b", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+      }).setOrigin(0.5).setDepth(depth + 3);
+    }
+
+    // Innings pill (used in multiplayer)
+    this.inningsText = this.scene.add.text(CENTER_X, 17, "INN 1", {
       fontSize: "14px", color: "#f59e0b", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
-    }).setOrigin(0.5).setDepth(depth + 3);
+    }).setOrigin(0.5).setDepth(depth + 3).setVisible(this.mode === "multiplayer");
 
     // Card background (Broadcast style)
     const bg = this.scene.add.graphics();
@@ -109,6 +120,16 @@ export class CricketHUDManager {
       fontSize: "64px", fontFamily: "Outfit, sans-serif", fontStyle: "900", color: "#ffffff", stroke: "#000000", strokeThickness: 4
     }).setOrigin(0.5).setDepth(depth + 1);
     this.runsText.setShadow(0, 4, 'rgba(0,0,0,0.5)', 8, true, false);
+
+    // Wickets (small, under the runs)
+    this.wicketsText = this.scene.add.text(CENTER_X, 99, "WICKETS: 0", {
+      fontSize: "14px", color: "#cbd5e1", fontStyle: "bold", fontFamily: "Outfit, sans-serif", stroke: "#000000", strokeThickness: 3
+    }).setOrigin(0.5).setDepth(depth + 1);
+
+    // Run rate (only meaningful for a live multiplayer match)
+    this.runRateText = this.scene.add.text(GAME_W - 95, 80, "RR: 0.0", {
+      fontSize: "14px", color: "#fbbf24", fontStyle: "bold", fontFamily: "Outfit, sans-serif", stroke: "#000000", strokeThickness: 3
+    }).setOrigin(0.5).setDepth(depth + 1).setVisible(this.mode === "multiplayer");
 
     // Status Text
     this.statusText = this.scene.add.text(CENTER_X, 125, this.role === 'batting' ? "Ready for First Ball!" : "Your turn to bowl!", {
@@ -230,6 +251,7 @@ export class CricketHUDManager {
     });
 
     this.controlElements.push(bg, this.powerBarIndicator, glow);
+    this.powerBarElements.push(bg, glow);
   }
 
   private createControls() {
@@ -322,17 +344,35 @@ export class CricketHUDManager {
 
 
 
-  public updateScore(runs: number, _wickets: number) {
+  public updateScore(runs: number, wickets?: number) {
     const runsStr = runs.toString().padStart(3, '0');
     this.runsText.setText(runsStr);
+    if (wickets != null) this.setWickets(wickets);
+  }
+
+  public setWickets(wickets: number) {
+    this.wicketsText.setText(`WICKETS: ${wickets}`);
+  }
+
+  public setInnings(inning: number) {
+    this.inningsText.setText(`INN ${inning}`);
+  }
+
+  /** Show the current overs as `completed.balls` out of the total. */
+  public updateOvers(completedOvers: number, ballsInOver: number, totalOvers: number) {
+    this.ballsText.setText(`OVERS: ${completedOvers}.${ballsInOver}/${totalOvers}`);
+  }
+
+  public setRunRate(runRate: number) {
+    this.runRateText.setText(`RR: ${runRate.toFixed(1)}`);
   }
 
   public setBestScore(score: number) {
-    this.bestScoreText.setText(`BEST: ${score}`);
+    this.bestScoreText?.setText(`BEST: ${score}`);
   }
 
-  public setTarget(target: number) {
-    this.targetText.setText(`TARGET: ${target}`);
+  public setTarget(target: number | null) {
+    this.targetText.setText(target == null ? "TARGET: --" : `TARGET: ${target}`);
   }
 
   public updateStats(balls: number, maxBalls: number) {
@@ -406,5 +446,34 @@ export class CricketHUDManager {
         (el as Phaser.GameObjects.Sprite | Phaser.GameObjects.Graphics).setAlpha(disabled ? 0.5 : 1);
       }
     });
+  }
+
+  /**
+   * Swap between the batting and bowling control set (used when the innings
+   * flip in a multiplayer match). Recreates the relevant controls in place.
+   */
+  public setRole(newRole: "batting" | "bowling") {
+    if (this.role === newRole) return;
+    this.role = newRole;
+
+    if (this.powerBarTween) {
+      this.powerBarTween.stop();
+      this.powerBarTween = undefined;
+    }
+    if (this.powerBarIndicator) {
+      this.powerBarIndicator.destroy();
+      this.powerBarIndicator = undefined;
+    }
+    this.powerBarElements.forEach(el => el.destroy());
+    this.powerBarElements = [];
+
+    this.controlElements.forEach(el => el.destroy());
+    this.controlElements = [];
+
+    this.isControlsDisabled = true;
+    if (this.role === "bowling") {
+      this.createPowerBar();
+    }
+    this.createControls();
   }
 }

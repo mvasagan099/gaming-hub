@@ -4,4 +4,8 @@ export { MultiplayerGameEngine, type TurnTimerConfig, type MatchTimerConfig, typ
 export * from "./snake-ladder";
 export * from "./chess";
 export * from "./carrom";
+export * from "./cricket";
+export * from "./table-tennis";
+export * from "./snake-vs-worms";
+export * from "./fruit-ninja";
 export * from "./registry";

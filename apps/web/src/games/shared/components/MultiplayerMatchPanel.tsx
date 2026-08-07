@@ -24,6 +24,8 @@ import { useMultiplayerStore } from "../../../store/multiplayerStore";
 import { useAuthStore } from "../../../store/authStore";
 import { usePublicProfile } from "../../../services/api/usePublicProfile";
 import { useMe } from "../../../services/api/useMe";
+import { MultiplayerMatchControls } from "./MultiplayerMatchControls";
+import { MultiplayerMatchChat } from "./MultiplayerMatchChat";
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -282,6 +284,10 @@ const SEAT_COLORS = [
 interface MultiplayerMatchPanelProps {
   /** Compact variant for in-game sidebar (hides some stats) */
   compact?: boolean;
+  /** Show the standard resign/draw/pause/rematch action buttons. */
+  showControls?: boolean;
+  /** Show the in-match chat panel. */
+  showChat?: boolean;
 }
 
 /**
@@ -290,6 +296,8 @@ interface MultiplayerMatchPanelProps {
  */
 export function MultiplayerMatchPanel({
   compact = false,
+  showControls = true,
+  showChat = true,
 }: MultiplayerMatchPanelProps) {
   const room = useMultiplayerStore((s) => s.room);
   const mySeat = useMultiplayerStore((s) => s.mySeat);
@@ -492,6 +500,18 @@ export function MultiplayerMatchPanel({
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-[10px] text-slate-400">
           <Eye className="w-3.5 h-3.5" />
           You are spectating this match
+        </div>
+      )}
+
+      {/* Standard in-match actions + rematch */}
+      {showControls && <MultiplayerMatchControls />}
+
+      {/* In-match chat */}
+      {showChat && room.status !== "waiting" && (
+        <div className="rounded-2xl bg-slate-900/80 border border-slate-700/60 p-3 h-56 flex flex-col">
+          <div className="flex-1 min-h-0">
+            <MultiplayerMatchChat />
+          </div>
         </div>
       )}
 

@@ -6,6 +6,9 @@ import { LudoEngine } from "./ludo/engine";
 import { BubbleShooterEngine } from "./bubble-shooter/engine";
 import { CarromEngine } from "./carrom/engine";
 import { CricketEngine } from "./cricket/engine";
+import { TableTennisEngine } from "./table-tennis/engine";
+import { SnakeVsWormsEngine } from "./snake-vs-worms/engine";
+import { FruitNinjaEngine } from "./fruit-ninja/engine";
 
 /**
  * Game engines that have been migrated to the server-authoritative engine
@@ -28,6 +31,9 @@ const ENGINES: Record<string, EngineConstructor> = {
   "bubble-shooter": BubbleShooterEngine,
   carrom: CarromEngine,
   cricket: CricketEngine,
+  "table-tennis": TableTennisEngine,
+  "snake-vs-worms": SnakeVsWormsEngine,
+  "fruit-ninja": FruitNinjaEngine,
 };
 
 export function isGameEngineAvailable(gameId: GameId): boolean {

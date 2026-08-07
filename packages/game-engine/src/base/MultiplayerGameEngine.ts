@@ -126,6 +126,61 @@ export abstract class MultiplayerGameEngine<
     return 0;
   }
 
+  /** Default resolution when the turn flag expires: the timed-out player loses. */
+  protected onTurnTimerExpired(seat: number, state: S): EngineActionResult<S> {
+    const next = this.cloneState(state);
+    next.finished = true;
+    next.gameOver = true;
+    next.endReason = "turn-timeout";
+    next.turnStartedAtMs = null;
+    next.matchStartedAtMs = null;
+    const winnerSeats = seat === 0 ? [1] : [0];
+    next.winnerSeats = winnerSeats;
+    return {
+      ok: true,
+      state: next,
+      events: [{ type: "turn-timeout", seat }],
+      finished: true,
+      winnerSeats,
+    };
+  }
+
+  /** Default resolution when the whole-match deadline expires: current seat wins. */
+  protected onMatchTimerExpired(state: S): EngineActionResult<S> {
+    const next = this.cloneState(state);
+    next.finished = true;
+    next.gameOver = true;
+    next.endReason = "match-timeout";
+    next.turnStartedAtMs = null;
+    next.matchStartedAtMs = null;
+    const winnerSeats = [next.currentSeat];
+    next.winnerSeats = winnerSeats;
+    return {
+      ok: true,
+      state: next,
+      events: [{ type: "match-timeout", seat: next.currentSeat }],
+      finished: true,
+      winnerSeats,
+    };
+  }
+
+  handleTimeout(kind: "turn" | "match", seat?: number): EngineActionResult<S> {
+    if (this.state.finished || this.state.paused) {
+      return {
+        ok: false,
+        error: "Match is not in an active state",
+        state: this.state,
+        events: [],
+        finished: this.state.finished,
+        winnerSeats: this.state.winnerSeats,
+      };
+    }
+    if (kind === "turn") {
+      return this.onTurnTimerExpired(seat ?? this.state.currentSeat, this.state);
+    }
+    return this.onMatchTimerExpired(this.state);
+  }
+
   protected startTurnTimer(state: S): void {
     if (this.turnTimerConfig) {
       state.turnStartedAtMs = this.now();

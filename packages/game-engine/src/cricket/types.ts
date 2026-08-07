@@ -10,12 +10,26 @@ export const CRICKET_OVERS = {
 
 export type CricketMatchType = keyof typeof CRICKET_OVERS;
 
+/** The delivery the bowler can choose. Mirrors the in-scene pitch types. */
+export type CricketDelivery = "fast" | "slow" | "spin";
+
+/** The shot the batsman can choose. */
+export type CricketShot = "straight" | "left" | "right" | "up";
+
+/** How well the batsman connected with the ball. */
+export type CricketTiming = "early" | "good" | "late";
+
+export const CRICKET_DELIVERIES: readonly CricketDelivery[] = ["fast", "slow", "spin"];
+export const CRICKET_SHOTS: readonly CricketShot[] = ["straight", "left", "right", "up"];
+
+export type CricketWicketType = "bowled" | "caught" | "lbw" | "runout" | "stumped";
+
 export interface CricketBall extends JsonObject {
   over: number;
   ball: number;
   runs: number;
   wicket: boolean;
-  wicketType: "bowled" | "caught" | "lbw" | "runout" | "stumped" | null;
+  wicketType: CricketWicketType | null;
   comment: string;
 }
 
@@ -31,6 +45,12 @@ export interface CricketPlayer extends JsonObject {
   runsConceded: number;
 }
 
+/** The delivery currently awaiting a shot from the batsman. */
+export interface CricketPendingDelivery extends JsonObject {
+  delivery: CricketDelivery;
+  power: number;
+}
+
 export interface CricketState extends JsonObject {
   matchType: CricketMatchType;
   totalOvers: number;
@@ -39,6 +59,13 @@ export interface CricketState extends JsonObject {
   inning: 1 | 2;
   battingTeam: number;
   bowlingTeam: number;
+  /** Seat that bats first, decided by the server toss. */
+  battingFirst: number;
+  /** Who is allowed to act right now. */
+  currentActor: "bowler" | "batsman";
+  /** Runs needed to win (first innings score + 1); null during the first innings. */
+  target: number | null;
+  pendingDelivery: CricketPendingDelivery | null;
   team1Score: number;
   team2Score: number;
   team1Wickets: number;
@@ -50,7 +77,16 @@ export interface CricketState extends JsonObject {
   finished: boolean;
   winnerSeats: number[];
   winner: number | null;
-  endReason: "all-out" | "overs-complete" | "target-chased" | "tie" | null;
+  endReason:
+    | "all-out"
+    | "overs-complete"
+    | "target-chased"
+    | "tie"
+    | "resign"
+    | "agreement"
+    | "turn-timeout"
+    | "match-timeout"
+    | null;
   currentSeat: number;
   turnNumber: number;
   turnStartedAtMs: number | null;
@@ -65,15 +101,23 @@ export interface CricketState extends JsonObject {
   endReasonState: string | null;
 }
 
-export interface CricketPlayBallAction extends GameAction {
-  type: "play-ball";
-  runs?: number;
-  wicket?: boolean;
-  wicketType?: "bowled" | "caught" | "lbw" | "runout" | "stumped";
+export interface CricketBowlAction extends GameAction {
+  type: "bowl";
+  delivery: CricketDelivery;
+  /** Power 0..1 from the power bar; defaults to 0.5. */
+  power?: number;
+}
+
+export interface CricketBatAction extends GameAction {
+  type: "bat";
+  shot: CricketShot;
+  /** Derived client-side from the ball flight; defaults to "good". */
+  timing?: CricketTiming;
 }
 
 export type CricketAction =
-  | CricketPlayBallAction
+  | CricketBowlAction
+  | CricketBatAction
   | { type: "resign" }
   | { type: "draw-offer" }
   | { type: "draw-accept" }

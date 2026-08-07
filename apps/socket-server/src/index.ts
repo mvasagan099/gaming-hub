@@ -147,6 +147,13 @@ async function main(): Promise<void> {
       }),
     );
 
+    socket.on("room:kick", (payload, ack) =>
+      void guard(ack, async () => {
+        const result = await roomManager.kickPlayer(user, payload.roomId, payload.targetUserId, socket);
+        ack?.({ ok: true, data: result });
+      }),
+    );
+
     socket.on("game:action", (payload, ack) =>
       void guard(ack, async () => {
         console.log(`[SocketServer] game:action received from user ${user.userId} in room ${payload.roomId} with action:`, payload.action);
@@ -162,8 +169,29 @@ async function main(): Promise<void> {
 
     socket.on("game:rematch", (payload, ack) =>
       void guard(ack, async () => {
-        const room = await roomManager.rematch(user, payload.roomId, socket);
-        ack?.({ ok: true, data: room });
+        const update = await roomManager.rematch(user, payload.roomId, socket);
+        ack?.({ ok: true, data: update });
+      }),
+    );
+
+    socket.on("game:rematch-request", (payload, ack) =>
+      void guard(ack, async () => {
+        const update = await roomManager.requestRematch(user, payload.roomId, socket);
+        ack?.({ ok: true, data: update });
+      }),
+    );
+
+    socket.on("game:rematch-accept", (payload, ack) =>
+      void guard(ack, async () => {
+        const update = await roomManager.acceptRematch(user, payload.roomId, socket);
+        ack?.({ ok: true, data: update });
+      }),
+    );
+
+    socket.on("game:rematch-decline", (payload, ack) =>
+      void guard(ack, async () => {
+        const update = await roomManager.declineRematch(user, payload.roomId, socket);
+        ack?.({ ok: true, data: update });
       }),
     );
 
@@ -177,6 +205,13 @@ async function main(): Promise<void> {
     socket.on("chat:emoji", (payload, ack) =>
       void guard(ack, async () => {
         await roomManager.sendEmoji(user, payload.roomId, payload.emoji, socket);
+        ack?.({ ok: true, data: { sent: true } });
+      }),
+    );
+
+    socket.on("chat:typing", (payload, ack) =>
+      void guard(ack, async () => {
+        await roomManager.typingIndicator(user, payload.roomId, socket);
         ack?.({ ok: true, data: { sent: true } });
       }),
     );

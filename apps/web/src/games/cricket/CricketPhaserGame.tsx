@@ -4,9 +4,9 @@ import { CricketScene } from "./phaser/scenes/CricketScene";
 
 interface CricketPhaserGameProps {
   mode: "ai" | "multiplayer";
-  role: 'batting' | 'bowling';
-  overs: number;
-  onGameOver: (runs: number, wickets: number, won: boolean) => void;
+  role?: 'batting' | 'bowling';
+  overs?: number;
+  onGameOver?: (runs: number, wickets: number, won: boolean) => void;
 }
 
 export function CricketPhaserGame({ mode, role, overs, onGameOver }: CricketPhaserGameProps) {
@@ -38,8 +38,15 @@ export function CricketPhaserGame({ mode, role, overs, onGameOver }: CricketPhas
 
     gameRef.current = new Phaser.Game(config);
 
-    // Pass data to the scene
-    gameRef.current.scene.start("CricketScene", { mode, role, overs, onGameOver });
+    // Pass data to the scene. In multiplayer mode the scene reads the
+    // authoritative state/events from the multiplayer store itself, so role
+    // and overs are only meaningful for the local AI mode.
+    gameRef.current.scene.start("CricketScene", {
+      mode,
+      role: role ?? 'batting',
+      overs: overs ?? 5,
+      onGameOver,
+    });
 
     return () => {
       if (gameRef.current) {

@@ -56,11 +56,11 @@ export class TableTennisEngine extends MultiplayerGameEngine<TableTennisState, T
     if (state.paused) return "Match is paused";
     switch (action.type) {
       case "serve":
-        if (!state.ball || !state.ball.served) return "Not your turn";
+        if (state.ball && (state.ball as TableTennisBall).served) return "Ball already in play";
         if (seat !== state.servingSeat) return "Not your turn";
         return null;
       case "hit":
-        if (!state.ball || !state.ball.served) return "Ball not in play";
+        if (!state.ball || !(state.ball as TableTennisBall).served) return "Ball not in play";
         if (action.angle < -Math.PI / 3 || action.angle > Math.PI / 3) return "Invalid angle";
         return null;
       default:
@@ -85,8 +85,8 @@ export class TableTennisEngine extends MultiplayerGameEngine<TableTennisState, T
           bounced: 0,
         };
          events.push({ type: "serve-begin", seat });
-        this.startTurnTimer(seat);
         return { ok: true, state: ns, events, finished: ns.finished, winnerSeats: ns.winnerSeat ? [ns.winnerSeat] : [] };
+
       case "resign":
         const next = this.cloneState(state);
         next.winnerSeat = (seat + 1) % 2;

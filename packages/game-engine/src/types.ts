@@ -49,4 +49,16 @@ export interface EngineInstance {
   setRandomSource(rng: RandomSource): void;
   /** Wall-clock deadline for the current seat's flag, for clock-capable games. */
   readonly currentClockDeadline?: number | null;
+  /**
+   * Optional wall-clock deadline for the whole match, when the match must end
+   * regardless of whose turn it is (e.g. speedrun or timer-constrained modes).
+   */
+  readonly currentMatchDeadline?: number | null;
+  /**
+   * Resolves a wall-clock deadline expiry. `kind` distinguishes the per-turn
+   * flag ("turn") from the whole-match deadline ("match"). Engines that do not
+   * support timeouts (or that handle them internally) may omit this method;
+   * hosts should then fall back to their own default (e.g. flagging the player).
+   */
+  handleTimeout?(kind: "turn" | "match", seat?: number): EngineActionResult<JsonObject>;
 }

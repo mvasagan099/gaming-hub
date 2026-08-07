@@ -40,6 +40,11 @@ export interface ClientToServerEvents {
 
   "room:start": (payload: { roomId: string }, ack: Ack<RoomFull>) => void;
 
+  "room:kick": (
+    payload: { roomId: string; targetUserId: string },
+    ack: Ack<{ roomId: string; kickedUserId: string }>,
+  ) => void;
+
   "matchmaking:join": (
     payload: { gameId: GameId; stake: number; settings?: MatchSettings },
     ack: Ack<{ position: number }>,
@@ -49,11 +54,19 @@ export interface ClientToServerEvents {
 
   "game:action": (payload: { roomId: string; action: { type: string } & JsonObject }, ack: Ack<GameActionResult>) => void;
 
-  "game:rematch": (payload: { roomId: string }, ack: Ack<RoomFull>) => void;
+  "game:rematch": (payload: { roomId: string }, ack: Ack<RematchUpdate>) => void;
+
+  "game:rematch-request": (payload: { roomId: string }, ack: Ack<RematchUpdate>) => void;
+
+  "game:rematch-accept": (payload: { roomId: string }, ack: Ack<RematchUpdate>) => void;
+
+  "game:rematch-decline": (payload: { roomId: string }, ack: Ack<RematchUpdate>) => void;
 
   "chat:message": (payload: { roomId: string; text: string }, ack: Ack<ChatMessage>) => void;
 
   "chat:emoji": (payload: { roomId: string; emoji: string }, ack: Ack<{ sent: true }>) => void;
+
+  "chat:typing": (payload: { roomId: string }, ack: Ack<{ sent: true }>) => void;
 
   "game:state:ack": (payload: { roomId: string; matchId: string; timestamp: number }) => void;
 }
@@ -69,6 +82,9 @@ export interface ServerToClientEvents {
     playerId: string;
     status: RoomPlayer["connectionStatus"];
   }) => void;
+  "player:kicked": (payload: { roomId: string; playerId: string; byUserId: string; reason: string }) => void;
+
+  "rematch:update": (payload: RematchUpdate) => void;
 
   "game:state": (payload: {
     roomId: string;
@@ -88,11 +104,20 @@ export interface ServerToClientEvents {
 
   "chat:message": (message: ChatMessage) => void;
   "chat:emoji": (emoji: ChatEmoji) => void;
+  "chat:typing": (payload: { roomId: string; userId: string; senderName: string; typing: boolean }) => void;
 
   "matchmaking:queued": (payload: { position: number }) => void;
   "matchmaking:found": (payload: { roomId: string }) => void;
 
   "error": (payload: SocketErrorPayload) => void;
+}
+
+export interface RematchUpdate {
+  roomId: string;
+  /** Users who have requested/confirmed a rematch. Match restarts once everyone has. */
+  requestedBy: string[];
+  /** False when the rematch offer has been cleared or the match has restarted. */
+  active: boolean;
 }
 
 export interface InterServerEvents {
