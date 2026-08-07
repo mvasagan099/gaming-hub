@@ -3,12 +3,14 @@ import { prisma } from "@gaming-hub/db";
 import { AppError, respondFriendRequestSchema, sendFriendRequestSchema } from "@gaming-hub/shared";
 import { authenticate } from "../plugins/authenticate";
 import { requireUser, parseSchema, routeParams } from "../lib/http";
+import { assertFeatureEnabled } from "../services/featureFlags";
 import { toPublicProfile } from "../services/users";
 import { checkAndUnlock } from "../services/achievements";
 
 export async function friendsRoutes(app: FastifyInstance) {
   app.get("/api/friends", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("social.friends", "Friends");
     const relationships = await prisma.friend.findMany({
       where: {
         status: "ACCEPTED",
@@ -33,6 +35,7 @@ export async function friendsRoutes(app: FastifyInstance) {
 
   app.get("/api/friends/requests", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("social.friends", "Friends");
     const incoming = await prisma.friend.findMany({
       where: { addresseeId: user.id, status: "PENDING" },
       include: { requester: { include: { profile: true } } },
@@ -48,6 +51,7 @@ export async function friendsRoutes(app: FastifyInstance) {
 
   app.post("/api/friends/request", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("social.friends", "Friends");
     const { username } = parseSchema(sendFriendRequestSchema, request.body);
 
     const target = await prisma.user.findUnique({ where: { username } });
@@ -77,6 +81,7 @@ export async function friendsRoutes(app: FastifyInstance) {
 
   app.post("/api/friends/respond", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("social.friends", "Friends");
     const { requestId, accept } = parseSchema(respondFriendRequestSchema, request.body);
 
     const rel = await prisma.friend.findFirst({
@@ -115,6 +120,7 @@ export async function friendsRoutes(app: FastifyInstance) {
 
   app.delete("/api/friends/:friendId", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("social.friends", "Friends");
     const { friendId } = routeParams(request);
 
     const rel = await prisma.friend.findFirst({

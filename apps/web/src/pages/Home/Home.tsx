@@ -5,10 +5,11 @@ import { MatchSetupModal } from '../../components/MatchSetupModal';
 import { SearchBar } from '../../components/SearchBar/SearchBar';
 import { CategoryCard } from '../../components/CategoryCard/CategoryCard';
 import { GAMES_DATA } from '../../data/games';
-import { Sparkles, Clock, Flame, Trophy, Play, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Sparkles, Clock, Flame, Trophy, Play, ChevronLeft, ChevronRight, Gamepad2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useMe } from '../../services/api/useMe';
+import { useFeatureEnabled } from '../../store/featureFlagsStore';
 
 const gamesList: GameMetadata[] = GAMES_DATA.map(g => ({
   id: g.id as GameId,
@@ -145,6 +146,24 @@ export const Home: React.FC = () => {
       navigate(`/games/${gameId}`, { state: { mode, stake } });
     }
   };
+
+  const gamesEnabled = useFeatureEnabled('games.enabled');
+
+  if (!gamesEnabled) {
+    return (
+      <div className="space-y-10 w-full max-w-6xl mx-auto pb-8">
+        <div className="flex flex-col items-center justify-center text-center p-10 rounded-3xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/60">
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+            <Gamepad2 className="w-7 h-7 text-slate-400" />
+          </div>
+          <h3 className="text-base font-black text-slate-900 dark:text-white">Games are currently disabled</h3>
+          <p className="mt-1 max-w-sm text-xs text-slate-500 dark:text-slate-400">
+            The platform administrator has turned off games for the time being.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-10 w-full max-w-6xl mx-auto pb-8">

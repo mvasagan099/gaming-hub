@@ -15,6 +15,7 @@ import { MultiplayerFramework } from "@gaming-hub/multiplayer";
 import pino from "pino";
 import { env } from "./env";
 import { authenticateToken, type AuthenticatedUser } from "./auth";
+import { assertFeatureEnabled } from "./settings";
 
 const logger = pino({ level: env.LOG_LEVEL, transport: { target: "pino-pretty" } });
 
@@ -161,6 +162,13 @@ async function main(): Promise<void> {
     // Room Management
     socket.on("room:create", (payload, ack) =>
       void guard(ack, async () => {
+        await assertFeatureEnabled("games.enabled", "Games");
+        if (payload.stake > 0) {
+          await assertFeatureEnabled("games.realMoney", "Real-money play");
+        } else {
+          await assertFeatureEnabled("games.practice", "Practice mode");
+        }
+
         // Remove from matchmaking if in queue
         framework.matchmakingManager.removeFromQueue(user.userId);
         
@@ -180,6 +188,11 @@ async function main(): Promise<void> {
 
     socket.on("room:join", (payload, ack) =>
       void guard(ack, async () => {
+        await assertFeatureEnabled("games.enabled", "Games");
+        if (payload.asSpectator) {
+          await assertFeatureEnabled("games.spectator", "Spectator mode");
+        }
+
         // Remove from matchmaking if in queue
         framework.matchmakingManager.removeFromQueue(user.userId);
         
@@ -212,6 +225,7 @@ async function main(): Promise<void> {
 
     socket.on("room:start", (payload, ack) =>
       void guard(ack, async () => {
+        await assertFeatureEnabled("games.enabled", "Games");
         await framework.matchManager.startMatch({
           roomId: payload.roomId,
           startedBy: user.userId,
@@ -231,6 +245,7 @@ async function main(): Promise<void> {
     // Game Actions
     socket.on("game:action", (payload, ack) =>
       void guard(ack, async () => {
+        await assertFeatureEnabled("games.enabled", "Games");
         logger.info(`[SocketServer] game:action received from user ${user.userId} in room ${payload.roomId}`);
         
         const result = await framework.matchManager.applyAction({
@@ -282,6 +297,8 @@ async function main(): Promise<void> {
     const handleRematchConsent = async (roomId: string) => {
       const room = framework.roomManager.getRoom(roomId);
       if (!room) throw new Error("Room not found");
+
+      await assertFeatureEnabled("games.enabled", "Games");
 
       if (!room.rematch) {
         room.rematch = {
@@ -430,7 +447,14 @@ async function main(): Promise<void> {
         if (!parsed.success) {
           throw new AppError("VALIDATION_ERROR", "Invalid matchmaking request");
         }
-        
+
+        await assertFeatureEnabled("games.matchmaking", "Matchmaking");
+        if (parsed.data.stake > 0) {
+          await assertFeatureEnabled("games.realMoney", "Real-money play");
+        } else {
+          await assertFeatureEnabled("games.practice", "Practice mode");
+        }
+
         const result = await framework.matchmakingManager.joinQueue({
           playerId: user.userId,
           gameId: parsed.data.gameId,

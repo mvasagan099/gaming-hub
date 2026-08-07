@@ -29,6 +29,8 @@ import {
 import { cn } from '../utils/cn';
 import { useTheme } from '../contexts/ThemeProvider';
 import { useMe } from '../services/api/useMe';
+import { useFeatureFlagsStore } from '../store/featureFlagsStore';
+import { useEffect } from 'react';
 
 const NAV_GROUPS = [
   {
@@ -76,6 +78,11 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const { effectiveTheme, setTheme } = useTheme();
   const { me } = useMe();
+  const loadFlags = useFeatureFlagsStore((s) => s.loadFlags);
+
+  useEffect(() => {
+    void loadFlags();
+  }, [loadFlags]);
 
   const allItems = NAV_GROUPS.flatMap((g) => g.items);
   const currentItem = allItems.find((n) =>

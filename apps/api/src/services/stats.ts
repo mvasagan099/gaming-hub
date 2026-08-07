@@ -254,6 +254,23 @@ export async function getRankedLeaderboard(
 
   const userIds = await resolveCandidateUserIds(scope, { gameId, country, region, viewerId });
 
+  // Empty candidate set (e.g. tournament scope with no ended tournaments) is a
+  // valid empty board - return early to avoid passing an empty list to
+  // Prisma.join(), which throws.
+  if (userIds !== null && userIds.length === 0) {
+    return {
+      items: [],
+      total: 0,
+      page,
+      pageSize,
+      scope,
+      period,
+      metric,
+      viewerRank: null,
+      viewer: null,
+    };
+  }
+
   // All-time boards only need match rows for fastest-win/streak metrics.
   const needMatchAggregates = since !== null || metric === "fastestWin" || metric === "streak";
 
@@ -415,7 +432,7 @@ async function fetchMatchAggregates(
   const filters: Prisma.Sql[] = [Prisma.sql`m."status"::text = 'FINISHED'`];
   if (since) filters.push(Prisma.sql`m."endedAt" >= ${since}`);
   if (gameId) filters.push(Prisma.sql`m."gameId" = ${gameId}`);
-  if (userIds) filters.push(Prisma.sql`mp."userId" IN (${Prisma.join(userIds)})`);
+  if (userIds && userIds.length > 0) filters.push(Prisma.sql`mp."userId" IN (${Prisma.join(userIds)})`);
 
   const [rows, streakRows] = await Promise.all([
     prisma.$queryRaw<

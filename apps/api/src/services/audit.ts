@@ -30,23 +30,30 @@ export interface AuditEntry {
  * Writes an audit trail entry. Fire-and-forget: failures are logged and never
  * allowed to break the request path. Uses its own connection so audit rows
  * persist even when the triggering business transaction is rolled back.
+ *
+ * Skipped entirely when the `infra.auditLogging` feature flag is disabled.
  */
 export function audit(entry: AuditEntry): void {
-  const { meta, ...rest } = entry;
-  void prisma.auditLog
-    .create({
-      data: {
-        ...rest,
-        actorType: rest.actorType ?? "user",
-        meta:
-          meta === null || meta === undefined
-            ? Prisma.JsonNull
-            : (meta as Prisma.InputJsonValue),
-      },
-    })
-    .catch((error: unknown) => {
+  void (async () => {
+    try {
+      const { isFeatureEnabled } = await import("./featureFlags");
+      if (!(await isFeatureEnabled("infra.auditLogging"))) return;
+
+      const { meta, ...rest } = entry;
+      await prisma.auditLog.create({
+        data: {
+          ...rest,
+          actorType: rest.actorType ?? "user",
+          meta:
+            meta === null || meta === undefined
+              ? Prisma.JsonNull
+              : (meta as Prisma.InputJsonValue),
+        },
+      });
+    } catch (error: unknown) {
       logger.error({ error, entry }, "audit: failed to write audit log");
-    });
+    }
+  })();
 }
 
 /** Builds an audit entry from a request's transport context (IP + user agent). */

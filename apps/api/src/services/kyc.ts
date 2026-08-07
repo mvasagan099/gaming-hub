@@ -5,6 +5,8 @@ import {
   KycDocumentType,
   type KycRequestWithDocuments,
   DOCUMENTS_REQUIRING_BACK_SIDE,
+  COUNTRY_DOCUMENTS,
+  AppError,
 } from "@gaming-hub/shared";
 import { FileUploadService } from "./fileUpload";
 
@@ -13,6 +15,47 @@ function calculateExpiryDate(): Date {
   d.setFullYear(d.getFullYear() + 1);
   return d;
 }
+
+export const KycComplianceService = {
+  async getRequiredDocuments(level: KycLevel, country?: string): Promise<KycDocumentType[]> {
+    if (level === KycLevel.LEVEL_0) {
+      return [];
+    }
+
+    if (level === KycLevel.LEVEL_1) {
+      return [];
+    }
+
+    const countryDocs = country && COUNTRY_DOCUMENTS[country]
+      ? COUNTRY_DOCUMENTS[country]
+      : COUNTRY_DOCUMENTS.DEFAULT;
+
+    if (level === KycLevel.LEVEL_2) {
+      return countryDocs.slice(0, 2);
+    }
+
+    if (level === KycLevel.LEVEL_3) {
+      const docs = [...countryDocs];
+      if (!docs.includes(KycDocumentType.UTILITY_BILL)) {
+        docs.push(KycDocumentType.UTILITY_BILL);
+      }
+      return docs;
+    }
+
+    return countryDocs;
+  },
+
+  async getDocumentConfig(country: string, documentType: KycDocumentType) {
+    return prisma.kycDocumentConfig.findUnique({
+      where: {
+        country_documentType: {
+          country,
+          documentType,
+        },
+      },
+    });
+  },
+};
 
 export interface CreateKycRequestInput {
   userId: string;
@@ -170,10 +213,10 @@ export async function submitKycRequest(requestId: string, userId: string): Promi
     throw new Error("Cannot submit request in current status");
   }
 
-  const requiredDocs = await KycComplianceService.getRequiredDocuments(request.level, request.country ?? undefined);
+  const requiredDocs = await KycComplianceService.getRequiredDocuments(request.level as KycLevel, request.country ?? undefined);
   
   const uploadedTypes = new Set(request.documents.map((d) => d.documentType));
-  const missing = requiredDocs.filter((t) => !uploadedTypes.has(t));
+  const missing = requiredDocs.filter((t: KycDocumentType) => !uploadedTypes.has(t));
 
   const hasSelfie = request.documents.some((d) => d.isSelfie);
   if (!hasSelfie) {
@@ -238,6 +281,42 @@ export async function getKycRequestById(requestId: string): Promise<KycRequestWi
   if (!request) return null;
 
   return request as KycRequestWithDocuments;
+}
+
+export async function getUserWithdrawalLimits(userId: string): Promise<{
+  level: KycLevel;
+  dailyLimit: number;
+  monthlyLimit: number;
+  singleWithdrawLimit: number;
+} | null> {
+  const kycRequest = await prisma.kycRequest.findUnique({
+    where: { userId },
+    select: { level: true, status: true },
+  });
+
+  const level = kycRequest?.status === KycStatus.APPROVED 
+    ? (kycRequest.level as KycLevel)
+    : KycLevel.LEVEL_0;
+
+  const limit = await prisma.kycWithdrawalLimit.findUnique({
+    where: { level: level as any },
+  });
+
+  if (!limit) {
+    return {
+      level,
+      dailyLimit: 0,
+      monthlyLimit: 0,
+      singleWithdrawLimit: 0,
+    };
+  }
+
+  return {
+    level: limit.level as KycLevel,
+    dailyLimit: limit.dailyLimit,
+    monthlyLimit: limit.monthlyLimit,
+    singleWithdrawLimit: limit.singleWithdrawLimit,
+  };
 }
 
 export async function listPendingKycRequests(page: number = 1, pageSize: number = 20) {
@@ -313,7 +392,12 @@ export async function approveKycRequest(
 ): Promise<KycRequestWithDocuments> {
   const request = await prisma.kycRequest.findUnique({
     where: { id: requestId },
-    include: { documents: true },
+    include: { 
+      documents: true,
+      user: {
+        include: { profile: true },
+      },
+    },
   });
 
   if (!request) {
@@ -348,7 +432,7 @@ export async function approveKycRequest(
     data: {
       kycStatus: "approved",
       country: request.country ?? undefined,
-      phone: updated.mobileNumber ?? request.user.profile?.phone,
+      phone: request.mobileNumber ?? request.user.profile?.phone,
     },
   });
 
@@ -570,6 +654,7 @@ export const KycService = {
   startReview,
   adminOverride: adminOverrideKycLevel,
   deleteDocument: deleteKycDocument,
+  getUserWithdrawalLimits,
 };
 
 export default KycService;

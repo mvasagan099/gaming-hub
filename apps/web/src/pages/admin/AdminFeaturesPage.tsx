@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Flag, Search, Sliders, CheckCircle2, XCircle, Loader2, Sparkles } from 'lucide-react';
 import { adminApi } from '../../services/api/enterprise';
+import { useFeatureFlagsStore } from '../../store/featureFlagsStore';
 import type { FeatureFlagGroup, FeatureFlagEntry } from '@gaming-hub/shared';
 
 export function AdminFeaturesPage() {
@@ -42,6 +43,7 @@ export function AdminFeaturesPage() {
             }))
           : prev,
       );
+      void useFeatureFlagsStore.getState().loadFlags(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update flag');
     } finally {

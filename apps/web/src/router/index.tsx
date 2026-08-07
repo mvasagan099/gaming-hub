@@ -8,6 +8,7 @@ import { ErrorPage } from "../pages/ErrorPage";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { PublicOnlyRoute } from "../components/auth/PublicOnlyRoute";
 import { AdminRoute } from "../components/admin/AdminRoute";
+import { FeatureGate } from "../components/FeatureGate";
 
 // Route-level code splitting: heavy pages (Phaser games, chess.js) load on
 // demand instead of inflating the initial bundle.
@@ -83,30 +84,30 @@ export const router = createBrowserRouter([
     errorElement: <ErrorPage />,
     children: [
       { index: true, element: <SuspensePage><HomePage /></SuspensePage> },
-      { path: "games/:slug", element: <SuspensePage><GamePage /></SuspensePage> },
-      { path: "game/:slug", element: <SuspensePage><GamePage /></SuspensePage> },
+      { path: "games/:slug", element: <SuspensePage><FeatureGate flag="games.enabled"><GamePage /></FeatureGate></SuspensePage> },
+      { path: "game/:slug", element: <SuspensePage><FeatureGate flag="games.enabled"><GamePage /></FeatureGate></SuspensePage> },
       {
         element: <ProtectedRoute />,
         children: [
-          { path: "lobby/:slug", element: <SuspensePage><LobbyPage /></SuspensePage> },
+          { path: "lobby/:slug", element: <SuspensePage><FeatureGate flag="games.enabled"><LobbyPage /></FeatureGate></SuspensePage> },
           { path: "profile", element: <SuspensePage><ProfilePage /></SuspensePage> },
           { path: "wallet", element: <SuspensePage><WalletPage /></SuspensePage> },
           { path: "settings", element: <SuspensePage><SettingsPage /></SuspensePage> },
-          { path: "referrals", element: <SuspensePage><ReferralsPage /></SuspensePage> },
-          { path: "coupons", element: <SuspensePage><CouponsPage /></SuspensePage> },
-          { path: "announcements", element: <SuspensePage><AnnouncementsPage /></SuspensePage> },
-          { path: "tickets", element: <SuspensePage><TicketsPage /></SuspensePage> },
-          { path: "messages", element: <SuspensePage><MessagesPage /></SuspensePage> },
-          { path: "tournaments", element: <SuspensePage><TournamentsPage /></SuspensePage> },
+          { path: "referrals", element: <SuspensePage><FeatureGate flag="social.referrals"><ReferralsPage /></FeatureGate></SuspensePage> },
+          { path: "coupons", element: <SuspensePage><FeatureGate flag="content.coupons"><CouponsPage /></FeatureGate></SuspensePage> },
+          { path: "announcements", element: <SuspensePage><FeatureGate flag="content.announcements"><AnnouncementsPage /></FeatureGate></SuspensePage> },
+          { path: "tickets", element: <SuspensePage><FeatureGate flag="support.tickets"><TicketsPage /></FeatureGate></SuspensePage> },
+          { path: "messages", element: <SuspensePage><FeatureGate flag="social.messaging"><MessagesPage /></FeatureGate></SuspensePage> },
+          { path: "tournaments", element: <SuspensePage><FeatureGate flag="content.tournaments"><TournamentsPage /></FeatureGate></SuspensePage> },
           { path: "search", element: <SuspensePage><SearchPage /></SuspensePage> },
-          { path: "friends", element: <SuspensePage><FriendsPage /></SuspensePage> },
+          { path: "friends", element: <SuspensePage><FeatureGate flag="social.friends"><FriendsPage /></FeatureGate></SuspensePage> },
           { path: "achievements", element: <SuspensePage><AchievementsPage /></SuspensePage> },
           { path: "notifications", element: <SuspensePage><NotificationsPage /></SuspensePage> },
-          { path: "kyc", element: <SuspensePage><KycPage /></SuspensePage> },
-          { path: "kyc/verify", element: <SuspensePage><KycVerifyPage /></SuspensePage> }
+          { path: "kyc", element: <SuspensePage><FeatureGate flag="support.kyc"><KycPage /></FeatureGate></SuspensePage> },
+          { path: "kyc/verify", element: <SuspensePage><FeatureGate flag="support.kyc"><KycVerifyPage /></FeatureGate></SuspensePage> }
         ],
       },
-      { path: "leaderboard", element: <SuspensePage><LeaderboardPage /></SuspensePage> },
+      { path: "leaderboard", element: <SuspensePage><FeatureGate flag="social.leaderboards"><LeaderboardPage /></FeatureGate></SuspensePage> },
       { path: "*", element: <SuspensePage><NotFoundPage /></SuspensePage> },
     ],
   },

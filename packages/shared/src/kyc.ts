@@ -144,6 +144,10 @@ export type KycRequestWithDocuments = {
   submittedAt: Date | null;
   approvedAt: Date | null;
   expiresAt: Date | null;
+  adminOverride: boolean;
+  adminOverrideBy: string | null;
+  adminOverrideAt: Date | null;
+  adminOverrideReason: string | null;
   createdAt: Date;
   updatedAt: Date;
   documents: Array<{
@@ -166,3 +170,9 @@ export type KycWithdrawalLimits = {
   monthlyLimit: number;
   singleWithdrawLimit: number;
 };
+
+export function getKycLevelFromDb(level: string): KycLevel {
+  return Object.values(KycLevel).includes(level as KycLevel) 
+    ? (level as KycLevel) 
+    : KycLevel.LEVEL_0;
+}

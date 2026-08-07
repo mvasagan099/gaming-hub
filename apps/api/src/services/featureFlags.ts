@@ -45,11 +45,18 @@ export async function getFeatureFlagGroups() {
   }));
 }
 
+const FEATURE_FLAG_KEYS = new Set(
+  FEATURE_FLAG_GROUPS.flatMap((g) => g.flags.map((f) => f.key)),
+);
+
 export async function setFeatureFlag(
   key: string,
   enabled: boolean,
   updatedBy: string | null,
 ): Promise<void> {
+  if (!FEATURE_FLAG_KEYS.has(key)) {
+    throw new AppError("VALIDATION_ERROR", `Unknown feature flag: ${key}`, 400);
+  }
   const developer = await getCategorySettings("developer");
   const next = { ...developer.featureFlags, [key]: enabled };
   const { setCategorySettings } = await import("./settings");

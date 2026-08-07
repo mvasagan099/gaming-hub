@@ -1,11 +1,14 @@
 import { prisma } from "@gaming-hub/db";
-import { gameSettingsSchema } from "@gaming-hub/shared";
+import { gameSettingsSchema, DEFAULT_FEATURE_FLAGS } from "@gaming-hub/shared";
 import type { z } from "zod";
 import { AppError } from "@gaming-hub/shared";
 
 const CACHE_TTL_MS = 5_000;
 let cache: z.infer<typeof gameSettingsSchema> | null = null;
 let cacheExpiresAt = 0;
+
+let flagsCache: Record<string, boolean> | null = null;
+let flagsCacheExpiresAt = 0;
 
 /**
  * Reads the admin-configured `game` settings category. Cached briefly so every
@@ -27,6 +30,37 @@ async function getGameSettings(): Promise<z.infer<typeof gameSettingsSchema>> {
   cache = parsed.success ? parsed.data : gameSettingsSchema.parse({});
   cacheExpiresAt = Date.now() + CACHE_TTL_MS;
   return cache;
+}
+
+/**
+ * Resolved enterprise feature flags: admin-stored `developer.featureFlags`
+ * overlaid on the shared catalog defaults. Cached like the game settings.
+ */
+export async function getFeatureFlags(): Promise<Record<string, boolean>> {
+  if (flagsCache && Date.now() < flagsCacheExpiresAt) return flagsCache;
+
+  const row = await prisma.siteSetting.findUnique({
+    where: { key: "developer.featureFlags" },
+    select: { value: true },
+  });
+  const stored =
+    row && row.value && typeof row.value === "object"
+      ? (row.value as Record<string, boolean>)
+      : {};
+  flagsCache = { ...DEFAULT_FEATURE_FLAGS, ...stored };
+  flagsCacheExpiresAt = Date.now() + CACHE_TTL_MS;
+  return flagsCache;
+}
+
+export async function assertFeatureEnabled(key: string, label?: string): Promise<void> {
+  const flags = await getFeatureFlags();
+  if (flags[key] === false) {
+    throw new AppError(
+      "FEATURE_DISABLED",
+      `${label ?? key} is currently disabled`,
+      403,
+    );
+  }
 }
 
 export async function getDisabledGames(): Promise<string[]> {

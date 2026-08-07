@@ -8,6 +8,7 @@ import type {
 } from "@gaming-hub/shared";
 import { audit } from "./audit";
 import { getCategorySettings } from "./settings";
+import { getFeatureFlags } from "./featureFlags";
 
 const BALANCE_FIELD: Record<WalletBalanceType, keyof Pick<Wallet, "balance" | "bonusBalance" | "lockedBalance" | "rewardBalance" | "cashbackBalance">> = {
   MAIN: "balance",
@@ -17,12 +18,26 @@ const BALANCE_FIELD: Record<WalletBalanceType, keyof Pick<Wallet, "balance" | "b
   CASHBACK: "cashbackBalance",
 };
 
+/**
+ * Zeroes out balance types whose feature flag is disabled so users cannot see
+ * bonus/locked/cashback balances once an admin turns those features off.
+ */
+async function maskWalletBalances(wallet: Wallet): Promise<Wallet> {
+  const flags = await getFeatureFlags();
+  return {
+    ...wallet,
+    bonusBalance: flags["payments.bonusWallet"] === false ? 0 : wallet.bonusBalance,
+    lockedBalance: flags["payments.lockedWallet"] === false ? 0 : wallet.lockedBalance,
+    cashbackBalance: flags["payments.cashback"] === false ? 0 : wallet.cashbackBalance,
+  };
+}
+
 export async function getWallet(userId: string): Promise<Wallet> {
   const wallet = await prisma.wallet.findUnique({ where: { userId } });
   if (!wallet) {
     throw new AppError("NOT_FOUND", "Wallet not found", 404);
   }
-  return wallet;
+  return maskWalletBalances(wallet);
 }
 
 export async function listTransactions(

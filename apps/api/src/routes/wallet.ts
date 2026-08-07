@@ -4,6 +4,7 @@ import { AppError, clampPagination, isGameId } from "@gaming-hub/shared";
 import type { WalletRequestKind, WalletRequestStatus } from "@gaming-hub/shared";
 import { authenticate } from "../plugins/authenticate";
 import { parseSchema, requireUser, routeParams, queryParams, queryString } from "../lib/http";
+import { assertFeatureEnabled } from "../services/featureFlags";
 import { claimPracticeReward, getWallet, getWalletSummary, transferToCouponWallet, listTransactions } from "../services/wallet";
 import {
   cancelWalletRequest,
@@ -88,6 +89,7 @@ export async function walletRoutes(app: FastifyInstance) {
 
   app.post("/api/wallet/practice-reward", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("games.practice", "Practice mode");
     const { gameId } = parseSchema(practiceRewardSchema, request.body);
     if (!isGameId(gameId)) {
       throw new AppError("VALIDATION_ERROR", "Unknown game", 400);
@@ -98,6 +100,7 @@ export async function walletRoutes(app: FastifyInstance) {
   // ---- Withdrawal OTP -----------------------------------------------------
 
   app.post("/api/wallet/otp", { preHandler: authenticate, config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request) => {
+    await assertFeatureEnabled("payments.withdrawals", "Withdrawals");
     return requestWithdrawalOtp(requireUser(request).id);
   });
 
@@ -105,12 +108,14 @@ export async function walletRoutes(app: FastifyInstance) {
 
   app.post("/api/wallet/deposits", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("payments.deposits", "Deposits");
     const { amount, method } = parseSchema(depositSchema, request.body);
     return createDepositRequest(user.id, amount, method);
   });
 
   app.post("/api/wallet/withdrawals", { preHandler: authenticate, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("payments.withdrawals", "Withdrawals");
     const { amount, otp } = parseSchema(withdrawalSchema, request.body);
     return createWithdrawalRequest(user.id, amount, otp);
   });

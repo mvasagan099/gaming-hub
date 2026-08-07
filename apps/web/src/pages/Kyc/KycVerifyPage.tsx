@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../components/ui/Button';
 import { apiClient } from '../../services/api/client';
 import { KycLevel, KycDocumentType, COUNTRY_DOCUMENTS } from '@gaming-hub/shared';
-import type { MultipartFile } from 'fastify-multipart';
 
 export function KycVerifyPage() {
   const navigate = useNavigate();
@@ -126,6 +125,48 @@ export function KycVerifyPage() {
         <ArrowLeft className="w-4 h-4 mr-1" />
         Back
       </Button>
+
+      {step === 1 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Select Verification Tier</CardTitle>
+            <CardDescription>
+              Choose the identity verification level you want to unlock
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3">
+              {[
+                { level: KycLevel.LEVEL_1, name: 'Tier 1 - Basic Verification', limit: '$1,000 / day', desc: 'Full game access & basic withdrawals.' },
+                { level: KycLevel.LEVEL_2, name: 'Tier 2 - Government ID', limit: '$10,000 / day', desc: 'High roller matches & increased deposit limits.' },
+                { level: KycLevel.LEVEL_3, name: 'Tier 3 - Premium Verification', limit: 'Unlimited', desc: 'VIP rewards, instant payouts & zero limits.' },
+              ].map((item) => (
+                <div
+                  key={item.level}
+                  onClick={() => setSelectedLevel(item.level)}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                    selectedLevel === item.level
+                      ? 'border-indigo-500 bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 font-bold'
+                      : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-sm">{item.name}</span>
+                    <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                      {item.limit}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            <Button onClick={() => setStep(2)} className="w-full mt-4">
+              Continue to Personal Information
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {step === 2 && (
         <Card>

@@ -33,6 +33,8 @@ import { securityRoutes } from "./routes/security";
 import { kycRoutes } from "./routes/kyc";
 import { adminKycRoutes } from "./routes/adminKyc";
 import { adminRolesRoutes } from "./routes/adminRoles";
+import { featureFlagsRoutes } from "./routes/featureFlags";
+import { isFeatureEnabled } from "./services/featureFlags";
 import { instrument } from "./services/metrics";
 
 export function buildApp() {
@@ -88,6 +90,30 @@ export function buildApp() {
 
   registerErrorHandler(app);
 
+  // Global maintenance gate. When `infra.maintenance` is enabled the platform
+  // is read-only for everyone except health checks, the public flag snapshot,
+  // authentication, and the admin panel (so admins can switch it back off).
+  app.addHook("onRequest", async (request) => {
+    const { url } = request;
+    if (
+      url === "/api/health" ||
+      url.startsWith("/api/health/") ||
+      url.startsWith("/api/feature-flags") ||
+      url.startsWith("/api/auth/") ||
+      url.startsWith("/api/admin/") ||
+      url.startsWith("/api/internal/")
+    ) {
+      return;
+    }
+    if (await isFeatureEnabled("infra.maintenance")) {
+      throw new AppError(
+        "MAINTENANCE",
+        "The platform is currently under maintenance",
+        503,
+      );
+    }
+  });
+
   instrument(app);
 
   void app.register(healthRoutes);
@@ -118,6 +144,7 @@ export function buildApp() {
   void app.register(kycRoutes);
   void app.register(adminKycRoutes);
   void app.register(adminRolesRoutes);
+  void app.register(featureFlagsRoutes);
 
   return app;
 }

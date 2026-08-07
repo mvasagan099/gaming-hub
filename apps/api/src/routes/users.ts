@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { AppError, updateProfileSchema } from "@gaming-hub/shared";
 import { authenticate } from "../plugins/authenticate";
 import { requireUser, parseSchema, routeParams, queryParams, queryString } from "../lib/http";
+import { assertFeatureEnabled } from "../services/featureFlags";
 import {
   getPublicProfileById,
   searchUsers,
@@ -11,6 +12,7 @@ import { getRankOfUser } from "../services/stats";
 
 export async function usersRoutes(app: FastifyInstance) {
   app.get("/api/users/:id", { preHandler: authenticate }, async (request) => {
+    await assertFeatureEnabled("social.profiles", "Public profiles");
     const { id } = routeParams(request);
     const profile = await getPublicProfileById(id);
     if (!profile) {
@@ -27,6 +29,7 @@ export async function usersRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/users/search", { preHandler: authenticate }, async (request) => {
+    await assertFeatureEnabled("social.profiles", "Public profiles");
     const query = queryString(queryParams(request).q).trim();
     if (!query) {
       return [];

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { prisma } from "@gaming-hub/db";
 import {
   KycLevel,
   KycStatus,
@@ -16,7 +17,7 @@ import { FileUploadService } from "../services/fileUpload";
 
 export async function adminKycRoutes(app: FastifyInstance) {
   app.get("/api/admin/kyc/pending", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:kyc:view");
+    await requirePermission(request, "admin:kyc:view", prisma);
     const q = queryParams(request);
     const page = Number(queryString(q.page)) || 1;
     const pageSize = Number(queryString(q.pageSize)) || 20;
@@ -27,7 +28,7 @@ export async function adminKycRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/admin/kyc/status/:status", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:kyc:view");
+    await requirePermission(request, "admin:kyc:view", prisma);
     const params = request.params as { status: string };
     const q = queryParams(request);
     const page = Number(queryString(q.page)) || 1;
@@ -44,7 +45,7 @@ export async function adminKycRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/admin/kyc/request/:requestId", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:kyc:view");
+    await requirePermission(request, "admin:kyc:view", prisma);
     const params = request.params as { requestId: string };
 
     const kycRequest = await KycService.getById(params.requestId);
@@ -77,7 +78,7 @@ export async function adminKycRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/admin/kyc/start-review/:requestId", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:kyc:review");
+    await requirePermission(request, "admin:kyc:review", prisma);
     const user = requireUser(request);
     const params = request.params as { requestId: string };
 
@@ -91,7 +92,7 @@ export async function adminKycRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/admin/kyc/review/:requestId", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:kyc:review");
+    await requirePermission(request, "admin:kyc:review", prisma);
     const user = requireUser(request);
     const params = request.params as { requestId: string };
     const data = parseSchema(kycReviewSchema, request.body);
@@ -139,7 +140,7 @@ export async function adminKycRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/admin/kyc/override/:requestId", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:kyc:override");
+    await requirePermission(request, "admin:kyc:override", prisma);
     const user = requireUser(request);
     const params = request.params as { requestId: string };
     const data = parseSchema(kycAdminOverrideSchema, request.body);
@@ -160,8 +161,7 @@ export async function adminKycRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/admin/kyc/limits", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:kyc:config");
-    const { prisma } = await import("@gaming-hub/db");
+    await requirePermission(request, "admin:kyc:config", prisma);
 
     const limits = await prisma.kycWithdrawalLimit.findMany({
       orderBy: { level: "asc" },
@@ -171,9 +171,8 @@ export async function adminKycRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/admin/kyc/limits", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:kyc:config");
+    await requirePermission(request, "admin:kyc:config", prisma);
     const data = parseSchema(kycSetWithdrawalLimitsSchema, request.body);
-    const { prisma } = await import("@gaming-hub/db");
 
     const limit = await prisma.kycWithdrawalLimit.upsert({
       where: { level: data.level },
@@ -194,8 +193,7 @@ export async function adminKycRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/admin/kyc/document-configs", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:kyc:config");
-    const { prisma } = await import("@gaming-hub/db");
+    await requirePermission(request, "admin:kyc:config", prisma);
 
     const configs = await prisma.kycDocumentConfig.findMany({
       orderBy: [{ country: "asc" }, { documentType: "asc" }],
@@ -205,9 +203,8 @@ export async function adminKycRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/admin/kyc/document-config", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:kyc:config");
+    await requirePermission(request, "admin:kyc:config", prisma);
     const data = parseSchema(kycDocumentConfigSchema, request.body);
-    const { prisma } = await import("@gaming-hub/db");
 
     const config = await prisma.kycDocumentConfig.upsert({
       where: {
@@ -238,8 +235,7 @@ export async function adminKycRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/admin/kyc/analytics", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:kyc:view");
-    const { prisma } = await import("@gaming-hub/db");
+    await requirePermission(request, "admin:kyc:view", prisma);
 
     const [
       totalRequests,

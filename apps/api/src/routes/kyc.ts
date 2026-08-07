@@ -1,13 +1,36 @@
 import type { FastifyInstance } from "fastify";
+import type { Multipart } from "@fastify/multipart";
 import { KycLevel, KycDocumentType, AppError, kycSubmitLevel1Schema } from "@gaming-hub/shared";
 import { authenticate } from "../plugins/authenticate";
 import { requireUser, parseSchema } from "../lib/http";
+import { assertFeatureEnabled } from "../services/featureFlags";
 import KycService from "../services/kyc";
 import { FileUploadService } from "../services/fileUpload";
+import multipart from "@fastify/multipart";
+
+function getFieldStringValue(field: Multipart | Multipart[] | undefined): string | undefined {
+  if (!field) return undefined;
+  if (Array.isArray(field)) {
+    return field[0] && 'value' in field[0] ? field[0].value as string : undefined;
+  }
+  return 'value' in field ? field.value as string : undefined;
+}
 
 export async function kycRoutes(app: FastifyInstance) {
+  await app.register(multipart, {
+    limits: {
+      fieldNameSize: 100,
+      fieldSize: 1024 * 1024,
+      fields: 10,
+      fileSize: 10 * 1024 * 1024,
+      files: 5,
+      headerPairs: 2000,
+    },
+  });
+
   app.get("/api/kyc/status", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("support.kyc", "KYC verification");
     const kycRequest = await KycService.getByUserId(user.id);
 
     if (!kycRequest) {
@@ -47,6 +70,7 @@ export async function kycRoutes(app: FastifyInstance) {
 
   app.post("/api/kyc/initiate", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("support.kyc", "KYC verification");
     const data = parseSchema(kycSubmitLevel1Schema, request.body);
 
     const kycRequest = await KycService.create({
@@ -67,6 +91,7 @@ export async function kycRoutes(app: FastifyInstance) {
 
   app.post("/api/kyc/request-level", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("support.kyc", "KYC verification");
     const body = request.body as { level: string };
     const level = body.level as KycLevel;
 
@@ -96,19 +121,21 @@ export async function kycRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/api/kyc/upload", { preHandler: authenticate }, async (request) => {
+  app.post("/api/kyc/upload", { preHandler: authenticate }, async (request, reply) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("support.kyc", "KYC verification");
+    
     const data = await request.file();
-
+    
     if (!data) {
       throw new AppError("VALIDATION_ERROR", "No file uploaded", 400);
     }
 
-    const fields = data.fields;
-    const requestId = fields.requestId?.value as string;
-    const documentType = fields.documentType?.value as KycDocumentType;
-    const side = (fields.side?.value as "front" | "back") ?? undefined;
-    const isSelfie = fields.isSelfie?.value === "true";
+    const requestId = getFieldStringValue(data.fields.requestId);
+    const documentType = getFieldStringValue(data.fields.documentType) as KycDocumentType;
+    const side = getFieldStringValue(data.fields.side) as "front" | "back" | undefined;
+    const isSelfieValue = getFieldStringValue(data.fields.isSelfie);
+    const isSelfie = isSelfieValue === "true";
 
     if (!requestId || !documentType) {
       throw new AppError("VALIDATION_ERROR", "Missing required fields", 400);
@@ -140,6 +167,7 @@ export async function kycRoutes(app: FastifyInstance) {
 
   app.delete("/api/kyc/document/:documentId", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("support.kyc", "KYC verification");
     const params = request.params as { documentId: string };
     const body = request.body as { requestId: string };
 
@@ -150,6 +178,7 @@ export async function kycRoutes(app: FastifyInstance) {
 
   app.post("/api/kyc/submit", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("support.kyc", "KYC verification");
     const body = request.body as { requestId: string };
 
     const kycRequest = await KycService.submit(body.requestId, user.id);
@@ -163,6 +192,7 @@ export async function kycRoutes(app: FastifyInstance) {
 
   app.get("/api/kyc/limits", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
+    await assertFeatureEnabled("support.kyc", "KYC verification");
 
     const limits = await KycService.getUserWithdrawalLimits(user.id);
 
