@@ -13,6 +13,12 @@ import { requirePermission } from "../lib/permissions";
 import { applyTransaction } from "../services/wallet";
 import { auditFromRequest } from "../services/audit";
 import {
+  approveWalletRequest,
+  listWalletRequests,
+  rejectWalletRequest,
+  setWalletFrozen,
+} from "../services/walletRequests";
+import {
   getSettings,
   setSetting,
   setCategorySettings,
@@ -25,6 +31,18 @@ const walletAdjustSchema = z.object({
 
 const roleChangeSchema = z.object({
   role: z.enum(["USER", "MODERATOR", "ADMIN"]),
+});
+
+const requestDecisionSchema = z.object({
+  note: z.string().trim().max(300).optional(),
+});
+
+const requestRejectSchema = z.object({
+  reason: z.string().trim().min(1).max(300),
+});
+
+const freezeSchema = z.object({
+  reason: z.string().trim().min(1).max(300),
 });
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -121,6 +139,85 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     return { ok: true, balance: wallet.balance };
+  });
+
+  // ---- Wallet requests ------------------------------------------------------
+  app.get("/api/admin/wallet/requests", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:wallet:requests:view");
+    const q = queryParams(request);
+    const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
+    const kind = (["DEPOSIT", "WITHDRAWAL"] as const).find((k) => k === queryString(q.kind));
+    const status = (["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const).find(
+      (s) => s === queryString(q.status),
+    );
+    const userId = queryString(q.userId) || undefined;
+    return listWalletRequests({ userId, kind, status }, page, pageSize);
+  });
+
+  app.post("/api/admin/wallet/requests/:id/approve", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:wallet:requests:manage");
+    const { id } = routeParams(request);
+    const { note } = parseSchema(requestDecisionSchema, request.body ?? {});
+    const updated = await approveWalletRequest(admin.id, id, note);
+    auditFromRequest(request, {
+      actorType: "user",
+      actorId: admin.id,
+      action: "admin.wallet.request.approved",
+      category: "admin",
+      targetType: "walletRequest",
+      targetId: id,
+      meta: { kind: updated.kind, amount: updated.amount, userId: updated.userId },
+    });
+    return { ok: true, request: updated };
+  });
+
+  app.post("/api/admin/wallet/requests/:id/reject", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:wallet:requests:manage");
+    const { id } = routeParams(request);
+    const { reason } = parseSchema(requestRejectSchema, request.body);
+    const updated = await rejectWalletRequest(admin.id, id, reason);
+    auditFromRequest(request, {
+      actorType: "user",
+      actorId: admin.id,
+      action: "admin.wallet.request.rejected",
+      category: "admin",
+      targetType: "walletRequest",
+      targetId: id,
+      meta: { kind: updated.kind, amount: updated.amount, userId: updated.userId },
+    });
+    return { ok: true, request: updated };
+  });
+
+  app.post("/api/admin/users/:id/wallet/freeze", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:wallet:requests:manage");
+    const { id } = routeParams(request);
+    const { reason } = parseSchema(freezeSchema, request.body);
+    const wallet = await setWalletFrozen(admin.id, id, true, reason);
+    auditFromRequest(request, {
+      actorType: "user",
+      actorId: admin.id,
+      action: "admin.wallet.frozen",
+      category: "admin",
+      targetType: "user",
+      targetId: id,
+      meta: { reason },
+    });
+    return { ok: true, isFrozen: wallet.isFrozen };
+  });
+
+  app.post("/api/admin/users/:id/wallet/unfreeze", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:wallet:requests:manage");
+    const { id } = routeParams(request);
+    const wallet = await setWalletFrozen(admin.id, id, false);
+    auditFromRequest(request, {
+      actorType: "user",
+      actorId: admin.id,
+      action: "admin.wallet.unfrozen",
+      category: "admin",
+      targetType: "user",
+      targetId: id,
+    });
+    return { ok: true, isFrozen: wallet.isFrozen };
   });
 
   app.patch("/api/admin/users/:id/role", { preHandler: authenticate }, async (request) => {

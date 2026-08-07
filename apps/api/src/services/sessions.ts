@@ -8,13 +8,26 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-/** Parse a rough device label from a User-Agent string for the devices list. */
 export function deviceNameFromUserAgent(userAgent: string | null | undefined): string | null {
   if (!userAgent) return null;
   const ua = userAgent;
   if (/mobile|android|iphone/i.test(ua)) return "Mobile";
   if (/tablet|ipad/i.test(ua)) return "Tablet";
+  if (/windows/i.test(ua)) return "Windows PC";
+  if (/mac/i.test(ua)) return "Mac";
+  if (/linux/i.test(ua)) return "Linux";
   return "Desktop";
+}
+
+export function browserFromUserAgent(userAgent: string | null | undefined): string | null {
+  if (!userAgent) return null;
+  const ua = userAgent;
+  if (/edg/i.test(ua)) return "Microsoft Edge";
+  if (/opr|opera/i.test(ua)) return "Opera";
+  if (/chrome/i.test(ua)) return "Google Chrome";
+  if (/firefox/i.test(ua)) return "Mozilla Firefox";
+  if (/safari/i.test(ua) && !/chrome/i.test(ua)) return "Apple Safari";
+  return "Unknown Browser";
 }
 
 export async function recordLoginSession(input: {
@@ -78,6 +91,7 @@ export async function listSessions(userId: string) {
     ip: s.ip,
     userAgent: s.userAgent,
     deviceName: s.deviceName,
+    browserName: browserFromUserAgent(s.userAgent),
     isCurrent: s.isCurrent,
     createdAt: s.createdAt.toISOString(),
     expiresAt: s.expiresAt.toISOString(),

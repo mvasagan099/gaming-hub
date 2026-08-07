@@ -45,6 +45,43 @@ async function main(): Promise<void> {
       res.end(JSON.stringify(health));
       return;
     }
+    if (req.method === "POST" && req.url === "/internal/notify") {
+      // Internal push channel used by the API to synchronize wallet events to
+      // a user's live sockets. Guarded by the shared INTERNAL_API_KEY.
+      let body = "";
+      req.on("data", (chunk: Buffer) => {
+        body += chunk;
+        if (body.length > 32 * 1024) req.destroy();
+      });
+      req.on("end", () => {
+        try {
+          if (req.headers["x-internal-key"] !== env.INTERNAL_API_KEY) {
+            res.writeHead(401, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ ok: false, error: "UNAUTHORIZED" }));
+            return;
+          }
+          const parsed = JSON.parse(body) as {
+            userId?: unknown;
+            event?: unknown;
+            payload?: unknown;
+          };
+          const userId = typeof parsed.userId === "string" ? parsed.userId : "";
+          const event = typeof parsed.event === "string" ? parsed.event : "";
+          if (!userId || !event) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ ok: false, error: "VALIDATION_ERROR" }));
+            return;
+          }
+          const emitted = io.to(`user:${userId}`).emit(event, parsed.payload);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, emitted: emitted > 0 }));
+        } catch {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: false, error: "INTERNAL_ERROR" }));
+        }
+      });
+      return;
+    }
     res.writeHead(404);
     res.end();
   });
@@ -96,6 +133,9 @@ async function main(): Promise<void> {
 
   io.on("connection", (socket) => {
     const user = (socket.data as { user: AuthenticatedUser }).user;
+
+    // Join a personal room so internal services can target a single user.
+    socket.join(`user:${user.userId}`);
 
     // Handle reconnection - check if user is in an active room
     const activeRoom = framework.roomManager.getPlayerRoom(user.userId);

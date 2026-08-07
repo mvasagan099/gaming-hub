@@ -163,6 +163,18 @@ enum CouponDiscountType {
   FIXED
 }
 
+enum WalletRequestKind {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+enum WalletRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 enum AnnouncementType {
   INFO
   UPDATE
@@ -247,6 +259,9 @@ model User {
   referralsMade      Referral[]           @relation("Referrer")
   referralsReceived  Referral[]           @relation("ReferredUser")
   couponRedemptions  CouponRedemption[]
+  walletRequests     WalletRequest[]
+  walletRequestDecisions WalletRequest[]    @relation("WalletRequestAdmin")
+  walletOtps         WalletOtp[]
   conversations      ConversationMember[]
   sentMessages       Message[]
   searchHistory      SearchHistory[]
@@ -294,6 +309,18 @@ model Profile {
   wins        Int       @default(0)
   losses      Int       @default(0)
   draws       Int       @default(0)
+  
+  streetAddress String?
+  city          String?
+  state         String?
+  postcode      String?
+  
+  emailVerified Boolean @default(false)
+  kycStatus     String  @default("pending")
+  
+  passwordHash    String?
+  twoFactorSecret String?
+  twoFactorEnabled Boolean @default(false)
 
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -478,9 +505,59 @@ model Wallet {
   lockedBalance   Int      @default(0)
   rewardBalance   Int      @default(0)
   cashbackBalance Int      @default(0)
+  isFrozen        Boolean  @default(false)
+  frozenAt        DateTime?
+  frozenReason    String?
   updatedAt       DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// A user-initiated deposit or withdrawal that an admin approves or rejects.
+/// Approving a deposit credits MAIN; approving a withdrawal debits MAIN. All
+/// money movement happens inside a serializable transaction that locks both the
+/// request and wallet rows so concurrent decisions cannot double-spend.
+model WalletRequest {
+  id         String              @id @default(uuid())
+  userId     String
+  kind       WalletRequestKind
+  amount     Int
+  fee        Int                 @default(0)
+  status     WalletRequestStatus @default(PENDING)
+  /// Payment provider label for deposits (e.g. "MANUAL", "STRIPE", "COUPON").
+  method     String?
+  /// Free-form note supplied by the user when creating the request.
+  note       String?
+  adminId    String?
+  adminNote  String?
+  decidedAt  DateTime?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admin User? @relation("WalletRequestAdmin", fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([userId, kind, createdAt])
+  @@index([kind, status, createdAt])
+  @@index([status, createdAt])
+}
+
+/// One-time codes guarding sensitive wallet actions (withdrawals). Codes are
+/// stored hashed, expire, and are single-use; attempts are bounded per code.
+model WalletOtp {
+  id         String   @id @default(uuid())
+  userId     String
+  purpose    String   @default("WALLET_WITHDRAWAL")
+  codeHash   String
+  attempts   Int      @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, createdAt])
+  @@index([expiresAt])
 }
 
 model Transaction {
@@ -1131,4 +1208,131 @@ model SiteSetting {
   updatedAt DateTime @updatedAt
 
   @@index([category])
+}
+
+// ============================================================================
+// Support Assistant Models
+// ============================================================================
+
+enum SupportContentType {
+  FAQ
+  QUICK_ACTION
+  GUIDE
+  TROUBLESHOOTING
+  NOTE
+  LINK
+  TUTORIAL
+}
+
+enum SupportContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model SupportCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  icon        String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  articles SupportArticle[]
+
+  @@index([isActive, sortOrder])
+}
+
+model SupportArticle {
+  id           String               @id @default(cuid())
+  categoryId   String
+  title        String
+  slug         String               @unique
+  content      String
+  contentType  SupportContentType   @default(FAQ)
+  status       SupportContentStatus @default(DRAFT)
+  tags         String[]             @default([])
+  keywords     String[]             @default([])
+  quickAction  Json?                // { label: string, action: string, link?: string }
+  sortOrder    Int                  @default(0)
+  viewCount    Int                  @default(0)
+  helpfulCount Int                  @default(0)
+  notHelpfulCount Int               @default(0)
+  createdBy    String?
+  updatedBy    String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  category SupportCategory        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  mappings SupportPageMapping[]
+  feedback SupportArticleFeedback[]
+
+  @@index([categoryId, status, sortOrder])
+  @@index([contentType, status])
+  @@index([tags])
+  @@index([status, createdAt])
+}
+
+model SupportPageMapping {
+  id        String   @id @default(cuid())
+  articleId String
+  pageRoute String   // e.g., "/wallet", "/games/chess"
+  context   String?  // Additional context for filtering
+  priority  Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  article SupportArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, pageRoute])
+  @@index([pageRoute, isActive, priority])
+}
+
+model SupportArticleFeedback {
+  id        String   @id @default(cuid())
+  articleId String
+  userId    String?
+  isHelpful Boolean
+  feedback  String?
+  pageRoute String?
+  createdAt DateTime @default(now())
+
+  article SupportArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([articleId, createdAt])
+  @@index([userId])
+}
+
+model SupportArticleTranslation {
+  id          String   @id @default(cuid())
+  articleId   String
+  language    String   // e.g., "en", "es", "fr"
+  title       String
+  content     String
+  keywords    String[] @default([])
+  createdBy   String?
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([articleId, language])
+  @@index([articleId, language])
+}
+
+model SupportSearchLog {
+  id         String    @id @default(cuid())
+  query      String
+  userId     String?
+  pageRoute  String?
+  results    Json?     // Array of matched article IDs
+  clickedId  String?   // Article ID that was clicked
+  createdAt  DateTime  @default(now())
+
+  @@index([query])
+  @@index([userId, createdAt])
+  @@index([pageRoute, createdAt])
 }

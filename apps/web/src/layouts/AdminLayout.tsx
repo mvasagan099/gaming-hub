@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { path: '/admin/coupons', label: 'Coupons' },
   { path: '/admin/announcements', label: 'Announcements' },
   { path: '/admin/crm', label: 'Support (CRM)' },
+  { path: '/admin/support', label: 'Help Center' },
   { path: '/admin/features', label: 'Feature Flags' },
   { path: '/admin/analytics', label: 'Analytics' },
   { path: '/admin/monitoring', label: 'Monitoring' },

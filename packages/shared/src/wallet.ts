@@ -20,6 +20,10 @@ export type TransactionReferenceType =
 
 export type WalletBalanceType = "MAIN" | "BONUS" | "LOCKED" | "REWARD" | "CASHBACK";
 
+export type WalletRequestKind = "DEPOSIT" | "WITHDRAWAL";
+
+export type WalletRequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+
 export interface Wallet {
   userId: string;
   balance: number;
@@ -27,6 +31,25 @@ export interface Wallet {
   lockedBalance: number;
   rewardBalance: number;
   cashbackBalance: number;
+  isFrozen: boolean;
+  frozenAt: string | null;
+  frozenReason: string | null;
+  updatedAt: string;
+}
+
+export interface WalletRequest {
+  id: string;
+  userId: string;
+  kind: WalletRequestKind;
+  amount: number;
+  fee: number;
+  status: WalletRequestStatus;
+  method: string | null;
+  note: string | null;
+  adminId: string | null;
+  adminNote: string | null;
+  decidedAt: string | null;
+  createdAt: string;
   updatedAt: string;
 }
 

@@ -20,6 +20,23 @@ export interface VerifiedSupabaseToken {
  * same token, and refresh is handled by the client SDK (supabase-js).
  */
 export async function verifyAccessToken(token: string): Promise<VerifiedSupabaseToken> {
+  // Test mode: tokens are `test.<userId>` so integration tests can drive the
+  // real authenticate/ensureUser pipeline without a Supabase project. The
+  // production path below is untouched.
+  if (process.env.NODE_ENV === "test" && token.startsWith("test.")) {
+    const sub = token.slice("test.".length);
+    if (!sub) {
+      throw new Error("Test token is missing subject");
+    }
+    return {
+      sub,
+      email: `${sub}@test.local`,
+      emailVerified: true,
+      issuedAt: Date.now() / 1000,
+      userMetadata: { username: `testuser_${sub}` },
+    };
+  }
+
   const { payload } = await jwtVerify(token, jwks, {
     issuer: `${env.SUPABASE_URL}/auth/v1`,
     audience: "authenticated",

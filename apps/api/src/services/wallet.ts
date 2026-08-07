@@ -241,3 +241,55 @@ export async function claimPracticeReward(
     remainingToday: Math.max(0, gameSettings.practiceDailyLimit - earned - gameSettings.practiceRewardAmount),
   };
 }
+
+export async function getWalletSummary(userId: string) {
+  const [wallet, deposited, withdrawn, spent, won] = await Promise.all([
+    getWallet(userId),
+    prisma.transaction.aggregate({
+      where: { userId, referenceType: { in: ["DEPOSIT", "COUPON", "BONUS"] }, type: "CREDIT" },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { userId, referenceType: "WITHDRAWAL" },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { userId, referenceType: "MATCH_WAGER" },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { userId, referenceType: "MATCH_PAYOUT" },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  return {
+    balance: wallet.balance,
+    bonusBalance: wallet.bonusBalance,
+    lockedBalance: wallet.lockedBalance,
+    rewardBalance: wallet.rewardBalance,
+    cashbackBalance: wallet.cashbackBalance,
+    totalDeposited: deposited._sum.amount ?? 0,
+    totalWithdrawn: withdrawn._sum.amount ?? 0,
+    totalSpent: spent._sum.amount ?? 0,
+    totalWon: won._sum.amount ?? 0,
+  };
+}
+
+export async function transferToCouponWallet(userId: string, amount: number) {
+  if (amount < 50) {
+    throw new AppError("VALIDATION_ERROR", "Minimum transfer amount is 50 coins", 400);
+  }
+
+  const updatedWallet = await prisma.$transaction(async (tx) => {
+    return applyTransaction(tx, userId, -amount, "WITHDRAWAL", null, {
+      destination: "COUPON_WALLET",
+    });
+  });
+
+  return {
+    ok: true,
+    transferredAmount: amount,
+    newBalance: updatedWallet.balance,
+  };
+}

@@ -19,6 +19,7 @@
     "db:studio": "prisma studio --schema packages/db/prisma/schema.prisma",
     "db:backup": "tsx scripts/db-backup.mts",
     "db:restore": "tsx scripts/db-restore.mts",
+    "db:seed:support": "tsx scripts/seed-support.ts",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down"
   },

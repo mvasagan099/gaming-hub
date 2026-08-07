@@ -13,6 +13,8 @@ export type Permission =
   | "admin:rooms:view"
   | "admin:matches:view"
   | "admin:wallet:adjust"
+  | "admin:wallet:requests:view"
+  | "admin:wallet:requests:manage"
   | "admin:settings:view"
   | "admin:settings:edit"
   | "admin:audit:view"
@@ -52,6 +54,8 @@ export const ROLE_PERMISSIONS: Record<DbUserRole, readonly Permission[]> = {
     "admin:rooms:view",
     "admin:matches:view",
     "admin:wallet:adjust",
+    "admin:wallet:requests:view",
+    "admin:wallet:requests:manage",
     "admin:settings:view",
     "admin:settings:edit",
     "admin:audit:view",

@@ -388,6 +388,9 @@ export class MatchManager {
     // Broadcast game over
     await this.framework.syncManager.broadcastGameOver(room);
     
+    // Keep the room around briefly for rematch, then close it so it can't leak.
+    this.framework.roomManager.scheduleRoomCleanup(room.id);
+    
     this.framework.log(`Match ${room.match.matchId} finished in room ${room.id}. Winners: ${matchResult.winnerIds.join(", ")}`);
   }
   
@@ -414,6 +417,9 @@ export class MatchManager {
       roomId: room.id,
       reason,
     });
+    
+    // Close the room after a short linger so the abort isn't followed by a leak.
+    this.framework.roomManager.scheduleRoomCleanup(room.id);
     
     this.framework.log(`Match ${room.match.matchId} aborted in room ${room.id}: ${reason}`);
   }

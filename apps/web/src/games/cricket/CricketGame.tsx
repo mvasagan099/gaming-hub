@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { CricketState } from '@gaming-hub/game-engine';
 import { GameWrapper } from '../../components/GameWrapper';
 import { claimPracticeReward } from '../../services/api/practiceReward';
 import { CricketPhaserGame } from './CricketPhaserGame';
 import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
+import { CricketTossUI } from './components/CricketTossUI';
 
 interface CricketProps {
   mode: 'ai' | 'multiplayer';
@@ -15,15 +16,15 @@ interface CricketProps {
 export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => {
   const isMultiplayer = mode === 'multiplayer';
 
-  // AI mode state
   const [playerRole, setPlayerRole] = useState<'batting' | 'bowling' | null>(null);
   const [matchOvers, setMatchOvers] = useState<number>(1);
   const [aiGameOver, setAiGameOver] = useState(false);
   const [finalRuns, setFinalRuns] = useState(0);
   const [finalWickets, setFinalWickets] = useState(0);
   const [isWin, setIsWin] = useState(false);
+  const [showTossUI, setShowTossUI] = useState(false);
+  const [tossComplete, setTossComplete] = useState(false);
 
-  // Multiplayer store state
   const gameState = useMultiplayerStore((s) => s.gameState);
   const winner = useMultiplayerStore((s) => s.winner);
   const mySeat = useMultiplayerStore((s) => s.mySeat);
@@ -31,6 +32,18 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
   const roomPlayers = useMultiplayerStore((s) => s.room?.players ?? []);
 
   const remoteState = isMultiplayer ? (gameState as unknown as CricketState | null) : null;
+  
+  useEffect(() => {
+    if (isMultiplayer && remoteState) {
+      if (remoteState.currentActor === 'toss' && !tossComplete) {
+        setShowTossUI(true);
+      } else if (remoteState.tossWinner != null) {
+        setShowTossUI(false);
+        setTossComplete(true);
+      }
+    }
+  }, [isMultiplayer, remoteState, tossComplete]);
+
   const matchStarted = isMultiplayer ? Boolean(remoteState) : Boolean(playerRole);
   const matchFinished = isMultiplayer
     ? Boolean(remoteState?.finished || winner)
@@ -86,7 +99,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
               Waiting for Match
             </h2>
             <p className="text-slate-400 mb-8">
-              The match will start once the host kicks it off. The toss and innings are decided by the server.
+              Waiting for all players to join and ready up...
             </p>
             <div className="hidden lg:block">
               <MultiplayerMatchPanel />
@@ -148,6 +161,20 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
                   <span className="text-sm text-slate-400 mt-2 text-center relative z-10">Defend the target score!</span>
                 </button>
               </div>
+            </div>
+          </div>
+        ) : isMultiplayer && !matchStarted ? (
+          <div className="flex flex-col items-center justify-center w-full max-w-2xl mx-auto p-10 bg-[#0f172a]/60 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] text-center">
+            <div className="text-6xl mb-6">🏏</div>
+            <h2 className="text-3xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-500 mb-4 drop-shadow-sm">
+              Initializing Match
+            </h2>
+            <p className="text-slate-400 mb-8">
+              The toss is being prepared...
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-slate-300">Loading...</span>
             </div>
           </div>
         ) : isMultiplayer && matchFinished ? (
@@ -258,6 +285,14 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
               </div>
             )}
           </div>
+        )}
+        
+        {isMultiplayer && showTossUI && remoteState && (
+          <CricketTossUI onTossComplete={() => {
+            console.log('[CricketGame] Toss complete callback');
+            setShowTossUI(false);
+            setTossComplete(true);
+          }} />
         )}
       </div>
     </GameWrapper>

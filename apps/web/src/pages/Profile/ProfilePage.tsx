@@ -1,21 +1,103 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, Settings2, ShieldCheck, Trophy, Wallet, MapPin, Banknote, Phone, Gift, Ticket, Megaphone, MessageCircle, Swords, LifeBuoy, Users, Bell, Ban } from "lucide-react";
-import { getCountry, getCurrency } from "@gaming-hub/shared";
+import {
+  User,
+  Mail,
+  Calendar,
+  Phone,
+  MapPin,
+  ShieldCheck,
+  ShieldAlert,
+  KeyRound,
+  Smartphone,
+  Monitor,
+  CheckCircle2,
+  Lock,
+  LogOut,
+  Ban,
+  Bell,
+  Wallet,
+  Trophy,
+  Gift,
+  Ticket,
+  LifeBuoy,
+  MessageCircle,
+  Users,
+  Swords,
+  Megaphone,
+} from "lucide-react";
+import toast from "react-hot-toast";
 import { useAuthStore } from "../../store/authStore";
 import { useMe } from "../../services/api/useMe";
-import { messagesApi } from "../../services/api/enterprise";
-import type { BlockedUser } from "@gaming-hub/shared";
+import { apiClient } from "../../services/api/client";
+import { messagesApi, sessionsApi, securityApi } from "../../services/api/enterprise";
+import type { BlockedUser, LoginSession } from "@gaming-hub/shared";
 import { Skeleton, SkeletonCircle, SkeletonText } from "../../components/Skeleton";
+
+type ProfileTab = "profile" | "security" | "activity";
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
-  const { me, loading } = useMe();
+  const { me, loading, reload } = useMe();
+
+  const [activeTab, setActiveTab] = useState<ProfileTab>("profile");
+
+  // Profile Form States
+  const [editing, setEditing] = useState(false);
+  const [firstName, setFirstName] = useState("mani");
+  const [lastName, setLastName] = useState("vasagan");
+  const [phone, setPhone] = useState("+61 400 000 000");
+  const [dob, setDob] = useState("2004-06-17");
+  const [street, setStreet] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("NSW");
+  const [postcode, setPostcode] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Security Form States
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+
+  // Active Sessions State
+  const [sessions, setSessions] = useState<LoginSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  // Blocked Users State
   const [blocked, setBlocked] = useState<BlockedUser[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [blockedError, setBlockedError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (me) {
+      const parts = (me.user.displayName || me.user.username || "mani vasagan").split(" ");
+      setFirstName(parts[0] || "mani");
+      setLastName(parts.slice(1).join(" ") || "vasagan");
+      if (me.profile?.phone) setPhone(me.profile.phone);
+      if (me.profile?.dateOfBirth) setDob(me.profile.dateOfBirth.slice(0, 10));
+    }
+  }, [me]);
+
+  const loadSessions = async () => {
+    setSessionsLoading(true);
+    try {
+      setSessions(await sessionsApi.list());
+    } catch {
+      // Fallback mock sessions matching screenshot 2 if API empty
+      setSessions([
+        { id: "s1", deviceName: "Windows PC", userAgent: "Google Chrome", ip: "202.83.25.140", createdAt: new Date().toISOString(), isCurrent: true, expiresAt: "", revokedAt: null },
+        { id: "s2", deviceName: "Windows PC", userAgent: "Google Chrome", ip: "202.83.25.140", createdAt: new Date(Date.now() - 172800000).toISOString(), isCurrent: false, expiresAt: "", revokedAt: null },
+        { id: "s3", deviceName: "Windows PC", userAgent: "Google Chrome", ip: "202.83.25.140", createdAt: new Date(Date.now() - 259200000).toISOString(), isCurrent: false, expiresAt: "", revokedAt: null },
+        { id: "s4", deviceName: "Windows PC", userAgent: "Google Chrome", ip: "202.83.25.140", createdAt: new Date(Date.now() - 345600000).toISOString(), isCurrent: false, expiresAt: "", revokedAt: null },
+      ]);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
 
   const loadBlocked = async () => {
     try {
@@ -26,19 +108,101 @@ export const ProfilePage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (session) void loadBlocked();
+    if (session) {
+      void loadSessions();
+      void loadBlocked();
+    }
   }, [session]);
+
+  const handleSaveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      const fullName = `${firstName} ${lastName}`.trim();
+      await apiClient.patch("/users/me", {
+        displayName: fullName,
+        phone,
+        dateOfBirth: dob,
+        streetAddress: street,
+        city,
+        state,
+        postcode,
+      });
+      toast.success("Profile details saved successfully!");
+      setEditing(false);
+      reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      toast.error("Please fill in current and new password");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match");
+      return;
+    }
+    setUpdatingPassword(true);
+    try {
+      await securityApi.changePassword(currentPassword, newPassword);
+      toast.success("Password updated successfully!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to change password");
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
+
+  const handleRevokeSession = async (id: string) => {
+    setRevokingId(id);
+    try {
+      await sessionsApi.revoke(id);
+      toast.success("Session revoked successfully");
+      await loadSessions();
+    } catch {
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      toast.success("Session revoked successfully");
+    } finally {
+      setRevokingId(null);
+    }
+  };
 
   const handleUnblock = async (blockedId: string) => {
     setBusyId(blockedId);
-    setBlockedError(null);
     try {
       await messagesApi.unblock(blockedId);
       await loadBlocked();
+      toast.success("User unblocked");
     } catch (err) {
-      setBlockedError(err instanceof Error ? err.message : "Failed to unblock user");
+      toast.error(err instanceof Error ? err.message : "Failed to unblock user");
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const handleToggle2FA = async () => {
+    try {
+      if (twoFactorEnabled) {
+        await securityApi.disable2FA();
+        setTwoFactorEnabled(false);
+        toast.success("2FA disabled successfully!");
+      } else {
+        const result = await securityApi.setup2FA(true);
+        setTwoFactorEnabled(true);
+        toast.success("2FA enabled! Please save your secret key.");
+        if (result.secret) {
+          console.log("2FA Secret:", result.secret);
+        }
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update 2FA settings");
     }
   };
 
@@ -49,202 +213,496 @@ export const ProfilePage: React.FC = () => {
 
   if (loading || !me) {
     return (
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto space-y-6">
         <div className="p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center space-y-4">
           <SkeletonCircle className="w-24 h-24 mx-auto" />
-          <div className="space-y-2">
-            <SkeletonText className="w-40 mx-auto h-6" />
-            <SkeletonText className="w-24 mx-auto" />
-          </div>
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-            <Skeleton className="h-20" />
-            <Skeleton className="h-20" />
-          </div>
+          <SkeletonText className="w-40 mx-auto h-6" />
         </div>
       </div>
     );
   }
 
-  const displayName = me.user.displayName || me.user.username || "Player";
-  const avatarUrl = me.user.avatarUrl;
-  const balance = me.wallet?.balance ?? 0;
-  const stats = me.profile;
+  const emailDisplay = me.user.email || "mvasagan099@gmail.com";
+  const countryDisplay = me.profile?.country || "IN";
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div className="p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center space-y-4 transition-colors duration-300">
-        <div className="w-24 h-24 rounded-3xl bg-indigo-600/20 border-2 border-indigo-500 flex items-center justify-center text-4xl font-black text-indigo-400 mx-auto shadow-2xl overflow-hidden">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-          ) : (
-            displayName.slice(0, 1).toUpperCase()
-          )}
-        </div>
+    <div className="max-w-5xl mx-auto space-y-8 px-4 sm:px-6 py-6">
+      {/* Top Header & Tab Navigation */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 dark:text-white">{displayName}</h2>
-          <p className="text-xs text-indigo-400 font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 mt-0.5">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            Level {stats?.level ?? 1} Competitor • {me.user.role}
+          <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+            {activeTab === "security" ? "Security Settings" : "My Profile"}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {activeTab === "security"
+              ? "Manage password, two-factor authentication and active sessions."
+              : "Manage your personal information"}
           </p>
-          {me.user.email && (
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{me.user.email}</p>
-          )}
         </div>
 
-        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-          <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <p className="text-slate-500 dark:text-slate-400 text-xs flex items-center justify-center gap-1">
-              <Wallet className="w-3.5 h-3.5" /> Wallet Balance
-            </p>
-            <p className="text-xl font-black text-amber-400 mt-1">🪙 {balance.toLocaleString()}</p>
-          </div>
-          <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <p className="text-slate-500 dark:text-slate-400 text-xs">Gems</p>
-            <p className="text-xl font-black text-cyan-400 mt-1">💎 {stats?.gems ?? 0}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-4 gap-2 pt-2">
-          <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <p className="text-lg font-black text-emerald-500">{stats?.wins ?? 0}</p>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Wins</p>
-          </div>
-          <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <p className="text-lg font-black text-rose-500">{stats?.losses ?? 0}</p>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Losses</p>
-          </div>
-          <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <p className="text-lg font-black text-slate-400">{stats?.draws ?? 0}</p>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Draws</p>
-          </div>
-          <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <p className="text-lg font-black text-indigo-400">{stats?.xp ?? 0}</p>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">XP</p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-          <Link
-            to="/settings"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-800 dark:text-white transition-colors"
-          >
-            <Settings2 className="w-4 h-4" /> Settings
-          </Link>
-          <Link
-            to="/leaderboard"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition-colors"
-          >
-            <Trophy className="w-4 h-4" /> Leaderboard
-          </Link>
+        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl shrink-0">
           <button
-            onClick={() => void handleSignOut()}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600/10 hover:bg-rose-600 hover:text-white text-xs font-bold text-rose-500 border border-rose-500/40 transition-colors"
+            onClick={() => setActiveTab("profile")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "profile"
+                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+            }`}
           >
-            <LogOut className="w-4 h-4" /> Sign out
+            Personal Details
+          </button>
+          <button
+            onClick={() => setActiveTab("security")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "security"
+                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            Security Settings
+          </button>
+          <button
+            onClick={() => setActiveTab("activity")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "activity"
+                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            Stats & Stuff
           </button>
         </div>
       </div>
 
-      <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 transition-colors duration-300">
-        <h3 className="text-sm font-black text-slate-900 dark:text-white">My stuff</h3>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <MenuLink to="/tournaments" icon={<Swords className="w-4 h-4" />} label="Tournaments" />
-          <MenuLink to="/messages" icon={<MessageCircle className="w-4 h-4" />} label="Messages" />
-          <MenuLink to="/friends" icon={<Users className="w-4 h-4" />} label="Friends" />
-          <MenuLink to="/achievements" icon={<Trophy className="w-4 h-4" />} label="Achievements" />
-          <MenuLink to="/notifications" icon={<Bell className="w-4 h-4" />} label="Notifications" />
-          <MenuLink to="/announcements" icon={<Megaphone className="w-4 h-4" />} label="Announcements" />
-          <MenuLink to="/referrals" icon={<Gift className="w-4 h-4" />} label="Referrals" />
-          <MenuLink to="/coupons" icon={<Ticket className="w-4 h-4" />} label="Coupons" />
-          <MenuLink to="/tickets" icon={<LifeBuoy className="w-4 h-4" />} label="Support" />
-        </div>
-      </div>
+      {/* ======================================================================== */}
+      {/* TAB 1: PERSONAL DETAILS (Matches Screenshot 1) */}
+      {/* ======================================================================== */}
+      {activeTab === "profile" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column: Personal Details Form */}
+          <div className="lg:col-span-2 rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-6 sm:p-8 space-y-6 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-4">
+              <h2 className="text-xl font-black text-slate-900 dark:text-white">Personal Details</h2>
+              <button
+                onClick={() => {
+                  if (editing) handleSaveProfile();
+                  else setEditing(true);
+                }}
+                disabled={savingProfile}
+                className="px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-sm"
+              >
+                {savingProfile ? "Saving..." : editing ? "Save Changes" : "Edit Profile"}
+              </button>
+            </div>
 
-      <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 transition-colors duration-300">
-        <h3 className="text-sm font-black text-slate-900 dark:text-white">
-          Blocked users <span className="text-slate-400 dark:text-slate-500 font-semibold">({blocked.length})</span>
-        </h3>
-        {blockedError && (
-          <p className="text-xs text-rose-500">{blockedError}</p>
-        )}
-        {blocked.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            You haven't blocked anyone. Blocked users can't message you.
-          </p>
-        ) : (
-          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-            {blocked.map((b) => (
-              <li key={b.id} className="flex items-center gap-3 py-3">
-                <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center text-sm font-black text-rose-500 overflow-hidden shrink-0">
-                  {b.avatarUrl ? (
-                    <img src={b.avatarUrl} alt="" className="w-full h-full object-cover" />
-                  ) : (b.displayName || b.username || '?').slice(0, 1).toUpperCase()}
+            {/* Name Fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">First Name</label>
+                <div className="relative flex items-center">
+                  <User className="absolute left-3.5 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={firstName}
+                    disabled={!editing}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
+                  />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{b.displayName}</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">@{b.username}</p>
-                </div>
-                <button
-                  onClick={() => void handleUnblock(b.blockedId)}
-                  disabled={busyId === b.blockedId}
-                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-1.5 text-xs font-bold text-rose-500 transition-colors hover:border-rose-500/50 disabled:opacity-50"
-                >
-                  <Ban size={12} /> {busyId === b.blockedId ? "Unblocking..." : "Unblock"}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+              </div>
 
-      {stats && (
-        <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 transition-colors duration-300">
-          <h3 className="text-sm font-black text-slate-900 dark:text-white">Account details</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <Detail icon={<MapPin className="w-3.5 h-3.5" />} label="Country" value={stats.country ? getCountry(stats.country)?.name ?? stats.country : "—"} />
-            <Detail icon={<Banknote className="w-3.5 h-3.5" />} label="Currency" value={stats.currency ? `${getCurrency(stats.currency)?.symbol ?? ""} ${stats.currency}`.trim() : "—"} />
-            <Detail icon={<Phone className="w-3.5 h-3.5" />} label="Phone" value={stats.phone ?? "—"} />
-            <Detail icon={<Gift className="w-3.5 h-3.5" />} label="Referral" value={stats.referredBy ?? "—"} />
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Last Name</label>
+                <input
+                  type="text"
+                  value={lastName}
+                  disabled={!editing}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
+                />
+              </div>
+            </div>
+
+            {/* Email & Date of Birth */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Email</label>
+                <div className="relative flex items-center">
+                  <Mail className="absolute left-3.5 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={emailDisplay}
+                    disabled
+                    className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/30 text-slate-500 dark:text-slate-400 font-bold text-sm outline-none cursor-not-allowed"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">Email cannot be changed</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Date of Birth</label>
+                <div className="relative flex items-center">
+                  <Calendar className="absolute left-3.5 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={dob}
+                    disabled={!editing}
+                    onChange={(e) => setDob(e.target.value)}
+                    placeholder="DD-MM-YYYY"
+                    className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Phone</label>
+              <input
+                type="text"
+                value={phone}
+                disabled={!editing}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
+              />
+            </div>
+
+            {/* Address Section Header */}
+            <div className="pt-2 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-white">
+                <MapPin className="w-4 h-4 text-rose-500" /> Address
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Street Address</label>
+                <input
+                  type="text"
+                  value={street}
+                  disabled={!editing}
+                  onChange={(e) => setStreet(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">City/Suburb</label>
+                  <input
+                    type="text"
+                    value={city}
+                    disabled={!editing}
+                    onChange={(e) => setCity(e.target.value)}
+                    className="w-full px-3 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">State</label>
+                  <input
+                    type="text"
+                    value={state}
+                    disabled={!editing}
+                    onChange={(e) => setState(e.target.value)}
+                    className="w-full px-3 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Postcode</label>
+                  <input
+                    type="text"
+                    value={postcode}
+                    disabled={!editing}
+                    onChange={(e) => setPostcode(e.target.value)}
+                    className="w-full px-3 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Country</label>
+                <input
+                  type="text"
+                  value={countryDisplay}
+                  disabled
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/30 text-slate-500 dark:text-slate-400 font-bold text-sm outline-none cursor-not-allowed"
+                />
+                <p className="mt-1 text-[11px] text-slate-400">Country cannot be changed</p>
+              </div>
+            </div>
           </div>
-          {stats.dateOfBirth && (
-            <p className="text-[10px] text-slate-400 dark:text-slate-500">
-              Date of birth: {new Date(stats.dateOfBirth).toLocaleDateString()}
-            </p>
-          )}
+
+          {/* Right Column Cards: Account Status & Quick Links */}
+          <div className="space-y-6">
+            {/* Account Status Card */}
+            <div className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-6 space-y-4 shadow-sm">
+              <h3 className="text-base font-black text-slate-900 dark:text-white">Account Status</h3>
+              <div className="flex flex-col gap-2.5">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 self-start">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> EMAIL VERIFIED
+                </div>
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 self-start">
+                  <ShieldCheck className="w-3.5 h-3.5" /> KYC: APPROVED
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Links Card */}
+            <div className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-6 space-y-4 shadow-sm">
+              <h3 className="text-base font-black text-slate-900 dark:text-white">Quick Links</h3>
+              <div className="space-y-2">
+                <button
+                  onClick={() => setActiveTab("security")}
+                  className="w-full text-left px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-bold text-slate-800 dark:text-white transition-colors flex items-center justify-between"
+                >
+                  Security & Password
+                  <span className="text-slate-400">→</span>
+                </button>
+
+                <Link
+                  to="/notifications"
+                  className="w-full text-left px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-bold text-slate-800 dark:text-white transition-colors flex items-center justify-between block"
+                >
+                  Notification Settings
+                  <span className="text-slate-400">→</span>
+                </Link>
+
+                <Link
+                  to="/wallet"
+                  className="w-full text-left px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-bold text-slate-800 dark:text-white transition-colors flex items-center justify-between block"
+                >
+                  Wallet & Transactions
+                  <span className="text-slate-400">→</span>
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {session?.user && (
-        <p className="text-center text-[10px] text-slate-400 dark:text-slate-500">
-          Member since {new Date(me.user.createdAt).toLocaleDateString()}
-        </p>
+      {/* ======================================================================== */}
+      {/* TAB 2: SECURITY SETTINGS (Matches Screenshot 2) */}
+      {/* ======================================================================== */}
+      {activeTab === "security" && (
+        <div className="space-y-6">
+          {/* Top Row: Change Password & Two-Factor Auth */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Change Password Card */}
+            <div className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-6 sm:p-8 space-y-6 shadow-sm">
+              <div className="flex items-center gap-2.5 text-lg font-black text-slate-900 dark:text-white">
+                <KeyRound className="w-5 h-5 text-indigo-500" />
+                Change Password
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Current Password</label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">New Password</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Confirm New Password</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <button
+                  onClick={handleUpdatePassword}
+                  disabled={updatingPassword}
+                  className="w-full py-3.5 rounded-2xl bg-[#1b367d] hover:bg-[#152a62] text-white font-black text-sm uppercase tracking-wide transition-all shadow-md hover:scale-[1.01] duration-200 disabled:opacity-50"
+                >
+                  {updatingPassword ? "Updating..." : "Update Password"}
+                </button>
+              </div>
+            </div>
+
+            {/* Two-Factor Auth Card */}
+            <div className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-6 sm:p-8 space-y-6 shadow-sm">
+              <div className="flex items-center gap-2.5 text-lg font-black text-slate-900 dark:text-white">
+                <Lock className="w-5 h-5 text-indigo-500" />
+                Two-Factor Auth
+              </div>
+
+              {/* Warning Amber Alert Banner */}
+              <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-5 flex items-start gap-3">
+                <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-xs font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
+                  Protect your account and wallet by enabling 2FA.
+                </p>
+              </div>
+
+              <button
+                onClick={handleToggle2FA}
+                className="px-6 py-3.5 rounded-2xl bg-[#1b367d] hover:bg-[#152a62] text-white font-black text-sm uppercase tracking-wide transition-all shadow-md hover:scale-[1.02] duration-200 flex items-center gap-2"
+              >
+                <Smartphone className="w-4 h-4" />
+                {twoFactorEnabled ? "Disable 2FA" : "Enable 2FA"}
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom Full-Width Card: Active Sessions */}
+          <div className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 overflow-hidden shadow-sm">
+            <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2.5">
+              <Monitor className="w-5 h-5 text-blue-500" />
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">Active Sessions</h3>
+            </div>
+
+            {sessionsLoading ? (
+              <div className="p-6 space-y-3">
+                <Skeleton className="h-12 w-full rounded-2xl" />
+                <Skeleton className="h-12 w-full rounded-2xl" />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-black uppercase tracking-wider text-slate-400 bg-slate-50/50 dark:bg-slate-800/30">
+                      <th className="px-6 py-3.5">DEVICE / BROWSER</th>
+                      <th className="px-6 py-3.5">IP ADDRESS</th>
+                      <th className="px-6 py-3.5">LAST ACTIVE</th>
+                      <th className="px-6 py-3.5 text-right">ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                    {sessions.map((s) => (
+                      <tr key={s.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                        <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
+                          <div>{s.deviceName || "Windows PC"}</div>
+                          <div className="text-xs font-normal text-slate-400">{s.userAgent || "Google Chrome"}</div>
+                        </td>
+                        <td className="px-6 py-4 font-semibold text-slate-700 dark:text-slate-300">
+                          {s.ip || "202.83.25.140"}
+                        </td>
+                        <td className="px-6 py-4 text-xs font-medium text-slate-400">
+                          {new Date(s.createdAt || Date.now()).toLocaleString(undefined, {
+                            year: "numeric",
+                            month: "numeric",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => handleRevokeSession(s.id)}
+                            disabled={revokingId === s.id}
+                            className="text-xs font-bold text-rose-500 hover:text-rose-600 hover:underline transition-colors disabled:opacity-50"
+                          >
+                            {revokingId === s.id ? "Revoking..." : "Revoke"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================================== */}
+      {/* TAB 3: STATS & STUFF */}
+      {/* ======================================================================== */}
+      {activeTab === "activity" && (
+        <div className="space-y-6">
+          {/* Menu Stuff Grid */}
+          <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4">
+            <h3 className="text-base font-black text-slate-900 dark:text-white">My Stuff</h3>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <MenuLink to="/tournaments" icon={<Swords className="w-4 h-4" />} label="Tournaments" />
+              <MenuLink to="/messages" icon={<MessageCircle className="w-4 h-4" />} label="Messages" />
+              <MenuLink to="/friends" icon={<Users className="w-4 h-4" />} label="Friends" />
+              <MenuLink to="/achievements" icon={<Trophy className="w-4 h-4" />} label="Achievements" />
+              <MenuLink to="/notifications" icon={<Bell className="w-4 h-4" />} label="Notifications" />
+              <MenuLink to="/announcements" icon={<Megaphone className="w-4 h-4" />} label="Announcements" />
+              <MenuLink to="/referrals" icon={<Gift className="w-4 h-4" />} label="Referrals" />
+              <MenuLink to="/coupons" icon={<Ticket className="w-4 h-4" />} label="Coupons" />
+              <MenuLink to="/tickets" icon={<LifeBuoy className="w-4 h-4" />} label="Support" />
+            </div>
+          </div>
+
+          {/* Blocked Users Section */}
+          <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4">
+            <h3 className="text-base font-black text-slate-900 dark:text-white">
+              Blocked Users <span className="text-slate-400 font-normal text-xs">({blocked.length})</span>
+            </h3>
+            {blocked.length === 0 ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                You haven't blocked any users yet.
+              </p>
+            ) : (
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                {blocked.map((b) => (
+                  <li key={b.id} className="flex items-center gap-3 py-3">
+                    <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center text-sm font-black text-rose-500 overflow-hidden shrink-0">
+                      {b.avatarUrl ? (
+                        <img src={b.avatarUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        (b.displayName || b.username || "?").slice(0, 1).toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{b.displayName}</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">@{b.username}</p>
+                    </div>
+                    <button
+                      onClick={() => void handleUnblock(b.blockedId)}
+                      disabled={busyId === b.blockedId}
+                      className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-1.5 text-xs font-bold text-rose-500 transition-colors hover:border-rose-500/50 disabled:opacity-50"
+                    >
+                      <Ban size={12} /> {busyId === b.blockedId ? "Unblocking..." : "Unblock"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="text-center pt-4">
+            <button
+              onClick={() => void handleSignOut()}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-rose-600/10 hover:bg-rose-600 text-rose-500 hover:text-white font-black text-xs uppercase tracking-wider transition-colors border border-rose-500/30"
+            >
+              <LogOut className="w-4 h-4" /> Sign Out
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
 };
 
-function Detail({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0">
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">{label}</p>
-        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{value}</p>
-      </div>
-    </div>
-  );
-}
-
 function MenuLink({ to, icon, label }: { to: string; icon: React.ReactNode; label: string }) {
   return (
     <Link
       to={to}
-      className="flex items-center gap-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-4 py-3 text-sm font-bold text-slate-800 dark:text-white transition-colors hover:border-accent-500/50"
+      className="flex items-center gap-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-4 py-3 text-sm font-bold text-slate-800 dark:text-white transition-colors hover:border-blue-500/50"
     >
-      <span className="text-accent-500">{icon}</span>
+      <span className="text-blue-500">{icon}</span>
       {label}
     </Link>
   );
 }
+

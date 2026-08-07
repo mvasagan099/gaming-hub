@@ -28,6 +28,8 @@ import { ticketsRoutes } from "./routes/tickets";
 import { messagesRoutes } from "./routes/messages";
 import { searchRoutes } from "./routes/search";
 import { adminEnterpriseRoutes } from "./routes/adminEnterprise";
+import { supportRoutes } from "./routes/support";
+import { securityRoutes } from "./routes/security";
 import { instrument } from "./services/metrics";
 
 export function buildApp() {
@@ -108,6 +110,8 @@ export function buildApp() {
   void app.register(messagesRoutes);
   void app.register(searchRoutes);
   void app.register(adminEnterpriseRoutes);
+  void app.register(supportRoutes);
+  void app.register(securityRoutes);
 
   return app;
 }

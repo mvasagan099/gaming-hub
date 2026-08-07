@@ -5,6 +5,7 @@ import Sidebar from "../components/layout/Sidebar";
 import BottomNav from "../components/layout/BottomNav";
 import PageHeader from "../components/layout/PageHeader";
 import AnimatedOutlet from "../components/layout/AnimatedOutlet";
+import { SupportAssistant } from "../components/SupportAssistant";
 
 export default function MainLayout() {
   const location = useLocation();
@@ -33,6 +34,9 @@ export default function MainLayout() {
       </div>
 
       <BottomNav />
+      
+      {/* Support Assistant - Available on all pages */}
+      <SupportAssistant />
     </div>
   );
 }

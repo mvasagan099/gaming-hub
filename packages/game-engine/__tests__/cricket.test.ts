@@ -1,10 +1,11 @@
+import { describe, it, expect } from "vitest";
 import { CricketEngine } from "..";
 import type { CricketAction, CricketMatchType } from "..";
 
 describe("CricketEngine", () => {
   const players = [
-    { seat: 0, id: "p0", name: "Player 1" },
-    { seat: 1, id: "p1", name: "Player 2" },
+    { seat: 0, id: "p0", userId: "p0", name: "Player 1" },
+    { seat: 1, id: "p1", userId: "p1", name: "Player 2" },
   ];
 
   function setup(options?: { matchType?: CricketMatchType }) {

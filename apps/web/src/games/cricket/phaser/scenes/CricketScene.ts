@@ -3,6 +3,7 @@ import type { CricketState, CricketDelivery, CricketShot, CricketTiming } from "
 import { CricketHUDManager } from "../managers/CricketHUDManager";
 import { CricketAudioManager } from "../managers/CricketAudioManager";
 import { useMultiplayerStore } from "../../../../store/multiplayerStore";
+import CricketMultiplayerDriver from "../managers/CricketMultiplayerDriver";
 
 const GAME_W = 924;
 const GAME_H = 680;
@@ -41,7 +42,7 @@ export class CricketScene extends Phaser.Scene {
   private ballHeight = 0;
   private ballVelocityZ = 0;
   private gravity = 1200; // pixels per second squared for Z axis
-  private deliveryType: 'fast' | 'slow' | 'spin' = 'fast';
+  private deliveryType: CricketDelivery = 'fast';
   private spinDirection: number = 1;
   private isBowling = false;
   private isHit = false;
@@ -78,6 +79,7 @@ export class CricketScene extends Phaser.Scene {
   private namesBySeat: Record<number, string> = {};
   private unsubscribe?: () => void;
   private multiplayerOver = false;
+  private multiplayerDriver?: CricketMultiplayerDriver;
 
   constructor() {
     super("CricketScene");
@@ -149,27 +151,43 @@ export class CricketScene extends Phaser.Scene {
         this.unsubscribe();
         this.unsubscribe = undefined;
       }
+      if (this.multiplayerDriver) {
+        this.multiplayerDriver.stop();
+      }
       this.audioManager.destroy();
     });
 
     if (this.mode === "multiplayer") {
-      this.unsubscribe = useMultiplayerStore.subscribe((s, prev) => {
-        if (s.gameState === prev.gameState && s.lastEvents === prev.lastEvents) return;
-        if (!s.gameState) return;
-        this.applyRemoteState(s.gameState as unknown as CricketState, s.lastEvents);
+      console.log("[CricketScene] Initializing multiplayer mode");
+      
+      const names: string[] = [];
+      for (let i = 0; i < 2; i++) {
+        const p = useMultiplayerStore.getState().room?.players.find(pl => pl.seat === i);
+        names[i] = p?.displayName ?? `Player ${i + 1}`;
+      }
+      
+      this.multiplayerDriver = new CricketMultiplayerDriver(this, this.hud, this.mySeat, names);
+      
+      this.events.on("cricket:state:updated", (state: CricketState, events: { type: string }[]) => {
+        this.applyRemoteState(state, events);
+      });
+      
+      this.events.on("cricket:toss:call_needed", () => {
+        console.log("[CricketScene] Toss call needed, emitting to react");
+        this.events.emit("cricket:toss:call_needed_react");
       });
 
-      const st = useMultiplayerStore.getState();
-      if (st.gameState) {
-        this.applyRemoteState(st.gameState as unknown as CricketState, []);
-        const initial = st.gameState as unknown as CricketState;
-        this.hud.updateStatus(`${this.nameFor(initial.battingFirst)} won the toss and will bat first!`, "#fbbf24");
-        this.time.delayedCall(2500, () => {
-          if (this.remoteState && !this.remoteState.finished) this.updateTurnStatus(this.remoteState);
-        });
-      } else {
-        this.hud.updateStatus("Waiting for the match to start...", "#ffffff");
-      }
+      this.events.on("cricket:toss:waiting", () => {
+        console.log("[CricketScene] Waiting for opponent toss call");
+        this.hud.updateStatus("Waiting for opponent to call the toss...", "#94a3b8");
+      });
+
+      this.events.on("cricket:match:complete", (state: CricketState) => {
+        console.log("[CricketScene] Match complete event received");
+        this.handleMatchComplete(state);
+      });
+      
+      this.multiplayerDriver.start();
       return;
     }
 
@@ -636,12 +654,47 @@ export class CricketScene extends Phaser.Scene {
   }
 
   private applyRemoteState(state: CricketState, events: { type: string }[]) {
+    console.log("[CricketScene] applyRemoteState called, currentActor:", state.currentActor, "tossWinner:", state.tossWinner);
+    
     this.remoteState = state;
     const store = useMultiplayerStore.getState();
     this.mySeat = store.mySeat;
     this.namesBySeat = {};
     for (const p of store.room?.players ?? []) {
       if (p.seat != null) this.namesBySeat[p.seat] = p.displayName;
+    }
+
+    if (state.currentActor === "toss") {
+      console.log("[CricketScene] Toss phase - not applying game state yet");
+      return;
+    }
+
+    if (state.tossWinner != null && state.battingFirst != null) {
+      const battingName = this.namesBySeat[state.battingFirst] ?? `Player ${state.battingFirst + 1}`;
+      const calledBy = this.namesBySeat[state.tossWinner] ?? `Player ${state.tossWinner + 1}`;
+      console.log("[CricketScene] Toss completed:", calledBy, "won, batting first:", battingName);
+      
+      const isMyTurn = state.currentSeat === this.mySeat;
+      if (isMyTurn) {
+        this.hud.updateStatus(`You ${state.battingFirst === this.mySeat ? 'bat' : 'bowl'} first!`, "#34d399");
+      } else {
+        const opponentSeat = 1 - (this.mySeat ?? 0);
+        const opponentName = this.namesBySeat[opponentSeat] ?? `Player ${opponentSeat + 1}`;
+        this.hud.updateStatus(`${opponentName} ${state.battingFirst === opponentSeat ? 'bats' : 'bowls'} first!`, "#94a3b8");
+      }
+      
+      if (!this.tossCompleteDisplayed) {
+        this.tossCompleteDisplayed = true;
+        this.time.delayedCall(2000, () => {
+          if (this.remoteState && !this.remoteState.finished) {
+            this.updateTurnStatus(this.remoteState);
+          }
+        });
+      }
+      
+      if (state.inning === 1 && state.currentOver === 0 && state.currentBall === 0 && !state.pendingDelivery) {
+        this.updateTurnStatus(state);
+      }
     }
 
     const isBatting = this.mySeat != null && state.battingTeam === this.mySeat;
@@ -660,6 +713,8 @@ export class CricketScene extends Phaser.Scene {
       this.updateTurnStatus(state);
     }
   }
+  
+  private tossCompleteDisplayed = false;
 
   private handleRemoteEvent(ev: { type: string } & Record<string, unknown>) {
     switch (ev.type) {
@@ -735,11 +790,17 @@ export class CricketScene extends Phaser.Scene {
   }
 
   private updateTurnStatus(state: CricketState) {
+    if (state.currentActor === "toss") {
+      console.log("[CricketScene] updateTurnStatus - toss phase, not updating controls");
+      return;
+    }
+    
     if (this.mySeat == null) {
       this.hud.setControlsState(true);
       this.hud.updateStatus("Spectating...", "#94a3b8");
       return;
     }
+    
     if (state.currentActor === "bowler") {
       if (this.mySeat === state.bowlingTeam) {
         this.hud.setControlsState(false);
@@ -748,7 +809,7 @@ export class CricketScene extends Phaser.Scene {
         this.hud.setControlsState(true);
         this.hud.updateStatus(`Waiting for ${this.nameFor(state.bowlingTeam)} to bowl...`, "#94a3b8");
       }
-    } else {
+    } else if (state.currentActor === "batsman") {
       if (this.mySeat === state.battingTeam) {
         this.hud.setControlsState(false);
         this.hud.updateStatus("Ready for the ball!", "#fbbf24");
@@ -773,6 +834,34 @@ export class CricketScene extends Phaser.Scene {
       this.jumpCelebrate(this.nonStriker);
     } else {
       this.hud.updateStatus(`${this.nameFor(winner)} wins the match!`, "#f43f5e");
+    }
+  }
+  
+  public callToss(call: "heads" | "tails"): void {
+    console.log("[CricketScene] callToss:", call);
+    if (this.multiplayerDriver) {
+      this.multiplayerDriver.sendTossCall(call);
+    }
+  }
+  
+  private handleMatchComplete(state: CricketState) {
+    console.log("[CricketScene] handleMatchComplete - winner:", state.winner, "mySeat:", this.mySeat);
+    this.multiplayerOver = true;
+    this.hud.setControlsState(true);
+    
+    this.audioManager.playCrowdRoar();
+    this.createConfetti();
+    
+    if (state.winnerSeats.length === 0) {
+      this.hud.updateStatus("Match tied!", "#fbbf24");
+    } else if (state.winner === this.mySeat) {
+      this.hud.updateStatus("YOU WIN THE MATCH!", "#34d399");
+      this.fielders.forEach(f => this.jumpCelebrate(f));
+      this.jumpCelebrate(this.batsman);
+      this.jumpCelebrate(this.nonStriker);
+    } else {
+      const winnerName = this.namesBySeat[state.winner ?? 0] ?? "Opponent";
+      this.hud.updateStatus(`${winnerName} wins the match!`, "#f43f5e");
     }
   }
 
@@ -833,21 +922,20 @@ export class CricketScene extends Phaser.Scene {
     if (this.wickets >= 1 || this.balls >= this.maxBalls) return;
 
     if (this.mode === 'multiplayer') {
-      // The server resolves the delivery; the animation is driven by the
-      // resulting `ball-bowled` broadcast so both clients stay in sync.
+      if (!this.multiplayerDriver?.canBowl()) {
+        console.log("[CricketScene] playerBowl rejected - not my turn to bowl");
+        this.hud.updateStatus("Not your turn to bowl!", "#f43f5e");
+        return;
+      }
+      
       this.hud.setControlsState(true);
       this.hud.updateStatus("Delivery sent! Waiting...", "#93c5fd");
-      void useMultiplayerStore.getState().sendGameAction({ type: 'bowl', delivery: type, power }).then((res) => {
-        if (!res.ok) {
-          this.hud.updateStatus(res.error ?? "Action rejected", "#f43f5e");
-          this.hud.setControlsState(false);
-        }
-      });
+      this.multiplayerDriver.sendBowlAction(type, power);
       return;
     }
 
     this.executeBowl(type, power);
-    this.hud.setControlsState(true); // Disable bowling controls while ball is in play
+    this.hud.setControlsState(true);
   }
 
 
@@ -944,25 +1032,23 @@ export class CricketScene extends Phaser.Scene {
   private hitShot(isAI = false, direction: 'left' | 'right' | 'up' | 'straight' = 'straight') {
     if (!this.isBowling || this.isHit || this.wickets >= 1 || this.balls >= this.maxBalls) return;
     
-    // Only allow one swing per delivery!
     if (!isAI && this.playerHasSwung) return;
     if (!isAI) this.playerHasSwung = true;
 
     if (this.mode === 'multiplayer' && !isAI) {
-      // The batsman's swing is sent to the server; the outcome is rolled
-      // authoritatively and arrives back as a `ball-result` event.
+      if (!this.multiplayerDriver?.canBat()) {
+        console.log("[CricketScene] hitShot rejected - not my turn to bat");
+        this.playerHasSwung = false;
+        this.hud.updateStatus("Not your turn to bat!", "#f43f5e");
+        return;
+      }
+      
       this.playBatSwing(direction);
       const timing = this.computeTiming(direction);
       this.hud.setControlsState(true);
       this.hud.updateStatus("Shot played! Waiting for result...", "#93c5fd");
       this.audioManager.playWhoosh();
-      void useMultiplayerStore.getState().sendGameAction({ type: 'bat', shot: direction, timing }).then((res) => {
-        if (!res.ok) {
-          this.playerHasSwung = false;
-          this.hud.setControlsState(false);
-          this.hud.updateStatus(res.error ?? "Action rejected", "#f43f5e");
-        }
-      });
+      this.multiplayerDriver.sendBatAction(direction, timing);
       return;
     }
 

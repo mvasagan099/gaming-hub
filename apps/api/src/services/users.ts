@@ -220,7 +220,18 @@ export async function getAuthenticatedUserData(user: User) {
 
 export async function updateUserProfile(
   userId: string,
-  data: { displayName?: string; bio?: string; country?: string; avatarUrl?: string | null },
+  data: {
+    displayName?: string;
+    bio?: string;
+    country?: string;
+    avatarUrl?: string | null;
+    phone?: string;
+    dateOfBirth?: string;
+    streetAddress?: string;
+    city?: string;
+    state?: string;
+    postcode?: string;
+  },
 ) {
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.update({
@@ -235,6 +246,12 @@ export async function updateUserProfile(
       data: {
         bio: data.bio,
         country: data.country,
+        phone: data.phone,
+        dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
+        streetAddress: data.streetAddress,
+        city: data.city,
+        state: data.state,
+        postcode: data.postcode,
       },
     });
     return { user, profile };

@@ -496,8 +496,9 @@ export class RoomManager {
       this.roomExpirationTimers.delete(roomId);
     }
     
-    // End match if active
-    if (room.match) {
+    // End match if active (finished/aborted rooms are closed as-is so we don't
+    // re-broadcast an abort after game:over).
+    if (room.status === "playing" && room.match) {
       this.framework.matchManager.abortMatch(room, reason);
     }
     
@@ -549,8 +550,40 @@ export class RoomManager {
     if (room.status === "playing") return;
     
     const timer = setTimeout(() => {
+      this.roomExpirationTimers.delete(roomId);
+      // Re-check: the room may have started a match (or been reset for a
+      // rematch) since the timer was scheduled.
+      const current = this.rooms.get(roomId);
+      if (!current || current.status === "playing") return;
       this.closeRoom(roomId, "expired");
     }, this.framework.config.roomExpirationMs);
+    
+    this.roomExpirationTimers.set(roomId, timer);
+  }
+  
+  /**
+   * Schedule a room to be closed after its match has finished, leaving a
+   * linger window so players can still request a rematch. If the room is
+   * reset for a rematch before the timer fires, the close is skipped.
+   */
+  scheduleRoomCleanup(roomId: RoomId, delayMs?: number): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+    
+    // Clear existing timer
+    const existingTimer = this.roomExpirationTimers.get(roomId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    
+    const timer = setTimeout(() => {
+      this.roomExpirationTimers.delete(roomId);
+      // Only close rooms that are still finished — a rematch may have reset
+      // the room back to "waiting".
+      const current = this.rooms.get(roomId);
+      if (!current || current.status !== "ended") return;
+      this.closeRoom(roomId, "match_finished");
+    }, delayMs ?? this.framework.config.endedRoomLingerMs);
     
     this.roomExpirationTimers.set(roomId, timer);
   }

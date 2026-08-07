@@ -31,12 +31,19 @@ export function makeSocket(id: string): Socket {
 
 /** Build a framework instance (singleton is reset by the caller). */
 export function createTestFramework(
-  opts: { enableAntiCheat?: boolean; enableReplay?: boolean } = {},
+  opts: {
+    enableAntiCheat?: boolean;
+    enableReplay?: boolean;
+    roomExpirationMs?: number;
+    endedRoomLingerMs?: number;
+  } = {},
 ): MultiplayerFramework {
   return MultiplayerFramework.getInstance({
     io: createIoStub(),
     enableAntiCheat: opts.enableAntiCheat ?? true,
     enableReplay: opts.enableReplay ?? true,
+    roomExpirationMs: opts.roomExpirationMs,
+    endedRoomLingerMs: opts.endedRoomLingerMs,
   });
 }
 

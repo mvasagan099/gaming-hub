@@ -46,6 +46,7 @@ const AdminMonitoringPage = lazy(() => import("../pages/admin/AdminMonitoringPag
 const AdminAnalyticsPage = lazy(() => import("../pages/admin/AdminAnalyticsPage").then((m) => ({ default: m.AdminAnalyticsPage })));
 const AdminErrorsPage = lazy(() => import("../pages/admin/AdminErrorsPage").then((m) => ({ default: m.AdminErrorsPage })));
 const AdminAutomationPage = lazy(() => import("../pages/admin/AdminAutomationPage").then((m) => ({ default: m.AdminAutomationPage })));
+const AdminSupportPage = lazy(() => import("../pages/admin/AdminSupportPage").then((m) => ({ default: m.AdminSupportPage })));
 
 const SuspensePage = ({ children }: { children: ReactNode }) => (
   <Suspense
@@ -122,6 +123,7 @@ export const router = createBrowserRouter([
           { path: "monitoring", element: <SuspensePage><AdminMonitoringPage /></SuspensePage> },
           { path: "errors", element: <SuspensePage><AdminErrorsPage /></SuspensePage> },
           { path: "automation", element: <SuspensePage><AdminAutomationPage /></SuspensePage> },
+          { path: "support", element: <SuspensePage><AdminSupportPage /></SuspensePage> },
           { path: "audit", element: <SuspensePage><AdminAuditPage /></SuspensePage> },
           { path: "settings", element: <SuspensePage><AdminSettingsPage /></SuspensePage> },
         ],

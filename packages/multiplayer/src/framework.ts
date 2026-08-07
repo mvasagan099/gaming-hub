@@ -46,6 +46,9 @@ export interface MultiplayerFrameworkConfig {
   /** Room expiration time in milliseconds (default: 30 minutes) */
   roomExpirationMs?: number;
   
+  /** How long a finished/aborted room lingers for rematch before it is closed (default: 2 minutes) */
+  endedRoomLingerMs?: number;
+  
   /** Maximum spectators per room (default: 10) */
   maxSpectators?: number;
   
@@ -96,6 +99,7 @@ export class MultiplayerFramework {
       reconnectGracePeriodMs: config.reconnectGracePeriodMs ?? 90_000,
       afkTimeoutMs: config.afkTimeoutMs ?? 60_000,
       roomExpirationMs: config.roomExpirationMs ?? 30 * 60 * 1000,
+      endedRoomLingerMs: config.endedRoomLingerMs ?? 120_000,
       maxSpectators: config.maxSpectators ?? 10,
       enableAntiCheat: config.enableAntiCheat ?? true,
       enableReplay: config.enableReplay ?? true,

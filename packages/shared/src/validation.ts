@@ -80,6 +80,22 @@ export const updateProfileSchema = z.object({
   bio: z.string().trim().max(240).optional(),
   country: z.string().trim().max(60).optional(),
   avatarUrl: z.string().url().max(500).nullable().optional(),
+  phone: z.string().trim().max(20).optional(),
+  dateOfBirth: z.string().datetime().optional(),
+  streetAddress: z.string().trim().max(200).optional(),
+  city: z.string().trim().max(100).optional(),
+  state: z.string().trim().max(100).optional(),
+  postcode: z.string().trim().max(20).optional(),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(100),
+  confirmPassword: z.string().min(8).max(100),
+});
+
+export const setup2FASchema = z.object({
+  enable: z.boolean(),
 });
 
 export const sendFriendRequestSchema = z.object({

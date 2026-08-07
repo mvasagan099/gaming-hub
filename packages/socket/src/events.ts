@@ -111,9 +111,28 @@ export interface ServerToClientEvents {
   "matchmaking:queued": (payload: { position: number }) => void;
   "matchmaking:found": (payload: { roomId: string }) => void;
 
+  "wallet:updated": (payload: WalletUpdatePayload) => void;
+
   "latency:ping": (payload: { timestamp: number }, ack: () => void) => void;
 
   "error": (payload: SocketErrorPayload) => void;
+}
+
+export interface WalletUpdatePayload {
+  event:
+    | "wallet-balance"
+    | "deposit-approved"
+    | "deposit-rejected"
+    | "withdrawal-approved"
+    | "withdrawal-rejected"
+    | "wallet-frozen"
+    | "wallet-unfrozen";
+  requestId?: string;
+  kind?: "DEPOSIT" | "WITHDRAWAL";
+  status?: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+  balance?: number;
+  bonusBalance?: number;
+  message?: string;
 }
 
 export interface RematchUpdate {

@@ -238,6 +238,22 @@ export const sessionsApi = {
 };
 
 // ---------------------------------------------------------------------------
+// Security
+// ---------------------------------------------------------------------------
+
+export const securityApi = {
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiClient.patch<{ ok: boolean }>('/security/password', {
+      currentPassword,
+      newPassword,
+      confirmPassword: newPassword,
+    }),
+  setup2FA: (enable: boolean) =>
+    apiClient.post<{ ok: boolean; enabled: boolean; secret?: string }>('/security/2fa/setup', { enable }),
+  disable2FA: () => apiClient.post<{ ok: boolean }>('/security/2fa/disable'),
+};
+
+// ---------------------------------------------------------------------------
 // Achievements
 // ---------------------------------------------------------------------------
 
@@ -250,7 +266,21 @@ export const achievementsApi = {
 // Wallet
 // ---------------------------------------------------------------------------
 
+export interface WalletSummary {
+  balance: number;
+  bonusBalance: number;
+  lockedBalance: number;
+  rewardBalance: number;
+  cashbackBalance: number;
+  totalDeposited: number;
+  totalWithdrawn: number;
+  totalSpent: number;
+  totalWon: number;
+}
+
 export const walletApi = {
+  summary: () => apiClient.get<WalletSummary>('/wallet/summary'),
+  transfer: (amount: number) => apiClient.post<{ ok: boolean; transferredAmount: number; newBalance: number }>('/wallet/transfer', { amount }),
   transactions: (page: number, pageSize: number, walletType?: WalletBalanceType, referenceType?: TransactionReferenceType) => {
     const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (walletType) qs.set('walletType', walletType);
