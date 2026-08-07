@@ -15,6 +15,28 @@ export { SyncManager } from "./managers/SyncManager";
 export { AntiCheatManager } from "./managers/AntiCheatManager";
 export { MatchmakingManager } from "./managers/MatchmakingManager";
 
+// Phase 11 gameplay framework
+export {
+  GameStateManager,
+  TurnManager,
+  ActionValidator,
+  EventDispatcher,
+  WinnerCalculator,
+  StatisticsCollector,
+  DisconnectHandler,
+  ReconnectHandler,
+  GAME_PLAY_CONFIGS,
+  getGamePlayConfig,
+  hasCompleteGameConfigs,
+} from "./gameplay";
+export type {
+  GamePlayConfig,
+  PlayerOutcome,
+  PlayerMatchResult,
+  MatchResult,
+  PlayerMatchStats,
+} from "./gameplay";
+
 // Types
 export * from "./types";
 

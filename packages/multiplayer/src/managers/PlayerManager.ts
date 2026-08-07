@@ -53,7 +53,6 @@ export class PlayerManager {
   private readonly framework: MultiplayerFramework;
   private readonly players = new Map<PlayerId, PlayerRuntime>();
   private readonly afkTimers = new Map<string, NodeJS.Timeout>(); // roomId:playerId
-  private readonly disconnectTimers = new Map<string, NodeJS.Timeout>(); // roomId:playerId
   private readonly pingIntervals = new Map<PlayerId, NodeJS.Timeout>();
   private readonly activityLog = new Map<PlayerId, number[]>(); // playerId -> timestamps
   
@@ -73,15 +72,11 @@ export class PlayerManager {
     for (const timer of this.afkTimers.values()) {
       clearTimeout(timer);
     }
-    for (const timer of this.disconnectTimers.values()) {
-      clearTimeout(timer);
-    }
     for (const timer of this.pingIntervals.values()) {
       clearInterval(timer);
     }
     
     this.afkTimers.clear();
-    this.disconnectTimers.clear();
     this.pingIntervals.clear();
     this.players.clear();
     this.playerStats.clear();
@@ -198,18 +193,12 @@ export class PlayerManager {
       status: "reconnecting",
     });
     
-    // Start disconnect timer for active matches
+    // Start disconnect handling for active matches (grace period + forfeit),
+    // or remove the player immediately from waiting rooms.
     if (room.status === "playing") {
-      const timerKey = `${roomId}:${playerId}`;
-      const timer = setTimeout(() => {
-        this.handleDisconnectTimeout(roomId, playerId);
-      }, this.framework.config.reconnectGracePeriodMs);
-      
-      this.disconnectTimers.set(timerKey, timer);
-      
+      await this.framework.disconnectHandler.handleDisconnect(room, player);
       this.framework.log(`Player ${playerId} disconnected, grace period started (${this.framework.config.reconnectGracePeriodMs}ms)`);
     } else {
-      // For waiting rooms, remove player immediately
       await this.framework.roomManager.leaveRoom(roomId, playerId, socket);
     }
   }
@@ -220,14 +209,6 @@ export class PlayerManager {
   async handleReconnect(playerId: PlayerId, roomId: RoomId, socket: Socket): Promise<void> {
     const player = this.players.get(playerId);
     if (!player) return;
-    
-    // Clear disconnect timer
-    const timerKey = `${roomId}:${playerId}`;
-    const timer = this.disconnectTimers.get(timerKey);
-    if (timer) {
-      clearTimeout(timer);
-      this.disconnectTimers.delete(timerKey);
-    }
     
     // Update player
     player.socketIds.add(socket.id);
@@ -252,6 +233,10 @@ export class PlayerManager {
       playerId,
       status: "connected",
     });
+    
+    // Restore the player into the active match (cancel grace timer, rehydrate
+    // state, auto-resume if everyone is connected).
+    await this.framework.reconnectHandler.handleReconnect(room, player, socket);
     
     this.framework.log(`Player ${playerId} reconnected to room ${roomId}`);
   }
@@ -428,26 +413,6 @@ export class PlayerManager {
         // This would trigger a forfeit action
         this.framework.matchManager.handlePlayerForfeit(room, player, "afk");
       }
-    }
-  }
-  
-  /**
-   * Handle disconnect timeout (player didn't reconnect in time).
-   */
-  private async handleDisconnectTimeout(roomId: RoomId, playerId: PlayerId): Promise<void> {
-    const room = this.framework.roomManager.getRoom(roomId);
-    if (!room) return;
-    
-    const player = room.players.get(playerId) || room.players.get(playerId);
-    if (!player) return;
-    
-    player.connectionStatus = "disconnected";
-    
-    this.framework.log(`Player ${playerId} disconnect timeout in room ${roomId}`);
-    
-    // Handle match forfeit if playing
-    if (room.status === "playing" && room.match && player.seat !== null) {
-      await this.framework.matchManager.handlePlayerForfeit(room, player, "disconnect_timeout");
     }
   }
   

@@ -1,0 +1,655 @@
+// ============================================================================
+// Enterprise Prisma Schema Extensions
+// Add these to your schema.prisma file
+// ============================================================================
+
+// ============================================================================
+// Feature Flags & Remote Config
+// ============================================================================
+
+model FeatureFlag {
+  id                 String    @id @default(cuid())
+  key                String    @unique
+  name               String
+  description        String?
+  enabled            Boolean   @default(false)
+  targetAudience     Json      @default("{}")
+  rolloutPercentage  Int       @default(100)
+  conditions         Json?
+  metadata           Json?
+  expiresAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([key, enabled])
+}
+
+model RemoteConfig {
+  id          String   @id @default(cuid())
+  key         String
+  value       Json
+  environment String   @default("production")
+  version     Int      @default(1)
+  isSecret    Boolean  @default(false)
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([key, environment])
+  @@index([environment])
+}
+
+// ============================================================================
+// Live Events & Seasons
+// ============================================================================
+
+enum LiveEventStatus {
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  ENDED
+  CANCELLED
+}
+
+enum LiveEventType {
+  SEASONAL
+  PROMOTIONAL
+  TOURNAMENT
+  SPECIAL
+}
+
+model LiveEvent {
+  id              String          @id @default(cuid())
+  name            String
+  description     String?
+  type            LiveEventType
+  startTime       DateTime
+  endTime         DateTime
+  timezone        String          @default("UTC")
+  status          LiveEventStatus @default(SCHEDULED)
+  targetAudience  Json            @default("{}")
+  rewards         Json            @default("[]")
+  config          Json            @default("{}")
+  bannerUrl       String?
+  metadata        Json?
+  createdBy       String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([status, startTime])
+  @@index([endTime])
+}
+
+enum SeasonStatus {
+  UPCOMING
+  ACTIVE
+  ENDED
+}
+
+model GameSeason {
+  id                String       @id @default(cuid())
+  number            Int
+  name              String
+  gameId            String
+  startDate         DateTime
+  endDate           DateTime
+  theme             String?
+  rewards           Json         @default("[]")
+  battlePass        Json?
+  status            SeasonStatus @default(UPCOMING)
+  leaderboardReset  Boolean      @default(false)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([gameId, number])
+  @@index([gameId, status])
+}
+
+// ============================================================================
+// Maintenance & Announcements
+// ============================================================================
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model MaintenanceWindow {
+  id               String            @id @default(cuid())
+  startTime        DateTime
+  endTime          DateTime
+  timezone         String            @default("UTC")
+  title            String
+  description      String?
+  affectedServices String[]          @default([])
+  isEmergency      Boolean           @default(false)
+  status           MaintenanceStatus @default(SCHEDULED)
+  createdBy        String
+  createdAt        DateTime          @default(now())
+
+  @@index([status, startTime])
+}
+
+enum ServerBroadcastType {
+  INFO
+  WARNING
+  CRITICAL
+  MAINTENANCE
+}
+
+model ServerBroadcast {
+  id              String             @id @default(cuid())
+  message         String
+  type            ServerBroadcastType
+  durationSeconds Int                @default(300)
+  dismissible     Boolean            @default(true)
+  targetAudience  Json               @default("{}")
+  scheduledAt     DateTime?
+  createdBy       String
+  createdAt       DateTime           @default(now())
+}
+
+enum AnnouncementPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model GlobalAnnouncement {
+  id              String               @id @default(cuid())
+  title           String
+  body            String
+  type            AnnouncementType
+  priority        AnnouncementPriority
+  imageUrl        String?
+  actionUrl       String?
+  buttonText      String?
+  targetAudience  Json                 @default("{}")
+  scheduledAt     DateTime?
+  expiresAt       DateTime?
+  dismissedBy     String[]             @default([])
+  status          String               @default("active")
+  createdBy       String
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([status, priority])
+  @@index([scheduledAt, expiresAt])
+}
+
+// ============================================================================
+// AI Models & Predictions
+// ============================================================================
+
+enum AIModelType {
+  MATCHMAKING
+  CHEAT_DETECTION
+  TOXICITY
+  SPAM
+  FRAUD
+  RECOMMENDATION
+}
+
+enum AIModelStatus {
+  ACTIVE
+  TRAINING
+  DEPRECATED
+  DISABLED
+}
+
+model AIModel {
+  id            String         @id @default(cuid())
+  name          String
+  type          AIModelType
+  version       String
+  status        AIModelStatus  @default(ACTIVE)
+  config        Json           @default("{}")
+  accuracy      Float?
+  precision     Float?
+  recall        Float?
+  lastTrainedAt DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([type, status])
+}
+
+model AIPrediction {
+  id        String   @id @default(cuid())
+  modelId   String
+  input     Json
+  output    Json
+  confidence Float
+  timestamp DateTime @default(now())
+
+  @@index([modelId, timestamp])
+}
+
+// ============================================================================
+// Economy Extensions
+// ============================================================================
+
+model StoreItem {
+  id              String    @id @default(cuid())
+  type            String
+  name            String
+  description     String?
+  imageUrl        String?
+  price           Int
+  currency        String    @default("coins")
+  originalPrice   Int?
+  isLimited       Boolean   @default(false)
+  quantity        Int?
+  availableFrom   DateTime?
+  availableUntil  DateTime?
+  targetAudience  Json?
+  metadata        Json?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  inventoryItems UserInventoryItem[]
+
+  @@index([type, isActive])
+  @@index([availableUntil])
+}
+
+model UserInventoryItem {
+  id          String    @id @default(cuid())
+  userId      String
+  itemId      String
+  type        String
+  quantity    Int       @default(1)
+  acquiredAt  DateTime  @default(now())
+  expiresAt   DateTime?
+  isEquipped  Boolean   @default(false)
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item StoreItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([itemId])
+}
+
+enum SubscriptionTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+model SubscriptionPlan {
+  id          String           @id @default(cuid())
+  name        String
+  description String?
+  tier        SubscriptionTier
+  price       Int
+  currency    String           @default("USD")
+  interval    String             @default("monthly")
+  features    Json             @default("[]")
+  rewards     Json             @default("[]")
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  subscriptions UserSubscription[]
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  PAST_DUE
+}
+
+model UserSubscription {
+  id                    String              @id @default(cuid())
+  userId                String
+  planId                String
+  status                SubscriptionStatus
+  startedAt             DateTime
+  expiresAt             DateTime
+  cancelledAt           DateTime?
+  autoRenew             Boolean             @default(true)
+  paymentMethod         String?
+  externalSubscriptionId String?
+
+  user User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([planId])
+}
+
+model Gift {
+  id          String    @id @default(cuid())
+  senderId    String
+  recipientId String
+  itemId      String
+  itemType    String
+  quantity    Int       @default(1)
+  message     String?
+  status      String    @default("pending")
+  sentAt      DateTime  @default(now())
+  expiresAt   DateTime
+  respondedAt DateTime?
+
+  @@index([recipientId, status])
+  @@index([senderId])
+}
+
+// ============================================================================
+// Notification Extensions
+// ============================================================================
+
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+model ScheduledNotification {
+  id              String    @id @default(cuid())
+  templateId      String
+  userIds         String[]  @default([])
+  targetAudience  Json?
+  scheduledAt     DateTime
+  status          String    @default("scheduled")
+  sentCount       Int       @default(0)
+  failedCount     Int       @default(0)
+  createdBy       String
+  createdAt       DateTime  @default(now())
+
+  @@index([status, scheduledAt])
+}
+
+// ============================================================================
+// Analytics
+// ============================================================================
+
+model AnalyticsDashboard {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  widgets     Json     @default("[]")
+  filters     Json?
+  isDefault   Boolean  @default(false)
+  isPublic    Boolean  @default(false)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MetricDefinition {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String
+  calculation String
+  eventType   String?
+  eventProperty String?
+  formula     String?
+  unit        String?
+  format      String   @default("number")
+  isActive    Boolean  @default(true)
+}
+
+// ============================================================================
+// Compliance
+// ============================================================================
+
+enum DataExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model DataExportRequest {
+  id           String            @id @default(cuid())
+  userId       String
+  status       DataExportStatus
+  requestedAt  DateTime          @default(now())
+  completedAt  DateTime?
+  expiresAt    DateTime?
+  downloadUrl  String?
+  fileSize     Int?
+  dataTypes    String[]          @default([])
+
+  @@index([userId, status])
+}
+
+enum DeletionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+model AccountDeletionRequest {
+  id           String          @id @default(cuid())
+  userId       String          @unique
+  status       DeletionStatus
+  reason       String?
+  requestedAt  DateTime        @default(now())
+  scheduledFor DateTime
+  completedAt  DateTime?
+  cancelledAt  DateTime?
+
+  @@index([status, scheduledFor])
+}
+
+model ConsentRecord {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  version   String
+  granted   Boolean
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, type])
+}
+
+// ============================================================================
+// Infrastructure
+// ============================================================================
+
+model WorkerJob {
+  id            String    @id @default(cuid())
+  name          String
+  queue         String
+  data          Json?
+  priority      Int       @default(0)
+  attempts      Int       @default(0)
+  maxAttempts   Int       @default(3)
+  delay         DateTime?
+  status        String    @default("waiting")
+  result        Json?
+  error         String?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([queue, status])
+  @@index([createdAt])
+}
+
+enum HealthStatus {
+  HEALTHY
+  DEGRADED
+  UNHEALTHY
+  UNKNOWN
+}
+
+model HealthCheck {
+  id            String       @id @default(cuid())
+  service       String
+  status        HealthStatus @default(UNKNOWN)
+  latencyMs     Int
+  lastCheckedAt DateTime     @default(now())
+  message       String?
+  metadata      Json?
+
+  @@index([service, status])
+  @@index([lastCheckedAt])
+}
+
+enum ScalingAction {
+  SCALE_UP
+  SCALE_DOWN
+  MAINTAIN
+}
+
+model ScalingEvent {
+  id              String       @id @default(cuid())
+  service         String
+  action          ScalingAction
+  reason          String
+  fromInstances   Int
+  toInstances     Int
+  triggeredAt     DateTime     @default(now())
+  completedAt     DateTime?
+  success         Boolean?
+
+  @@index([service, triggeredAt])
+}
+
+// ============================================================================
+// Security Extensions
+// ============================================================================
+
+enum SecuritySeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model SecurityAuditLog {
+  id          String           @id @default(cuid())
+  userId      String?
+  action      String
+  category    String
+  severity    SecuritySeverity @default(INFO)
+  targetType  String?
+  targetId    String?
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  timestamp   DateTime         @default(now())
+
+  @@index([userId, timestamp])
+  @@index([category, severity])
+}
+
+model RateLimitRule {
+  id           String @id @default(cuid())
+  name         String
+  endpoint     String
+  method       String?
+  maxRequests  Int
+  windowMs     Int
+  scope        String @default("ip")
+  isActive     Boolean @default(true)
+}
+
+model DeviceFingerprint {
+  id               String   @id @default(cuid())
+  userId           String
+  fingerprint      String   @unique
+  deviceType       String?
+  os               String?
+  browser          String?
+  screenResolution String?
+  timezone         String?
+  firstSeen        DateTime @default(now())
+  lastSeen         DateTime @updatedAt
+  trustScore       Float    @default(0.5)
+
+  @@index([userId])
+  @@index([fingerprint])
+}
+
+enum FraudSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum FraudStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  FALSE_POSITIVE
+}
+
+model FraudAlert {
+  id          String        @id @default(cuid())
+  userId      String
+  type        String
+  severity    FraudSeverity
+  description String
+  evidence    Json?
+  status      FraudStatus   @default(OPEN)
+  assignedTo  String?
+  createdAt   DateTime      @default(now())
+  resolvedAt  DateTime?
+
+  @@index([userId, status])
+  @@index([severity, createdAt])
+}
+
+// ============================================================================
+// Automation
+// ============================================================================
+
+model CronJob {
+  id               String    @id @default(cuid())
+  name             String
+  description      String?
+  schedule         String
+  timezone         String    @default("UTC")
+  handler          String
+  params           Json?
+  isActive         Boolean   @default(true)
+  lastRunAt        DateTime?
+  lastRunStatus    String?
+  lastRunDurationMs Int?
+  nextRunAt        DateTime?
+  createdBy        String
+  createdAt        DateTime  @default(now())
+
+  @@index([isActive, nextRunAt])
+}
+
+enum AutomationTriggerType {
+  EVENT
+  SCHEDULE
+  MANUAL
+}
+
+model AutomationRule {
+  id          String                @id @default(cuid())
+  name        String
+  description String?
+  trigger     Json
+  conditions  Json                  @default("[]")
+  actions     Json                  @default("[]")
+  isActive    Boolean               @default(true)
+  runCount    Int                   @default(0)
+  lastTriggeredAt DateTime?
+  createdBy   String
+  createdAt   DateTime              @default(now())
+
+  @@index([isActive])
+}

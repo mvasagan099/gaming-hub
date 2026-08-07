@@ -8,9 +8,10 @@ import { io, type Socket } from "socket.io-client";
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
+  GameActionResult,
 } from "@gaming-hub/socket";
-import type { RoomFull, GameActionResult } from "@gaming-hub/socket";
 import type { JsonObject } from "@gaming-hub/shared";
+import type { RoomFull } from "@gaming-hub/shared";
 
 export interface MultiplayerClientConfig {
   serverUrl: string;
@@ -236,7 +237,7 @@ export class MultiplayerClient {
   /**
    * Send a game action.
    */
-  async sendAction(roomId: string, action: { type: string } & Record<string, unknown>): Promise<GameActionResult> {
+  async sendAction(roomId: string, action: { type: string } & JsonObject): Promise<GameActionResult> {
     return new Promise((resolve, reject) => {
       if (!this.socket?.connected) {
         reject(new Error("Not connected"));
@@ -529,27 +530,27 @@ export class MultiplayerClient {
       }
     });
     
-    // Reconnect
-    this.socket.on("reconnect", () => {
+    // Reconnect (manager-level reconnection events)
+    this.socket.io.on("reconnect", () => {
       this.connectionState.reconnecting = false;
       for (const listener of this.reconnectListeners) {
         listener();
       }
     });
-    
-    this.socket.on("reconnecting", () => {
+
+    this.socket.io.on("reconnect_attempt", () => {
       this.connectionState.reconnecting = true;
     });
   }
-  
+
   /**
    * Start ping monitoring.
    */
   private startPingMonitoring(): void {
     if (!this.socket) return;
-    
+
     // Respond to server pings
-    this.socket.on("ping", (data: { timestamp: number }, callback: () => void) => {
+    this.socket.on("latency:ping", (data: { timestamp: number }, callback: () => void) => {
       this.connectionState.lastPingAt = Date.now();
       if (callback) callback();
     });

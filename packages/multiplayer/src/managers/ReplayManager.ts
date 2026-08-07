@@ -20,6 +20,7 @@ import type {
   GameEvent,
   StateSnapshot,
 } from "../types";
+import type { EngineInstance } from "@gaming-hub/game-engine";
 
 export interface ReplayMetadata {
   id: string;
@@ -96,7 +97,7 @@ export class ReplayManager {
     
     const replayData: ReplayData = {
       metadata,
-      initialState: room.match?.engine.serialize() ?? {},
+      initialState: (room.match?.engine as EngineInstance | undefined)?.serialize() ?? {},
       actions: [],
       snapshots: [],
     };

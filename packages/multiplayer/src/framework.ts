@@ -15,15 +15,23 @@
  */
 
 import type { Server } from "socket.io";
-import type { RoomManager } from "./managers/RoomManager";
-import type { MatchManager } from "./managers/MatchManager";
-import type { PlayerManager } from "./managers/PlayerManager";
-import type { SpectatorManager } from "./managers/SpectatorManager";
-import type { ReplayManager } from "./managers/ReplayManager";
-import type { TimerManager } from "./managers/TimerManager";
-import type { SyncManager } from "./managers/SyncManager";
-import type { AntiCheatManager } from "./managers/AntiCheatManager";
-import type { MatchmakingManager } from "./managers/MatchmakingManager";
+import { RoomManager } from "./managers/RoomManager";
+import { MatchManager } from "./managers/MatchManager";
+import { PlayerManager } from "./managers/PlayerManager";
+import { SpectatorManager } from "./managers/SpectatorManager";
+import { ReplayManager } from "./managers/ReplayManager";
+import { TimerManager } from "./managers/TimerManager";
+import { SyncManager } from "./managers/SyncManager";
+import { AntiCheatManager } from "./managers/AntiCheatManager";
+import { MatchmakingManager } from "./managers/MatchmakingManager";
+import { GameStateManager } from "./gameplay/GameStateManager";
+import { TurnManager } from "./gameplay/TurnManager";
+import { ActionValidator } from "./gameplay/ActionValidator";
+import { EventDispatcher } from "./gameplay/EventDispatcher";
+import { WinnerCalculator } from "./gameplay/WinnerCalculator";
+import { StatisticsCollector } from "./gameplay/StatisticsCollector";
+import { DisconnectHandler } from "./gameplay/DisconnectHandler";
+import { ReconnectHandler } from "./gameplay/ReconnectHandler";
 
 export interface MultiplayerFrameworkConfig {
   /** Socket.IO server instance */
@@ -68,6 +76,14 @@ export class MultiplayerFramework {
   readonly syncManager: SyncManager;
   readonly antiCheatManager: AntiCheatManager;
   readonly matchmakingManager: MatchmakingManager;
+  readonly gameStateManager: GameStateManager;
+  readonly turnManager: TurnManager;
+  readonly actionValidator: ActionValidator;
+  readonly eventDispatcher: EventDispatcher;
+  readonly winnerCalculator: WinnerCalculator;
+  readonly statisticsCollector: StatisticsCollector;
+  readonly disconnectHandler: DisconnectHandler;
+  readonly reconnectHandler: ReconnectHandler;
   
   readonly config: Required<MultiplayerFrameworkConfig>;
   
@@ -76,6 +92,7 @@ export class MultiplayerFramework {
   private constructor(config: MultiplayerFrameworkConfig) {
     this.io = config.io;
     this.config = {
+      io: config.io,
       reconnectGracePeriodMs: config.reconnectGracePeriodMs ?? 90_000,
       afkTimeoutMs: config.afkTimeoutMs ?? 60_000,
       roomExpirationMs: config.roomExpirationMs ?? 30 * 60 * 1000,
@@ -86,16 +103,6 @@ export class MultiplayerFramework {
     };
     
     // Initialize managers (lazy initialization)
-    const { RoomManager } = require("./managers/RoomManager");
-    const { MatchManager } = require("./managers/MatchManager");
-    const { PlayerManager } = require("./managers/PlayerManager");
-    const { SpectatorManager } = require("./managers/SpectatorManager");
-    const { ReplayManager } = require("./managers/ReplayManager");
-    const { TimerManager } = require("./managers/TimerManager");
-    const { SyncManager } = require("./managers/SyncManager");
-    const { AntiCheatManager } = require("./managers/AntiCheatManager");
-    const { MatchmakingManager } = require("./managers/MatchmakingManager");
-    
     this.roomManager = new RoomManager(this);
     this.matchManager = new MatchManager(this);
     this.playerManager = new PlayerManager(this);
@@ -105,6 +112,14 @@ export class MultiplayerFramework {
     this.syncManager = new SyncManager(this);
     this.antiCheatManager = new AntiCheatManager(this);
     this.matchmakingManager = new MatchmakingManager(this);
+    this.gameStateManager = new GameStateManager(this);
+    this.turnManager = new TurnManager(this);
+    this.actionValidator = new ActionValidator(this);
+    this.eventDispatcher = new EventDispatcher(this);
+    this.winnerCalculator = new WinnerCalculator(this);
+    this.statisticsCollector = new StatisticsCollector(this);
+    this.disconnectHandler = new DisconnectHandler(this);
+    this.reconnectHandler = new ReconnectHandler(this);
   }
   
   /**
@@ -147,6 +162,14 @@ export class MultiplayerFramework {
     await this.syncManager.initialize();
     await this.antiCheatManager.initialize();
     await this.matchmakingManager.initialize();
+    await this.gameStateManager.initialize();
+    await this.turnManager.initialize();
+    await this.actionValidator.initialize();
+    await this.eventDispatcher.initialize();
+    await this.winnerCalculator.initialize();
+    await this.statisticsCollector.initialize();
+    await this.disconnectHandler.initialize();
+    await this.reconnectHandler.initialize();
     
     this.initialized = true;
     this.log("Multiplayer Framework initialized successfully");
@@ -161,6 +184,14 @@ export class MultiplayerFramework {
     this.log("Shutting down Multiplayer Framework...");
     
     // Shutdown in reverse order of initialization
+    await this.reconnectHandler.shutdown();
+    await this.disconnectHandler.shutdown();
+    await this.statisticsCollector.shutdown();
+    await this.winnerCalculator.shutdown();
+    await this.eventDispatcher.shutdown();
+    await this.actionValidator.shutdown();
+    await this.turnManager.shutdown();
+    await this.gameStateManager.shutdown();
     await this.matchmakingManager.shutdown();
     await this.antiCheatManager.shutdown();
     await this.syncManager.shutdown();
@@ -228,6 +259,21 @@ export { TimerManager } from "./managers/TimerManager";
 export { SyncManager } from "./managers/SyncManager";
 export { AntiCheatManager } from "./managers/AntiCheatManager";
 export { MatchmakingManager } from "./managers/MatchmakingManager";
+
+// Re-export Phase 11 gameplay framework
+export {
+  GameStateManager,
+  TurnManager,
+  ActionValidator,
+  EventDispatcher,
+  WinnerCalculator,
+  StatisticsCollector,
+  DisconnectHandler,
+  ReconnectHandler,
+  GAME_PLAY_CONFIGS,
+  getGamePlayConfig,
+  hasCompleteGameConfigs,
+} from "./gameplay";
 
 // Re-export utilities
 export { EventEmitter } from "./utils/EventEmitter";

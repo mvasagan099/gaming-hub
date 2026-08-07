@@ -19,6 +19,7 @@ import type {
   PlayerRuntime,
   PlayerId,
 } from "../types";
+import type { EngineInstance } from "@gaming-hub/game-engine";
 import type { Socket } from "socket.io";
 
 export interface SpectatorView {
@@ -119,7 +120,8 @@ export class SpectatorManager {
    */
   getSpectatorView(room: RoomRuntime): SpectatorView {
     // Filter out sensitive information
-    const filteredGameState = room.match ? this.filterGameState(room.match.engine.serialize()) : null;
+    const engine = room.match?.engine as EngineInstance | undefined;
+    const filteredGameState = engine ? this.filterGameState(engine.serialize()) : null;
     
     return {
       roomId: room.id,
@@ -136,17 +138,13 @@ export class SpectatorManager {
   }
   
   /**
-   * Get spectator count for a room.
+   * Get spectator count. With no room ID, returns the total across all rooms.
    */
-  getSpectatorCount(roomId: RoomId): number {
-    const room = this.framework.roomManager.getRoom(roomId);
-    return room ? room.spectators.size : 0;
-  }
-  
-  /**
-   * Get total spectator count across all rooms.
-   */
-  getSpectatorCount(): number {
+  getSpectatorCount(roomId?: RoomId): number {
+    if (roomId) {
+      const room = this.framework.roomManager.getRoom(roomId);
+      return room ? room.spectators.size : 0;
+    }
     let count = 0;
     for (const room of this.framework.roomManager.getAllRooms()) {
       count += room.spectators.size;

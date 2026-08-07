@@ -24,10 +24,10 @@ import type {
   PlayerId,
   PlayerRuntime,
   StateSyncPacket,
-  GameEvent,
   ConnectionQuality,
 } from "../types";
 import type { JsonObject } from "@gaming-hub/shared";
+import type { EngineEvent, EngineInstance } from "@gaming-hub/game-engine";
 import type { Socket } from "socket.io";
 
 export class SyncManager {
@@ -95,10 +95,11 @@ export class SyncManager {
   /**
    * Broadcast game state update.
    */
-  async broadcastGameState(room: RoomRuntime, events: GameEvent[]): Promise<void> {
+  async broadcastGameState(room: RoomRuntime, events: EngineEvent[]): Promise<void> {
     if (!room.match) return;
     
-    const state = room.match.engine.serialize();
+    const engine = room.match.engine as EngineInstance;
+    const state = engine.serialize();
     const sequenceNumber = this.getNextSequenceNumber(room.id);
     
     const packet: StateSyncPacket = {
@@ -124,7 +125,8 @@ export class SyncManager {
   syncMatchStateToPlayer(room: RoomRuntime, playerId: PlayerId, socket: Socket): void {
     if (!room.match) return;
     
-    const state = room.match.engine.serialize();
+    const engine = room.match.engine as EngineInstance;
+    const state = engine.serialize();
     const sequenceNumber = this.getNextSequenceNumber(room.id);
     
     const packet: StateSyncPacket = {
@@ -132,7 +134,7 @@ export class SyncManager {
       matchId: room.match.matchId,
       turnNumber: room.match.turnNumber,
       state,
-      events: [{ type: "sync" }],
+      events: [{ type: "sync", timestamp: Date.now() }],
       timestamp: Date.now(),
       checksum: this.calculateChecksum(state),
       sequenceNumber,
@@ -175,7 +177,7 @@ export class SyncManager {
       matchId: room.match.matchId,
       winnerSeats: room.match.winnerSeats,
       winnerIds: room.match.winnerIds,
-      state: room.match.engine.serialize(),
+      state: (room.match.engine as EngineInstance).serialize(),
       finishedAt: room.match.finishedAt,
     };
     
@@ -254,7 +256,7 @@ export class SyncManager {
       
       const pingStart = Date.now();
       
-      socket.emit("ping", { timestamp: pingStart }, () => {
+      socket.emit("latency:ping", { timestamp: pingStart }, () => {
         const latency = Date.now() - pingStart;
         
         // Update connection quality

@@ -74,9 +74,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@gaming-hub/db": "workspace:*",
-    "@gaming-hub/shared": "workspace:*",
-    "@gaming-hub/multiplayer": "workspace:*",
+    "@gaming-hub/db": "*",
+    "@gaming-hub/shared": "*",
+    "@gaming-hub/multiplayer": "*",
     "ioredis": "^5.4.1",
     "bullmq": "^5.0.0",
     "openai": "^4.0.0",
@@ -93,6 +93,6 @@
     "@types/nodemailer": "^6.4.15",
     "@types/web-push": "^3.6.3",
     "tsup": "^8.1.0",
-    "typescript": "^5.5.3"
+    "typescript": "~6.0.3"
   }
 }

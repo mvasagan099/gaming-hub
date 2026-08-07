@@ -14,6 +14,54 @@ enum UserRole {
   ADMIN
 }
 
+enum RankTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+  DIAMOND
+  MASTER
+  GRANDMASTER
+  LEGEND
+}
+
+enum SeasonStatus {
+  UPCOMING
+  ACTIVE
+  ENDED
+}
+
+enum PenaltyType {
+  AFK_WARNING
+  AFK_PENALTY
+  RAGE_QUIT
+  DISCONNECT_TIMEOUT
+  CHEATING
+  ABUSE
+  SPAMMING
+  UNSPORTSMANLIKE_CONDUCT
+}
+
+enum PenaltyStatus {
+  ACTIVE
+  EXPIRED
+  APPEALED
+  REVOKED
+}
+
+enum GameNotificationType {
+  MATCH_FOUND
+  MATCH_STARTING
+  MATCH_ENDED
+  RANK_CHANGED
+  ACHIEVEMENT_UNLOCKED
+  SEASON_REWARD
+  FRIEND_ONLINE
+  TOURNAMENT_STARTING
+  PENALTY_RECEIVED
+  APPEAL_RESOLVED
+}
+
 enum FriendStatus {
   PENDING
   ACCEPTED
@@ -174,6 +222,14 @@ model User {
   profile            Profile?
   wallet             Wallet?
   playerStatistics   PlayerStatistic[]
+  gameStats          PlayerGameStats[]
+  competitiveRanks   CompetitiveRank[]
+  penalties          PlayerPenalty[]
+  reputation         PlayerReputation?
+  reportsMade        PlayerReport[]     @relation("ReportedBy")
+  reportsReceived    PlayerReport[]     @relation("ReportedUser")
+  gameNotifications  GameNotification[]
+  
   leaderboards       Leaderboard[]
   friendsRequested   Friend[]             @relation("FriendRequester")
   friendsReceived    Friend[]             @relation("FriendAddressee")
@@ -311,14 +367,51 @@ model Match {
   startedAt DateTime?
   endedAt   DateTime?
   createdAt DateTime    @default(now())
-
+  
   room      Room?         @relation(fields: [roomId], references: [id], onDelete: SetNull)
   players   MatchPlayer[]
   moves     Move[]
   gameState GameState?
   replay    Replay?
-
+  stats     MatchStatistics?
+  
   @@index([gameId, status])
+}
+
+model MatchStatistics {
+  id                  String    @id @default(uuid())
+  matchId             String    @unique
+  
+  durationSeconds     Int       @default(0)
+  startedAt           DateTime  @default(now())
+  endedAt             DateTime?
+  
+  averagePing         Json      @default("{}")
+  packetLoss          Json      @default("{}")
+  reconnections       Int       @default(0)
+  
+  totalMoves          Int       @default(0)
+  illegalMoveAttempts Int       @default(0)
+  timeoutCount        Int       @default(0)
+  drawOffers          Int       @default(0)
+  rematchRequests     Int       @default(0)
+  
+  performanceData     Json      @default("{}")
+  
+  suspiciousActivity  Json      @default("[]")
+  afkWarnings         Int       @default(0)
+  
+  spectatorPeak       Int       @default(0)
+  spectatorMinutes    Int       @default(0)
+  
+  coinsAwarded        Json      @default("{}")
+  xpAwarded           Json      @default("{}")
+  ratingChanges       Json      @default("{}")
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  match               Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
 }
 
 model MatchPlayer {
@@ -491,6 +584,260 @@ model PlayerStatistic {
 
   @@unique([userId, gameId])
   @@index([gameId, rating(sort: Desc)])
+}
+
+model PlayerGameStats {
+  id                  String    @id @default(uuid())
+  userId              String
+  gameId              String
+  
+  totalMatches        Int       @default(0)
+  rankedMatches       Int       @default(0)
+  casualMatches       Int       @default(0)
+  
+  wins                Int       @default(0)
+  losses              Int       @default(0)
+  draws               Int       @default(0)
+  winRate             Float     @default(0)
+  
+  currentWinStreak    Int       @default(0)
+  longestWinStreak    Int       @default(0)
+  currentLossStreak   Int       @default(0)
+  longestLossStreak   Int       @default(0)
+  
+  averageMatchDuration Int      @default(0)
+  fastestWin          Int?
+  bestPerformance     Json?
+  
+  totalTimePlayed     Int       @default(0)
+  rankedTimePlayed    Int       @default(0)
+  casualTimePlayed    Int       @default(0)
+  
+  lastTenMatches      Json      @default("[]")
+  lastTwentyMatches   Json      @default("[]")
+  
+  lastMatchAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, gameId])
+  @@index([gameId, winRate(sort: Desc)])
+  @@index([gameId, totalMatches(sort: Desc)])
+}
+
+model CompetitiveRank {
+  id                String      @id @default(uuid())
+  userId            String
+  gameId            String
+  seasonId          String?
+  
+  mmr               Int         @default(1000)
+  rating            Int         @default(1000)
+  peakRating        Int         @default(1000)
+  
+  tier              RankTier    @default(BRONZE)
+  tierProgress      Int         @default(0)
+  stars             Int         @default(0)
+  
+  placementMatches  Int         @default(0)
+  placementComplete Boolean     @default(false)
+  promotionMatches  Int         @default(0)
+  demotionProtection Boolean    @default(false)
+  
+  gamesPlayed       Int         @default(0)
+  wins              Int         @default(0)
+  losses            Int         @default(0)
+  draws             Int         @default(0)
+  winStreak         Int         @default(0)
+  longestWinStreak  Int         @default(0)
+  
+  globalRank        Int?
+  regionalRank      Int?
+  countryRank       Int?
+  
+  lastMatchAt       DateTime?
+  ratingUpdatedAt   DateTime    @default(now())
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  season            Season?     @relation(fields: [seasonId], references: [id])
+  history           RatingHistory[]
+  
+  @@unique([userId, gameId, seasonId])
+  @@index([gameId, mmr(sort: Desc)])
+  @@index([gameId, rating(sort: Desc)])
+  @@index([gameId, tier])
+}
+
+model Season {
+  id                String        @id @default(uuid())
+  gameId            String
+  name              String
+  startDate         DateTime
+  endDate           DateTime
+  status            SeasonStatus  @default(UPCOMING)
+  rewards           Json          @default("{}")
+  createdAt         DateTime      @default(now())
+  
+  ranks             CompetitiveRank[]
+  history           RatingHistory[]
+  
+  @@unique([gameId, startDate])
+  @@index([gameId, status])
+}
+
+model RatingHistory {
+  id                    String   @id @default(uuid())
+  rankId                String
+  seasonId              String?
+  matchId               String?
+  
+  ratingBefore          Int
+  ratingAfter           Int
+  ratingChange          Int
+  mmrBefore             Int
+  mmrAfter              Int
+  mmrChange             Int
+  
+  tierBefore            RankTier
+  tierAfter             RankTier
+  tierProgressBefore    Int
+  tierProgressAfter     Int
+  
+  opponentRating        Int?
+  result                String
+  gameId                String
+  
+  createdAt             DateTime @default(now())
+  
+  rank                  CompetitiveRank @relation(fields: [rankId], references: [id], onDelete: Cascade)
+  season                Season?  @relation(fields: [seasonId], references: [id])
+  
+  @@index([rankId, createdAt(sort: Desc)])
+  @@index([matchId])
+}
+
+model PlayerPenalty {
+  id                String        @id @default(uuid())
+  userId            String
+  matchId           String?
+  
+  type              PenaltyType
+  severity          Int           @default(1)
+  status            PenaltyStatus @default(ACTIVE)
+  
+  duration          Int           @default(0)
+  startedAt         DateTime      @default(now())
+  expiresAt         DateTime?
+  
+  coinsPenalty      Int           @default(0)
+  xpPenalty        Int           @default(0)
+  ratingPenalty     Int           @default(0)
+  
+  detectionMethod   String        @default("automatic")
+  detectionData     Json?
+  
+  appealedAt        DateTime?
+  appealReason      String?
+  appealResolvedAt  DateTime?
+  appealStatus      String?
+  
+  issuedBy          String?
+  reason            String
+  notes             String?
+  
+  createdAt         DateTime      @default(now())
+  
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, status, expiresAt])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([matchId])
+}
+
+model PlayerReputation {
+  id                  String    @id @default(uuid())
+  userId              String    @unique
+  
+  score               Float     @default(100.0)
+  tier                String    @default("Good")
+  
+  reportsReceived     Int       @default(0)
+  reportsValidated    Int       @default(0)
+  complimentsReceived Int       @default(0)
+  
+  afkCount            Int       @default(0)
+  rageQuitCount       Int       @default(0)
+  sportsmanshipScore  Float     @default(100.0)
+  
+  gamesCompleted      Int       @default(0)
+  gamesAbandoned      Int       @default(0)
+  completionRate      Float     @default(100.0)
+  
+  monthlyScore        Float     @default(100.0)
+  weeklyScore         Float     @default(100.0)
+  
+  lastUpdated         DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([score(sort: Desc)])
+}
+
+model PlayerReport {
+  id              String    @id @default(uuid())
+  reporterId      String
+  reportedUserId  String
+  matchId         String?
+  
+  reason          String
+  category        String
+  description     String?
+  evidence        Json?
+  
+  status          String    @default("pending")
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  resolution      String?
+  action          String?
+  
+  contextData     Json?
+  
+  createdAt       DateTime  @default(now())
+  
+  reporter        User      @relation("ReportedBy", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser    User      @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  
+  @@index([status, createdAt(sort: Desc)])
+  @@index([reportedUserId, status])
+}
+
+model GameNotification {
+  id          String              @id @default(uuid())
+  userId      String
+  type        GameNotificationType
+  
+  title       String
+  body        String
+  data        Json?
+  
+  readAt      DateTime?
+  dismissedAt DateTime?
+  actionUrl   String?
+  
+  expiresAt   DateTime?
+  
+  createdAt   DateTime            @default(now())
+  
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, readAt])
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model Tournament {

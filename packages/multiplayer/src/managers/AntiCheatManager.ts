@@ -21,7 +21,8 @@ import type {
   ValidationResult,
   SuspiciousEvent,
 } from "../types";
-import type { EngineActionResult, JsonObject } from "@gaming-hub/shared";
+import type { EngineActionResult } from "@gaming-hub/game-engine";
+import type { JsonObject } from "@gaming-hub/shared";
 
 export interface AntiCheatConfig {
   /** Maximum actions per second */
@@ -96,7 +97,7 @@ export class AntiCheatManager {
         playerId: player.id,
         roomId: room.id,
         eventType: "rate_limit_exceeded",
-        details: { action, rate: this.getActionRate(player.id) },
+        details: { actionType: action.type, rate: this.getActionRate(player.id) },
         timestamp: now,
         severity: "medium",
       });
@@ -110,7 +111,7 @@ export class AntiCheatManager {
         playerId: player.id,
         roomId: room.id,
         eventType: "rapid_actions",
-        details: { action },
+        details: { actionType: action.type },
         timestamp: now,
         severity: "high",
       });
@@ -124,7 +125,7 @@ export class AntiCheatManager {
         playerId: player.id,
         roomId: room.id,
         eventType: "duplicate_action",
-        details: { action },
+        details: { actionType: action.type },
         timestamp: now,
         severity: "medium",
       });
@@ -138,7 +139,7 @@ export class AntiCheatManager {
         playerId: player.id,
         roomId: room.id,
         eventType: "wrong_turn",
-        details: { action, currentSeat: this.getCurrentSeat(room) },
+        details: { actionType: action.type, currentSeat: this.getCurrentSeat(room) },
         timestamp: now,
         severity: "high",
       });
@@ -152,7 +153,7 @@ export class AntiCheatManager {
         playerId: player.id,
         roomId: room.id,
         eventType: "state_manipulation",
-        details: { action },
+        details: { actionType: action.type },
         timestamp: now,
         severity: "critical",
       });
@@ -288,7 +289,7 @@ export class AntiCheatManager {
     const { room, player, action } = context;
     
     if (!room.match) {
-      return { valid: false, reason: "No active match" };
+      return { valid: false, reason: "No active match", confidence: 1.0 };
     }
     
     const engine = room.match.engine as { currentSeat: number };

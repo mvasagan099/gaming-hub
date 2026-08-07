@@ -16,17 +16,21 @@
     "build": "tsup src/index.ts --format cjs,esm --dts",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "lint": "eslint src --ext .ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@gaming-hub/shared": "workspace:*",
-    "@gaming-hub/socket": "workspace:*",
+    "@gaming-hub/db": "*",
+    "@gaming-hub/game-engine": "*",
+    "@gaming-hub/shared": "*",
+    "@gaming-hub/socket": "*",
     "socket.io": "^4.7.5",
     "socket.io-client": "^4.7.5"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
     "tsup": "^8.1.0",
-    "typescript": "^5.5.3"
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.10"
   }
 }

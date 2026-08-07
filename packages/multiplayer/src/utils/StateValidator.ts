@@ -91,4 +91,6 @@ export class StateValidator {
   }
 }
 
-export type StateSchema = Record<string, "string" | "number" | "boolean" | "array" | StateSchema>;
+export interface StateSchema {
+  [key: string]: "string" | "number" | "boolean" | "array" | StateSchema;
+}

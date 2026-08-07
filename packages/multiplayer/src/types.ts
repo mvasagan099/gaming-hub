@@ -4,7 +4,7 @@
  * synchronization, and anti-cheat systems.
  */
 
-import type { GameId, JsonObject, RoomStatus, ConnectionStatus } from "@gaming-hub/shared";
+import type { ChessTimeControlConfig, GameId, JsonObject, RoomStatus, ConnectionStatus } from "@gaming-hub/shared";
 import type { Socket } from "socket.io";
 
 // ============================================================================
@@ -88,13 +88,14 @@ export interface RoomConfig {
 }
 
 /** Room settings that can be customized */
-export interface RoomSettings extends JsonObject {
+export interface RoomSettings {
   rated?: boolean;
   turnTimerDurationMs?: number;
   matchTimerDurationMs?: number;
   reconnectGracePeriodMs?: number;
   afkTimeoutMs?: number;
   allowRematch?: boolean;
+  timeControl?: ChessTimeControlConfig | null;
   [key: string]: unknown;
 }
 
@@ -203,15 +204,15 @@ export interface GameEvent {
   [key: string]: unknown;
 }
 
-/** Chat message */
+/** Chat message (shares shape with @gaming-hub/shared ChatMessage) */
 export interface ChatMessage {
   id: string;
   roomId: RoomId;
-  playerId: PlayerId | null;
+  userId: string | null;
   senderName: string;
   body: string;
   isSystem: boolean;
-  timestamp: string;
+  createdAt: string;
 }
 
 // ============================================================================

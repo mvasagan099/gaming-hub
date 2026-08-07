@@ -41,6 +41,7 @@ export class TableTennisEngine extends MultiplayerGameEngine<TableTennisState, T
       score: 0,
       paddleX: 0.5,
       wins: 0,
+      pointsWon: 0,
     }));
     return {
       servingSeat: 0,
@@ -74,15 +75,19 @@ export class TableTennisEngine extends MultiplayerGameEngine<TableTennisState, T
     switch (action.type) {
       case "serve":
         const ns = this.cloneState(state);
+        const fromY = seat === 0 ? 0.1 : 0.9;
         ns.ball = {
           x: 0.5,
-          y: seat === 0 ? 0.1 : 0.9,
+          y: fromY,
           vx: 0,
           vy: seat === 0 ? 0.1 : -0.1,
           served: true,
           servedBySeat: seat,
           lastHitSeat: null,
           bounced: 0,
+          inPlay: true,
+          fromX: 0.5,
+          fromY,
         };
          events.push({ type: "serve-begin", seat });
         return { ok: true, state: ns, events, finished: ns.finished, winnerSeats: ns.winnerSeat ? [ns.winnerSeat] : [] };

@@ -98,9 +98,12 @@ async function main(): Promise<void> {
     const user = (socket.data as { user: AuthenticatedUser }).user;
 
     // Handle reconnection - check if user is in an active room
-    void framework.playerManager.handleReconnect(user.userId, "", socket).catch(() => {
-      // No active room to reconnect to
-    });
+    const activeRoom = framework.roomManager.getPlayerRoom(user.userId);
+    if (activeRoom) {
+      void framework.playerManager.handleReconnect(user.userId, activeRoom.id, socket).catch(() => {
+        // No active room to reconnect to
+      });
+    }
 
     const guard = async (
       ack: ((res: { ok: false; error: SocketErrorPayload }) => void) | undefined,
@@ -273,6 +276,10 @@ async function main(): Promise<void> {
           room.rematch.requestedBy.push(user.userId);
         }
         
+        // Snapshot rematch state before it may be cleared below
+        const requestedBy = [...room.rematch.requestedBy];
+        const active = room.rematch.active;
+        
         // Check if everyone accepted
         const participants = [...room.players.values()].filter(p => !p.isSpectator).map(p => p.id);
         const allAccepted = participants.every(id => room.rematch?.requestedBy.includes(id));
@@ -299,11 +306,11 @@ async function main(): Promise<void> {
         
         framework.syncManager.broadcastToRoom(room, "rematch:update", {
           roomId: payload.roomId,
-          requestedBy: room.rematch.requestedBy,
-          active: room.rematch.active,
+          requestedBy,
+          active,
         });
         
-        ack?.({ ok: true, data: { roomId: payload.roomId, requestedBy: room.rematch.requestedBy, active: room.rematch.active } });
+        ack?.({ ok: true, data: { roomId: payload.roomId, requestedBy, active } });
       }),
     );
 

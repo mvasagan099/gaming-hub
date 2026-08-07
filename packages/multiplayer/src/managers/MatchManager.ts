@@ -22,11 +22,9 @@ import type {
   PlayerRuntime,
   MatchRuntime,
   GameAction,
-  GameEvent,
-  StateSnapshot,
-  RecordedAction,
 } from "../types";
-import type { EngineInstance, EngineActionResult, EnginePlayer } from "@gaming-hub/game-engine";
+import type { EngineInstance, EngineActionResult, EnginePlayer, EngineEvent } from "@gaming-hub/game-engine";
+import type { JsonObject } from "@gaming-hub/shared";
 import { getGameDefinition } from "@gaming-hub/shared";
 
 export interface StartMatchOptions {
@@ -190,7 +188,7 @@ export class MatchManager {
   /**
    * Apply a game action.
    */
-  async applyAction(options: GameActionOptions): Promise<EngineActionResult<Record<string, unknown>>> {
+  async applyAction(options: GameActionOptions): Promise<EngineActionResult<JsonObject>> {
     const { roomId, playerId, action } = options;
     
     const room = this.framework.roomManager.getRoom(roomId);
@@ -207,85 +205,88 @@ export class MatchManager {
       return this.createErrorResult(null, "Player not in room");
     }
     
-    if (player.isSpectator || player.seat === null) {
-      return this.createErrorResult(null, "Spectators cannot play");
-    }
-    
-    // Record activity
-    this.framework.playerManager.recordActivity(playerId);
-    
-    // Apply action to engine
-    const engine = room.match.engine as EngineInstance;
-    const result = engine.apply(action as { type: string }, player.seat);
-    
-    // Validate action with anti-cheat
-    if (this.framework.config.enableAntiCheat) {
-      const validation = await this.framework.antiCheatManager.validateAction(
-        room,
-        player,
-        action,
-        result
-      );
+    // Serialize state mutations per room so concurrent actions never corrupt
+    // the authoritative engine.
+    return this.framework.gameStateManager.enqueue(roomId, async () => {
+      // Framework-level pre-validation (turn, spectator, rate limiting).
+      const validation = this.framework.actionValidator.validate(room!, player, action);
+      if (!validation.ok) {
+        this.framework.actionValidator.recordRejected(player.id);
+        return this.createErrorResult(null, validation.error ?? "Action rejected");
+      }
       
-      if (!validation.valid) {
-        this.framework.antiCheatManager.logSuspiciousEvent({
-          playerId,
-          roomId,
-          eventType: "invalid_action",
-          details: { action, validation },
-          severity: "medium",
-        });
+      // Record activity
+      this.framework.playerManager.recordActivity(playerId);
+      
+      // Apply action to engine
+      const engine = room!.match!.engine as EngineInstance;
+      const seat = player.seat as number;
+      const result = engine.apply(action as { type: string }, seat);
+      
+      // Validate action with anti-cheat
+      if (this.framework.config.enableAntiCheat) {
+        const validation = await this.framework.antiCheatManager.validateAction(
+          room!,
+          player,
+          action,
+          result
+        );
         
-        return this.createErrorResult(engine.serialize(), validation.reason || "Action rejected");
-      }
-    }
-    
-    if (result.ok) {
-      // Update match
-      room.match.turnNumber++;
-      
-      // Record action in history
-      const recordedAction: RecordedAction = {
-        turnNumber: room.match.turnNumber,
-        timestamp: Date.now(),
-        playerId,
-        seat: player.seat,
-        action,
-        events: result.events,
-      };
-      room.match.actionHistory.push(recordedAction);
-      
-      // Store state snapshot
-      room.match.stateSnapshots.push({
-        turnNumber: room.match.turnNumber,
-        timestamp: Date.now(),
-        state: result.state,
-        action: recordedAction,
-      });
-      
-      // Update player statistics
-      this.framework.playerManager.updateStatistics(playerId, {
-        movesMade: (this.framework.playerManager.getPlayerStatistics(playerId)?.movesMade ?? 0) + 1,
-      });
-      
-      // Record for replay
-      if (this.framework.config.enableReplay) {
-        this.framework.replayManager.recordAction(room, recordedAction);
+        if (!validation.valid) {
+          this.framework.antiCheatManager.logSuspiciousEvent({
+            playerId,
+            roomId,
+            eventType: "invalid_action",
+            details: {
+              actionType: action.type,
+              reason: validation.reason ?? "Action rejected",
+              confidence: validation.confidence,
+            },
+            timestamp: Date.now(),
+            severity: "medium",
+          });
+          
+          return this.createErrorResult(engine.serialize(), validation.reason || "Action rejected");
+        }
       }
       
-      // Broadcast state update
-      await this.framework.syncManager.broadcastGameState(room, result.events);
-      
-      // Check if match finished
-      if (result.finished) {
-        await this.finishMatch(room, result.winnerSeats);
-      } else {
-        // Reschedule clock check
-        this.scheduleClockCheck(room);
+      if (result.ok) {
+        // Normalize engine events and append to the room event log.
+        const events = this.framework.eventDispatcher.toGameEvents(room!, result.events);
+        this.framework.eventDispatcher.appendToLog(room!, events);
+        
+        // Record snapshot + history and bump the turn counter.
+        const recorded = this.framework.gameStateManager.recordResult(
+          room!,
+          result,
+          player.id,
+          seat,
+          action,
+          events
+        );
+        
+        this.framework.actionValidator.recordAction(player.id);
+        this.framework.statisticsCollector.recordAction(room!, player, action);
+        
+        // Record for replay
+        if (this.framework.config.enableReplay) {
+          this.framework.replayManager.recordAction(room!, recorded);
+        }
+        
+        // Broadcast state update
+        await this.framework.syncManager.broadcastGameState(room!, result.events);
+        
+        // Check if match finished
+        if (result.finished) {
+          await this.finishMatch(room!, result);
+        } else {
+          // Reschedule clock check
+          this.scheduleClockCheck(room!);
+        }
       }
-    }
-    
-    return result as EngineActionResult<Record<string, unknown>>;
+      
+      return result;
+    });
   }
   
   /**
@@ -318,9 +319,11 @@ export class MatchManager {
   }
   
   /**
-   * Resume a match.
+   * Resume a match. `system` bypasses the player authorization check and is
+   * used by the reconnect handler to resume a match that was auto-paused when
+   * a player disconnected.
    */
-  async resumeMatch(roomId: RoomId, playerId: string): Promise<void> {
+  async resumeMatch(roomId: RoomId, playerId: string, system = false): Promise<void> {
     const room = this.framework.roomManager.getRoom(roomId);
     if (!room || !room.match) throw new Error("Match not found");
     
@@ -329,7 +332,7 @@ export class MatchManager {
     }
     
     // Only host or player who paused can resume
-    if (playerId !== room.hostId && playerId !== room.match.pausedBy) {
+    if (!system && playerId !== room.hostId && playerId !== room.match.pausedBy) {
       throw new Error("Not authorized to resume");
     }
     
@@ -354,23 +357,17 @@ export class MatchManager {
   }
   
   /**
-   * Finish a match.
+   * Finish a match and resolve the final result.
    */
-  async finishMatch(room: RoomRuntime, winnerSeats: number[]): Promise<void> {
+  async finishMatch(room: RoomRuntime, result: EngineActionResult<JsonObject>): Promise<void> {
     if (!room.match) return;
     
-    room.match.finishedAt = Date.now();
-    room.match.winnerSeats = winnerSeats;
+    // Resolve winner ids, per-player outcomes and scores.
+    const matchResult = this.framework.winnerCalculator.calculate(room, result);
     
-    // Map winner seats to player IDs
-    const winnerIds: string[] = [];
-    for (const seat of winnerSeats) {
-      const player = [...room.players.values()].find(p => p.seat === seat);
-      if (player) {
-        winnerIds.push(player.id);
-      }
-    }
-    room.match.winnerIds = winnerIds;
+    room.match.finishedAt = matchResult.finishedAt;
+    room.match.winnerSeats = matchResult.winnerSeats;
+    room.match.winnerIds = matchResult.winnerIds;
     
     // Update room status
     room.status = "ended";
@@ -385,10 +382,13 @@ export class MatchManager {
       await this.framework.replayManager.finalizeReplay(room);
     }
     
+    // Persist match statistics.
+    await this.framework.statisticsCollector.finalize(room, matchResult);
+    
     // Broadcast game over
     await this.framework.syncManager.broadcastGameOver(room);
     
-    this.framework.log(`Match ${room.match.matchId} finished in room ${room.id}. Winners: ${winnerIds.join(", ")}`);
+    this.framework.log(`Match ${room.match.matchId} finished in room ${room.id}. Winners: ${matchResult.winnerIds.join(", ")}`);
   }
   
   /**
@@ -440,6 +440,18 @@ export class MatchManager {
     
     this.framework.log(`Player ${player.id} forfeited in room ${room.id}: ${reason}`);
     
+    // If the match was auto-paused (e.g. by this player's disconnect), resume
+    // it first so the engine accepts the resign action.
+    if (room.match.pausedAt) {
+      const engine = room.match.engine as EngineInstance;
+      const resumeResult = engine.apply({ type: "resume" }, player.seat);
+      if (resumeResult.ok) {
+        room.match.pausedAt = null;
+        room.match.pausedBy = null;
+        await this.framework.syncManager.broadcastGameState(room, resumeResult.events);
+      }
+    }
+    
     // Apply forfeit action
     const forfeitAction: GameAction = {
       type: "resign",
@@ -484,7 +496,7 @@ export class MatchManager {
   private async handleClockExpiry(room: RoomRuntime): Promise<void> {
     if (!room.match || room.status !== "playing") return;
     
-    const engine = room.match.engine as EngineInstance & { handleTimeout?: (kind: "turn" | "match", seat?: number) => EngineActionResult<Record<string, unknown>> };
+    const engine = room.match.engine as EngineInstance & { handleTimeout?: (kind: "turn" | "match", seat?: number) => EngineActionResult<JsonObject> };
     
     if (!engine.handleTimeout) return;
     
@@ -499,7 +511,7 @@ export class MatchManager {
         await this.framework.syncManager.broadcastGameState(room, result.events);
         
         if (result.finished) {
-          await this.finishMatch(room, result.winnerSeats);
+          await this.finishMatch(room, result);
         } else {
           this.scheduleClockCheck(room);
         }
@@ -513,7 +525,7 @@ export class MatchManager {
       const result = engine.handleTimeout("match");
       
       if (result.ok) {
-        await this.finishMatch(room, result.winnerSeats);
+        await this.finishMatch(room, result);
       }
     }
   }
@@ -521,7 +533,7 @@ export class MatchManager {
   /**
    * Create error result.
    */
-  private createErrorResult(state: Record<string, unknown> | null, error: string): EngineActionResult<Record<string, unknown>> {
+  private createErrorResult(state: JsonObject | null, error: string): EngineActionResult<JsonObject> {
     return {
       ok: false,
       error,

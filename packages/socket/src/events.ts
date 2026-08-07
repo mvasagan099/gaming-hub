@@ -69,6 +69,8 @@ export interface ClientToServerEvents {
   "chat:typing": (payload: { roomId: string }, ack: Ack<{ sent: true }>) => void;
 
   "game:state:ack": (payload: { roomId: string; matchId: string; timestamp: number }) => void;
+
+  "ping": (payload: { timestamp: number }, callback: () => void) => void;
 }
 
 export interface ServerToClientEvents {
@@ -108,6 +110,8 @@ export interface ServerToClientEvents {
 
   "matchmaking:queued": (payload: { position: number }) => void;
   "matchmaking:found": (payload: { roomId: string }) => void;
+
+  "latency:ping": (payload: { timestamp: number }, ack: () => void) => void;
 
   "error": (payload: SocketErrorPayload) => void;
 }
