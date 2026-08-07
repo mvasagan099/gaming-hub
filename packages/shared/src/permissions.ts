@@ -5,7 +5,7 @@
  * role can be granted a subset of capabilities without touching route code.
  */
 
-export type DbUserRole = "USER" | "MODERATOR" | "ADMIN";
+export type DbUserRole = "USER" | "MODERATOR" | "ADMIN" | "CUSTOM";
 
 export type Permission =
   | "admin:users:view"
@@ -38,7 +38,11 @@ export type Permission =
   | "admin:kyc:view"
   | "admin:kyc:review"
   | "admin:kyc:override"
-  | "admin:kyc:config";
+  | "admin:kyc:config"
+  | "admin:roles:view"
+  | "admin:roles:create"
+  | "admin:roles:edit"
+  | "admin:roles:delete";
 
 export const ROLE_PERMISSIONS: Record<DbUserRole, readonly Permission[]> = {
   USER: [],
@@ -84,9 +88,55 @@ export const ROLE_PERMISSIONS: Record<DbUserRole, readonly Permission[]> = {
     "admin:kyc:review",
     "admin:kyc:override",
     "admin:kyc:config",
+    "admin:roles:view",
+    "admin:roles:create",
+    "admin:roles:edit",
+    "admin:roles:delete",
   ],
+  CUSTOM: [],
 };
 
-export function hasPermission(role: DbUserRole, permission: Permission): boolean {
+export const ALL_PERMISSIONS: readonly Permission[] = [
+  "admin:users:view",
+  "admin:users:manage",
+  "admin:rooms:view",
+  "admin:matches:view",
+  "admin:wallet:adjust",
+  "admin:wallet:requests:view",
+  "admin:wallet:requests:manage",
+  "admin:settings:view",
+  "admin:settings:edit",
+  "admin:audit:view",
+  "admin:monitoring:view",
+  "admin:analytics:view",
+  "admin:errors:view",
+  "admin:errors:manage",
+  "admin:features:view",
+  "admin:features:edit",
+  "admin:tournaments:view",
+  "admin:tournaments:manage",
+  "admin:coupons:view",
+  "admin:coupons:manage",
+  "admin:announcements:view",
+  "admin:announcements:manage",
+  "admin:crm:view",
+  "admin:crm:manage",
+  "admin:automation:view",
+  "admin:automation:manage",
+  "admin:referrals:view",
+  "admin:kyc:view",
+  "admin:kyc:review",
+  "admin:kyc:override",
+  "admin:kyc:config",
+  "admin:roles:view",
+  "admin:roles:create",
+  "admin:roles:edit",
+  "admin:roles:delete",
+];
+
+export function hasPermission(role: DbUserRole, permission: Permission, customPermissions?: readonly Permission[]): boolean {
+  if (role === "CUSTOM") {
+    return customPermissions?.includes(permission) ?? false;
+  }
   return ROLE_PERMISSIONS[role].includes(permission);
 }

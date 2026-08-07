@@ -131,39 +131,20 @@ export function SupportAssistant() {
             exit="exit"
             transition={{ duration: 0.2, ease: "easeOut" }}
             className={cn(
-              "fixed z-[100] flex flex-col overflow-hidden rounded-2xl shadow-2xl",
+              "fixed z-[100] flex flex-col overflow-hidden rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 transition-all duration-300",
               isMinimized
                 ? "bottom-4 right-4 h-14 w-72"
-                : "bottom-4 right-4 h-[600px] w-full max-w-[400px] sm:h-[650px]",
-              effectiveTheme === "dark"
-                ? "bg-slate-900 border border-slate-800"
-                : "bg-white border border-slate-200"
+                : "bottom-4 right-4 h-[calc(100vh-6rem)] max-h-[620px] w-[calc(100vw-2rem)] sm:w-[420px]",
+              effectiveTheme === "dark" ? "bg-slate-900" : "bg-white"
             )}
           >
             {/* Header */}
-            <div
-              className={cn(
-                "flex h-14 shrink-0 items-center justify-between px-4",
-                effectiveTheme === "dark"
-                  ? "border-b border-slate-800 bg-slate-900/95"
-                  : "border-b border-slate-200 bg-white/95"
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-full",
-                    effectiveTheme === "dark" ? "bg-accent-500/20 text-accent-400" : "bg-indigo-100 text-indigo-600"
-                  )}
-                >
-                  <MessageCircle className="h-4 w-4" />
+            <div className="flex h-14 shrink-0 items-center justify-between px-5 bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white border-b border-indigo-700/40">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500/20 border border-indigo-400/30 text-indigo-300">
+                  <MessageCircle className="h-4 w-4 text-indigo-300" />
                 </div>
-                <span
-                  className={cn(
-                    "font-semibold",
-                    effectiveTheme === "dark" ? "text-slate-100" : "text-slate-900"
-                  )}
-                >
+                <span className="font-extrabold text-sm tracking-tight text-white">
                   {isMinimized ? "Help Center" : "Support Assistant"}
                 </span>
               </div>
@@ -171,12 +152,7 @@ export function SupportAssistant() {
                 {isMinimized ? (
                   <button
                     onClick={maximize}
-                    className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
-                      effectiveTheme === "dark"
-                        ? "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                    )}
+                    className="flex h-8 w-8 items-center justify-center rounded-xl text-indigo-200 hover:bg-white/10 hover:text-white transition-colors"
                     aria-label="Maximize"
                   >
                     <Maximize2 className="h-4 w-4" />
@@ -184,12 +160,7 @@ export function SupportAssistant() {
                 ) : (
                   <button
                     onClick={minimize}
-                    className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
-                      effectiveTheme === "dark"
-                        ? "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                    )}
+                    className="flex h-8 w-8 items-center justify-center rounded-xl text-indigo-200 hover:bg-white/10 hover:text-white transition-colors"
                     aria-label="Minimize"
                   >
                     <Minimize2 className="h-4 w-4" />
@@ -197,12 +168,7 @@ export function SupportAssistant() {
                 )}
                 <button
                   onClick={close}
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
-                    effectiveTheme === "dark"
-                      ? "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                      : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                  )}
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-indigo-200 hover:bg-white/10 hover:text-white transition-colors"
                   aria-label="Close"
                 >
                   <X className="h-4 w-4" />

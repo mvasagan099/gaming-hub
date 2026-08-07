@@ -1,8 +1,10 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { prisma } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
 import { env } from "../env";
 import { verifyAccessToken } from "../auth/supabase";
 import { ensureUser } from "../services/users";
+import { hashToken, recordLoginSession } from "../services/sessions";
 
 export async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   const header = request.headers.authorization;
@@ -28,5 +30,23 @@ export async function authenticate(request: FastifyRequest, _reply: FastifyReply
   }
 
   const user = await ensureUser(verified.sub, verified.email, verified.userMetadata);
+  
+  // Check if this session token was explicitly revoked
+  const tokenHash = hashToken(token);
+  const existingSession = await prisma.loginSession.findUnique({ where: { tokenHash } });
+  if (existingSession?.revokedAt) {
+    throw new AppError("UNAUTHORIZED", "Session has been revoked", 401);
+  }
+
+  // Ensure active session is recorded / refreshed in DB
+  if (!existingSession) {
+    await recordLoginSession({
+      userId: user.id,
+      token,
+      ip: request.ip,
+      userAgent: (request.headers["user-agent"] as string) ?? null,
+    }).catch(() => {});
+  }
+
   request.user = user;
 }

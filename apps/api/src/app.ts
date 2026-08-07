@@ -32,6 +32,7 @@ import { supportRoutes } from "./routes/support";
 import { securityRoutes } from "./routes/security";
 import { kycRoutes } from "./routes/kyc";
 import { adminKycRoutes } from "./routes/adminKyc";
+import { adminRolesRoutes } from "./routes/adminRoles";
 import { instrument } from "./services/metrics";
 
 export function buildApp() {
@@ -116,6 +117,7 @@ export function buildApp() {
   void app.register(securityRoutes);
   void app.register(kycRoutes);
   void app.register(adminKycRoutes);
+  void app.register(adminRolesRoutes);
 
   return app;
 }

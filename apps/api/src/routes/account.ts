@@ -23,7 +23,7 @@ export async function accountRoutes(app: FastifyInstance) {
     "/api/account/sessions",
     { preHandler: authenticate, config: { rateLimit: SESSIONS_RATE_LIMIT } },
     async (request) => {
-      return listSessions(requireUser(request).id);
+      return listSessions(requireUser(request).id, currentTokenHash(request));
     },
   );
 

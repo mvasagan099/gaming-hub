@@ -49,7 +49,7 @@ interface UseMeResult {
 export function useMe(): UseMeResult {
   const session = useAuthStore((s) => s.session);
   const [me, setMe] = useState<MePayload | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(!!session);
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
 

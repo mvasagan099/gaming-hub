@@ -32,7 +32,9 @@ export class ApiError extends Error {
 async function request<T>(path: string, init: RequestInit, tokenOverride?: string): Promise<T> {
   const token = tokenOverride ?? useAuthStore.getState().session?.access_token;
   const headers = new Headers(init.headers);
-  headers.set("Content-Type", "application/json");
+  if (init.body !== undefined && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const response = await fetch(`${API_URL}${path}`, { ...init, headers });

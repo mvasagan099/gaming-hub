@@ -425,6 +425,63 @@ export const adminApi = {
   assignTicket: (id: string, assignedTo: string | null) => apiClient.patch(`/admin/tickets/${id}/assign`, { assignedTo }),
 
   referralLeaderboard: () => apiClient.get<ReferralLeaderboardEntry[]>('/admin/referrals/leaderboard'),
+
+  roles: () => apiClient.get<CustomRoleView[]>('/admin/roles'),
+  createRole: (input: { name: string; displayName: string; description?: string; permissions: string[] }) =>
+    apiClient.post<CustomRoleView>('/admin/roles', input),
+  updateRole: (id: string, input: { displayName?: string; description?: string; permissions?: string[] }) =>
+    apiClient.patch<CustomRoleView>(`/admin/roles/${id}`, input),
+  deleteRole: (id: string) => apiClient.delete(`/admin/roles/${id}`),
+
+  kycPending: (page = 1, pageSize = 20) =>
+    apiClient.get<Page<AdminKycRequest>>(`/admin/kyc/pending?page=${page}&pageSize=${pageSize}`),
+  kycListByStatus: (status: string, page = 1, pageSize = 20) =>
+    apiClient.get<Page<AdminKycRequest>>(`/admin/kyc/status/${status}?page=${page}&pageSize=${pageSize}`),
+  kycReview: (requestId: string, approved: boolean, notes?: string, rejectionReason?: string) =>
+    apiClient.post(`/admin/kyc/review/${requestId}`, {
+      action: approved ? 'APPROVE' : 'REJECT',
+      notes: notes || undefined,
+      rejectionReason: rejectionReason || undefined,
+    }),
+  kycOverride: (userId: string, targetLevel: string, reason: string) =>
+    apiClient.post('/admin/kyc/override', { userId, targetLevel, reason }),
 };
+
+export interface AdminKycRequest {
+  id: string;
+  userId: string;
+  level: string;
+  status: string;
+  submittedAt: string;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
+  rejectionReason?: string | null;
+  notes?: string | null;
+  user?: {
+    id: string;
+    displayName: string;
+    username: string;
+    email?: string | null;
+  };
+  documents?: Array<{
+    id: string;
+    documentType: string;
+    fileUrl: string;
+    status: string;
+    uploadedAt: string;
+  }>;
+}
+
+export interface CustomRoleView {
+  id: string;
+  name: string;
+  displayName: string;
+  description?: string | null;
+  isSystem: boolean;
+  userCount?: number;
+  permissions: string[];
+  createdAt: string;
+  updatedAt: string;
+}
 
 export type { LoginSession };

@@ -18,8 +18,8 @@ export async function adminKycRoutes(app: FastifyInstance) {
   app.get("/api/admin/kyc/pending", { preHandler: authenticate }, async (request) => {
     await requirePermission(request, "admin:kyc:view");
     const q = queryParams(request);
-    const page = queryString(q.page) ?? 1;
-    const pageSize = queryString(q.pageSize) ?? 20;
+    const page = Number(queryString(q.page)) || 1;
+    const pageSize = Number(queryString(q.pageSize)) || 20;
 
     const result = await KycService.listPending(page, pageSize);
 
@@ -30,8 +30,8 @@ export async function adminKycRoutes(app: FastifyInstance) {
     await requirePermission(request, "admin:kyc:view");
     const params = request.params as { status: string };
     const q = queryParams(request);
-    const page = queryString(q.page) ?? 1;
-    const pageSize = queryString(q.pageSize) ?? 20;
+    const page = Number(queryString(q.page)) || 1;
+    const pageSize = Number(queryString(q.pageSize)) || 20;
 
     const status = params.status as KycStatus;
     if (!Object.values(KycStatus).includes(status)) {

@@ -20,10 +20,35 @@
   --color-accent-800: #3730a3;
   --color-accent-900: #312e81;
 
+  --color-border: var(--color-border, #e2e8f0);
+  --color-card: var(--color-card, #ffffff);
+  --color-muted: var(--color-muted, #f8fafc);
+  --color-muted-foreground: var(--color-muted-foreground, #64748b);
+  --color-primary: var(--color-primary, #4f46e5);
+  --color-primary-foreground: var(--color-primary-foreground, #ffffff);
+
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
   --radius-2xl: 1.25rem;
+}
+
+:root {
+  --color-border: #e2e8f0;
+  --color-card: #ffffff;
+  --color-muted: #f8fafc;
+  --color-muted-foreground: #64748b;
+  --color-primary: #4f46e5;
+  --color-primary-foreground: #ffffff;
+}
+
+.dark {
+  --color-border: #1e293b;
+  --color-card: #0f172a;
+  --color-muted: #1e293b;
+  --color-muted-foreground: #94a3b8;
+  --color-primary: #6366f1;
+  --color-primary-foreground: #ffffff;
 }
 
 html[data-accent="violet"] {

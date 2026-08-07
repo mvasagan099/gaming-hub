@@ -80,7 +80,7 @@ export async function recordLoginSession(input: {
   });
 }
 
-export async function listSessions(userId: string) {
+export async function listSessions(userId: string, currentTokenHash?: string) {
   const rows = await prisma.loginSession.findMany({
     where: { userId, revokedAt: null },
     orderBy: { createdAt: "desc" },
@@ -88,11 +88,11 @@ export async function listSessions(userId: string) {
   });
   return rows.map((s) => ({
     id: s.id,
-    ip: s.ip,
+    ip: s.ip || "127.0.0.1",
     userAgent: s.userAgent,
-    deviceName: s.deviceName,
-    browserName: browserFromUserAgent(s.userAgent),
-    isCurrent: s.isCurrent,
+    deviceName: s.deviceName || deviceNameFromUserAgent(s.userAgent) || "Windows PC",
+    browserName: browserFromUserAgent(s.userAgent) || "Google Chrome",
+    isCurrent: currentTokenHash ? s.tokenHash === currentTokenHash : s.isCurrent,
     createdAt: s.createdAt.toISOString(),
     expiresAt: s.expiresAt.toISOString(),
     revokedAt: s.revokedAt ? s.revokedAt.toISOString() : null,

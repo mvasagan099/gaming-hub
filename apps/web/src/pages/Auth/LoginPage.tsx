@@ -61,7 +61,19 @@ export function LoginPage() {
         navigate("/2fa", { replace: true, state: { userId: result.userId } });
         return;
       }
-      
+
+      // If user is Admin, redirect to Admin Dashboard by default
+      try {
+        const meData = await apiClient.get<{ user: { role: string } }>("/auth/me");
+        if (meData?.user?.role === "ADMIN") {
+          toast.success("Welcome Admin!");
+          navigate("/admin", { replace: true });
+          return;
+        }
+      } catch {
+        // Fallback to default redirect
+      }
+
       toast.success("Welcome back!");
       navigate(from?.pathname ?? "/", { replace: true, state: from?.state });
     } catch (err) {

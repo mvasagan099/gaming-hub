@@ -1,4 +1,4 @@
-import { Search, Bell, UserCircle2, Sun, Moon, Contrast, LogOut, Gamepad2, Loader2, Image } from "lucide-react";
+import { Search, Bell, UserCircle2, Sun, Moon, LogOut, Gamepad2, Loader2, Image, ShieldCheck } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "../../contexts/ThemeProvider";
 import { useAuthStore } from "../../store/authStore";
@@ -13,7 +13,7 @@ interface NavbarProps {
 
 export default function Navbar({ onLogoClick }: NavbarProps) {
   const navigate = useNavigate();
-  const { theme, setTheme, effectiveTheme, contrast, setContrast } = useTheme();
+  const { theme, setTheme, effectiveTheme } = useTheme();
   const setPaletteOpen = useUIStore((s) => s.setPaletteOpen);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
@@ -82,20 +82,6 @@ export default function Navbar({ onLogoClick }: NavbarProps) {
             {effectiveTheme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </button>
 
-          <button
-            onClick={() => setContrast(contrast === 'high' ? 'normal' : 'high')}
-            className={`p-2 rounded-full transition-colors ${
-              contrast === 'high'
-                ? "bg-accent-500/15 text-accent-500"
-                : "hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-            aria-label={`High contrast ${contrast === 'high' ? 'off' : 'on'}`}
-            aria-pressed={contrast === 'high'}
-            title="Toggle high contrast"
-          >
-            <Contrast size={20} />
-          </button>
-
           {session && (
             <button
               onClick={() => navigate('/notifications')}
@@ -127,6 +113,16 @@ export default function Navbar({ onLogoClick }: NavbarProps) {
             </div>
           ) : me ? (
             <div className="flex items-center gap-2">
+              {((me.user as { role?: string })?.role === "ADMIN") && (
+                <button
+                  onClick={() => navigate('/admin')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 text-indigo-500 dark:text-indigo-400 font-extrabold text-xs transition-colors"
+                  title="Admin Dashboard"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span className="hidden sm:inline">Admin</span>
+                </button>
+              )}
               <button
                 onClick={() => navigate('/wallet')}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 hover:border-amber-500/50 transition-colors"

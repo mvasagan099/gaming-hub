@@ -8,6 +8,7 @@ import { GAMES_DATA } from '../../data/games';
 import { Sparkles, Clock, Flame, Trophy, Play, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useMe } from '../../services/api/useMe';
 
 const gamesList: GameMetadata[] = GAMES_DATA.map(g => ({
   id: g.id as GameId,

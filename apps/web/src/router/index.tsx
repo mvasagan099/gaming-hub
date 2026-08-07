@@ -50,6 +50,8 @@ const AdminAnalyticsPage = lazy(() => import("../pages/admin/AdminAnalyticsPage"
 const AdminErrorsPage = lazy(() => import("../pages/admin/AdminErrorsPage").then((m) => ({ default: m.AdminErrorsPage })));
 const AdminAutomationPage = lazy(() => import("../pages/admin/AdminAutomationPage").then((m) => ({ default: m.AdminAutomationPage })));
 const AdminSupportPage = lazy(() => import("../pages/admin/AdminSupportPage").then((m) => ({ default: m.AdminSupportPage })));
+const AdminRolesPage = lazy(() => import("../pages/admin/AdminRolesPage").then((m) => ({ default: m.AdminRolesPage })));
+const AdminKycPage = lazy(() => import("../pages/admin/AdminKycPage").then((m) => ({ default: m.AdminKycPage })));
 
 const SuspensePage = ({ children }: { children: ReactNode }) => (
   <Suspense
@@ -118,6 +120,8 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <SuspensePage><AdminOverviewPage /></SuspensePage> },
           { path: "users", element: <SuspensePage><AdminUsersPage /></SuspensePage> },
+          { path: "kyc", element: <SuspensePage><AdminKycPage /></SuspensePage> },
+          { path: "roles", element: <SuspensePage><AdminRolesPage /></SuspensePage> },
           { path: "matches", element: <SuspensePage><AdminMatchesPage /></SuspensePage> },
           { path: "rooms", element: <SuspensePage><AdminRoomsPage /></SuspensePage> },
           { path: "tournaments", element: <SuspensePage><AdminTournamentsPage /></SuspensePage> },

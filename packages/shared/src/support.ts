@@ -213,5 +213,11 @@ export const SUPPORTED_PAGE_ROUTES: PageSupportConfig[] = [
   { pageRoute: "/tickets", pageName: "Support Tickets", icon: "Ticket", description: "Support tickets" },
   { pageRoute: "/messages", pageName: "Messages", icon: "MessageCircle", description: "Messages" },
   { pageRoute: "/search", pageName: "Search", icon: "Search", description: "Search" },
+  { pageRoute: "/announcements", pageName: "Announcements", icon: "Megaphone", description: "Platform announcements" },
+  { pageRoute: "/kyc", pageName: "KYC Verification", icon: "ShieldCheck", description: "Identity verification" },
+  { pageRoute: "/kyc/verify", pageName: "KYC Verify", icon: "ScanLine", description: "Submit KYC documents" },
   { pageRoute: "/admin", pageName: "Admin", icon: "Shield", description: "Admin panel" },
+  { pageRoute: "/admin/users", pageName: "Admin Users", icon: "Users", description: "Manage users" },
+  { pageRoute: "/admin/matches", pageName: "Admin Matches", icon: "Swords", description: "Review matches" },
+  { pageRoute: "/admin/rooms", pageName: "Admin Rooms", icon: "DoorOpen", description: "Manage game rooms" },
 ];

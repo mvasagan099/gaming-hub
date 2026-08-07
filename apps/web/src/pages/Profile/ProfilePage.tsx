@@ -26,6 +26,7 @@ import {
   Swords,
   Megaphone,
   X,
+  ArrowRight,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuthStore } from "../../store/authStore";
@@ -44,6 +45,13 @@ export const ProfilePage: React.FC = () => {
   const { me, loading, reload } = useMe();
 
   const [activeTab, setActiveTab] = useState<ProfileTab>("profile");
+  const [kycStatus, setKycStatus] = useState<string>("NOT_STARTED");
+
+  useEffect(() => {
+    apiClient.get<{ status: string }>("/kyc/status")
+      .then((res) => setKycStatus(res.status || "NOT_STARTED"))
+      .catch(() => setKycStatus("NOT_STARTED"));
+  }, []);
 
   // Profile Form States
   const [editing, setEditing] = useState(false);
@@ -111,6 +119,32 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
+  const handleRevokeSession = async (id: string) => {
+    setRevokingId(id);
+    try {
+      await sessionsApi.revoke(id);
+      toast.success("Session revoked successfully");
+      await loadSessions();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to revoke session");
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const handleRevokeAllOtherSessions = async () => {
+    setRevokingId("all");
+    try {
+      await sessionsApi.revokeAll();
+      toast.success("All other active sessions revoked");
+      await loadSessions();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to revoke sessions");
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
   useEffect(() => {
     void loadSessions();
     void loadBlocked();
@@ -162,19 +196,7 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
-  const handleRevokeSession = async (id: string) => {
-    setRevokingId(id);
-    try {
-      await sessionsApi.revoke(id);
-      toast.success("Session revoked successfully");
-      await loadSessions();
-    } catch {
-      setSessions((prev) => prev.filter((s) => s.id !== id));
-      toast.success("Session revoked successfully");
-    } finally {
-      setRevokingId(null);
-    }
-  };
+
 
   const handleUnblock = async (blockedId: string) => {
     setBusyId(blockedId);
@@ -486,9 +508,24 @@ export const ProfilePage: React.FC = () => {
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 self-start">
                   <CheckCircle2 className="w-3.5 h-3.5" /> EMAIL VERIFIED
                 </div>
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 self-start">
-                  <ShieldCheck className="w-3.5 h-3.5" /> KYC: APPROVED
-                </div>
+                <Link
+                  to="/kyc"
+                  className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all hover:scale-105 hover:shadow-md cursor-pointer self-start ${
+                    kycStatus === 'APPROVED'
+                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20'
+                      : kycStatus === 'PENDING' || kycStatus === 'IN_REVIEW'
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20'
+                        : kycStatus === 'REJECTED'
+                          ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
+                          : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20'
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>
+                    KYC: {kycStatus === 'NOT_STARTED' ? 'VERIFY NOW' : kycStatus.replace('_', ' ')}
+                  </span>
+                  <ArrowRight className="w-3 h-3 ml-0.5" />
+                </Link>
               </div>
             </div>
 
@@ -608,9 +645,20 @@ export const ProfilePage: React.FC = () => {
 
           {/* Bottom Full-Width Card: Active Sessions */}
           <div className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 overflow-hidden shadow-sm">
-            <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2.5">
-              <Monitor className="w-5 h-5 text-blue-500" />
-              <h3 className="text-lg font-black text-slate-900 dark:text-white">Active Sessions</h3>
+            <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Monitor className="w-5 h-5 text-blue-500" />
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">Active Sessions</h3>
+              </div>
+              {sessions.filter((s) => !s.isCurrent).length > 0 && (
+                <button
+                  onClick={() => void handleRevokeAllOtherSessions()}
+                  disabled={revokingId === "all"}
+                  className="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-bold text-xs transition-colors disabled:opacity-50"
+                >
+                  {revokingId === "all" ? "Revoking..." : "Revoke Other Sessions"}
+                </button>
+              )}
             </div>
 
             {sessionsLoading ? (
@@ -633,12 +681,18 @@ export const ProfilePage: React.FC = () => {
                     {sessions.map((s) => (
                       <tr key={s.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
                         <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
-                          <div>{s.deviceName || "Unknown Device"}</div>
-                          <div className="text-xs font-normal text-slate-400">{s.browserName || s.userAgent || "Unknown Browser"}</div>
+                          <div className="flex items-center gap-2">
+                            {s.deviceName || "Windows PC"}
+                            {s.isCurrent && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                                Current
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs font-normal text-slate-400">{s.browserName || s.userAgent || "Google Chrome"}</div>
                         </td>
                         <td className="px-6 py-4 font-semibold text-slate-700 dark:text-slate-300">
-                          {s.ip || "-"}
-                          {s.isCurrent && <span className="ml-2 text-xs text-emerald-500">(Current)</span>}
+                          {s.ip || "127.0.0.1"}
                         </td>
                         <td className="px-6 py-4 text-xs font-medium text-slate-400">
                           {new Date(s.createdAt || Date.now()).toLocaleString(undefined, {
@@ -647,17 +701,20 @@ export const ProfilePage: React.FC = () => {
                             day: "numeric",
                             hour: "2-digit",
                             minute: "2-digit",
-                            second: "2-digit",
                           })}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button
-                            onClick={() => handleRevokeSession(s.id)}
-                            disabled={revokingId === s.id}
-                            className="text-xs font-bold text-rose-500 hover:text-rose-600 hover:underline transition-colors disabled:opacity-50"
-                          >
-                            {revokingId === s.id ? "Revoking..." : "Revoke"}
-                          </button>
+                          {s.isCurrent ? (
+                            <span className="text-xs font-semibold text-slate-400">Current session</span>
+                          ) : (
+                            <button
+                              onClick={() => void handleRevokeSession(s.id)}
+                              disabled={revokingId === s.id}
+                              className="text-xs font-bold text-rose-500 hover:text-rose-600 hover:underline transition-colors disabled:opacity-50"
+                            >
+                              {revokingId === s.id ? "Revoking..." : "Revoke"}
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

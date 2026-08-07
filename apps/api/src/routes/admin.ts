@@ -30,7 +30,8 @@ const walletAdjustSchema = z.object({
 });
 
 const roleChangeSchema = z.object({
-  role: z.enum(["USER", "MODERATOR", "ADMIN"]),
+  role: z.enum(["USER", "MODERATOR", "ADMIN", "CUSTOM"]),
+  customRoleId: z.string().optional(),
 });
 
 const requestDecisionSchema = z.object({
@@ -47,7 +48,7 @@ const freezeSchema = z.object({
 
 export async function adminRoutes(app: FastifyInstance) {
   app.get("/api/admin/users", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:users:view");
+    await requirePermission(request, "admin:users:view", prisma);
     const q = queryParams(request);
     const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
 
@@ -68,6 +69,7 @@ export async function adminRoutes(app: FastifyInstance) {
         displayName: u.displayName,
         email: u.email,
         role: u.role,
+        customRoleId: u.customRoleId,
         isOnline: u.isOnline,
         coins: u.wallet?.balance ?? 0,
         level: u.profile?.level ?? 1,
@@ -80,7 +82,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/admin/rooms", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:rooms:view");
+    await requirePermission(request, "admin:rooms:view", prisma);
     const rooms = await prisma.room.findMany({
       where: { status: { not: "ENDED" } },
       orderBy: { createdAt: "desc" },
@@ -94,7 +96,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/admin/matches", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:matches:view");
+    await requirePermission(request, "admin:matches:view", prisma);
     const q = queryParams(request);
     const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
 
@@ -112,7 +114,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/admin/users/:id/wallet", { preHandler: authenticate }, async (request) => {
-    const admin = await requirePermission(request, "admin:wallet:adjust");
+    const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
     const { id } = routeParams(request);
     const { amount, reason } = parseSchema(walletAdjustSchema, request.body);
 
@@ -143,7 +145,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // ---- Wallet requests ------------------------------------------------------
   app.get("/api/admin/wallet/requests", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:wallet:requests:view");
+    await requirePermission(request, "admin:wallet:requests:view", prisma);
     const q = queryParams(request);
     const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
     const kind = (["DEPOSIT", "WITHDRAWAL"] as const).find((k) => k === queryString(q.kind));
@@ -155,7 +157,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/admin/wallet/requests/:id/approve", { preHandler: authenticate }, async (request) => {
-    const admin = await requirePermission(request, "admin:wallet:requests:manage");
+    const admin = await requirePermission(request, "admin:wallet:requests:manage", prisma);
     const { id } = routeParams(request);
     const { note } = parseSchema(requestDecisionSchema, request.body ?? {});
     const updated = await approveWalletRequest(admin.id, id, note);
@@ -172,7 +174,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/admin/wallet/requests/:id/reject", { preHandler: authenticate }, async (request) => {
-    const admin = await requirePermission(request, "admin:wallet:requests:manage");
+    const admin = await requirePermission(request, "admin:wallet:requests:manage", prisma);
     const { id } = routeParams(request);
     const { reason } = parseSchema(requestRejectSchema, request.body);
     const updated = await rejectWalletRequest(admin.id, id, reason);
@@ -189,7 +191,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/admin/users/:id/wallet/freeze", { preHandler: authenticate }, async (request) => {
-    const admin = await requirePermission(request, "admin:wallet:requests:manage");
+    const admin = await requirePermission(request, "admin:wallet:requests:manage", prisma);
     const { id } = routeParams(request);
     const { reason } = parseSchema(freezeSchema, request.body);
     const wallet = await setWalletFrozen(admin.id, id, true, reason);
@@ -206,7 +208,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/admin/users/:id/wallet/unfreeze", { preHandler: authenticate }, async (request) => {
-    const admin = await requirePermission(request, "admin:wallet:requests:manage");
+    const admin = await requirePermission(request, "admin:wallet:requests:manage", prisma);
     const { id } = routeParams(request);
     const wallet = await setWalletFrozen(admin.id, id, false);
     auditFromRequest(request, {
@@ -221,20 +223,28 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.patch("/api/admin/users/:id/role", { preHandler: authenticate }, async (request) => {
-    const admin = await requirePermission(request, "admin:users:manage");
+    const admin = await requirePermission(request, "admin:users:manage", prisma);
     const { id } = routeParams(request);
-    const { role } = parseSchema(roleChangeSchema, request.body);
+    const { role, customRoleId } = parseSchema(roleChangeSchema, request.body);
 
     if (id === admin.id) {
       throw new AppError("FORBIDDEN", "You cannot change your own role", 403);
     }
 
-    const target = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+    const target = await prisma.user.findUnique({ where: { id }, select: { role: true, customRoleId: true } });
     if (!target) {
       throw new AppError("NOT_FOUND", "User not found", 404);
     }
 
-    // Never allow demoting the last ADMIN — prevents lockout of the platform.
+    if (role === "CUSTOM" && customRoleId) {
+      const customRole = await prisma.customRole.findUnique({
+        where: { id: customRoleId },
+      });
+      if (!customRole) {
+        throw new AppError("VALIDATION_ERROR", "Custom role not found", 422);
+      }
+    }
+
     if (target.role === "ADMIN" && role !== "ADMIN") {
       const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
       if (adminCount <= 1) {
@@ -242,7 +252,13 @@ export async function adminRoutes(app: FastifyInstance) {
       }
     }
 
-    await prisma.user.update({ where: { id }, data: { role } });
+    await prisma.user.update({
+      where: { id },
+      data: {
+        role,
+        customRoleId: role === "CUSTOM" ? customRoleId : null,
+      },
+    });
 
     auditFromRequest(request, {
       actorType: "user",
@@ -251,17 +267,22 @@ export async function adminRoutes(app: FastifyInstance) {
       category: "admin",
       targetType: "user",
       targetId: id,
-      meta: { from: target.role, to: role },
+      meta: {
+        from: target.role,
+        to: role,
+        fromCustomRole: target.customRoleId,
+        toCustomRole: customRoleId,
+      },
     });
 
-    return { ok: true, user: { id, role } };
+    return { ok: true, user: { id, role, customRoleId: role === "CUSTOM" ? customRoleId : null } };
   });
 
   // ---- Site settings -------------------------------------------------------
   // Returns the full validated configuration including secret values. Requires
   // the read permission; non-admin clients use the public /api/settings route.
   app.get("/api/admin/settings", { preHandler: authenticate }, async (request) => {
-    await requirePermission(request, "admin:settings:view");
+    await requirePermission(request, "admin:settings:view", prisma);
     return getSettings();
   });
 
@@ -271,7 +292,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // Patch a single dotted setting key (e.g. `auth.signupEnabled`).
   app.patch("/api/admin/settings/:key", { preHandler: authenticate }, async (request) => {
-    const admin = await requirePermission(request, "admin:settings:edit");
+    const admin = await requirePermission(request, "admin:settings:edit", prisma);
     const { key } = routeParams(request);
     const { value } = parseSchema(singleSettingSchema, request.body);
     await setSetting(key, value, admin.id);
@@ -294,7 +315,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // Replace an entire category (e.g. all `wallet.*` keys) in one transaction.
   app.put("/api/admin/settings/category", { preHandler: authenticate }, async (request) => {
-    const admin = await requirePermission(request, "admin:settings:edit");
+    const admin = await requirePermission(request, "admin:settings:edit", prisma);
     const { category, values } = parseSchema(categoryUpdateSchema, request.body);
     const saved = await setCategorySettings(category, values, admin.id);
     auditFromRequest(request, {
@@ -311,7 +332,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // Reset a category back to built-in defaults (deletes all stored rows).
   app.delete("/api/admin/settings/category/:category", { preHandler: authenticate }, async (request) => {
-    const admin = await requirePermission(request, "admin:settings:edit");
+    const admin = await requirePermission(request, "admin:settings:edit", prisma);
     const { category } = routeParams(request);
     if (!(category in SETTINGS_CATEGORIES)) {
       throw new AppError("VALIDATION_ERROR", `Unknown category "${category}"`, 422);
