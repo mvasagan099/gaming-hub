@@ -241,6 +241,66 @@ export async function createWithdrawalRequest(
 ): Promise<WalletRequest> {
   await assertWalletNotFrozen(userId);
 
+  const kycRequest = await prisma.kycRequest.findUnique({
+    where: { userId },
+    select: { status: true, level: true },
+  });
+
+  if (!kycRequest || kycRequest.status !== "APPROVED") {
+    throw new AppError(
+      "KYC_REQUIRED",
+      "KYC verification is required for withdrawals. Please complete KYC verification first.",
+      403,
+    );
+  }
+
+  const withdrawalLimits = await prisma.kycWithdrawalLimit.findUnique({
+    where: { level: kycRequest.level },
+  });
+
+  if (withdrawalLimits) {
+    if (withdrawalLimits.singleWithdrawLimit === 0) {
+      throw new AppError(
+        "WITHDRAWAL_NOT_ALLOWED",
+        "Withdrawals are not allowed for your current KYC level",
+        403,
+      );
+    }
+
+    if (amount > withdrawalLimits.singleWithdrawLimit) {
+      throw new AppError(
+        "WITHDRAWAL_LIMIT_EXCEEDED",
+        `Withdrawal amount exceeds your limit of ${(withdrawalLimits.singleWithdrawLimit / 100).toFixed(2)}`,
+        400,
+      );
+    }
+
+    const todayStart = new Date(
+      Date.UTC(
+        new Date().getUTCFullYear(),
+        new Date().getUTCMonth(),
+        new Date().getUTCDate(),
+      ),
+    );
+    const { _sum } = await prisma.walletRequest.aggregate({
+      where: {
+        userId,
+        kind: "WITHDRAWAL",
+        status: { in: ["PENDING", "APPROVED"] },
+        createdAt: { gte: todayStart },
+      },
+      _sum: { amount: true },
+    });
+    
+    if ((_sum.amount ?? 0) + amount > withdrawalLimits.dailyLimit) {
+      throw new AppError(
+        "DAILY_WITHDRAWAL_LIMIT_EXCEEDED",
+        `Daily withdrawal limit of ${(withdrawalLimits.dailyLimit / 100).toFixed(2)} reached`,
+        400,
+      );
+    }
+  }
+
   const settings = await getCategorySettings("wallet");
   if (amount < settings.minWithdrawal) {
     throw new AppError(
@@ -316,7 +376,7 @@ export async function createWithdrawalRequest(
     category: "wallet",
     targetType: "walletRequest",
     targetId: request.id,
-    meta: { amount, fee },
+    meta: { amount, fee, kycLevel: kycRequest.level },
   });
 
   return serializeRequest(request);
@@ -379,11 +439,11 @@ async function assertPending(
 }
 
 /**
- * Approves a deposit or withdrawal. Runs in a serializable transaction that
- * locks both the request row and the wallet row, so two concurrent approvals
- * (or an approval racing a match settlement) cannot double-credit or
- * double-spend. Credits/debits go through `applyTransaction`, which records a
- * `Transaction` row with the post-change balance.
+ * Approves a deposit or withdrawal. Runs in a read-committed transaction that
+ * locks both the request row and the wallet row (`FOR UPDATE`), so two
+ * concurrent approvals (or an approval racing a match settlement) cannot
+ * double-credit or double-spend. Credits/debits go through `applyTransaction`,
+ * which records a `Transaction` row with the post-change balance.
  */
 export async function approveWalletRequest(
   adminId: string,
@@ -458,7 +518,7 @@ export async function approveWalletRequest(
 
       return { updated, wallet };
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
   );
 
   const kindLabel = result.updated.kind === "DEPOSIT" ? "Deposit" : "Withdrawal";
@@ -522,7 +582,7 @@ export async function rejectWalletRequest(
         },
       });
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
   );
 
   const kindLabel = updated.kind === "DEPOSIT" ? "Deposit" : "Withdrawal";

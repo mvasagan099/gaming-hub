@@ -34,7 +34,11 @@ export type Permission =
   | "admin:crm:manage"
   | "admin:automation:view"
   | "admin:automation:manage"
-  | "admin:referrals:view";
+  | "admin:referrals:view"
+  | "admin:kyc:view"
+  | "admin:kyc:review"
+  | "admin:kyc:override"
+  | "admin:kyc:config";
 
 export const ROLE_PERMISSIONS: Record<DbUserRole, readonly Permission[]> = {
   USER: [],
@@ -76,6 +80,10 @@ export const ROLE_PERMISSIONS: Record<DbUserRole, readonly Permission[]> = {
     "admin:automation:view",
     "admin:automation:manage",
     "admin:referrals:view",
+    "admin:kyc:view",
+    "admin:kyc:review",
+    "admin:kyc:override",
+    "admin:kyc:config",
   ],
 };
 

@@ -13,7 +13,8 @@ export function getTestDatabaseUrl(): string {
   const url = new URL(dev);
   const name = url.pathname.split("/").filter(Boolean).at(-1);
   if (!name) throw new Error("DATABASE_URL has no database name");
-  url.pathname = url.pathname.replace(/[^/]*$/, `${name}_test`);
+  const base = name.endsWith("_test") ? name.slice(0, -"_test".length) : name;
+  url.pathname = url.pathname.replace(/[^/]*$/, `${base}_test`);
   return url.toString();
 }
 

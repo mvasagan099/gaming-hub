@@ -113,15 +113,11 @@ export async function securityRoutes(app: FastifyInstance) {
     
     const profile = await prisma.profile.findUnique({
       where: { userId: user.id },
-      select: { twoFactorEnabled: true, passwordHash: true, email: true },
+      select: { twoFactorEnabled: true, passwordHash: true },
     });
     
     if (!profile) {
       throw new AppError("NOT_FOUND", "Profile not found", 404);
-    }
-    
-    if (!profile.passwordHash) {
-      throw new AppError("VALIDATION_ERROR", "You must set a password before enabling 2FA", 400);
     }
     
     if (profile.twoFactorEnabled) {
@@ -129,7 +125,7 @@ export async function securityRoutes(app: FastifyInstance) {
     }
     
     const secret = generateTOTPSecret();
-    const email = profile.email ?? user.email ?? "user";
+    const email = user.email ?? "user";
     const authUrl = getTOTPAuthUrl(email, secret);
     
     await prisma.profile.update({

@@ -14,6 +14,32 @@ import type {
   SupportAnalytics,
 } from "@gaming-hub/shared";
 
+interface SupportCategoryRow {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function toSupportCategory(c: SupportCategoryRow) {
+  return {
+    id: c.id,
+    name: c.name,
+    slug: c.slug,
+    description: c.description ?? undefined,
+    icon: c.icon ?? undefined,
+    sortOrder: c.sortOrder,
+    isActive: c.isActive,
+    createdAt: c.createdAt.toISOString(),
+    updatedAt: c.updatedAt.toISOString(),
+  };
+}
+
 // ============================================================================
 // Categories
 // ============================================================================
@@ -171,11 +197,7 @@ export async function listArticles(
     items: items.map((a) => ({
       id: a.id,
       categoryId: a.categoryId,
-      category: a.category ? {
-        id: a.category.id,
-        name: a.category.name,
-        slug: a.category.slug,
-      } : null,
+      category: a.category ? toSupportCategory(a.category) : null,
       title: a.title,
       slug: a.slug,
       content: a.content,
@@ -386,11 +408,7 @@ export async function getContentForPage(pageRoute: string): Promise<SupportConte
   const articles = uniqueArticles.map((a) => ({
     id: a.id,
     categoryId: a.categoryId,
-    category: a.category ? {
-      id: a.category.id,
-      name: a.category.name,
-      slug: a.category.slug,
-    } : null,
+    category: a.category ? toSupportCategory(a.category) : null,
     title: a.title,
     slug: a.slug,
     content: a.content,
@@ -551,11 +569,7 @@ export async function searchSupportContent(input: SearchSupportInput): Promise<S
     articles: items.map((a) => ({
       id: a.id,
       categoryId: a.categoryId,
-      category: a.category ? {
-        id: a.category.id,
-        name: a.category.name,
-        slug: a.category.slug,
-      } : null,
+      category: a.category ? toSupportCategory(a.category) : null,
       title: a.title,
       slug: a.slug,
       content: a.content.length > 200 ? `${a.content.slice(0, 200)}...` : a.content,
@@ -652,11 +666,7 @@ export async function getSupportAnalytics(): Promise<SupportAnalytics> {
       article: {
         id: a.id,
         categoryId: a.categoryId,
-        category: a.category ? {
-          id: a.category.id,
-          name: a.category.name,
-          slug: a.category.slug,
-        } : null,
+        category: a.category ? toSupportCategory(a.category) : null,
         title: a.title,
         slug: a.slug,
         content: a.content,

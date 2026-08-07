@@ -139,7 +139,7 @@ describe("walletRequests", () => {
     it("rejects withdrawals beyond the balance", async () => {
       const user = await createTestUser();
       const { debugCode } = await requestWithdrawalOtp(user.id);
-      await expectAppError(createWithdrawalRequest(user.id, 999_999, debugCode!), "INSUFFICIENT_BALANCE");
+      await expectAppError(createWithdrawalRequest(user.id, 3000, debugCode!), "INSUFFICIENT_BALANCE");
     });
 
     it("enforces the daily withdrawal limit", async () => {

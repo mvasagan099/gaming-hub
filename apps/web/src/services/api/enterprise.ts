@@ -38,6 +38,9 @@ import type {
   UserAchievement,
   WalletBalanceType,
   TransactionReferenceType,
+  WalletRequest,
+  WalletRequestKind,
+  WalletRequestStatus,
   LeaderboardMetric,
   LeaderboardPeriod,
   LeaderboardScope,
@@ -248,9 +251,12 @@ export const securityApi = {
       newPassword,
       confirmPassword: newPassword,
     }),
-  setup2FA: (enable: boolean) =>
-    apiClient.post<{ ok: boolean; enabled: boolean; secret?: string }>('/security/2fa/setup', { enable }),
-  disable2FA: () => apiClient.post<{ ok: boolean }>('/security/2fa/disable'),
+  setup2FA: () =>
+    apiClient.post<{ ok: boolean; secret: string; authUrl: string }>('/security/2fa/setup', { enable: true }),
+  verify2FA: (token: string) =>
+    apiClient.post<{ ok: boolean; enabled: boolean }>('/security/2fa/verify', { token }),
+  disable2FA: (token: string) =>
+    apiClient.post<{ ok: boolean }>('/security/2fa/disable', { token }),
 };
 
 // ---------------------------------------------------------------------------
@@ -287,6 +293,19 @@ export const walletApi = {
     if (referenceType) qs.set('referenceType', referenceType);
     return apiClient.get<TransactionPage>(`/wallet/transactions?${qs.toString()}`);
   },
+  requestOtp: () => apiClient.post<{ ok: boolean; expiresAt: string; debugCode?: string }>('/wallet/otp'),
+  createDeposit: (input: { amount: number; method?: string }) =>
+    apiClient.post<WalletRequest>('/wallet/deposits', input),
+  createWithdrawal: (input: { amount: number; otp: string }) =>
+    apiClient.post<WalletRequest>('/wallet/withdrawals', input),
+  requests: (page = 1, pageSize = 20, kind?: WalletRequestKind, status?: WalletRequestStatus) => {
+    const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    if (kind) qs.set('kind', kind);
+    if (status) qs.set('status', status);
+    return apiClient.get<Page<WalletRequest>>(`/wallet/requests?${qs.toString()}`);
+  },
+  cancelRequest: (requestId: string) =>
+    apiClient.post<WalletRequest>(`/wallet/requests/${requestId}/cancel`),
 };
 
 // ---------------------------------------------------------------------------

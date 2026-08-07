@@ -175,6 +175,7 @@ export interface LoginSession {
   ip: string | null;
   userAgent: string | null;
   deviceName: string | null;
+  browserName?: string | null;
   isCurrent: boolean;
   createdAt: string;
   expiresAt: string;

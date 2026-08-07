@@ -25,6 +25,7 @@ import {
   Users,
   Swords,
   Megaphone,
+  X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuthStore } from "../../store/authStore";
@@ -62,6 +63,13 @@ export const ProfilePage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [show2FAModal, setShow2FAModal] = useState(false);
+  const [modalMode, setModalMode] = useState<"setup" | "disable">("setup");
+  const [twoFactorSecret, setTwoFactorSecret] = useState<string | null>(null);
+  const [twoFactorAuthUrl, setTwoFactorAuthUrl] = useState<string | null>(null);
+  const [totpToken, setTotpToken] = useState("");
+  const [submitting2FA, setSubmitting2FA] = useState(false);
+  const [settingUp2FA, setSettingUp2FA] = useState(false);
 
   // Active Sessions State
   const [sessions, setSessions] = useState<LoginSession[]>([]);
@@ -85,15 +93,11 @@ export const ProfilePage: React.FC = () => {
   const loadSessions = async () => {
     setSessionsLoading(true);
     try {
-      setSessions(await sessionsApi.list());
+      const list = await sessionsApi.list();
+      setSessions(list || []);
     } catch {
-      // Fallback mock sessions matching screenshot 2 if API empty
-      setSessions([
-        { id: "s1", deviceName: "Windows PC", userAgent: "Google Chrome", ip: "202.83.25.140", createdAt: new Date().toISOString(), isCurrent: true, expiresAt: "", revokedAt: null },
-        { id: "s2", deviceName: "Windows PC", userAgent: "Google Chrome", ip: "202.83.25.140", createdAt: new Date(Date.now() - 172800000).toISOString(), isCurrent: false, expiresAt: "", revokedAt: null },
-        { id: "s3", deviceName: "Windows PC", userAgent: "Google Chrome", ip: "202.83.25.140", createdAt: new Date(Date.now() - 259200000).toISOString(), isCurrent: false, expiresAt: "", revokedAt: null },
-        { id: "s4", deviceName: "Windows PC", userAgent: "Google Chrome", ip: "202.83.25.140", createdAt: new Date(Date.now() - 345600000).toISOString(), isCurrent: false, expiresAt: "", revokedAt: null },
-      ]);
+      setSessions([]);
+      toast.error("Failed to load sessions");
     } finally {
       setSessionsLoading(false);
     }
@@ -108,11 +112,9 @@ export const ProfilePage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (session) {
-      void loadSessions();
-      void loadBlocked();
-    }
-  }, [session]);
+    void loadSessions();
+    void loadBlocked();
+  }, [session, activeTab]);
 
   const handleSaveProfile = async () => {
     setSavingProfile(true);
@@ -188,21 +190,64 @@ export const ProfilePage: React.FC = () => {
   };
 
   const handleToggle2FA = async () => {
-    try {
-      if (twoFactorEnabled) {
-        await securityApi.disable2FA();
-        setTwoFactorEnabled(false);
-        toast.success("2FA disabled successfully!");
-      } else {
-        const result = await securityApi.setup2FA(true);
-        setTwoFactorEnabled(true);
-        toast.success("2FA enabled! Please save your secret key.");
-        if (result.secret) {
-          console.log("2FA Secret:", result.secret);
-        }
+    if (twoFactorEnabled) {
+      setTotpToken("");
+      setModalMode("disable");
+      setShow2FAModal(true);
+    } else {
+      setSettingUp2FA(true);
+      try {
+        const res = await securityApi.setup2FA();
+        setTwoFactorSecret(res.secret);
+        setTwoFactorAuthUrl(res.authUrl);
+        setTotpToken("");
+        setModalMode("setup");
+        setShow2FAModal(true);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to initiate 2FA setup");
+      } finally {
+        setSettingUp2FA(false);
       }
+    }
+  };
+
+  const handleVerifyAndActivate2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (totpToken.length !== 6) {
+      toast.error("Please enter a 6-digit verification code");
+      return;
+    }
+    setSubmitting2FA(true);
+    try {
+      await securityApi.verify2FA(totpToken);
+      setTwoFactorEnabled(true);
+      toast.success("Two-Factor Authentication activated successfully!");
+      setShow2FAModal(false);
+      reload();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update 2FA settings");
+      toast.error(err instanceof Error ? err.message : "Invalid verification code");
+    } finally {
+      setSubmitting2FA(false);
+    }
+  };
+
+  const handleConfirmDisable2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (totpToken.length !== 6) {
+      toast.error("Please enter a 6-digit verification code");
+      return;
+    }
+    setSubmitting2FA(true);
+    try {
+      await securityApi.disable2FA(totpToken);
+      setTwoFactorEnabled(false);
+      toast.success("Two-Factor Authentication disabled.");
+      setShow2FAModal(false);
+      reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to disable 2FA");
+    } finally {
+      setSubmitting2FA(false);
     }
   };
 
@@ -552,10 +597,11 @@ export const ProfilePage: React.FC = () => {
 
               <button
                 onClick={handleToggle2FA}
-                className="px-6 py-3.5 rounded-2xl bg-[#1b367d] hover:bg-[#152a62] text-white font-black text-sm uppercase tracking-wide transition-all shadow-md hover:scale-[1.02] duration-200 flex items-center gap-2"
+                disabled={settingUp2FA}
+                className="px-6 py-3.5 rounded-2xl bg-[#1b367d] hover:bg-[#152a62] disabled:opacity-50 text-white font-black text-sm uppercase tracking-wide transition-all shadow-md hover:scale-[1.02] duration-200 flex items-center gap-2"
               >
                 <Smartphone className="w-4 h-4" />
-                {twoFactorEnabled ? "Disable 2FA" : "Enable 2FA"}
+                {settingUp2FA ? "Setting up..." : twoFactorEnabled ? "Disable 2FA" : "Enable 2FA"}
               </button>
             </div>
           </div>
@@ -587,11 +633,12 @@ export const ProfilePage: React.FC = () => {
                     {sessions.map((s) => (
                       <tr key={s.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
                         <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
-                          <div>{s.deviceName || "Windows PC"}</div>
-                          <div className="text-xs font-normal text-slate-400">{s.userAgent || "Google Chrome"}</div>
+                          <div>{s.deviceName || "Unknown Device"}</div>
+                          <div className="text-xs font-normal text-slate-400">{s.browserName || s.userAgent || "Unknown Browser"}</div>
                         </td>
                         <td className="px-6 py-4 font-semibold text-slate-700 dark:text-slate-300">
-                          {s.ip || "202.83.25.140"}
+                          {s.ip || "-"}
+                          {s.isCurrent && <span className="ml-2 text-xs text-emerald-500">(Current)</span>}
                         </td>
                         <td className="px-6 py-4 text-xs font-medium text-slate-400">
                           {new Date(s.createdAt || Date.now()).toLocaleString(undefined, {
@@ -616,6 +663,13 @@ export const ProfilePage: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+                {sessions.length === 0 && (
+                  <div className="px-6 py-8 text-center">
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      No active sessions found.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -687,6 +741,107 @@ export const ProfilePage: React.FC = () => {
             >
               <LogOut className="w-4 h-4" /> Sign Out
             </button>
+          </div>
+        </div>
+      )}
+      {/* Interactive 2FA Setup / Disable Modal */}
+      {show2FAModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+            <button
+              onClick={() => setShow2FAModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {modalMode === "setup" ? (
+              <form onSubmit={handleVerifyAndActivate2FA} className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-indigo-500/10 text-indigo-500">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white">Enable 2FA</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Scan QR code or enter secret key</p>
+                  </div>
+                </div>
+
+                {twoFactorAuthUrl && (
+                  <div className="flex flex-col items-center gap-3 p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(twoFactorAuthUrl)}`}
+                      alt="2FA QR Code"
+                      className="w-44 h-44 rounded-xl border border-white bg-white p-2 shadow-sm"
+                    />
+                    <div className="w-full text-center">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Secret Key</p>
+                      <code className="text-xs font-mono font-bold text-indigo-500 bg-indigo-500/10 px-3 py-1.5 rounded-lg select-all inline-block break-all">
+                        {twoFactorSecret}
+                      </code>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    6-Digit Authenticator Code
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={totpToken}
+                    onChange={(e) => setTotpToken(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-2xl px-4 py-3 text-center tracking-[0.5em] font-mono text-lg text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting2FA || totpToken.length !== 6}
+                  className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-extrabold text-sm transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2"
+                >
+                  {submitting2FA ? "Activating..." : "Verify & Enable 2FA"}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleConfirmDisable2FA} className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-rose-500/10 text-rose-500">
+                    <ShieldAlert className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white">Disable 2FA</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Confirm with your 6-digit code</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Enter 6-digit Authenticator Code
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={totpToken}
+                    onChange={(e) => setTotpToken(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-2xl px-4 py-3 text-center tracking-[0.5em] font-mono text-lg text-slate-900 dark:text-white focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting2FA || totpToken.length !== 6}
+                  className="w-full py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-extrabold text-sm transition-all shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2"
+                >
+                  {submitting2FA ? "Disabling..." : "Confirm & Disable 2FA"}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}

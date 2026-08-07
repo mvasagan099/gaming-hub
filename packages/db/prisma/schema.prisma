@@ -270,6 +270,12 @@ model User {
   loginSessions      LoginSession[]
   errorEvents        ErrorEvent[]
   announcementsRead  AnnouncementRead[]
+  
+  // KYC Relations
+  kycRequest         KycRequest?
+  kycReviews         KycReview[]
+  kycDocumentVerifications KycDocument[] @relation("KycDocumentVerifier")
+  kycReviewedRequests KycRequest[] @relation("KycReviewer")
 
   @@index([role])
   @@index([deletedAt])
@@ -1335,4 +1341,193 @@ model SupportSearchLog {
   @@index([query])
   @@index([userId, createdAt])
   @@index([pageRoute, createdAt])
+}
+
+// ==================== KYC VERIFICATION SYSTEM ====================
+
+enum KycLevel {
+  LEVEL_0  // Unverified
+  LEVEL_1  // Basic Verification
+  LEVEL_2  // Identity Verification  
+  LEVEL_3  // Address Verification
+}
+
+enum KycStatus {
+  NOT_STARTED
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+  REQUIRES_RESUBMISSION
+}
+
+enum KycDocumentType {
+  // India
+  AADHAAR_CARD
+  PAN_CARD
+  VOTER_ID
+  // International
+  PASSPORT
+  DRIVING_LICENCE
+  NATIONAL_ID
+  RESIDENCE_PERMIT
+  // Address Proof
+  UTILITY_BILL
+  BANK_STATEMENT
+  GOVERNMENT_ADDRESS_DOC
+}
+
+enum KycDocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+model KycRequest {
+  id           String      @id @default(cuid())
+  userId       String      @unique
+  level        KycLevel    @default(LEVEL_0)
+  status       KycStatus   @default(NOT_STARTED)
+  country      String?
+  
+  // Level 1 fields
+  fullName     String?
+  dateOfBirth  DateTime?
+  mobileNumber String?
+  
+  // Review fields
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  rejectionReason String?
+  
+  // Administrative Override
+  adminOverride    Boolean   @default(false)
+  adminOverrideBy  String?
+  adminOverrideAt  DateTime?
+  adminOverrideReason String?
+  
+  submittedAt DateTime?
+  approvedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewer    User?       @relation("KycReviewer", fields: [reviewedBy], references: [id])
+  documents   KycDocument[]
+  reviews     KycReview[]
+  auditLogs   KycAuditLog[]
+  
+  @@index([status])
+  @@index([level])
+  @@index([country])
+  @@index([createdAt])
+}
+
+model KycDocument {
+  id            String            @id @default(cuid())
+  requestId     String
+  documentType  KycDocumentType
+  status        KycDocumentStatus @default(PENDING)
+  
+  // File metadata
+  fileName      String
+  fileUrl       String            // Encrypted path
+  fileSize      Int               // in bytes
+  mimeType      String
+  fileHash      String            // SHA-256 hash for integrity
+  
+  // Page/side indicator (for documents with front/back)
+  page          Int?              // 0 = front, 1 = back
+  side          String?           // "front", "back"
+  
+  // Document-specific fields
+  documentNumber String?
+  issueDate     DateTime?
+  expiryDate    DateTime?
+  issuingCountry String?
+  
+  // Selfie verification
+  isSelfie      Boolean  @default(false)
+  
+  // Review
+  rejectionReason String?
+  verifiedBy      String?
+  verifiedAt      DateTime?
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  request     KycRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  verifier    User?      @relation("KycDocumentVerifier", fields: [verifiedBy], references: [id])
+  
+  @@index([requestId])
+  @@index([documentType])
+  @@index([status])
+}
+
+model KycReview {
+  id          String   @id @default(cuid())
+  requestId   String
+  reviewerId  String
+  action      String   // APPROVED, REJECTED, REQUEST_RESUBMISSION, INFO_UPDATED
+  notes       String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  
+  request     KycRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  reviewer    User       @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  
+  @@index([requestId, createdAt])
+  @@index([reviewerId, createdAt])
+}
+
+model KycAuditLog {
+  id          String   @id @default(cuid())
+  requestId   String
+  actorId     String?
+  action      String
+  category    String   // "STATUS_CHANGE", "DOCUMENT_UPLOAD", "REVIEW", "ADMIN_OVERRIDE"
+  targetType  String?
+  targetId    String?
+  metadata    Json?
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  
+  request     KycRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  
+  @@index([requestId, createdAt])
+  @@index([action, createdAt])
+}
+
+model KycWithdrawalLimit {
+  id              String   @id @default(cuid())
+  level           KycLevel @unique
+  dailyLimit      Int      // in cents
+  monthlyLimit    Int      // in cents
+  singleWithdrawLimit Int  // in cents
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([level, isActive])
+}
+
+model KycDocumentConfig {
+  id              String   @id @default(cuid())
+  country         String
+  documentType    KycDocumentType
+  isAccepted     Boolean  @default(true)
+  isRequired     Boolean  @default(false)
+  requiresBack   Boolean  @default(false)  // Document has front/back
+  hasExpiry      Boolean  @default(true)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@unique([country, documentType])
+  @@index([country, isAccepted])
 }

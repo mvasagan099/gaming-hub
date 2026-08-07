@@ -32,6 +32,8 @@ const SignupPage = lazy(() => import("../pages/Auth/SignupPage").then((m) => ({ 
 const ForgotPasswordPage = lazy(() => import("../pages/Auth/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import("../pages/Auth/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
 const TwoFactorPage = lazy(() => import("../pages/Auth/TwoFactorPage").then((m) => ({ default: m.TwoFactorPage })));
+const KycPage = lazy(() => import("../pages/Kyc/KycPage").then((m) => ({ default: m.KycPage })));
+const KycVerifyPage = lazy(() => import("../pages/Kyc/KycVerifyPage").then((m) => ({ default: m.KycVerifyPage })));
 const AdminOverviewPage = lazy(() => import("../pages/admin/AdminOverviewPage").then((m) => ({ default: m.AdminOverviewPage })));
 const AdminUsersPage = lazy(() => import("../pages/admin/AdminUsersPage").then((m) => ({ default: m.AdminUsersPage })));
 const AdminMatchesPage = lazy(() => import("../pages/admin/AdminMatchesPage").then((m) => ({ default: m.AdminMatchesPage })));
@@ -98,6 +100,8 @@ export const router = createBrowserRouter([
           { path: "friends", element: <SuspensePage><FriendsPage /></SuspensePage> },
           { path: "achievements", element: <SuspensePage><AchievementsPage /></SuspensePage> },
           { path: "notifications", element: <SuspensePage><NotificationsPage /></SuspensePage> },
+          { path: "kyc", element: <SuspensePage><KycPage /></SuspensePage> },
+          { path: "kyc/verify", element: <SuspensePage><KycVerifyPage /></SuspensePage> }
         ],
       },
       { path: "leaderboard", element: <SuspensePage><LeaderboardPage /></SuspensePage> },

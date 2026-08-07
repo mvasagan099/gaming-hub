@@ -1,6 +1,6 @@
 import { buildApp } from "./app";
 import { env } from "./env";
-import { prisma } from "@gaming-hub/db";
+import { prisma } from "@gaming-hub/db"; // API Server Entrypoint
 
 const SCHEDULE_INTERVAL_MS = 15 * 60 * 1000;
 
