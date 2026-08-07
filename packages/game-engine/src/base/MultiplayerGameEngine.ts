@@ -209,6 +209,18 @@ export abstract class MultiplayerGameEngine<
     return remaining;
   }
 
+  protected isBaseAction(type: string): boolean {
+    return [
+      "resign",
+      "draw-offer",
+      "draw-accept",
+      "draw-decline",
+      "pause",
+      "resume",
+      "rematch",
+    ].includes(type);
+  }
+
   protected override validateAction(action: A, seat: number): string | null {
     const state = this.state;
     if (state.finished) {
@@ -218,8 +230,9 @@ export abstract class MultiplayerGameEngine<
       return "Game is paused";
     }
 
-    const baseValidation = this.validateBaseAction(action as PlayerAction, seat, state);
-    if (baseValidation) return baseValidation;
+    if (this.isBaseAction(action.type)) {
+      return this.validateBaseAction(action as PlayerAction, seat, state);
+    }
 
     return this.validateGameAction(action, seat, state);
   }
@@ -276,14 +289,20 @@ export abstract class MultiplayerGameEngine<
         const next = this.cloneState(state);
         next.finished = true;
         next.gameOver = true;
-        next.winnerSeats = [seat === 0 ? 1 : 0];
+        const winnerSeats = this.players
+          .map((p) => p.seat)
+          .filter((s) => s !== seat);
+        next.winnerSeats = winnerSeats.length > 0 ? winnerSeats : [seat === 0 ? 1 : 0];
+        if ("winner" in next) {
+          (next as unknown as Record<string, unknown>).winner = next.winnerSeats[0] ?? null;
+        }
         next.endReason = "resign";
         next.turnStartedAtMs = null;
         next.matchStartedAtMs = null;
         return {
           ok: true,
           state: next,
-          events: [{ type: "resign", seat }],
+          events: [{ type: "resign", seat, winner: next.winnerSeats[0] ?? null, winnerSeats: next.winnerSeats }],
           finished: true,
           winnerSeats: next.winnerSeats,
         };

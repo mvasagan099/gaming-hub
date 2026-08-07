@@ -286,14 +286,11 @@ export class AntiCheatManager {
    * Validate turn order.
    */
   private validateTurnOrder(context: ActionValidationContext): ValidationResult {
-    const { room, player, action } = context;
+    const { room, player, action, result } = context;
     
     if (!room.match) {
       return { valid: false, reason: "No active match", confidence: 1.0 };
     }
-    
-    const engine = room.match.engine as { currentSeat: number };
-    const currentSeat = engine.currentSeat;
     
     // Allow non-turn actions (like chat)
     if (action.type === "chat" || action.type === "emoji") {
@@ -304,6 +301,18 @@ export class AntiCheatManager {
     if (action.type === "resign") {
       return { valid: true, confidence: 1.0 };
     }
+    
+    // The engine is the authority on turn order. When it accepted the action
+    // it has already verified the acting seat, and `currentSeat` now reflects
+    // the *next* player (post-transition), so re-deriving the turn here would
+    // falsely reject every legal move. Only cross-check when the engine
+    // rejected the action (defense-in-depth on the rejected state).
+    if (result.ok) {
+      return { valid: true, confidence: 1.0 };
+    }
+    
+    const engine = room.match.engine as { currentSeat: number };
+    const currentSeat = engine.currentSeat;
     
     // Check if it's this player's turn
     if (player.seat !== currentSeat) {

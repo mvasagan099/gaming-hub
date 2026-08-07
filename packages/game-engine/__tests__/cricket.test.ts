@@ -129,4 +129,22 @@ describe("CricketEngine", () => {
     expect(res.ok).toBe(true);
     expect(res.state.finished).toBe(true);
   });
+
+  it("allows resigning during toss phase", () => {
+    const eng = new CricketEngine(players, () => 0.9);
+    expect(eng.state.currentActor).toBe("toss");
+    const res = eng.apply({ type: "resign" }, 1);
+    expect(res.ok).toBe(true);
+    expect(res.state.finished).toBe(true);
+    expect(res.state.winnerSeats).toEqual([0]);
+  });
+
+  it("allows resigning when it is not your turn", () => {
+    const eng = setup();
+    const notMyTurnSeat = 1 - eng.state.currentSeat;
+    const res = eng.apply({ type: "resign" }, notMyTurnSeat);
+    expect(res.ok).toBe(true);
+    expect(res.state.finished).toBe(true);
+    expect(res.state.winnerSeats).toEqual([eng.state.currentSeat]);
+  });
 });

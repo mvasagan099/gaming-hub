@@ -12,8 +12,21 @@ import type {
 export function createIoStub(): Server {
   return {
     to: () => ({ emit: () => undefined }),
+    in: () => ({ socketsLeave: () => undefined }),
     sockets: { sockets: new Map() },
   } as unknown as Server;
+}
+
+/** A minimal client socket stub used to join queues and rooms. */
+export function makeSocket(id: string): Socket {
+  return {
+    id,
+    connected: true,
+    data: { user: { username: `user-${id}`, displayName: `User ${id}`, avatarUrl: null } },
+    join: () => undefined,
+    leave: () => undefined,
+    emit: () => undefined,
+  } as unknown as Socket;
 }
 
 /** Build a framework instance (singleton is reset by the caller). */

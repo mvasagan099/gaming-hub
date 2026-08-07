@@ -368,24 +368,36 @@ export class MatchmakingManager {
       settings: bucket.settings,
     });
     
-    // Add remaining players
-    for (let i = 1; i < group.length; i++) {
-      const entry = group[i]!;
-      await this.framework.roomManager.joinRoom({
+    try {
+      // Add remaining players
+      for (let i = 1; i < group.length; i++) {
+        const entry = group[i]!;
+        await this.framework.roomManager.joinRoom({
+          roomId: room.id,
+          playerId: entry.playerId,
+          socket: entry.socket,
+          asSpectator: false,
+        });
+      }
+      
+      // Matchmaking players skip the manual ready check, so mark everyone ready.
+      for (const player of room.players.values()) {
+        player.isReady = true;
+      }
+      
+      // Auto-start match
+      await this.framework.matchManager.startMatch({
         roomId: room.id,
-        playerId: entry.playerId,
-        socket: entry.socket,
-        asSpectator: false,
+        startedBy: firstEntry.playerId,
       });
+      
+      return room;
+    } catch (error) {
+      // Never leave a half-created matchmaking room behind: close it so the
+      // players' sockets are released and the room doesn't leak in "waiting".
+      this.framework.roomManager.closeRoom(room.id, "matchmaking_failed");
+      throw error;
     }
-    
-    // Auto-start match
-    await this.framework.matchManager.startMatch({
-      roomId: room.id,
-      startedBy: firstEntry.playerId,
-    });
-    
-    return room;
   }
   
   /**
