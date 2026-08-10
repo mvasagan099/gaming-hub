@@ -30,24 +30,24 @@ interface Coin {
 const BOARD_WIDTH = 400;
 const BOARD_HEIGHT = 400;
 const BORDER_SIZE = 25;
-const POCKET_RADIUS = 20;
+const POCKET_RADIUS = 16;
 const POCKETS = [
-  { x: 35, y: 35 },
-  { x: BOARD_WIDTH - 35, y: 35 },
-  { x: 35, y: BOARD_HEIGHT - 35 },
-  { x: BOARD_WIDTH - 35, y: BOARD_HEIGHT - 35 },
+  { x: 32, y: 32 },
+  { x: BOARD_WIDTH - 32, y: 32 },
+  { x: 32, y: BOARD_HEIGHT - 32 },
+  { x: BOARD_WIDTH - 32, y: BOARD_HEIGHT - 32 },
 ];
 
 const STRIKER_START_X = BOARD_WIDTH / 2;
-const STRIKER_START_Y = BOARD_HEIGHT - 70;
+const STRIKER_START_Y = BOARD_HEIGHT - 62;
 
 function createInitialCoins(): Coin[] {
   const coins: Coin[] = [];
   const cx = BOARD_WIDTH / 2;
   const cy = BOARD_HEIGHT / 2;
 
-  // Striker
-  coins.push({ id: 'striker', type: 'striker', x: STRIKER_START_X, y: STRIKER_START_Y, vx: 0, vy: 0, radius: 14, mass: 3, color: '#0284c7', active: true });
+  // Striker (smaller radius 11 to fit baseline cleanly)
+  coins.push({ id: 'striker', type: 'striker', x: STRIKER_START_X, y: STRIKER_START_Y, vx: 0, vy: 0, radius: 11, mass: 2.5, color: '#0284c7', active: true });
 
   // Queen
   coins.push({ id: 'queen', type: 'queen', x: cx, y: cy, vx: 0, vy: 0, radius: 10, mass: 1, color: '#dc2626', active: true });
@@ -446,7 +446,7 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
         const striker = coins.find(c => c.type === 'striker');
         if (striker) {
           striker.x = BOARD_WIDTH / 2 + (nextPlayer === 'player' ? strikerPos : 0);
-          striker.y = nextPlayer === 'player' ? STRIKER_START_Y : 70;
+          striker.y = nextPlayer === 'player' ? STRIKER_START_Y : 62;
           striker.vx = 0;
           striker.vy = 0;
         }
@@ -461,275 +461,331 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
       const height = BOARD_HEIGHT;
       const cx = width / 2;
       const cy = height / 2;
-      const darkColor = '#171717';
-      const redColor = '#d32f2f';
-      const yellowColor = '#ffe082';
-      const greenColor = '#2e7d32';
-      const innerGreenLineColor = '#1e5e2e';
-      const bgColor = '#fcc575';
+      const dark = '#1a1008';
+      const redColor = '#cc1a1a';
+      const bgColor = '#f5dba0'; // cream/beige playing surface
 
-      // 1. Outer Warm Brown Wooden Frame
-      ctx.fillStyle = '#8c5638';
-      ctx.fillRect(0, 0, width, height);
+      // ── 1. OUTER DARK ROUNDED FRAME ─────────────────────────────
+      const frameRadius = 24; // rounded corner radius of frame
+      const frameColor = '#2e1806'; // warm dark brown (matches reference)
 
-      // Inner wood frame bevel
-      ctx.fillStyle = '#7a4a2f';
-      ctx.fillRect(4, 4, width - 8, height - 8);
-
-      // 4 Black Corner Caps / Bumpers on the outer frame corners
-      ctx.fillStyle = '#171717';
-      const cornerCapR = 36;
-      // Top-Left corner cap
+      // Draw the dark rounded-rectangle outer frame
+      ctx.fillStyle = frameColor;
       ctx.beginPath();
-      ctx.arc(0, 0, cornerCapR, 0, Math.PI / 2);
-      ctx.lineTo(0, 0);
-      ctx.fill();
-      // Top-Right corner cap
-      ctx.beginPath();
-      ctx.arc(width, 0, cornerCapR, Math.PI / 2, Math.PI);
-      ctx.lineTo(width, 0);
-      ctx.fill();
-      // Bottom-Right corner cap
-      ctx.beginPath();
-      ctx.arc(width, height, cornerCapR, Math.PI, 3 * Math.PI / 2);
-      ctx.lineTo(width, height);
-      ctx.fill();
-      // Bottom-Left corner cap
-      ctx.beginPath();
-      ctx.arc(0, height, cornerCapR, 3 * Math.PI / 2, Math.PI * 2);
-      ctx.lineTo(0, height);
+      ctx.moveTo(frameRadius, 0);
+      ctx.lineTo(width - frameRadius, 0);
+      ctx.quadraticCurveTo(width, 0, width, frameRadius);
+      ctx.lineTo(width, height - frameRadius);
+      ctx.quadraticCurveTo(width, height, width - frameRadius, height);
+      ctx.lineTo(frameRadius, height);
+      ctx.quadraticCurveTo(0, height, 0, height - frameRadius);
+      ctx.lineTo(0, frameRadius);
+      ctx.quadraticCurveTo(0, 0, frameRadius, 0);
+      ctx.closePath();
       ctx.fill();
 
-      // 2. Playing Surface (Golden Tan Wood Background with Subtle Horizontal Wood Grain)
-      const surfaceMargin = BORDER_SIZE;
+      // ── 2. PLAYING SURFACE (inside the dark frame) ─────────────
+      const sm = 18; // thin frame edge
+
+      // Playing surface — straight rectangle (square corners, pockets overlap)
       ctx.fillStyle = bgColor;
-      ctx.fillRect(surfaceMargin, surfaceMargin, width - surfaceMargin * 2, height - surfaceMargin * 2);
+      ctx.fillRect(sm, sm, width - sm * 2, height - sm * 2);
 
-      // Horizontal Wood Grain lines
-      ctx.strokeStyle = 'rgba(160, 90, 30, 0.08)';
-      ctx.lineWidth = 1.8;
-      for (let y = surfaceMargin + 8; y < height - surfaceMargin; y += 10) {
+      // Horizontal wood grain
+      ctx.save();
+      ctx.rect(sm, sm, width - sm * 2, height - sm * 2);
+      ctx.clip();
+      ctx.strokeStyle = 'rgba(180, 120, 40, 0.07)';
+      ctx.lineWidth = 1.5;
+      for (let gy = sm + 6; gy < height - sm; gy += 8) {
         ctx.beginPath();
-        ctx.moveTo(surfaceMargin, y);
-        ctx.lineTo(width - surfaceMargin, y);
+        ctx.moveTo(sm, gy);
+        ctx.lineTo(width - sm, gy);
         ctx.stroke();
       }
+      ctx.restore();
 
-      // Inner border outline around playing surface
-      ctx.strokeStyle = darkColor;
-      ctx.lineWidth = 2.5;
-      ctx.strokeRect(surfaceMargin, surfaceMargin, width - surfaceMargin * 2, height - surfaceMargin * 2);
+      // Inner border (thin black line around playing surface)
+      ctx.strokeStyle = dark;
+      ctx.lineWidth = 1.8;
+      ctx.strokeRect(sm + 1, sm + 1, width - sm * 2 - 2, height - sm * 2 - 2);
 
-      // 3. Corner Pockets (4 pockets)
-      POCKETS.forEach((p) => {
-        // Pocket hole
-        ctx.fillStyle = '#361d11';
-        ctx.strokeStyle = darkColor;
-        ctx.lineWidth = 2.5;
+      // ── 3. CORNER POCKET HOLES ──────────────────────────────────
+      // Pockets sit INSIDE the playing surface corners (inset from edge)
+      const pocketR = 13;    // white ring radius (smaller)
+      const pocketHole = 16; // dark background hole radius
+      const pc = sm + 14;    // pocket center: 14px inside the playing surface from frame edge
+      const pocketPos = [
+        { x: pc, y: pc },
+        { x: width - pc, y: pc },
+        { x: pc, y: height - pc },
+        { x: width - pc, y: height - pc },
+      ];
+      pocketPos.forEach((p) => {
+        // Dark filled hole
+        ctx.fillStyle = '#0d0804';
         ctx.beginPath();
-        ctx.arc(p.x, p.y, POCKET_RADIUS, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, pocketHole, 0, Math.PI * 2);
         ctx.fill();
+
+        // White ring around the hole
+        ctx.strokeStyle = '#e0d8c8';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, pocketR, 0, Math.PI * 2);
         ctx.stroke();
       });
 
-      // 4. Baselines (Outer Thick Black Line + Inner Thin Green Line)
-      const bOuter = 72; // outer black line offset from edge
-      const bInner = 79; // inner green line offset from edge
-      const bStart = 88; // baseline line start coord
-      const bEnd = 312;  // baseline line end coord
-      const redR = 9;    // red circle radius
-      const greenDotR = 4.5; // corner green dot radius
+      // ── 5. BASELINE CAPSULES (4 sides) ──────────────────────────
+      // Based on image: capsules are narrow rectangles with thick outer line,
+      // thin inner line, semicircular end caps, and red dots at each end
 
-      // Outer Thick Black Baseline Box
-      ctx.strokeStyle = darkColor;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      // Top
-      ctx.moveTo(bStart, bOuter); ctx.lineTo(bEnd, bOuter);
-      // Bottom
-      ctx.moveTo(bStart, height - bOuter); ctx.lineTo(bEnd, height - bOuter);
-      // Left
-      ctx.moveTo(bOuter, bStart); ctx.lineTo(bOuter, bEnd);
-      // Right
-      ctx.moveTo(width - bOuter, bStart); ctx.lineTo(width - bOuter, bEnd);
-      ctx.stroke();
+      const capsuleOffset = 62; // distance from surface edge to capsule center
+      const capsuleHalf = 8;    // half-height of capsule (outer to inner gap)
+      const capStart = 86;      // capsule start along the side
+      const capEnd = 314;       // capsule end along the side
+      const capRedR = 9;        // red circle radius at capsule ends
 
-      // Inner Thin Green Baseline Box
-      ctx.strokeStyle = innerGreenLineColor;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      // Top
-      ctx.moveTo(bStart, bInner); ctx.lineTo(bEnd, bInner);
-      // Bottom
-      ctx.moveTo(bStart, height - bInner); ctx.lineTo(bEnd, height - bInner);
-      // Left
-      ctx.moveTo(bInner, bStart); ctx.lineTo(bInner, bEnd);
-      // Right
-      ctx.moveTo(width - bInner, bStart); ctx.lineTo(width - bInner, bEnd);
-      ctx.stroke();
+      const drawCapsule = (ax: number, ay: number, bx: number, by: number, isVert: boolean) => {
+        ctx.strokeStyle = dark;
+        ctx.fillStyle = bgColor;
 
-      // Red Circles at baseline ends
-      const drawBaselineRedCircle = (x: number, y: number) => {
-        ctx.fillStyle = redColor;
-        ctx.strokeStyle = darkColor;
+        // Fill the capsule background
+        ctx.beginPath();
+        if (!isVert) {
+          ctx.rect(ax, ay - capsuleHalf, bx - ax, capsuleHalf * 2);
+        } else {
+          ctx.rect(ax - capsuleHalf, ay, capsuleHalf * 2, by - ay);
+        }
+        ctx.fill();
+
+        // Outer thick line (closer to board edge)
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        if (!isVert) {
+          ctx.moveTo(ax, ay - capsuleHalf);
+          ctx.lineTo(bx, ay - capsuleHalf);
+        } else {
+          ctx.moveTo(ax - capsuleHalf, ay);
+          ctx.lineTo(ax - capsuleHalf, by);
+        }
+        ctx.stroke();
+
+        // Inner thin line (closer to center)
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        if (!isVert) {
+          ctx.moveTo(ax, ay + capsuleHalf);
+          ctx.lineTo(bx, ay + capsuleHalf);
+        } else {
+          ctx.moveTo(ax + capsuleHalf, ay);
+          ctx.lineTo(ax + capsuleHalf, by);
+        }
+        ctx.stroke();
+
+        // Rounded end caps
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(x, y, redR, 0, Math.PI * 2);
-        ctx.fill();
+        if (!isVert) {
+          // left semicircle
+          ctx.arc(ax, ay, capsuleHalf, -Math.PI / 2, Math.PI / 2, true);
+          // right semicircle
+          ctx.arc(bx, ay, capsuleHalf, Math.PI / 2, -Math.PI / 2, true);
+        } else {
+          // top semicircle
+          ctx.arc(ax, ay, capsuleHalf, -Math.PI, 0, true);
+          // bottom semicircle
+          ctx.arc(ax, by, capsuleHalf, 0, Math.PI, true);
+        }
         ctx.stroke();
+
+        // Red circles at each end (on top)
+        [[ax, ay], [bx, by]].forEach(([rcx, rcy]) => {
+          ctx.fillStyle = redColor;
+          ctx.strokeStyle = dark;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(rcx, rcy, capRedR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        });
       };
 
-      // Top baseline red circles
-      drawBaselineRedCircle(bStart, bOuter);
-      drawBaselineRedCircle(bEnd, bOuter);
-      // Bottom baseline red circles
-      drawBaselineRedCircle(bStart, height - bOuter);
-      drawBaselineRedCircle(bEnd, height - bOuter);
-      // Left baseline red circles
-      drawBaselineRedCircle(bOuter, bStart);
-      drawBaselineRedCircle(bOuter, bEnd);
-      // Right baseline red circles
-      drawBaselineRedCircle(width - bOuter, bStart);
-      drawBaselineRedCircle(width - bOuter, bEnd);
+      // Top capsule
+      drawCapsule(capStart, sm + capsuleOffset - sm, capEnd, sm + capsuleOffset - sm, false);
+      // Bottom capsule
+      drawCapsule(capStart, height - (sm + capsuleOffset - sm), capEnd, height - (sm + capsuleOffset - sm), false);
+      // Left capsule
+      drawCapsule(sm + capsuleOffset - sm, capStart, sm + capsuleOffset - sm, capEnd, true);
+      // Right capsule
+      drawCapsule(width - (sm + capsuleOffset - sm), capStart, width - (sm + capsuleOffset - sm), capEnd, true);
 
-      // Green Dots at the 4 baseline corner junctions
-      const drawCornerGreenDot = (x: number, y: number) => {
-        ctx.fillStyle = greenColor;
-        ctx.strokeStyle = darkColor;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(x, y, greenDotR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      };
+      // ── 6. CORNER DIAGONAL ARROW LINES ──────────────────────────
+      // Lines go from near corner pocket diagonally inward
+      // with a small open circle on the line, and a curved arrow at inner end
 
-      drawCornerGreenDot(bOuter, bOuter);
-      drawCornerGreenDot(width - bOuter, bOuter);
-      drawCornerGreenDot(bOuter, height - bOuter);
-      drawCornerGreenDot(width - bOuter, height - bOuter);
-
-      // 5. Corner Arrow Lines & Semicircular Arcs
-      const drawCornerArrow = (startX: number, startY: number, angleRad: number, length: number) => {
+      const drawCornerDiag = (
+        fromX: number, fromY: number, // near-pocket start (inside playing surface)
+        toX: number, toY: number,      // inner end (arc center)
+        dirX: number, dirY: number     // unit vector pointing outward
+      ) => {
         ctx.save();
-        ctx.translate(startX, startY);
-        ctx.rotate(angleRad);
+        ctx.strokeStyle = dark;
+        ctx.lineWidth = 1.4;
 
-        ctx.strokeStyle = darkColor;
-        ctx.lineWidth = 1.5;
+        // Draw the diagonal line
+        ctx.beginPath();
+        ctx.moveTo(fromX, fromY);
+        ctx.lineTo(toX, toY);
+        ctx.stroke();
 
-        // Line extending towards pocket
+        // Small open circle on line, 1/3 from outer end
+        const circX = fromX + (toX - fromX) * 0.28;
+        const circY = fromY + (toY - fromY) * 0.28;
+        ctx.fillStyle = bgColor;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(circX, circY, 6.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Arrowhead at outer end pointing toward pocket
+        const arrowAngle = Math.atan2(fromY - toY, fromX - toX);
+        ctx.save();
+        ctx.translate(fromX, fromY);
+        ctx.rotate(arrowAngle);
+        ctx.fillStyle = dark;
+        ctx.beginPath();
+        ctx.moveTo(5, 0);
+        ctx.lineTo(-4, -3.5);
+        ctx.lineTo(-4, 3.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // Curved arc (C-shape opening toward center) at inner end
+        ctx.save();
+        ctx.translate(toX, toY);
+        // Rotate so arc opens toward board center
+        const rotAngle = Math.atan2(toY - cy, toX - cx);
+        ctx.rotate(rotAngle);
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        // Arc opens toward center (right side in local space)
+        ctx.arc(0, 0, 14, Math.PI * 0.3, Math.PI * 1.7, false);
+        ctx.stroke();
+
+        // Small arrowhead at end of arc (bottom tip)
+        ctx.fillStyle = dark;
+        const arcEndX = Math.cos(Math.PI * 1.7) * 14;
+        const arcEndY = Math.sin(Math.PI * 1.7) * 14;
+        ctx.save();
+        ctx.translate(arcEndX, arcEndY);
+        ctx.rotate(Math.PI * 1.7 - Math.PI / 2);
         ctx.beginPath();
         ctx.moveTo(0, 0);
-        ctx.lineTo(length, 0);
-        ctx.stroke();
+        ctx.lineTo(-4, -3);
+        ctx.lineTo(4, -3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
 
-        // Arrowhead pointing into pocket
-        ctx.beginPath();
-        ctx.moveTo(length - 7, -4);
-        ctx.lineTo(length, 0);
-        ctx.lineTo(length - 7, 4);
-        ctx.stroke();
-
-        // Semi-circular arc loop at inner end facing center
-        ctx.beginPath();
-        ctx.arc(0, 0, 16, Math.PI * 0.25, Math.PI * 1.75, true);
-        ctx.stroke();
-
+        ctx.restore();
         ctx.restore();
       };
 
-      // 4 Corners:
-      drawCornerArrow(105, 105, Math.atan2(36 - 105, 36 - 105), 80);
-      drawCornerArrow(295, 105, Math.atan2(36 - 105, 364 - 295), 80);
-      drawCornerArrow(105, 295, Math.atan2(364 - 295, 36 - 105), 80);
-      drawCornerArrow(295, 295, Math.atan2(364 - 295, 364 - 295), 80);
+      // Top-left: from (54,54) to (120,120)
+      drawCornerDiag(56, 56, 118, 118, -1, -1);
+      // Top-right: from (346,54) to (282,120)
+      drawCornerDiag(344, 56, 282, 118, 1, -1);
+      // Bottom-left: from (56,346) to (118,282)
+      drawCornerDiag(56, 344, 118, 282, -1, 1);
+      // Bottom-right: from (344,344) to (282,282)
+      drawCornerDiag(344, 344, 282, 282, 1, 1);
 
-      // 6. Center Circle & 8-Pointed Red/Yellow Compass Star
-      ctx.strokeStyle = darkColor;
+      // ── 7. CENTER CIRCLE DESIGN ──────────────────────────────────
+      // Reference: large red outer ring, then cream/beige ring, then black inner ring + queen dot
+
+      // Outermost thin black circle border
+      ctx.strokeStyle = dark;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(cx, cy, 45, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 56, 0, Math.PI * 2);
       ctx.stroke();
 
-      const drawRedYellowStarPoint = (angleRad: number, outerR: number, innerR: number) => {
-        const tipX = cx + Math.cos(angleRad) * outerR;
-        const tipY = cy + Math.sin(angleRad) * outerR;
-
-        const leftAngle = angleRad - Math.PI / 8;
-        const rightAngle = angleRad + Math.PI / 8;
-
-        const leftX = cx + Math.cos(leftAngle) * innerR;
-        const leftY = cy + Math.sin(leftAngle) * innerR;
-
-        const rightX = cx + Math.cos(rightAngle) * innerR;
-        const rightY = cy + Math.sin(rightAngle) * innerR;
-
-        // Left half: Red
-        ctx.fillStyle = redColor;
-        ctx.strokeStyle = darkColor;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(leftX, leftY);
-        ctx.lineTo(tipX, tipY);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        // Right half: Yellow / Cream
-        ctx.fillStyle = yellowColor;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(tipX, tipY);
-        ctx.lineTo(rightX, rightY);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-      };
-
-      // 4 Major cardinal points (44px)
-      for (let i = 0; i < 4; i++) {
-        drawRedYellowStarPoint((i * Math.PI) / 2, 43, 12);
-      }
-      // 4 Minor diagonal points (32px)
-      for (let i = 0; i < 4; i++) {
-        drawRedYellowStarPoint((i * Math.PI) / 2 + Math.PI / 4, 32, 10);
-      }
-
-      // Center Queen Spot
-      ctx.strokeStyle = darkColor;
-      ctx.lineWidth = 1.5;
+      // Red outer fill ring
+      ctx.fillStyle = '#c41a1a';
       ctx.beginPath();
-      ctx.arc(cx, cy, 10, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.fillStyle = redColor;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 55, 0, Math.PI * 2);
       ctx.fill();
+
+      // Cream middle ring
+      ctx.fillStyle = bgColor;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 44, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Thin black border between cream and next ring
+      ctx.strokeStyle = dark;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 44, 0, Math.PI * 2);
       ctx.stroke();
 
-      ctx.fillStyle = darkColor;
+      // Inner dark ring
+      ctx.fillStyle = '#1a0808';
       ctx.beginPath();
-      ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 34, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Inner cream/beige fill
+      ctx.fillStyle = bgColor;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 28, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Inner black ring border
+      ctx.strokeStyle = dark;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 28, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Center red queen dot
+      ctx.fillStyle = '#cc1a1a';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = dark;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Center black dot
+      ctx.fillStyle = dark;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 3, 0, Math.PI * 2);
       ctx.fill();
 
       // Render Coins
       for (const c of coins) {
         if (!c.active) continue;
         
-        // Force striker position to match slider if not active
-        if (c.type === 'striker' && !isTurnActive && !gameOver && currentPlayer === 'player') {
-          c.x = BOARD_WIDTH / 2 + strikerPos;
+        // Force striker position to match baseline line if not active
+        if (c.type === 'striker' && !isTurnActive && !gameOver) {
+          if (currentPlayer === 'player') {
+            c.x = BOARD_WIDTH / 2 + strikerPos;
+            c.y = STRIKER_START_Y;
+          } else {
+            c.y = 62;
+          }
         }
 
-        // Draw shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        // Draw drop shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
         ctx.beginPath();
         ctx.arc(c.x + 2, c.y + 3, c.radius, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw coin with gradient
         let isOverlapping = false;
         if (c.type === 'striker' && strikerPhase === 'positioning' && currentPlayer === 'player' && !isTurnActive && !gameOver) {
            for (const other of coins) {
@@ -740,47 +796,87 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
            }
         }
 
-        const coinGrad = ctx.createRadialGradient(c.x - c.radius/3, c.y - c.radius/3, c.radius/5, c.x, c.y, c.radius);
         if (c.type === 'striker') {
+          // Striker: large disc with gradient
+          const grad = ctx.createRadialGradient(c.x - c.radius * 0.3, c.y - c.radius * 0.3, c.radius * 0.1, c.x, c.y, c.radius);
           if (isOverlapping) {
-            coinGrad.addColorStop(0, '#fca5a5');
-            coinGrad.addColorStop(1, '#ef4444');
-            ctx.strokeStyle = '#fee2e2';
+            grad.addColorStop(0, '#fca5a5'); grad.addColorStop(1, '#ef4444');
           } else if (strikerPhase === 'aiming' && currentPlayer === 'player' && !isTurnActive && !gameOver) {
-            coinGrad.addColorStop(0, '#fef08a');
-            coinGrad.addColorStop(1, '#eab308');
-            ctx.strokeStyle = '#fef9c3';
+            grad.addColorStop(0, '#fef08a'); grad.addColorStop(1, '#eab308');
           } else {
-            coinGrad.addColorStop(0, '#38bdf8');
-            coinGrad.addColorStop(1, '#0284c7');
-            ctx.strokeStyle = '#e0f2fe';
+            grad.addColorStop(0, '#7dd3fc'); grad.addColorStop(1, '#0284c7');
+          }
+          ctx.fillStyle = grad;
+          ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          if (isOverlapping) {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 6px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('MOVE', c.x, c.y);
           }
         } else if (c.type === 'queen') {
-          coinGrad.addColorStop(0, '#f87171');
-          coinGrad.addColorStop(1, '#dc2626');
-        } else if (c.type === 'white') {
-          coinGrad.addColorStop(0, '#ffffff');
-          coinGrad.addColorStop(1, '#cbd5e1');
+          // Queen: red disc with inner ring
+          ctx.fillStyle = '#cc1a1a';
+          ctx.strokeStyle = '#8b0000';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          // Inner ring
+          ctx.strokeStyle = 'rgba(255,180,180,0.7)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.radius * 0.55, 0, Math.PI * 2);
+          ctx.stroke();
         } else {
-          coinGrad.addColorStop(0, '#52525b');
-          coinGrad.addColorStop(1, '#09090b');
-        }
+          // White / Black coins with carrom-style inner ring detail
+          const isWhite = c.type === 'white';
+          const outerColor = isWhite ? '#e8c990' : '#2a1205'; // tan/cream for white, dark brown for black
+          const innerColor = isWhite ? '#f5dba0' : '#1a0808'; // lighter cream / darker
+          const ringColor = isWhite ? '#1a0808' : '#8a6a40';  // dark ring on white, tan ring on black
+          const highlightColor = isWhite ? 'rgba(255,255,255,0.5)' : 'rgba(180,120,50,0.25)';
 
-        ctx.fillStyle = coinGrad;
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.lineWidth = c.type === 'striker' ? 2 : 1;
-        if (c.type !== 'striker') ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-        ctx.stroke();
+          // Outer disc
+          ctx.fillStyle = outerColor;
+          ctx.strokeStyle = '#1a1008';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
 
-        if (isOverlapping) {
-           ctx.fillStyle = '#ffffff';
-           ctx.font = 'bold 7px sans-serif';
-           ctx.textAlign = 'center';
-           ctx.textBaseline = 'middle';
-           ctx.fillText('MOVE', c.x, c.y - 3);
-           ctx.fillText('AWAY', c.x, c.y + 5);
+          // Inner ring stripe
+          ctx.strokeStyle = ringColor;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.radius * 0.65, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Inner fill
+          ctx.fillStyle = innerColor;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.radius * 0.55, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Center dot
+          ctx.fillStyle = ringColor;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.radius * 0.18, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Highlight shimmer
+          ctx.fillStyle = highlightColor;
+          ctx.beginPath();
+          ctx.arc(c.x - c.radius * 0.3, c.y - c.radius * 0.3, c.radius * 0.25, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
 
@@ -1002,7 +1098,7 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
           </div>
         )}
 
-        <div className="relative w-full max-w-[520px]">
+        <div className="relative" style={{ aspectRatio: '1', width: '100%', maxWidth: '520px' }}>
           <canvas
             ref={canvasRef}
             width={400}
@@ -1011,7 +1107,7 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
-            className={`rounded-[2rem] border-8 border-[#3a1301] shadow-[0_20px_40px_rgba(0,0,0,0.6)] bg-amber-950 w-full object-contain touch-none ${dragState === 'idle' && currentPlayer === 'player' ? 'cursor-grab' : currentPlayer === 'ai' ? 'cursor-not-allowed' : 'cursor-grabbing'}`}
+            className={`w-full h-full object-contain touch-none shadow-[0_20px_60px_rgba(0,0,0,0.7)] rounded-[28px] ${dragState === 'idle' && currentPlayer === 'player' ? 'cursor-grab' : currentPlayer === 'ai' ? 'cursor-not-allowed' : 'cursor-grabbing'}`}
           />
         </div>
 
