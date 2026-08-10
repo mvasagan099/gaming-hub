@@ -16,7 +16,8 @@ export function SnakeLadderPage({ mode = 'ai', stake = 10, onBack = () => {} }: 
 
   const isMultiplayer = mode === "multiplayer";
   const participants = room?.players ?? [];
-  const players = isMultiplayer && participants.length > 0 ? participants.length : 2;
+  const maxPlayers = room?.maxPlayers ?? 2;
+  const players = isMultiplayer && maxPlayers > 0 ? maxPlayers : 2;
   const names = isMultiplayer
     ? [...participants]
         .sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0))

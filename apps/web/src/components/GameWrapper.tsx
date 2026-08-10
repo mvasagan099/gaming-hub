@@ -59,10 +59,10 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
 
   if (isFullscreen) {
     return (
-      <div className="fixed inset-0 z-50 bg-[#060913] flex items-center justify-center overflow-hidden">
+      <div className="fixed inset-0 z-50 bg-[#060913] flex flex-col overflow-hidden">
         {/* Compact HUD bar — top */}
         {mode === 'multiplayer' && room && (
-          <div className="absolute top-0 left-0 right-0 z-[65] flex items-center justify-between px-4 py-2 bg-slate-900/80 backdrop-blur-md border-b border-slate-800/60">
+          <div className="z-[65] flex items-center justify-between px-4 py-2 bg-slate-900/80 backdrop-blur-md border-b border-slate-800/60 flex-shrink-0">
             {/* Left: back + game title */}
             <div className="flex items-center gap-3">
               <button
@@ -159,7 +159,7 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
         )}
 
         {/* Game content */}
-        <div className={`w-full h-full flex items-center justify-center relative ${mode === 'multiplayer' && room ? 'pt-11' : ''} p-2 sm:p-4`}>
+        <div className="w-full flex-1 min-h-0 flex items-start justify-center relative p-2 sm:p-4 overflow-hidden">
           {children}
         </div>
       </div>

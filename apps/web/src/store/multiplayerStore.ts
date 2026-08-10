@@ -218,6 +218,17 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         if (gameState?.history) {
           console.log("[MultiplayerStore] Chess move count:", gameState.history.length, "last move:", gameState.lastMove);
         }
+        if (gameState?.coins) {
+          console.log("[MultiplayerStore] Carrom state:", {
+            coins: gameState.coins.length,
+            activeCoins: gameState.coins.filter((c: any) => !c.pocketed).length,
+            currentSeat: gameState.currentSeat,
+            strikerPlacementPhase: gameState.strikerPlacementPhase,
+            strikerX: gameState.striker?.x,
+            strikerY: gameState.striker?.y,
+            events: payload.events.map((e: any) => e.type)
+          });
+        }
         
         // Always increment renderKey and ensure proper state update
         set({

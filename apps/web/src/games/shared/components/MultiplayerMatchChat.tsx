@@ -126,12 +126,15 @@ export function MultiplayerMatchChat() {
         ))}
       </div>
 
-      <div className="flex items-center gap-1 pt-2">
+      <div 
+        className="flex items-center gap-1.5 pt-1.5 pb-1 overflow-x-auto flex-shrink-0 scroll-smooth"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
         {EMOJI_SET.map((emoji) => (
           <button
             key={emoji}
             onClick={() => void sendEmoji(emoji)}
-            className="w-7 h-7 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-sm transition-colors"
+            className="w-7 h-7 flex-shrink-0 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-sm transition-colors"
             title={`Send ${emoji}`}
           >
             {emoji}

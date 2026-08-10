@@ -204,6 +204,10 @@ async function main(): Promise<void> {
           asSpectator: payload.asSpectator,
         });
         
+        logger.info(`[CARROM JOIN] User ${user.userId} joined room ${room.id}`);
+        const roomSockets = io.sockets.adapter.rooms.get(`room:${room.id}`);
+        logger.info(`[CARROM JOIN] Room room:${room.id} now has ${roomSockets?.size ?? 0} sockets`);
+        
         ack?.({ ok: true, data: room as unknown as import("@gaming-hub/shared").RoomFull });
       }),
     );
@@ -246,7 +250,11 @@ async function main(): Promise<void> {
     socket.on("game:action", (payload, ack) =>
       void guard(ack, async () => {
         await assertFeatureEnabled("games.enabled", "Games");
-        logger.info(`[SocketServer] game:action received from user ${user.userId} in room ${payload.roomId}`);
+        logger.info(`[CARROM ACTION] game:action received from user ${user.userId} (socket: ${socket.id}) in room ${payload.roomId}`);
+        logger.info(`[CARROM ACTION] Action type: ${payload.action?.type}`);
+        
+        const roomSockets = io.sockets.adapter.rooms.get(`room:${payload.roomId}`);
+        logger.info(`[CARROM ACTION] Room room:${payload.roomId} has ${roomSockets?.size ?? 0} sockets before action`);
         
         const result = await framework.matchManager.applyAction({
           roomId: payload.roomId,
@@ -254,7 +262,7 @@ async function main(): Promise<void> {
           action: payload.action,
         });
         
-        logger.info(`[SocketServer] game:action processed for user ${user.userId}, result: ${result.ok}`);
+        logger.info(`[CARROM ACTION] game:action processed for user ${user.userId}, result: ${result.ok}`);
         
         ack?.({ 
           ok: true, 

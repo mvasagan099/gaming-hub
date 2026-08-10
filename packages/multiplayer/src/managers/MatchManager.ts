@@ -74,7 +74,7 @@ export class MatchManager {
     }, this.PHYSICS_TICK_MS);
     
     this.physicsIntervals.set(matchId, intervalId);
-    this.framework.log(`Physics loop started for match ${matchId}`);
+    this.framework.log(`Physics loop started for match ${matchId} (${gameId})`);
   }
   
   stopPhysicsLoop(matchId: string): void {

@@ -302,30 +302,25 @@ export class MatchmakingManager {
     const { getGameDefinition } = await import("@gaming-hub/shared");
     const gameDef = getGameDefinition(bucket.gameId);
     
-    const requiredPlayers = gameDef.minPlayers;
+    const requiredPlayers = (bucket.settings.playerCount as number | undefined) ?? gameDef.minPlayers;
     
     if (bucket.entries.length < requiredPlayers) {
       return false;
     }
     
-    // Sort by skill rating for ranked matches
     if (bucket.key.includes(":ranked:")) {
       bucket.entries.sort((a, b) => a.skillRating - b.skillRating);
     }
     
-    // Take required players
     const group = bucket.entries.splice(0, requiredPlayers);
     
-    // Remove from queue map
     for (const entry of group) {
       this.playerQueueMap.delete(entry.playerId);
     }
     
     try {
-      // Create room
       const room = await this.createMatchmakingRoom(group, bucket);
       
-      // Notify all players
       for (const entry of group) {
         entry.socket.emit("matchmaking:found", {
           roomId: room.id,
@@ -339,7 +334,6 @@ export class MatchmakingManager {
     } catch (error) {
       this.framework.error("Failed to create matchmaking room", error);
       
-      // Return players to queue
       for (const entry of group) {
         bucket.entries.push(entry);
         this.playerQueueMap.set(entry.playerId, bucket.key);
@@ -357,14 +351,15 @@ export class MatchmakingManager {
     bucket: MatchmakingBucket
   ): Promise<RoomRuntime> {
     const firstEntry = group[0]!;
+    const maxPlayers = (bucket.settings.playerCount as number | undefined) ?? group.length;
     
-    // Create room
     const room = await this.framework.roomManager.createRoom({
       gameId: bucket.gameId,
       hostId: firstEntry.playerId,
       hostSocket: firstEntry.socket,
       isPrivate: true,
       stake: bucket.stake,
+      maxPlayers,
       settings: bucket.settings,
     });
     
@@ -450,7 +445,9 @@ export class MatchmakingManager {
     
     const rated = settings.rated !== false ? "rated" : "casual";
     
-    return `${gameId}:${stake}:${timeControl}:${rated}:${mode}`;
+    const playerCount = settings.playerCount ? `:p${settings.playerCount}` : "";
+    
+    return `${gameId}:${stake}:${timeControl}:${rated}:${mode}${playerCount}`;
   }
   
   /**

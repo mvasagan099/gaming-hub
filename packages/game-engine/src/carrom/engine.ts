@@ -131,7 +131,8 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
   ): EngineActionResult<CarromState> {
     const next = this.cloneState(state);
     next.striker.x = action.x;
-    next.striker.y = BASE_LINE_Y;
+    // Player 0 places at bottom (y=540), Player 1 places at top (y=60)
+    next.striker.y = seat === 0 ? BASE_LINE_Y : 60;
     next.striker.placed = true;
     next.striker.placedBy = seat;
     next.strikerPlacementPhase = false;
@@ -149,7 +150,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       type: "striker-placed",
       seat,
       x: action.x,
-      y: BASE_LINE_Y,
+      y: next.striker.y,
     });
 
     return {
@@ -187,6 +188,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     }
 
     let foul = false;
+    let earnedExtraTurn = false;
     let scoreThisTurn = 0;
     let queenPocketedThisTurn = false;
     let queenCoveredThisTurn = false;
@@ -196,44 +198,43 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       player.fouls++;
       player.consecutiveFouls++;
       events.push({ type: "foul", seat, reason: "striker-pocketed" });
-    } else if (pocketedCoins.length === 0) {
-      foul = true;
-      player.fouls++;
-      player.consecutiveFouls++;
-      events.push({ type: "foul", seat, reason: "no-coin-pocketed" });
     } else {
       player.consecutiveFouls = 0;
-      const playerColor: CoinType = seat === 0 ? "white" : "black";
-      const result = calculateScore(
-        pocketedCoins,
-        playerColor,
-        player.queenPocketed,
-        player.queenCovered,
-      );
-      scoreThisTurn = result.score;
-      player.score += scoreThisTurn;
-      queenPocketedThisTurn = result.queenPocketed && !player.queenPocketed;
-      queenCoveredThisTurn = result.queenCovered && !player.queenCovered;
-      player.queenPocketed = result.queenPocketed;
-      player.queenCovered = result.queenCovered;
+      
+      if (pocketedCoins.length > 0) {
+        const playerColor: CoinType = seat === 0 ? "white" : "black";
+        const result = calculateScore(
+          pocketedCoins,
+          playerColor,
+          player.queenPocketed,
+          player.queenCovered,
+        );
+        scoreThisTurn = result.score;
+        earnedExtraTurn = result.earnedExtraTurn;
+        player.score += scoreThisTurn;
+        queenPocketedThisTurn = result.queenPocketed && !player.queenPocketed;
+        queenCoveredThisTurn = result.queenCovered && !player.queenCovered;
+        player.queenPocketed = result.queenPocketed;
+        player.queenCovered = result.queenCovered;
 
-      for (const coin of pocketedCoins) {
-        coin.pocketedBy = seat;
-        coin.pocketedAtTurn = next.turnNumber;
-        events.push({
-          type: "coin-scored",
-          seat,
-          coinId: coin.id,
-          coinType: coin.type,
-          points: coin.type === "queen" ? 3 : 1,
-        });
-      }
+        for (const coin of pocketedCoins) {
+          coin.pocketedBy = seat;
+          coin.pocketedAtTurn = next.turnNumber;
+          events.push({
+            type: "coin-scored",
+            seat,
+            coinId: coin.id,
+            coinType: coin.type,
+            points: coin.type === "queen" ? 3 : 1,
+          });
+        }
 
-      if (queenPocketedThisTurn) {
-        events.push({ type: "queen-pocketed", seat });
-      }
-      if (queenCoveredThisTurn) {
-        events.push({ type: "queen-covered", seat });
+        if (queenPocketedThisTurn) {
+          events.push({ type: "queen-pocketed", seat });
+        }
+        if (queenCoveredThisTurn) {
+          events.push({ type: "queen-covered", seat });
+        }
       }
     }
 
@@ -260,19 +261,19 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       next.turnStartedAtMs = null;
       next.matchStartedAtMs = null;
       events.push({ type: "draw", reason: "all-coins-pocketed" });
-    } else if (!foul) {
-      next.currentSeat = seat === 0 ? 1 : 0;
-      next.turnStartedAtMs = now;
-      next.strikerPlacementPhase = true;
-      next.strikerPlacementSeat = next.currentSeat;
-      next.striker = createInitialStriker();
-      events.push({ type: "turn-end", seat, nextSeat: next.currentSeat });
     } else {
+      const nextSeat = earnedExtraTurn ? seat : (seat === 0 ? 1 : 0);
+      next.currentSeat = nextSeat;
       next.turnStartedAtMs = now;
-      next.striker = createInitialStriker();
       next.strikerPlacementPhase = true;
-      next.strikerPlacementSeat = seat;
-      events.push({ type: "foul-turn-end", seat });
+      next.strikerPlacementSeat = nextSeat;
+      next.striker = createInitialStriker();
+      
+      if (foul) {
+        events.push({ type: "foul-turn-end", seat, nextSeat });
+      } else {
+        events.push({ type: "turn-end", seat, nextSeat });
+      }
     }
 
     return {

@@ -99,7 +99,7 @@ export class SyncManager {
     if (!room.match) return;
     
     const engine = room.match.engine as EngineInstance;
-    const state = engine.serialize();
+    const state = engine.serialize() as any;
     const sequenceNumber = this.getNextSequenceNumber(room.id);
     
     const packet: StateSyncPacket = {
@@ -113,10 +113,18 @@ export class SyncManager {
       sequenceNumber,
     };
     
-    // Emit to room
+    const socketCount = this.framework.io.sockets?.adapter?.rooms?.get?.(room.ioName)?.size ?? 0;
+    this.framework.log(`[CARROM SYNC] Broadcasting game state for room ${room.id} (turn ${room.match.turnNumber}, seq: ${sequenceNumber})`);
+    this.framework.log(`[CARROM SYNC] Room ${room.ioName} has ${socketCount} sockets connected`);
+    this.framework.log(`[CARROM SYNC] Events: ${events.map(e => e.type).join(", ")}`);
+    
+    if (state.coins) {
+      this.framework.log(`[CARROM SYNC] State: coins=${state.coins?.length}, active=${state.coins?.filter((c: any) => !c.pocketed).length}, currentSeat=${state.currentSeat}, strikerPlacement=${state.strikerPlacementPhase}`);
+    }
+    
     this.framework.io.to(room.ioName).emit("game:state", packet);
     
-    this.framework.log(`Broadcasted game state for room ${room.id} turn ${room.match.turnNumber} (seq: ${sequenceNumber})`);
+    this.framework.log(`[CARROM SYNC] Broadcast complete for room ${room.id}`);
   }
   
   /**

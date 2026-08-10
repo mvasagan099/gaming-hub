@@ -12,10 +12,10 @@ describe("gameConfigs", () => {
   });
 
   it("classifies turn-based games", () => {
-    for (const id of ["snake-ladder", "ludo", "chess", "cricket"] as const) {
+    for (const id of ["snake-ladder", "ludo", "chess", "cricket", "carrom"] as const) {
       expect(getGamePlayConfig(id).turnBased).toBe(true);
     }
-    for (const id of ["carrom", "fruit-ninja", "bubble-shooter", "table-tennis", "snake-vs-worms"] as const) {
+    for (const id of ["fruit-ninja", "bubble-shooter", "table-tennis", "snake-vs-worms"] as const) {
       expect(getGamePlayConfig(id).turnBased).toBe(false);
     }
   });
@@ -24,7 +24,7 @@ describe("gameConfigs", () => {
     expect(getGamePlayConfig("chess").defaultTurnTimerMs).toBe(120_000);
     expect(getGamePlayConfig("fruit-ninja").defaultMatchTimerMs).toBe(90_000);
     expect(getGamePlayConfig("table-tennis").actionCooldownMs).toBe(20);
-    expect(getGamePlayConfig("carrom").pauseOnDisconnect).toBe(false);
+    expect(getGamePlayConfig("table-tennis").pauseOnDisconnect).toBe(false);
     expect(getGamePlayConfig("chess").pauseOnDisconnect).toBe(true);
     expect(getGamePlayConfig("snake-ladder").minPlayersToStart).toBeGreaterThan(0);
   });

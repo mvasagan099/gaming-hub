@@ -41,6 +41,8 @@ export type MatchSettings = {
   timeControl?: ChessTimeControlConfig | null;
   /** Rating-affecting match. Defaults to true when absent. */
   rated?: boolean;
+  /** Player count for games that support 2 or 4 players (e.g., Ludo, Snake & Ladder) */
+  playerCount?: 2 | 4;
 };
 
 export interface CreateRoomInput {

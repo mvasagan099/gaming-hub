@@ -233,6 +233,8 @@ export const LobbyPage: React.FC = () => {
   const [waitElapsed, setWaitElapsed] = useState(0);
   
   const isChess = def?.id === "chess";
+  const allowsPlayerCountChoice = def?.id === "ludo" || def?.id === "snake-ladder";
+  const [playerCount, setPlayerCount] = useState<2 | 4>(2);
   const [settings, setSettings] = useState<MatchSettings>({
     timeControl: isChess ? DEFAULT_TIME_CONTROL : null,
     rated: true,
@@ -240,6 +242,7 @@ export const LobbyPage: React.FC = () => {
 
   useEffect(() => {
     setSettings({ timeControl: isChess ? DEFAULT_TIME_CONTROL : null, rated: true });
+    setPlayerCount(2);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
@@ -338,7 +341,7 @@ export const LobbyPage: React.FC = () => {
   const handleCreatePrivate = async () => {
     if (!def) return;
     try {
-      await createRoom(def.id, true, stake, def.maxPlayers, settings);
+      await createRoom(def.id, true, stake, allowsPlayerCountChoice ? playerCount : def.maxPlayers, settings);
       toast.success("Private room created");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create room");
@@ -348,7 +351,7 @@ export const LobbyPage: React.FC = () => {
   const handleQuickMatch = async () => {
     if (!def) return;
     try {
-      await joinMatchmaking(def.id, stake, settings);
+      await joinMatchmaking(def.id, stake, { ...settings, playerCount: allowsPlayerCountChoice ? playerCount : undefined } as Record<string, unknown>);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not join matchmaking");
     }
@@ -562,6 +565,33 @@ export const LobbyPage: React.FC = () => {
               </div>
             )}
 
+            {/* Player count selector for Ludo and Snake & Ladder */}
+            {allowsPlayerCountChoice && (
+              <div className="mt-4 space-y-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Players
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {([2, 4] as const).map((count) => (
+                    <button
+                      key={count}
+                      onClick={() => setPlayerCount(count)}
+                      className={`flex flex-col items-center gap-1 p-3 rounded-lg border transition-all ${
+                        playerCount === count
+                          ? "bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-500/20"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-300"
+                      }`}
+                    >
+                      <span className="text-xs font-black">{count} Players</span>
+                      <span className={`text-[9px] font-medium ${playerCount === count ? "text-indigo-200" : "text-slate-500 dark:text-slate-400"}`}>
+                        {count === 2 ? "1 vs 1" : "4-way battle"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => void handleQuickMatch()}
@@ -646,7 +676,7 @@ export const LobbyPage: React.FC = () => {
           </div>
           <h3 className="relative z-10 text-lg font-black text-slate-900 dark:text-white">Finding opponents…</h3>
           <p className="relative z-10 text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-1">
-            <span className="block">{def.name} · 🪙 {matchmaking.stake ?? stake} stake</span>
+            <span className="block">{def.name} · 🪙 {matchmaking.stake ?? stake} stake{matchmaking.settings?.playerCount ? ` · ${matchmaking.settings.playerCount} players` : ""}</span>
             {matchmaking.position > 0 && <span className="block">Queue position: #{matchmaking.position}</span>}
             {secondsRemaining > 0 && (
               <span className="block font-semibold text-amber-400">Auto-cancels in {secondsRemaining}s</span>

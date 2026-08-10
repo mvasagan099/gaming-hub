@@ -108,11 +108,11 @@ describe("TurnManager", () => {
   it("never gates realtime games", () => {
     const p1 = makePlayer("p1", 0);
     const p2 = makePlayer("p2", 1);
-    const room = createMatchRoom("carrom", [p1, p2]);
+    const room = createMatchRoom("table-tennis", [p1, p2]);
 
     expect(framework.turnManager.isTurnBased(room)).toBe(false);
-    expect(framework.turnManager.canAct(room, p1, { type: "strike" })).toBe(true);
-    expect(framework.turnManager.canAct(room, p2, { type: "strike" })).toBe(true);
+    expect(framework.turnManager.canAct(room, p1, { type: "paddle-move" })).toBe(true);
+    expect(framework.turnManager.canAct(room, p2, { type: "paddle-move" })).toBe(true);
   });
 });
 
@@ -155,10 +155,10 @@ describe("ActionValidator", () => {
   it("rate-limits repeated realtime actions", () => {
     const p1 = makePlayer("p1", 0);
     const p2 = makePlayer("p2", 1);
-    const room = createMatchRoom("carrom", [p1, p2]);
-    expect(framework.actionValidator.validate(room, p1, { type: "strike" }).ok).toBe(true);
+    const room = createMatchRoom("table-tennis", [p1, p2]);
+    expect(framework.actionValidator.validate(room, p1, { type: "paddle-move" }).ok).toBe(true);
     framework.actionValidator.recordAction(p1.id);
-    const second = framework.actionValidator.validate(room, p1, { type: "strike" });
+    const second = framework.actionValidator.validate(room, p1, { type: "paddle-move" });
     expect(second.ok).toBe(false);
     expect(second.error).toContain("too frequent");
   });

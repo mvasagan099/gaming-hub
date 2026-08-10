@@ -53,7 +53,7 @@ export function createInitialCoins(): CarromCoin[] {
 
   const types: CoinType[] = [
     "queen",
-    "white", "white", "white", "white", "white", "white", "white", "white",
+    "white", "white", "white", "white", "white", "white", "white", "white", "white",
     "black", "black", "black", "black", "black", "black", "black", "black", "black",
   ];
 
@@ -325,10 +325,11 @@ export function calculateScore(
   playerColor: CoinType,
   queenPocketed: boolean,
   queenCovered: boolean,
-): { score: number; queenPocketed: boolean; queenCovered: boolean } {
+): { score: number; queenPocketed: boolean; queenCovered: boolean; earnedExtraTurn: boolean } {
   let score = 0;
   let newQueenPocketed = queenPocketed;
   let newQueenCovered = queenCovered;
+  let pocketedOwnColor = false;
 
   for (const coin of pocketedCoins) {
     if (coin.type === "queen") {
@@ -336,6 +337,7 @@ export function calculateScore(
       score += 3;
     } else if (coin.type === playerColor) {
       score += 1;
+      pocketedOwnColor = true;
       if (newQueenPocketed && !newQueenCovered) {
         newQueenCovered = true;
         score += 3;
@@ -345,7 +347,8 @@ export function calculateScore(
     }
   }
 
-  return { score, queenPocketed: newQueenPocketed, queenCovered: newQueenCovered };
+  const earnedExtraTurn = pocketedOwnColor;
+  return { score, queenPocketed: newQueenPocketed, queenCovered: newQueenCovered, earnedExtraTurn };
 }
 
 export function checkWinCondition(

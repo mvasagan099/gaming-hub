@@ -34,7 +34,7 @@ export const GAME_PLAY_CONFIGS: Record<GameId, GamePlayConfig> = {
   ludo: baseConfig("ludo", {}),
   chess: baseConfig("chess", { defaultTurnTimerMs: 120_000 }),
   cricket: baseConfig("cricket", {}),
-  carrom: baseConfig("carrom", { actionCooldownMs: 30, pauseOnDisconnect: false }),
+  carrom: baseConfig("carrom", {}),
   "fruit-ninja": baseConfig("fruit-ninja", {
     actionCooldownMs: 100,
     defaultMatchTimerMs: 90_000,

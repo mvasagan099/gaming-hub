@@ -90,7 +90,7 @@ export const GAME_DEFINITIONS: readonly GameDefinition[] = [
     slug: "carrom",
     icon: "🎯",
     category: "Board",
-    mode: "realtime",
+    mode: "turn-based",
     minPlayers: 2,
     maxPlayers: 4,
     defaultStake: 100,

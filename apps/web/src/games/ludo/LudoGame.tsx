@@ -22,7 +22,8 @@ export const LudoGame: React.FC<LudoGameProps> = ({ mode: initialMode, stake, on
   const [playMode, setPlayMode] = useState<"ai" | "pvp">(isMultiplayer ? "pvp" : "ai");
 
   const participants = room?.players ?? [];
-  const onlinePlayers = isMultiplayer && participants.length > 0 ? participants.length : playerCount;
+  const maxPlayers = room?.maxPlayers ?? playerCount;
+  const onlinePlayers = isMultiplayer && maxPlayers > 0 ? maxPlayers : playerCount;
   const seat = isMultiplayer ? (isSpectator ? null : mySeat) : null;
   const names = isMultiplayer
     ? [...participants]
