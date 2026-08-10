@@ -1,22 +1,107 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Upload, FileImage, X, Loader2 } from 'lucide-react';
+import { ArrowLeft, FileImage, X, Loader2, Check, Camera } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { apiClient } from '../../services/api/client';
-import { KycLevel, KycDocumentType, COUNTRY_DOCUMENTS } from '@gaming-hub/shared';
+import { KycDocumentType, COUNTRY_DOCUMENTS } from '@gaming-hub/shared';
+
+async function compressImageIfNeeded(file: File, maxSizeBytes = 2 * 1024 * 1024): Promise<File> {
+  if (!file.type.startsWith('image/')) {
+    if (file.size > maxSizeBytes) {
+      throw new Error(`File size must be less than 2MB (current: ${(file.size / (1024 * 1024)).toFixed(2)}MB)`);
+    }
+    return file;
+  }
+
+  if (file.size <= maxSizeBytes) {
+    return file;
+  }
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      const maxDim = 1920;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return resolve(file);
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const compressLoop = (q: number) => {
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return resolve(file);
+            if (blob.size <= maxSizeBytes || q <= 0.3) {
+              const compressedName = file.name.replace(/\.[^/.]+$/, '.jpg');
+              resolve(new File([blob], compressedName, { type: 'image/jpeg' }));
+            } else {
+              compressLoop(q - 0.15);
+            }
+          },
+          'image/jpeg',
+          q
+        );
+      };
+
+      compressLoop(0.85);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to process image for compression'));
+    };
+    img.src = url;
+  });
+}
 
 export function KycVerifyPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+
+  useEffect(() => {
+    async function checkExistingStatus() {
+      try {
+        const res = await apiClient.get<{ status: string }>('/kyc/status');
+        if (res?.status === 'APPROVED' || res?.status === 'PENDING' || res?.status === 'UNDER_REVIEW') {
+          navigate('/kyc');
+        }
+      } catch {
+        // ignore
+      }
+    }
+    void checkExistingStatus();
+  }, [navigate]);
+
   const [loading, setLoading] = useState(false);
-  const [selectedLevel, setSelectedLevel] = useState<KycLevel>(KycLevel.LEVEL_1);
   const [country, setCountry] = useState('IN');
+  const [selectedDocType, setSelectedDocType] = useState<KycDocumentType | null>(null);
   const [formData, setFormData] = useState({
     fullName: '',
     dateOfBirth: '',
     mobileNumber: '',
+    streetAddress: '',
+    addressLine2: '',
+    city: '',
+    state: '',
+    postalCode: '',
   });
   const [requestId, setRequestId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Array<{
@@ -39,8 +124,16 @@ export function KycVerifyPage() {
   };
 
   const handleInitiateKyc = async () => {
-    if (!formData.fullName || !formData.dateOfBirth || !formData.mobileNumber) {
-      toast.error('Please fill all fields');
+    if (
+      !formData.fullName ||
+      !formData.dateOfBirth ||
+      !formData.mobileNumber ||
+      !formData.streetAddress ||
+      !formData.city ||
+      !formData.state ||
+      !formData.postalCode
+    ) {
+      toast.error('Please fill all personal and address details');
       return;
     }
 
@@ -51,10 +144,15 @@ export function KycVerifyPage() {
         dateOfBirth: new Date(formData.dateOfBirth).toISOString(),
         country,
         mobileNumber: formData.mobileNumber,
+        streetAddress: formData.streetAddress,
+        addressLine2: formData.addressLine2 || undefined,
+        city: formData.city,
+        state: formData.state,
+        postalCode: formData.postalCode,
       });
 
       setRequestId(result.requestId);
-      setStep(3);
+      setStep(2);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to initiate KYC');
     } finally {
@@ -69,18 +167,19 @@ export function KycVerifyPage() {
   ) => {
     if (!requestId) return;
 
-    const formData = new FormData();
-    formData.append('requestId', requestId);
-    formData.append('documentType', documentType);
-    formData.append('file', file);
-    if (side) {
-      formData.append('side', side);
-    }
-
     try {
+      const uploadFile = await compressImageIfNeeded(file);
+      const formData = new FormData();
+      formData.append('requestId', requestId);
+      formData.append('documentType', documentType);
+      formData.append('file', uploadFile);
+      if (side) {
+        formData.append('side', side);
+      }
+
       await apiClient.post<{ ok: boolean; documentId: string }>('/kyc/upload', formData);
-      setDocuments([...documents, { documentType, file, side }]);
-      toast.success('Document uploaded');
+      setDocuments((prev) => [...prev, { documentType, file: uploadFile, side }]);
+      toast.success('Document compressed & uploaded (< 2 MB)');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to upload document');
     }
@@ -89,18 +188,19 @@ export function KycVerifyPage() {
   const handleSelfieUpload = async (file: File) => {
     if (!requestId) return;
 
-    const formData = new FormData();
-    formData.append('requestId', requestId);
-    formData.append('documentType', 'SELFIE');
-    formData.append('isSelfie', 'true');
-    formData.append('file', file);
-
     try {
+      const uploadFile = await compressImageIfNeeded(file);
+      const formData = new FormData();
+      formData.append('requestId', requestId);
+      formData.append('documentType', 'SELFIE');
+      formData.append('isSelfie', 'true');
+      formData.append('file', uploadFile);
+
       await apiClient.post<{ ok: boolean; documentId: string }>('/kyc/upload', formData);
-      setSelfie(file);
-      toast.success('Selfie uploaded');
+      setSelfie(uploadFile);
+      toast.success('Live selfie compressed & saved (< 2 MB)');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to upload selfie');
+      toast.error(err instanceof Error ? err.message : 'Failed to save selfie');
     }
   };
 
@@ -129,40 +229,123 @@ export function KycVerifyPage() {
       {step === 1 && (
         <Card>
           <CardHeader>
-            <CardTitle>Select Verification Tier</CardTitle>
+            <CardTitle>Personal Information & Address</CardTitle>
             <CardDescription>
-              Choose the identity verification level you want to unlock
+              Enter your personal details and residential address before document submission
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3">
-              {[
-                { level: KycLevel.LEVEL_1, name: 'Tier 1 - Basic Verification', limit: '$1,000 / day', desc: 'Full game access & basic withdrawals.' },
-                { level: KycLevel.LEVEL_2, name: 'Tier 2 - Government ID', limit: '$10,000 / day', desc: 'High roller matches & increased deposit limits.' },
-                { level: KycLevel.LEVEL_3, name: 'Tier 3 - Premium Verification', limit: 'Unlimited', desc: 'VIP rewards, instant payouts & zero limits.' },
-              ].map((item) => (
-                <div
-                  key={item.level}
-                  onClick={() => setSelectedLevel(item.level)}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-                    selectedLevel === item.level
-                      ? 'border-indigo-500 bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 font-bold'
-                      : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'
-                  }`}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold mb-1.5">Full Name (as on ID)</label>
+                <input
+                  type="text"
+                  value={formData.fullName}
+                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                  placeholder="John Doe"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold mb-1.5">Date of Birth</label>
+                <input
+                  type="date"
+                  value={formData.dateOfBirth}
+                  onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold mb-1.5">Country of Residence</label>
+                <select
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-sm">{item.name}</span>
-                    <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                      {item.limit}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{item.desc}</p>
-                </div>
-              ))}
+                  {supportedCountries.map((c) => (
+                    <option key={c.code} value={c.code}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold mb-1.5">Mobile Number</label>
+                <input
+                  type="tel"
+                  value={formData.mobileNumber}
+                  onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value })}
+                  placeholder="+1 234 567 8900"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+                />
+              </div>
             </div>
 
-            <Button onClick={() => setStep(2)} className="w-full mt-4">
-              Continue to Personal Information
+            <div className="border-t border-slate-200 dark:border-slate-800 pt-4 space-y-4">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Residential Address</h4>
+
+              <div>
+                <label className="block text-xs font-semibold mb-1.5">Street Address</label>
+                <input
+                  type="text"
+                  value={formData.streetAddress}
+                  onChange={(e) => setFormData({ ...formData, streetAddress: e.target.value })}
+                  placeholder="123 Main Street"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold mb-1.5">Apartment, suite, unit (optional)</label>
+                <input
+                  type="text"
+                  value={formData.addressLine2}
+                  onChange={(e) => setFormData({ ...formData, addressLine2: e.target.value })}
+                  placeholder="Apt 4B"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5">City</label>
+                  <input
+                    type="text"
+                    value={formData.city}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    placeholder="City"
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5">State / Province</label>
+                  <input
+                    type="text"
+                    value={formData.state}
+                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                    placeholder="State"
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5">Postal Code / ZIP</label>
+                  <input
+                    type="text"
+                    value={formData.postalCode}
+                    onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
+                    placeholder="10001"
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Button onClick={handleInitiateKyc} disabled={loading} className="w-full mt-4">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Continue to Document & Selfie Upload →
             </Button>
           </CardContent>
         </Card>
@@ -171,118 +354,77 @@ export function KycVerifyPage() {
       {step === 2 && (
         <Card>
           <CardHeader>
-            <CardTitle>Personal Information</CardTitle>
-            <CardDescription>
-              Enter your details as they appear on your ID
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold mb-1.5">Full Name</label>
-              <input
-                type="text"
-                value={formData.fullName}
-                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                placeholder="John Doe"
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1.5">Date of Birth</label>
-              <input
-                type="date"
-                value={formData.dateOfBirth}
-                onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1.5">Country</label>
-              <select
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-              >
-                {supportedCountries.map((c) => (
-                  <option key={c.code} value={c.code}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1.5">Mobile Number</label>
-              <input
-                type="tel"
-                value={formData.mobileNumber}
-                onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value })}
-                placeholder="+91 9876543210"
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-              />
-            </div>
-
-            <Button onClick={handleInitiateKyc} disabled={loading} className="w-full">
-              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Continue
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {step === 3 && (
-        <Card>
-          <CardHeader>
             <CardTitle>Upload Documents</CardTitle>
             <CardDescription>
-              Upload your identity documents
+              Select a document type and upload your identity document
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-3">
               <h3 className="text-sm font-semibold">Select Document Type</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {getDocumentsForCountry(country).map((doc) => (
-                  <DocumentUploadCard
-                    key={doc}
-                    type={doc}
-                    onUpload={(file, side) => handleFileUpload(doc, file, side)}
-                    uploaded={documents.some(d => d.documentType === doc)}
-                  />
-                ))}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {getDocumentsForCountry(country).map((doc) => {
+                  const isUploaded = documents.some(d => d.documentType === doc);
+                  const isSelected = selectedDocType === doc;
+                  return (
+                    <button
+                      key={doc}
+                      type="button"
+                      onClick={() => setSelectedDocType(doc)}
+                      className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between min-h-[72px] cursor-pointer ${
+                        isSelected
+                          ? 'border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold ring-2 ring-indigo-500/20'
+                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
+                      }`}
+                    >
+                      <span className="text-xs font-bold">{doc.replace(/_/g, ' ')}</span>
+                      {isUploaded ? (
+                        <span className="text-[10px] font-extrabold w-max px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 mt-2">
+                          ✓ Uploaded
+                        </span>
+                      ) : isSelected ? (
+                        <span className="text-[10px] font-extrabold w-max px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 mt-2">
+                          Selected
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-medium text-slate-400 mt-2">
+                          Click to select
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold">Selfie Verification</h3>
-              <label className="flex flex-col items-center gap-2 p-6 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl cursor-pointer hover:border-accent-500 transition-colors">
-                {selfie ? (
-                  <>
-                    <img
-                      src={URL.createObjectURL(selfie)}
-                      alt="Selfie"
-                      className="w-24 h-24 rounded-full object-cover"
-                    />
-                    <span className="text-sm text-slate-600 dark:text-slate-400">{selfie.name}</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-6 h-6 text-slate-400" />
-                    <span className="text-sm text-slate-600 dark:text-slate-400">
-                      Upload a selfie
-                    </span>
-                  </>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleSelfieUpload(file);
-                  }}
+            {selectedDocType ? (
+              <div className="space-y-4 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/50 dark:bg-indigo-950/20">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                  Upload {selectedDocType.replace(/_/g, ' ')}
+                </h3>
+                <DocumentUploadForm
+                  type={selectedDocType}
+                  onUpload={(file, side) => handleFileUpload(selectedDocType, file, side)}
+                  uploaded={documents.some(d => d.documentType === selectedDocType)}
                 />
-              </label>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400">
+                Please select a document type above to reveal upload controls.
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <span>Selfie Verification</span>
+                <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                  Live Camera Only
+                </span>
+              </h3>
+              <LiveSelfieCapture
+                selfie={selfie}
+                onCapture={(file) => handleSelfieUpload(file)}
+              />
             </div>
 
             <Button onClick={handleSubmit} disabled={loading || documents.length === 0 || !selfie} className="w-full">
@@ -296,7 +438,142 @@ export function KycVerifyPage() {
   );
 }
 
-function DocumentUploadCard({
+function LiveSelfieCapture({
+  selfie,
+  onCapture,
+}: {
+  selfie: File | null;
+  onCapture: (file: File) => void;
+}) {
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const startCamera = async () => {
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setIsCameraOpen(true);
+    } catch (err) {
+      setError('Unable to access camera. Please ensure camera permissions are allowed in your browser.');
+    }
+  };
+
+  useEffect(() => {
+    if (isCameraOpen && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [isCameraOpen]);
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraOpen(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Flip horizontally for natural selfie orientation
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        const file = new File([blob], 'live-selfie.jpg', { type: 'image/jpeg' });
+        onCapture(file);
+        stopCamera();
+      },
+      'image/jpeg',
+      0.9
+    );
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 space-y-4 text-center">
+      {isCameraOpen ? (
+        <div className="flex flex-col items-center space-y-3 w-full">
+          <div className="relative overflow-hidden rounded-xl border-2 border-indigo-500 bg-black w-full max-w-sm aspect-video flex items-center justify-center shadow-lg">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover scale-x-[-1]"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={capturePhoto} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              <Camera className="w-4 h-4 mr-1.5" />
+              Capture Selfie
+            </Button>
+            <Button size="sm" variant="outline" onClick={stopCamera}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : selfie ? (
+        <div className="flex flex-col items-center space-y-3">
+          <img
+            src={URL.createObjectURL(selfie)}
+            alt="Live Selfie"
+            className="w-28 h-28 rounded-full object-cover border-4 border-indigo-500 shadow-md"
+          />
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+            <Check className="w-3.5 h-3.5" />
+            Live Selfie Captured
+          </div>
+          <Button size="sm" variant="outline" onClick={startCamera}>
+            <Camera className="w-4 h-4 mr-1.5" />
+            Retake Live Selfie
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center space-y-3">
+          <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-full border border-indigo-100 dark:border-indigo-900/50">
+            <Camera className="w-6 h-6 text-indigo-500" />
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Live Camera Selfie Required</h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-md">
+              File uploads are disabled for selfie verification. Please use your camera to take a real-time photo.
+            </p>
+          </div>
+          {error && <p className="text-xs text-rose-500 font-medium">{error}</p>}
+          <Button size="sm" onClick={startCamera} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Camera className="w-4 h-4 mr-1.5" />
+            Open Camera & Take Live Selfie
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocumentUploadForm({
   type,
   onUpload,
   uploaded,
@@ -308,57 +585,71 @@ function DocumentUploadCard({
   const [front, setFront] = useState<File | null>(null);
   const [back, setBack] = useState<File | null>(null);
 
-  const needsBack = [
+  useEffect(() => {
+    setFront(null);
+    setBack(null);
+  }, [type]);
+
+  const needsBack = ([
     KycDocumentType.DRIVING_LICENCE,
     KycDocumentType.NATIONAL_ID,
     KycDocumentType.RESIDENCE_PERMIT,
-  ].includes(type);
+  ] as KycDocumentType[]).includes(type);
 
   const handleUpload = () => {
-    onUpload(front!, 'front');
+    if (!front) return;
+    onUpload(front, 'front');
     if (needsBack && back) {
       onUpload(back, 'back');
     }
   };
 
-  return (
-    <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium">{type.replace(/_/g, ' ')}</span>
-        {uploaded && (
-          <span className="text-xs text-green-600 dark:text-green-400">Uploaded</span>
-        )}
+  if (uploaded) {
+    return (
+      <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
+        <Check className="w-4 h-4" />
+        Document uploaded successfully.
       </div>
+    );
+  }
 
-      <div className="space-y-2">
-        <label className="flex items-center justify-center gap-2 p-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 cursor-pointer text-xs">
-          <FileImage className="w-4 h-4" />
-          {front ? front.name.slice(0, 15) : 'Front'}
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => setFront(e.target.files?.[0] ?? null)}
-          />
-        </label>
-
-        {needsBack && (
-          <label className="flex items-center justify-center gap-2 p-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 cursor-pointer text-xs">
-            <FileImage className="w-4 h-4" />
-            {back ? back.name.slice(0, 15) : 'Back'}
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <span className="block text-xs font-medium mb-1 text-slate-600 dark:text-slate-400">Front Side</span>
+          <label className="flex items-center justify-center gap-2 p-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer text-xs hover:border-indigo-500 transition-colors">
+            <FileImage className="w-4 h-4 text-slate-500" />
+            <span className="truncate">{front ? front.name : 'Choose Front File'}</span>
             <input
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => setBack(e.target.files?.[0] ?? null)}
+              onChange={(e) => setFront(e.target.files?.[0] ?? null)}
             />
           </label>
+        </div>
+
+        {needsBack && (
+          <div>
+            <span className="block text-xs font-medium mb-1 text-slate-600 dark:text-slate-400">Back Side</span>
+            <label className="flex items-center justify-center gap-2 p-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer text-xs hover:border-indigo-500 transition-colors">
+              <FileImage className="w-4 h-4 text-slate-500" />
+              <span className="truncate">{back ? back.name : 'Choose Back File'}</span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => setBack(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          </div>
         )}
       </div>
 
-      {!uploaded && front && (
-        <Button size="sm" onClick={handleUpload} className="w-full">
-          Upload
+      {front && (!needsBack || back) && (
+        <Button size="sm" onClick={handleUpload} className="w-full mt-2">
+          Upload Document
         </Button>
       )}
     </div>

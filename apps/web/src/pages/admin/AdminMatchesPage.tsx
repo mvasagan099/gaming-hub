@@ -9,7 +9,7 @@ interface Player {
 interface Match {
   id: string;
   status: string;
-  gameSlug: string;
+  gameId: string;
   stake: number | null;
   createdAt: string;
   players: Player[];
@@ -80,7 +80,7 @@ export function AdminMatchesPage() {
                 <td className="px-4 py-3 font-mono text-sm">
                   {match.id.slice(0, 8)}
                 </td>
-                <td className="px-4 py-3">{match.gameSlug}</td>
+                <td className="px-4 py-3">{match.gameId}</td>
                 <td className="px-4 py-3">{match.stake || 'Free'}</td>
                 <td className="px-4 py-3">
                   <span

@@ -153,10 +153,10 @@ export function SupportPanel() {
     }
 
     const sections: { id: SupportSection; label: string; icon: React.ReactNode; count: number }[] = [
-      { id: "faqs", label: "FAQs", icon: <HelpCircle className="h-5 w-5" />, count: pageContent.faqs.length },
-      { id: "quickActions", label: "Quick Actions", icon: <Zap className="h-5 w-5" />, count: pageContent.quickActions.length },
-      { id: "guides", label: "Guides", icon: <BookOpen className="h-5 w-5" />, count: pageContent.guides.length },
-      { id: "troubleshooting", label: "Troubleshooting", icon: <Wrench className="h-5 w-5" />, count: pageContent.troubleshooting.length },
+      { id: "faqs" as SupportSection, label: "FAQs", icon: <HelpCircle className="h-5 w-5" />, count: pageContent.faqs.length },
+      { id: "quickActions" as SupportSection, label: "Quick Actions", icon: <Zap className="h-5 w-5" />, count: pageContent.quickActions.length },
+      { id: "guides" as SupportSection, label: "Guides", icon: <BookOpen className="h-5 w-5" />, count: pageContent.guides.length },
+      { id: "troubleshooting" as SupportSection, label: "Troubleshooting", icon: <Wrench className="h-5 w-5" />, count: pageContent.troubleshooting.length },
     ].filter((s) => s.count > 0);
 
     return (

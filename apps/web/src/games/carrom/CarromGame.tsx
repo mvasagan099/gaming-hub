@@ -457,71 +457,262 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
       // 2. Rendering
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Wood Board Frame
-      const frameGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      frameGrad.addColorStop(0, '#5c2205');
-      frameGrad.addColorStop(1, '#3a1301');
-      ctx.fillStyle = frameGrad;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const width = BOARD_WIDTH;
+      const height = BOARD_HEIGHT;
+      const cx = width / 2;
+      const cy = height / 2;
+      const darkColor = '#171717';
+      const redColor = '#d32f2f';
+      const yellowColor = '#ffe082';
+      const greenColor = '#2e7d32';
+      const innerGreenLineColor = '#1e5e2e';
+      const bgColor = '#fcc575';
 
-      // Board Surface
-      const surfaceGrad = ctx.createRadialGradient(BOARD_WIDTH/2, BOARD_HEIGHT/2, 50, BOARD_WIDTH/2, BOARD_HEIGHT/2, 250);
-      surfaceGrad.addColorStop(0, '#fef3c7');
-      surfaceGrad.addColorStop(1, '#fde68a');
-      ctx.fillStyle = surfaceGrad;
-      ctx.fillRect(BORDER_SIZE, BORDER_SIZE, canvas.width - (BORDER_SIZE*2), canvas.height - (BORDER_SIZE*2));
+      // 1. Outer Warm Brown Wooden Frame
+      ctx.fillStyle = '#8c5638';
+      ctx.fillRect(0, 0, width, height);
 
-      // Carrom Baselines
-      const baselineOffset = 70;
-      const baselineGap = 10;
-      const baselineCircleRadius = 7;
-      const bPadding = 85;
+      // Inner wood frame bevel
+      ctx.fillStyle = '#7a4a2f';
+      ctx.fillRect(4, 4, width - 8, height - 8);
 
-      const drawBaseline = (x1: number, y1: number, x2: number, y2: number, isVertical: boolean) => {
-         ctx.strokeStyle = '#92400e';
-         ctx.lineWidth = 1;
-         
-         ctx.beginPath();
-         if (isVertical) {
-           ctx.moveTo(x1 - baselineGap/2, y1); ctx.lineTo(x2 - baselineGap/2, y2);
-           ctx.moveTo(x1 + baselineGap/2, y1); ctx.lineTo(x2 + baselineGap/2, y2);
-         } else {
-           ctx.moveTo(x1, y1 - baselineGap/2); ctx.lineTo(x2, y2 - baselineGap/2);
-           ctx.moveTo(x1, y1 + baselineGap/2); ctx.lineTo(x2, y2 + baselineGap/2);
-         }
-         ctx.stroke();
-         
-         ctx.fillStyle = '#ef4444';
-         ctx.beginPath();
-         ctx.arc(x1, y1, baselineCircleRadius, 0, Math.PI * 2);
-         ctx.fill();
-         ctx.stroke();
+      // 4 Black Corner Caps / Bumpers on the outer frame corners
+      ctx.fillStyle = '#171717';
+      const cornerCapR = 36;
+      // Top-Left corner cap
+      ctx.beginPath();
+      ctx.arc(0, 0, cornerCapR, 0, Math.PI / 2);
+      ctx.lineTo(0, 0);
+      ctx.fill();
+      // Top-Right corner cap
+      ctx.beginPath();
+      ctx.arc(width, 0, cornerCapR, Math.PI / 2, Math.PI);
+      ctx.lineTo(width, 0);
+      ctx.fill();
+      // Bottom-Right corner cap
+      ctx.beginPath();
+      ctx.arc(width, height, cornerCapR, Math.PI, 3 * Math.PI / 2);
+      ctx.lineTo(width, height);
+      ctx.fill();
+      // Bottom-Left corner cap
+      ctx.beginPath();
+      ctx.arc(0, height, cornerCapR, 3 * Math.PI / 2, Math.PI * 2);
+      ctx.lineTo(0, height);
+      ctx.fill();
 
-         ctx.beginPath();
-         ctx.arc(x2, y2, baselineCircleRadius, 0, Math.PI * 2);
-         ctx.fill();
-         ctx.stroke();
-      };
-      
-      drawBaseline(bPadding, BOARD_HEIGHT - baselineOffset, BOARD_WIDTH - bPadding, BOARD_HEIGHT - baselineOffset, false);
-      drawBaseline(bPadding, baselineOffset, BOARD_WIDTH - bPadding, baselineOffset, false);
-      drawBaseline(baselineOffset, bPadding, baselineOffset, BOARD_HEIGHT - bPadding, true);
-      drawBaseline(BOARD_WIDTH - baselineOffset, bPadding, BOARD_WIDTH - baselineOffset, BOARD_HEIGHT - bPadding, true);
+      // 2. Playing Surface (Golden Tan Wood Background with Subtle Horizontal Wood Grain)
+      const surfaceMargin = BORDER_SIZE;
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(surfaceMargin, surfaceMargin, width - surfaceMargin * 2, height - surfaceMargin * 2);
 
-      // 4 Pockets
-      ctx.fillStyle = '#1e293b';
+      // Horizontal Wood Grain lines
+      ctx.strokeStyle = 'rgba(160, 90, 30, 0.08)';
+      ctx.lineWidth = 1.8;
+      for (let y = surfaceMargin + 8; y < height - surfaceMargin; y += 10) {
+        ctx.beginPath();
+        ctx.moveTo(surfaceMargin, y);
+        ctx.lineTo(width - surfaceMargin, y);
+        ctx.stroke();
+      }
+
+      // Inner border outline around playing surface
+      ctx.strokeStyle = darkColor;
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(surfaceMargin, surfaceMargin, width - surfaceMargin * 2, height - surfaceMargin * 2);
+
+      // 3. Corner Pockets (4 pockets)
       POCKETS.forEach((p) => {
+        // Pocket hole
+        ctx.fillStyle = '#361d11';
+        ctx.strokeStyle = darkColor;
+        ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.arc(p.x, p.y, POCKET_RADIUS, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke();
       });
 
-      // Center Circle
-      ctx.strokeStyle = '#b45309';
+      // 4. Baselines (Outer Thick Black Line + Inner Thin Green Line)
+      const bOuter = 72; // outer black line offset from edge
+      const bInner = 79; // inner green line offset from edge
+      const bStart = 88; // baseline line start coord
+      const bEnd = 312;  // baseline line end coord
+      const redR = 9;    // red circle radius
+      const greenDotR = 4.5; // corner green dot radius
+
+      // Outer Thick Black Baseline Box
+      ctx.strokeStyle = darkColor;
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(BOARD_WIDTH / 2, BOARD_HEIGHT / 2, 45, 0, Math.PI * 2);
+      // Top
+      ctx.moveTo(bStart, bOuter); ctx.lineTo(bEnd, bOuter);
+      // Bottom
+      ctx.moveTo(bStart, height - bOuter); ctx.lineTo(bEnd, height - bOuter);
+      // Left
+      ctx.moveTo(bOuter, bStart); ctx.lineTo(bOuter, bEnd);
+      // Right
+      ctx.moveTo(width - bOuter, bStart); ctx.lineTo(width - bOuter, bEnd);
       ctx.stroke();
+
+      // Inner Thin Green Baseline Box
+      ctx.strokeStyle = innerGreenLineColor;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      // Top
+      ctx.moveTo(bStart, bInner); ctx.lineTo(bEnd, bInner);
+      // Bottom
+      ctx.moveTo(bStart, height - bInner); ctx.lineTo(bEnd, height - bInner);
+      // Left
+      ctx.moveTo(bInner, bStart); ctx.lineTo(bInner, bEnd);
+      // Right
+      ctx.moveTo(width - bInner, bStart); ctx.lineTo(width - bInner, bEnd);
+      ctx.stroke();
+
+      // Red Circles at baseline ends
+      const drawBaselineRedCircle = (x: number, y: number) => {
+        ctx.fillStyle = redColor;
+        ctx.strokeStyle = darkColor;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(x, y, redR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      };
+
+      // Top baseline red circles
+      drawBaselineRedCircle(bStart, bOuter);
+      drawBaselineRedCircle(bEnd, bOuter);
+      // Bottom baseline red circles
+      drawBaselineRedCircle(bStart, height - bOuter);
+      drawBaselineRedCircle(bEnd, height - bOuter);
+      // Left baseline red circles
+      drawBaselineRedCircle(bOuter, bStart);
+      drawBaselineRedCircle(bOuter, bEnd);
+      // Right baseline red circles
+      drawBaselineRedCircle(width - bOuter, bStart);
+      drawBaselineRedCircle(width - bOuter, bEnd);
+
+      // Green Dots at the 4 baseline corner junctions
+      const drawCornerGreenDot = (x: number, y: number) => {
+        ctx.fillStyle = greenColor;
+        ctx.strokeStyle = darkColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(x, y, greenDotR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      };
+
+      drawCornerGreenDot(bOuter, bOuter);
+      drawCornerGreenDot(width - bOuter, bOuter);
+      drawCornerGreenDot(bOuter, height - bOuter);
+      drawCornerGreenDot(width - bOuter, height - bOuter);
+
+      // 5. Corner Arrow Lines & Semicircular Arcs
+      const drawCornerArrow = (startX: number, startY: number, angleRad: number, length: number) => {
+        ctx.save();
+        ctx.translate(startX, startY);
+        ctx.rotate(angleRad);
+
+        ctx.strokeStyle = darkColor;
+        ctx.lineWidth = 1.5;
+
+        // Line extending towards pocket
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(length, 0);
+        ctx.stroke();
+
+        // Arrowhead pointing into pocket
+        ctx.beginPath();
+        ctx.moveTo(length - 7, -4);
+        ctx.lineTo(length, 0);
+        ctx.lineTo(length - 7, 4);
+        ctx.stroke();
+
+        // Semi-circular arc loop at inner end facing center
+        ctx.beginPath();
+        ctx.arc(0, 0, 16, Math.PI * 0.25, Math.PI * 1.75, true);
+        ctx.stroke();
+
+        ctx.restore();
+      };
+
+      // 4 Corners:
+      drawCornerArrow(105, 105, Math.atan2(36 - 105, 36 - 105), 80);
+      drawCornerArrow(295, 105, Math.atan2(36 - 105, 364 - 295), 80);
+      drawCornerArrow(105, 295, Math.atan2(364 - 295, 36 - 105), 80);
+      drawCornerArrow(295, 295, Math.atan2(364 - 295, 364 - 295), 80);
+
+      // 6. Center Circle & 8-Pointed Red/Yellow Compass Star
+      ctx.strokeStyle = darkColor;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 45, 0, Math.PI * 2);
+      ctx.stroke();
+
+      const drawRedYellowStarPoint = (angleRad: number, outerR: number, innerR: number) => {
+        const tipX = cx + Math.cos(angleRad) * outerR;
+        const tipY = cy + Math.sin(angleRad) * outerR;
+
+        const leftAngle = angleRad - Math.PI / 8;
+        const rightAngle = angleRad + Math.PI / 8;
+
+        const leftX = cx + Math.cos(leftAngle) * innerR;
+        const leftY = cy + Math.sin(leftAngle) * innerR;
+
+        const rightX = cx + Math.cos(rightAngle) * innerR;
+        const rightY = cy + Math.sin(rightAngle) * innerR;
+
+        // Left half: Red
+        ctx.fillStyle = redColor;
+        ctx.strokeStyle = darkColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(leftX, leftY);
+        ctx.lineTo(tipX, tipY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Right half: Yellow / Cream
+        ctx.fillStyle = yellowColor;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(tipX, tipY);
+        ctx.lineTo(rightX, rightY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      };
+
+      // 4 Major cardinal points (44px)
+      for (let i = 0; i < 4; i++) {
+        drawRedYellowStarPoint((i * Math.PI) / 2, 43, 12);
+      }
+      // 4 Minor diagonal points (32px)
+      for (let i = 0; i < 4; i++) {
+        drawRedYellowStarPoint((i * Math.PI) / 2 + Math.PI / 4, 32, 10);
+      }
+
+      // Center Queen Spot
+      ctx.strokeStyle = darkColor;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = redColor;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = darkColor;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+      ctx.fill();
 
       // Render Coins
       for (const c of coins) {
@@ -811,7 +1002,7 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
           </div>
         )}
 
-        <div className="relative perspective-[1200px] w-full max-w-[600px]">
+        <div className="relative w-full max-w-[520px]">
           <canvas
             ref={canvasRef}
             width={400}
@@ -820,11 +1011,7 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
-            style={{
-              transform: "rotateX(20deg) rotateZ(0deg) translateY(-5px)",
-              transformStyle: "preserve-3d"
-            }}
-            className={`rounded-[2rem] border-8 border-[#3a1301] shadow-[0_40px_60px_-15px_rgba(0,0,0,0.8)] bg-amber-950 w-full object-contain touch-none ${dragState === 'idle' && currentPlayer === 'player' ? 'cursor-grab' : currentPlayer === 'ai' ? 'cursor-not-allowed' : 'cursor-grabbing'}`}
+            className={`rounded-[2rem] border-8 border-[#3a1301] shadow-[0_20px_40px_rgba(0,0,0,0.6)] bg-amber-950 w-full object-contain touch-none ${dragState === 'idle' && currentPlayer === 'player' ? 'cursor-grab' : currentPlayer === 'ai' ? 'cursor-not-allowed' : 'cursor-grabbing'}`}
           />
         </div>
 

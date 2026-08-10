@@ -46,4 +46,88 @@ describe("ChessEngine", () => {
     expect(r1.ok).toBe(false);
     expect(r1.error).toBe("Illegal move");
   });
+
+  it("starts a 10-minutes match with seeded clocks and a live deadline", () => {
+    let now = 5_000_000;
+    const engine = new ChessEngine(players, undefined, {
+      timeControl: { baseSeconds: 600, incrementSeconds: 0, delaySeconds: 0 },
+      now: () => now,
+    });
+
+    expect(engine.state.timeControl).toEqual({ baseSeconds: 600, incrementSeconds: 0, delaySeconds: 0 });
+    expect(engine.state.clocks).toEqual({
+      0: { remainingMs: 600_000, startedAtMs: 5_000_000 },
+      1: { remainingMs: 600_000, startedAtMs: null },
+    });
+    expect(engine.currentClockDeadline).toBe(5_600_000);
+
+    // A move finalizes white's clock and starts black's.
+    now += 2_000;
+    const result = engine.apply({ type: "move", from: "e2", to: "e4" }, 0);
+    expect(result.ok).toBe(true);
+
+    const clocks = engine.state.clocks!;
+    expect(clocks[0].remainingMs).toBe(598_000);
+    expect(clocks[0].startedAtMs).toBeNull();
+    expect(clocks[1].startedAtMs).toBe(5_002_000);
+    expect(engine.currentClockDeadline).toBe(5_602_000);
+  });
+
+  it("checkmate mode has no clock", () => {
+    const engine = new ChessEngine(players, undefined, {
+      timeControl: { baseSeconds: 0, incrementSeconds: 0, delaySeconds: 0 },
+    });
+
+    expect(engine.state.timeControl).toBeNull();
+    expect(engine.state.clocks).toBeNull();
+    expect(engine.currentClockDeadline).toBeNull();
+  });
+
+  it("flags the current player when their clock hits zero", () => {
+    let now = 1_000_000;
+    const engine = new ChessEngine(players, undefined, {
+      timeControl: { baseSeconds: 1, incrementSeconds: 0, delaySeconds: 0 },
+      now: () => now,
+    });
+
+    const deadline = engine.currentClockDeadline!;
+    expect(deadline).toBe(1_001_000);
+
+    now = deadline + 1;
+    const result = engine.handleTimeout("turn", engine.currentSeat);
+    expect(result.ok).toBe(true);
+    expect(result.finished).toBe(true);
+    expect(result.state.endReason).toBe("flag");
+    expect(result.state.result).toBe("0-1");
+    expect(result.state.winnerSeats).toEqual([1]);
+  });
+
+  it("flags on move when the clock has already run out", () => {
+    let now = 10_000_000;
+    const engine = new ChessEngine(players, undefined, {
+      timeControl: { baseSeconds: 1, incrementSeconds: 0, delaySeconds: 0 },
+      now: () => now,
+    });
+
+    // Touch the state so the clock is seeded before time advances.
+    engine.state;
+
+    now += 2_000;
+    const result = engine.apply({ type: "move", from: "e2", to: "e4" }, 0);
+    expect(result.ok).toBe(true);
+    expect(result.finished).toBe(true);
+    expect(result.state.endReason).toBe("flag");
+    expect(result.state.winnerSeats).toEqual([1]);
+  });
+
+  it("rejects stale or wrong-kind timeouts", () => {
+    const engine = new ChessEngine(players, undefined, {
+      timeControl: { baseSeconds: 600, incrementSeconds: 0, delaySeconds: 0 },
+    });
+
+    // Not the flagging seat's turn.
+    expect(engine.handleTimeout("turn", 1).ok).toBe(false);
+    // Chess has no match-level timer.
+    expect(engine.handleTimeout("match").ok).toBe(false);
+  });
 });

@@ -1,6 +1,7 @@
 /**
- * Chess-specific shared types: time controls and presets used by the client
- * (setup UI + clock rendering) and the server engine (authoritative clocks).
+ * Chess-specific shared types: the two game modes and their time controls,
+ * used by the client (setup UI + clock rendering) and the server engine
+ * (authoritative clocks).
  */
 
 /** A serializable clock configuration. `null`/absent means untimed play. */
@@ -14,40 +15,74 @@ export type ChessTimeControlConfig = {
 };
 
 export type ChessTimeControlPreset = ChessTimeControlConfig & {
-  /** Human-friendly label, e.g. "Blitz • 5+3". */
+  /** Human-friendly label, e.g. "10 Minutes". */
   label: string;
-  /** Short category used for grouping, e.g. "Bullet". */
-  category: "Bullet" | "Blitz" | "Rapid" | "Classical";
+};
+
+export const TEN_MINUTES_TIME_CONTROL: ChessTimeControlPreset = {
+  label: "10 Minutes",
+  baseSeconds: 600,
+  incrementSeconds: 0,
+  delaySeconds: 0,
 };
 
 export const UNLIMITED_TIME_CONTROL: ChessTimeControlPreset = {
-  label: "Unlimited",
-  category: "Classical",
+  label: "Checkmate",
   baseSeconds: 0,
   incrementSeconds: 0,
   delaySeconds: 0,
 };
 
+/** The only two time controls the product offers. */
 export const CHESS_TIME_CONTROLS: readonly ChessTimeControlPreset[] = [
-  { label: "Bullet • 1", category: "Bullet", baseSeconds: 60, incrementSeconds: 0, delaySeconds: 0 },
-  { label: "Bullet • 2+1", category: "Bullet", baseSeconds: 120, incrementSeconds: 1, delaySeconds: 0 },
-  { label: "Blitz • 3+2", category: "Blitz", baseSeconds: 180, incrementSeconds: 2, delaySeconds: 0 },
-  { label: "Blitz • 5", category: "Blitz", baseSeconds: 300, incrementSeconds: 0, delaySeconds: 0 },
-  { label: "Blitz • 5+3", category: "Blitz", baseSeconds: 300, incrementSeconds: 3, delaySeconds: 0 },
-  { label: "Rapid • 10", category: "Rapid", baseSeconds: 600, incrementSeconds: 0, delaySeconds: 0 },
-  { label: "Rapid • 15+10", category: "Rapid", baseSeconds: 900, incrementSeconds: 10, delaySeconds: 0 },
-  { label: "Classical • 30", category: "Classical", baseSeconds: 1800, incrementSeconds: 0, delaySeconds: 0 },
+  TEN_MINUTES_TIME_CONTROL,
+  UNLIMITED_TIME_CONTROL,
 ];
 
-export const DEFAULT_TIME_CONTROL: ChessTimeControlPreset = CHESS_TIME_CONTROLS[3]; // Blitz • 5
+export const DEFAULT_TIME_CONTROL: ChessTimeControlPreset = TEN_MINUTES_TIME_CONTROL;
 
-/** Stable string key used for matchmaking buckets so different controls never pair. */
-export function timeControlKey(control: ChessTimeControlConfig | null | undefined): string {
-  if (!control || control.baseSeconds <= 0) return "unlimited";
-  return `${control.baseSeconds}+${control.incrementSeconds}/${control.delaySeconds}`;
+/** The two supported chess game modes. */
+export type ChessGameMode = "ten-minutes" | "checkmate";
+
+export interface ChessGameModeDefinition {
+  id: ChessGameMode;
+  label: string;
+  description: string;
+  timeControl: ChessTimeControlConfig;
 }
 
-/** Formats a clock config like a chess site would, e.g. "10", "3+2", "15+10". */
+export const CHESS_GAME_MODES: readonly ChessGameModeDefinition[] = [
+  {
+    id: "ten-minutes",
+    label: "10 Minutes",
+    description: "Each player gets 10 minutes on the clock",
+    timeControl: TEN_MINUTES_TIME_CONTROL,
+  },
+  {
+    id: "checkmate",
+    label: "Checkmate",
+    description: "No clock — play until checkmate",
+    timeControl: UNLIMITED_TIME_CONTROL,
+  },
+];
+
+export function chessModeOf(id: ChessGameMode): ChessGameModeDefinition | undefined {
+  return CHESS_GAME_MODES.find((m) => m.id === id);
+}
+
+/** Maps a time control config to the game mode it represents. */
+export function chessModeId(control: ChessTimeControlConfig | null | undefined): ChessGameMode {
+  if (!control || control.baseSeconds <= 0) return "checkmate";
+  return "ten-minutes";
+}
+
+/** Stable string key used for matchmaking buckets so different modes never pair. */
+export function timeControlKey(control: ChessTimeControlConfig | null | undefined): string {
+  if (!control || control.baseSeconds <= 0) return "checkmate";
+  return "10-minutes";
+}
+
+/** Formats a clock config like a chess site would, e.g. "10", "3+2". */
 export function formatTimeControl(control: ChessTimeControlConfig | null | undefined): string {
   if (!control || control.baseSeconds <= 0) return "∞";
   const base = String(control.baseSeconds);

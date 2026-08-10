@@ -4,7 +4,7 @@ import { apiClient } from '../../services/api/client';
 interface Room {
   id: string;
   status: string;
-  gameSlug: string;
+  gameId: string;
   stake: number | null;
   host: { username: string };
   createdAt: string;
@@ -72,7 +72,7 @@ export function AdminRoomsPage() {
                 <td className="px-4 py-3 font-mono text-sm">
                   {room.id.slice(0, 8)}
                 </td>
-                <td className="px-4 py-3">{room.gameSlug}</td>
+                <td className="px-4 py-3">{room.gameId}</td>
                 <td className="px-4 py-3">{room.host.username}</td>
                 <td className="px-4 py-3">{room.stake || 'Free'}</td>
                 <td className="px-4 py-3">{room._count.players}</td>

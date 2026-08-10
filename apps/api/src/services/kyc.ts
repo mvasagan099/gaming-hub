@@ -9,11 +9,10 @@ import {
   AppError,
 } from "@gaming-hub/shared";
 import { FileUploadService } from "./fileUpload";
+import { SupabaseStorageService } from "./supabaseStorage";
 
-function calculateExpiryDate(): Date {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() + 1);
-  return d;
+function calculateExpiryDate(): Date | null {
+  return null;
 }
 
 export const KycComplianceService = {
@@ -64,6 +63,11 @@ export interface CreateKycRequestInput {
   dateOfBirth: Date;
   country: string;
   mobileNumber: string;
+  streetAddress?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
 }
 
 export interface UploadDocumentInput {
@@ -83,7 +87,7 @@ export async function createKycRequest(data: CreateKycRequestInput): Promise<Kyc
   });
 
   if (request && request.status === KycStatus.APPROVED) {
-    throw new Error("User already has an approved KYC request");
+    throw new AppError("VALIDATION_ERROR", "KYC verification is already completed for this account", 400);
   }
 
   if (request) {
@@ -95,6 +99,11 @@ export async function createKycRequest(data: CreateKycRequestInput): Promise<Kyc
         fullName: data.fullName,
         dateOfBirth: data.dateOfBirth,
         mobileNumber: data.mobileNumber,
+        streetAddress: data.streetAddress,
+        addressLine2: data.addressLine2,
+        city: data.city,
+        state: data.state,
+        postalCode: data.postalCode,
         status: KycStatus.NOT_STARTED,
         submittedAt: null,
         reviewedBy: null,
@@ -116,6 +125,11 @@ export async function createKycRequest(data: CreateKycRequestInput): Promise<Kyc
         fullName: data.fullName,
         dateOfBirth: data.dateOfBirth,
         mobileNumber: data.mobileNumber,
+        streetAddress: data.streetAddress,
+        addressLine2: data.addressLine2,
+        city: data.city,
+        state: data.state,
+        postalCode: data.postalCode,
         status: KycStatus.NOT_STARTED,
       },
       include: {
@@ -146,28 +160,58 @@ export async function uploadKycDocument(data: UploadDocumentInput) {
     throw new Error("Cannot upload documents to an approved KYC request");
   }
 
-  const uploaded = await FileUploadService.save(
-    data.userId,
-    data.fileBuffer,
-    data.fileName,
-    data.mimeType,
-  );
+  let fileName = "";
+  let fileUrl = "";
+  let fileSize = data.fileBuffer.length;
+  let mimeType = data.mimeType;
+  let fileHash = "";
 
-  const docNumber = await prisma.kycDocument.count({
-    where: { requestId: data.requestId, documentType: data.documentType },
+  try {
+    const supabaseRes = await SupabaseStorageService.upload(
+      data.userId,
+      data.fileBuffer,
+      data.fileName,
+      data.mimeType,
+      data.side,
+      data.isSelfie,
+      data.documentType
+    );
+    fileName = supabaseRes.fileName;
+    fileUrl = supabaseRes.filePath;
+    fileSize = supabaseRes.fileSize;
+  } catch (err) {
+    const uploaded = await FileUploadService.save(
+      data.userId,
+      data.fileBuffer,
+      data.fileName,
+      data.mimeType,
+    );
+    fileName = uploaded.fileName;
+    fileUrl = uploaded.filePath;
+    fileSize = uploaded.fileSize;
+    fileHash = uploaded.fileHash;
+  }
+
+  await prisma.kycDocument.deleteMany({
+    where: {
+      requestId: data.requestId,
+      documentType: data.documentType,
+      side: data.side ?? null,
+      isSelfie: data.isSelfie ?? false,
+    },
   });
 
-  const page = docNumber;
+  const page = 0;
 
   const document = await prisma.kycDocument.create({
     data: {
       requestId: data.requestId,
       documentType: data.documentType,
-      fileName: uploaded.fileName,
-      fileUrl: uploaded.filePath,
-      fileSize: uploaded.fileSize,
-      mimeType: uploaded.mimeType,
-      fileHash: uploaded.fileHash,
+      fileName,
+      fileUrl,
+      fileSize,
+      mimeType,
+      fileHash: fileHash || "",
       page,
       side: data.side,
       isSelfie: data.isSelfie ?? false,
@@ -184,8 +228,8 @@ export async function uploadKycDocument(data: UploadDocumentInput) {
       targetId: document.id,
       metadata: {
         documentType: data.documentType,
-        fileName: uploaded.fileName,
-        fileSize: uploaded.fileSize,
+        fileName,
+        fileSize,
       },
     },
   });
@@ -213,18 +257,16 @@ export async function submitKycRequest(requestId: string, userId: string): Promi
     throw new Error("Cannot submit request in current status");
   }
 
-  const requiredDocs = await KycComplianceService.getRequiredDocuments(request.level as KycLevel, request.country ?? undefined);
-  
-  const uploadedTypes = new Set(request.documents.map((d) => d.documentType));
-  const missing = requiredDocs.filter((t: KycDocumentType) => !uploadedTypes.has(t));
-
-  const hasSelfie = request.documents.some((d) => d.isSelfie);
-  if (!hasSelfie) {
-    missing.push(KycDocumentType.PASSPORT);
+  const hasIdentityDoc = request.documents.some(
+    (d) => d.documentType !== KycDocumentType.SELFIE && !d.isSelfie
+  );
+  if (!hasIdentityDoc) {
+    throw new AppError("VALIDATION_ERROR", "Please upload at least one valid identity document", 400);
   }
 
-  if (missing.length > 0) {
-    throw new Error(`Missing documents: ${missing.join(", ")}`);
+  const hasSelfie = request.documents.some((d) => d.isSelfie || d.documentType === KycDocumentType.SELFIE);
+  if (!hasSelfie) {
+    throw new AppError("VALIDATION_ERROR", "Live camera selfie is required before submitting verification", 400);
   }
 
   const updated = await prisma.kycRequest.update({
@@ -416,6 +458,7 @@ export async function approveKycRequest(
   const updated = await prisma.kycRequest.update({
     where: { id: requestId },
     data: {
+      level: KycLevel.LEVEL_2,
       status: KycStatus.APPROVED,
       reviewedBy: adminId,
       reviewedAt: new Date(),

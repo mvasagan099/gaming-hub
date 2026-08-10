@@ -75,11 +75,16 @@ export async function kycRoutes(app: FastifyInstance) {
 
     const kycRequest = await KycService.create({
       userId: user.id,
-      level: KycLevel.LEVEL_1,
+      level: KycLevel.LEVEL_2,
       fullName: data.fullName,
       dateOfBirth: new Date(data.dateOfBirth),
       country: data.country,
       mobileNumber: data.mobileNumber,
+      streetAddress: data.streetAddress,
+      addressLine2: data.addressLine2,
+      city: data.city,
+      state: data.state,
+      postalCode: data.postalCode,
     });
 
     return {
@@ -132,10 +137,14 @@ export async function kycRoutes(app: FastifyInstance) {
     }
 
     const requestId = getFieldStringValue(data.fields.requestId);
-    const documentType = getFieldStringValue(data.fields.documentType) as KycDocumentType;
+    let documentType = getFieldStringValue(data.fields.documentType) as KycDocumentType;
     const side = getFieldStringValue(data.fields.side) as "front" | "back" | undefined;
     const isSelfieValue = getFieldStringValue(data.fields.isSelfie);
     const isSelfie = isSelfieValue === "true";
+
+    if (isSelfie && !documentType) {
+      documentType = KycDocumentType.SELFIE;
+    }
 
     if (!requestId || !documentType) {
       throw new AppError("VALIDATION_ERROR", "Missing required fields", 400);
@@ -145,24 +154,33 @@ export async function kycRoutes(app: FastifyInstance) {
     const mimeType = data.mimetype;
     const filename = data.filename;
 
-    const document = await KycService.uploadDocument({
-      requestId,
-      userId: user.id,
-      documentType: documentType as KycDocumentType,
-      fileBuffer: buffer,
-      fileName: filename,
-      mimeType,
-      side,
-      isSelfie,
-    });
+    try {
+      const document = await KycService.uploadDocument({
+        requestId,
+        userId: user.id,
+        documentType: documentType as KycDocumentType,
+        fileBuffer: buffer,
+        fileName: filename,
+        mimeType,
+        side,
+        isSelfie,
+      });
 
-    return {
-      ok: true,
-      documentId: document.id,
-      documentType: document.documentType,
-      fileName: document.fileName,
-      fileSize: document.fileSize,
-    };
+      return {
+        ok: true,
+        documentId: document.id,
+        documentType: document.documentType,
+        fileName: document.fileName,
+        fileSize: document.fileSize,
+      };
+    } catch (err) {
+      console.error("KYC Upload Error:", err);
+      throw new AppError(
+        "VALIDATION_ERROR",
+        err instanceof Error ? err.message : "Failed to upload document",
+        400
+      );
+    }
   });
 
   app.delete("/api/kyc/document/:documentId", { preHandler: authenticate }, async (request) => {
@@ -181,13 +199,22 @@ export async function kycRoutes(app: FastifyInstance) {
     await assertFeatureEnabled("support.kyc", "KYC verification");
     const body = request.body as { requestId: string };
 
-    const kycRequest = await KycService.submit(body.requestId, user.id);
+    try {
+      const kycRequest = await KycService.submit(body.requestId, user.id);
 
-    return {
-      ok: true,
-      status: kycRequest.status,
-      message: "KYC request submitted for review",
-    };
+      return {
+        ok: true,
+        status: kycRequest.status,
+        message: "KYC request submitted for review",
+      };
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      throw new AppError(
+        "VALIDATION_ERROR",
+        err instanceof Error ? err.message : "Failed to submit KYC request",
+        400
+      );
+    }
   });
 
   app.get("/api/kyc/limits", { preHandler: authenticate }, async (request) => {

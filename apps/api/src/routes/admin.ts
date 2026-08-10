@@ -20,6 +20,7 @@ import {
 } from "../services/walletRequests";
 import {
   getSettings,
+  resetSettingsCache,
   setSetting,
   setCategorySettings,
 } from "../services/settings";
@@ -338,6 +339,7 @@ export async function adminRoutes(app: FastifyInstance) {
       throw new AppError("VALIDATION_ERROR", `Unknown category "${category}"`, 422);
     }
     await prisma.siteSetting.deleteMany({ where: { category } });
+    resetSettingsCache();
     auditFromRequest(request, {
       actorType: "user",
       actorId: admin.id,

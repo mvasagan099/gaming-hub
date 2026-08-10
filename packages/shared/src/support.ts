@@ -31,7 +31,7 @@ export interface SupportArticle {
   status: SupportContentStatus;
   tags: string[];
   keywords: string[];
-  quickAction?: Record<string, string> | null;
+  quickAction?: QuickActionConfig | null;
   sortOrder: number;
   viewCount: number;
   helpfulCount: number;

@@ -442,6 +442,35 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
     };
   }
 
+  /**
+   * Resolves a wall-clock deadline expiry. Chess only has a per-turn flag
+   * deadline, so "match" timeouts are always rejected.
+   */
+  handleTimeout(kind: "turn" | "match", seat?: number): EngineActionResult<ChessState> {
+    const state = this.state as ChessState;
+    if (kind === "match") {
+      return {
+        ok: false,
+        error: "This game has no match-level timer",
+        state,
+        events: [],
+        finished: state.finished,
+        winnerSeats: state.winnerSeats,
+      };
+    }
+    if (seat == null || seat !== state.currentSeat) {
+      return {
+        ok: false,
+        error: "Stale clock deadline",
+        state,
+        events: [],
+        finished: state.finished,
+        winnerSeats: state.winnerSeats,
+      };
+    }
+    return this.applyFlag(seat, state, this.now());
+  }
+
   private applyFlag(seat: number, state: ChessState, now: number): EngineActionResult<ChessState> {
     const next = structuredClone(state);
     if (next.clocks) {

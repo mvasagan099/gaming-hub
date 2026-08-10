@@ -15,6 +15,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { adminApi, type AdminKycRequest } from '../../services/api/enterprise';
+import { useAuthStore } from '../../store/authStore';
 
 export function AdminKycPage() {
   const [items, setItems] = useState<AdminKycRequest[]>([]);
@@ -254,30 +255,89 @@ export function AdminKycPage() {
               </button>
             </div>
 
+            {/* Applicant Details */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
+              <h3 className="font-extrabold uppercase text-slate-500 tracking-wider text-[10px]">Applicant & Address Details</h3>
+              <div className="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+                <div><span className="text-slate-400">Full Name:</span> <span className="font-bold">{selectedRequest.fullName || 'N/A'}</span></div>
+                <div><span className="text-slate-400">Mobile:</span> <span className="font-bold">{selectedRequest.mobileNumber || 'N/A'}</span></div>
+                <div><span className="text-slate-400">Country:</span> <span className="font-bold">{selectedRequest.country || 'N/A'}</span></div>
+                <div><span className="text-slate-400">DOB:</span> <span className="font-bold">{selectedRequest.dateOfBirth ? new Date(selectedRequest.dateOfBirth).toLocaleDateString() : 'N/A'}</span></div>
+              </div>
+              {(selectedRequest.streetAddress || selectedRequest.city) && (
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300">
+                  <span className="text-slate-400">Residential Address:</span>{' '}
+                  <span className="font-bold">
+                    {[selectedRequest.streetAddress, selectedRequest.addressLine2, selectedRequest.city, selectedRequest.state, selectedRequest.postalCode].filter(Boolean).join(', ')}
+                  </span>
+                </div>
+              )}
+            </div>
+
             {/* Document Preview */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Uploaded Documents</h3>
+            <div className="space-y-3">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Uploaded Identity Documents & Live Selfie</h3>
               {selectedRequest.documents && selectedRequest.documents.length > 0 ? (
-                <div className="grid gap-2">
-                  {selectedRequest.documents.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-indigo-500" />
-                        <span className="font-bold uppercase">{doc.documentType}</span>
-                      </div>
-                      <a
-                        href={doc.fileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-indigo-500 font-extrabold hover:underline flex items-center gap-1"
+                <div className="grid gap-3">
+                  {Array.from(
+                    selectedRequest.documents.reduce((map, doc) => {
+                      const key = `${doc.isSelfie ? 'selfie' : doc.documentType}-${doc.side || 'default'}`;
+                      if (!map.has(key)) map.set(key, doc);
+                      return map;
+                    }, new Map<string, typeof selectedRequest.documents[0]>()).values()
+                  ).map((doc) => {
+                    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:4000/api';
+                    const rawUrl = doc.fileUrl;
+                    const isFullUrl = rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'));
+                    const token = useAuthStore.getState().session?.access_token;
+                    const viewUrl = isFullUrl
+                      ? rawUrl
+                      : rawUrl && rawUrl.startsWith('/')
+                        ? `${apiBase.replace(/\/api$/, '')}${rawUrl}${token ? `?token=${token}` : ''}`
+                        : `${apiBase}/admin/kyc/document/${doc.id}/view${token ? `?token=${token}` : ''}`;
+                    const isImg = !doc.mimeType || doc.mimeType.startsWith('image/') || !!doc.fileName?.match(/\.(jpg|jpeg|png|webp)$/i) || !!doc.isSelfie;
+                    return (
+                      <div
+                        key={doc.id}
+                        className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 space-y-2.5 text-xs"
                       >
-                        View File ↗
-                      </a>
-                    </div>
-                  ))}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-indigo-500" />
+                            <span className="font-extrabold uppercase text-slate-800 dark:text-slate-200">
+                              {doc.isSelfie ? 'Live Selfie' : doc.documentType?.replace(/_/g, ' ')}
+                            </span>
+                            {doc.side && (
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+                                {doc.side}
+                              </span>
+                            )}
+                          </div>
+                          <a
+                            href={viewUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] transition-colors inline-flex items-center gap-1 shadow-sm"
+                          >
+                            <span>Open in Supabase</span> ↗
+                          </a>
+                        </div>
+
+                        {isImg && viewUrl && (
+                          <div className="relative overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-black/5 max-h-48 flex items-center justify-center">
+                            <img
+                              src={viewUrl}
+                              alt={doc.fileName || 'KYC Document'}
+                              className="max-h-48 w-full object-contain rounded-xl"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-xs text-slate-400 italic">No document previews attached.</p>

@@ -1,5 +1,5 @@
 import { prisma } from "@gaming-hub/db";
-import { AppError, type SupportContentType, type SupportContentStatus } from "@gaming-hub/shared";
+import { AppError, type SupportContentType, type SupportContentStatus, type QuickActionConfig } from "@gaming-hub/shared";
 import type {
   CreateCategoryInput,
   UpdateCategoryInput,
@@ -416,7 +416,7 @@ export async function getContentForPage(pageRoute: string): Promise<SupportConte
     status: a.status as SupportContentStatus,
     tags: a.tags,
     keywords: a.keywords,
-    quickAction: a.quickAction as Record<string, string> | undefined,
+    quickAction: a.quickAction as QuickActionConfig | null | undefined,
     sortOrder: a.sortOrder,
     viewCount: a.viewCount,
     helpfulCount: a.helpfulCount,
@@ -577,7 +577,7 @@ export async function searchSupportContent(input: SearchSupportInput): Promise<S
       status: a.status as SupportContentStatus,
       tags: a.tags,
       keywords: a.keywords,
-      quickAction: a.quickAction as Record<string, string> | undefined,
+    quickAction: a.quickAction as QuickActionConfig | null | undefined,
       sortOrder: a.sortOrder,
       viewCount: a.viewCount,
       helpfulCount: a.helpfulCount,

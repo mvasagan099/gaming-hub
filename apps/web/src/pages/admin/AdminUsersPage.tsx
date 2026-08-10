@@ -18,7 +18,7 @@ interface User {
   id: string;
   username: string;
   displayName: string;
-  email: string;
+  email: string | null;
   role: 'USER' | 'MODERATOR' | 'ADMIN';
   isOnline: boolean;
   coins: number;
@@ -92,8 +92,7 @@ export function AdminUsersPage() {
     setIsSubmitting(true);
     setError(null);
     try {
-      await apiClient.post('/admin/wallet/adjust', {
-        userId: selectedUser.id,
+      await apiClient.post(`/admin/users/${selectedUser.id}/wallet`, {
         amount: walletAmount,
         reason: walletReason,
       });
@@ -129,7 +128,7 @@ export function AdminUsersPage() {
     (u) =>
       u.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase()),
+      (u.email ?? '').toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
@@ -205,7 +204,7 @@ export function AdminUsersPage() {
                         <div>
                           <div className="font-bold text-slate-900 dark:text-white text-sm">{user.displayName}</div>
                           <div className="text-xs text-slate-400 font-normal">@{user.username}</div>
-                          <div className="text-[11px] text-slate-400 font-mono">{user.email}</div>
+                          <div className="text-[11px] text-slate-400 font-mono">{user.email ?? 'No email'}</div>
                         </div>
                       </div>
                     </td>

@@ -56,6 +56,39 @@ export async function listAnnouncements(userId: string, page: number, pageSize: 
   };
 }
 
+/**
+ * Lists every announcement regardless of schedule/visibility — the admin
+ * surface needs to manage scheduled and expired items too.
+ */
+export async function listAllAnnouncements(page: number, pageSize: number) {
+  const [items, total] = await Promise.all([
+    prisma.announcement.findMany({
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.announcement.count(),
+  ]);
+
+  return {
+    items: items.map((a) => ({
+      id: a.id,
+      title: a.title,
+      body: a.body,
+      type: a.type,
+      imageUrl: a.imageUrl,
+      targetRole: a.targetRole,
+      startsAt: a.startsAt?.toISOString() ?? null,
+      expiresAt: a.expiresAt?.toISOString() ?? null,
+      createdAt: a.createdAt.toISOString(),
+      read: false,
+    })),
+    total,
+    page,
+    pageSize,
+  };
+}
+
 export async function markAnnouncementRead(userId: string, announcementId: string) {
   const announcement = await prisma.announcement.findUnique({ where: { id: announcementId } });
   if (!announcement) throw new AppError("NOT_FOUND", "Announcement not found", 404);

@@ -41,6 +41,8 @@ export interface GameActionOptions {
 export class MatchManager {
   private readonly framework: MultiplayerFramework;
   private readonly activeMatches = new Map<string, MatchRuntime>();
+  private physicsIntervals = new Map<string, ReturnType<typeof setInterval>>();
+  private readonly PHYSICS_TICK_MS = 16;
   
   constructor(framework: MultiplayerFramework) {
     this.framework = framework;
@@ -51,16 +53,59 @@ export class MatchManager {
   }
   
   async shutdown(): Promise<void> {
-    // End all active matches
+    for (const intervalId of this.physicsIntervals.values()) {
+      clearInterval(intervalId);
+    }
+    this.physicsIntervals.clear();
     for (const match of this.activeMatches.values()) {
-      // Clean up any resources
     }
     this.activeMatches.clear();
   }
   
-  /**
-   * Start a match in a room.
-   */
+  startPhysicsLoop(room: RoomRuntime): void {
+    const matchId = room.match?.matchId;
+    if (!matchId || this.physicsIntervals.has(matchId)) return;
+    
+    const gameId = room.config.gameId;
+    if (gameId !== "table-tennis") return;
+    
+    const intervalId = setInterval(() => {
+      this.runPhysicsTick(room);
+    }, this.PHYSICS_TICK_MS);
+    
+    this.physicsIntervals.set(matchId, intervalId);
+    this.framework.log(`Physics loop started for match ${matchId}`);
+  }
+  
+  stopPhysicsLoop(matchId: string): void {
+    const intervalId = this.physicsIntervals.get(matchId);
+    if (intervalId) {
+      clearInterval(intervalId);
+      this.physicsIntervals.delete(matchId);
+      this.framework.log(`Physics loop stopped for match ${matchId}`);
+    }
+  }
+  
+  private async runPhysicsTick(room: RoomRuntime): Promise<void> {
+    if (!room.match || room.status !== "playing") return;
+    
+    const engine = room.match.engine as any;
+    if (typeof engine.tick !== "function") return;
+    
+    try {
+      const result = engine.tick();
+      if (result && result.events && result.events.length > 0) {
+        await this.framework.syncManager.broadcastGameState(room, result.events);
+        
+        if (result.state?.finished) {
+          this.stopPhysicsLoop(room.match.matchId);
+        }
+      }
+    } catch (error) {
+      this.framework.error("Physics tick error", error);
+    }
+  }
+
   async startMatch(options: StartMatchOptions): Promise<MatchRuntime> {
     const { roomId, startedBy } = options;
     
@@ -131,6 +176,13 @@ export class MatchManager {
       };
     }
     
+    // Pass the chess time control through so clock-capable engines run
+    // authoritative timers (untimed modes omit it entirely).
+    const timeControl = room.config.settings.timeControl;
+    if (timeControl && timeControl.baseSeconds > 0) {
+      engineOptions.timeControl = timeControl;
+    }
+    
     // Create engine
     const engine = createEngine(
       room.config.gameId,
@@ -181,6 +233,8 @@ export class MatchManager {
     // room transition to "playing" and can navigate into the game page).
     await this.framework.syncManager.broadcastRoomUpdate(room);
     await this.framework.syncManager.broadcastMatchStart(room);
+    
+    this.startPhysicsLoop(room);
     
     this.framework.log(`Match ${matchId} started in room ${roomId}`);
     
@@ -364,7 +418,8 @@ export class MatchManager {
   async finishMatch(room: RoomRuntime, result: EngineActionResult<JsonObject>): Promise<void> {
     if (!room.match) return;
     
-    // Resolve winner ids, per-player outcomes and scores.
+    this.stopPhysicsLoop(room.match.matchId);
+    
     const matchResult = this.framework.winnerCalculator.calculate(room, result);
     
     room.match.finishedAt = matchResult.finishedAt;

@@ -1,34 +1,38 @@
 import { z } from "zod";
 
-export enum KycLevel {
-  LEVEL_0 = "LEVEL_0",
-  LEVEL_1 = "LEVEL_1",
-  LEVEL_2 = "LEVEL_2",
-  LEVEL_3 = "LEVEL_3",
-}
+export const KycLevel = {
+  LEVEL_0: "LEVEL_0",
+  LEVEL_1: "LEVEL_1",
+  LEVEL_2: "LEVEL_2",
+  LEVEL_3: "LEVEL_3",
+} as const;
+export type KycLevel = (typeof KycLevel)[keyof typeof KycLevel];
 
-export enum KycStatus {
-  NOT_STARTED = "NOT_STARTED",
-  PENDING = "PENDING",
-  UNDER_REVIEW = "UNDER_REVIEW",
-  APPROVED = "APPROVED",
-  REJECTED = "REJECTED",
-  EXPIRED = "EXPIRED",
-  REQUIRES_RESUBMISSION = "REQUIRES_RESUBMISSION",
-}
+export const KycStatus = {
+  NOT_STARTED: "NOT_STARTED",
+  PENDING: "PENDING",
+  UNDER_REVIEW: "UNDER_REVIEW",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  EXPIRED: "EXPIRED",
+  REQUIRES_RESUBMISSION: "REQUIRES_RESUBMISSION",
+} as const;
+export type KycStatus = (typeof KycStatus)[keyof typeof KycStatus];
 
-export enum KycDocumentType {
-  AADHAAR_CARD = "AADHAAR_CARD",
-  PAN_CARD = "PAN_CARD",
-  VOTER_ID = "VOTER_ID",
-  PASSPORT = "PASSPORT",
-  DRIVING_LICENCE = "DRIVING_LICENCE",
-  NATIONAL_ID = "NATIONAL_ID",
-  RESIDENCE_PERMIT = "RESIDENCE_PERMIT",
-  UTILITY_BILL = "UTILITY_BILL",
-  BANK_STATEMENT = "BANK_STATEMENT",
-  GOVERNMENT_ADDRESS_DOC = "GOVERNMENT_ADDRESS_DOC",
-}
+export const KycDocumentType = {
+  AADHAAR_CARD: "AADHAAR_CARD",
+  PAN_CARD: "PAN_CARD",
+  VOTER_ID: "VOTER_ID",
+  PASSPORT: "PASSPORT",
+  DRIVING_LICENCE: "DRIVING_LICENCE",
+  NATIONAL_ID: "NATIONAL_ID",
+  RESIDENCE_PERMIT: "RESIDENCE_PERMIT",
+  UTILITY_BILL: "UTILITY_BILL",
+  BANK_STATEMENT: "BANK_STATEMENT",
+  GOVERNMENT_ADDRESS_DOC: "GOVERNMENT_ADDRESS_DOC",
+  SELFIE: "SELFIE",
+} as const;
+export type KycDocumentType = (typeof KycDocumentType)[keyof typeof KycDocumentType];
 
 export const KYC_LEVEL_NAMES: Record<KycLevel, string> = {
   [KycLevel.LEVEL_0]: "Unverified",
@@ -81,6 +85,11 @@ export const kycSubmitLevel1Schema = z.object({
   dateOfBirth: z.string().datetime(),
   country: z.string().trim().length(2).toUpperCase(),
   mobileNumber: z.string().trim().min(10).max(15),
+  streetAddress: z.string().trim().min(2).max(200).optional(),
+  addressLine2: z.string().trim().max(200).optional(),
+  city: z.string().trim().min(2).max(100).optional(),
+  state: z.string().trim().min(2).max(100).optional(),
+  postalCode: z.string().trim().min(2).max(20).optional(),
 });
 
 export const kycUploadDocumentSchema = z.object({
@@ -93,7 +102,7 @@ export const kycUploadDocumentSchema = z.object({
 });
 
 export const kycReviewSchema = z.object({
-  requestId: z.string().cuid(),
+  requestId: z.string().min(1),
   action: z.enum(["APPROVE", "REJECT", "REQUEST_RESUBMISSION"]),
   notes: z.string().trim().max(1000).optional(),
   rejectionReason: z.string().trim().min(1).max(500).optional(),
@@ -138,6 +147,11 @@ export type KycRequestWithDocuments = {
   fullName: string | null;
   dateOfBirth: Date | null;
   mobileNumber: string | null;
+  streetAddress?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
   reviewedBy: string | null;
   reviewedAt: Date | null;
   rejectionReason: string | null;
@@ -155,6 +169,7 @@ export type KycRequestWithDocuments = {
     documentType: KycDocumentType;
     status: string;
     fileName: string;
+    fileUrl: string;
     fileSize: number;
     mimeType: string;
     side: string | null;

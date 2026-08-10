@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { SnakeVsWormsEngine } from "..";
 import type { SnakeVsWormsAction } from "..";
 

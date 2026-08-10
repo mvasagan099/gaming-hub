@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Plus, X, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '../../services/api/client';
-import type { SettingsCategoryName, SettingsShape } from '@gaming-hub/shared';
-import { SETTINGS_CATEGORY_META } from '@gaming-hub/shared';
+import type { SettingsCategoryName, SettingsShape, SettingsFieldMeta } from '@gaming-hub/shared';
+import { SETTINGS_CATEGORY_META, SETTINGS_FIELD_META, SECRET_SETTING_KEYS } from '@gaming-hub/shared';
 
 async function fetchAllSettings(): Promise<SettingsShape> {
   return apiClient.get<SettingsShape>('/admin/settings');
@@ -19,6 +20,9 @@ async function resetCategory(category: SettingsCategoryName) {
 }
 
 const CATEGORIES = Object.keys(SETTINGS_CATEGORY_META) as SettingsCategoryName[];
+
+const inputClass =
+  'w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring focus:border-ring';
 
 export function AdminSettingsPage() {
   const [settings, setSettings] = useState<SettingsShape | null>(null);
@@ -52,8 +56,8 @@ export function AdminSettingsPage() {
     setIsSaving(true);
     setSaveError(null);
     try {
-      const categorySettings = settings?.[activeCategory] ?? {};
-      const mergedValues = { ...categorySettings, ...editedValues };
+  const categorySettings = (settings?.[activeCategory] ?? {}) as Record<string, unknown>;
+  const mergedValues: Record<string, unknown> = { ...categorySettings, ...editedValues };
       await updateCategory(activeCategory, mergedValues);
       await loadSettings();
       setEditedValues({});
@@ -107,8 +111,9 @@ export function AdminSettingsPage() {
     );
   }
 
-  const categorySettings = settings?.[activeCategory] ?? {};
-  const mergedValues = { ...categorySettings, ...editedValues };
+  const categorySettings = (settings?.[activeCategory] ?? {}) as Record<string, unknown>;
+  const mergedValues: Record<string, unknown> = { ...categorySettings, ...editedValues };
+  const fields = SETTINGS_FIELD_META[activeCategory];
 
   return (
     <div>
@@ -151,59 +156,29 @@ export function AdminSettingsPage() {
             </div>
 
             {saveError && (
-              <div className="mb-4 rounded-md border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-600">
+              <div className="mb-4 flex items-center gap-2 rounded-md border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-600">
+                <AlertCircle className="h-4 w-4 shrink-0" />
                 {saveError}
               </div>
             )}
 
             {saveSuccess && (
-              <div className="mb-4 rounded-md border border-green-500/50 bg-green-500/10 p-3 text-sm text-green-600">
+              <div className="mb-4 flex items-center gap-2 rounded-md border border-green-500/50 bg-green-500/10 p-3 text-sm text-green-600">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
                 Settings saved successfully
               </div>
             )}
 
             <div className="space-y-4">
-              {Object.entries(mergedValues).map(([field, value]) => (
-                <div key={field} className="grid grid-cols-3 gap-4">
-                  <label className="flex items-center text-sm font-medium text-foreground">
-                    {field.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())}
-                  </label>
-                  <div className="col-span-2">
-                    {typeof value === 'boolean' ? (
-                      <input
-                        type="checkbox"
-                        checked={value as boolean}
-                        onChange={(e) => handleFieldChange(field, e.target.checked)}
-                        className="h-4 w-4 rounded border-border"
-                      />
-                    ) : typeof value === 'number' ? (
-                      <input
-                        type="number"
-                        value={value as number}
-                        onChange={(e) => handleFieldChange(field, e.target.valueAsNumber || 0)}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                      />
-                    ) : typeof value === 'string' ? (
-                      <input
-                        type="text"
-                        value={value as string}
-                        onChange={(e) => handleFieldChange(field, e.target.value)}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        value={JSON.stringify(value)}
-                        onChange={(e) => {
-                          try {
-                            handleFieldChange(field, JSON.parse(e.target.value));
-                          } catch {}
-                        }}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono text-xs"
-                      />
-                    )}
-                  </div>
-                </div>
+              {fields.map((field) => (
+                <SettingsField
+                  key={`${activeCategory}.${field.key}`}
+                  field={field}
+                  value={mergedValues[field.key]}
+                  isDirty={field.key in editedValues}
+                  isSecret={SECRET_SETTING_KEYS.has(`${activeCategory}.${field.key}`)}
+                  onChange={(value) => handleFieldChange(field.key, value)}
+                />
               ))}
             </div>
 
@@ -228,6 +203,220 @@ export function AdminSettingsPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SettingsField({
+  field,
+  value,
+  isDirty,
+  isSecret,
+  onChange,
+}: {
+  field: SettingsFieldMeta;
+  value: unknown;
+  isDirty: boolean;
+  isSecret: boolean;
+  onChange: (value: unknown) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-4">
+      <div className="flex items-start gap-2 pt-2">
+        <label className="text-sm font-medium text-foreground">
+          {field.label}
+          {isDirty && <span className="ml-1.5 h-1.5 w-1.5 inline-block rounded-full bg-primary align-middle" />}
+        </label>
+      </div>
+      <div className="col-span-2">
+        {field.kind === 'boolean' && (
+          <input
+            type="checkbox"
+            checked={Boolean(value)}
+            onChange={(e) => onChange(e.target.checked)}
+            className="mt-2 h-4 w-4 rounded border-border"
+          />
+        )}
+        {field.kind === 'number' && (
+          <input
+            type="number"
+            value={typeof value === 'number' ? value : 0}
+            onChange={(e) => onChange(e.target.valueAsNumber || 0)}
+            className={inputClass}
+          />
+        )}
+        {field.kind === 'enum' && (
+          <select
+            value={typeof value === 'string' ? value : ''}
+            onChange={(e) => onChange(e.target.value)}
+            className={inputClass}
+          >
+            {field.enumValues?.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        )}
+        {field.kind === 'string' && (
+          <SecretTextInput
+            value={typeof value === 'string' ? value : ''}
+            isSecret={isSecret}
+            onChange={onChange}
+          />
+        )}
+        {field.kind === 'stringArray' && (
+          <StringArrayEditor
+            value={Array.isArray(value) ? (value as string[]) : []}
+            onChange={onChange}
+          />
+        )}
+        {(field.kind === 'objectArray' || field.kind === 'record') && (
+          <JsonEditor value={value} onChange={onChange} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SecretTextInput({
+  value,
+  isSecret,
+  onChange,
+}: {
+  value: string;
+  isSecret: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [revealed, setRevealed] = useState(false);
+  const showReveal = isSecret && value.length > 0;
+  return (
+    <div className="relative">
+      <input
+        type={isSecret && !revealed ? 'password' : 'text'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`${inputClass} ${showReveal ? 'pr-9' : ''}`}
+      />
+      {showReveal && (
+        <button
+          type="button"
+          onClick={() => setRevealed((r) => !r)}
+          className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground hover:text-foreground"
+          aria-label={revealed ? 'Hide value' : 'Show value'}
+        >
+          {revealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function StringArrayEditor({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (value: string[]) => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const add = () => {
+    const item = draft.trim();
+    if (!item) return;
+    if (!value.includes(item)) onChange([...value, item]);
+    setDraft('');
+  };
+  const remove = (item: string) => onChange(value.filter((v) => v !== item));
+  return (
+    <div className="space-y-2">
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {value.map((item) => (
+            <span
+              key={item}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium text-foreground"
+            >
+              {item}
+              <button
+                type="button"
+                onClick={() => remove(item)}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label={`Remove ${item}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder="Add item and press Enter"
+          className={inputClass}
+        />
+        <button
+          type="button"
+          onClick={add}
+          disabled={!draft.trim()}
+          className="rounded-md border border-border px-3 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50"
+          aria-label="Add item"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function JsonEditor({ value, onChange }: { value: unknown; onChange: (value: unknown) => void }) {
+  const [draft, setDraft] = useState(() => (value === undefined ? '' : JSON.stringify(value, null, 2)));
+  const [invalid, setInvalid] = useState(false);
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused && value !== undefined) setDraft(JSON.stringify(value, null, 2));
+  }, [value, focused]);
+
+  const handleChange = (text: string) => {
+    setDraft(text);
+    if (text.trim() === '') {
+      setInvalid(false);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(text);
+      setInvalid(false);
+      onChange(parsed);
+    } catch {
+      setInvalid(true);
+    }
+  };
+
+  return (
+    <div>
+      <textarea
+        value={draft}
+        onChange={(e) => handleChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        rows={5}
+        spellCheck={false}
+        className={`w-full rounded-md border bg-background px-3 py-2 font-mono text-xs outline-none focus:ring-2 focus:ring-ring ${
+          invalid ? 'border-red-500 focus:ring-red-500' : 'border-border focus:border-ring'
+        }`}
+      />
+      {invalid && (
+        <p className="mt-1 text-xs text-red-600">Invalid JSON — not saved until fixed.</p>
+      )}
     </div>
   );
 }

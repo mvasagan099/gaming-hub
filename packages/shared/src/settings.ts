@@ -395,10 +395,101 @@ export const SECRET_SETTING_KEYS: ReadonlySet<string> = new Set([
   "payment.paypalWebhookId",
   "payment.razorpayKeySecret",
   "payment.razorpayWebhookSecret",
+  "storage.s3AccessKeyId",
   "storage.s3SecretAccessKey",
   "email.smtpPassword",
   "api.webhookSecret",
 ]);
+
+// ---------------------------------------------------------------------------
+// Field metadata (drives the admin settings editor)
+// ---------------------------------------------------------------------------
+
+export type SettingsFieldKind =
+  | "string"
+  | "number"
+  | "boolean"
+  | "enum"
+  | "stringArray"
+  | "objectArray"
+  | "record";
+
+export interface SettingsFieldMeta {
+  key: string;
+  label: string;
+  kind: SettingsFieldKind;
+  /** Present when `kind === "enum"`. */
+  enumValues?: readonly string[];
+  /** Present when `kind === "stringArray"`. */
+  itemHint?: string;
+}
+
+function settingFieldLabel(key: string): string {
+  return key
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (s) => s.toUpperCase());
+}
+
+function unwrapZodDefault(schema: { _def?: { type?: string; innerType?: unknown } }): unknown {
+  let current: unknown = schema;
+  while (
+    current &&
+    typeof current === "object" &&
+    (current as { _def?: { type?: string } })._def?.type === "default"
+  ) {
+    current = (current as { _def: { innerType: unknown } })._def.innerType;
+  }
+  return current;
+}
+
+function describeSettingField(schema: unknown): { kind: SettingsFieldKind; enumValues?: readonly string[] } {
+  const def = unwrapZodDefault(schema as { _def?: { type?: string; innerType?: unknown } });
+  if (!def || typeof def !== "object") return { kind: "string" };
+  const type = (def as { _def?: { type?: string } })._def?.type;
+
+  switch (type) {
+    case "boolean":
+      return { kind: "boolean" };
+    case "number":
+      return { kind: "number" };
+    case "string":
+      return { kind: "string" };
+    case "enum": {
+      const entries = (def as { _def?: { entries?: Record<string, string> } })._def?.entries;
+      return { kind: "enum", enumValues: entries ? Object.keys(entries) : [] };
+    }
+    case "array": {
+      const element = (def as { _def?: { element?: unknown } })._def?.element;
+      const elementDef = element && typeof element === "object"
+        ? (element as { _def?: { type?: string } })._def?.type
+        : undefined;
+      return { kind: elementDef === "object" || elementDef === "record" ? "objectArray" : "stringArray" };
+    }
+    case "record":
+      return { kind: "record" };
+    default:
+      return { kind: "string" };
+  }
+}
+
+/**
+ * Per-category field descriptors used by the admin settings UI. Derived from
+ * the zod schemas so the editor never drifts from validation.
+ */
+export const SETTINGS_FIELD_META: Record<SettingsCategoryName, SettingsFieldMeta[]> = (() => {
+  const out = {} as Record<SettingsCategoryName, SettingsFieldMeta[]>;
+  for (const [category, schema] of Object.entries(SETTINGS_CATEGORIES) as Array<
+    [SettingsCategoryName, { shape: Record<string, unknown> }]
+  >) {
+    const fields = Object.entries(schema.shape ?? {}).map(([key, fieldSchema]) => ({
+      key,
+      label: settingFieldLabel(key),
+      ...describeSettingField(fieldSchema),
+    }));
+    out[category] = fields;
+  }
+  return out;
+})();
 
 /** Human-readable category metadata for UI rendering. */
 export const SETTINGS_CATEGORY_META: Record<

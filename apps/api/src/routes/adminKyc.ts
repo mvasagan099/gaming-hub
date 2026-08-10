@@ -8,12 +8,15 @@ import {
   kycAdminOverrideSchema,
   kycSetWithdrawalLimitsSchema,
   kycDocumentConfigSchema,
+  AppError,
 } from "@gaming-hub/shared";
 import { authenticate } from "../plugins/authenticate";
 import { requireUser, parseSchema, queryParams, queryString } from "../lib/http";
 import { requirePermission } from "../lib/permissions";
 import KycService from "../services/kyc";
 import { FileUploadService } from "../services/fileUpload";
+import { SupabaseStorageService } from "../services/supabaseStorage";
+import { readFile } from "node:fs/promises";
 
 export async function adminKycRoutes(app: FastifyInstance) {
   app.get("/api/admin/kyc/pending", { preHandler: authenticate }, async (request) => {
@@ -24,7 +27,23 @@ export async function adminKycRoutes(app: FastifyInstance) {
 
     const result = await KycService.listPending(page, pageSize);
 
-    return result;
+    const items = await Promise.all(
+      result.items.map(async (item) => {
+        const documents = await Promise.all(
+          item.documents.map(async (doc) => {
+            const signedUrl = await SupabaseStorageService.getSignedUrl(doc.fileUrl);
+            return {
+              ...doc,
+              fileUrl: signedUrl || `/api/admin/kyc/document/${doc.id}/view`,
+              signedUrl: signedUrl || undefined,
+            };
+          })
+        );
+        return { ...item, documents };
+      })
+    );
+
+    return { ...result, items };
   });
 
   app.get("/api/admin/kyc/status/:status", { preHandler: authenticate }, async (request) => {
@@ -41,7 +60,23 @@ export async function adminKycRoutes(app: FastifyInstance) {
 
     const result = await KycService.listByStatus(status, page, pageSize);
 
-    return result;
+    const items = await Promise.all(
+      result.items.map(async (item) => {
+        const documents = await Promise.all(
+          item.documents.map(async (doc) => {
+            const signedUrl = await SupabaseStorageService.getSignedUrl(doc.fileUrl);
+            return {
+              ...doc,
+              fileUrl: signedUrl || `/api/admin/kyc/document/${doc.id}/view`,
+              signedUrl: signedUrl || undefined,
+            };
+          })
+        );
+        return { ...item, documents };
+      })
+    );
+
+    return { ...result, items };
   });
 
   app.get("/api/admin/kyc/request/:requestId", { preHandler: authenticate }, async (request) => {
@@ -54,6 +89,17 @@ export async function adminKycRoutes(app: FastifyInstance) {
       return null;
     }
 
+    const documentsWithSignedUrls = await Promise.all(
+      kycRequest.documents.map(async (doc) => {
+        const signedUrl = await SupabaseStorageService.getSignedUrl(doc.fileUrl);
+        return {
+          ...doc,
+          fileUrl: signedUrl || `/api/admin/kyc/document/${doc.id}/view`,
+          signedUrl,
+        };
+      })
+    );
+
     return {
       id: kycRequest.id,
       userId: kycRequest.userId,
@@ -63,6 +109,11 @@ export async function adminKycRoutes(app: FastifyInstance) {
       fullName: kycRequest.fullName,
       dateOfBirth: kycRequest.dateOfBirth?.toISOString(),
       mobileNumber: kycRequest.mobileNumber,
+      streetAddress: kycRequest.streetAddress,
+      addressLine2: kycRequest.addressLine2,
+      city: kycRequest.city,
+      state: kycRequest.state,
+      postalCode: kycRequest.postalCode,
       reviewedBy: kycRequest.reviewedBy,
       reviewedAt: kycRequest.reviewedAt?.toISOString(),
       rejectionReason: kycRequest.rejectionReason,
@@ -73,8 +124,35 @@ export async function adminKycRoutes(app: FastifyInstance) {
       adminOverrideBy: kycRequest.adminOverrideBy,
       adminOverrideAt: kycRequest.adminOverrideAt?.toISOString(),
       createdAt: kycRequest.createdAt.toISOString(),
-      documents: kycRequest.documents,
+      documents: documentsWithSignedUrls,
     };
+  });
+
+  app.get("/api/admin/kyc/document/:documentId/view", { preHandler: authenticate }, async (request, reply) => {
+    await requirePermission(request, "admin:kyc:view", prisma);
+    const params = request.params as { documentId: string };
+
+    const doc = await prisma.kycDocument.findUnique({
+      where: { id: params.documentId },
+    });
+
+    if (!doc) {
+      throw new AppError("NOT_FOUND", "Document not found", 404);
+    }
+
+    const signedUrl = await SupabaseStorageService.getSignedUrl(doc.fileUrl);
+    if (signedUrl) {
+      return reply.redirect(signedUrl);
+    }
+
+    const stats = FileUploadService.getStats(doc.fileUrl);
+    if (stats.exists) {
+      const buffer = await readFile(doc.fileUrl);
+      reply.type(doc.mimeType);
+      return reply.send(buffer);
+    }
+
+    throw new AppError("NOT_FOUND", "File not available", 404);
   });
 
   app.post("/api/admin/kyc/start-review/:requestId", { preHandler: authenticate }, async (request) => {
@@ -95,7 +173,8 @@ export async function adminKycRoutes(app: FastifyInstance) {
     await requirePermission(request, "admin:kyc:review", prisma);
     const user = requireUser(request);
     const params = request.params as { requestId: string };
-    const data = parseSchema(kycReviewSchema, request.body);
+    const rawBody = (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>;
+    const data = parseSchema(kycReviewSchema, { requestId: params.requestId, ...rawBody });
 
     if (data.action === "APPROVE") {
       const result = await KycService.approve(params.requestId, user.id, data.notes);

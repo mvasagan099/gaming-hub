@@ -33,7 +33,7 @@ export async function assertFeatureEnabled(key: string, label?: string): Promise
 export async function getFeatureFlagGroups() {
   const flags = await getFeatureFlags();
   return FEATURE_FLAG_GROUPS.map((group) => ({
-    group: group.group,
+    key: group.group,
     label: group.label,
     description: group.description,
     flags: group.flags.map((flag) => ({

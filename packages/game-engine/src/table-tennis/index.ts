@@ -1,2 +1,2 @@
 export * from "./types";
-export { TableTennisEngine, type TableTennisActionTyp } from "./engine";
+export { TableTennisEngine } from "./engine";

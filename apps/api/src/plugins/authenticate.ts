@@ -8,13 +8,13 @@ import { hashToken, recordLoginSession } from "../services/sessions";
 
 export async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   const header = request.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
-    throw new AppError("UNAUTHORIZED", "Missing bearer token", 401);
-  }
+  const queryToken = (request.query as { token?: string })?.token;
+  const token = header?.startsWith("Bearer ")
+    ? header.slice("Bearer ".length).trim()
+    : queryToken;
 
-  const token = header.slice("Bearer ".length).trim();
   if (!token) {
-    throw new AppError("UNAUTHORIZED", "Empty bearer token", 401);
+    throw new AppError("UNAUTHORIZED", "Missing bearer token", 401);
   }
 
   let verified: Awaited<ReturnType<typeof verifyAccessToken>>;

@@ -11,7 +11,7 @@ export interface FileUploadConfig {
 
 const DEFAULT_UPLOAD_CONFIG: FileUploadConfig = {
   uploadDir: process.env.KYC_UPLOAD_DIR || "./uploads/kyc",
-  maxFileSizeBytes: 10 * 1024 * 1024, // 10MB
+  maxFileSizeBytes: 2 * 1024 * 1024, // 2MB
   allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
 };
 

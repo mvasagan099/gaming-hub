@@ -706,6 +706,13 @@ export class CricketScene extends Phaser.Scene {
       this.handleRemoteEvent(ev as Record<string, unknown> & { type: string });
     }
 
+    if (state.currentActor === "batsman" && state.pendingDelivery && !this.isBowling) {
+      this.executeBowl(state.pendingDelivery.delivery as CricketDelivery, state.pendingDelivery.power ?? 0.5);
+      if (this.mySeat === state.battingTeam) {
+        this.hud.setControlsState(false);
+      }
+    }
+
     if (state.finished) {
       this.multiplayerOver = true;
       this.hud.setControlsState(true);

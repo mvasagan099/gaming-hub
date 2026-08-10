@@ -9,8 +9,8 @@ import React, { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Crown, Swords, Zap, Trophy, TrendingUp, TrendingDown, Sparkles, X } from "lucide-react";
 import confetti from "canvas-confetti";
-import type { RankTier } from "@prisma/client";
-import { useMultiplayerStore } from "../../store/multiplayerStore";
+import type { RankTier } from "@gaming-hub/db";
+import { useMultiplayerStore } from "../../../store/multiplayerStore";
 
 interface MatchFoundModalProps {
   onAccept: () => void;

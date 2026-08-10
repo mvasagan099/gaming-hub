@@ -16,6 +16,7 @@ import {
   Trophy,
   TrendingUp,
   TrendingDown,
+  Minus,
   BarChart3,
   Target,
   Clock,

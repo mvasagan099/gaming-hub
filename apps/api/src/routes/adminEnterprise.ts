@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { clampPagination } from "@gaming-hub/shared";
 import { authenticate } from "../plugins/authenticate";
-import { requireUser, parseSchema, routeParams, queryParams, queryString } from "../lib/http";
+import { parseSchema, routeParams, queryParams, queryString } from "../lib/http";
 import { requirePermission } from "../lib/permissions";
 import { auditFromRequest } from "../services/audit";
 import {
@@ -12,7 +12,7 @@ import {
 import {
   createAnnouncement,
   deleteAnnouncement,
-  listAnnouncements,
+  listAllAnnouncements,
   updateAnnouncement,
 } from "../services/announcements";
 import {
@@ -430,7 +430,7 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     await requirePermission(request, "admin:announcements:view");
     const q = queryParams(request);
     const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
-    return listAnnouncements(requireUser(request).id, page, pageSize);
+    return listAllAnnouncements(page, pageSize);
   });
 
   app.post("/api/admin/announcements", { preHandler: authenticate }, async (request) => {

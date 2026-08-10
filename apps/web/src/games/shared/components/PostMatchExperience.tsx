@@ -43,7 +43,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import type { RankTier } from "@prisma/client";
+import type { RankTier } from "@gaming-hub/db";
 
 interface PostMatchSummaryProps {
   matchId: string;

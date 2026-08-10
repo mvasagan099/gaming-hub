@@ -224,19 +224,23 @@ export class TimerManager {
     let nextDeadline = Infinity;
     let deadlineType: "turn" | "match" = "turn";
     
-    if (engine.currentClockDeadline && engine.currentClockDeadline > now) {
-      nextDeadline = engine.currentClockDeadline;
+    const turnDeadline = engine.currentClockDeadline;
+    if (turnDeadline != null && turnDeadline > 0 && turnDeadline < nextDeadline) {
+      nextDeadline = turnDeadline;
       deadlineType = "turn";
     }
     
-    if (engine.currentMatchDeadline && engine.currentMatchDeadline > now && engine.currentMatchDeadline < nextDeadline) {
-      nextDeadline = engine.currentMatchDeadline;
+    const matchDeadline = engine.currentMatchDeadline;
+    if (matchDeadline != null && matchDeadline > 0 && matchDeadline < nextDeadline) {
+      nextDeadline = matchDeadline;
       deadlineType = "match";
     }
     
     if (nextDeadline === Infinity) return;
     
-    const delay = nextDeadline - now;
+    // Clamp so an already-passed deadline still fires immediately instead of
+    // being dropped (the handler re-validates against the engine's state).
+    const delay = Math.max(0, nextDeadline - now);
     
     // Clear existing clock timer
     this.clearTimer(`${room.id}:clock`);

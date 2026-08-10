@@ -1409,6 +1409,7 @@ enum KycDocumentType {
   UTILITY_BILL
   BANK_STATEMENT
   GOVERNMENT_ADDRESS_DOC
+  SELFIE
 }
 
 enum KycDocumentStatus {
@@ -1429,6 +1430,13 @@ model KycRequest {
   fullName     String?
   dateOfBirth  DateTime?
   mobileNumber String?
+  
+  // Address fields
+  streetAddress String?
+  addressLine2  String?
+  city          String?
+  state         String?
+  postalCode    String?
   
   // Review fields
   reviewedBy   String?

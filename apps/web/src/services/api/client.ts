@@ -63,13 +63,26 @@ export const apiClient = {
     return request<T>(path, { method: "GET" });
   },
   post<T>(path: string, body?: unknown, tokenOverride?: string): Promise<T> {
-    return request<T>(path, { method: "POST", body: body === undefined ? "{}" : JSON.stringify(body) }, tokenOverride);
+    const requestBody = typeof FormData !== "undefined" && body instanceof FormData
+      ? body
+      : body === undefined
+        ? "{}"
+        : JSON.stringify(body);
+    return request<T>(path, { method: "POST", body: requestBody }, tokenOverride);
   },
   put<T>(path: string, body?: unknown): Promise<T> {
-    return request<T>(path, { method: "PUT", body: body === undefined ? "{}" : JSON.stringify(body) });
+    const requestBody = typeof FormData !== "undefined" && body instanceof FormData
+      ? body
+      : body === undefined
+        ? "{}"
+        : JSON.stringify(body);
+    return request<T>(path, { method: "PUT", body: requestBody });
   },
   patch<T>(path: string, body: unknown): Promise<T> {
-    return request<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+    const requestBody = typeof FormData !== "undefined" && body instanceof FormData
+      ? body
+      : JSON.stringify(body);
+    return request<T>(path, { method: "PATCH", body: requestBody });
   },
   delete<T>(path: string): Promise<T> {
     return request<T>(path, { method: "DELETE" });

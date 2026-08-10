@@ -439,6 +439,7 @@ export const adminApi = {
     apiClient.get<Page<AdminKycRequest>>(`/admin/kyc/status/${status}?page=${page}&pageSize=${pageSize}`),
   kycReview: (requestId: string, approved: boolean, notes?: string, rejectionReason?: string) =>
     apiClient.post(`/admin/kyc/review/${requestId}`, {
+      requestId,
       action: approved ? 'APPROVE' : 'REJECT',
       notes: notes || undefined,
       rejectionReason: rejectionReason || undefined,
@@ -452,6 +453,15 @@ export interface AdminKycRequest {
   userId: string;
   level: string;
   status: string;
+  fullName?: string | null;
+  country?: string | null;
+  dateOfBirth?: string | null;
+  mobileNumber?: string | null;
+  streetAddress?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
   submittedAt: string;
   reviewedAt?: string | null;
   reviewedBy?: string | null;
@@ -468,7 +478,11 @@ export interface AdminKycRequest {
     documentType: string;
     fileUrl: string;
     status: string;
-    uploadedAt: string;
+    uploadedAt?: string;
+    fileName?: string;
+    mimeType?: string;
+    side?: string | null;
+    isSelfie?: boolean;
   }>;
 }
 

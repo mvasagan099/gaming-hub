@@ -8,6 +8,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),
+      "@gaming-hub/shared": path.resolve(import.meta.dirname, "../../packages/shared/src/index.ts"),
+      "@gaming-hub/game-engine": path.resolve(import.meta.dirname, "../../packages/game-engine/src/index.ts"),
     },
   },
   server: {

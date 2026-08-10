@@ -20,9 +20,9 @@ import {
   Zap,
 } from "lucide-react";
 import {
-  CHESS_TIME_CONTROLS,
+  CHESS_GAME_MODES,
+  chessModeId,
   DEFAULT_TIME_CONTROL,
-  UNLIMITED_TIME_CONTROL,
   GAME_BY_ID,
   type GameId,
   type MatchSettings,
@@ -521,36 +521,32 @@ export const LobbyPage: React.FC = () => {
               )}
             </div>
 
-            {/* Chess time control selector */}
+            {/* Chess game mode selector */}
             {isChess && (
               <div className="mt-4 space-y-3">
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Time Control
+                  Game Mode
                 </h4>
-                <div className="grid grid-cols-4 gap-2 flex flex-wrap">
-                  {CHESS_TIME_CONTROLS.map((tc) => (
-                    <button
-                      key={tc.label}
-                      onClick={() => setSettings({ ...settings, timeControl: tc })}
-                      className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${
-                        (settings.timeControl as Record<string, unknown> | null)?.label === tc.label
-                          ? "bg-indigo-600 text-white border-indigo-500"
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-300"
-                      }`}
-                    >
-                      {tc.label}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => setSettings({ ...settings, timeControl: UNLIMITED_TIME_CONTROL })}
-                    className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${
-                      settings.timeControl === UNLIMITED_TIME_CONTROL
-                        ? "bg-indigo-600 text-white border-indigo-500"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-300"
-                    }`}
-                  >
-                    ∞
-                  </button>
+                <div className="grid grid-cols-2 gap-2">
+                  {CHESS_GAME_MODES.map((mode) => {
+                    const selected = chessModeId(settings.timeControl) === mode.id;
+                    return (
+                      <button
+                        key={mode.id}
+                        onClick={() => setSettings({ ...settings, timeControl: mode.timeControl })}
+                        className={`flex flex-col items-start gap-1 p-3 rounded-lg text-left border transition-all ${
+                          selected
+                            ? "bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-500/20"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-300"
+                        }`}
+                      >
+                        <span className="text-xs font-black">{mode.label}</span>
+                        <span className={`text-[9px] font-medium leading-tight ${selected ? "text-indigo-200" : "text-slate-500 dark:text-slate-400"}`}>
+                          {mode.description}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
                 <div className="flex items-center justify-between text-[10px]">
                   <label className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">

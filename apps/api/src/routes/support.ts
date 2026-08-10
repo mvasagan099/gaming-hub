@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { prisma } from "@gaming-hub/db";
 import { authenticate } from "../plugins/authenticate";
 import { parseSchema, routeParams, queryParams, queryString } from "../lib/http";
 import { clampPagination } from "@gaming-hub/shared";
 import { requirePermission } from "../lib/permissions";
-import { requireUser } from "../lib/http";
 import {
   listCategories,
   getCategoryBySlug,
@@ -169,24 +169,27 @@ export async function supportRoutes(app: FastifyInstance) {
 
   // Categories (Admin)
   app.post("/api/admin/support/categories", { preHandler: authenticate }, async (request) => {
-    const admin = await requireUser(request);
+    const admin = await requirePermission(request, "admin:crm:manage", prisma);
     const input = parseSchema(createCategorySchema, request.body);
     return createCategory(input, admin.id);
   });
 
   app.patch("/api/admin/support/categories/:id", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:crm:manage", prisma);
     const { id } = routeParams(request);
     const input = parseSchema(updateCategorySchema, request.body);
     return updateCategory(id, input);
   });
 
   app.delete("/api/admin/support/categories/:id", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:crm:manage", prisma);
     const { id } = routeParams(request);
     return deleteCategory(id);
   });
 
   // Articles (Admin)
   app.get("/api/admin/support/articles", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:crm:view", prisma);
     const q = queryParams(request);
     const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
     const categoryId = queryString(q.categoryId) || undefined;
@@ -198,53 +201,60 @@ export async function supportRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/admin/support/articles", { preHandler: authenticate }, async (request) => {
-    const admin = await requireUser(request);
+    const admin = await requirePermission(request, "admin:crm:manage", prisma);
     const input = parseSchema(createArticleSchema, request.body);
     return createArticle(input, admin.id);
   });
 
   app.get("/api/admin/support/articles/:id", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:crm:view", prisma);
     const { id } = routeParams(request);
     return getArticleById(id);
   });
 
   app.patch("/api/admin/support/articles/:id", { preHandler: authenticate }, async (request) => {
-    const admin = await requireUser(request);
+    const admin = await requirePermission(request, "admin:crm:manage", prisma);
     const { id } = routeParams(request);
     const input = parseSchema(updateArticleSchema, request.body);
     return updateArticle(id, input, admin.id);
   });
 
   app.patch("/api/admin/support/articles/:id/status", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:crm:manage", prisma);
     const { id } = routeParams(request);
     const { status } = parseSchema(z.object({ status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]) }), request.body);
     return setArticleStatus(id, status);
   });
 
   app.delete("/api/admin/support/articles/:id", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:crm:manage", prisma);
     const { id } = routeParams(request);
     return deleteArticle(id);
   });
 
   // Page Mappings (Admin)
   app.get("/api/admin/support/mappings", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:crm:view", prisma);
     const q = queryParams(request);
     const articleId = queryString(q.articleId) || undefined;
     return listPageMappings(articleId);
   });
 
   app.post("/api/admin/support/mappings", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:crm:manage", prisma);
     const input = parseSchema(createMappingSchema, request.body);
     return createPageMapping(input);
   });
 
   app.patch("/api/admin/support/mappings/:id", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:crm:manage", prisma);
     const { id } = routeParams(request);
     const input = parseSchema(updateMappingSchema, request.body);
     return updatePageMapping(id, input);
   });
 
   app.delete("/api/admin/support/mappings/:id", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:crm:manage", prisma);
     const { id } = routeParams(request);
     return deletePageMapping(id);
   });

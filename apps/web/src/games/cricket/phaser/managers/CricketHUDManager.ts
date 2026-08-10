@@ -256,22 +256,22 @@ export class CricketHUDManager {
 
   private createControls() {
     const depth = 20;
-    const btnY = GAME_H - 70;
+    const btnY = GAME_H - 42;
     
     if (this.role === 'batting') {
-      // DEFEND BTN
+      // DEFEND BTN (Left side)
       const defBg = this.scene.add.graphics();
       defBg.fillStyle(0x3b82f6, 1); // blue
-      defBg.fillRoundedRect(CENTER_X - 160, btnY - 30, 140, 60, 10);
+      defBg.fillRoundedRect(CENTER_X - 220, btnY - 25, 140, 50, 12);
       defBg.lineStyle(4, 0x2563eb, 1);
-      defBg.strokeRoundedRect(CENTER_X - 160, btnY - 30, 140, 60, 10);
+      defBg.strokeRoundedRect(CENTER_X - 220, btnY - 25, 140, 50, 12);
       defBg.setDepth(depth);
 
-      const defTxt = this.scene.add.text(CENTER_X - 90, btnY, "DEFEND 🛡️", {
-        fontSize: "22px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+      const defTxt = this.scene.add.text(CENTER_X - 150, btnY, "DEFEND 🛡️", {
+        fontSize: "20px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
       }).setOrigin(0.5).setDepth(depth + 1);
 
-      const defZone = this.scene.add.zone(CENTER_X - 90, btnY, 140, 60).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
+      const defZone = this.scene.add.zone(CENTER_X - 150, btnY, 140, 50).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
       defZone.on('pointerdown', () => {
         if (!this.isControlsDisabled) {
           defBg.setAlpha(0.7);
@@ -281,19 +281,19 @@ export class CricketHUDManager {
       defZone.on('pointerup', () => defBg.setAlpha(this.isControlsDisabled ? 0.5 : 1));
       defZone.on('pointerout', () => defBg.setAlpha(this.isControlsDisabled ? 0.5 : 1));
 
-      // SLOG BTN
+      // SLOG BTN (Right side)
       const slogBg = this.scene.add.graphics();
       slogBg.fillStyle(0xf43f5e, 1); // red
-      slogBg.fillRoundedRect(CENTER_X + 20, btnY - 30, 140, 60, 10);
+      slogBg.fillRoundedRect(CENTER_X + 80, btnY - 25, 140, 50, 12);
       slogBg.lineStyle(4, 0xe11d48, 1);
-      slogBg.strokeRoundedRect(CENTER_X + 20, btnY - 30, 140, 60, 10);
+      slogBg.strokeRoundedRect(CENTER_X + 80, btnY - 25, 140, 50, 12);
       slogBg.setDepth(depth);
 
-      const slogTxt = this.scene.add.text(CENTER_X + 90, btnY, "SLOG 🔥", {
-        fontSize: "22px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+      const slogTxt = this.scene.add.text(CENTER_X + 150, btnY, "SLOG 🔥", {
+        fontSize: "20px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
       }).setOrigin(0.5).setDepth(depth + 1);
 
-      const slogZone = this.scene.add.zone(CENTER_X + 90, btnY, 140, 60).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
+      const slogZone = this.scene.add.zone(CENTER_X + 150, btnY, 140, 50).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
       slogZone.on('pointerdown', () => {
         if (!this.isControlsDisabled) {
           slogBg.setAlpha(0.7);
@@ -307,25 +307,25 @@ export class CricketHUDManager {
     } else {
       // BOWL CONTROLS
       const types = [
-        { id: 'fast', label: 'Fast ⚡', color: 0xf43f5e, outline: 0xbe123c, xOffset: -120 },
+        { id: 'fast', label: 'Fast ⚡', color: 0xf43f5e, outline: 0xbe123c, xOffset: -180 },
         { id: 'slow', label: 'Slow 🐢', color: 0x3b82f6, outline: 0x1d4ed8, xOffset: 0 },
-        { id: 'spin', label: 'Spin 🌪️', color: 0xeab308, outline: 0xca8a04, xOffset: 120 }
+        { id: 'spin', label: 'Spin 🌪️', color: 0xeab308, outline: 0xca8a04, xOffset: 180 }
       ] as const;
 
       types.forEach(t => {
         const cx = CENTER_X + t.xOffset;
         const bg = this.scene.add.graphics();
         bg.fillStyle(t.color, 1);
-        bg.fillCircle(cx, btnY, 45);
+        bg.fillCircle(cx, btnY, 35);
         bg.lineStyle(4, t.outline, 1);
-        bg.strokeCircle(cx, btnY, 45);
+        bg.strokeCircle(cx, btnY, 35);
         bg.setDepth(depth);
 
         const text = this.scene.add.text(cx, btnY, t.label, {
-          fontSize: "18px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+          fontSize: "16px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
         }).setOrigin(0.5).setDepth(depth + 1);
 
-        const zone = this.scene.add.zone(cx, btnY, 90, 90).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
+        const zone = this.scene.add.zone(cx, btnY, 70, 70).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
         zone.on('pointerdown', () => {
           if (!this.isControlsDisabled) {
             bg.setAlpha(0.7);

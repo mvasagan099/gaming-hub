@@ -149,7 +149,7 @@ export function validateDocumentType(
   documentType: KycDocumentType,
   level: KycLevel,
 ): boolean {
-  const identityDocs = [
+  const identityDocs: KycDocumentType[] = [
     KycDocumentType.AADHAAR_CARD,
     KycDocumentType.PAN_CARD,
     KycDocumentType.VOTER_ID,
@@ -159,7 +159,7 @@ export function validateDocumentType(
     KycDocumentType.RESIDENCE_PERMIT,
   ];
 
-  const addressDocs = [
+  const addressDocs: KycDocumentType[] = [
     KycDocumentType.UTILITY_BILL,
     KycDocumentType.BANK_STATEMENT,
     KycDocumentType.GOVERNMENT_ADDRESS_DOC,

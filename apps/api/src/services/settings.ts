@@ -3,7 +3,6 @@ import {
   SETTINGS_CATEGORIES,
   DEFAULT_SETTINGS as SITE_SETTINGS_DEFAULTS,
   SECRET_SETTING_KEYS,
-  siteSettingsSchema,
   type SettingsCategoryName,
   type SettingsShape,
   type SiteSettings,
@@ -32,17 +31,16 @@ export async function getSettings(): Promise<SiteSettings> {
     merged[category][field] = row.value;
   }
 
-  const parsed = siteSettingsSchema.safeParse(merged);
-  if (!parsed.success) {
-    // Stored rows validate on write, so a corrupt row would be a bug. Fail loud
-    // but fall back to defaults for non-failing fields is not safe (typing);
-    // log and serve defaults instead of crashing enforcement paths.
-    cache = SITE_SETTINGS_DEFAULTS;
-    cacheExpiresAt = Date.now() + CACHE_TTL_MS;
-    return cache;
+  // Validate per category so a single stale/wrongly-typed row only resets that
+  // category (to its defaults) instead of disabling every admin-configured
+  // setting across the whole platform.
+  const out = {} as Record<string, unknown>;
+  for (const category of Object.keys(SETTINGS_CATEGORIES) as SettingsCategoryName[]) {
+    const parsed = SETTINGS_CATEGORIES[category].safeParse(merged[category] ?? {});
+    out[category] = parsed.success ? parsed.data : SITE_SETTINGS_DEFAULTS[category];
   }
 
-  cache = parsed.data;
+  cache = out as SiteSettings;
   cacheExpiresAt = Date.now() + CACHE_TTL_MS;
   return cache;
 }
@@ -96,6 +94,9 @@ export async function setSetting(
   if (!fieldSchema || typeof fieldSchema.safeParse !== "function") {
     throw new AppError("VALIDATION_ERROR", `Unknown setting key "${key}"`, 422);
   }
+  if (value === undefined) {
+    throw new AppError("VALIDATION_ERROR", `Value required for "${key}"`, 422);
+  }
   const result = fieldSchema.safeParse(value);
   if (!result.success) {
     throw new AppError("VALIDATION_ERROR", `Invalid value for "${key}"`, 422, result.error!.flatten());
@@ -129,6 +130,7 @@ export async function setCategorySettings(
     category,
     value: value as Prisma.InputJsonValue,
     secret: SECRET_SETTING_KEYS.has(`${category}.${field}`),
+    updatedBy,
   }));
 
   await prisma.$transaction([
