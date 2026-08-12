@@ -14,12 +14,14 @@ export default class DiceManager {
   private scene:        Phaser.Scene;
   private container!:  Phaser.GameObjects.Container;
   private diceGfx!:    Phaser.GameObjects.Graphics;
+  private hitArea!:    Phaser.GameObjects.Rectangle;
   private rollBtn!:    Phaser.GameObjects.Rectangle;
   private rollLabel!:  Phaser.GameObjects.Text;
 
-  private value    = 1;
-  private rolling  = false;
-  private enabled  = true;
+  private value      = 1;
+  private rolling    = false;
+  private enabled    = true;
+  private selectMode = false;
   private onRollCb: (() => void) | null = null;
   private onRollCompleteCb: (() => void) | null = null;
 
@@ -32,17 +34,17 @@ export default class DiceManager {
     this.drawFace(this.value);
 
     // Invisible click target on the dice face
-    const hitArea = this.scene.add.rectangle(0, -16, 66, 66, 0xffffff, 0);
-    hitArea.setInteractive({ useHandCursor: true });
-    hitArea.on("pointerdown", () => this.roll());
-    hitArea.on("pointerover", () => { if (this.enabled) this.scene.tweens.add({ targets: this.container, scale: 1.05, duration: 100 }); });
-    hitArea.on("pointerout",  () => { this.scene.tweens.add({ targets: this.container, scale: 1.0,  duration: 100 }); });
+    this.hitArea = this.scene.add.rectangle(0, -16, 66, 66, 0xffffff, 0);
+    this.hitArea.setInteractive({ useHandCursor: true });
+    this.hitArea.on("pointerdown", () => this.handlePointerDown());
+    this.hitArea.on("pointerover", () => { if (this.enabled) this.scene.tweens.add({ targets: this.container, scale: 1.05, duration: 100 }); });
+    this.hitArea.on("pointerout",  () => { this.scene.tweens.add({ targets: this.container, scale: 1.0,  duration: 100 }); });
 
     // Roll button
     this.rollBtn = this.scene.add.rectangle(0, 44, 160, 38, 0x7c3aed);
     this.rollBtn.setStrokeStyle(2, 0xa78bfa);
     this.rollBtn.setInteractive({ useHandCursor: true });
-    this.rollBtn.on("pointerdown", () => this.roll());
+    this.rollBtn.on("pointerdown", () => this.handlePointerDown());
     this.rollBtn.on("pointerover", () => { if (this.enabled) this.rollBtn.setFillStyle(0x6d28d9); });
     this.rollBtn.on("pointerout",  () => { this.rollBtn.setFillStyle(0x7c3aed); });
 
@@ -55,11 +57,19 @@ export default class DiceManager {
 
     this.container = this.scene.add.container(x, y, [
       this.diceGfx,
-      hitArea,
+      this.hitArea,
       this.rollBtn,
       this.rollLabel,
     ]);
     this.container.setDepth(100);
+  }
+
+  private handlePointerDown(): void {
+    if (this.selectMode) {
+      this.flashSelectHint();
+      return;
+    }
+    this.roll();
   }
 
   // ─── Face drawing ─────────────────────────────────────────────────────────────
@@ -86,34 +96,39 @@ export default class DiceManager {
 
   enable(label = "🎲  ROLL DICE"): void {
     this.enabled = true;
+    this.selectMode = false;
     this.rollBtn.setFillStyle(0x7c3aed).setAlpha(1);
     this.rollBtn.setInteractive({ useHandCursor: true });
-    this.rollBtn.off("pointerdown");
-    this.rollBtn.on("pointerdown", () => this.roll());
+    this.hitArea.setInteractive({ useHandCursor: true });
     this.rollLabel.setText(label).setAlpha(1);
   }
 
   disable(): void {
     this.enabled = false;
+    this.selectMode = false;
     this.rollBtn.setFillStyle(0x1e293b).setAlpha(0.6);
-    this.rollBtn.disableInteractive();
+    if (this.rollBtn?.input) this.rollBtn.disableInteractive();
+    if (this.hitArea?.input) this.hitArea.disableInteractive();
     this.rollLabel.setAlpha(0.5);
   }
 
   /** Show "waiting" state visually without blocking rollForAI() */
   setWaiting(label: string): void {
+    this.enabled = false;
+    this.selectMode = false;
     this.rollBtn.setFillStyle(0x1e293b).setAlpha(0.6);
-    this.rollBtn.disableInteractive();
+    if (this.rollBtn?.input) this.rollBtn.disableInteractive();
+    if (this.hitArea?.input) this.hitArea.disableInteractive();
     this.rollLabel.setText(label).setAlpha(0.7);
   }
 
   /** Show prompt to select a token (after rolling, multiple moves available) */
   setSelectMode(): void {
     this.enabled = false;
+    this.selectMode = true;
     this.rollBtn.setFillStyle(0xd97706).setAlpha(1);
     this.rollBtn.setInteractive({ useHandCursor: true });
-    this.rollBtn.off("pointerdown");
-    this.rollBtn.on("pointerdown", () => this.flashSelectHint());
+    this.hitArea.setInteractive({ useHandCursor: true });
     this.rollLabel.setText("👇 SELECT TOKEN").setAlpha(1);
   }
 
@@ -157,10 +172,7 @@ export default class DiceManager {
    * Used when a `game:state` broadcast reports a server-side roll.
    */
   rollTo(value: number, onComplete?: () => void): void {
-    if (this.rolling) {
-      if (onComplete) onComplete();
-      return;
-    }
+    this.rolling = false;
     this.onRollCompleteCb = onComplete ?? null;
     this.startRoll(Math.max(1, Math.min(6, value)));
   }

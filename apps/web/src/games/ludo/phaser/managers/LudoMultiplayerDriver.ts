@@ -126,14 +126,24 @@ export default class LudoMultiplayerDriver {
     this.scene.events.off(LudoEvents.TOKEN_SELECTED, this.onTokenSelected, this);
   }
 
+  private get effectiveMySeat(): number | null {
+    const storeSeat = useMultiplayerStore.getState().mySeat;
+    if (storeSeat !== null && storeSeat !== undefined) return storeSeat;
+    return this.mySeat;
+  }
+
   private seatName(seat: number): string {
     return this.names[seat] ?? `Player ${seat + 1}`;
   }
 
   private onRoll(): void {
     this.dice.disable();
+    this.dice.rollTo(1);
     void useMultiplayerStore.getState().sendGameAction({ type: "roll" }).then((res) => {
-      if (!res.ok && res.error) this.hud.addLog(res.error);
+      if (!res.ok && res.error) {
+        this.hud.addLog(res.error);
+        if (this.lastState) this.updateDice(this.lastState);
+      }
     });
   }
 
@@ -185,11 +195,15 @@ export default class LudoMultiplayerDriver {
       if (moveEvent?.tokenId && s.dice != null) {
         const actorSeat = moveEvent.seat ?? -1;
         const prevPlayer = prev?.players?.find((p) => p.seat === actorSeat);
-        const prevToken = prevPlayer?.tokens?.find((t) => t.id === moveEvent.tokenId);
-        if (prevToken) {
-          this.animateMove(prevToken, moveEvent, s, evs);
-          return;
-        }
+        const prevToken = prevPlayer?.tokens?.find((t) => t.id === moveEvent.tokenId) ?? {
+          id: moveEvent.tokenId,
+          color: moveEvent.color ?? "red",
+          index: parseInt(moveEvent.tokenId.split("-")[1] ?? "0", 10),
+          position: moveEvent.from ?? -1,
+          state: (moveEvent.from ?? -1) === -1 ? "yard" : "active",
+        };
+        this.animateMove(prevToken, moveEvent, s, evs);
+        return;
       }
       this.finalize(s, evs);
     };
@@ -213,11 +227,12 @@ export default class LudoMultiplayerDriver {
     const color = moveEvent.color ?? prevToken.color;
 
     this.tokenManager.moveAlongPath(prevToken.id, path, color, () => {
-      if (moveEvent.isFinish) {
-        this.hud.addLog("🎉 Token reached Home!");
+      if (this.destroyed) return;
+
+      const finish = evs.find((e) => e.type === "finish");
+      if (finish) {
+        this.hud.addLog(`🎉 ${color.toUpperCase()} token reached Home!`);
         this.scene.events.emit(LudoEvents.TOKEN_FINISHED);
-      } else if (moveEvent.isSafe) {
-        this.scene.events.emit(LudoEvents.TOKEN_SAFE);
       }
 
       const capture = evs.find((e) => e.type === "capture");
@@ -243,15 +258,13 @@ export default class LudoMultiplayerDriver {
   }
 
   private finalize(s: RemoteState, evs: RemoteEvent[]): void {
-    if (!s) return;
+    if (this.destroyed) return;
 
-    // Correct any drift against the authoritative token positions.
-    for (const t of s.players?.flatMap((p) => p.tokens) ?? []) {
-      this.tokenManager.syncFromServer(t);
-    }
-
-    for (const p of s.players ?? []) {
-      this.hud.updateProgress(p.seat, p.tokensDone);
+    if (s.players) {
+      s.players.forEach((p) => {
+        this.tokenManager.updateTokens(p.tokens);
+        this.hud.updateProgress(p.seat, p.tokensDone);
+      });
     }
 
     this.hud.updateTurn(s.currentSeat ?? 0);
@@ -263,8 +276,9 @@ export default class LudoMultiplayerDriver {
 
   private updateDice(s: RemoteState): void {
     const finished = s.finished || (s.winnerSeats?.length ?? 0) > 0;
+    const mySeat = this.effectiveMySeat;
 
-    if (this.mySeat == null) {
+    if (mySeat == null) {
       this.dice.setWaiting("Spectating…");
       this.tokenManager.clearAllGlows();
       return;
@@ -276,7 +290,7 @@ export default class LudoMultiplayerDriver {
       return;
     }
 
-    if (s.currentSeat !== this.mySeat) {
+    if (s.currentSeat !== mySeat) {
       this.dice.setWaiting(`${this.seatName(s.currentSeat ?? 0)}'s turn…`);
       this.tokenManager.clearAllGlows();
       return;
@@ -285,7 +299,7 @@ export default class LudoMultiplayerDriver {
     if (s.phase === "selecting") {
       this.dice.setSelectMode();
       this.tokenManager.highlightClickable(s.legalMoves ?? []);
-      if (s.currentSeat === this.mySeat) {
+      if (s.currentSeat === mySeat) {
         this.hud.showSelectionBanner("👇 TAP A HIGHLIGHTED TOKEN TO MOVE!");
       } else {
         this.hud.hideSelectionBanner();

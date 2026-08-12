@@ -57,6 +57,55 @@ function getGridY(row: number, topOffset: number) {
   return RADIUS + (row + topOffset) * ROW_HEIGHT;
 }
 
+const OpponentMiniBoard: React.FC<{ player: RemotePlayer; name: string }> = ({ player, name }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const scale = canvas.width / CANVAS_WIDTH;
+    ctx.save();
+    ctx.scale(scale, scale);
+
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    player.grid.forEach((b) => {
+      const x = getGridX(b.row, b.col);
+      const y = getGridY(b.row, player.topOffset);
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.arc(x, y, RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+
+    ctx.restore();
+  }, [player]);
+
+  return (
+    <div className="flex flex-col items-center bg-slate-900/90 border border-slate-800 p-3 rounded-2xl shadow-xl w-full">
+      <div className="flex items-center justify-between w-full mb-1.5 px-1">
+        <span className="text-xs font-bold text-slate-300 truncate">⚔️ {name}</span>
+        <span className="text-xs font-black text-amber-400">{player.score} pts</span>
+      </div>
+      <canvas
+        ref={canvasRef}
+        width={143}
+        height={230}
+        className="rounded-xl border border-slate-800 bg-[#0f172a] shadow-inner"
+      />
+    </div>
+  );
+};
+
 export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, onBack }) => {
   const isMultiplayer = mode === 'multiplayer';
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -898,6 +947,21 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-rose-500 to-transparent"></div>
                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Shots Till Drop</span>
                  <p className="text-3xl font-black text-rose-500 mt-2 filter drop-shadow-md">Every 2</p>
+              </div>
+            )}
+
+            {isMultiplayer && (
+              <div className="w-full space-y-3 mt-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block text-center">Live Opponent</span>
+                {serverPlayers
+                  .filter((p) => p.seat !== mySeat)
+                  .map((opp) => (
+                    <OpponentMiniBoard
+                      key={opp.seat}
+                      player={opp}
+                      name={namesBySeat[opp.seat] ?? opp.name}
+                    />
+                  ))}
               </div>
             )}
           

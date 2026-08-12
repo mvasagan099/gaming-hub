@@ -158,22 +158,28 @@ export default class HUDManager {
   }
 
   updateTurn(playerIndex: number): void {
-    const color = this.colors[playerIndex % this.colors.length] ?? "red";
-    const colName = color as keyof typeof COLORS;
-    const nameStr = playerIndex === this.mySeat ? "YOUR TURN" : `PLAYER ${playerIndex + 1}'S TURN`;
+    if (!this.turnText?.active || !this.turnText?.scene) return;
+    try {
+      const color = this.colors[playerIndex % this.colors.length] ?? "red";
+      const colName = color as keyof typeof COLORS;
+      const nameStr = playerIndex === this.mySeat ? "YOUR TURN" : `PLAYER ${playerIndex + 1}'S TURN`;
 
-    this.turnText.setText(nameStr);
-    this.turnText.setColor("#" + COLORS[colName].toString(16));
+      this.turnText.setText(nameStr);
+      this.turnText.setColor("#" + COLORS[colName].toString(16));
 
-    // Reset card highlight scales
-    this.cards.forEach((card, idx) => {
-      if (idx === playerIndex) {
-        card.setStrokeStyle(3, COLORS[colName]);
-      } else {
-        const otherColor = this.colors[idx % this.colors.length] ?? "red";
-        card.setStrokeStyle(1.5, COLORS[otherColor]);
-      }
-    });
+      // Reset card highlight scales
+      this.cards.forEach((card, idx) => {
+        if (!card?.active) return;
+        if (idx === playerIndex) {
+          card.setStrokeStyle(3, COLORS[colName]);
+        } else {
+          const otherColor = this.colors[idx % this.colors.length] ?? "red";
+          card.setStrokeStyle(1.5, COLORS[otherColor]);
+        }
+      });
+    } catch {
+      // Ignore text rendering errors on destroyed canvas
+    }
   }
 
   /** Which seat is "you" (for turn labels). Defaults to seat 0 (local play). */
@@ -185,7 +191,9 @@ export default class HUDManager {
   setNames(names: string[]): void {
     names.forEach((name, idx) => {
       const txt = this.nameTexts[idx];
-      if (txt) txt.setText(name);
+      if (txt?.active && txt?.scene) {
+        try { txt.setText(name); } catch { /* ignore */ }
+      }
     });
   }
 
@@ -194,38 +202,46 @@ export default class HUDManager {
     this.colors = [...colors];
     colors.forEach((color, idx) => {
       const hex = COLORS[color];
-      this.cards[idx]?.setStrokeStyle(2, hex);
-      this.dots[idx]?.setFillStyle(hex, 1);
-      this.nameTexts[idx]?.setColor("#" + hex.toString(16));
+      if (this.cards[idx]?.active) this.cards[idx]?.setStrokeStyle(2, hex);
+      if (this.dots[idx]?.active) this.dots[idx]?.setFillStyle(hex, 1);
+      if (this.nameTexts[idx]?.active && this.nameTexts[idx]?.scene) {
+        try { this.nameTexts[idx]?.setColor("#" + hex.toString(16)); } catch { /* ignore */ }
+      }
     });
   }
 
   /** Show the authoritative action log (newest first). */
   setLogs(logs: string[]): void {
     this.logLines.forEach((t, i) => {
-      t.setText(i < logs.length ? `› ${logs[i]}` : "");
+      if (t?.active && t?.scene) {
+        try { t.setText(i < logs.length ? `› ${logs[i]}` : ""); } catch { /* ignore */ }
+      }
     });
   }
 
   updateProgress(playerIndex: number, doneCount: number): void {
     const prog = this.progressTexts[playerIndex];
-    if (prog) {
-      prog.setText(`Home: ${doneCount} / 4`);
-      if (doneCount === 4) {
-        prog.setColor("#f59e0b").setText("🏆 FINISHED!");
-      }
+    if (prog?.active && prog?.scene) {
+      try {
+        prog.setText(`Home: ${doneCount} / 4`);
+        if (doneCount === 4) {
+          prog.setColor("#f59e0b").setText("🏆 FINISHED!");
+        }
+      } catch { /* ignore */ }
     }
   }
 
   addLog(message: string): void {
-    // Shift up
-    for (let i = this.logLines.length - 1; i > 0; i--) {
-      const prev = this.logLines[i - 1];
-      const curr = this.logLines[i];
-      if (prev && curr) curr.setText(prev.text);
-    }
-    const first = this.logLines[0];
-    if (first) first.setText(`› ${message}`);
+    try {
+      // Shift up
+      for (let i = this.logLines.length - 1; i > 0; i--) {
+        const prev = this.logLines[i - 1];
+        const curr = this.logLines[i];
+        if (prev?.active && curr?.active) curr.setText(prev.text);
+      }
+      const first = this.logLines[0];
+      if (first?.active && first?.scene) first.setText(`› ${message}`);
+    } catch { /* ignore */ }
   }
 
   showSelectionBanner(message = "👇 TAP A HIGHLIGHTED TOKEN TO MOVE!"): void {

@@ -17,7 +17,7 @@ const BALL_RADIUS = 6;
 const PADDLE_MARGIN = 20;
 const MAX_PADDLE_SPEED = 8;
 const BALL_SPEED_INCREMENT = 1.05;
-const MAX_BALL_SPEED = 12;
+const MAX_BALL_SPEED = 12.6;
 
 type InternalState = TableTennisState & BaseState;
 
@@ -25,18 +25,19 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
   readonly gameId = "table-tennis" as const;
 
   private readonly rules = {
-    pointsPerSet: 11,
-    setsToWin: 3,
+    pointsPerSet: 5,
+    setsToWin: 1,
     winByTwo: true,
-    maxSpeed: MAX_BALL_SPEED,
-    minSpeed: 5,
+    maxSpeed: 12.0,
+    minSpeed: 5.0,
+    speedIncreasePerTouch: 0.5,
   };
 
   private physicsInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: TableTennisEngineOptions) {
     const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 5000 };
-    const matchTimer = options?.matchTimer ?? { matchDurationMs: 600000, warningThresholdMs: 60000 };
+    const matchTimer = options?.matchTimer ?? { matchDurationMs: 180000, warningThresholdMs: 30000 };
     super(players, rng, {
       turnTimer,
       matchTimer,
@@ -103,13 +104,6 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
         if (seat !== 0 && seat !== 1) return "Invalid seat";
         const y = action.y;
         if (typeof y !== "number" || isNaN(y)) return "Invalid paddle position";
-        if (y < 0 || y > CANVAS_HEIGHT - PADDLE_HEIGHT) return "Paddle out of bounds";
-        const player = state.players[seat];
-        const maxMove = MAX_PADDLE_SPEED;
-        const currentY = player.paddleY;
-        if (Math.abs(y - currentY) > maxMove * 2) {
-          return "Paddle movement too fast";
-        }
         return null;
       }
       case "serve": {
@@ -152,7 +146,7 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
           ? PADDLE_MARGIN + PADDLE_WIDTH + BALL_RADIUS + 5 
           : CANVAS_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH - BALL_RADIUS - 5;
         
-        const baseSpeed = this.rules.minSpeed;
+        const baseSpeed = 5.0;
         const angle = (action.angle * Math.PI) / 180;
         
         next.ball = {
@@ -161,6 +155,7 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
           vx: seat === 0 ? baseSpeed * Math.cos(angle) : -baseSpeed * Math.cos(angle),
           vy: baseSpeed * Math.sin(angle),
           speed: baseSpeed,
+          touchCount: 0,
           served: true,
           servedBySeat: seat,
           lastHitSeat: seat,
@@ -194,6 +189,56 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
       default:
         return { ok: false, error: "Unknown action", state, events: [], finished: state.finished, winnerSeats: state.winnerSeats };
     }
+  }
+
+  tick(): EngineActionResult<InternalState> {
+    if (this.state.finished || this.state.paused) {
+      return {
+        ok: true,
+        state: this.state,
+        events: [],
+        finished: this.state.finished,
+        winnerSeats: this.state.winnerSeats,
+      };
+    }
+
+    if (!this.state.ball || !this.state.ball.inPlay || this.state.phase !== "rally") {
+      return {
+        ok: true,
+        state: this.state,
+        events: [],
+        finished: false,
+        winnerSeats: [],
+      };
+    }
+
+    const prevWinner = this.state.lastPointWinner;
+    const nextState = this.simulatePhysics(this.state);
+    this.updateState(nextState);
+
+    const events: EngineEvent[] = [];
+    if (nextState.lastPointWinner !== null && nextState.lastPointWinner !== prevWinner) {
+      events.push({
+        type: "point-scored",
+        winnerSeat: nextState.lastPointWinner,
+        reason: nextState.lastPointReason ?? "miss",
+      });
+    }
+
+    if (nextState.finished) {
+      events.push({
+        type: "match-complete",
+        winnerSeats: nextState.winnerSeats,
+      });
+    }
+
+    return {
+      ok: true,
+      state: nextState,
+      events,
+      finished: nextState.finished,
+      winnerSeats: nextState.winnerSeats,
+    };
   }
 
   simulatePhysics(state: InternalState): InternalState {
@@ -244,14 +289,17 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
         const maxAngle = Math.PI / 3;
         const angle = hitPosition * maxAngle;
         
-        ball.speed = Math.min(ball.speed * BALL_SPEED_INCREMENT, MAX_BALL_SPEED);
-        ball.vx = (isLeftPaddle ? 1 : -1) * ball.speed * Math.cos(angle);
-        ball.vy = ball.speed * Math.sin(angle) + player.paddleVelocity * 0.3;
+        const touchCount = (ball.touchCount || 0) + 1;
+        const newSpeed = Math.min(ball.speed + this.rules.speedIncreasePerTouch, this.rules.maxSpeed);
         
-        if (Math.abs(ball.vy) < 0.5) {
-          ball.vy = (Math.random() - 0.5) * 2;
-        }
+        const rawVx = (isLeftPaddle ? 1 : -1) * Math.cos(angle);
+        const rawVy = Math.sin(angle) + player.paddleVelocity * 0.05;
+        const len = Math.sqrt(rawVx * rawVx + rawVy * rawVy) || 1;
         
+        ball.touchCount = touchCount;
+        ball.speed = newSpeed;
+        ball.vx = (rawVx / len) * newSpeed;
+        ball.vy = (rawVy / len) * newSpeed;
         ball.lastHitSeat = player.seat;
         next.rallyCount++;
         ball.bounceCount = 0;
@@ -302,24 +350,25 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
       next.players[winnerSeat].setsWon++;
       next.currentSet++;
       
-      for (const p of next.players) {
-        p.score = 0;
-      }
-      
       if (next.players[winnerSeat].setsWon >= this.rules.setsToWin) {
         next.finished = true;
         next.gameOver = true;
         next.phase = "finished";
-        next.endReason = "win-by-sets";
+        next.endReason = "SCORE_LIMIT_REACHED";
         next.winnerSeats = [winnerSeat];
+        next.ball = null;
         return next;
+      }
+
+      for (const p of next.players) {
+        p.score = 0;
       }
       
       next.servingSeat = 1 - next.servingSeat;
       next.serverCount = 0;
     } else {
       next.serverCount++;
-      const isDeuce = next.players[0].score >= 10 && next.players[1].score >= 10;
+      const isDeuce = next.players[0].score >= (this.rules.pointsPerSet - 1) && next.players[1].score >= (this.rules.pointsPerSet - 1);
       next.deuce = isDeuce;
       
       if (isDeuce) {
@@ -356,35 +405,26 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
   }
 
   protected onMatchTimerExpired(state: InternalState): EngineActionResult<InternalState> {
-    const p1Sets = state.players[0].setsWon;
-    const p2Sets = state.players[1].setsWon;
-    const winnerSeat = p1Sets > p2Sets ? 0 : p2Sets > p1Sets ? 1 : state.servingSeat;
+    const p1Score = state.players[0].score;
+    const p2Score = state.players[1].score;
+    let winnerSeats: number[] = [];
+    if (p1Score > p2Score) {
+      winnerSeats = [0];
+    } else if (p2Score > p1Score) {
+      winnerSeats = [1];
+    } else {
+      winnerSeats = [];
+    }
     
     const next = this.cloneState(state);
     next.finished = true;
     next.gameOver = true;
-    next.endReason = "match-timeout";
-    next.winnerSeats = [winnerSeat];
+    next.endReason = "TIME_EXPIRED";
+    next.winnerSeats = winnerSeats;
     next.phase = "finished";
+    next.ball = null;
     
-    return { ok: true, state: next, events: [{ type: "match-timeout" }], finished: true, winnerSeats: [winnerSeat] };
-  }
-
-  tick(): { state: InternalState; events: EngineEvent[] } {
-    let state = this.state as InternalState;
-    const events: EngineEvent[] = [];
-    
-    if (!state.paused && !state.finished && state.ball && state.ball.inPlay && state.phase === "rally") {
-      state = this.simulatePhysics(state);
-      if (state.lastPointWinner !== null) {
-        events.push({ type: "point-scored", winnerSeat: state.lastPointWinner, reason: state.lastPointReason });
-        state.lastPointWinner = null;
-        state.lastPointReason = null;
-      }
-      (this as unknown as { _state: InternalState })._state = state;
-    }
-    
-    return { state, events };
+    return { ok: true, state: next, events: [{ type: "match-complete", reason: "TIME_EXPIRED", winnerSeats }], finished: true, winnerSeats };
   }
 
   getStateSnapshot(): InternalState {

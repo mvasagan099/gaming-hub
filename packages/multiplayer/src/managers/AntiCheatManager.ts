@@ -104,6 +104,11 @@ export class AntiCheatManager {
       actionSequence: this.getNextActionSequence(player.id),
     };
     
+    // Real-time paddle movement is exempt from turn/rate anti-cheat limits
+    if (action.type === "paddle-move") {
+      return { valid: true, confidence: 1.0 };
+    }
+
     // Check action rate limiting
     const rateCheck = this.checkActionRate(room, player.id, now);
     if (!rateCheck.valid) {

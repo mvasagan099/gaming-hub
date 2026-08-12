@@ -1,114 +1,433 @@
 import type { EngineActionResult, EngineEvent, EnginePlayer, RandomSource } from "../types";
-import { MultiplayerGameEngine } from "../base/MultiplayerGameEngine";
+import { MultiplayerGameEngine, type BaseState } from "../base/MultiplayerGameEngine";
 import type {
   SnakeVsWormsState,
   SnakeVsWormsAction,
-  Snake,
-  Worm,
-  Food,
-  SnakeVsWormsPlayer,
+  SnakeWormPlayerEntity,
+  SnakeWormFood,
+  SnakeWormDirection,
+  Position,
+  FoodType,
   SnakeVsWormsEngineOptions,
 } from "./types";
 
-export class SnakeVsWormsEngine extends MultiplayerGameEngine<SnakeVsWormsState, SnakeVsWormsAction> {
+type InternalState = SnakeVsWormsState & BaseState;
+
+const OPPOSITE_DIRECTIONS: Record<SnakeWormDirection, SnakeWormDirection> = {
+  up: "down",
+  down: "up",
+  left: "right",
+  right: "left",
+};
+
+export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, SnakeVsWormsAction> {
   readonly gameId = "snake-vs-worms" as const;
-  private gridSize = 20;
+  private gridWidth = 2000;
+  private gridHeight = 2000;
 
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: SnakeVsWormsEngineOptions) {
     const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 5000 };
-    const matchTimer = options?.matchTimer ?? { matchDurationMs: 1200000, warningThresholdMs: 60000 };
+    const matchTimer = options?.matchTimer ?? { matchDurationMs: 180000, warningThresholdMs: 30000 };
     super(players, rng, {
       turnTimer,
       matchTimer,
       enableResign: options?.enableResign ?? true,
-      enableDraw: options?.enableDraw ?? true,
+      enableDraw: false,
       enablePause: options?.enablePause ?? true,
-      enableRematch: options?.enableRematch ?? true,
+      enableRematch: true,
       now: options?.now,
     });
+
+    if (options?.gridWidth) this.gridWidth = options.gridWidth;
+    if (options?.gridHeight) this.gridHeight = options.gridHeight;
   }
 
   protected getInitialSeat(): number {
     return 0;
   }
 
-  protected initBaseState(): Omit<SnakeVsWormsState, keyof import("../base/MultiplayerGameEngine").BaseState> {
-    const snakes: Snake[] = this.players.map((p, i) => ({
-      id: i,
-      seat: p.seat,
-      body: [{ x: 5, y: 5 }],
-      direction: "right",
-      alive: true,
-      life: 100,
-    }));
-    const worms: Worm[] = this.players.map((p, i) => ({
-      id: i,
-      seat: p.seat,
-      body: [{ x: 10, y: 10 }],
-      direction: "right",
-      alive: true,
-    }));
+  protected initBaseState(): Omit<InternalState, keyof BaseState> {
+    const p0Body: Position[] = [
+      { x: 300, y: 1000 },
+      { x: 280, y: 1000 },
+      { x: 260, y: 1000 },
+      { x: 240, y: 1000 },
+    ];
 
-    const food: Food[] = [];
+    const p1Body: Position[] = [
+      { x: 1700, y: 1000 },
+      { x: 1720, y: 1000 },
+      { x: 1740, y: 1000 },
+      { x: 1760, y: 1000 },
+    ];
 
-    const players: SnakeVsWormsPlayer[] = this.players.map((p) => ({
-      seat: p.seat,
-      name: `Player ${p.seat + 1}`,
+    const players: SnakeWormPlayerEntity[] = this.players.map((p, idx) => ({
+      playerId: p.userId,
+      seat: idx,
+      type: idx === 0 ? "SNAKE" : "WORM",
+      name: idx === 0 ? "Snake (P1)" : "Worm (P2)",
+      body: idx === 0 ? p0Body : p1Body,
+      direction: idx === 0 ? "right" : "left",
+      targetDirection: idx === 0 ? "right" : "left",
+      speed: 10.0,
       score: 0,
+      foodCollected: 0,
+      kills: 0,
+      boostEnergy: 100,
+      isBoosting: false,
+      status: "active",
+      pendingGrowth: 0,
+      connected: true,
     }));
+
+    const food: SnakeWormFood[] = [];
+    this.spawnInitialFood(food, players);
 
     return {
-      snakes,
-      worms,
+      gridWidth: this.gridWidth,
+      gridHeight: this.gridHeight,
       players,
       food,
-      gameTimeMs: 0,
-      winnerSeat: null,
-      finished: false,
-      foodEaten: 0,
+      gameStatus: "playing",
+      stateVersion: 1,
     };
   }
 
-  protected validateGameAction(action: SnakeVsWormsAction, seat: number, state: SnakeVsWormsState): string | null {
-    if (state.finished) return "Game is over";
+  private spawnInitialFood(foodList: SnakeWormFood[], players: SnakeWormPlayerEntity[]) {
+    const foodTypes: FoodType[] = ["normal", "normal", "normal", "golden", "boost", "normal", "normal", "golden", "boost", "normal"];
+    for (let i = 0; i < foodTypes.length; i++) {
+      const pos = this.findUnoccupiedPosition(players, foodList);
+      if (pos) {
+        const type = foodTypes[i];
+        foodList.push({
+          id: `food-${i + 1}-${this.randomInt(100, 999)}`,
+          x: pos.x,
+          y: pos.y,
+          type,
+          score: type === "golden" ? 50 : type === "boost" ? 20 : 10,
+          growth: type === "golden" ? 3 : 1,
+        });
+      }
+    }
+  }
+
+  private findUnoccupiedPosition(players: SnakeWormPlayerEntity[], foodList: SnakeWormFood[]): Position | null {
+    for (let attempts = 0; attempts < 100; attempts++) {
+      const x = this.randomInt(100, this.gridWidth - 100);
+      const y = this.randomInt(100, this.gridHeight - 100);
+
+      const hitBody = players.some((p) => p.body.some((seg) => Math.hypot(seg.x - x, seg.y - y) < 30));
+      const hitFood = foodList.some((f) => Math.hypot(f.x - x, f.y - y) < 30);
+
+      if (!hitBody && !hitFood) {
+        return { x, y };
+      }
+    }
+    return { x: 1000, y: 1000 };
+  }
+
+  protected validateGameAction(action: SnakeVsWormsAction, seat: number, state: InternalState): string | null {
+    if (state.finished) return "Match is finished";
+    if (state.paused && action.type !== "resume" && action.type !== "ready") return "Match is paused";
+
+    const player = state.players[seat];
+    if (!player) return "Invalid player seat";
+    if (player.status === "eliminated") return "Player is eliminated";
+
     switch (action.type) {
-      case "turn":
-        const snake = state.snakes.find((s) => s.seat === seat);
-        if (!snake) return "No snake";
+      case "direction": {
+        const nextDir = action.direction;
+        if (!["up", "down", "left", "right"].includes(nextDir)) return "Invalid direction";
+        if (OPPOSITE_DIRECTIONS[player.direction] === nextDir) {
+          return "180 degree reversal not allowed";
+        }
         return null;
-      case "worm-turn":
-        const worm = state.worms.find((w) => w.seat === seat);
-        if (!worm) return "No worm";
+      }
+      case "boost-start":
+      case "boost-stop":
+      case "ready":
         return null;
       default:
         return null;
     }
   }
 
-  protected applyGameAction(action: SnakeVsWormsAction, seat: number, state: SnakeVsWormsState): EngineActionResult<SnakeVsWormsState> {
-    const events: EngineEvent[] = [];
+  protected applyGameAction(action: SnakeVsWormsAction, seat: number, state: InternalState): EngineActionResult<InternalState> {
     const next = this.cloneState(state);
-    const now = this.now();
+    const events: EngineEvent[] = [];
+    const player = next.players[seat];
 
     switch (action.type) {
-      case "resign": {
-        next.winnerSeat = next.players.findIndex((p) => p.seat !== seat);
-        next.finished = true;
-        events.push({ type: "resign", seat });
-        return { ok: true, state: next, events, finished: true, winnerSeats: [next.winnerSeat] };
+      case "direction": {
+        if (OPPOSITE_DIRECTIONS[player.direction] !== action.direction) {
+          player.targetDirection = action.direction;
+        }
+        next.stateVersion++;
+        return { ok: true, state: next, events: [], finished: next.finished, winnerSeats: next.winnerSeats };
+      }
+      case "boost-start": {
+        player.isBoosting = true;
+        next.stateVersion++;
+        return { ok: true, state: next, events: [], finished: next.finished, winnerSeats: next.winnerSeats };
+      }
+      case "boost-stop": {
+        player.isBoosting = false;
+        next.stateVersion++;
+        return { ok: true, state: next, events: [], finished: next.finished, winnerSeats: next.winnerSeats };
+      }
+      case "ready": {
+        player.connected = true;
+        next.stateVersion++;
+        return { ok: true, state: next, events: [], finished: next.finished, winnerSeats: next.winnerSeats };
       }
       default:
-        return { ok: false, error: "Unknown action", state: next, events: [], finished: state.finished, winnerSeats: state.winnerSeat ? [state.winnerSeat] : [] };
+        return { ok: false, error: "Unknown action", state, events: [], finished: state.finished, winnerSeats: state.winnerSeats };
     }
   }
 
-  protected onTurnTimerExpired(seat: number, state: SnakeVsWormsState): EngineActionResult<SnakeVsWormsState> {
+  tick(): EngineActionResult<InternalState> {
+    if (this.state.finished || this.state.paused || this.state.gameStatus !== "playing") {
+      return {
+        ok: true,
+        state: this.state,
+        events: [],
+        finished: this.state.finished,
+        winnerSeats: this.state.winnerSeats,
+      };
+    }
+
+    const nextState = this.simulatePhysics(this.state);
+    this.updateState(nextState);
+
+    const events: EngineEvent[] = [];
+    if (nextState.finished) {
+      events.push({
+        type: "match-complete",
+        winnerSeats: nextState.winnerSeats,
+      });
+    }
+
+    return {
+      ok: true,
+      state: nextState,
+      events,
+      finished: nextState.finished,
+      winnerSeats: nextState.winnerSeats,
+    };
+  }
+
+  simulatePhysics(state: InternalState): InternalState {
+    if (state.paused || state.finished) return state;
+
     const next = this.cloneState(state);
-    next.winnerSeat = (seat + 1) % 2; // TODO: two players?
+    next.stateVersion++;
+
+    // 1. Boost Energy Update & Movement Execution
+    for (const player of next.players) {
+      if (player.status !== "active") continue;
+
+      let stepSize = 10;
+      if (player.isBoosting && player.boostEnergy > 0) {
+        player.boostEnergy = Math.max(0, player.boostEnergy - 2);
+        player.speed = 20.0;
+        stepSize = 20;
+        if (player.boostEnergy === 0) {
+          player.isBoosting = false;
+        }
+      } else {
+        player.boostEnergy = Math.min(100, player.boostEnergy + 1);
+        player.speed = 10.0;
+      }
+
+      // Update direction if targetDirection is valid
+      if (OPPOSITE_DIRECTIONS[player.direction] !== player.targetDirection) {
+        player.direction = player.targetDirection;
+      }
+
+      const head = player.body[0];
+      let nextX = head.x;
+      let nextY = head.y;
+
+      switch (player.direction) {
+        case "up":
+          nextY -= stepSize;
+          break;
+        case "down":
+          nextY += stepSize;
+          break;
+        case "left":
+          nextX -= stepSize;
+          break;
+        case "right":
+          nextX += stepSize;
+          break;
+      }
+
+      player.body = [{ x: nextX, y: nextY }, ...player.body];
+
+      if (player.pendingGrowth > 0) {
+        player.pendingGrowth--;
+      } else {
+        player.body.pop();
+      }
+    }
+
+    // 2. Wall & Self Collision Check
+    for (const player of next.players) {
+      if (player.status !== "active") continue;
+
+      const head = player.body[0];
+
+      // Wall collision
+      if (head.x < 0 || head.x > this.gridWidth || head.y < 0 || head.y > this.gridHeight) {
+        player.status = "eliminated";
+        continue;
+      }
+
+      // Self collision
+      const hitSelf = player.body.slice(1).some((seg) => Math.hypot(seg.x - head.x, seg.y - head.y) < 8);
+      if (hitSelf) {
+        player.status = "eliminated";
+      }
+    }
+
+    // 3. Head-to-Head & Head-to-Body Collision Check
+    const activePlayers = next.players.filter((p) => p.status === "active");
+    if (activePlayers.length === 2) {
+      const p0 = activePlayers[0];
+      const p1 = activePlayers[1];
+      const head0 = p0.body[0];
+      const head1 = p1.body[0];
+
+      // Head-to-Head collision
+      if (Math.hypot(head0.x - head1.x, head0.y - head1.y) < 18) {
+        if (p0.body.length > p1.body.length) {
+          p1.status = "eliminated";
+          p0.score += 100;
+          p0.kills++;
+        } else if (p1.body.length > p0.body.length) {
+          p0.status = "eliminated";
+          p1.score += 100;
+          p1.kills++;
+        } else {
+          p0.status = "eliminated";
+          p1.status = "eliminated";
+        }
+      } else {
+        // Head-to-Opponent-Body collision
+        const p0HitsP1Body = p1.body.slice(1).some((seg) => Math.hypot(seg.x - head0.x, seg.y - head0.y) < 18);
+        const p1HitsP0Body = p0.body.slice(1).some((seg) => Math.hypot(seg.x - head1.x, seg.y - head1.y) < 18);
+
+        if (p0HitsP1Body) {
+          p0.status = "eliminated";
+          p1.score += 100;
+          p1.kills++;
+        }
+        if (p1HitsP0Body) {
+          p1.status = "eliminated";
+          p0.score += 100;
+          p0.kills++;
+        }
+      }
+    }
+
+    // 4. Food Collection
+    for (const player of next.players) {
+      if (player.status !== "active") continue;
+      const head = player.body[0];
+
+      const foodIndex = next.food.findIndex((f) => Math.hypot(f.x - head.x, f.y - head.y) < 30);
+      if (foodIndex !== -1) {
+        const item = next.food[foodIndex];
+        player.score += item.score;
+        player.foodCollected++;
+        player.pendingGrowth += item.growth;
+
+        if (item.type === "boost") {
+          player.boostEnergy = Math.min(100, player.boostEnergy + 30);
+        }
+
+        // Remove collected food and spawn replacement
+        next.food.splice(foodIndex, 1);
+        const newPos = this.findUnoccupiedPosition(next.players, next.food);
+        if (newPos) {
+          const types: FoodType[] = ["normal", "normal", "golden", "boost"];
+          const newType = types[this.randomInt(0, types.length - 1)];
+          next.food.push({
+            id: `food-${Date.now()}-${this.randomInt(10, 99)}`,
+            x: newPos.x,
+            y: newPos.y,
+            type: newType,
+            score: newType === "golden" ? 50 : newType === "boost" ? 20 : 10,
+            growth: newType === "golden" ? 3 : 1,
+          });
+        }
+      }
+    }
+
+    // 5. Game Over Verification
+    const finalActive = next.players.filter((p) => p.status === "active");
+    if (finalActive.length === 1) {
+      next.finished = true;
+      next.gameOver = true;
+      next.gameStatus = "finished";
+      next.winnerSeats = [finalActive[0].seat];
+      next.endReason = "PLAYER_ELIMINATED";
+    } else if (finalActive.length === 0) {
+      next.finished = true;
+      next.gameOver = true;
+      next.gameStatus = "finished";
+      next.winnerSeats = [];
+      next.endReason = "BOTH_ELIMINATED";
+    }
+
+    return next;
+  }
+
+  protected onTurnTimerExpired(seat: number, state: InternalState): EngineActionResult<InternalState> {
+    const winnerSeat = seat === 0 ? 1 : 0;
+    const next = this.cloneState(state);
     next.finished = true;
-    const events: EngineEvent[] = [{ type: "turn-timeout", seat }];
-    return { ok: true, state: next, events, finished: true, winnerSeats: [next.winnerSeat] };
+    next.gameOver = true;
+    next.gameStatus = "finished";
+    next.winnerSeats = [winnerSeat];
+    next.endReason = "TIMEOUT";
+    return { ok: true, state: next, events: [{ type: "match-timeout" }], finished: true, winnerSeats: [winnerSeat] };
+  }
+
+  protected onMatchTimerExpired(state: InternalState): EngineActionResult<InternalState> {
+    const p0 = state.players[0];
+    const p1 = state.players[1];
+
+    let winnerSeats: number[] = [];
+    if (p0.score > p1.score) {
+      winnerSeats = [0];
+    } else if (p1.score > p0.score) {
+      winnerSeats = [1];
+    } else {
+      // Secondary tiebreaker: body length
+      if (p0.body.length > p1.body.length) {
+        winnerSeats = [0];
+      } else if (p1.body.length > p0.body.length) {
+        winnerSeats = [1];
+      } else {
+        winnerSeats = []; // Draw
+      }
+    }
+
+    const next = this.cloneState(state);
+    next.finished = true;
+    next.gameOver = true;
+    next.gameStatus = "finished";
+    next.endReason = "TIME_EXPIRED";
+    next.winnerSeats = winnerSeats;
+
+    return { ok: true, state: next, events: [{ type: "match-complete", reason: "TIME_EXPIRED", winnerSeats }], finished: true, winnerSeats };
+  }
+
+  getStateSnapshot(): InternalState {
+    return this.cloneState(this.state as InternalState);
   }
 }
 
-export type SnakeVsWormsActionTyp = SnakeVsWormsAction["type"];
+export type SnakeVsWormsEngineInstance = InstanceType<typeof SnakeVsWormsEngine>;

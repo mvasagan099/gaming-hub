@@ -89,6 +89,7 @@ export class BubbleShooterEngine extends MultiplayerGameEngine<
         shotsFired: 0,
         nextBubble: this.rollNextBubble(grid),
         score: 0,
+        combo: 0,
         status: "playing",
         lastShot: null,
       };
@@ -196,18 +197,45 @@ export class BubbleShooterEngine extends MultiplayerGameEngine<
       matchedCount = matched.length;
       const removed = new Set(matched);
       player.grid = grid.filter((b) => !removed.has(b));
-      points = matched.length * 10 * (fired.type === "bomb" ? 2 : 1);
+      
       const drop = this.dropFloating(player.grid, topOffset);
       droppedCount = drop.dropped;
-      points += droppedCount * 30;
+
+      // Spec scoring: 30 base for 3 bubbles + 10 for each extra bubble
+      const basePoints = 30 + (matched.length > 3 ? (matched.length - 3) * 10 : 0);
+      const nextCombo = (player.combo || 0) + 1;
+      player.combo = nextCombo;
+      const comboBonus = nextCombo > 1 ? nextCombo * 15 : 0;
+      const floatingBonus = droppedCount * 30;
+      points = (basePoints + comboBonus + floatingBonus) * (fired.type === "bomb" ? 2 : 1);
+    } else {
+      // Missed shot resets combo
+      player.combo = 0;
     }
 
-    player.score += points;
+    player.score = (player.score || 0) + points;
     player.shotsFired += 1;
     if (player.shotsFired >= SHOTS_PER_DROP) {
       player.shotsFired = 0;
       player.topOffset = this.addNewRow(player.grid, player.topOffset);
     }
+
+    // Combo Attack / Garbage System: 2+ combo, 5+ matched bubbles, 2+ dropped, or Bomb sends a penalty row to opponents
+    const currentCombo = player.combo || 0;
+    const isGarbageAttack = currentCombo >= 2 || matchedCount >= 5 || droppedCount >= 2 || fired.type === "bomb";
+    if (isGarbageAttack) {
+      for (const opp of next.players) {
+        if (opp.seat !== seat && opp.status === "playing") {
+          opp.topOffset = this.addNewRow(opp.grid, opp.topOffset);
+          if (this.isOverflow(opp.grid, opp.topOffset)) {
+            opp.status = "eliminated";
+            events.push({ type: "eliminated", seat: opp.seat });
+          }
+          events.push({ type: "garbage-attack", seat, targetSeat: opp.seat });
+        }
+      }
+    }
+
     player.nextBubble = this.rollNextBubble(player.grid);
 
     const lastShot: BubbleShooterLastShot = {
@@ -258,8 +286,18 @@ export class BubbleShooterEngine extends MultiplayerGameEngine<
     next.currentSeat = seat;
     next.turnCount += 1;
 
-    const activeCount = next.players.filter((p) => p.status === "playing").length;
-    if (activeCount === 0) {
+    const remaining = next.players.filter((p) => p.status === "playing");
+    if (remaining.length === 1 && next.players.length >= 2) {
+      const survivor = remaining[0]!;
+      survivor.status = "won";
+      next.finished = true;
+      next.winnerSeats = [survivor.seat];
+      next.result = "win";
+      events.push({ type: "win", seat: survivor.seat });
+      return { ok: true, state: next, events, finished: true, winnerSeats: [survivor.seat] };
+    }
+
+    if (remaining.length === 0) {
       next.finished = true;
       next.result = "draw";
       next.winnerSeats = [];
@@ -268,6 +306,38 @@ export class BubbleShooterEngine extends MultiplayerGameEngine<
     }
 
     return { ok: true, state: next, events, finished: false, winnerSeats: [] };
+  }
+
+  protected override onMatchTimerExpired(state: BubbleShooterServerState): EngineActionResult<BubbleShooterServerState> {
+    const next = structuredClone(state);
+    next.finished = true;
+    next.gameOver = true;
+    next.endReason = "match-timeout";
+
+    const sorted = [...next.players].sort((a, b) => b.score - a.score);
+    if (sorted.length > 0 && sorted[0].score > (sorted[1]?.score ?? -1)) {
+      const winnerSeat = sorted[0].seat;
+      sorted[0].status = "won";
+      next.winnerSeats = [winnerSeat];
+      next.result = "win";
+      return {
+        ok: true,
+        state: next,
+        events: [{ type: "match-timeout" }, { type: "win", seat: winnerSeat }],
+        finished: true,
+        winnerSeats: [winnerSeat],
+      };
+    }
+
+    next.winnerSeats = [];
+    next.result = "draw";
+    return {
+      ok: true,
+      state: next,
+      events: [{ type: "match-timeout" }, { type: "draw" }],
+      finished: true,
+      winnerSeats: [],
+    };
   }
 
   private isOverflow(grid: BubbleShooterBubbleView[], topOffset: number): boolean {

@@ -264,6 +264,11 @@ export const LobbyPage: React.FC = () => {
   const leaveMatchmaking = useMultiplayerStore((s) => s.leaveMatchmaking);
   const sendMessage = useMultiplayerStore((s) => s.sendMessage);
   const sendEmoji = useMultiplayerStore((s) => s.sendEmoji);
+  const clearError = useMultiplayerStore((s) => s.clearError);
+
+  useEffect(() => {
+    clearError();
+  }, [slug, clearError]);
 
   useEffect(() => {
     if (session) connect();

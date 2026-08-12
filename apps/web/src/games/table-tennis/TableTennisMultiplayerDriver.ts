@@ -23,7 +23,8 @@ export default class TableTennisMultiplayerDriver {
   
   private pendingPaddleMove: { y: number; velocity: number } | null = null;
   private lastPaddleSent: number = 0;
-  private readonly paddleSendInterval: number = 16;
+  private lastSentY: number = -999;
+  private readonly paddleSendInterval: number = 40;
 
   constructor(mySeat: number | null, names: string[]) {
     this.mySeat = mySeat;
@@ -41,15 +42,17 @@ export default class TableTennisMultiplayerDriver {
       }
     });
     
-    setInterval(() => {
+    this.physicsInterval = setInterval(() => {
       if (this.pendingPaddleMove && !this.destroyed) {
         const now = Date.now();
         if (now - this.lastPaddleSent >= this.paddleSendInterval) {
-          this.sendPaddleMoveImmediate(this.pendingPaddleMove.y, this.pendingPaddleMove.velocity);
+          const move = this.pendingPaddleMove;
+          this.pendingPaddleMove = null;
+          this.sendPaddleMoveImmediate(move.y, move.velocity);
           this.lastPaddleSent = now;
         }
       }
-    }, 16);
+    }, 40);
     
     const current = useMultiplayerStore.getState();
     this.applyState(current.gameState as unknown as TableTennisRemoteState | null, current.lastEvents, current.winner);
@@ -96,14 +99,6 @@ export default class TableTennisMultiplayerDriver {
     const s = state as TableTennisRemoteState;
     this.lastState = s;
     
-    console.log("[TableTennisMultiplayerDriver] State updated:", {
-      phase: s.phase,
-      servingSeat: s.servingSeat,
-      scores: s.players?.map(p => p.score),
-      rallyCount: s.rallyCount,
-      ball: s.ball ? { x: s.ball.x, y: s.ball.y, inPlay: s.ball.inPlay } : null,
-    });
-    
     if (this.onStateUpdate) {
       this.onStateUpdate(s);
     }
@@ -131,22 +126,26 @@ export default class TableTennisMultiplayerDriver {
   }
   
   sendPaddleMove(y: number, velocity: number): void {
-    this.pendingPaddleMove = { y, velocity };
+    if (Math.abs(y - this.lastSentY) >= 0.5) {
+      this.pendingPaddleMove = { y, velocity };
+    }
   }
   
   private sendPaddleMoveImmediate(y: number, velocity: number): void {
     if (this.mySeat == null || this.destroyed) return;
+    if (Math.abs(y - this.lastSentY) < 0.5) return;
+    this.lastSentY = y;
     
     useMultiplayerStore.getState().sendGameAction({
       type: "paddle-move",
       y,
       velocity,
-    }).catch(err => {
-      console.error("[TableTennisMultiplayerDriver] Paddle move failed:", err);
+    }).catch(() => {
+      // Catch rate-limit errors silently
     });
   }
   
-  sendServe(angle: number = 0, power: number = 5): void {
+  sendServe(angle: number = 0, power: number = 5.25): void {
     console.log("[TableTennisMultiplayerDriver] sendServe:", { angle, power, mySeat: this.mySeat });
     
     if (this.mySeat == null) {

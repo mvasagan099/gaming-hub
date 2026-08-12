@@ -1,69 +1,59 @@
 import type { JsonObject } from "@gaming-hub/shared";
-import type { GameAction } from "../types";
+import type { BaseState } from "../base/MultiplayerGameEngine";
 
-export interface Snake extends JsonObject {
-  id: number;
-  seat: number;
-  body: { x: number; y: number }[];
-  direction: "up" | "down" | "left" | "right";
-  alive: boolean;
-  life: number | null;
-}
+export type SnakeWormType = "SNAKE" | "WORM";
+export type SnakeWormDirection = "up" | "down" | "left" | "right";
 
-export interface Worm extends JsonObject {
-  id: number;
-  seat: number;
-  body: { x: number; y: number }[];
-  direction: "up" | "down" | "left" | "right";
-  alive: boolean;
-}
-
-export interface Food extends JsonObject {
-  id: number;
+export interface Position extends JsonObject {
   x: number;
   y: number;
-  type: "apple" | "banana" | "cherry" | "special";
-  points: number;
-  age: number;
 }
 
-export interface SnakeVsWormsPlayer extends JsonObject {
+export interface SnakeWormPlayerEntity extends JsonObject {
+  playerId: string;
   seat: number;
+  type: SnakeWormType;
   name: string;
+  body: Position[];
+  direction: SnakeWormDirection;
+  targetDirection: SnakeWormDirection;
+  speed: number;
   score: number;
+  foodCollected: number;
+  kills: number;
+  boostEnergy: number;
+  isBoosting: boolean;
+  status: "active" | "eliminated";
+  pendingGrowth: number;
+  connected: boolean;
 }
 
-export interface SnakeVsWormsState extends JsonObject {
-  snakes: Snake[];
-  worms: Worm[];
-  players: SnakeVsWormsPlayer[];
-  food: Food[];
-  gameTimeMs: number;
-  winnerSeats: number[];
-  finished: boolean;
-  foodEaten: number;
-  currentSeat: number;
-  winnerSeat: number | null;
-  turnNumber: number;
-  turnStartedAtMs: number | null;
-  matchStartedAtMs: number | null;
-  drawOfferedBy: number | null;
-  paused: boolean;
-  pausedAtMs: number | null;
-  pausedBy: number | null;
-  turnTimerConfig: { turnDurationMs: number; warningThresholdMs: number } | null;
-  matchTimerConfig: { matchDurationMs: number; warningThresholdMs: number } | null;
-  gameOver: boolean;
-  endReason: string | null;
+export type FoodType = "normal" | "golden" | "boost";
+
+export interface SnakeWormFood extends JsonObject {
+  id: string;
+  x: number;
+  y: number;
+  type: FoodType;
+  score: number;
+  growth: number;
+}
+
+export interface SnakeVsWormsState extends BaseState {
+  gridWidth: number;
+  gridHeight: number;
+  players: SnakeWormPlayerEntity[];
+  food: SnakeWormFood[];
+  gameStatus: "waiting" | "playing" | "finished";
+  stateVersion: number;
 }
 
 export type SnakeVsWormsAction =
-  | { type: "turn"; snackId: number; angle: number; deltaSpeed?: number }
-  | { type: "worm-turn"; wormId: number; angle: number; deltaSpeed?: number }
+  | { type: "direction"; direction: SnakeWormDirection; sequenceNumber?: number }
+  | { type: "boost-start" }
+  | { type: "boost-stop" }
+  | { type: "ready" }
   | { type: "resign" }
-  | { type: "draw-offer" }
-  | { type: "draw-accept" }
-  | { type: "draw-decline" }
   | { type: "pause" }
   | { type: "resume" };
 
@@ -73,9 +63,9 @@ export interface SnakeVsWormsEngineOptions {
   turnTimer?: { turnDurationMs: number; warningThresholdMs: number };
   matchTimer?: { matchDurationMs: number; warningThresholdMs: number };
   enableResign?: boolean;
-  enableDraw?: boolean;
   enablePause?: boolean;
   enableRematch?: boolean;
-  gridSize?: number; // Width and height of the board (default 20x20)
+  gridWidth?: number;
+  gridHeight?: number;
   now?: () => number;
 }

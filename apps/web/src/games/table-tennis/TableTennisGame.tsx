@@ -41,7 +41,21 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
   const [isMatchPoint, setIsMatchPoint] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'disconnected'>('connected');
   const [pointAnimation, setPointAnimation] = useState<{ winner: number; reason: string } | null>(null);
-  
+  const [remainingTime, setRemainingTime] = useState(180);
+  const [endReason, setEndReason] = useState<string | null>(null);
+  const matchStartedAtMsRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (gameState === 'gameover') return;
+    const interval = setInterval(() => {
+      if (matchStartedAtMsRef.current) {
+        const elapsed = Math.max(0, Math.floor((Date.now() - matchStartedAtMsRef.current) / 1000));
+        setRemainingTime(Math.max(0, 180 - elapsed));
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [gameState]);
+
   const stateRef = useRef({
     gameState: 'serving' as GameState,
     server: 1 as 1 | 2,
@@ -52,6 +66,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
   const p1Ref = useRef({ y: 160, vy: 0, targetY: 160 });
   const p2Ref = useRef({ y: 160, vy: 0 });
+  const p2TargetYRef = useRef(160);
   const ballRef = useRef({ x: 300, y: 200, vx: 0, vy: 0, speed: 5, inPlay: false });
   const trailRef = useRef<{x: number, y: number}[]>([]);
   const particlesRef = useRef<Particle[]>([]);
@@ -128,6 +143,13 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         } else if (state.phase === 'finished' || state.finished) {
           setGameState('gameover');
           stateRef.current.gameState = 'gameover';
+        }
+        
+        if (state.matchStartedAtMs) {
+          matchStartedAtMsRef.current = state.matchStartedAtMs;
+        }
+        if (state.endReason) {
+          setEndReason(state.endReason);
         }
         
         setIsMatchPoint(state.matchPointSeat !== null);
@@ -302,28 +324,28 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
     const paddleSpeed = 300 * dt;
 
     if (mode === 'multiplayer' && driverRef.current) {
-      let targetY: number;
-      
       if (mySeat === 0) {
-        targetY = p1.targetY;
-        if (keys.up || keys.w) targetY -= paddleSpeed;
-        if (keys.down || keys.s) targetY += paddleSpeed;
-        targetY = Math.max(0, Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, targetY));
-        p1.targetY = targetY;
-        p1.y += (targetY - p1.y) * 0.3;
+        if (keys.up || keys.w) p1.targetY -= paddleSpeed;
+        if (keys.down || keys.s) p1.targetY += paddleSpeed;
+        p1.targetY = Math.max(0, Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, p1.targetY));
+        p1.y += (p1.targetY - p1.y) * 0.4;
       } else if (mySeat === 1) {
-        targetY = p2.y;
-        if (keys.up || keys.w) targetY -= paddleSpeed;
-        if (keys.down || keys.s) targetY += paddleSpeed;
-        targetY = Math.max(0, Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, targetY));
-        p2.y += (targetY - p2.y) * 0.3;
-        p2.y = targetY;
+        if (keys.up || keys.w) p2TargetYRef.current -= paddleSpeed;
+        if (keys.down || keys.s) p2TargetYRef.current += paddleSpeed;
+        p2TargetYRef.current = Math.max(0, Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, p2TargetYRef.current));
+        p2.y += (p2TargetYRef.current - p2.y) * 0.4;
       }
       
       const paddleY = mySeat === 0 ? p1.y : p2.y;
-      const velocity = mySeat === 0 ? (p1.y - p1.targetY) : (p2.vy);
+      const velocity = mySeat === 0 ? (p1.y - p1.targetY) : (p2.y - p2TargetYRef.current);
       driverRef.current.sendPaddleMove(paddleY, velocity);
       
+      if (ball.inPlay) {
+        trailRef.current.push({ x: ball.x, y: ball.y });
+        if (trailRef.current.length > 10) trailRef.current.shift();
+        ball.x += ball.vx * (dt * 60);
+        ball.y += ball.vy * (dt * 60);
+      }
     } else {
       if (keys.w) p1.targetY -= paddleSpeed;
       if (keys.s) p1.targetY += paddleSpeed;
@@ -483,21 +505,31 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
   }, true);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
+  const handlePointerMoveY = (clientY: number) => {
+    if (!canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
     const scaleY = CANVAS_HEIGHT / rect.height;
-    let y = (e.clientY - rect.top) * scaleY;
+    const y = (clientY - rect.top) * scaleY - PADDLE_HEIGHT / 2;
+    const clampedY = Math.max(0, Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, y));
     
     if (mode === 'multiplayer') {
       if (mySeat === 0) {
-        p1Ref.current.targetY = y - 40;
+        p1Ref.current.targetY = clampedY;
       } else if (mySeat === 1) {
-        p2Ref.current.y = y - 40;
+        p2TargetYRef.current = clampedY;
       }
     } else {
-      p1Ref.current.targetY = y - 40;
+      p1Ref.current.targetY = clampedY;
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    handlePointerMoveY(e.clientY);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches[0]) {
+      handlePointerMoveY(e.touches[0].clientY);
     }
   };
 
@@ -519,6 +551,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
             width={CANVAS_WIDTH}
             height={CANVAS_HEIGHT}
             onMouseMove={handleMouseMove}
+            onTouchMove={handleTouchMove}
             onClick={handleCanvasClick}
             className="rounded-3xl border-4 border-emerald-500/30 shadow-[0_0_50px_rgba(16,185,129,0.3)] bg-emerald-950 w-full h-auto max-h-[80vh] object-contain cursor-crosshair transition-transform duration-300 group-hover:scale-[1.01]"
           />
@@ -558,26 +591,26 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
           {gameState === 'gameover' && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/80 rounded-3xl backdrop-blur-sm z-10">
-              <div className="flex flex-col items-center gap-6 p-8 bg-slate-900/80 rounded-3xl border border-slate-700 shadow-2xl scale-110">
-                <h2 className={`text-5xl font-black ${winner === 1 ? 'text-rose-400' : 'text-blue-400'}`}>
-                  {winner === (mySeat === 0 ? 1 : (mySeat === 1 ? 2 : winner)) ? 'YOU WIN!' : 'OPPONENT WINS!'}
+              <div className="flex flex-col items-center gap-5 p-8 bg-slate-900/90 rounded-3xl border border-slate-700 shadow-2xl scale-105">
+                <h2 className={`text-4xl font-black ${winner === null ? 'text-amber-400' : (winner === (mySeat === 0 ? 1 : 2) ? 'text-emerald-400' : 'text-rose-400')}`}>
+                  {winner === null ? 'DRAW MATCH!' : (winner === (mySeat === 0 ? 1 : 2) ? 'YOU WIN!' : 'OPPONENT WINS!')}
                 </h2>
-                <div className="text-2xl text-slate-300 font-bold mb-4">
+                <div className="text-3xl text-white font-black tracking-wider">
                   {p1Score} - {p2Score}
                 </div>
-                <div className="text-lg text-slate-400 mb-4">
-                  Sets: {p1Sets} - {p2Sets}
+                <div className="text-xs font-black text-slate-400 uppercase tracking-widest bg-slate-800 px-4 py-1.5 rounded-full border border-slate-700">
+                  Reason: {endReason === "TIME_EXPIRED" ? "TIME EXPIRED" : "SCORE LIMIT REACHED"}
                 </div>
                 {mode === 'ai' && (
                   <button 
                     onClick={resetGame}
-                    className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-full transition-colors uppercase tracking-wider"
+                    className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-full transition-colors uppercase tracking-wider mt-2"
                   >
                     Play Again
                   </button>
                 )}
                 {mode === 'multiplayer' && (
-                  <div className="flex gap-4">
+                  <div className="flex gap-4 mt-2">
                     <button 
                       onClick={() => useMultiplayerStore.getState().requestRematch()}
                       className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-full transition-colors uppercase tracking-wider"
@@ -599,7 +632,11 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
         <div className="flex flex-col gap-6 w-full max-w-xs">
           <div className="glass-panel p-6 rounded-3xl border border-slate-800 flex flex-col items-center shadow-xl">
-            <span className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Set {Math.max(p1Sets, p2Sets) + 1}</span>
+            <span className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Match Timer</span>
+            <div className={`px-4 py-1.5 rounded-full border mb-4 font-mono font-black text-2xl tracking-wider transition-all ${remainingTime <= 30 ? 'bg-red-500/20 border-red-500/50 text-red-400 animate-pulse' : 'bg-slate-900/60 border-slate-700 text-emerald-400'}`}>
+              {Math.floor(remainingTime / 60).toString().padStart(2, '0')}:{(remainingTime % 60).toString().padStart(2, '0')}
+            </div>
+
             <span className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Match Score</span>
             <div className="flex items-center gap-6 text-5xl font-black">
               <div className={`flex flex-col items-center ${currentServer === 1 ? 'scale-110 opacity-100' : 'opacity-70'} transition-all`}>
@@ -612,11 +649,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
                 {currentServer === 2 && <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 animate-bounce"/>}
               </div>
             </div>
-            <div className="mt-4 text-sm text-slate-500">
-              Sets: <span className="text-rose-400">{p1Sets}</span> - <span className="text-blue-400">{p2Sets}</span>
-            </div>
             {isMatchPoint && (
-              <div className="mt-2 px-4 py-1 bg-yellow-500/20 border border-yellow-500/40 rounded-full">
+              <div className="mt-3 px-4 py-1 bg-yellow-500/20 border border-yellow-500/40 rounded-full">
                 <span className="text-yellow-400 font-bold text-sm animate-pulse">MATCH POINT!</span>
               </div>
             )}

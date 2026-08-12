@@ -204,8 +204,9 @@ export class LudoEngine extends MultiplayerGameEngine<
       return { ok: true, state: nextState, events, finished: false, winnerSeats: [] };
     }
 
-    if (moves.length === 1) {
-      return this.applyChosenMove(state, streak, moves[0]!, events);
+    const uniqueMoves = new Set(moves.map((m) => `${m.fromPosition}->${m.toPosition}`));
+    if (uniqueMoves.size === 1 && moves[0]) {
+      return this.applyChosenMove(state, streak, moves[0], events, dice);
     }
 
     const nextState: LudoServerState = {
@@ -237,7 +238,7 @@ export class LudoEngine extends MultiplayerGameEngine<
         winnerSeats: [],
       };
     }
-    return this.applyChosenMove(state, state.consecutiveSixes, move, events);
+    return this.applyChosenMove(state, state.consecutiveSixes, move, events, state.dice ?? undefined);
   }
 
   private applyChosenMove(
@@ -245,8 +246,10 @@ export class LudoEngine extends MultiplayerGameEngine<
     streak: number,
     move: LudoMove,
     events: EngineEvent[],
+    rolledDice?: number,
   ): EngineActionResult<LudoServerState> {
     const next = structuredClone(state);
+    if (rolledDice != null) next.dice = rolledDice;
     const player = this.playerByColor(next, move.token.color);
     const token = player.tokens.find((t) => t.id === move.token.id);
     if (!token) {
@@ -425,6 +428,16 @@ export class LudoEngine extends MultiplayerGameEngine<
       isFinish,
       isSafe,
     };
+  }
+
+  protected override onTurnTimerExpired(seat: number, state: LudoServerState): EngineActionResult<LudoServerState> {
+    if (state.phase === "selecting") {
+      const moves = this.legalMovesFor(state, seat, state.dice ?? 0);
+      if (moves.length > 0 && moves[0]) {
+        return this.applyChosenMove(state, state.consecutiveSixes, moves[0], []);
+      }
+    }
+    return this.applyRoll(state, seat);
   }
 
   private findOpponentTokenAt(

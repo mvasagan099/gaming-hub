@@ -247,6 +247,15 @@ export default class TokenManager {
   }
 
   /**
+   * Update multiple tokens at once from authoritative server state.
+   */
+  updateTokens(tokens: Token[]): void {
+    for (const token of tokens) {
+      this.syncFromServer(token);
+    }
+  }
+
+  /**
    * Snap a token to its authoritative server position and reflect its state
    * (used by the online driver after every `game:state` broadcast).
    */

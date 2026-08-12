@@ -8,6 +8,7 @@ export interface TableTennisBall extends JsonObject {
   vx: number;
   vy: number;
   speed: number;
+  touchCount: number;
   served: boolean;
   servedBySeat: number;
   lastHitSeat: number | null;
@@ -66,8 +67,8 @@ export interface TableTennisState extends BaseState {
 }
 
 export type TableTennisAction =
-  | { type: "paddle-move"; y: number; velocity: number }
-  | { type: "serve"; angle: number; power: number }
+  | { type: "paddle-move"; y: number; velocity?: number }
+  | { type: "serve"; angle: number; power?: number }
   | { type: "resign" }
   | { type: "pause" }
   | { type: "resume" }

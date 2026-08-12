@@ -92,6 +92,7 @@ interface MultiplayerState {
   declineRematch: () => Promise<void>;
   /** @deprecated use requestRematch */
   rematch: () => Promise<void>;
+  clearError: () => void;
   joinMatchmaking: (gameId: GameId, stake: number, settings?: MatchSettings) => Promise<void>;
   leaveMatchmaking: () => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
@@ -284,8 +285,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("player:kicked", (payload) => {
-        set({ error: "You were removed from the room" });
         if (payload.playerId === useAuthStore.getState().user?.id) {
+          set({ error: "You were removed from the room" });
           clearRoom(set);
         }
       });
@@ -339,16 +340,18 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   createRoom: async (gameId, isPrivate, stake, maxPlayers, settings) => {
     const socket = get().socket;
     if (!socket) throw new Error("Not connected to the game server");
+    set({ error: null });
     const res = await socket.emitWithAck("room:create", { gameId, isPrivate, stake, maxPlayers, settings });
     const room = unwrapAck<RoomFull>(res);
     applyRoom(set, room);
-    set({ winner: null, matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
+    set({ winner: null, matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null, error: null });
     return room;
   },
 
   joinRoom: async (input) => {
     const socket = get().socket;
     if (!socket) throw new Error("Not connected to the game server");
+    set({ error: null });
     const res = await socket.emitWithAck("room:join", {
       roomId: input.roomId,
       code: input.code,
@@ -356,7 +359,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     });
     const room = unwrapAck<RoomFull>(res);
     applyRoom(set, room);
-    set({ winner: null, matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
+    set({ winner: null, matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null, error: null });
     return room;
   },
 
@@ -438,11 +441,13 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   joinMatchmaking: async (gameId, stake, settings) => {
     const socket = get().socket;
     if (!socket) throw new Error("Not connected to the game server");
+    set({ error: null });
     const res = await socket.emitWithAck("matchmaking:join", { gameId, stake, settings });
     const data = unwrapAck<{ position: number }>(res);
     set({
       matchmaking: { queued: true, position: data.position, gameId, stake, settings: settings ?? {} },
       pendingRequeue: null,
+      error: null,
     });
   },
 
@@ -504,4 +509,6 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     // double-render the same event set on the acting client.
     return { ok: true };
   },
+
+  clearError: () => set({ error: null }),
 }));

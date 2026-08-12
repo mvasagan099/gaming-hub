@@ -23,7 +23,7 @@ describe("gameConfigs", () => {
   it("assigns sensible timers and cooldowns", () => {
     expect(getGamePlayConfig("chess").defaultTurnTimerMs).toBe(120_000);
     expect(getGamePlayConfig("fruit-ninja").defaultMatchTimerMs).toBe(60_000);
-    expect(getGamePlayConfig("table-tennis").actionCooldownMs).toBe(20);
+    expect(getGamePlayConfig("table-tennis").actionCooldownMs).toBe(15);
     expect(getGamePlayConfig("table-tennis").pauseOnDisconnect).toBe(false);
     expect(getGamePlayConfig("chess").pauseOnDisconnect).toBe(true);
     expect(getGamePlayConfig("snake-ladder").minPlayersToStart).toBeGreaterThan(0);

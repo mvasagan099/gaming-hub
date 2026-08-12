@@ -57,6 +57,10 @@ export abstract class ServerGameEngine<S extends JsonObject, A extends GameActio
     return this._state;
   }
 
+  protected updateState(next: S): void {
+    this._state = next;
+  }
+
   serialize(): JsonObject {
     return structuredClone(this.state) as unknown as JsonObject;
   }

@@ -94,8 +94,12 @@ export class MatchManager {
     
     try {
       const result = engine.tick();
-      if (result && result.events && result.events.length > 0) {
-        await this.framework.syncManager.broadcastGameState(room, result.events);
+      if (result && result.ok) {
+        const hasEvents = result.events && result.events.length > 0;
+        const isPhysicsActive = Boolean(result.state?.ball?.inPlay);
+        if (hasEvents || isPhysicsActive) {
+          await this.framework.syncManager.broadcastGameState(room, result.events ?? []);
+        }
         
         if (result.state?.finished) {
           this.stopPhysicsLoop(room.match.matchId);

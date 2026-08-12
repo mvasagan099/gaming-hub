@@ -38,6 +38,7 @@ export type BubbleShooterPlayerState = JsonObject & {
   shotsFired: number;
   nextBubble: BubbleShooterNextBubble;
   score: number;
+  combo: number;
   status: BubbleShooterStatus;
   lastShot: BubbleShooterLastShot | null;
 };

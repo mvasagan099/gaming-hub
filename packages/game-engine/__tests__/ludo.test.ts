@@ -33,21 +33,39 @@ describe("LudoEngine", () => {
     expect(res.error).toMatch(/not your turn/i);
   });
 
-  it("allows player to roll dice and select legal moves on a 6", () => {
+  it("auto-enters yard token on a 6 when all yard choices lead to start tile", () => {
     // 0.99 -> roll = 6
     const rng = mockRng([0.99]);
     const eng = new LudoEngine([p0, p1], rng);
     const rollRes = eng.apply({ type: "roll" }, 0);
     expect(rollRes.ok).toBe(true);
-    expect(rollRes.state.dice).toBe(6);
-    expect(rollRes.state.phase).toBe("selecting");
-    expect(rollRes.state.legalMoves).toHaveLength(4); // all 4 yard tokens can enter
+    // Since all 4 yard tokens enter position 0, engine auto-enters first token and grants extra turn for 6
+    expect(rollRes.state.phase).toBe("rolling");
+    expect(rollRes.state.currentSeat).toBe(0);
+    expect(rollRes.state.players[0].tokens[0].position).toBe(0);
+    expect(rollRes.state.players[0].tokens[0].state).toBe("active");
+  });
 
-    // Move token red-0 out of yard to start position 0
-    const moveRes = eng.apply({ type: "move", tokenId: "red-0" }, 0);
+  it("triggers selection phase when multiple distinct move destinations exist", () => {
+    const rng = mockRng([0.0]); // roll 1
+    const eng = new LudoEngine([p0, p1], rng);
+
+    // Place 2 red tokens at different active positions on the board
+    (eng.state as any).players[0].tokens[0].state = "active";
+    (eng.state as any).players[0].tokens[0].position = 2;
+    (eng.state as any).players[0].tokens[1].state = "active";
+    (eng.state as any).players[0].tokens[1].position = 10;
+
+    const rollRes = eng.apply({ type: "roll" }, 0);
+    expect(rollRes.ok).toBe(true);
+    expect(rollRes.state.dice).toBe(1);
+    expect(rollRes.state.phase).toBe("selecting");
+    expect(rollRes.state.legalMoves).toHaveLength(2); // red-0 to 3, red-1 to 11
+
+    // Move token red-1 to position 11
+    const moveRes = eng.apply({ type: "move", tokenId: "red-1" }, 0);
     expect(moveRes.ok).toBe(true);
-    expect(moveRes.state.players[0].tokens[0].position).toBe(0);
-    expect(moveRes.state.players[0].tokens[0].state).toBe("active");
+    expect(moveRes.state.players[0].tokens[1].position).toBe(11);
   });
 
   it("passes turn when rolling a non-6 with all tokens in yard", () => {

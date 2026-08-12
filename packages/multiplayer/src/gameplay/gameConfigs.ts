@@ -52,11 +52,11 @@ export const GAME_PLAY_CONFIGS: Record<GameId, GamePlayConfig> = {
   }),
   "bubble-shooter": baseConfig("bubble-shooter", {
     actionCooldownMs: 100,
-    defaultMatchTimerMs: 120_000,
+    defaultMatchTimerMs: 180_000,
     pauseOnDisconnect: false,
   }),
   "table-tennis": baseConfig("table-tennis", {
-    actionCooldownMs: 20,
+    actionCooldownMs: 15,
     pauseOnDisconnect: false,
   }),
   "snake-vs-worms": baseConfig("snake-vs-worms", {
