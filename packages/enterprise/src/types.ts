@@ -5,6 +5,8 @@
 
 import type { JsonObject } from "@gaming-hub/shared";
 
+export type { JsonObject };
+
 // ============================================================================
 // Feature Flags & Remote Configuration
 // ============================================================================
@@ -192,6 +194,14 @@ export interface AIPrediction {
   output: JsonObject;
   confidence: number;
   timestamp: Date;
+}
+
+export interface GameAction {
+  type: string;
+  playerId?: string;
+  timestamp?: number;
+  data?: JsonObject;
+  isOptimal?: boolean;
 }
 
 export interface RiskScore {

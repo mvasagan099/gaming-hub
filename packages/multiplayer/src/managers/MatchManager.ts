@@ -67,7 +67,7 @@ export class MatchManager {
     if (!matchId || this.physicsIntervals.has(matchId)) return;
     
     const gameId = room.config.gameId;
-    if (gameId !== "table-tennis") return;
+    if (gameId !== "table-tennis" && gameId !== "fruit-ninja") return;
     
     const intervalId = setInterval(() => {
       this.runPhysicsTick(room);
@@ -99,6 +99,9 @@ export class MatchManager {
         
         if (result.state?.finished) {
           this.stopPhysicsLoop(room.match.matchId);
+          // The engine finished the match on its own clock (e.g. fruit-ninja
+          // timer/bomb elimination) - finalize it like any other game-over.
+          await this.finishMatch(room, result);
         }
       }
     } catch (error) {
@@ -417,6 +420,10 @@ export class MatchManager {
    */
   async finishMatch(room: RoomRuntime, result: EngineActionResult<JsonObject>): Promise<void> {
     if (!room.match) return;
+    
+    // Idempotency guard: the engine can finish via both the physics tick and
+    // the scheduled clock check, so never finalize a match twice.
+    if (room.match.finishedAt) return;
     
     this.stopPhysicsLoop(room.match.matchId);
     

@@ -121,10 +121,22 @@ export default class GameManager {
         }
       });
     } else {
-      // Human chooses: highlight tokens
+      // Check if all legal moves lead to the exact same outcome (e.g. 1 move or yard entry)
+      const uniqueDestinations = new Set(this.legalMoves.map((m) => `${m.fromPosition}->${m.toPosition}`));
+      if (uniqueDestinations.size === 1 && this.legalMoves[0]) {
+        const autoMove = this.legalMoves[0];
+        this.addLog("Auto-moving token...");
+        this.scene.time.delayedCall(400, () => {
+          this.executeMove(autoMove);
+        });
+        return;
+      }
+
+      // Multiple choices: human selects token
       this.dice.setSelectMode();
       const ids = this.legalMoves.map((m) => m.token.id);
       this.tokenManager.highlightClickable(ids);
+      this.hud.showSelectionBanner("👇 TAP A HIGHLIGHTED TOKEN TO MOVE!");
     }
   }
 
@@ -137,6 +149,7 @@ export default class GameManager {
     const move = this.legalMoves.find((m) => m.token.id === tokenId);
     if (!move) return;
 
+    this.hud.hideSelectionBanner();
     this.tokenManager.clearAllGlows();
     this.executeMove(move);
   }

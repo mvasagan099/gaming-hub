@@ -74,31 +74,100 @@ export function createInitialCoins(): CarromCoin[] {
   return coins;
 }
 
-export function createInitialStriker(): CarromStriker {
+export function createInitialStriker(seat: number = 0): CarromStriker {
   return {
     x: CARROM_BOARD_WIDTH / 2,
-    y: BASE_LINE_Y,
+    y: seat === 0 ? BASE_LINE_Y : 93,
     vx: 0,
     vy: 0,
     placed: false,
     pocketed: false,
-    placedBy: null,
+    placedBy: seat,
   };
 }
 
-export function isValidStrikerPlacement(x: number, _seat: number): boolean {
+export function isValidStrikerPlacement(x: number, seat: number, coins: CarromCoin[] = []): boolean {
   const margin = STRIKER_RADIUS + 5;
-  return x >= BASE_LINE_X_START + margin && x <= BASE_LINE_X_END - margin;
+  if (x < BASE_LINE_X_START + margin || x > BASE_LINE_X_END - margin) return false;
+
+  // The striker may not overlap any active coin (server-authoritative rule).
+  const y = seat === 0 ? BASE_LINE_Y : 93;
+  for (const coin of coins) {
+    if (coin.pocketed) continue;
+    const r = coin.type === "queen" ? QUEEN_RADIUS : COIN_RADIUS;
+    if (Math.hypot(coin.x - x, coin.y - y) < STRIKER_RADIUS + r + 2) return false;
+  }
+  return true;
 }
 
-export function checkPocketCollision(x: number, y: number, radius: number): number | null {
+/**
+ * "Due owed" rule: after a striker foul, one of the fouler's own pocketed coins
+ * returns to the board near the center (avoiding overlap with active coins).
+ * Returns the returned coin, or null when the fouler has no pocketed coin left.
+ */
+export function returnOneOwnCoin(
+  coins: CarromCoin[],
+  seat: number,
+  rng: () => number = Math.random,
+): CarromCoin | null {
+  const color: CoinType = seat === 0 ? "white" : "black";
+  const pocketedOwn = coins.filter(c => c.type === color && c.pocketed);
+  if (pocketedOwn.length === 0) return null;
+
+  const coin = pocketedOwn[pocketedOwn.length - 1];
+  coin.pocketed = false;
+  coin.pocketedBy = null;
+  coin.pocketedAtTurn = null;
+  coin.vx = 0;
+  coin.vy = 0;
+
+  const centerX = CARROM_BOARD_WIDTH / 2;
+  const centerY = CARROM_BOARD_HEIGHT / 2;
+  const radius = coin.type === "queen" ? QUEEN_RADIUS : COIN_RADIUS;
+
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const angle = rng() * Math.PI * 2;
+    const distance = 20 + rng() * 80;
+    const x = centerX + Math.cos(angle) * distance;
+    const y = centerY + Math.sin(angle) * distance;
+
+    let overlaps = false;
+    for (const other of coins) {
+      if (other === coin || other.pocketed) continue;
+      const otherR = other.type === "queen" ? QUEEN_RADIUS : COIN_RADIUS;
+      if (Math.hypot(other.x - x, other.y - y) < radius + otherR + 2) {
+        overlaps = true;
+        break;
+      }
+    }
+    if (!overlaps) {
+      coin.x = x;
+      coin.y = y;
+      return coin;
+    }
+  }
+
+  // Extremely unlikely fallback: place it on the board center.
+  coin.x = centerX;
+  coin.y = centerY;
+  return coin;
+}
+
+
+
+export function checkPocketCollision(x: number, y: number, vx: number, vy: number, _radius: number): number | null {
   for (let i = 0; i < POCKETS.length; i++) {
     const pocket = POCKETS[i];
-    const dx = x - pocket.x;
-    const dy = y - pocket.y;
+    const dx = pocket.x - x;
+    const dy = pocket.y - y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    if (distance <= radius + POCKET_RADIUS * 0.7) {
-      return i;
+    // Coin center must be within 12px of pocket center (inner hole)
+    if (distance <= 12) {
+      if (distance <= 6) return i;
+      const dotProduct = vx * dx + vy * dy;
+      if (dotProduct > 0 || Math.hypot(vx, vy) > 0.05) {
+        return i;
+      }
     }
   }
   return null;
@@ -111,265 +180,377 @@ export function checkWallCollision(
   vy: number,
   radius: number,
 ): { x: number; y: number; vx: number; vy: number } {
+  const innerMin = 33;
+  const innerMax = CARROM_BOARD_WIDTH - innerMin;
   let newX = x;
   let newY = y;
   let newVx = vx;
   let newVy = vy;
+  const wallRestitution = radius >= STRIKER_RADIUS ? 0.75 : 0.70;
 
-  if (newX - radius <= 0) {
-    newX = radius;
-    newVx = Math.abs(newVx) * RESTITUTION;
-  } else if (newX + radius >= CARROM_BOARD_WIDTH) {
-    newX = CARROM_BOARD_WIDTH - radius;
-    newVx = -Math.abs(newVx) * RESTITUTION;
+  if (newX - radius < innerMin) {
+    newX = innerMin + radius;
+    newVx = Math.abs(newVx) * wallRestitution;
+  } else if (newX + radius > innerMax) {
+    newX = innerMax - radius;
+    newVx = -Math.abs(newVx) * wallRestitution;
   }
 
-  if (newY - radius <= 0) {
-    newY = radius;
-    newVy = Math.abs(newVy) * RESTITUTION;
-  } else if (newY + radius >= CARROM_BOARD_HEIGHT) {
-    newY = CARROM_BOARD_HEIGHT - radius;
-    newVy = -Math.abs(newVy) * RESTITUTION;
+  if (newY - radius < innerMin) {
+    newY = innerMin + radius;
+    newVy = Math.abs(newVy) * wallRestitution;
+  } else if (newY + radius > innerMax) {
+    newY = innerMax - radius;
+    newVy = -Math.abs(newVy) * wallRestitution;
   }
 
   return { x: newX, y: newY, vx: newVx, vy: newVy };
 }
 
 export function checkCircleCollision(
-  x1: number,
-  y1: number,
-  vx1: number,
-  vy1: number,
-  r1: number,
-  m1: number,
-  x2: number,
-  y2: number,
-  vx2: number,
-  vy2: number,
-  r2: number,
-  m2: number,
+  x1: number, y1: number, vx1: number, vy1: number, r1: number, m1: number,
+  x2: number, y2: number, vx2: number, vy2: number, r2: number, m2: number,
 ): { x1: number; y1: number; vx1: number; vy1: number; x2: number; y2: number; vx2: number; vy2: number } | null {
   const dx = x2 - x1;
   const dy = y2 - y1;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-  const minDistance = r1 + r2;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const minDist = r1 + r2;
 
-  if (distance >= minDistance || distance === 0) return null;
+  if (dist >= minDist || dist === 0) return null;
 
-  const nx = dx / distance;
-  const ny = dy / distance;
-
+  const nx = dx / dist;
+  const ny = dy / dist;
   const dvx = vx1 - vx2;
   const dvy = vy1 - vy2;
   const dvn = dvx * nx + dvy * ny;
 
-  if (dvn >= 0) return null;
+  if (dvn <= 0) return null;
 
-  const restitution = m1 === STRIKER_MASS ? RESTITUTION : COIN_RESTITUTION;
-  const impulse = (2 * m1 * m2 * dvn) / (m1 + m2) * restitution;
+  const isStriker = m1 === STRIKER_MASS || m2 === STRIKER_MASS;
+  const restitution = isStriker ? 0.90 : 0.82;
+  const jImpulse = -(2 * m1 * m2 * dvn) / (m1 + m2) * restitution;
 
-  const ix = impulse * nx;
-  const iy = impulse * ny;
+  const newVx1 = vx1 + (jImpulse * nx) / m1;
+  const newVy1 = vy1 + (jImpulse * ny) / m1;
+  const newVx2 = vx2 - (jImpulse * nx) / m2;
+  const newVy2 = vy2 - (jImpulse * ny) / m2;
 
-  let newVx1 = vx1 - ix / m1;
-  let newVy1 = vy1 - iy / m1;
-  let newVx2 = vx2 + ix / m2;
-  let newVy2 = vy2 + iy / m2;
-
-  const overlap = minDistance - distance;
+  const overlap = minDist - dist;
   const totalMass = m1 + m2;
-  let newX1 = x1 - nx * overlap * (m2 / totalMass);
-  let newY1 = y1 - ny * overlap * (m2 / totalMass);
-  let newX2 = x2 + nx * overlap * (m1 / totalMass);
-  let newY2 = y2 + ny * overlap * (m1 / totalMass);
+  const newX1 = x1 - nx * overlap * (m2 / totalMass);
+  const newY1 = y1 - ny * overlap * (m2 / totalMass);
+  const newX2 = x2 + nx * overlap * (m1 / totalMass);
+  const newY2 = y2 + ny * overlap * (m1 / totalMass);
 
-  return {
-    x1: newX1,
-    y1: newY1,
-    vx1: newVx1,
-    vy1: newVy1,
-    x2: newX2,
-    y2: newY2,
-    vx2: newVx2,
-    vy2: newVy2,
-  };
+  return { x1: newX1, y1: newY1, vx1: newVx1, vy1: newVy1, x2: newX2, y2: newY2, vx2: newVx2, vy2: newVy2 };
 }
 
 export function applyFriction(vx: number, vy: number, dt: number = 1): { vx: number; vy: number } {
   const speed = Math.sqrt(vx * vx + vy * vy);
   if (speed < MIN_VELOCITY) return { vx: 0, vy: 0 };
-
-  const newSpeed = speed * Math.pow(FRICTION, dt);
-  if (newSpeed < MIN_VELOCITY) return { vx: 0, vy: 0 };
-
-  const ratio = newSpeed / speed;
-  return { vx: vx * ratio, vy: vy * ratio };
+  const frictionFactor = Math.pow(FRICTION, dt);
+  return { vx: vx * frictionFactor, vy: vy * frictionFactor };
 }
 
 export function simulatePhysics(
   coins: CarromCoin[],
   striker: CarromStriker,
   dt: number = 1 / 60,
-  steps: number = 60,
+  steps: number = 600,
 ): { pocketedCoins: CarromCoin[]; pocketedStriker: boolean; events: any[] } {
   const events: any[] = [];
   let pocketedStriker = false;
   const pocketedCoins: CarromCoin[] = [];
 
-  for (let step = 0; step < steps; step++) {
-    let allStopped = true;
+  const innerMin = 33; // 22 * 1.5
+  const innerMax = CARROM_BOARD_WIDTH - innerMin; // 567
 
-    if (!striker.pocketed && (striker.vx !== 0 || striker.vy !== 0)) {
-      allStopped = false;
-      striker.x += striker.vx * dt;
-      striker.y += striker.vy * dt;
+  // 12 sub-steps per frame step (same as client)
+  const maxSubSteps = 12;
+  const subDt = dt / maxSubSteps;
+  const frictionPerSubstep = Math.pow(0.985, subDt * 60);
 
-      const wallResult = checkWallCollision(striker.x, striker.y, striker.vx, striker.vy, STRIKER_RADIUS);
-      striker.x = wallResult.x;
-      striker.y = wallResult.y;
-      striker.vx = wallResult.vx;
-      striker.vy = wallResult.vy;
+  // Combine all active entities into a single array for physics integration
+  type Body = {
+    id: string;
+    isStriker: boolean;
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    radius: number;
+    mass: number;
+    coinObj?: CarromCoin;
+  };
 
-      const pocketIndex = checkPocketCollision(striker.x, striker.y, STRIKER_RADIUS);
-      if (pocketIndex !== null) {
-        striker.pocketed = true;
-        striker.vx = 0;
-        striker.vy = 0;
-        pocketedStriker = true;
-        events.push({ type: "striker-pocketed", pocketIndex });
-        continue;
+  const bodies: Body[] = [];
+  if (!striker.pocketed) {
+    bodies.push({
+      id: "striker",
+      isStriker: true,
+      x: striker.x,
+      y: striker.y,
+      vx: striker.vx,
+      vy: striker.vy,
+      radius: STRIKER_RADIUS,
+      mass: STRIKER_MASS,
+    });
+  }
+
+  for (const c of coins) {
+    if (!c.pocketed) {
+      const r = c.type === "queen" ? QUEEN_RADIUS : COIN_RADIUS;
+      bodies.push({
+        id: c.id,
+        isStriker: false,
+        x: c.x,
+        y: c.y,
+        vx: c.vx,
+        vy: c.vy,
+        radius: r,
+        mass: COIN_MASS,
+        coinObj: c,
+      });
+    }
+  }
+
+  for (let frame = 0; frame < steps; frame++) {
+    let anyMoving = false;
+
+    for (let sub = 0; sub < maxSubSteps; sub++) {
+      // 1. Position integration & wall collision
+      for (const b of bodies) {
+        if (b.vx === 0 && b.vy === 0) continue;
+
+        b.x += b.vx * (subDt * 60);
+        b.y += b.vy * (subDt * 60);
+
+        const r = b.radius;
+        const wallRestitution = b.isStriker ? 0.75 : 0.70;
+
+        // Check if coin is in a pocket corner cutout zone (skip straight wall clamping near corners)
+        let inPocketZone = false;
+        for (const p of POCKETS) {
+          if (Math.hypot(b.x - p.x, b.y - p.y) < POCKET_RADIUS + 12) {
+            inPocketZone = true;
+            break;
+          }
+        }
+
+        if (!inPocketZone) {
+          if (b.x - r < innerMin) {
+            b.x = innerMin + r;
+            b.vx = Math.abs(b.vx) * wallRestitution;
+          } else if (b.x + r > innerMax) {
+            b.x = innerMax - r;
+            b.vx = -Math.abs(b.vx) * wallRestitution;
+          }
+
+          if (b.y - r < innerMin) {
+            b.y = innerMin + r;
+            b.vy = Math.abs(b.vy) * wallRestitution;
+          } else if (b.y + r > innerMax) {
+            b.y = innerMax - r;
+            b.vy = -Math.abs(b.vy) * wallRestitution;
+          }
+        }
+
+        // Friction
+        b.vx *= frictionPerSubstep;
+        b.vy *= frictionPerSubstep;
+
+        if (Math.abs(b.vx) < 0.06) b.vx = 0;
+        if (Math.abs(b.vy) < 0.06) b.vy = 0;
+
+        if (b.vx !== 0 || b.vy !== 0) anyMoving = true;
       }
 
-      const friction = applyFriction(striker.vx, striker.vy, dt);
-      striker.vx = friction.vx;
-      striker.vy = friction.vy;
-    }
+      // 2. Circle-circle collisions
+      for (let i = 0; i < bodies.length; i++) {
+        for (let j = i + 1; j < bodies.length; j++) {
+          const b1 = bodies[i];
+          const b2 = bodies[j];
 
-    for (const coin of coins) {
-      if (coin.pocketed || (coin.vx === 0 && coin.vy === 0)) continue;
-      allStopped = false;
+          const dx = b2.x - b1.x;
+          const dy = b2.y - b1.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const minDist = b1.radius + b2.radius;
 
-      coin.x += coin.vx * dt;
-      coin.y += coin.vy * dt;
+          if (dist < minDist && dist > 0) {
+            const nx = dx / dist;
+            const ny = dy / dist;
 
-      const wallResult = checkWallCollision(coin.x, coin.y, coin.vx, coin.vy, COIN_RADIUS);
-      coin.x = wallResult.x;
-      coin.y = wallResult.y;
-      coin.vx = wallResult.vx;
-      coin.vy = wallResult.vy;
+            const dvx = b1.vx - b2.vx;
+            const dvy = b1.vy - b2.vy;
+            const dvn = dvx * nx + dvy * ny;
 
-      const pocketIndex = checkPocketCollision(coin.x, coin.y, COIN_RADIUS);
-      if (pocketIndex !== null) {
-        coin.pocketed = true;
-        coin.vx = 0;
-        coin.vy = 0;
-        pocketedCoins.push(coin);
-        events.push({ type: "coin-pocketed", coinId: coin.id, coinType: coin.type, pocketIndex });
-        continue;
+            if (dvn > 0) {
+              const restitution = (b1.isStriker || b2.isStriker) ? 0.90 : 0.82;
+              const jImpulse = -(2 * b1.mass * b2.mass * dvn) / (b1.mass + b2.mass) * restitution;
+
+              b1.vx += (jImpulse * nx) / b1.mass;
+              b1.vy += (jImpulse * ny) / b1.mass;
+              b2.vx -= (jImpulse * nx) / b2.mass;
+              b2.vy -= (jImpulse * ny) / b2.mass;
+            }
+
+            const overlap = minDist - dist;
+            const totalMass = b1.mass + b2.mass;
+            b1.x -= nx * overlap * (b2.mass / totalMass);
+            b1.y -= ny * overlap * (b2.mass / totalMass);
+            b2.x += nx * overlap * (b1.mass / totalMass);
+            b2.y += ny * overlap * (b1.mass / totalMass);
+          }
+        }
       }
 
-      const friction = applyFriction(coin.vx, coin.vy, dt);
-      coin.vx = friction.vx;
-      coin.vy = friction.vy;
-    }
-
-    for (let i = 0; i < coins.length; i++) {
-      if (coins[i].pocketed) continue;
-      for (let j = i + 1; j < coins.length; j++) {
-        if (coins[j].pocketed) continue;
-        const collision = checkCircleCollision(
-          coins[i].x, coins[i].y, coins[i].vx, coins[i].vy, COIN_RADIUS, COIN_MASS,
-          coins[j].x, coins[j].y, coins[j].vx, coins[j].vy, COIN_RADIUS, COIN_MASS,
-        );
-        if (collision) {
-          coins[i].x = collision.x1;
-          coins[i].y = collision.y1;
-          coins[i].vx = collision.vx1;
-          coins[i].vy = collision.vy1;
-          coins[j].x = collision.x2;
-          coins[j].y = collision.y2;
-          coins[j].vx = collision.vx2;
-          coins[j].vy = collision.vy2;
+      // 3. Pocket collisions
+      for (let i = bodies.length - 1; i >= 0; i--) {
+        const b = bodies[i];
+        const pocketIdx = checkPocketCollision(b.x, b.y, b.vx, b.vy, b.radius);
+        if (pocketIdx !== null) {
+          if (b.isStriker) {
+            striker.pocketed = true;
+            striker.x = b.x;
+            striker.y = b.y;
+            striker.vx = 0;
+            striker.vy = 0;
+            pocketedStriker = true;
+            events.push({ type: "striker-pocketed", pocketIndex: pocketIdx });
+          } else if (b.coinObj) {
+            b.coinObj.pocketed = true;
+            b.coinObj.x = b.x;
+            b.coinObj.y = b.y;
+            b.coinObj.vx = 0;
+            b.coinObj.vy = 0;
+            pocketedCoins.push(b.coinObj);
+            events.push({ type: "coin-pocketed", coinId: b.coinObj.id, coinType: b.coinObj.type, pocketIndex: pocketIdx });
+          }
+          bodies.splice(i, 1);
         }
       }
     }
 
-    if (!striker.pocketed && (striker.vx !== 0 || striker.vy !== 0)) {
-      for (const coin of coins) {
-        if (coin.pocketed) continue;
-        const collision = checkCircleCollision(
-          striker.x, striker.y, striker.vx, striker.vy, STRIKER_RADIUS, STRIKER_MASS,
-          coin.x, coin.y, coin.vx, coin.vy, COIN_RADIUS, COIN_MASS,
-        );
-        if (collision) {
-          striker.x = collision.x1;
-          striker.y = collision.y1;
-          striker.vx = collision.vx1;
-          striker.vy = collision.vy1;
-          coin.x = collision.x2;
-          coin.y = collision.y2;
-          coin.vx = collision.vx2;
-          coin.vy = collision.vy2;
-        }
-      }
-    }
+    if (!anyMoving) break;
+  }
 
-    if (allStopped) break;
+  // Update final position & velocity on source objects
+  for (const b of bodies) {
+    if (b.isStriker) {
+      striker.x = b.x;
+      striker.y = b.y;
+      striker.vx = b.vx;
+      striker.vy = b.vy;
+    } else if (b.coinObj) {
+      b.coinObj.x = b.x;
+      b.coinObj.y = b.y;
+      b.coinObj.vx = b.vx;
+      b.coinObj.vy = b.vy;
+    }
   }
 
   return { pocketedCoins, pocketedStriker, events };
 }
 
+/**
+ * Calculates the result of a shot for turn and score purposes.
+ *
+ * Turn table (per user spec):
+ *   - Own coin pocketed                → extra turn (keep turn)
+ *   - Only opponent coin pocketed       → no extra turn (opponent gets turn)
+ *   - Striker pocketed                  → foul (handled in engine, not here)
+ *   - Queen pocketed + own coin covered → extra turn + queen is covered
+ *   - Queen pocketed alone              → extra turn to COVER it on the next shot;
+ *                                         if the cover shot pockets no own coin the
+ *                                         queen returns to the board (queenNeedsReturn)
+ *   - Nothing pocketed                  → no extra turn (opponent gets turn)
+ */
 export function calculateScore(
   pocketedCoins: CarromCoin[],
   playerColor: CoinType,
-  queenPocketed: boolean,
-  queenCovered: boolean,
-): { score: number; queenPocketed: boolean; queenCovered: boolean; earnedExtraTurn: boolean } {
+  queenAlreadyPocketed: boolean,
+  queenAlreadyCovered: boolean,
+): {
+  score: number;
+  queenPocketed: boolean;
+  queenCovered: boolean;
+  earnedExtraTurn: boolean;
+  /** True when the queen returns to the board center (cover failed or not attempted). */
+  queenNeedsReturn: boolean;
+} {
   let score = 0;
-  let newQueenPocketed = queenPocketed;
-  let newQueenCovered = queenCovered;
+  let newQueenPocketed = queenAlreadyPocketed;
+  let newQueenCovered = queenAlreadyCovered;
   let pocketedOwnColor = false;
+  let pocketedQueenThisShot = false;
 
   for (const coin of pocketedCoins) {
     if (coin.type === "queen") {
-      newQueenPocketed = true;
-      score += 3;
+      pocketedQueenThisShot = true;
     } else if (coin.type === playerColor) {
       score += 1;
       pocketedOwnColor = true;
-      if (newQueenPocketed && !newQueenCovered) {
-        newQueenCovered = true;
-        score += 3;
-      }
+    }
+    // Opponent coin: no points awarded, no extra turn.
+  }
+
+  let queenNeedsReturn = false;
+  const hasPendingCover = queenAlreadyPocketed && !queenAlreadyCovered;
+
+  if (pocketedQueenThisShot) {
+    if (pocketedOwnColor) {
+      // Queen pocketed AND own coin pocketed in the same shot → covered immediately.
+      newQueenPocketed = true;
+      newQueenCovered = true;
+      score += 3; // queen bonus
     } else {
-      score += 1;
+      // Queen pocketed alone → stays off-board, must be covered on the next shot.
+      newQueenPocketed = true;
+      newQueenCovered = false;
+    }
+  } else if (hasPendingCover) {
+    if (pocketedOwnColor) {
+      // Covered the queen on the follow-up shot.
+      newQueenCovered = true;
+      score += 3; // queen bonus
+    } else {
+      // Failed to cover the queen → it returns to the board center.
+      queenNeedsReturn = true;
+      newQueenPocketed = false;
+      newQueenCovered = false;
     }
   }
 
-  const earnedExtraTurn = pocketedOwnColor;
-  return { score, queenPocketed: newQueenPocketed, queenCovered: newQueenCovered, earnedExtraTurn };
+  // Extra turn: own coin always grants one; a queen pocketed alone grants one
+  // so the shooter gets a chance to cover it. A queen returned on the cover
+  // shot gives no extra turn.
+  const earnedExtraTurn = pocketedOwnColor || (pocketedQueenThisShot && !pocketedOwnColor);
+
+  return {
+    score,
+    queenPocketed: newQueenPocketed,
+    queenCovered: newQueenCovered,
+    earnedExtraTurn,
+    queenNeedsReturn,
+  };
 }
 
 export function checkWinCondition(
   coins: CarromCoin[],
-  players: { seat: number; color: CoinType; score: number; queenPocketed: boolean; queenCovered: boolean }[],
+  _players: { seat: number; color: CoinType; score: number; queenPocketed: boolean; queenCovered: boolean }[],
 ): { winner: number | null; isDraw: boolean } {
-  const whiteCoins = coins.filter(c => !c.pocketed && c.type === "white").length;
-  const blackCoins = coins.filter(c => !c.pocketed && c.type === "black").length;
-  const queenOnBoard = coins.some(c => !c.pocketed && c.type === "queen");
+  const queenRemaining = coins.some(c => !c.pocketed && c.type === "queen");
+  const whiteCoinsRemaining = coins.filter(c => !c.pocketed && c.type === "white").length;
+  const blackCoinsRemaining = coins.filter(c => !c.pocketed && c.type === "black").length;
 
-  if (whiteCoins === 0 && blackCoins === 0 && !queenOnBoard) {
-    if (players[0].score > players[1].score) return { winner: 0, isDraw: false };
-    if (players[1].score > players[0].score) return { winner: 1, isDraw: false };
-    return { winner: null, isDraw: true };
-  }
-
-  if (whiteCoins === 0 && !queenOnBoard) {
-    return { winner: 1, isDraw: false };
-  }
-  if (blackCoins === 0 && !queenOnBoard) {
+  // Seat 0 plays WHITE (9 white coins). When all White coins are pocketed & Queen is off board -> Seat 0 wins!
+  if (whiteCoinsRemaining === 0 && !queenRemaining) {
     return { winner: 0, isDraw: false };
+  }
+
+  // Seat 1 plays BLACK (9 black coins). When all Black coins are pocketed & Queen is off board -> Seat 1 wins!
+  if (blackCoinsRemaining === 0 && !queenRemaining) {
+    return { winner: 1, isDraw: false };
   }
 
   return { winner: null, isDraw: false };

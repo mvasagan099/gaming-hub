@@ -17,12 +17,12 @@ export function SnakeLadderPage({ mode = 'ai', stake = 10, onBack = () => {} }: 
   const isMultiplayer = mode === "multiplayer";
   const participants = room?.players ?? [];
   const maxPlayers = room?.maxPlayers ?? 2;
-  const players = isMultiplayer && maxPlayers > 0 ? maxPlayers : 2;
   const names = isMultiplayer
     ? [...participants]
         .sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0))
         .map((p) => p.displayName)
     : [];
+  const players = isMultiplayer && names.length > 0 ? names.length : (isMultiplayer ? maxPlayers : 2);
   const seat = isMultiplayer ? (isSpectator ? null : mySeat) : null;
 
   return (

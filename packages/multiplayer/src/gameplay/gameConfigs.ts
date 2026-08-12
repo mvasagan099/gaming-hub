@@ -34,10 +34,20 @@ export const GAME_PLAY_CONFIGS: Record<GameId, GamePlayConfig> = {
   ludo: baseConfig("ludo", {}),
   chess: baseConfig("chess", { defaultTurnTimerMs: 120_000 }),
   cricket: baseConfig("cricket", {}),
-  carrom: baseConfig("carrom", {}),
+  carrom: baseConfig("carrom", {
+    // Carrom's natural input is a rapid sequence: slider positioning ticks, a
+    // confirm tap and a quick flick to shoot. A nonzero cooldown rejects these
+    // legitimate bursts ("Action too frequent"), so the shot never reaches the
+    // engine, the striker snaps back and the turn appears stuck. The engine
+    // already validates every action, so 0 disables the framework-level gate.
+    actionCooldownMs: 0,
+  }),
   "fruit-ninja": baseConfig("fruit-ninja", {
-    actionCooldownMs: 100,
-    defaultMatchTimerMs: 90_000,
+    // The client streams blade samples (begin/move/end) during a swipe; a
+    // non-zero framework cooldown would drop legitimate bursts before the
+    // engine ever validates them. The engine is the authority on slices.
+    actionCooldownMs: 0,
+    defaultMatchTimerMs: 60_000,
     pauseOnDisconnect: false,
   }),
   "bubble-shooter": baseConfig("bubble-shooter", {

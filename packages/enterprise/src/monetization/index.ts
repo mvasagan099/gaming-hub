@@ -361,18 +361,17 @@ export class MonetizationManager extends EventEmitter {
     const created = await prisma.coupon.create({
       data: {
         code: coupon.code!,
-        name: coupon.name!,
+        title: coupon.name!,
         description: coupon.description,
-        discountType: coupon.discountType!,
+        discountType: coupon.discountType === "fixed" ? "FIXED" : "PERCENT",
         discountValue: coupon.discountValue!,
         maxUses: coupon.maxUses ?? 1,
         usedCount: 0,
-        minPurchase: coupon.minPurchase,
-        maxDiscount: coupon.maxDiscount,
-        appliesTo: coupon.appliesTo ?? [],
+        minWager: coupon.minPurchase ?? 0,
+        maxRedeemValue: coupon.maxDiscount ?? null,
         validFrom: coupon.validFrom!,
         validUntil: coupon.validUntil!,
-        createdBy: coupon.createdBy!,
+        createdBy: coupon.createdBy,
       },
     }) as unknown as Coupon;
 

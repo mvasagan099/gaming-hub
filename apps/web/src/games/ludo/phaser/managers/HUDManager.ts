@@ -21,6 +21,9 @@ const ORDERED_COLORS: Array<keyof typeof COLORS> = ["red", "blue", "green", "yel
 export default class HUDManager {
   private scene: Phaser.Scene;
   private turnText!: Phaser.GameObjects.Text;
+  private bannerContainer!: Phaser.GameObjects.Container;
+  private bannerText!: Phaser.GameObjects.Text;
+  private bannerTween: Phaser.Tweens.Tween | null = null;
   private cards: Phaser.GameObjects.Rectangle[] = [];
   private dots: Phaser.GameObjects.Arc[] = [];
   private nameTexts: Phaser.GameObjects.Text[] = [];
@@ -41,6 +44,22 @@ export default class HUDManager {
     const bg = this.scene.add.rectangle(PANEL_X, 400, PANEL_W, PANEL_H, COLORS.bg);
     bg.setStrokeStyle(2, COLORS.border);
     bg.setDepth(depth);
+
+    // Floating selection banner (centered over top of board)
+    const bannerBg = this.scene.add.rectangle(0, 0, 300, 36, 0xd97706);
+    bannerBg.setStrokeStyle(2, 0xfcd34d);
+
+    this.bannerText = this.scene.add.text(0, 0, "👇 TAP A HIGHLIGHTED TOKEN TO MOVE!", {
+      fontSize: "11px",
+      color: "#ffffff",
+      fontFamily: "Outfit, sans-serif",
+      fontStyle: "bold",
+    }).setOrigin(0.5);
+
+    this.bannerContainer = this.scene.add.container(400, 36, [bannerBg, this.bannerText]);
+    this.bannerContainer.setDepth(150);
+    this.bannerContainer.setVisible(false);
+    this.bannerContainer.setScale(0);
 
     // Title
     this.scene.add.text(PANEL_X, 22, "🎲 LUDO CHAMPION", {
@@ -207,5 +226,32 @@ export default class HUDManager {
     }
     const first = this.logLines[0];
     if (first) first.setText(`› ${message}`);
+  }
+
+  showSelectionBanner(message = "👇 TAP A HIGHLIGHTED TOKEN TO MOVE!"): void {
+    if (!this.bannerContainer) return;
+    this.bannerText.setText(message);
+    this.bannerContainer.setVisible(true);
+    this.bannerTween?.stop();
+
+    this.bannerTween = this.scene.tweens.add({
+      targets: this.bannerContainer,
+      scale: 1,
+      duration: 250,
+      ease: "Back.Out",
+    });
+  }
+
+  hideSelectionBanner(): void {
+    if (!this.bannerContainer || !this.bannerContainer.visible) return;
+    this.bannerTween?.stop();
+
+    this.bannerTween = this.scene.tweens.add({
+      targets: this.bannerContainer,
+      scale: 0,
+      duration: 200,
+      ease: "Back.In",
+      onComplete: () => this.bannerContainer.setVisible(false),
+    });
   }
 }

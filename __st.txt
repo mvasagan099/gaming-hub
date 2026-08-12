@@ -1,0 +1,102 @@
+let foul = false;
+    let earnedExtraTurn = false;
+    let queenPocketedThisTurn = false;
+    let queenCoveredThisTurn = false;
+    let queenReturnedThisTurn = false;
+
+    if (pocketedStriker) {
+      // ── FOUL: striker pocketed ──────────────────────────────────────────────
+      foul = true;
+      player.fouls++;
+      player.consecutiveFouls++;
+      events.push({ type: "foul", seat, reason: "striker-pocketed" });
+
+      // A foul voids any pending queen cover — the queen returns to the board.
+      if (player.queenPocketed && !player.queenCovered) {
+        player.queenPocketed = false;
+        queenReturnedThisTurn = true;
+        const queenCoin = next.coins.find(c => c.type === "queen");
+        if (queenCoin) {
+          queenCoin.pocketed = false;
+          queenCoin.x = 300;
+          queenCoin.y = 300;
+          queenCoin.vx = 0;
+          queenCoin.vy = 0;
+          queenCoin.pocketedBy = null;
+          queenCoin.pocketedAtTurn = null;
+        }
+        events.push({ type: "queen-returned", seat, reason: "foul" });
+      }
+
+      // Due owed: one of the fouler's own pocketed coins returns to the board.
+      const returnedCoin = returnOneOwnCoin(next.coins, seat);
+      if (returnedCoin) {
+        events.push({ type: "coin-returned", seat, coinId: returnedCoin.id, coinType: returnedCoin.type });
+      }
+    } else {
+      player.consecutiveFouls = 0;
+
+      // Always evaluate the pending-cover state, even when this shot pocketed nothing.
+      const hasPendingCover = player.queenPocketed && !player.queenCovered;
+      if (pocketedCoins.length > 0 || hasPendingCover) {
+        const playerColor: CoinType = seat === 0 ? "white" : "black";
+        const result = calculateScore(
+          pocketedCoins,
+          playerColor,
+          player.queenPocketed,
+          player.queenCovered,
+        );
+
+        earnedExtraTurn = result.earnedExtraTurn;
+        player.score += result.score;
+        queenPocketedThisTurn = result.queenPocketed && !player.queenPocketed;
+        queenCoveredThisTurn  = result.queenCovered  && !player.queenCovered;
+        player.queenPocketed  = result.queenPocketed;
+        player.queenCovered   = result.queenCovered;
+
+        if (result.queenNeedsReturn) {
+          // Queen pocketed without cover → restore queen to board center
+          queenReturnedThisTurn = true;
+          const queenCoin = next.coins.find(c => c.type === "queen");
+          if (queenCoin) {
+            queenCoin.pocketed = false;
+            queenCoin.x = 300; // board center X
+            queenCoin.y = 300; // board center Y
+            queenCoin.vx = 0;
+            queenCoin.vy = 0;
+            queenCoin.pocketedBy = null;
+            queenCoin.pocketedAtTurn = null;
+          }
+          events.push({ type: "queen-returned", seat, reason: "not-covered" });
+        }
+
+        // Emit scored events for own/opponent coins only (queen handled above)
+        for (const coin of pocketedCoins) {
+          if (coin.type === "queen") continue; // already handled
+          coin.pocketedBy = seat;
+          coin.pocketedAtTurn = next.turnNumber;
+          events.push({
+            type: "coin-scored",
+            seat,
+            coinId: coin.id,
+            coinType: coin.type,
+            points: coin.type === playerColor ? 1 : 0,
+          });
+        }
+
+        if (queenPocketedThisTurn && !queenReturnedThisTurn) {
+          // Queen was permanently pocketed (covered)
+          const queenCoin = next.coins.find(c => c.type === "queen");
+          if (queenCoin) {
+            queenCoin.pocketedBy = seat;
+            queenCoin.pocketedAtTurn = next.turnNumber;
+          }
+          events.push({ type: "queen-pocketed", seat });
+        }
+        if (queenCoveredThisTurn) {
+          events.push({ type: "queen-covered", seat });
+        }
+      }
+    }
+
+    

@@ -59,20 +59,21 @@ export class LiveOpsManager extends EventEmitter {
     if (!flag) {
       const cached = await this.redis.get(cacheKey);
       if (cached) {
-        flag = JSON.parse(cached);
+        flag = JSON.parse(cached) as FeatureFlag;
         this.featureFlags.set(featureKey, flag);
       }
     }
 
     // If not in cache, fetch from database
     if (!flag) {
-      flag = await prisma.featureFlag.findUnique({
+      const dbFlag = await prisma.featureFlag.findUnique({
         where: { key: featureKey },
       }) as unknown as FeatureFlag | null;
-      
-      if (flag) {
-        this.featureFlags.set(featureKey, flag);
-        await this.redis.setex(cacheKey, this.defaultCacheTtl, JSON.stringify(flag));
+
+      if (dbFlag) {
+        flag = dbFlag;
+        this.featureFlags.set(featureKey, dbFlag);
+        await this.redis.setex(cacheKey, this.defaultCacheTtl, JSON.stringify(dbFlag));
       }
     }
 
@@ -196,24 +197,25 @@ export class LiveOpsManager extends EventEmitter {
     if (!config) {
       const cached = await this.redis.get(cacheKey);
       if (cached) {
-        config = JSON.parse(cached);
+        config = JSON.parse(cached) as RemoteConfig;
         this.remoteConfigs.set(`${environment}:${key}`, config);
       }
     }
 
     // Fetch from database
     if (!config) {
-      config = await prisma.remoteConfig.findUnique({
+      const dbConfig = await prisma.remoteConfig.findUnique({
         where: { key_environment: { key, environment } },
       }) as unknown as RemoteConfig | null;
-      
-      if (config) {
-        this.remoteConfigs.set(`${environment}:${key}`, config);
-        await this.redis.setex(cacheKey, this.defaultCacheTtl, JSON.stringify(config));
+
+      if (dbConfig) {
+        config = dbConfig;
+        this.remoteConfigs.set(`${environment}:${key}`, dbConfig);
+        await this.redis.setex(cacheKey, this.defaultCacheTtl, JSON.stringify(dbConfig));
       }
     }
 
-    return config;
+    return config ?? null;
   }
 
   /**
@@ -619,13 +621,19 @@ export class LiveOpsManager extends EventEmitter {
     const announcements = await prisma.globalAnnouncement.findMany({
       where: {
         status: "active",
-        OR: [
-          { scheduledAt: { lte: now } },
-          { scheduledAt: null },
-        ],
-        OR: [
-          { expiresAt: { gte: now } },
-          { expiresAt: null },
+        AND: [
+          {
+            OR: [
+              { scheduledAt: { lte: now } },
+              { scheduledAt: null },
+            ],
+          },
+          {
+            OR: [
+              { expiresAt: { gte: now } },
+              { expiresAt: null },
+            ],
+          },
         ],
       },
       orderBy: [
@@ -803,4 +811,4 @@ export class LiveOpsManager extends EventEmitter {
   }
 }
 
-export * from "./types";
+export * from "../types";

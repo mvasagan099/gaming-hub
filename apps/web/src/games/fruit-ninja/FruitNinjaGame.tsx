@@ -12,20 +12,24 @@ interface FruitNinjaProps {
 }
 
 export const FruitNinjaGame: React.FC<FruitNinjaProps> = ({ mode: initialMode, stake, onBack }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playMode, setPlayMode] = useState<"classic" | "zen">("classic");
   const isMultiplayer = initialMode === "multiplayer";
+  const [isPlaying, setIsPlaying] = useState(isMultiplayer);
+  const [playMode, setPlayMode] = useState<"classic" | "zen">("classic");
   const room = useMultiplayerStore((s) => s.room);
+
+  const activePlayMode = isMultiplayer ? "classic" : playMode;
 
   const startGame = () => setIsPlaying(true);
   const resetGame = () => setIsPlaying(false);
 
-  if (isPlaying) {
+  const isGameStarted = isMultiplayer || isPlaying;
+
+  if (isGameStarted) {
     return (
-      <GameWrapper title="Fruit Ninja Blade" gameId="fruit-ninja" mode={initialMode} stake={stake} onBack={resetGame} isFullscreen>
+      <GameWrapper title="Fruit Ninja Blade" gameId="fruit-ninja" mode={initialMode} stake={stake} onBack={isMultiplayer ? onBack : resetGame} isFullscreen>
         <div className="flex flex-col lg:flex-row items-center justify-center gap-6 w-full max-w-5xl">
           <div className="flex flex-col items-center gap-4">
-            <FruitNinjaPhaserGame mode={playMode} />
+            <FruitNinjaPhaserGame mode={activePlayMode} isMultiplayer={isMultiplayer} />
             {!isMultiplayer && (
               <button
                 onClick={resetGame}
@@ -58,39 +62,49 @@ export const FruitNinjaGame: React.FC<FruitNinjaProps> = ({ mode: initialMode, s
           <p className="text-[10px] text-slate-400 uppercase tracking-widest text-center mt-0.5">Vite + Phaser 3 Arcade Engine</p>
 
           {/* Play Mode Selection */}
-          <div className="w-full mt-4">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 text-left">Blade Mode</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setPlayMode("classic")}
-                className={`py-3 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1.5 ${
-                  playMode === "classic"
-                    ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10"
-                    : "bg-slate-850 border-slate-700 text-slate-400 hover:border-slate-600"
-                }`}
-              >
-                <Zap className="w-4 h-4" />
-                <div className="text-center">
-                  <p className="font-black">Classic Mode</p>
-                  <p className="text-[9px] text-slate-400 font-medium">3 Lives &amp; Bombs</p>
-                </div>
-              </button>
-              <button
-                onClick={() => setPlayMode("zen")}
-                className={`py-3 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1.5 ${
-                  playMode === "zen"
-                    ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10"
-                    : "bg-slate-850 border-slate-700 text-slate-400 hover:border-slate-600"
-                }`}
-              >
-                <Shield className="w-4 h-4" />
-                <div className="text-center">
-                  <p className="font-black">Zen Mode</p>
-                  <p className="text-[9px] text-slate-400 font-medium">No Bombs, Just Slices</p>
-                </div>
-              </button>
+          {!isMultiplayer ? (
+            <div className="w-full mt-4">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 text-left">Blade Mode</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setPlayMode("classic")}
+                  className={`py-3 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1.5 ${
+                    playMode === "classic"
+                      ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10"
+                      : "bg-slate-850 border-slate-700 text-slate-400 hover:border-slate-600"
+                  }`}
+                >
+                  <Zap className="w-4 h-4" />
+                  <div className="text-center">
+                    <p className="font-black">Classic Mode</p>
+                    <p className="text-[9px] text-slate-400 font-medium">3 Lives &amp; Bombs</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setPlayMode("zen")}
+                  className={`py-3 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1.5 ${
+                    playMode === "zen"
+                      ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10"
+                      : "bg-slate-850 border-slate-700 text-slate-400 hover:border-slate-600"
+                  }`}
+                >
+                  <Shield className="w-4 h-4" />
+                  <div className="text-center">
+                    <p className="font-black">Zen Mode</p>
+                    <p className="text-[9px] text-slate-400 font-medium">No Bombs, Just Slices</p>
+                  </div>
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="w-full mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-center gap-2 text-amber-400">
+              <Zap className="w-4 h-4" />
+              <div className="text-center">
+                <p className="font-black text-xs uppercase tracking-wider">Multiplayer Mode: Classic</p>
+                <p className="text-[9px] text-amber-300/80 font-medium">3 Lives &amp; Bombs Enabled</p>
+              </div>
+            </div>
+          )}
 
           {/* Stake and play button */}
           <div className="w-full mt-4 pt-3 border-t border-slate-800">

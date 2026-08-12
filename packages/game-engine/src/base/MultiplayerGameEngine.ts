@@ -94,8 +94,8 @@ export abstract class MultiplayerGameEngine<
   get currentMatchDeadline(): number | null {
     const state = this.state;
     if (!state.matchTimerConfig || state.finished || state.paused) return null;
-    if (state.matchStartedAtMs === null) return null;
-    return state.matchStartedAtMs + state.matchTimerConfig.matchDurationMs;
+    const start = state.matchStartedAtMs ?? (this.now ? this.now() : Date.now());
+    return start + state.matchTimerConfig.matchDurationMs;
   }
 
   protected abstract initBaseState(): Omit<S, keyof BaseState>;

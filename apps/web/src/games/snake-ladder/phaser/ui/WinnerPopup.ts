@@ -12,7 +12,10 @@ export default class WinnerPopup {
   private scene: Phaser.Scene;
   private container!: Phaser.GameObjects.Container;
   private titleText!: Phaser.GameObjects.Text;
+  private trophyText!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
+  private playBtnLabel!: Phaser.GameObjects.Text;
+  private closeBtnLabel!: Phaser.GameObjects.Text;
   private particles: ParticleManager | null;
   private playAgainAction: (() => void) | null = null;
   private closeAction: (() => void) | null = null;
@@ -35,15 +38,15 @@ export default class WinnerPopup {
     const card = this.scene.add.rectangle(0, 0, 420, 300, 0x0f172a);
     card.setStrokeStyle(3, 0xf59e0b);
 
-    // Trophy
-    const trophy = this.scene.add.text(0, -110, "🏆", {
+    // Trophy / outcome icon
+    this.trophyText = this.scene.add.text(0, -110, "🏆", {
       fontSize: "52px",
       align: "center",
     }).setOrigin(0.5);
 
     // Winner title
     this.titleText = this.scene.add.text(0, -48, "", {
-      fontSize: "26px",
+      fontSize: "24px",
       color: "#f59e0b",
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
@@ -70,7 +73,7 @@ export default class WinnerPopup {
     btnBg.on("pointerout",  () => btnBg.setFillStyle(0x16a34a));
     btnBg.on("pointerdown", () => this.onPlayAgain());
 
-    const btnLabel = this.scene.add.text(-85, 95, "▶  REPLAY", {
+    this.playBtnLabel = this.scene.add.text(-85, 95, "▶  REPLAY", {
       fontSize: "13px",
       color: "#ffffff",
       fontFamily: "Outfit, sans-serif",
@@ -85,7 +88,7 @@ export default class WinnerPopup {
     closeBtnBg.on("pointerout",  () => closeBtnBg.setFillStyle(0xef4444));
     closeBtnBg.on("pointerdown", () => this.onClose());
 
-    const closeBtnLabel = this.scene.add.text(85, 95, "✖  CLOSE", {
+    this.closeBtnLabel = this.scene.add.text(85, 95, "✖  CLOSE", {
       fontSize: "13px",
       color: "#ffffff",
       fontFamily: "Outfit, sans-serif",
@@ -95,14 +98,14 @@ export default class WinnerPopup {
     this.container = this.scene.add.container(cx, cy, [
       overlay,
       card,
-      trophy,
+      this.trophyText,
       this.titleText,
       this.statsText,
       divider,
       btnBg,
-      btnLabel,
+      this.playBtnLabel,
       closeBtnBg,
-      closeBtnLabel
+      this.closeBtnLabel
     ]);
 
     this.container.setDepth(200);
@@ -114,26 +117,33 @@ export default class WinnerPopup {
     const isMultiplayer = options.mode === "multiplayer";
 
     if (isMultiplayer) {
-      this.titleText.setText(options.won ? `🏆 YOU WON!` : `🏆 ${playerName} WON!`);
-      this.titleText.setColor(options.won ? "#4ade80" : "#f59e0b");
       if (options.won) {
-        this.particles?.winFireworks();
-      }
-    } else {
-      const isHuman = playerName.toLowerCase() === "player 1";
-
-      if (isHuman) {
-        this.titleText.setText(`🎉 YOU WON! (+50 Coins)`);
+        this.trophyText.setText("🏆");
+        this.titleText.setText("🎉 YOU WON!");
         this.titleText.setColor("#4ade80");
-        void claimPracticeReward("snake-ladder");
+        this.particles?.winFireworks();
       } else {
-        this.titleText.setText(`🤖 SORRY, AI WON...`);
+        this.trophyText.setText("💔");
+        this.titleText.setText(`YOU LOST\n(${playerName} Won)`);
         this.titleText.setColor("#f87171");
       }
+    } else {
+      const regNames = (this.scene.registry.get("names") as string[] | undefined) ?? [];
+      const humanName = regNames[0]?.toLowerCase();
+      const isHuman =
+        playerName.toLowerCase() === "player 1" ||
+        (humanName != null && playerName.toLowerCase() === humanName);
 
-      // Fireworks only if human wins
       if (isHuman) {
+        this.trophyText.setText("🏆");
+        this.titleText.setText("🎉 YOU WON! (+50 Coins)");
+        this.titleText.setColor("#4ade80");
+        void claimPracticeReward("snake-ladder");
         this.particles?.winFireworks();
+      } else {
+        this.trophyText.setText("🤖");
+        this.titleText.setText("SORRY, AI WON...");
+        this.titleText.setColor("#f87171");
       }
     }
 
@@ -160,6 +170,12 @@ export default class WinnerPopup {
   setActions(onPlayAgain?: (() => void) | null, onClose?: (() => void) | null): void {
     this.playAgainAction = onPlayAgain ?? null;
     this.closeAction = onClose ?? null;
+    if (this.playBtnLabel) {
+      this.playBtnLabel.setText(onPlayAgain ? "🔄  REMATCH" : "▶  REPLAY");
+    }
+    if (this.closeBtnLabel) {
+      this.closeBtnLabel.setText(onClose ? "🚪  EXIT LOBBY" : "✖  CLOSE");
+    }
   }
 
   hide(): void {

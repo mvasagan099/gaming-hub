@@ -18,13 +18,14 @@ import {
   simulatePhysics,
   calculateScore,
   checkWinCondition,
+  returnOneOwnCoin,
 } from "./physics";
 
 export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromAction> {
   readonly gameId = "carrom" as const;
 
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: CarromEngineOptions) {
-    const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 5000 };
+    const turnTimer = options?.turnTimer ?? { turnDurationMs: 60000, warningThresholdMs: 10000 };
     const matchTimer = options?.matchTimer ?? { matchDurationMs: 600000, warningThresholdMs: 30000 };
     super(players, rng, {
       turnTimer,
@@ -35,6 +36,47 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       enableRematch: options?.enableRematch ?? true,
       now: options?.now,
     });
+  }
+
+  protected onTurnTimerExpired(seat: number, state: CarromState): EngineActionResult<CarromState> {
+    const next = this.cloneState(state);
+    const player = next.players.find(p => p.seat === seat);
+    if (player) {
+      player.fouls++;
+      player.consecutiveFouls++;
+    }
+
+    // Only forfeit if a player accumulates 3 consecutive AFK timeouts
+    if (player && player.consecutiveFouls >= 3) {
+      next.finished = true;
+      next.gameOver = true;
+      next.endReason = "afk-forfeit";
+      const winnerSeats = [seat === 0 ? 1 : 0];
+      next.winnerSeats = winnerSeats;
+      return {
+        ok: true,
+        state: next,
+        events: [{ type: "afk-forfeit", seat, winnerSeat: winnerSeats[0] }],
+        finished: true,
+        winnerSeats,
+      };
+    }
+
+    // Regular turn timeout: pass the turn to opponent without ending the match
+    const nextSeat = seat === 0 ? 1 : 0;
+    next.currentSeat = nextSeat;
+    next.turnStartedAtMs = this.now();
+    next.strikerPlacementPhase = true;
+    next.strikerPlacementSeat = nextSeat;
+    next.striker = createInitialStriker(nextSeat);
+
+    return {
+      ok: true,
+      state: next,
+      events: [{ type: "turn-timeout", seat, nextSeat }],
+      finished: false,
+      winnerSeats: [],
+    };
   }
 
   protected getInitialSeat(): number {
@@ -78,19 +120,18 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
         if (state.strikerPlacementSeat !== seat) return "Not your turn to place striker";
         if (state.currentSeat !== seat) return "Not your turn";
         if (typeof action.x !== "number") return "Invalid x coordinate";
-        if (!isValidStrikerPlacement(action.x, seat)) return "Invalid striker placement position";
+        if (!isValidStrikerPlacement(action.x, seat, state.coins)) return "Invalid striker placement position";
         return null;
       }
 
       case "strike": {
-        if (state.strikerPlacementPhase) return "Must place striker first";
         if (state.currentSeat !== seat) return "Not your turn";
+        if (state.strikerPlacementPhase) return "Place the striker first";
         if (typeof action.angle !== "number" || typeof action.power !== "number") return "Invalid strike parameters";
         if (action.power < 0 || action.power > 1) return "Power must be between 0 and 1";
-        if (action.angle < 0 || action.angle > Math.PI * 2) return "Angle must be between 0 and 2π";
-        const playerStriker = state.striker;
-        if (!playerStriker.placed) return "Striker not placed";
-        if (playerStriker.pocketed) return "Striker was pocketed, place again";
+        // Math.atan2 returns [-π, π]; after seat-1 flip it can reach [-2π, 2π]
+        if (Math.abs(action.angle) > Math.PI * 2) return "Angle must be between -2π and 2π";
+        if (state.striker.pocketed) return "Striker was pocketed, place again";
         return null;
       }
 
@@ -131,8 +172,8 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
   ): EngineActionResult<CarromState> {
     const next = this.cloneState(state);
     next.striker.x = action.x;
-    // Player 0 places at bottom (y=540), Player 1 places at top (y=60)
-    next.striker.y = seat === 0 ? BASE_LINE_Y : 60;
+    // Player 0 places at bottom (y=507), Player 1 places at top (y=93)
+    next.striker.y = seat === 0 ? BASE_LINE_Y : 93;
     next.striker.placed = true;
     next.striker.placedBy = seat;
     next.strikerPlacementPhase = false;
@@ -172,15 +213,19 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     const next = this.cloneState(state);
     const player = next.players.find(p => p.seat === seat)!;
 
-    const maxSpeed = 600;
+    const maxSpeed = 27;
     const speed = action.power * maxSpeed;
     next.striker.vx = Math.cos(action.angle) * speed;
     next.striker.vy = Math.sin(action.angle) * speed;
-    next.striker.placed = false;
+    next.striker.placed = true;
+    next.strikerPlacementPhase = false;
 
+    // 600 steps = 10 s of simulated physics — fully settles all realistic shots
     const { pocketedCoins, pocketedStriker, events: physicsEvents } = simulatePhysics(
       next.coins,
       next.striker,
+      1 / 60,
+      600,
     );
 
     for (const physicsEvent of physicsEvents) {
@@ -189,19 +234,47 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
 
     let foul = false;
     let earnedExtraTurn = false;
-    let scoreThisTurn = 0;
     let queenPocketedThisTurn = false;
     let queenCoveredThisTurn = false;
+    let queenReturnedThisTurn = false;
 
     if (pocketedStriker) {
+      // ── FOUL: striker pocketed ──────────────────────────────────────────────
       foul = true;
       player.fouls++;
       player.consecutiveFouls++;
       events.push({ type: "foul", seat, reason: "striker-pocketed" });
+
+      // A foul voids any pending queen cover — the queen returns to the board.
+      if (player.queenPocketed && !player.queenCovered) {
+        player.queenPocketed = false;
+        queenReturnedThisTurn = true;
+        const queenCoin = next.coins.find(c => c.type === "queen");
+        if (queenCoin) {
+          queenCoin.pocketed = false;
+          queenCoin.x = 300;
+          queenCoin.y = 300;
+          queenCoin.vx = 0;
+          queenCoin.vy = 0;
+          queenCoin.pocketedBy = null;
+          queenCoin.pocketedAtTurn = null;
+        }
+        events.push({ type: "queen-returned", seat, reason: "foul" });
+      }
+
+      // Due owed: one of the fouler's own pocketed coins returns to the board
+      // (and the corresponding point is taken back).
+      const returnedCoin = returnOneOwnCoin(next.coins, seat);
+      if (returnedCoin) {
+        player.score = Math.max(0, player.score - 1);
+        events.push({ type: "coin-returned", seat, coinId: returnedCoin.id, coinType: returnedCoin.type });
+      }
     } else {
       player.consecutiveFouls = 0;
-      
-      if (pocketedCoins.length > 0) {
+
+      // Always evaluate the pending-cover state, even when this shot pocketed nothing.
+      const hasPendingCover = player.queenPocketed && !player.queenCovered;
+      if (pocketedCoins.length > 0 || hasPendingCover) {
         const playerColor: CoinType = seat === 0 ? "white" : "black";
         const result = calculateScore(
           pocketedCoins,
@@ -209,15 +282,33 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
           player.queenPocketed,
           player.queenCovered,
         );
-        scoreThisTurn = result.score;
-        earnedExtraTurn = result.earnedExtraTurn;
-        player.score += scoreThisTurn;
-        queenPocketedThisTurn = result.queenPocketed && !player.queenPocketed;
-        queenCoveredThisTurn = result.queenCovered && !player.queenCovered;
-        player.queenPocketed = result.queenPocketed;
-        player.queenCovered = result.queenCovered;
 
+        earnedExtraTurn = result.earnedExtraTurn;
+        player.score += result.score;
+        queenPocketedThisTurn = result.queenPocketed && !player.queenPocketed;
+        queenCoveredThisTurn  = result.queenCovered  && !player.queenCovered;
+        player.queenPocketed  = result.queenPocketed;
+        player.queenCovered   = result.queenCovered;
+
+        if (result.queenNeedsReturn) {
+          // Queen pocketed without cover → restore queen to board center
+          queenReturnedThisTurn = true;
+          const queenCoin = next.coins.find(c => c.type === "queen");
+          if (queenCoin) {
+            queenCoin.pocketed = false;
+            queenCoin.x = 300; // board center X
+            queenCoin.y = 300; // board center Y
+            queenCoin.vx = 0;
+            queenCoin.vy = 0;
+            queenCoin.pocketedBy = null;
+            queenCoin.pocketedAtTurn = null;
+          }
+          events.push({ type: "queen-returned", seat, reason: "not-covered" });
+        }
+
+        // Emit scored events for own/opponent coins only (queen handled above)
         for (const coin of pocketedCoins) {
+          if (coin.type === "queen") continue; // already handled
           coin.pocketedBy = seat;
           coin.pocketedAtTurn = next.turnNumber;
           events.push({
@@ -225,11 +316,17 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
             seat,
             coinId: coin.id,
             coinType: coin.type,
-            points: coin.type === "queen" ? 3 : 1,
+            points: coin.type === playerColor ? 1 : 0,
           });
         }
 
-        if (queenPocketedThisTurn) {
+        if (queenPocketedThisTurn && !queenReturnedThisTurn) {
+          // Queen was permanently pocketed (covered)
+          const queenCoin = next.coins.find(c => c.type === "queen");
+          if (queenCoin) {
+            queenCoin.pocketedBy = seat;
+            queenCoin.pocketedAtTurn = next.turnNumber;
+          }
           events.push({ type: "queen-pocketed", seat });
         }
         if (queenCoveredThisTurn) {
@@ -262,13 +359,24 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       next.matchStartedAtMs = null;
       events.push({ type: "draw", reason: "all-coins-pocketed" });
     } else {
-      const nextSeat = earnedExtraTurn ? seat : (seat === 0 ? 1 : 0);
+      // ── Determine next player ──────────────────────────────────────────────
+      // Extra turn ONLY if player pocketed at least one own-color coin.
+      // Foul always passes turn to opponent regardless of other pockets.
+      const nextSeat = (earnedExtraTurn && !foul) ? seat : (seat === 0 ? 1 : 0);
       next.currentSeat = nextSeat;
       next.turnStartedAtMs = now;
       next.strikerPlacementPhase = true;
       next.strikerPlacementSeat = nextSeat;
-      next.striker = createInitialStriker();
-      
+      next.striker = createInitialStriker(nextSeat);
+
+      console.log("[CarromEngine] TURN DECISION",
+        "| shooter:", seat,
+        "| nextSeat:", nextSeat,
+        "| earnedExtraTurn:", earnedExtraTurn,
+        "| foul:", foul,
+        "| queenReturn:", queenReturnedThisTurn,
+      );
+
       if (foul) {
         events.push({ type: "foul-turn-end", seat, nextSeat });
       } else {

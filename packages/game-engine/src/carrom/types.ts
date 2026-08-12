@@ -3,21 +3,21 @@ import type { GameAction } from "../types";
 
 export const CARROM_BOARD_WIDTH = 600;
 export const CARROM_BOARD_HEIGHT = 600;
-export const POCKET_RADIUS = 35;
+export const POCKET_RADIUS = 30;
 export const STRIKER_RADIUS = 18;
 export const COIN_RADIUS = 15;
 export const QUEEN_RADIUS = 15;
 
 export const POCKETS = [
-  { x: POCKET_RADIUS, y: POCKET_RADIUS },
-  { x: CARROM_BOARD_WIDTH - POCKET_RADIUS, y: POCKET_RADIUS },
-  { x: POCKET_RADIUS, y: CARROM_BOARD_HEIGHT - POCKET_RADIUS },
-  { x: CARROM_BOARD_WIDTH - POCKET_RADIUS, y: CARROM_BOARD_HEIGHT - POCKET_RADIUS },
+  { x: 45, y: 45 },
+  { x: CARROM_BOARD_WIDTH - 45, y: 45 },
+  { x: 45, y: CARROM_BOARD_HEIGHT - 45 },
+  { x: CARROM_BOARD_WIDTH - 45, y: CARROM_BOARD_HEIGHT - 45 },
 ];
 
-export const BASE_LINE_Y = CARROM_BOARD_HEIGHT - 60;
-export const BASE_LINE_X_START = 100;
-export const BASE_LINE_X_END = CARROM_BOARD_WIDTH - 100;
+export const BASE_LINE_Y = CARROM_BOARD_HEIGHT - 93; // 507 (matches client 338 * 1.5)
+export const BASE_LINE_X_START = 129; // 86 * 1.5
+export const BASE_LINE_X_END = CARROM_BOARD_WIDTH - 129; // 314 * 1.5
 
 export type CoinType = "white" | "black" | "queen";
 export type CarromColor = "white" | "black";

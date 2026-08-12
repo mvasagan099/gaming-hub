@@ -18,12 +18,12 @@ export const LudoGame: React.FC<LudoGameProps> = ({ mode: initialMode, stake, on
   const isSpectator = useMultiplayerStore((s) => s.isSpectator);
 
   const [isPlaying, setIsPlaying] = useState(isMultiplayer);
-  const [playerCount, setPlayerCount] = useState<2 | 4>(4);
+  const [playerCount, setPlayerCount] = useState<2>(2);
   const [playMode, setPlayMode] = useState<"ai" | "pvp">(isMultiplayer ? "pvp" : "ai");
 
   const participants = room?.players ?? [];
-  const maxPlayers = room?.maxPlayers ?? playerCount;
-  const onlinePlayers = isMultiplayer && maxPlayers > 0 ? maxPlayers : playerCount;
+  const maxPlayers = room?.maxPlayers ?? 2;
+  const onlinePlayers = isMultiplayer && maxPlayers > 0 ? maxPlayers : 2;
   const seat = isMultiplayer ? (isSpectator ? null : mySeat) : null;
   const names = isMultiplayer
     ? [...participants]
@@ -87,32 +87,12 @@ export const LudoGame: React.FC<LudoGameProps> = ({ mode: initialMode, stake, on
           <h2 className="text-xl font-black text-white tracking-wide text-center">LUDO CHAMPION</h2>
           <p className="text-[10px] text-slate-400 uppercase tracking-widest text-center mt-0.5">Vite + Phaser 3 Engine</p>
 
-          {/* 2 vs 4 Players Selection */}
+          {/* Players Badge */}
           <div className="w-full mt-4">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 text-left">Players</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setPlayerCount(2)}
-                className={`py-2 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1 ${
-                  playerCount === 2
-                    ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10"
-                    : "bg-slate-850 border-slate-700 text-slate-400 hover:border-slate-600"
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>2 Players</span>
-              </button>
-              <button
-                onClick={() => setPlayerCount(4)}
-                className={`py-2 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1 ${
-                  playerCount === 4
-                    ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10"
-                    : "bg-slate-850 border-slate-700 text-slate-400 hover:border-slate-600"
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>4 Players</span>
-              </button>
+            <div className="w-full py-2 px-3 bg-amber-500/10 border border-amber-500/30 rounded-xl font-bold text-xs text-amber-400 flex items-center justify-center gap-2">
+              <Users className="w-4 h-4 text-amber-400" />
+              <span>2 Players Match</span>
             </div>
           </div>
 

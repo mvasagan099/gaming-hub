@@ -107,6 +107,7 @@ export class AIService extends EventEmitter {
             ],
             endedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
           },
+          include: { players: true },
           take: 10,
         });
 

@@ -6,6 +6,7 @@ export default class WinnerPopup {
   private scene: Phaser.Scene;
   private container!: Phaser.GameObjects.Container;
   private titleText!: Phaser.GameObjects.Text;
+  private trophyText!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
   private particles: ParticleManager | null;
   private onPlayAgain: (() => void) | null = null;
@@ -26,10 +27,10 @@ export default class WinnerPopup {
     const card = this.scene.add.rectangle(0, 0, 420, 300, 0x0f172a);
     card.setStrokeStyle(3, 0xf59e0b);
 
-    const trophy = this.scene.add.text(0, -110, "🏆", { fontSize: "52px" }).setOrigin(0.5);
+    this.trophyText = this.scene.add.text(0, -110, "🏆", { fontSize: "52px" }).setOrigin(0.5);
 
     this.titleText = this.scene.add.text(0, -48, "", {
-      fontSize:   "26px",
+      fontSize:   "24px",
       color:      "#f59e0b",
       fontFamily: "Outfit, sans-serif",
       fontStyle:  "bold",
@@ -63,7 +64,7 @@ export default class WinnerPopup {
     this.container = this.scene.add.container(cx, cy, [
       overlay,
       card,
-      trophy,
+      this.trophyText,
       this.titleText,
       this.statsText,
       divider,
@@ -89,7 +90,23 @@ export default class WinnerPopup {
     history: LudoHistoryEntry[] = [],
     opts?: { multiplayer?: boolean; won?: boolean },
   ): void {
-    this.titleText.setText(opts?.won ? "🎉 YOU WIN!" : `${playerName.toUpperCase()} WINS!`);
+    if (opts?.multiplayer) {
+      if (opts.won) {
+        this.trophyText.setText("🏆");
+        this.titleText.setText("🎉 YOU WIN!");
+        this.titleText.setColor("#4ade80");
+        this.particles?.winFireworks();
+      } else {
+        this.trophyText.setText("💔");
+        this.titleText.setText(`YOU LOST\n(${playerName} Won)`);
+        this.titleText.setColor("#f87171");
+      }
+    } else {
+      this.titleText.setText(opts?.won ? "🎉 YOU WIN!" : `${playerName.toUpperCase()} WINS!`);
+      if (opts?.won) {
+        this.particles?.winFireworks();
+      }
+    }
 
     const totalRolls = history.length;
     const captures   = history.filter((h) => h.message.includes("⚔️")).length;

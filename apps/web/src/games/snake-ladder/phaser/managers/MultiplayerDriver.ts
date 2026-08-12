@@ -78,7 +78,12 @@ export default class MultiplayerDriver {
 
     this.unsubscribe = useMultiplayerStore.subscribe((state, prev) => {
       if (this.destroyed) return;
-      if (state.gameState !== prev.gameState || state.winner !== prev.winner) {
+      if (
+        state.gameState !== prev.gameState ||
+        state.winner !== prev.winner ||
+        state.matchId !== prev.matchId ||
+        state.renderKey !== prev.renderKey
+      ) {
         this.applySnapshot(state.gameState, state.lastEvents, state.winner);
       }
     });
@@ -98,7 +103,7 @@ export default class MultiplayerDriver {
   }
 
   private seatName(seat: number): string {
-    return `Player ${seat + 1}`;
+    return this.players.getPlayer(seat + 1)?.name ?? `Player ${seat + 1}`;
   }
 
   private onRoll(): void {
@@ -125,6 +130,9 @@ export default class MultiplayerDriver {
     if (freshStart) {
       this.winShown = false;
       this.winnerPopup.hide();
+      for (const p of s.players ?? []) {
+        this.players.snapToTile(p.seat + 1, 1);
+      }
     }
 
     const hasWin =
@@ -241,20 +249,26 @@ export default class MultiplayerDriver {
 
   private scheduleWin(s: RemoteState): void {
     if (!this.pendingWin || this.winShown) return;
-    const seats = s.winnerSeats ?? [];
-    if (seats.length === 0) return;
+    const storeWinner = useMultiplayerStore.getState().winner;
+    const seats = (s.winnerSeats && s.winnerSeats.length > 0)
+      ? s.winnerSeats
+      : (storeWinner?.winnerSeats && storeWinner.winnerSeats.length > 0)
+      ? storeWinner.winnerSeats
+      : [];
+
+    if (seats.length === 0 && !s.finished && !storeWinner) return;
 
     this.winShown = true;
-    const winnerSeat = seats[0];
+    const winnerSeat = seats[0] ?? 0;
     const won = this.mySeat != null && winnerSeat === this.mySeat;
     const name = this.seatName(winnerSeat);
 
     this.scene.time.delayedCall(700, () => {
+      this.winnerPopup.show(name, [], { mode: "multiplayer", won });
       this.winnerPopup.setActions(
         () => this.rematch(),
-        () => this.close(),
+        () => this.close()
       );
-      this.winnerPopup.show(name, [], { mode: "multiplayer", won });
     });
   }
 

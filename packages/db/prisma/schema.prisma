@@ -361,6 +361,15 @@ model Profile {
   twoFactorSecret String?
   twoFactorEnabled Boolean @default(false)
 
+  dailyStreak      Int      @default(0)
+  lastDailyClaim   DateTime?
+  premium          Boolean  @default(false)
+  premiumExpiresAt DateTime?
+  vipLevel         Int      @default(0)
+  battlePassActive Boolean  @default(false)
+  battlePassXp     Int      @default(0)
+  battlePassTier   Int      @default(0)
+
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -489,6 +498,7 @@ model MatchPlayer {
   score        Int               @default(0)
   ratingBefore Int?
   ratingAfter  Int?
+  createdAt    DateTime          @default(now())
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1571,4 +1581,247 @@ model KycDocumentConfig {
   
   @@unique([country, documentType])
   @@index([country, isAccepted])
+}
+
+// ============================================================================
+// Live Operations
+// ============================================================================
+
+model FeatureFlag {
+  id               String    @id @default(uuid())
+  key              String    @unique
+  name             String
+  description      String?
+  enabled          Boolean   @default(false)
+  targetAudience   Json?
+  rolloutPercentage Float    @default(0)
+  conditions       Json?
+  metadata         Json?
+  expiresAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model RemoteConfig {
+  id          String   @id @default(uuid())
+  key         String
+  environment String
+  value       Json
+  version     Int      @default(1)
+  isSecret    Boolean  @default(false)
+  updatedBy   String
+  updatedAt   DateTime @updatedAt
+
+  @@unique([key, environment])
+}
+
+model LiveEvent {
+  id             String    @id @default(uuid())
+  name           String
+  description    String?
+  type           String
+  startTime      DateTime
+  endTime        DateTime
+  timezone       String    @default("UTC")
+  status         String    @default("scheduled")
+  targetAudience Json?
+  rewards        Json?
+  config         Json?
+  bannerUrl      String?
+  metadata       Json?
+  createdBy      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status])
+}
+
+model GameSeason {
+  id               String   @id @default(uuid())
+  number           Int
+  name             String
+  gameId           String
+  startDate        DateTime
+  endDate          DateTime
+  theme            String?
+  rewards          Json?
+  battlePass       Json?
+  status           String   @default("upcoming")
+  leaderboardReset Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model MaintenanceWindow {
+  id               String    @id @default(uuid())
+  startTime        DateTime
+  endTime          DateTime
+  timezone         String    @default("UTC")
+  title            String
+  description      String?
+  affectedServices String[]
+  isEmergency      Boolean   @default(false)
+  status           String    @default("scheduled")
+  createdBy        String
+  createdAt        DateTime  @default(now())
+}
+
+model ServerBroadcast {
+  id              String    @id @default(uuid())
+  message         String
+  type            String
+  durationSeconds Int
+  dismissible     Boolean   @default(true)
+  targetAudience  Json?
+  scheduledAt     DateTime?
+  createdBy       String
+  createdAt       DateTime  @default(now())
+}
+
+model GlobalAnnouncement {
+  id             String    @id @default(uuid())
+  title          String
+  body           String
+  type           String
+  priority       String
+  imageUrl       String?
+  actionUrl      String?
+  buttonText     String?
+  targetAudience Json?
+  scheduledAt    DateTime?
+  expiresAt      DateTime?
+  status         String    @default("active")
+  dismissedBy    String[]  @default([])
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status])
+}
+
+// ============================================================================
+// Monetization
+// ============================================================================
+
+model StoreItem {
+  id             String    @id @default(uuid())
+  type           String
+  name           String
+  description    String?
+  imageUrl       String?
+  price          Float
+  currency       String    @default("coins")
+  originalPrice  Float?
+  isLimited      Boolean   @default(false)
+  quantity       Int?
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  targetAudience Json?
+  metadata       Json?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model UserInventoryItem {
+  id         String    @id @default(uuid())
+  userId     String
+  itemId     String
+  type       String
+  quantity   Int       @default(1)
+  acquiredAt DateTime  @default(now())
+  expiresAt  DateTime?
+  isEquipped Boolean   @default(false)
+
+  @@index([userId, type])
+}
+
+model SubscriptionPlan {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  tier        String
+  price       Float
+  currency    String   @default("USD")
+  interval    String
+  features    Json?
+  rewards     Json?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model UserSubscription {
+  id                     String    @id @default(uuid())
+  userId                 String
+  planId                 String
+  status                 String    @default("active")
+  startedAt              DateTime  @default(now())
+  expiresAt              DateTime
+  cancelledAt            DateTime?
+  autoRenew              Boolean   @default(true)
+  paymentMethod          String?
+  externalSubscriptionId String?
+
+  @@index([userId, status])
+}
+
+model Gift {
+  id          String    @id @default(uuid())
+  senderId    String
+  recipientId String
+  itemId      String
+  itemType    String
+  quantity    Int       @default(1)
+  message     String?
+  status      String    @default("pending")
+  sentAt      DateTime  @default(now())
+  expiresAt   DateTime?
+  respondedAt DateTime?
+
+  @@index([recipientId, status])
+}
+
+// ============================================================================
+// Notifications
+// ============================================================================
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model NotificationTemplate {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  type      String
+  channels  Json?
+  subject   String?
+  body      String
+  data      Json?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ScheduledNotification {
+  id              String    @id @default(uuid())
+  templateId      String
+  userIds         Json?
+  targetAudience  Json?
+  scheduledAt     DateTime
+  status          String    @default("scheduled")
+  sentCount       Int       @default(0)
+  failedCount     Int       @default(0)
+  createdBy       String
+  createdAt       DateTime  @default(now())
+
+  @@index([status, scheduledAt])
 }

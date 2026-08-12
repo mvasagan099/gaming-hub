@@ -1,0 +1,101 @@
+160: 
+161:   const mySeat = useMultiplayerStore(s => s.mySeat);
+162:   const room = useMultiplayerStore(s => s.room);
+163:   const remoteGameState = useMultiplayerStore(s => s.gameState) as any;
+164:   const currentSeatFromServer = remoteGameState?.currentSeat;
+165: 
+166:   // Ref so the game-loop closure always reads the latest seat without re-creating renderBoard
+167:   const mySeatRef = useRef<number | null>(null);
+168:   // Sync immediately (not just via useEffect) so applyServerState always has the correct seat
+169:   mySeatRef.current = mySeat;
+170: 
+171:   const driverRef = useRef<CarromMultiplayerDriver | null>(null);
+172: 
+173:   const isMyTurn = mode === 'multiplayer'
+174:     ? (mySeat !== null && mySeat !== undefined && currentSeatFromServer !== undefined 
+175:         ? Number(currentSeatFromServer) === Number(mySeat)
+176:         : (driverRef.current ? driverRef.current.isMyTurn() : (currentPlayer === 'player')))
+177:     : (currentPlayer === 'player');
+178: 
+179:   const pendingServerStateRef = useRef<CarromRemoteState | null>(null);
+180:   const lastAnimatedActionAtRef = useRef<number | null>(null);
+181:   const isTurnActiveRef = useRef(false);
+182:   useEffect(() => { isTurnActiveRef.current = isTurnActive; }, [isTurnActive]);
+183: 
+184:   const hasInitializedCoinsRef = useRef(false);
+185:   // Guard: count frames since isTurnActive became true.
+186:   // Prevents the game-loop from triggering turn-end on the very first frame when
+187:   // isTurnActive just flipped to true but coins haven't received velocity yet.
+188:   const turnActiveFramesRef = useRef(0);
+189: 
+190:   const applyServerState = useCallback((state: CarromRemoteState) => {
+191:     // Always read directly from store for seat — never fall back to 0, as seat 0 is a valid seat
+192:     // and defaulting to it for seat-1 players causes inverted turn calculation.
+193:     const currentSeat = mySeatRef.current ?? useMultiplayerStore.getState().mySeat;
+194:     if (currentSeat === null || currentSeat === undefined) {
+195:       console.warn('[CarromGame] applyServerState called before mySeat is known, skipping');
+196:       return;
+197:     }
+198: 
+199:     if (!hasInitializedCoinsRef.current) {
+200:       hasInitializedCoinsRef.current = true;
+201:       const mappedCoins: LocalCoin[] = state.coins.map(c => {
+202:         const rawType = c.type as string;
+203:         const pos = mapServerToLocal(c.x, c.y, c.vx, c.vy, currentSeat);
+204:         return {
+205:           id: c.id,
+206:           type: rawType === 'striker' ? 'striker' : rawType === 'queen' ? 'queen' : (c.type as CoinType),
+207:           x: pos.x,
+208:           y: pos.y,
+209:           vx: pos.vx,
+210:           vy: pos.vy,
+211:           radius: rawType === 'queen' ? 10 : rawType === 'striker' ? 11 : 9,
+212:           mass: rawType === 'striker' ? 2.5 : 1,
+213:           color: rawType === 'queen' ? '#dc2626' : rawType === 'white' ? '#ffffff' : '#09090b',
+214:           active: !c.pocketed,
+215:           angle: 0,
+216:           trail: [] as Array<{ x: number; y: number }>
+217:         };
+218:       });
+219: 
+220:       if (state.striker) {
+221:         const pos = mapServerToLocal(state.striker.x, state.striker.y, 0, 0, currentSeat);
+222:         mappedCoins.push({
+223:           id: 'striker',
+224:           type: 'striker',
+225:           x: pos.x,
+226:           y: pos.y,
+227:           vx: 0,
+228:           vy: 0,
+229:           radius: 11,
+230:           mass: 2.5,
+231:           color: '#0284c7',
+232:           active: !state.striker.pocketed,
+233:           angle: 0,
+234:           trail: [] as Array<{ x: number; y: number }>
+235:         });
+236:       }
+237:       coinsRef.current = mappedCoins;
+238:     } else {
+239:       // Board already populated — update pocketed flags cleanly with animation!
+240:       for (const localCoin of coinsRef.current) {
+241:         if (localCoin.type === 'striker') continue;
+242:         const serverCoin = state.coins.find((c: any) => c.id === localCoin.id);
+243:         if (serverCoin && serverCoin.pocketed && localCoin.active && !localCoin.pocketing) {
+244:           // Find nearest pocket to localCoin
+245:           let nearestPocket = POCKETS[0];
+246:           let minDist = Infinity;
+247:           for (const p of POCKETS) {
+248:             const d = Math.hypot(localCoin.x - p.x, localCoin.y - p.y);
+249:             if (d < minDist) {
+250:               minDist = d;
+251:               nearestPocket = p;
+252:             }
+253:           }
+254:           // ONLY trigger pocketing animation from server sync if coin is already near a pocket (< 60px)!
+255:           // Prevents coins sitting near the center at hitting time from snapping into pocketing mode.
+256:           if (minDist < 60) {
+257:             localCoin.pocketing = {
+258:               pocketX: nearestPocket.x,
+259:               pocketY: nearestPocket.y,
+260:               scale: 1.0,

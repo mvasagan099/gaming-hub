@@ -1,0 +1,71 @@
+1600:               height={400}
+1601:               onPointerDown={handlePointerDown}
+1602:               onPointerMove={handlePointerMove}
+1603:               onPointerUp={handlePointerUp}
+1604:               onPointerCancel={handlePointerUp}
+1605:               className={`w-full h-full object-contain touch-none shadow-[0_20px_60px_rgba(0,0,0,0.7)] rounded-[28px] ${dragState === 'idle' && isMyTurn ? 'cursor-grab' : !isMyTurn ? 'cursor-not-allowed' : 'cursor-grabbing'}`}
+1606:             />
+1607:           </div>
+1608: 
+1609:           {!isTurnActive && !gameOver && strikerPhase === 'positioning' && isMyTurn && (
+1610:             <div className="w-full flex flex-col items-center gap-2">
+1611:               <div
+1612:                 className="relative w-full flex items-center px-4"
+1613:                 style={{ height: '48px' }}
+1614:               >
+1615:                 <div
+1616:                   className="absolute inset-x-4 rounded-full"
+1617:                   style={{
+1618:                     height: '34px',
+1619:                     background: 'linear-gradient(180deg, #c48a3c 0%, #e8a84a 40%, #9a6120 100%)',
+1620:                     border: '2px solid #6b3d0f',
+1621:                     boxShadow: '0 4px 14px rgba(0,0,0,0.45), inset 0 2px 4px rgba(255,255,255,0.15)',
+1622:                   }}
+1623:                 >
+1624:                   <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-full" style={{ height: '8px', background: 'rgba(0,0,0,0.2)' }} />
+1625:                 </div>
+1626: 
+1627:                 <input
+1628:                   type="range"
+1629:                   min={-115}
+1630:                   max={115}
+1631:                   value={strikerPos}
+1632:                   onChange={(e) => handleStrikerPosChange(Number(e.target.value))}
+1633:                   className="relative w-full h-full opacity-0 cursor-grab z-10"
+1634:                   style={{ WebkitAppearance: 'none' }}
+1635:                 />
+1636: 
+1637:                 <div
+1638:                   className="absolute top-1/2 -translate-y-1/2 pointer-events-none z-20 flex items-center justify-center rounded-full shadow-lg"
+1639:                   style={{
+1640:                     width: '36px',
+1641:                     height: '36px',
+1642:                     left: `calc(${((strikerPos + 115) / 230) * 100}% - ${((strikerPos + 115) / 230) * 36}px + 0px)`,
+1643:                     background: 'radial-gradient(circle at 35% 35%, #7dd3fc, #0284c7)',
+1644:                     border: '2.5px solid rgba(255,255,255,0.6)',
+1645:                     boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+1646:                   }}
+1647:                 />
+1648:               </div>
+1649:               
+1650:               
+1651:               <p className="text-xs text-slate-400 font-semibold tracking-widest uppercase">Slide to position striker</p>
+1652:             </div>
+1653:           )}
+1654:         </div>
+1655: 
+1656:         <div className="flex flex-col items-center gap-3 lg:gap-4 glass-panel p-4 lg:p-6 rounded-3xl border border-slate-800 w-full max-w-[270px] h-auto max-h-[80vh] overflow-y-auto custom-scrollbar">
+1657:           
+1658:           {(() => {
+1659:             const myColor = mode === 'multiplayer' ? (mySeat === 1 ? 'black' : 'white') : 'white';
+1660:             return (
+1661:               <>
+1662:                 <div className="w-full flex flex-col items-center gap-2 mb-1">
+1663:                    <div className={`px-4 py-2 rounded-full font-black text-sm uppercase shadow-lg transition-colors ${isMyTurn ? 'bg-emerald-500 text-white animate-pulse' : 'bg-rose-500 text-white'}`}>
+1664:                       {mode === 'multiplayer' 
+1665:                         ? (isMyTurn ? 'Your Turn' : 'Opponent\'s Turn')
+1666:                         : (currentPlayer === 'player' ? 'Your Turn' : 'AI Turn')
+1667:                       }
+1668:                    </div>
+1669: 
+1670:                    <div className={`px-3 py-1.5 rounded-full font-extrabold text-xs flex items-center gap-2 shadow border ${myColor === 'white' ? 'bg-slate-100 text-slate-900 border-slate-300' : 'bg-slate-950 text-white border-slate-700'}`}>

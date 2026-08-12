@@ -21,9 +21,11 @@ export default function PhaserGame({
   }, []);
 
   return (
-    <div
-      id="game-container"
-      className="flex items-center justify-center max-w-full max-h-full overflow-hidden"
-    />
+    <div className="relative mx-auto w-full max-w-5xl aspect-[1024/800] h-auto max-h-[calc(100vh-140px)] rounded-2xl overflow-hidden border border-slate-700/50 shadow-2xl flex justify-center items-center">
+      <div
+        id="game-container"
+        className="w-full h-full flex items-center justify-center overflow-hidden"
+      />
+    </div>
   );
 }

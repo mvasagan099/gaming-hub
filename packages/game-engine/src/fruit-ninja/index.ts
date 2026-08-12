@@ -1,2 +1,2 @@
 export * from "./types";
-export { FruitNinjaEngine, type FruitNinjaActionTyp } from "./engine";
+export { FruitNinjaEngine } from "./engine";

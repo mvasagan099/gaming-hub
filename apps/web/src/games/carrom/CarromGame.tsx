@@ -6,7 +6,7 @@ import { claimPracticeReward } from '../../services/api/practiceReward';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
 import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
-import CarromMultiplayerDriver from './CarromMultiplayerDriver';
+import CarromMultiplayerDriver, { type CarromRemoteState } from './CarromMultiplayerDriver';
 import type { CarromCoin, CarromStriker, CarromPlayer } from '@gaming-hub/game-engine';
 
 interface CarromGameProps {
@@ -28,21 +28,49 @@ interface LocalCoin {
   mass: number;
   color: string;
   active: boolean;
+  angle?: number;      // visual spin angle (radians)
+  trail?: Array<{ x: number; y: number }>; // motion trail positions
+  pocketing?: {
+    pocketX: number;
+    pocketY: number;
+    scale: number;
+    opacity: number;
+  };
 }
 
 const BOARD_WIDTH = 400;
 const BOARD_HEIGHT = 400;
-const BORDER_SIZE = 25;
-const POCKET_RADIUS = 16;
+// Wall bounce boundary — slightly inside the visual frame so coins naturally settle
+// and can reach the pocket holes at x/y ≈ 32
+const BORDER_SIZE = 22;
+const POCKET_RADIUS = 20;
 const POCKETS = [
-  { x: 32, y: 32 },
-  { x: BOARD_WIDTH - 32, y: 32 },
-  { x: 32, y: BOARD_HEIGHT - 32 },
-  { x: BOARD_WIDTH - 32, y: BOARD_HEIGHT - 32 },
+  { x: 30, y: 30 },
+  { x: BOARD_WIDTH - 30, y: 30 },
+  { x: 30, y: BOARD_HEIGHT - 30 },
+  { x: BOARD_WIDTH - 30, y: BOARD_HEIGHT - 30 },
 ];
+// Pocket capture must mirror the server's authoritative physics scaled 600→400 (×2/3):
+// server captures ≤12 (moving) / ≤6 (stationary) units; corner cutout zone ≤ 30+12 units.
+const POCKET_CAPTURE_MOVING = 8;
+const POCKET_CAPTURE_STATIONARY = 4;
+const POCKET_CUTOUT_ZONE = POCKET_RADIUS + 8;
 
 const STRIKER_START_X = BOARD_WIDTH / 2;
 const STRIKER_START_Y = BOARD_HEIGHT - 62;
+// Realistic carrom speed: full-power shot at ~18 canvas-px/frame (≈1080 px/s at 60fps)
+// This produces a satisfying 0.8-2 second shot duration with proper friction decay
+const SHOT_MAX_SPEED = 18;
+// Trail history: stores last N positions per coin for motion-blur effect
+const TRAIL_LENGTH = 6;
+
+// Striker placement range — maps exactly onto the server's valid placement zone.
+// Server accepts x ∈ [152, 448] (BASE_LINE ± (STRIKER_RADIUS+5)); local = server * 2/3,
+// so local x ∈ [101.33, 298.67] and offset from center (striker.x = 200 + val) ∈ [-98, 98].
+const STRIKER_POS_MIN = -98;
+const STRIKER_POS_MAX = 98;
+// Server placement clearance (STRIKER_RADIUS + coin radius + 2 = 35) scaled to local (2/3) ≈ 23.33
+const PLACEMENT_CLEARANCE = 23.33;
 
 function mapServerToLocal(
   x: number,
@@ -74,7 +102,7 @@ function createInitialCoins(): LocalCoin[] {
   const cy = BOARD_HEIGHT / 2;
   const radius = 20;
 
-  coins.push({ id: 'striker', type: 'striker', x: STRIKER_START_X, y: STRIKER_START_Y, vx: 0, vy: 0, radius: 11, mass: 2.5, color: '#0284c7', active: true });
+  coins.push({ id: 'striker', type: 'striker', x: STRIKER_START_X, y: STRIKER_START_Y, vx: 0, vy: 0, radius: 11, mass: 2.5, color: '#0284c7', active: true, angle: 0, trail: [] });
 
   const types: CoinType[] = [
     "queen",
@@ -132,6 +160,8 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
   const [currentPlayer, setCurrentPlayer] = useState<'player' | 'ai'>('player');
   const [aiThinking, setAiThinking] = useState(false);
   const [uiTrigger, setUiTrigger] = useState(0);
+  // Multiplayer queen state driven by the server (two-shot cover rule).
+  const [queenStatus, setQueenStatus] = useState<'unpocketed' | 'pocketed_needs_cover' | 'covered'>('unpocketed');
   
   const coinsRef = useRef<LocalCoin[]>(createInitialCoins());
   const rulesRef = useRef({
@@ -140,143 +170,337 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
     dueOwed: { white: 0, black: 0 }
   });
   const turnScoreRef = useRef({ white: 0, black: 0, queen: false, foul: false });
+  const floatingPopsRef = useRef<Array<{ id: number; text: string; color: string; x: number; y: number; opacity: number; scale: number }>>([]);
+  const pocketRipplesRef = useRef<Array<{ id: number; x: number; y: number; radius: number; maxRadius: number; opacity: number; color: string }>>([]);
 
   const mySeat = useMultiplayerStore(s => s.mySeat);
   const room = useMultiplayerStore(s => s.room);
+  const remoteGameState = useMultiplayerStore(s => s.gameState) as any;
+  const currentSeatFromServer = remoteGameState?.currentSeat;
+
+  // Ref so the game-loop closure always reads the latest seat without re-creating renderBoard
+  const mySeatRef = useRef<number | null>(null);
+  // Sync immediately (not just via useEffect) so applyServerState always has the correct seat
+  mySeatRef.current = mySeat;
+
   const driverRef = useRef<CarromMultiplayerDriver | null>(null);
-  const multiplayerInitializedRef = useRef(false);
 
-  useEffect(() => {
-    if (mode === 'multiplayer' && room && !multiplayerInitializedRef.current) {
-      const names = room.players.map(p => p.displayName || `Player ${(p.seat ?? 0) + 1}`);
-      names.sort((a, b) => {
-        const seatA = room.players.find(p => p.displayName === a)?.seat ?? 0;
-        const seatB = room.players.find(p => p.displayName === b)?.seat ?? 0;
-        return seatA - seatB;
-      });
-      
-      const driver = new CarromMultiplayerDriver(mySeat, names);
-      driverRef.current = driver;
-      
-      driver.setOnStateUpdate((state) => {
-        console.log("[CarromGame] State update from server:", {
-          mySeat,
-          currentSeat: state.currentSeat,
-          strikerPlacementPhase: state.strikerPlacementPhase,
-          strikerPlacementSeat: state.strikerPlacementSeat,
-          coins: state.coins.length,
-          activeCoins: state.coins.filter(c => !c.pocketed).length,
-          strikerX: state.striker?.x,
-          strikerY: state.striker?.y,
-          finished: state.finished
-        });
-        
-        const serverCoins = state.coins;
-        const mappedCoins: LocalCoin[] = serverCoins.map(c => {
-          const rawType = c.type as string;
-          const pos = mapServerToLocal(c.x, c.y, c.vx, c.vy, mySeat);
-          return {
-            id: c.id,
-            type: rawType === 'striker' ? 'striker' : rawType === 'queen' ? 'queen' : (c.type as CoinType),
-            x: pos.x,
-            y: pos.y,
-            vx: pos.vx,
-            vy: pos.vy,
-            radius: rawType === 'queen' ? 10 : rawType === 'striker' ? 11 : 9,
-            mass: rawType === 'striker' ? 2.5 : 1,
-            color: rawType === 'queen' ? '#dc2626' : rawType === 'white' ? '#ffffff' : '#09090b',
-            active: !c.pocketed
-          };
-        });
+  const isMyTurn = mode === 'multiplayer'
+    ? (mySeat !== null && mySeat !== undefined && currentSeatFromServer !== undefined 
+        ? Number(currentSeatFromServer) === Number(mySeat)
+        : (driverRef.current ? driverRef.current.isMyTurn() : (currentPlayer === 'player')))
+    : (currentPlayer === 'player');
 
-        if (state.striker) {
-          const pos = mapServerToLocal(state.striker.x, state.striker.y, state.striker.vx, state.striker.vy, mySeat);
-          mappedCoins.push({
-            id: 'striker',
-            type: 'striker',
-            x: pos.x,
-            y: pos.y,
-            vx: pos.vx,
-            vy: pos.vy,
-            radius: 11,
-            mass: 2.5,
-            color: '#0284c7',
-            active: !state.striker.pocketed
-          });
-        }
-        
-        coinsRef.current = mappedCoins;
-        
-        const myPlayer = state.players.find(p => p.seat === mySeat);
-        const opponentPlayer = state.players.find(p => p.seat !== mySeat);
-        
-        setScore({
-          white: mySeat === 0 ? (myPlayer?.score ?? 0) : (opponentPlayer?.score ?? 0),
-          black: mySeat === 1 ? (myPlayer?.score ?? 0) : (opponentPlayer?.score ?? 0)
-        });
-        
-        const isMyTurn = state.currentSeat === mySeat;
-        const isPlacement = state.strikerPlacementPhase;
-        
-        setCurrentPlayer(isMyTurn ? 'player' : 'ai');
-        setStrikerPhase(isPlacement ? 'positioning' : 'aiming');
-        
-        if (state.finished) {
-          setGameOver(true);
-        }
-        
-        setUiTrigger(t => t + 1);
-      });
-      
-      driver.setOnCoinPocketed((coinId, coinType, _pocketIndex) => {
-        console.log("[CarromGame] Coin pocketed:", coinId, coinType);
-        const coin = coinsRef.current.find(c => c.id === coinId);
-        if (coin) {
-          coin.active = false;
-          coin.vx = 0;
-          coin.vy = 0;
-        }
-        confetti();
-      });
-      
-      driver.setOnStrikerPlaced((x, y, _seat) => {
-        console.log("[CarromGame] Striker placed:", x, y);
-        const striker = coinsRef.current.find(c => c.type === 'striker');
-        if (striker) {
-          const pos = mapServerToLocal(x, y, 0, 0, mySeat);
-          striker.x = pos.x;
-          striker.y = pos.y;
-        }
-        setStrikerPhase('aiming');
-      });
-      
-      driver.setOnFoul((reason) => {
-        toast.error(`Foul: ${reason}`, { id: 'foul' });
-      });
-      
-      driver.setOnWin((winnerSeat) => {
-        const isMe = winnerSeat === mySeat;
-        setGameOver(true);
-        if (isMe) {
-          confetti({ particleCount: 100 });
-        }
-      });
-      
-      driver.setOnTurnChange((newSeat) => {
-        console.log("[CarromGame] onTurnChange called with newSeat:", newSeat, "mySeat:", mySeat, "currentSeat from driver.getCurrentSeat():", driverRef.current?.getCurrentSeat());
-        // This should match what's coming through state.currentSeat
-      });
-      
-      driver.start();
-      multiplayerInitializedRef.current = true;
-      
-      return () => {
-        driver.stop();
-        driverRef.current = null;
-        multiplayerInitializedRef.current = false;
-      };
+  // True when the striker (at its current slider position) overlaps an active coin.
+  // Mirrors the server's placement validation so the client can warn before confirming.
+  const strikerOverlapsCoin = (): boolean => {
+    const striker = coinsRef.current.find(c => c.type === 'striker');
+    if (!striker) return false;
+    for (const c of coinsRef.current) {
+      if (c.type === 'striker' || !c.active) continue;
+      if (Math.hypot(c.x - striker.x, c.y - striker.y) < PLACEMENT_CLEARANCE) return true;
     }
-  }, [mode, room, mySeat]);
+    return false;
+  };
+  const placementOverlapping = strikerPhase === 'positioning' && isMyTurn && !isTurnActive && strikerOverlapsCoin();
+
+  const pendingServerStateRef = useRef<CarromRemoteState | null>(null);
+  const lastAnimatedActionAtRef = useRef<number | null>(null);
+  // Throttle slider-tick place-striker sends so a fast drag doesn't flood the
+  // server with actions (which rate limits reject, stalling the turn).
+  const lastPlaceSendAtRef = useRef(0);
+  const isTurnActiveRef = useRef(false);
+  useEffect(() => { isTurnActiveRef.current = isTurnActive; }, [isTurnActive]);
+
+  const hasInitializedCoinsRef = useRef(false);
+  // Guard: count frames since isTurnActive became true.
+  // Prevents the game-loop from triggering turn-end on the very first frame when
+  // isTurnActive just flipped to true but coins haven't received velocity yet.
+  const turnActiveFramesRef = useRef(0);
+
+  const applyServerState = useCallback((state: CarromRemoteState) => {
+    // Always read directly from store for seat — never fall back to 0, as seat 0 is a valid seat
+    // and defaulting to it for seat-1 players causes inverted turn calculation.
+    const currentSeat = mySeatRef.current ?? useMultiplayerStore.getState().mySeat;
+    if (currentSeat === null || currentSeat === undefined) {
+      console.warn('[CarromGame] applyServerState called before mySeat is known, skipping');
+      return;
+    }
+
+    if (!hasInitializedCoinsRef.current) {
+      hasInitializedCoinsRef.current = true;
+      const mappedCoins: LocalCoin[] = state.coins.map(c => {
+        const rawType = c.type as string;
+        const pos = mapServerToLocal(c.x, c.y, c.vx, c.vy, currentSeat);
+        return {
+          id: c.id,
+          type: rawType === 'striker' ? 'striker' : rawType === 'queen' ? 'queen' : (c.type as CoinType),
+          x: pos.x,
+          y: pos.y,
+          vx: pos.vx,
+          vy: pos.vy,
+          radius: rawType === 'queen' ? 10 : rawType === 'striker' ? 11 : 9,
+          mass: rawType === 'striker' ? 2.5 : 1,
+          color: rawType === 'queen' ? '#dc2626' : rawType === 'white' ? '#ffffff' : '#09090b',
+          active: !c.pocketed,
+          angle: 0,
+          trail: [] as Array<{ x: number; y: number }>
+        };
+      });
+
+      if (state.striker) {
+        const pos = mapServerToLocal(state.striker.x, state.striker.y, 0, 0, currentSeat);
+        mappedCoins.push({
+          id: 'striker',
+          type: 'striker',
+          x: pos.x,
+          y: pos.y,
+          vx: 0,
+          vy: 0,
+          radius: 11,
+          mass: 2.5,
+          color: '#0284c7',
+          active: !state.striker.pocketed,
+          angle: 0,
+          trail: [] as Array<{ x: number; y: number }>
+        });
+      }
+      coinsRef.current = mappedCoins;
+    } else {
+      // Board already populated — update pocketed flags cleanly with animation!
+      for (const localCoin of coinsRef.current) {
+        if (localCoin.type === 'striker') continue;
+        const serverCoin = state.coins.find((c: any) => c.id === localCoin.id);
+        if (serverCoin && serverCoin.pocketed) {
+          if (localCoin.active && !localCoin.pocketing) {
+            // Find nearest pocket to localCoin
+            let nearestPocket = POCKETS[0];
+            let minDist = Infinity;
+            for (const p of POCKETS) {
+              const d = Math.hypot(localCoin.x - p.x, localCoin.y - p.y);
+              if (d < minDist) {
+                minDist = d;
+                nearestPocket = p;
+              }
+            }
+            if (minDist < 60) {
+              localCoin.pocketing = {
+                pocketX: nearestPocket.x,
+                pocketY: nearestPocket.y,
+                scale: 1.0,
+                opacity: 1.0,
+              };
+              localCoin.vx = 0;
+              localCoin.vy = 0;
+            } else {
+              localCoin.active = false;
+              localCoin.vx = 0;
+              localCoin.vy = 0;
+            }
+          } else if (!localCoin.pocketing) {
+            localCoin.active = false;
+          }
+        }
+      }
+
+      // Coins returned to the board (queen restored after a failed cover, or a
+      // due-owed coin returned after a striker foul) become active again.
+      for (const localCoin of coinsRef.current) {
+        if (localCoin.type === 'striker') continue;
+        const serverCoin = state.coins.find((c: any) => c.id === localCoin.id);
+        if (serverCoin && !serverCoin.pocketed && !localCoin.active) {
+          localCoin.active = true;
+          localCoin.pocketing = undefined;
+          const pos = mapServerToLocal(serverCoin.x, serverCoin.y, 0, 0, currentSeat);
+          localCoin.x = pos.x;
+          localCoin.y = pos.y;
+          localCoin.vx = 0;
+          localCoin.vy = 0;
+        }
+      }
+
+      // Reset striker for current turn (position reflects the server-confirmed placement)
+      const isMyTurn = state.currentSeat === currentSeat;
+      const striker = coinsRef.current.find(c => c.type === 'striker');
+      if (striker) {
+        const sx = state.striker?.x;
+        striker.x = sx !== undefined ? mapServerToLocal(sx, 0, 0, 0, currentSeat).x : BOARD_WIDTH / 2;
+        striker.y = isMyTurn ? STRIKER_START_Y : 62;
+        striker.vx = 0;
+        striker.vy = 0;
+        striker.active = !state.striker?.pocketed;
+      }
+      setStrikerPos(Math.round(Math.max(STRIKER_POS_MIN, Math.min(STRIKER_POS_MAX, (striker?.x ?? BOARD_WIDTH / 2) - BOARD_WIDTH / 2))));
+    }
+
+    const myPlayer = state.players.find(p => p.seat === currentSeat);
+    const opponentPlayer = state.players.find(p => p.seat !== currentSeat);
+    setScore({
+      white: currentSeat === 0 ? (myPlayer?.score ?? 0) : (opponentPlayer?.score ?? 0),
+      black: currentSeat === 1 ? (myPlayer?.score ?? 0) : (opponentPlayer?.score ?? 0)
+    });
+
+    // Queen cover state comes from the server (two-shot cover rule).
+    setQueenStatus(
+      myPlayer?.queenCovered
+        ? 'covered'
+        : myPlayer?.queenPocketed
+          ? 'pocketed_needs_cover'
+          : 'unpocketed',
+    );
+
+    // NOTE: applyServerState is called in TWO situations:
+    //   1. When no animation is running (state update arrives outside a shot)
+    //   2. At the END of the game-loop when animation finishes
+    // In case 2 the caller already sets currentPlayer/strikerPhase AFTER this call,
+    // so setting them here is also safe — the caller will immediately overwrite with
+    // identical values derived from the same state.
+    const isMyTurn = state.currentSeat === currentSeat;
+    setCurrentPlayer(isMyTurn ? 'player' : 'ai');
+    setStrikerPhase(state.strikerPlacementPhase ? 'positioning' : 'aiming');
+
+    if (state.finished) setGameOver(true);
+    setUiTrigger(t => t + 1);
+  }, []);
+
+  // Stable driver identity: only re-create when the seat assignment changes.
+  // Room updates (timers, readiness, etc.) must NOT tear down the driver.
+  useEffect(() => {
+    if (mode !== 'multiplayer') return;
+    // Wait until we have a valid seat assignment
+    if (mySeat == null) return;
+
+    mySeatRef.current = mySeat;
+
+    // Stop any existing driver before creating a new one
+    if (driverRef.current) {
+      driverRef.current.stop();
+      driverRef.current = null;
+    }
+
+    const names = (room?.players ?? [])
+      .slice()
+      .sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0))
+      .map(p => p.displayName || `Player ${(p.seat ?? 0) + 1}`);
+
+    const driver = new CarromMultiplayerDriver(mySeat, names);
+    driverRef.current = driver;
+
+    driver.setOnStateUpdate((state) => {
+      const currentSeat = mySeatRef.current;
+      const lastAction = state.lastAction as { type?: string; angle?: number; power?: number } | null;
+      const lastActionAt = state.lastActionAtMs ?? null;
+
+      console.log('[CarromGame] STATE UPDATE - mySeat:', currentSeat,
+        '| serverCurrentSeat:', state.currentSeat,
+        '| lastActionSeat:', state.lastActionSeat,
+        '| strikerPlacementPhase:', state.strikerPlacementPhase);
+
+      const isNewStrike =
+        lastAction?.type === 'strike' &&
+        lastActionAt !== null &&
+        lastActionAt !== lastAnimatedActionAtRef.current;
+
+      if (isNewStrike) {
+        lastAnimatedActionAtRef.current = lastActionAt;
+        pendingServerStateRef.current = state;
+
+        if (state.lastActionSeat !== currentSeat) {
+          // Opponent shot — animate using only striker velocity; let collision physics
+          // naturally scatter the coins (no manual seeding to avoid double-velocity).
+          const angle = lastAction.angle ?? 0;
+          const power = lastAction.power ?? 1;
+
+          const CLIENT_MAX_SPEED = SHOT_MAX_SPEED;
+          const forceMagnitude = power * CLIENT_MAX_SPEED;
+
+          // Seat 1 sees the board rotated 180°, so flip the angle
+          const localAngle = currentSeat === 1 ? angle + Math.PI : angle;
+
+          const striker = coinsRef.current.find(c => c.type === 'striker');
+          if (striker) {
+            striker.vx = Math.cos(localAngle) * forceMagnitude;
+            striker.vy = Math.sin(localAngle) * forceMagnitude;
+          }
+
+          setIsTurnActive(true);
+        } else {
+          // Local player shot: local animation already in progress
+          setIsTurnActive(true);
+        }
+        return;
+      }
+
+      if (isTurnActiveRef.current) {
+        pendingServerStateRef.current = state;
+        return;
+      }
+
+      applyServerState(state);
+    });
+
+    driver.setOnCoinPocketed(() => {
+      // Do not hide coins prematurely on socket event arrival.
+      // Allow client physics to roll the coin naturally into the hole.
+      confetti();
+    });
+
+    driver.setOnStrikerPlaced((x, y, seat) => {
+      // Only move the visual striker position — do NOT change strikerPhase here.
+      // strikerPhase is updated exclusively by applyServerState (from server state.strikerPlacementPhase).
+      // Changing it here causes a race: opponent's place-striker event fires on our client
+      // and incorrectly switches us to 'aiming' while it's still the opponent's turn.
+      const currentSeat = mySeatRef.current;
+      const striker = coinsRef.current.find(c => c.type === 'striker');
+      if (striker && seat === currentSeat) {
+        // Only reposition locally if it was OUR striker placement (server-confirmed).
+        const pos = mapServerToLocal(x, y, 0, 0, currentSeat);
+        striker.x = pos.x;
+        striker.y = pos.y;
+      }
+    });
+
+    driver.setOnFoul((reason) => {
+      toast.error(`Foul: ${reason}`, { id: 'foul' });
+    });
+
+    driver.setOnCoinReturned((_coinId, coinType) => {
+      toast(`${coinType === 'queen' ? 'Queen' : 'Coin'} returned to the board (striker foul penalty)`, { id: 'coin-returned' });
+    });
+
+    driver.setOnQueenReturned((reason) => {
+      toast(
+        reason === 'foul'
+          ? 'Queen returned: the foul forfeits the pending cover'
+          : 'Failed to cover the queen - it returns to the board',
+        { id: 'queen-returned' },
+      );
+    });
+
+    driver.setOnWin((winnerSeat) => {
+      setGameOver(true);
+      if (winnerSeat === mySeatRef.current) confetti({ particleCount: 100 });
+    });
+
+    // setOnTurnChange is intentionally NOT registered here.
+    // Reason: the 'turn-end' event fires in the SAME socket message as the strike state,
+    // which arrives while the animation is still playing. If we call setCurrentPlayer here
+    // the turn indicator flips immediately (while the striker is mid-air) and then the
+    // game-loop end-of-animation also tries to set it — causing a race.
+    // The ONLY authoritative turn update in multiplayer is inside the game-loop when
+    // isTurnActive && !anyMoving, where applyServerState is called with the latest
+    // server state (pendingServerStateRef || driver.lastState).
+    driver.setOnTurnChange((_nextSeat) => { /* handled in game-loop */ });
+
+    driver.start();
+
+    return () => {
+      driver.stop();
+      driverRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, mySeat, applyServerState]); // ← intentionally excludes `room` to avoid restarting on room updates
+
 
   useEffect(() => {
     if (gameOver || mode === 'multiplayer') return;
@@ -341,9 +565,8 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
          
          setTimeout(() => {
            const shootAngle = Math.atan2(impactY - striker.y, impactX - striker.x);
-           const forceMagnitude = 18; 
-           striker.vx = Math.cos(shootAngle) * forceMagnitude;
-           striker.vy = Math.sin(shootAngle) * forceMagnitude;
+           striker.vx = Math.cos(shootAngle) * SHOT_MAX_SPEED;
+           striker.vy = Math.sin(shootAngle) * SHOT_MAX_SPEED;
            setIsTurnActive(true);
            setTimeLeft(60);
            setAiThinking(false);
@@ -402,78 +625,184 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
     let anyMoving = false;
     const coins = coinsRef.current;
 
+    // Run client physics only during active animation (isTurnActive) or in AI mode.
+    // In multiplayer idle state, positions come exclusively from the server.
+    if (mode === 'ai' || isTurnActive) {
+      // Fixed 12 sub-steps per frame step (1/12 step size) matching server physics exactly
+      const maxSubSteps = 12;
+      const stepFactor = 1 / maxSubSteps; // 1/12
+
+      const innerMin = BORDER_SIZE;
+      const innerMax = BOARD_WIDTH - BORDER_SIZE;
+
+      for (let step = 0; step < maxSubSteps; step++) {
+        // 1. Integrate positions using fixed stepFactor
+        for (let i = 0; i < coins.length; i++) {
+          const c = coins[i];
+          if (!c.active) continue;
+
+          c.x += c.vx * stepFactor;
+          c.y += c.vy * stepFactor;
+
+          // Visual spin: angle proportional to tangential speed
+          const speed = Math.hypot(c.vx, c.vy);
+          if (c.angle !== undefined) {
+            c.angle += speed * stepFactor * 0.05;
+          }
+
+          // Motion trail: record position at each sub-step for blur effect
+          if (speed > 1.5 && c.trail !== undefined) {
+            c.trail.push({ x: c.x, y: c.y });
+            if (c.trail.length > TRAIL_LENGTH) c.trail.shift();
+          } else if (c.trail !== undefined) {
+            // Fade out trail when slow
+            if (c.trail.length > 0) c.trail.shift();
+          }
+
+          const r = c.radius;
+          const wallRestitution = c.type === 'striker' ? 0.75 : 0.70;
+          
+          // Check if coin is in a pocket corner cutout zone (skip straight wall clamping near corners)
+          let inPocketZone = false;
+          for (const p of POCKETS) {
+            if (Math.hypot(c.x - p.x, c.y - p.y) < POCKET_CUTOUT_ZONE) {
+              inPocketZone = true;
+              break;
+            }
+          }
+
+          if (!inPocketZone) {
+            if (c.x - r < innerMin) {
+              c.x = innerMin + r;
+              c.vx = Math.abs(c.vx) * wallRestitution;
+            } else if (c.x + r > innerMax) {
+              c.x = innerMax - r;
+              c.vx = -Math.abs(c.vx) * wallRestitution;
+            }
+
+            if (c.y - r < innerMin) {
+              c.y = innerMin + r;
+              c.vy = Math.abs(c.vy) * wallRestitution;
+            } else if (c.y + r > innerMax) {
+              c.y = innerMax - r;
+              c.vy = -Math.abs(c.vy) * wallRestitution;
+            }
+          }
+
+          // Friction: 0.985 per 60fps frame (1/12 power per substep)
+          const friction = Math.pow(0.985, stepFactor);
+          c.vx *= friction;
+          c.vy *= friction;
+
+          if (Math.abs(c.vx) < 0.04) c.vx = 0;
+          if (Math.abs(c.vy) < 0.04) c.vy = 0;
+
+          if (c.vx !== 0 || c.vy !== 0) anyMoving = true;
+        }
+
+
+        // 2. Circle-circle collisions with realistic momentum transfer and restitution
+        for (let i = 0; i < coins.length; i++) {
+          for (let j = i + 1; j < coins.length; j++) {
+            const c1 = coins[i];
+            const c2 = coins[j];
+            if (!c1.active || !c2.active) continue;
+            if (!isTurnActive && (c1.type === 'striker' || c2.type === 'striker')) continue;
+
+            const dx = c2.x - c1.x;
+            const dy = c2.y - c1.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const minDist = c1.radius + c2.radius;
+
+            if (dist < minDist && dist > 0) {
+              const nx = dx / dist;
+              const ny = dy / dist;
+
+              const dvx = c1.vx - c2.vx;
+              const dvy = c1.vy - c2.vy;
+              const dvn = dvx * nx + dvy * ny;
+
+              // Collision condition: dvn > 0 means objects are approaching each other.
+              // (n points from c1→c2; relative velocity (v1-v2)·n > 0 ⇒ c1 moves toward c2)
+              if (dvn > 0) {
+                const restitution = (c1.type === 'striker' || c2.type === 'striker') ? 0.90 : 0.82;
+                // Impulse magnitude (negated so that c1 is pushed BACK from c2)
+                const jImpulse = -(2 * c1.mass * c2.mass * dvn) / (c1.mass + c2.mass) * restitution;
+
+                c1.vx += (jImpulse * nx) / c1.mass;
+                c1.vy += (jImpulse * ny) / c1.mass;
+                c2.vx -= (jImpulse * nx) / c2.mass;
+                c2.vy -= (jImpulse * ny) / c2.mass;
+              }
+
+              // Overlap resolution proportional to inverse mass
+              const overlap = minDist - dist;
+              const totalMass = c1.mass + c2.mass;
+              c1.x -= nx * overlap * (c2.mass / totalMass);
+              c1.y -= ny * overlap * (c2.mass / totalMass);
+              c2.x += nx * overlap * (c1.mass / totalMass);
+              c2.y += ny * overlap * (c1.mass / totalMass);
+            }
+          }
+        }
+      }
+    } else {
+      // Multiplayer idle: just check whether any coin still has residual velocity
+      // Also count pocketing animations as "moving" so turn-end waits for them to finish.
+      for (const c of coins) {
+        if (c.active && (c.vx !== 0 || c.vy !== 0)) anyMoving = true;
+        if (c.pocketing) anyMoving = true; // pocketing animation still running
+      }
+    }
+
+    // Check pocket collisions during animation loop (all modes)
+    let scoredWhite = 0;
+    let scoredBlack = 0;
+    let strikerFoulThisFrame = false;
+    
     for (let i = 0; i < coins.length; i++) {
       const c = coins[i];
       if (!c.active) continue;
 
-      c.x += c.vx * (dt * 60);
-      c.y += c.vy * (dt * 60);
-      
-      const friction = Math.pow(0.985, dt * 60);
-      c.vx *= friction;
-      c.vy *= friction;
+      for (const p of POCKETS) {
+        const pdx = p.x - c.x;
+        const pdy = p.y - c.y;
+        const pdist = Math.hypot(pdx, pdy);
+        const isMovingTowards = c.vx * pdx + c.vy * pdy > 0 || Math.hypot(c.vx, c.vy) > 0.05;
 
-      if (Math.abs(c.vx) < 0.05) c.vx = 0;
-      if (Math.abs(c.vy) < 0.05) c.vy = 0;
-
-      if (c.vx !== 0 || c.vy !== 0) anyMoving = true;
-
-      if (c.x - c.radius < BORDER_SIZE) { c.x = BORDER_SIZE + c.radius; c.vx *= -1; }
-      if (c.x + c.radius > BOARD_WIDTH - BORDER_SIZE) { c.x = BOARD_WIDTH - BORDER_SIZE - c.radius; c.vx *= -1; }
-      if (c.y - c.radius < BORDER_SIZE) { c.y = BORDER_SIZE + c.radius; c.vy *= -1; }
-      if (c.y + c.radius > BOARD_HEIGHT - BORDER_SIZE) { c.y = BOARD_HEIGHT - BORDER_SIZE - c.radius; c.vy *= -1; }
-    }
-
-    for (let i = 0; i < coins.length; i++) {
-      for (let j = i + 1; j < coins.length; j++) {
-        const c1 = coins[i];
-        const c2 = coins[j];
-        if (!c1.active || !c2.active) continue;
-        
-        if (!isTurnActive && (c1.type === 'striker' || c2.type === 'striker')) continue;
-
-        const dx = c2.x - c1.x;
-        const dy = c2.y - c1.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const minDist = c1.radius + c2.radius;
-
-        if (dist < minDist) {
-          const overlap = minDist - dist;
-          const nx = dx / dist;
-          const ny = dy / dist;
-          c1.x -= nx * (overlap / 2);
-          c1.y -= ny * (overlap / 2);
-          c2.x += nx * (overlap / 2);
-          c2.y += ny * (overlap / 2);
-
-          const kx = c1.vx - c2.vx;
-          const ky = c1.vy - c2.vy;
-          const p = 2.0 * (nx * kx + ny * ky) / (c1.mass + c2.mass);
-
-          c1.vx -= p * c2.mass * nx;
-          c1.vy -= p * c2.mass * ny;
-          c2.vx += p * c1.mass * nx;
-          c2.vy += p * c1.mass * ny;
-        }
-      }
-    }
-
-    if (mode === 'ai') {
-      let scoredWhite = 0;
-      let scoredBlack = 0;
-      let strikerFoulThisFrame = false;
-      
-      for (let i = 0; i < coins.length; i++) {
-        const c = coins[i];
-        if (!c.active) continue;
-
-        for (const p of POCKETS) {
-          const dx = c.x - p.x;
-          const dy = c.y - p.y;
-          if (Math.sqrt(dx * dx + dy * dy) < POCKET_RADIUS) {
-            c.active = false;
+        if (pdist <= POCKET_CAPTURE_STATIONARY || (pdist <= POCKET_CAPTURE_MOVING && isMovingTowards)) {
+          if (!c.pocketing) {
+            c.pocketing = {
+              pocketX: p.x,
+              pocketY: p.y,
+              scale: 1.0,
+              opacity: 1.0,
+            };
             c.vx = 0;
             c.vy = 0;
+
+            const popText = c.type === 'queen' ? '👑 QUEEN!' : c.type === 'white' ? '⚪ +1 WHITE' : c.type === 'black' ? '⚫ +1 BLACK' : '❌ FOUL!';
+            const popColor = c.type === 'queen' ? '#f43f5e' : c.type === 'white' ? '#fbbf24' : c.type === 'black' ? '#38bdf8' : '#ef4444';
+            
+            floatingPopsRef.current.push({
+              id: Math.random(),
+              text: popText,
+              color: popColor,
+              x: p.x,
+              y: p.y - 12,
+              opacity: 1.0,
+              scale: 1.2,
+            });
+
+            pocketRipplesRef.current.push({
+              id: Math.random(),
+              x: p.x,
+              y: p.y,
+              radius: 12,
+              maxRadius: 38,
+              opacity: 0.95,
+              color: c.type === 'queen' ? '#f43f5e' : c.type === 'white' ? '#fbbf24' : '#38bdf8',
+            });
 
             if (c.type === 'white') {
                scoredWhite++;
@@ -493,6 +822,26 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
           }
         }
       }
+    }
+
+    // Step coin pocketing animations (pull-in, shrink, fade down)
+    for (const c of coins) {
+      if (c.pocketing) {
+        c.pocketing.scale = Math.max(0.02, c.pocketing.scale - 0.07);
+        c.pocketing.opacity = Math.max(0, c.pocketing.opacity - 0.07);
+        c.x += (c.pocketing.pocketX - c.x) * 0.35;
+        c.y += (c.pocketing.pocketY - c.y) * 0.35;
+
+        if (c.pocketing.scale <= 0.05 || c.pocketing.opacity <= 0.05) {
+          c.active = false;
+          c.pocketing = undefined;
+          setUiTrigger(t => t + 1);
+        }
+      }
+    }
+
+    if (mode === 'ai') {
+
 
       if (scoredWhite > 0 || scoredBlack > 0) {
         setScore(prev => {
@@ -587,9 +936,12 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
               }
            }
 
-           if (rules.queenStatus === 'covered') {
-              if (newWhite >= 9) setTimeout(() => setGameOver(true), 500);
-              if (newBlack >= 9) setTimeout(() => setGameOver(true), 500);
+           const pocketedW = coins.filter(c => c.type === 'white' && !c.active).length;
+           const pocketedB = coins.filter(c => c.type === 'black' && !c.active).length;
+           const queenPocketed = !coins.some(c => c.type === 'queen' && c.active);
+
+           if ((pocketedW >= 9 || pocketedB >= 9) && queenPocketed) {
+              setTimeout(() => setGameOver(true), 500);
            }
 
            return { white: newWhite, black: newBlack };
@@ -610,13 +962,70 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
         setTimeLeft(60);
       }
     } else if (mode === 'multiplayer') {
-      if (isTurnActive && !anyMoving) {
+      if (isTurnActive) {
+        turnActiveFramesRef.current++;
+      } else {
+        turnActiveFramesRef.current = 0;
+      }
+
+      // Wait at least 10 frames after turn started before allowing turn-end.
+      // This prevents the edge case where setIsTurnActive(true) and !anyMoving
+      // coincide on the same frame before coins have received velocity.
+      const hasEnoughFrames = turnActiveFramesRef.current >= 10;
+
+      if (isTurnActive && !anyMoving && hasEnoughFrames) {
         setIsTurnActive(false);
-        setStrikerPhase('positioning');
+        turnActiveFramesRef.current = 0;
+
+        const stateToApply = pendingServerStateRef.current || driverRef.current?.lastState;
+        if (stateToApply) {
+          pendingServerStateRef.current = null;
+
+          // Apply server state (scores, coin positions, pocketed flags, striker reset)
+          applyServerState(stateToApply);
+
+          // *** SINGLE AUTHORITATIVE TURN UPDATE ***
+          // This is the ONLY place in multiplayer that updates currentPlayer and strikerPhase.
+          // We derive them directly from the server state once animation has completely stopped.
+          const mySeatNow = mySeatRef.current ?? useMultiplayerStore.getState().mySeat ?? 0;
+          const isMyTurnNow = stateToApply.currentSeat === mySeatNow;
+
+          console.log('[CarromGame] TURN END - mySeat:', mySeatNow,
+            '| serverCurrentSeat:', stateToApply.currentSeat,
+            '| isMyTurn:', isMyTurnNow,
+            '| strikerPlacementPhase:', stateToApply.strikerPlacementPhase);
+
+          setCurrentPlayer(isMyTurnNow ? 'player' : 'ai');
+          setStrikerPhase(stateToApply.strikerPlacementPhase ? 'positioning' : 'aiming');
+          setStrikerPos(0);
+
+          // Reconcile pocketed coins with server ground-truth once motion has ceased
+          for (const localCoin of coinsRef.current) {
+            if (localCoin.type === 'striker') continue;
+            const serverCoin = stateToApply.coins?.find((c: any) => c.id === localCoin.id);
+            if (serverCoin) {
+              if (serverCoin.pocketed) {
+                localCoin.active = false;
+                localCoin.vx = 0;
+                localCoin.vy = 0;
+              } else if (!localCoin.active) {
+                // Coin returned to the board (queen restored / due owed)
+                localCoin.active = true;
+                localCoin.pocketing = undefined;
+                const pos = mapServerToLocal(serverCoin.x, serverCoin.y, 0, 0, mySeatNow);
+                localCoin.x = pos.x;
+                localCoin.y = pos.y;
+                localCoin.vx = 0;
+                localCoin.vy = 0;
+              }
+            }
+          }
+        }
       }
     }
 
-    renderBoard(ctx, coins, dragState, dragStart, currentAim, strikerPhase, currentPlayer, isTurnActive, gameOver, strikerPos);
+
+    renderBoard(ctx, coins, dragState, dragStart, currentAim, strikerPhase, currentPlayer, isTurnActive, gameOver, strikerPos, mySeatRef.current);
 
   }, true);
 
@@ -630,7 +1039,8 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
     currentPlayer: string,
     isTurnActive: boolean,
     gameOver: boolean,
-    strikerPos: number
+    strikerPos: number,
+    mySeatParam: number | null
   ) => {
     ctx.clearRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
 
@@ -821,30 +1231,80 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
     ctx.arc(cx, cy, 3, 0, Math.PI * 2);
     ctx.fill();
 
+    // --- Render Expanding Pocket Energy Ripples ---
+    for (let i = pocketRipplesRef.current.length - 1; i >= 0; i--) {
+      const rip = pocketRipplesRef.current[i];
+      rip.radius += 1.3;
+      rip.opacity -= 0.038;
+      if (rip.opacity <= 0 || rip.radius >= rip.maxRadius) {
+        pocketRipplesRef.current.splice(i, 1);
+        continue;
+      }
+      ctx.save();
+      ctx.strokeStyle = rip.color;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = Math.max(0, rip.opacity);
+      ctx.beginPath();
+      ctx.arc(rip.x, rip.y, rip.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // --- Motion trail pass (drawn before coins so trails are behind) ---
+    for (const c of coins) {
+      if (!c.active || !c.trail || c.trail.length < 2) continue;
+      const trailColor = c.type === 'striker' ? '30,132,255' : c.type === 'queen' ? '220,38,38' : c.type === 'white' ? '200,170,120' : '60,30,10';
+      for (let ti = 0; ti < c.trail.length; ti++) {
+        const tp = c.trail[ti];
+        const alpha = ((ti + 1) / c.trail.length) * 0.22;
+        const trailRadius = c.radius * (0.45 + 0.35 * (ti / c.trail.length));
+        ctx.beginPath();
+        ctx.arc(tp.x, tp.y, trailRadius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${trailColor},${alpha.toFixed(2)})`;
+        ctx.fill();
+      }
+    }
+
     for (const c of coins) {
       if (!c.active) continue;
       
       if (c.type === 'striker' && !isTurnActive && !gameOver) {
-        if (currentPlayer === 'player') {
-          c.x = BOARD_WIDTH / 2 + strikerPos;
-          // In multiplayer, Player 0 places at bottom, Player 1 at top
-          if (mode === 'multiplayer') {
-            c.y = mySeat === 0 ? STRIKER_START_Y : 62;
-          } else {
+        if (mode === 'multiplayer') {
+          if (currentPlayer === 'player') {
+            if (strikerPhase === 'positioning') {
+              c.x = BOARD_WIDTH / 2 + strikerPos;
+            }
             c.y = STRIKER_START_Y;
+          } else {
+            c.y = 62;
           }
         } else {
-          c.y = 62;
+          if (currentPlayer === 'player') {
+            c.x = BOARD_WIDTH / 2 + strikerPos;
+            c.y = STRIKER_START_Y;
+          } else {
+            c.y = 62;
+          }
         }
       }
 
+      ctx.save();
+      if (c.pocketing) {
+        ctx.globalAlpha = Math.max(0, c.pocketing.opacity);
+        ctx.translate(c.x, c.y);
+        ctx.scale(c.pocketing.scale, c.pocketing.scale);
+      }
+
+      const drawX = c.pocketing ? 0 : c.x;
+      const drawY = c.pocketing ? 0 : c.y;
+
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.beginPath();
-      ctx.arc(c.x + 2, c.y + 3, c.radius, 0, Math.PI * 2);
+      ctx.arc(drawX + 2, drawY + 3, c.radius, 0, Math.PI * 2);
       ctx.fill();
 
       let isOverlapping = false;
-      if (c.type === 'striker' && strikerPhase === 'positioning' && currentPlayer === 'player' && !isTurnActive && !gameOver) {
+      if (c.type === 'striker' && strikerPhase === 'positioning' && isMyTurn && !isTurnActive && !gameOver) {
          for (const other of coins) {
             if (other.type === 'striker' || !other.active) continue;
             if (Math.hypot(c.x - other.x, c.y - other.y) < c.radius + other.radius) {
@@ -854,41 +1314,53 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
       }
 
       if (c.type === 'striker') {
-        const grad = ctx.createRadialGradient(c.x - c.radius * 0.3, c.y - c.radius * 0.3, c.radius * 0.1, c.x, c.y, c.radius);
-        if (isOverlapping) {
-          grad.addColorStop(0, '#fca5a5'); grad.addColorStop(1, '#ef4444');
-        } else if (strikerPhase === 'aiming' && currentPlayer === 'player' && !isTurnActive && !gameOver) {
-          grad.addColorStop(0, '#fef08a'); grad.addColorStop(1, '#eab308');
+        // Fixed per-player striker color (matches the shooter's coin color) so it never
+        // changes mid-turn. Both players derive the same color from the turn holder's seat.
+        const shooterIsWhite =
+          mySeatParam === null
+            ? currentPlayer === 'player'
+            : currentPlayer === 'player'
+              ? mySeatParam === 0
+              : mySeatParam === 1;
+
+        const grad = ctx.createRadialGradient(drawX - c.radius * 0.3, drawY - c.radius * 0.3, c.radius * 0.1, drawX, drawY, c.radius);
+        if (shooterIsWhite) {
+          grad.addColorStop(0, '#fafaf9'); grad.addColorStop(1, '#d6d3d1');
         } else {
-          grad.addColorStop(0, '#7dd3fc'); grad.addColorStop(1, '#0284c7');
+          grad.addColorStop(0, '#44403c'); grad.addColorStop(1, '#1c1917');
         }
         ctx.fillStyle = grad;
-        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        ctx.strokeStyle = shooterIsWhite ? 'rgba(28,25,23,0.85)' : 'rgba(255,255,255,0.7)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
+        ctx.arc(drawX, drawY, c.radius, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
         if (isOverlapping) {
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(drawX, drawY, c.radius + 3, 0, Math.PI * 2);
+          ctx.stroke();
           ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 6px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('MOVE', c.x, c.y);
+          ctx.fillText('MOVE', drawX, drawY);
         }
       } else if (c.type === 'queen') {
         ctx.fillStyle = '#cc1a1a';
         ctx.strokeStyle = '#8b0000';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
+        ctx.arc(drawX, drawY, c.radius, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         ctx.strokeStyle = 'rgba(255,180,180,0.7)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(c.x, c.y, c.radius * 0.55, 0, Math.PI * 2);
+        ctx.arc(drawX, drawY, c.radius * 0.55, 0, Math.PI * 2);
         ctx.stroke();
       } else {
         const isWhite = c.type === 'white';
@@ -901,31 +1373,53 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
         ctx.strokeStyle = '#1a1008';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
+        ctx.arc(drawX, drawY, c.radius, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
         ctx.strokeStyle = ringColor;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(c.x, c.y, c.radius * 0.65, 0, Math.PI * 2);
+        ctx.arc(drawX, drawY, c.radius * 0.65, 0, Math.PI * 2);
         ctx.stroke();
 
         ctx.fillStyle = innerColor;
         ctx.beginPath();
-        ctx.arc(c.x, c.y, c.radius * 0.55, 0, Math.PI * 2);
+        ctx.arc(drawX, drawY, c.radius * 0.55, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.fillStyle = ringColor;
         ctx.beginPath();
-        ctx.arc(c.x, c.y, c.radius * 0.18, 0, Math.PI * 2);
+        ctx.arc(drawX, drawY, c.radius * 0.18, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.fillStyle = highlightColor;
         ctx.beginPath();
-        ctx.arc(c.x - c.radius * 0.3, c.y - c.radius * 0.3, c.radius * 0.25, 0, Math.PI * 2);
+        ctx.arc(drawX - c.radius * 0.3, drawY - c.radius * 0.3, c.radius * 0.25, 0, Math.PI * 2);
         ctx.fill();
       }
+
+      ctx.restore();
+    }
+
+    // --- Render Animated Floating Score Text Pops ---
+    for (let i = floatingPopsRef.current.length - 1; i >= 0; i--) {
+      const pop = floatingPopsRef.current[i];
+      pop.y -= 0.9;
+      pop.opacity -= 0.022;
+      if (pop.opacity <= 0) {
+        floatingPopsRef.current.splice(i, 1);
+        continue;
+      }
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, pop.opacity);
+      ctx.font = '900 13px system-ui, sans-serif';
+      ctx.fillStyle = pop.color;
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(0,0,0,0.9)';
+      ctx.shadowBlur = 6;
+      ctx.fillText(pop.text, pop.x, pop.y);
+      ctx.restore();
     }
 
     if (!isTurnActive && !gameOver && dragState === 'dragging') {
@@ -975,10 +1469,15 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
     
     if (mode === 'multiplayer') {
       if (!driverRef.current?.isMyTurn()) return;
-      if (driverRef.current.canPlaceStriker()) {
+      if (strikerPhase === 'positioning' && driverRef.current.canPlaceStriker()) {
         const striker = coinsRef.current.find(c => c.type === 'striker');
         if (striker) {
+          if (strikerOverlapsCoin()) {
+            toast.error('Striker overlaps a coin — move it before confirming.', { id: 'overlap-error' });
+            return;
+          }
           driverRef.current.sendPlaceStriker(striker.x);
+          setStrikerPhase('aiming');
         }
       }
     }
@@ -1000,7 +1499,8 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
        }
     }
 
-    if (overlap) {
+    // In multiplayer the server validates striker placement — skip client-side overlap check
+    if (mode === 'ai' && overlap) {
        toast.error('Cannot shoot! Reposition striker off overlapping coins first using the slider.', { id: 'overlap-error' });
        return;
     }
@@ -1030,26 +1530,31 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
         const dy = dragStart.y - currentAim.y;
         const pullDist = Math.hypot(dx, dy);
         
-         if (pullDist > 10) { 
+         if (pullDist > 10) {
            const maxPull = 150;
-           const forceMagnitude = Math.min(pullDist / maxPull, 1) * 22;
-           
-           const angle = Math.atan2(dy, dx);
            const power = Math.min(pullDist / maxPull, 1);
-           
+           const CLIENT_MAX_SPEED = SHOT_MAX_SPEED;
+           const forceMagnitude = power * CLIENT_MAX_SPEED;
+           const angle = Math.atan2(dy, dx);
+
            if (mode === 'multiplayer' && driverRef.current) {
-             driverRef.current.sendStrike(angle, power);
-             
              striker.vx = Math.cos(angle) * forceMagnitude;
              striker.vy = Math.sin(angle) * forceMagnitude;
              setIsTurnActive(true);
              setStrikerPhase('positioning');
+             setStrikerPos(0);
              setTimeLeft(60);
+             driverRef.current.sendStrike(angle, power).then(res => {
+               if (!res.ok) {
+                 toast.error(res.error ? `Shot rejected: ${res.error}` : 'Shot rejected by server', { id: 'strike-rejected' });
+               }
+             });
            } else {
              striker.vx = Math.cos(angle) * forceMagnitude;
              striker.vy = Math.sin(angle) * forceMagnitude;
              setIsTurnActive(true);
              setStrikerPhase('positioning');
+             setStrikerPos(0);
              setTimeLeft(60);
            }
          }
@@ -1061,18 +1566,39 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
   const handleStrikerPosChange = (val: number) => {
     setStrikerPos(val);
     const striker = coinsRef.current.find(c => c.type === 'striker');
-    if (striker) { 
-      striker.x = BOARD_WIDTH / 2 + val; 
-      striker.y = STRIKER_START_Y; 
+    if (!striker) return;
+    striker.x = BOARD_WIDTH / 2 + val;
+    striker.y = STRIKER_START_Y;
+    if (mode === 'multiplayer' && driverRef.current?.canPlaceStriker()) {
+      const now = Date.now();
+      if (now - lastPlaceSendAtRef.current >= 200) {
+        lastPlaceSendAtRef.current = now;
+        driverRef.current.sendPlaceStriker(striker.x);
+      }
     }
   };
 
+  const confirmStrikerPos = () => {
+    if (mode !== 'multiplayer') return;
+    const striker = coinsRef.current.find(c => c.type === 'striker');
+    if (!striker || !driverRef.current?.canPlaceStriker()) return;
+    // Always send the final slider position when the thumb is released so the
+    // last confirmed coordinate reaches the server even if the user never taps
+    // the board afterwards.
+    lastPlaceSendAtRef.current = Date.now();
+    driverRef.current.sendPlaceStriker(striker.x);
+  };
+
   const handleConfirmStrikerPlacement = () => {
-    if (mode === 'multiplayer' && driverRef.current && strikerPhase === 'positioning') {
+    if (mode === 'multiplayer' && driverRef.current?.canPlaceStriker()) {
       const striker = coinsRef.current.find(c => c.type === 'striker');
       if (striker) {
+        if (strikerOverlapsCoin()) {
+          toast.error('Striker overlaps a coin — move it before confirming.', { id: 'overlap-error' });
+          return;
+        }
         driverRef.current.sendPlaceStriker(striker.x);
-        setStrikerPhase('aiming');
+        // Don't optimistically set phase here — onStateUpdate will update it
       }
     }
   };
@@ -1092,6 +1618,12 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
     setIsTurnActive(false);
   };
 
+  const pocketedWhiteCount = coinsRef.current.filter(c => c.type === 'white' && !c.active).length;
+  const pocketedBlackCount = coinsRef.current.filter(c => c.type === 'black' && !c.active).length;
+  const isPlayerWinner = mode === 'multiplayer' 
+    ? (mySeat === 0 ? pocketedWhiteCount >= 9 : pocketedBlackCount >= 9)
+    : pocketedWhiteCount >= 9;
+
   return (
     <GameWrapper title="Real Carrom 3D" gameId="carrom" mode={mode} stake={stake} onBack={onBack} isFullscreen>
       <div className="flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 lg:gap-8 w-full max-w-6xl relative h-full overflow-y-auto lg:overflow-y-visible py-4 px-2 custom-scrollbar">
@@ -1099,15 +1631,15 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
         {gameOver && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in rounded-3xl">
             <div className="bg-[#0f172a] border border-amber-500/30 p-8 rounded-3xl shadow-2xl flex flex-col items-center max-w-sm w-full mx-4">
-              <div className="text-6xl mb-4">{score.white >= 9 ? '🏆' : '❌'}</div>
-              <h2 className={`text-3xl font-black uppercase tracking-widest text-center mb-2 ${score.white >= 9 ? 'text-emerald-400' : 'text-rose-500'}`}>
-                {score.white >= 9 ? 'YOU WIN!' : 'GAME OVER'}
+              <div className="text-6xl mb-4">{isPlayerWinner ? '🏆' : '❌'}</div>
+              <h2 className={`text-3xl font-black uppercase tracking-widest text-center mb-2 ${isPlayerWinner ? 'text-emerald-400' : 'text-rose-500'}`}>
+                {isPlayerWinner ? 'YOU WIN!' : 'GAME OVER'}
               </h2>
               <p className="text-slate-300 text-sm text-center mb-6 font-bold">
-                White: {score.white} / 9 | Black: {score.black} / 9
+                White: {pocketedWhiteCount} / 9 | Black: {pocketedBlackCount} / 9
               </p>
               
-              {score.white >= 9 && mode === 'ai' && (
+              {isPlayerWinner && mode === 'ai' && (
                 <div className="bg-emerald-950/50 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 mb-6">
                   🪙 +50 Coins Added!
                 </div>
@@ -1196,11 +1728,11 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              className={`w-full h-full object-contain touch-none shadow-[0_20px_60px_rgba(0,0,0,0.7)] rounded-[28px] ${dragState === 'idle' && currentPlayer === 'player' ? 'cursor-grab' : currentPlayer === 'ai' ? 'cursor-not-allowed' : 'cursor-grabbing'}`}
+              className={`w-full h-full object-contain touch-none shadow-[0_20px_60px_rgba(0,0,0,0.7)] rounded-[28px] ${dragState === 'idle' && isMyTurn ? 'cursor-grab' : !isMyTurn ? 'cursor-not-allowed' : 'cursor-grabbing'}`}
             />
           </div>
 
-          {!isTurnActive && !gameOver && strikerPhase === 'positioning' && currentPlayer === 'player' && (
+          {!isTurnActive && !gameOver && strikerPhase === 'positioning' && isMyTurn && (
             <div className="w-full flex flex-col items-center gap-2">
               <div
                 className="relative w-full flex items-center px-4"
@@ -1220,10 +1752,11 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
 
                 <input
                   type="range"
-                  min={-115}
-                  max={115}
+                  min={STRIKER_POS_MIN}
+                  max={STRIKER_POS_MAX}
                   value={strikerPos}
                   onChange={(e) => handleStrikerPosChange(Number(e.target.value))}
+                  onPointerUp={confirmStrikerPos}
                   className="relative w-full h-full opacity-0 cursor-grab z-10"
                   style={{ WebkitAppearance: 'none' }}
                 />
@@ -1233,7 +1766,7 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
                   style={{
                     width: '36px',
                     height: '36px',
-                    left: `calc(${((strikerPos + 115) / 230) * 100}% - ${((strikerPos + 115) / 230) * 36}px + 0px)`,
+                    left: `calc(${((strikerPos - STRIKER_POS_MIN) / (STRIKER_POS_MAX - STRIKER_POS_MIN)) * 100}% - ${((strikerPos - STRIKER_POS_MIN) / (STRIKER_POS_MAX - STRIKER_POS_MIN)) * 36}px + 0px)`,
                     background: 'radial-gradient(circle at 35% 35%, #7dd3fc, #0284c7)',
                     border: '2.5px solid rgba(255,255,255,0.6)',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
@@ -1243,44 +1776,71 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
               
               
               <p className="text-xs text-slate-400 font-semibold tracking-widest uppercase">Slide to position striker</p>
+              {placementOverlapping && (
+                <p className="text-xs text-rose-400 font-bold uppercase tracking-widest animate-pulse">
+                  Striker overlaps a coin - move it
+                </p>
+              )}
             </div>
           )}
         </div>
 
         <div className="flex flex-col items-center gap-3 lg:gap-4 glass-panel p-4 lg:p-6 rounded-3xl border border-slate-800 w-full max-w-[270px] h-auto max-h-[80vh] overflow-y-auto custom-scrollbar">
           
-          <div className="w-full flex justify-center mb-2">
-             <div className={`px-4 py-2 rounded-full font-black text-sm uppercase shadow-lg transition-colors ${currentPlayer === 'player' ? 'bg-emerald-500 text-white animate-pulse' : 'bg-rose-500 text-white'}`}>
-                {mode === 'multiplayer' 
-                  ? (currentPlayer === 'player' ? 'Your Turn' : 'Opponent\'s Turn')
-                  : (currentPlayer === 'player' ? 'Your Turn' : 'AI Turn')
-                }
-             </div>
-          </div>
+          {(() => {
+            const myColor = mode === 'multiplayer' ? (mySeat === 1 ? 'black' : 'white') : 'white';
+            return (
+              <>
+                <div className="w-full flex flex-col items-center gap-2 mb-1">
+                   <div className={`px-4 py-2 rounded-full font-black text-sm uppercase shadow-lg transition-colors ${isMyTurn ? 'bg-emerald-500 text-white animate-pulse' : 'bg-rose-500 text-white'}`}>
+                      {mode === 'multiplayer' 
+                        ? (isMyTurn ? 'Your Turn' : 'Opponent\'s Turn')
+                        : (currentPlayer === 'player' ? 'Your Turn' : 'AI Turn')
+                      }
+                   </div>
 
-          <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 mt-2">SCORE BOARD</h3>
+                   <div className={`px-3 py-1.5 rounded-full font-extrabold text-xs flex items-center gap-2 shadow border ${myColor === 'white' ? 'bg-slate-100 text-slate-900 border-slate-300' : 'bg-slate-950 text-white border-slate-700'}`}>
+                      <div className={`w-3 h-3 rounded-full ${myColor === 'white' ? 'bg-white border border-slate-400' : 'bg-slate-900 border border-slate-600'}`} />
+                      <span>YOUR COINS: <strong className="uppercase">{myColor}</strong></span>
+                   </div>
+                </div>
 
-          <div className="w-full grid grid-cols-3 gap-2 text-center bg-slate-900/80 p-4 rounded-xl border border-slate-800">
-            <div className="flex flex-col items-center">
-              <div className="w-4 h-4 rounded-full bg-white mb-2 shadow-sm border border-slate-300"></div>
-              <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest">White</p>
-              <p className="text-xl font-black text-amber-400 mt-1">{score.white}</p>
-            </div>
-            
-            <div className="flex flex-col items-center border-l border-r border-slate-700 px-2">
-              <div className="w-4 h-4 rounded-full bg-rose-500 mb-2 shadow-sm border border-rose-300"></div>
-              <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest">Queen</p>
-              <p className="text-[10px] font-black text-amber-400 mt-1 uppercase">
-                 {rulesRef.current.queenStatus === 'covered' ? 'Covered' : rulesRef.current.queenStatus === 'pocketed_needs_cover' ? 'Needs Cover' : 'Unpocketed'}
-              </p>
-            </div>
+                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">SCORE BOARD</h3>
 
-            <div className="flex flex-col items-center">
-              <div className="w-4 h-4 rounded-full bg-slate-950 mb-2 shadow-sm border border-slate-800"></div>
-              <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest">Black</p>
-              <p className="text-xl font-black text-slate-200 mt-1">{score.black}</p>
-            </div>
-          </div>
+                <div className="w-full grid grid-cols-3 gap-1.5 text-center bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                  <div className={`flex flex-col items-center p-1.5 rounded-lg transition-all ${myColor === 'white' ? 'bg-emerald-500/15 border border-emerald-500/40 ring-1 ring-emerald-500/30' : ''}`}>
+                    <div className="w-4 h-4 rounded-full bg-white mb-1 shadow-sm border border-slate-300"></div>
+                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest flex items-center gap-1">
+                      White {myColor === 'white' && <span className="text-[9px] text-emerald-400 font-black">(YOU)</span>}
+                    </p>
+                    <p className="text-base font-black text-amber-400 mt-1">
+                      {coinsRef.current.filter(c => c.type === 'white' && (!c.active || c.pocketing !== undefined)).length} / 9
+                    </p>
+                  </div>
+                  
+                  <div className="flex flex-col items-center border-l border-r border-slate-700 px-1 p-1.5">
+                    <div className="w-4 h-4 rounded-full bg-rose-500 mb-1 shadow-sm border border-rose-300"></div>
+                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest">Queen</p>
+                    <p className="text-[9px] font-black text-amber-400 mt-1 uppercase">
+                       {mode === 'ai'
+                         ? (rulesRef.current.queenStatus === 'covered' ? 'Covered' : rulesRef.current.queenStatus === 'pocketed_needs_cover' ? 'Needs Cover' : 'Unpocketed')
+                         : (queenStatus === 'covered' ? 'Covered' : queenStatus === 'pocketed_needs_cover' ? 'Needs Cover' : 'Unpocketed')}
+                    </p>
+                  </div>
+
+                  <div className={`flex flex-col items-center p-1.5 rounded-lg transition-all ${myColor === 'black' ? 'bg-emerald-500/15 border border-emerald-500/40 ring-1 ring-emerald-500/30' : ''}`}>
+                    <div className="w-4 h-4 rounded-full bg-slate-950 mb-1 shadow-sm border border-slate-800"></div>
+                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest flex items-center gap-1">
+                      Black {myColor === 'black' && <span className="text-[9px] text-emerald-400 font-black">(YOU)</span>}
+                    </p>
+                    <p className="text-base font-black text-slate-200 mt-1">
+                      {coinsRef.current.filter(c => c.type === 'black' && (!c.active || c.pocketing !== undefined)).length} / 9
+                    </p>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
           
           {mode === 'ai' && (
             <>
@@ -1299,8 +1859,8 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
             {currentPlayer === 'ai' 
               ? 'Wait for opponent to shoot.' 
               : strikerPhase === 'positioning' 
-                ? 'Drag to position striker.' 
-                : 'Tap striker to reposition. Drag board to shoot!'}
+                ? mode === 'multiplayer' ? 'Slide to position, then tap the board to confirm.' : 'Drag to position striker.'
+                : mode === 'multiplayer' ? 'Drag back and release to shoot!' : 'Tap striker to reposition. Drag board to shoot!'}
           </p>
         </div>
 

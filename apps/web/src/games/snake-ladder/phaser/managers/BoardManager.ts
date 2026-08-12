@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 
-export const BOARD_OFFSET_X = 0;
+export const BOARD_OFFSET_X = 60;
+export const BOARD_OFFSET_Y = 60;
 
 // Each row (row 0 = bottom = tiles 1-10, row 9 = top = tiles 91-100)
 // gets its own two-tone colour palette: [darkTile, lightTile]
@@ -27,7 +28,7 @@ export default class BoardManager {
   private tilePositions = new Map<number, Phaser.Math.Vector2>();
   private highlightGraphics!: Phaser.GameObjects.Graphics;
 
-  constructor(scene: Phaser.Scene, boardSize = 800) {
+  constructor(scene: Phaser.Scene, boardSize = 680) {
     this.scene = scene;
     this.boardSize = boardSize;
     this.tileSize = boardSize / this.cols;
@@ -42,7 +43,7 @@ export default class BoardManager {
       let   col   = index % this.cols;
       if (row % 2 === 1) col = this.cols - 1 - col;
       const px = BOARD_OFFSET_X + col * this.tileSize + this.tileSize / 2;
-      const py = this.boardSize - (row * this.tileSize + this.tileSize / 2);
+      const py = BOARD_OFFSET_Y + (this.rows - 1 - row) * this.tileSize + this.tileSize / 2;
       this.tilePositions.set(tile, new Phaser.Math.Vector2(px, py));
     }
   }
@@ -54,15 +55,20 @@ export default class BoardManager {
     // 3D Border around the board
     const borderThickness = 12;
     g.fillStyle(0x331c10, 1);
-    g.fillRect(BOARD_OFFSET_X - borderThickness, -borderThickness, this.boardSize + borderThickness * 2, this.boardSize + borderThickness * 2);
+    g.fillRect(
+      BOARD_OFFSET_X - borderThickness,
+      BOARD_OFFSET_Y - borderThickness,
+      this.boardSize + borderThickness * 2,
+      this.boardSize + borderThickness * 2
+    );
     // Outer bevel highlights
     g.fillStyle(0x5e3a24, 1);
-    g.fillRect(BOARD_OFFSET_X - borderThickness, -borderThickness, this.boardSize + borderThickness * 2, 4); // Top
-    g.fillRect(BOARD_OFFSET_X - borderThickness, -borderThickness, 4, this.boardSize + borderThickness * 2); // Left
+    g.fillRect(BOARD_OFFSET_X - borderThickness, BOARD_OFFSET_Y - borderThickness, this.boardSize + borderThickness * 2, 4); // Top
+    g.fillRect(BOARD_OFFSET_X - borderThickness, BOARD_OFFSET_Y - borderThickness, 4, this.boardSize + borderThickness * 2); // Left
     // Outer bevel shadows
     g.fillStyle(0x1a0d06, 1);
-    g.fillRect(BOARD_OFFSET_X - borderThickness, this.boardSize + borderThickness - 4, this.boardSize + borderThickness * 2, 4); // Bottom
-    g.fillRect(BOARD_OFFSET_X + this.boardSize + borderThickness - 4, -borderThickness, 4, this.boardSize + borderThickness * 2); // Right
+    g.fillRect(BOARD_OFFSET_X - borderThickness, BOARD_OFFSET_Y + this.boardSize + borderThickness - 4, this.boardSize + borderThickness * 2, 4); // Bottom
+    g.fillRect(BOARD_OFFSET_X + this.boardSize + borderThickness - 4, BOARD_OFFSET_Y - borderThickness, 4, this.boardSize + borderThickness * 2); // Right
 
     for (let tile = 1; tile <= 100; tile++) {
       const pos  = this.getTilePosition(tile);
@@ -138,10 +144,10 @@ export default class BoardManager {
     const border = this.scene.add.graphics();
     border.setDepth(2);
     border.lineStyle(5, 0xf59e0b, 1);
-    border.strokeRect(BOARD_OFFSET_X, 0, this.boardSize, this.boardSize);
+    border.strokeRect(BOARD_OFFSET_X, BOARD_OFFSET_Y, this.boardSize, this.boardSize);
     // Inner frame
     border.lineStyle(2, 0xfcd34d, 0.4);
-    border.strokeRect(BOARD_OFFSET_X + 4, 4, this.boardSize - 8, this.boardSize - 8);
+    border.strokeRect(BOARD_OFFSET_X + 4, BOARD_OFFSET_Y + 4, this.boardSize - 8, this.boardSize - 8);
 
     // Highlight overlay layer
     this.highlightGraphics = this.scene.add.graphics();

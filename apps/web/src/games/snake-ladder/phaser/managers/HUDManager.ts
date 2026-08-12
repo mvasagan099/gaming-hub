@@ -29,6 +29,20 @@ export class HUDManager {
     this.scene = scene;
   }
 
+  private playerNames: string[] = ["PLAYER 1", "PLAYER 2", "PLAYER 3", "PLAYER 4"];
+  private playerLabelTexts: Phaser.GameObjects.Text[] = [];
+
+  setNames(names: string[]): void {
+    names.forEach((name, i) => {
+      if (name) {
+        this.playerNames[i] = name.toUpperCase();
+        if (this.playerLabelTexts[i]) {
+          this.playerLabelTexts[i].setText(name);
+        }
+      }
+    });
+  }
+
   create(totalPlayers = 2): void {
     const depth = 10;  // below dice (depth 100) but above board
 
@@ -82,12 +96,13 @@ export class HUDManager {
       dot.setStrokeStyle(2, 0xffffff);
       dot.setDepth(depth + 1);
 
-      this.scene.add.text(PANEL_X - 60, cy - 14, label, {
+      const labelText = this.scene.add.text(PANEL_X - 60, cy - 14, label, {
         fontSize: "13px",
         color: hex,
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
       }).setDepth(depth + 1);
+      this.playerLabelTexts.push(labelText);
 
       const tileText = this.scene.add.text(PANEL_X - 60, cy + 4, "Tile: 1", {
         fontSize: "11px",
@@ -131,9 +146,9 @@ export class HUDManager {
   }
 
   updateTurn(playerId: number): void {
-    const names = ["PLAYER 1", "PLAYER 2", "PLAYER 3", "PLAYER 4"];
+    const name = this.playerNames[(playerId - 1) % 4] ?? `PLAYER ${playerId}`;
     const colors = ["#ef4444", "#10b981", "#3b82f6", "#f59e0b"];
-    this.turnText.setText(`${names[(playerId - 1) % 4]}'S TURN`);
+    this.turnText.setText(`${name}'S TURN`);
     this.turnText.setColor(colors[(playerId - 1) % 4] ?? "#38bdf8");
   }
 

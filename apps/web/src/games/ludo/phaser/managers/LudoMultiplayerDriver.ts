@@ -91,7 +91,8 @@ export default class LudoMultiplayerDriver {
     this.winnerPopup = winnerPopup;
     this.mySeat = mySeat;
     this.names = names;
-    this.ruleEngine = new LudoRuleEngine({ ...DEFAULT_SETTINGS, mode: "multiplayer" });
+    const count = names.length === 2 || mySeat != null ? 2 : (DEFAULT_SETTINGS.playerCount as 2 | 4);
+    this.ruleEngine = new LudoRuleEngine({ ...DEFAULT_SETTINGS, mode: "multiplayer", playerCount: count });
   }
 
   start(): void {
@@ -100,7 +101,12 @@ export default class LudoMultiplayerDriver {
 
     this.unsubscribe = useMultiplayerStore.subscribe((state, prev) => {
       if (this.destroyed) return;
-      if (state.gameState !== prev.gameState || state.winner !== prev.winner) {
+      if (
+        state.gameState !== prev.gameState ||
+        state.winner !== prev.winner ||
+        state.matchId !== prev.matchId ||
+        state.renderKey !== prev.renderKey
+      ) {
         this.applySnapshot(state.gameState, state.lastEvents, state.winner);
       }
     });
@@ -121,7 +127,7 @@ export default class LudoMultiplayerDriver {
   }
 
   private seatName(seat: number): string {
-    return `Player ${seat + 1}`;
+    return this.names[seat] ?? `Player ${seat + 1}`;
   }
 
   private onRoll(): void {
@@ -138,6 +144,7 @@ export default class LudoMultiplayerDriver {
     if (!s.legalMoves?.includes(tokenId)) return;
 
     this.busy = true;
+    this.hud.hideSelectionBanner();
     this.tokenManager.clearAllGlows();
     void useMultiplayerStore.getState().sendGameAction({ type: "move", tokenId }).then((res) => {
       if (!res.ok && res.error) {
@@ -172,24 +179,27 @@ export default class LudoMultiplayerDriver {
       evs.some((e) => e.type === "win") || (winner?.winnerSeats?.length ?? 0) > 0;
     this.pendingWin = hasWin;
 
-    if (s.dice != null) {
-      if (evs.some((e) => e.type === "roll")) this.dice.rollTo(s.dice);
-      else this.dice.setValue(s.dice);
-    }
-
-    const moveEvent = evs.find((e) => e.type === "move");
-    if (moveEvent?.tokenId && s.dice != null) {
-      const actorSeat = moveEvent.seat ?? -1;
-      const prevPlayer = prev?.players?.find((p) => p.seat === actorSeat);
-      const prevToken = prevPlayer?.tokens?.find((t) => t.id === moveEvent.tokenId);
-      if (prevToken) {
-        this.animateMove(prevToken, moveEvent, s, evs);
-        return;
+    const hasRoll = evs.some((e) => e.type === "roll");
+    const processMoveAndFinalize = () => {
+      const moveEvent = evs.find((e) => e.type === "move");
+      if (moveEvent?.tokenId && s.dice != null) {
+        const actorSeat = moveEvent.seat ?? -1;
+        const prevPlayer = prev?.players?.find((p) => p.seat === actorSeat);
+        const prevToken = prevPlayer?.tokens?.find((t) => t.id === moveEvent.tokenId);
+        if (prevToken) {
+          this.animateMove(prevToken, moveEvent, s, evs);
+          return;
+        }
       }
-    }
+      this.finalize(s, evs);
+    };
 
-    // No animated move (initial sync, reconnect, no-move, rematch).
-    this.finalize(s, evs);
+    if (s.dice != null && hasRoll) {
+      this.dice.rollTo(s.dice, processMoveAndFinalize);
+    } else {
+      if (s.dice != null) this.dice.setValue(s.dice);
+      processMoveAndFinalize();
+    }
   }
 
   private animateMove(
@@ -275,7 +285,13 @@ export default class LudoMultiplayerDriver {
     if (s.phase === "selecting") {
       this.dice.setSelectMode();
       this.tokenManager.highlightClickable(s.legalMoves ?? []);
+      if (s.currentSeat === this.mySeat) {
+        this.hud.showSelectionBanner("👇 TAP A HIGHLIGHTED TOKEN TO MOVE!");
+      } else {
+        this.hud.hideSelectionBanner();
+      }
     } else {
+      this.hud.hideSelectionBanner();
       this.dice.enable("🎲 ROLL DICE");
       this.tokenManager.clearAllGlows();
     }
@@ -283,13 +299,19 @@ export default class LudoMultiplayerDriver {
 
   private scheduleWin(s: RemoteState): void {
     if (!this.pendingWin || this.winShown) return;
-    const seats = s.winnerSeats ?? [];
-    if (seats.length === 0) return;
+    const storeWinner = useMultiplayerStore.getState().winner;
+    const seats = (s.winnerSeats && s.winnerSeats.length > 0)
+      ? s.winnerSeats
+      : (storeWinner?.winnerSeats && storeWinner.winnerSeats.length > 0)
+      ? storeWinner.winnerSeats
+      : [];
+
+    if (seats.length === 0 && !s.finished && !storeWinner) return;
 
     this.winShown = true;
-    const winnerSeat = seats[0];
+    const winnerSeat = seats[0] ?? 0;
     const won = this.mySeat != null && winnerSeat === this.mySeat;
-    const name = this.names[winnerSeat] ?? this.seatName(winnerSeat);
+    const name = this.seatName(winnerSeat);
 
     this.scene.time.delayedCall(700, () => {
       if (this.destroyed) return;

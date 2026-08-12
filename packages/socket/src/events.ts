@@ -94,6 +94,10 @@ export interface ServerToClientEvents {
     state: JsonObject;
     seat: number | null;
     events: { type: string }[];
+    /** Monotonically increasing per-room packet order; clients dedupe/order on it. */
+    sequenceNumber: number;
+    timestamp: number;
+    turnNumber: number;
   }) => void;
 
   "game:over": (payload: {

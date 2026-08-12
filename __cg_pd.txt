@@ -1,0 +1,92 @@
+1367:   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+1368:     if (gameOver || isTurnActive || showRules) return;
+1369:     
+1370:     if (mode === 'multiplayer') {
+1371:       if (!driverRef.current?.isMyTurn()) return;
+1372:       if (strikerPhase === 'positioning' && driverRef.current.canPlaceStriker()) {
+1373:         const striker = coinsRef.current.find(c => c.type === 'striker');
+1374:         if (striker) {
+1375:           driverRef.current.sendPlaceStriker(striker.x);
+1376:           setStrikerPhase('aiming');
+1377:         }
+1378:       }
+1379:     }
+1380:     if (mode === 'ai' && currentPlayer === 'ai') return;
+1381:     
+1382:     const { x, y } = getCanvasCoords(e);
+1383:     
+1384:     const striker = coinsRef.current.find(c => c.type === 'striker');
+1385:     let overlap = false;
+1386:     if (striker) {
+1387:        for (const c of coinsRef.current) {
+1388:           if (c.type === 'striker' || !c.active) continue;
+1389:           const dx = c.x - striker.x;
+1390:           const dy = c.y - striker.y;
+1391:           if (Math.hypot(dx, dy) < c.radius + striker.radius) {
+1392:              overlap = true;
+1393:              break;
+1394:           }
+1395:        }
+1396:     }
+1397: 
+1398:     // In multiplayer the server validates striker placement — skip client-side overlap check
+1399:     if (mode === 'ai' && overlap) {
+1400:        toast.error('Cannot shoot! Reposition striker off overlapping coins first using the slider.', { id: 'overlap-error' });
+1401:        return;
+1402:     }
+1403: 
+1404:     try {
+1405:       e.currentTarget.setPointerCapture(e.pointerId);
+1406:     } catch (err) {
+1407:       console.warn("Failed to set pointer capture", err);
+1408:     }
+1409: 
+1410:     setDragState('dragging');
+1411:     setDragStart({ x, y });
+1412:     setCurrentAim({ x, y });
+1413:   };
+1414: 
+1415:   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+1416:     if (dragState !== 'dragging') return;
+1417:     const { x, y } = getCanvasCoords(e);
+1418:     setCurrentAim({ x, y });
+1419:   };
+1420: 
+1421:   const handlePointerUp = () => {
+1422:     if (dragState === 'dragging') {
+1423:       const striker = coinsRef.current.find(c => c.type === 'striker');
+1424:       if (striker) {
+1425:         const dx = dragStart.x - currentAim.x;
+1426:         const dy = dragStart.y - currentAim.y;
+1427:         const pullDist = Math.hypot(dx, dy);
+1428:         
+1429:          if (pullDist > 10) {
+1430:            const maxPull = 150;
+1431:            const power = Math.min(pullDist / maxPull, 1);
+1432:            const CLIENT_MAX_SPEED = SHOT_MAX_SPEED;
+1433:            const forceMagnitude = power * CLIENT_MAX_SPEED;
+1434:            const angle = Math.atan2(dy, dx);
+1435: 
+1436:            if (mode === 'multiplayer' && driverRef.current) {
+1437:              driverRef.current.sendStrike(angle, power);
+1438:              striker.vx = Math.cos(angle) * forceMagnitude;
+1439:              striker.vy = Math.sin(angle) * forceMagnitude;
+1440:              setIsTurnActive(true);
+1441:              setStrikerPhase('positioning');
+1442:              setStrikerPos(0);
+1443:              setTimeLeft(60);
+1444:            } else {
+1445:              striker.vx = Math.cos(angle) * forceMagnitude;
+1446:              striker.vy = Math.sin(angle) * forceMagnitude;
+1447:              setIsTurnActive(true);
+1448:              setStrikerPhase('positioning');
+1449:              setStrikerPos(0);
+1450:              setTimeLeft(60);
+1451:            }
+1452:          }
+1453:       }
+1454:     }
+1455:     setDragState('idle');
+1456:   };
+1457: 
+1458:   const handleStrikerPosChange = (val: number) => {

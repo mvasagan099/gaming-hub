@@ -11,7 +11,9 @@ export default class HUDManager {
     this.scene = scene;
   }
 
-  create(mode: string): void {
+  private oppScoreText?: Phaser.GameObjects.Text;
+
+  create(mode: string, isMultiplayer = false): void {
     const depth = 50;
     const w = this.scene.scale.width;
 
@@ -25,6 +27,17 @@ export default class HUDManager {
       strokeThickness: 4,
     }).setDepth(depth);
 
+    if (isMultiplayer) {
+      this.oppScoreText = this.scene.add.text(24, 56, "Opponent: 0", {
+        fontSize:   "16px",
+        color:      "#38bdf8",
+        fontFamily: "Outfit, sans-serif",
+        fontStyle:  "bold",
+        stroke:     "#090d16",
+        strokeThickness: 3,
+      }).setDepth(depth);
+    }
+
     // Combo display (hidden by default)
     this.comboText = this.scene.add.text(w / 2, 80, "", {
       fontSize:   "28px",
@@ -35,17 +48,19 @@ export default class HUDManager {
       strokeThickness: 6,
     }).setOrigin(0.5).setDepth(depth).setAlpha(0);
 
-    if (mode === "zen") {
-      // Timer display
-      this.timerText = this.scene.add.text(w - 24, 24, "90", {
+    // Timer display (for zen or multiplayer)
+    if (mode === "zen" || isMultiplayer) {
+      this.timerText = this.scene.add.text(w / 2, 24, "60", {
         fontSize:   "26px",
         color:      "#4ade80",
         fontFamily: "Outfit, sans-serif",
         fontStyle:  "bold",
         stroke:     "#090d16",
         strokeThickness: 4,
-      }).setOrigin(1, 0).setDepth(depth);
-    } else {
+      }).setOrigin(0.5, 0).setDepth(depth);
+    }
+
+    if (mode !== "zen") {
       // Lives display
       for (let i = 0; i < 3; i++) {
         const txt = this.scene.add.text(w - 110 + i * 28, 24, "❤️", {
@@ -65,6 +80,12 @@ export default class HUDManager {
       yoyo:     true,
       ease:     "Sine.Out",
     });
+  }
+
+  updateOpponentScore(score: number): void {
+    if (this.oppScoreText) {
+      this.oppScoreText.setText(`Opponent: ${score}`);
+    }
   }
 
   updateLives(lives: number): void {

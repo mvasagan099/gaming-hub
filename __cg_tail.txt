@@ -1,0 +1,73 @@
+1671:                       <div className={`w-3 h-3 rounded-full ${myColor === 'white' ? 'bg-white border border-slate-400' : 'bg-slate-900 border border-slate-600'}`} />
+1672:                       <span>YOUR COINS: <strong className="uppercase">{myColor}</strong></span>
+1673:                    </div>
+1674:                 </div>
+1675: 
+1676:                 <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">SCORE BOARD</h3>
+1677: 
+1678:                 <div className="w-full grid grid-cols-3 gap-1.5 text-center bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+1679:                   <div className={`flex flex-col items-center p-1.5 rounded-lg transition-all ${myColor === 'white' ? 'bg-emerald-500/15 border border-emerald-500/40 ring-1 ring-emerald-500/30' : ''}`}>
+1680:                     <div className="w-4 h-4 rounded-full bg-white mb-1 shadow-sm border border-slate-300"></div>
+1681:                     <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest flex items-center gap-1">
+1682:                       White {myColor === 'white' && <span className="text-[9px] text-emerald-400 font-black">(YOU)</span>}
+1683:                     </p>
+1684:                     <p className="text-base font-black text-amber-400 mt-1">
+1685:                       {coinsRef.current.filter(c => c.type === 'white' && !c.active).length} / 9
+1686:                     </p>
+1687:                   </div>
+1688:                   
+1689:                   <div className="flex flex-col items-center border-l border-r border-slate-700 px-1 p-1.5">
+1690:                     <div className="w-4 h-4 rounded-full bg-rose-500 mb-1 shadow-sm border border-rose-300"></div>
+1691:                     <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest">Queen</p>
+1692:                     <p className="text-[9px] font-black text-amber-400 mt-1 uppercase">
+1693:                        {rulesRef.current.queenStatus === 'covered' ? 'Covered' : rulesRef.current.queenStatus === 'pocketed_needs_cover' ? 'Needs Cover' : 'Unpocketed'}
+1694:                     </p>
+1695:                   </div>
+1696: 
+1697:                   <div className={`flex flex-col items-center p-1.5 rounded-lg transition-all ${myColor === 'black' ? 'bg-emerald-500/15 border border-emerald-500/40 ring-1 ring-emerald-500/30' : ''}`}>
+1698:                     <div className="w-4 h-4 rounded-full bg-slate-950 mb-1 shadow-sm border border-slate-800"></div>
+1699:                     <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest flex items-center gap-1">
+1700:                       Black {myColor === 'black' && <span className="text-[9px] text-emerald-400 font-black">(YOU)</span>}
+1701:                     </p>
+1702:                     <p className="text-base font-black text-slate-200 mt-1">
+1703:                       {coinsRef.current.filter(c => c.type === 'black' && !c.active).length} / 9
+1704:                     </p>
+1705:                   </div>
+1706:                 </div>
+1707:               </>
+1708:             );
+1709:           })()}
+1710:           
+1711:           {mode === 'ai' && (
+1712:             <>
+1713:               <div className="mt-4 w-full flex flex-col items-center">
+1714:                 <div className={`text-4xl font-black tabular-nums transition-colors ${timeLeft <= 10 ? 'text-rose-500 animate-pulse' : 'text-slate-200'}`}>
+1715:                   00:{timeLeft < 10 ? `0${timeLeft}` : timeLeft}
+1716:                 </div>
+1717:                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+1718:                   {currentPlayer === 'ai' ? 'AI THINKING...' : 'TURN TIMER'}
+1719:                 </p>
+1720:               </div>
+1721:             </>
+1722:           )}
+1723:           
+1724:           <p className="text-xs text-slate-400 italic text-center mt-4 px-2">
+1725:             {currentPlayer === 'ai' 
+1726:               ? 'Wait for opponent to shoot.' 
+1727:               : strikerPhase === 'positioning' 
+1728:                 ? mode === 'multiplayer' ? 'Slide to position, then tap the board to confirm.' : 'Drag to position striker.'
+1729:                 : mode === 'multiplayer' ? 'Drag back and release to shoot!' : 'Tap striker to reposition. Drag board to shoot!'}
+1730:           </p>
+1731:         </div>
+1732: 
+1733:         {mode === 'multiplayer' && (
+1734:           <div className="w-full lg:w-auto flex-shrink-0 lg:self-start mt-4 lg:mt-0">
+1735:             <MultiplayerMatchPanel compact />
+1736:           </div>
+1737:         )}
+1738: 
+1739:       </div>
+1740:     </GameWrapper>
+1741:   );
+1742: };
+1743: 

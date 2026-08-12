@@ -37,7 +37,7 @@ export default class SnakeLadderScene extends Phaser.Scene {
     const names = (this.registry.get("names") as string[] | undefined) ?? [];
 
     // ── 1. Board (depth 0–3) ─────────────────────────────────────────────
-    this.board = new BoardManager(this, 800);
+    this.board = new BoardManager(this, 680);
     this.board.drawBoard();
 
     // ── 2. Snakes & Ladders (depth 4–5) ─────────────────────────────────
@@ -57,6 +57,7 @@ export default class SnakeLadderScene extends Phaser.Scene {
     // ── 5. HUD sidebar (depth 10, below dice) ───────────────────────────
     this.hud = new HUDManager(this);
     this.hud.create(count);
+    if (names.length > 0) this.hud.setNames(names);
 
     // ── 6. Dice (depth 100, topmost interactive element) ────────────────
     this.dice = new DiceManager(this);

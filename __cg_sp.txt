@@ -1,0 +1,43 @@
+1458:   const handleStrikerPosChange = (val: number) => {
+1459:     setStrikerPos(val);
+1460:     const striker = coinsRef.current.find(c => c.type === 'striker');
+1461:     if (striker) { 
+1462:       striker.x = BOARD_WIDTH / 2 + val;
+1463:       striker.y = STRIKER_START_Y;
+1464:       if (mode === 'multiplayer' && driverRef.current?.canPlaceStriker()) {
+1465:         driverRef.current.sendPlaceStriker(striker.x);
+1466:       }
+1467:     }
+1468:   };
+1469: 
+1470:   const handleConfirmStrikerPlacement = () => {
+1471:     if (mode === 'multiplayer' && driverRef.current?.canPlaceStriker()) {
+1472:       const striker = coinsRef.current.find(c => c.type === 'striker');
+1473:       if (striker) {
+1474:         driverRef.current.sendPlaceStriker(striker.x);
+1475:         // Don't optimistically set phase here — onStateUpdate will update it
+1476:       }
+1477:     }
+1478:   };
+1479: 
+1480:   const handleReplay = () => {
+1481:     setScore({ white: 0, black: 0 });
+1482:     setGameOver(false);
+1483:     setRewardClaimed(false);
+1484:     setStrikerPos(0);
+1485:     setStrikerPhase('positioning');
+1486:     setDragState('idle');
+1487:     setTimeLeft(60);
+1488:     setCurrentPlayer('player');
+1489:     rulesRef.current = { queenStatus: 'unpocketed', queenPocketedBy: null, dueOwed: { white: 0, black: 0 } };
+1490:     turnScoreRef.current = { white: 0, black: 0, queen: false, foul: false };
+1491:     coinsRef.current = createInitialCoins();
+1492:     setIsTurnActive(false);
+1493:   };
+1494: 
+1495:   const pocketedWhiteCount = coinsRef.current.filter(c => c.type === 'white' && !c.active).length;
+1496:   const pocketedBlackCount = coinsRef.current.filter(c => c.type === 'black' && !c.active).length;
+1497:   const isPlayerWinner = mode === 'multiplayer' 
+1498:     ? (mySeat === 0 ? pocketedWhiteCount >= 9 : pocketedBlackCount >= 9)
+1499:     : pocketedWhiteCount >= 9;
+1500: 

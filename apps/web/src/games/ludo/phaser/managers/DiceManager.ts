@@ -21,6 +21,7 @@ export default class DiceManager {
   private rolling  = false;
   private enabled  = true;
   private onRollCb: (() => void) | null = null;
+  private onRollCompleteCb: (() => void) | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -87,6 +88,8 @@ export default class DiceManager {
     this.enabled = true;
     this.rollBtn.setFillStyle(0x7c3aed).setAlpha(1);
     this.rollBtn.setInteractive({ useHandCursor: true });
+    this.rollBtn.off("pointerdown");
+    this.rollBtn.on("pointerdown", () => this.roll());
     this.rollLabel.setText(label).setAlpha(1);
   }
 
@@ -106,8 +109,22 @@ export default class DiceManager {
 
   /** Show prompt to select a token (after rolling, multiple moves available) */
   setSelectMode(): void {
-    this.disable();
-    this.rollLabel.setText("Select a token").setAlpha(1);
+    this.enabled = false;
+    this.rollBtn.setFillStyle(0xd97706).setAlpha(1);
+    this.rollBtn.setInteractive({ useHandCursor: true });
+    this.rollBtn.off("pointerdown");
+    this.rollBtn.on("pointerdown", () => this.flashSelectHint());
+    this.rollLabel.setText("👇 SELECT TOKEN").setAlpha(1);
+  }
+
+  private flashSelectHint(): void {
+    this.scene.tweens.add({
+      targets: this.container,
+      scale: 1.12,
+      duration: 90,
+      yoyo: true,
+      ease: "Sine.InOut",
+    });
   }
 
   /** Override the roll button label without changing enabled state. */
@@ -139,8 +156,12 @@ export default class DiceManager {
    * Play the roll animation but settle on the given authoritative value.
    * Used when a `game:state` broadcast reports a server-side roll.
    */
-  rollTo(value: number): void {
-    if (this.rolling) return;
+  rollTo(value: number, onComplete?: () => void): void {
+    if (this.rolling) {
+      if (onComplete) onComplete();
+      return;
+    }
+    this.onRollCompleteCb = onComplete ?? null;
     this.startRoll(Math.max(1, Math.min(6, value)));
   }
 
@@ -204,6 +225,11 @@ export default class DiceManager {
         this.container.setScale(1);
         this.rolling = false;
         this.scene.events.emit(LudoEvents.DICE_ROLLED, this.value);
+        if (this.onRollCompleteCb) {
+          const cb = this.onRollCompleteCb;
+          this.onRollCompleteCb = null;
+          cb();
+        }
       },
     });
   }

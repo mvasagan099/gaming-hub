@@ -1,0 +1,120 @@
+821:           const nb = prev.black + scoredBlack;
+822:           return { white: nw, black: nb };
+823:         });
+824:         if (scoredWhite > 0) confetti();
+825:       }
+826: 
+827:       if (strikerFoulThisFrame) {
+828:         const striker = coins.find(c => c.type === 'striker');
+829:         if (striker) {
+830:           striker.active = true;
+831:           striker.x = STRIKER_START_X;
+832:           striker.y = STRIKER_START_Y;
+833:           striker.vx = 0;
+834:           striker.vy = 0;
+835:         }
+836:       }
+837: 
+838:       if (isTurnActive && !anyMoving) {
+839:         setIsTurnActive(false);
+840: 
+841:         const rules = rulesRef.current;
+842:         const turnStats = turnScoreRef.current;
+843:         let nextPlayer = currentPlayer;
+844: 
+845:         if (rules.queenStatus === 'pocketed_needs_cover' && rules.queenPocketedBy === currentPlayer) {
+846:             const scoredOwn = (currentPlayer === 'player' && turnStats.white > 0) || (currentPlayer === 'ai' && turnStats.black > 0);
+847:             if (scoredOwn) {
+848:                 rules.queenStatus = 'covered';
+849:                 toast.success('Queen Covered!', { id: 'q-cover' });
+850:             } else {
+851:                 rules.queenStatus = 'unpocketed';
+852:                 rules.queenPocketedBy = null;
+853:                 toast.error('Failed to cover Queen!', { id: 'q-fail' });
+854:                 const q = coins.find(c => c.type === 'queen');
+855:                 if (q) {
+856:                     q.active = true;
+857:                     q.x = BOARD_WIDTH / 2;
+858:                     q.y = BOARD_HEIGHT / 2;
+859:                 }
+860:             }
+861:         }
+862: 
+863:         if (turnStats.queen) {
+864:            rules.queenStatus = 'pocketed_needs_cover';
+865:            rules.queenPocketedBy = currentPlayer;
+866:            toast('Queen pocketed! Must cover on next shot.', { id: 'q-pocket' });
+867:         }
+868: 
+869:         if (turnStats.foul) {
+870:            if (currentPlayer === 'player') rules.dueOwed.white++;
+871:            else rules.dueOwed.black++;
+872:            toast.error('Striker Foul! Due owed.', { id: 'foul' });
+873:            nextPlayer = currentPlayer === 'player' ? 'ai' : 'player';
+874:         } else {
+875:            const scoredOwn = (currentPlayer === 'player' && turnStats.white > 0) || (currentPlayer === 'ai' && turnStats.black > 0);
+876:            if (!scoredOwn && !turnStats.queen) {
+877:                nextPlayer = currentPlayer === 'player' ? 'ai' : 'player';
+878:            }
+879:         }
+880: 
+881:         setScore(prev => {
+882:            let newWhite = prev.white;
+883:            let newBlack = prev.black;
+884:            let wTaken = 0; let bTaken = 0;
+885:            
+886:            if (rules.dueOwed.white > 0 && newWhite > 0) {
+887:               const take = Math.min(rules.dueOwed.white, newWhite);
+888:               newWhite -= take; rules.dueOwed.white -= take; wTaken = take;
+889:            }
+890:            if (rules.dueOwed.black > 0 && newBlack > 0) {
+891:               const take = Math.min(rules.dueOwed.black, newBlack);
+892:               newBlack -= take; rules.dueOwed.black -= take; bTaken = take;
+893:            }
+894: 
+895:            if (wTaken > 0 || bTaken > 0) {
+896:               let spawnedW = 0; let spawnedB = 0;
+897:               for (const c of coins) {
+898:                  if (!c.active) {
+899:                     const rx = BOARD_WIDTH/2 + (Math.random() - 0.5) * 40;
+900:                     const ry = BOARD_HEIGHT/2 + (Math.random() - 0.5) * 40;
+901:                     if (c.type === 'white' && spawnedW < wTaken) {
+902:                        c.active = true; c.x = rx; c.y = ry; spawnedW++;
+903:                     }
+904:                     if (c.type === 'black' && spawnedB < bTaken) {
+905:                        c.active = true; c.x = rx; c.y = ry; spawnedB++;
+906:                     }
+907:                  }
+908:               }
+909:            }
+910: 
+911:            const pocketedW = coins.filter(c => c.type === 'white' && !c.active).length;
+912:            const pocketedB = coins.filter(c => c.type === 'black' && !c.active).length;
+913:            const queenPocketed = !coins.some(c => c.type === 'queen' && c.active);
+914: 
+915:            if ((pocketedW >= 9 || pocketedB >= 9) && queenPocketed) {
+916:               setTimeout(() => setGameOver(true), 500);
+917:            }
+918: 
+919:            return { white: newWhite, black: newBlack };
+920:         });
+921: 
+922:         setCurrentPlayer(nextPlayer);
+923:         turnScoreRef.current = { white: 0, black: 0, queen: false, foul: false };
+924:         setUiTrigger(t => t + 1);
+925: 
+926:         const striker = coins.find(c => c.type === 'striker');
+927:         if (striker) {
+928:           striker.x = BOARD_WIDTH / 2 + (nextPlayer === 'player' ? strikerPos : 0);
+929:           striker.y = nextPlayer === 'player' ? STRIKER_START_Y : 62;
+930:           striker.vx = 0;
+931:           striker.vy = 0;
+932:         }
+933:         setStrikerPhase('positioning');
+934:         setTimeLeft(60);
+935:       }
+936:     } else if (mode === 'multiplayer') {
+937:       if (isTurnActive) {
+938:         turnActiveFramesRef.current++;
+939:       } else {
+940:         turnActiveFramesRef.current = 0;

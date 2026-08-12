@@ -1,0 +1,40 @@
+1: import React, { useRef, useEffect, useState, useCallback } from 'react';
+2: import { GameWrapper } from '../../components/GameWrapper';
+3: import confetti from 'canvas-confetti';
+4: import toast from 'react-hot-toast';
+5: import { claimPracticeReward } from '../../services/api/practiceReward';
+6: import { useGameLoop } from '../shared/hooks/useGameLoop';
+7: import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
+8: import { useMultiplayerStore } from '../../store/multiplayerStore';
+9: import CarromMultiplayerDriver, { type CarromRemoteState } from './CarromMultiplayerDriver';
+10: import type { CarromCoin, CarromStriker, CarromPlayer } from '@gaming-hub/game-engine';
+11: 
+12: interface CarromGameProps {
+13:   mode: 'ai' | 'multiplayer';
+14:   stake: number;
+15:   onBack: () => void;
+16: }
+17: 
+18: type CoinType = 'striker' | 'queen' | 'white' | 'black';
+19: 
+20: interface LocalCoin {
+21:   id: string;
+22:   type: CoinType;
+23:   x: number;
+24:   y: number;
+25:   vx: number;
+26:   vy: number;
+27:   radius: number;
+28:   mass: number;
+29:   color: string;
+30:   active: boolean;
+31:   angle?: number;      // visual spin angle (radians)
+32:   trail?: Array<{ x: number; y: number }>; // motion trail positions
+33:   pocketing?: {
+34:     pocketX: number;
+35:     pocketY: number;
+36:     scale: number;
+37:     opacity: number;
+38:   };
+39: }
+40: 

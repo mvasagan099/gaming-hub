@@ -33,6 +33,11 @@ export interface AntiCheatConfig {
   actionRateWindowMs: number;
   /** Minimum time between actions (ms) */
   minActionIntervalMs: number;
+  /** Game-specific overrides for rate limits */
+  gameOverrides?: Record<string, {
+    maxActionsPerSecond?: number;
+    minActionIntervalMs?: number;
+  }>;
 }
 
 export interface ActionValidationContext {
@@ -51,13 +56,22 @@ export class AntiCheatManager {
   private readonly suspiciousEvents = new Map<string, SuspiciousEvent[]>(); // playerId -> events
   private readonly actionSequences = new Map<string, number>(); // playerId -> last sequence number
   
-  constructor(framework: MultiplayerFramework) {
+  constructor(framework: MultiplayerFramework, config?: Partial<AntiCheatConfig>) {
     this.framework = framework;
     this.config = {
       maxActionsPerSecond: 10,
       maxSuspiciousEvents: 5,
       actionRateWindowMs: 1000,
       minActionIntervalMs: 50,
+      gameOverrides: {
+        // Carrom fires place-striker confirmations and a strike in rapid
+        // succession; the generic realtime/turn-based limits would reject them.
+        carrom: { maxActionsPerSecond: 20, minActionIntervalMs: 20 },
+        // Fruit ninja sends a burst of blade samples per swipe (begin + move +
+        // end); the engine validates every sample itself, so loosen the gate.
+        "fruit-ninja": { maxActionsPerSecond: 40, minActionIntervalMs: 10 },
+      },
+      ...config,
     };
   }
   
@@ -91,7 +105,7 @@ export class AntiCheatManager {
     };
     
     // Check action rate limiting
-    const rateCheck = this.checkActionRate(player.id, now);
+    const rateCheck = this.checkActionRate(room, player.id, now);
     if (!rateCheck.valid) {
       this.logSuspiciousEvent({
         playerId: player.id,
@@ -105,7 +119,7 @@ export class AntiCheatManager {
     }
     
     // Check for rapid successive actions (speed hack)
-    const intervalCheck = this.checkActionInterval(player.id, now);
+    const intervalCheck = this.checkActionInterval(room, player.id, now);
     if (!intervalCheck.valid) {
       this.logSuspiciousEvent({
         playerId: player.id,
@@ -225,14 +239,26 @@ export class AntiCheatManager {
   }
   
   /**
+   * Per-game rate limits, honoring any game-specific overrides.
+   */
+  private getRateLimits(room: RoomRuntime): { maxActionsPerSecond: number; minActionIntervalMs: number } {
+    const overrides = this.config.gameOverrides?.[room.config.gameId];
+    return {
+      maxActionsPerSecond: overrides?.maxActionsPerSecond ?? this.config.maxActionsPerSecond,
+      minActionIntervalMs: overrides?.minActionIntervalMs ?? this.config.minActionIntervalMs,
+    };
+  }
+
+  /**
    * Check action rate for a player.
    */
-  private checkActionRate(playerId: string, now: number): ValidationResult {
+  private checkActionRate(room: RoomRuntime, playerId: string, now: number): ValidationResult {
+    const limits = this.getRateLimits(room);
     const history = this.actionHistory.get(playerId) ?? [];
     const windowStart = now - this.config.actionRateWindowMs;
     const actionsInWindow = history.filter(t => t >= windowStart).length;
     
-    if (actionsInWindow > this.config.maxActionsPerSecond * (this.config.actionRateWindowMs / 1000)) {
+    if (actionsInWindow > limits.maxActionsPerSecond * (this.config.actionRateWindowMs / 1000)) {
       return {
         valid: false,
         reason: "Action rate limit exceeded",
@@ -247,11 +273,12 @@ export class AntiCheatManager {
   /**
    * Check action interval for a player.
    */
-  private checkActionInterval(playerId: string, now: number): ValidationResult {
+  private checkActionInterval(room: RoomRuntime, playerId: string, now: number): ValidationResult {
+    const limits = this.getRateLimits(room);
     const history = this.actionHistory.get(playerId) ?? [];
     const lastAction = history[history.length - 1];
     
-    if (lastAction && now - lastAction < this.config.minActionIntervalMs) {
+    if (lastAction && now - lastAction < limits.minActionIntervalMs) {
       return {
         valid: false,
         reason: "Actions too frequent",

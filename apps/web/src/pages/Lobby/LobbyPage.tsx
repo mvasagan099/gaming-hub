@@ -233,7 +233,7 @@ export const LobbyPage: React.FC = () => {
   const [waitElapsed, setWaitElapsed] = useState(0);
   
   const isChess = def?.id === "chess";
-  const allowsPlayerCountChoice = def?.id === "ludo" || def?.id === "snake-ladder";
+  const allowsPlayerCountChoice = false;
   const [playerCount, setPlayerCount] = useState<2 | 4>(2);
   const [settings, setSettings] = useState<MatchSettings>({
     timeControl: isChess ? DEFAULT_TIME_CONTROL : null,

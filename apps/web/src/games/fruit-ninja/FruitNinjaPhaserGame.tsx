@@ -4,9 +4,10 @@ import { FruitNinjaScene } from "./phaser/scenes/FruitNinjaScene";
 
 interface FruitNinjaPhaserProps {
   mode: "classic" | "zen";
+  isMultiplayer?: boolean;
 }
 
-export const FruitNinjaPhaserGame: React.FC<FruitNinjaPhaserProps> = ({ mode }) => {
+export const FruitNinjaPhaserGame: React.FC<FruitNinjaPhaserProps> = ({ mode, isMultiplayer = false }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
 
@@ -36,6 +37,7 @@ export const FruitNinjaPhaserGame: React.FC<FruitNinjaPhaserProps> = ({ mode }) 
     const game = new Phaser.Game(config);
     gameRef.current = game;
     game.registry.set("mode", mode);
+    game.registry.set("isMultiplayer", isMultiplayer);
 
     return () => {
       game.destroy(true);

@@ -12,7 +12,7 @@ export default class CarromMultiplayerDriver {
   private readonly mySeat: number | null;
   private readonly names: string[];
   
-  private lastState: CarromRemoteState | null = null;
+  public lastState: CarromRemoteState | null = null;
   private destroyed = false;
   private unsubscribe: (() => void) | null = null;
   private onStateUpdate: ((state: CarromRemoteState) => void) | null = null;
@@ -23,6 +23,9 @@ export default class CarromMultiplayerDriver {
   private onFoul: ((reason: string) => void) | null = null;
   private onWin: ((winnerSeat: number) => void) | null = null;
   private onStrikerPlacementPhase: ((isPlacement: boolean, seat: number) => void) | null = null;
+  private onCoinReturned: ((coinId: string, coinType: string) => void) | null = null;
+  private onQueenReturned: ((reason: string) => void) | null = null;
+  private winFired = false; // Prevent duplicate win callbacks
   
   constructor(mySeat: number | null, names: string[]) {
     this.mySeat = mySeat;
@@ -82,6 +85,14 @@ export default class CarromMultiplayerDriver {
   setOnStrikerPlacementPhase(handler: (isPlacement: boolean, seat: number) => void): void {
     this.onStrikerPlacementPhase = handler;
   }
+
+  setOnCoinReturned(handler: (coinId: string, coinType: string) => void): void {
+    this.onCoinReturned = handler;
+  }
+
+  setOnQueenReturned(handler: (reason: string) => void): void {
+    this.onQueenReturned = handler;
+  }
   
   public getLatestState(): CarromRemoteState | null {
     return this.lastState;
@@ -97,6 +108,9 @@ export default class CarromMultiplayerDriver {
     const s = state as CarromRemoteState;
     this.lastState = s;
     
+    console.log("[CARROM TURN] Driver received currentSeat:", s.currentSeat);
+    console.log("[CARROM TURN] My seat:", this.mySeat);
+    console.log("[CARROM TURN] Is my turn:", s.currentSeat === this.mySeat);
     console.log("[CarromMultiplayerDriver] State updated:", {
       currentSeat: s.currentSeat,
       strikerPlacementPhase: s.strikerPlacementPhase,
@@ -135,16 +149,35 @@ export default class CarromMultiplayerDriver {
           this.onFoul(reason);
         }
       }
+
+      if (event.type === "coin-returned") {
+        const coinId = (event as any).coinId;
+        const coinType = (event as any).coinType;
+        if (this.onCoinReturned) {
+          this.onCoinReturned(coinId, coinType);
+        }
+      }
+
+      if (event.type === "queen-returned") {
+        const reason = (event as any).reason || "not-covered";
+        if (this.onQueenReturned) {
+          this.onQueenReturned(reason);
+        }
+      }
       
       if (event.type === "win") {
         const winnerSeat = (event as any).seat;
-        if (this.onWin) {
+        if (this.onWin && !this.winFired) {
+          this.winFired = true;
           this.onWin(winnerSeat);
         }
       }
       
       if (event.type === "turn-end" || event.type === "foul-turn-end") {
         const nextSeat = (event as any).nextSeat ?? s.currentSeat;
+        if (nextSeat !== s.currentSeat) {
+          console.error(`[CARROM TURN ERROR] event.nextSeat (${nextSeat}) !== state.currentSeat (${s.currentSeat})`);
+        }
         if (this.onTurnChange) {
           this.onTurnChange(nextSeat);
         }
@@ -155,9 +188,11 @@ export default class CarromMultiplayerDriver {
       this.onStrikerPlacementPhase(s.strikerPlacementPhase, s.strikerPlacementSeat ?? 0);
     }
     
-    if (s.finished || winner) {
+    // Fallback: if the game is finished but no win event arrived, fire win once
+    if ((s.finished || winner) && !this.winFired) {
       const winnerSeat = winner?.winnerSeats?.[0] ?? s.winnerSeats?.[0];
       if (winnerSeat !== undefined && this.onWin) {
+        this.winFired = true;
         this.onWin(winnerSeat);
       }
     }
@@ -186,28 +221,38 @@ export default class CarromMultiplayerDriver {
     });
   }
   
-  sendStrike(angle: number, power: number): void {
+  async sendStrike(angle: number, power: number): Promise<{ ok: boolean; error?: string }> {
     console.log("[CarromMultiplayerDriver] sendStrike:", { angle, power, mySeat: this.mySeat });
     
     if (this.mySeat == null) {
       console.error("[CarromMultiplayerDriver] Cannot strike: no seat assigned");
-      return;
+      return { ok: false, error: "No seat assigned" };
     }
     
-    let serverAngle = angle;
+    const TWO_PI = Math.PI * 2;
+    // Normalize to [0, 2π) so the engine's |angle| ≤ 2π check always passes
+    let serverAngle = ((angle % TWO_PI) + TWO_PI) % TWO_PI;
     if (this.mySeat === 1) {
-      serverAngle = angle + Math.PI;
+      // Seat 1 shoots from the opposite side — flip the angle
+      serverAngle = (serverAngle + Math.PI) % TWO_PI;
     }
     
-    useMultiplayerStore.getState().sendGameAction({
+    // NOTE: no auto place-striker here. The pointer-down gesture in the game
+    // component already sends the current placement with the correct local→server
+    // coordinate mapping. Re-using lastState.striker here would (a) treat server
+    // coordinates as local coordinates, and (b) overwrite a freshly confirmed
+    // placement with a stale position — both would corrupt the shot.
+    
+    const res = await useMultiplayerStore.getState().sendGameAction({
       type: "strike",
       angle: serverAngle,
       power,
-    }).then(res => {
-      if (!res.ok && res.error) {
-        console.error("[CarromMultiplayerDriver] Strike failed:", res.error);
-      }
     });
+    
+    if (!res.ok && res.error) {
+      console.error("[CarromMultiplayerDriver] Strike failed:", res.error);
+    }
+    return res;
   }
   
   canPlaceStriker(): boolean {
