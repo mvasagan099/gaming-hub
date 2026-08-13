@@ -428,6 +428,10 @@ export class CricketHUDManager {
     this.statusText.setColor(colorStr);
   }
 
+  public getCurrentPower(): number {
+    return this.currentPower;
+  }
+
   public setControlsState(disabled: boolean) {
     this.isControlsDisabled = disabled;
     

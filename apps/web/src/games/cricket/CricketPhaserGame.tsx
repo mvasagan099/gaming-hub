@@ -12,6 +12,8 @@ interface CricketPhaserGameProps {
 export function CricketPhaserGame({ mode, role, overs, onGameOver }: CricketPhaserGameProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
+  const onGameOverRef = useRef(onGameOver);
+  onGameOverRef.current = onGameOver;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -45,7 +47,7 @@ export function CricketPhaserGame({ mode, role, overs, onGameOver }: CricketPhas
       mode,
       role: role ?? 'batting',
       overs: overs ?? 5,
-      onGameOver,
+      onGameOver: (...args: [number, number, boolean]) => onGameOverRef.current?.(...args),
     });
 
     return () => {
@@ -55,7 +57,7 @@ export function CricketPhaserGame({ mode, role, overs, onGameOver }: CricketPhas
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, role, overs, onGameOver]);
+  }, [mode, role, overs]);
 
   return (
     <div className="relative mx-auto w-full max-w-[924px] aspect-[924/680] h-auto max-h-[85vh] bg-[#090d16] rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex justify-center items-center">

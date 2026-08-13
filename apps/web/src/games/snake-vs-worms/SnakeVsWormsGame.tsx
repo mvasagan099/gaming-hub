@@ -71,7 +71,6 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
   const [multiplayerState, setMultiplayerState] = useState<SnakeVsWormsState | null>(null);
   const [mpWinner, setMpWinner] = useState<number | null>(null);
   const driverRef = useRef<SnakeVsWormsMultiplayerDriver | null>(null);
-  const multiplayerInitializedRef = useRef(false);
 
   const mySeat = useMultiplayerStore(s => s.mySeat);
   const room = useMultiplayerStore(s => s.room);
@@ -100,7 +99,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
   // Multiplayer setup
   useEffect(() => {
-    if (mode === 'multiplayer' && room && !multiplayerInitializedRef.current) {
+    if (mode === 'multiplayer' && room && mySeat !== null) {
       const names = room.players.map(p => p.displayName || `Player ${(p.seat ?? 0) + 1}`);
       const driver = new SnakeVsWormsMultiplayerDriver(mySeat, names);
       driverRef.current = driver;
@@ -120,10 +119,10 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
       });
 
       driver.start();
-      multiplayerInitializedRef.current = true;
 
       return () => {
         driver.stop();
+        driverRef.current = null;
       };
     }
   }, [mode, room, mySeat]);
@@ -283,44 +282,99 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
       // Draw Shared Players (P1 Emerald Snake, P2 Blue Worm)
       for (const p of mpState.players) {
-        if (p.status === 'eliminated') continue;
         const isMe = p.seat === mySeat;
         const color = p.seat === 0 ? '#10b981' : '#3b82f6';
 
-        // Draw body segments
-        for (let i = p.body.length - 1; i >= 0; i--) {
-          const seg = p.body[i];
-          const segRadius = Math.max(8, 14 - i * 0.1);
+        if (p.status === 'eliminated') {
+          if (p.body && p.body[0]) {
+            const pHead = p.body[0];
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.6)';
+            ctx.beginPath();
+            ctx.arc(pHead.x, pHead.y, 14, 0, Math.PI * 2);
+            ctx.fill();
 
-          ctx.fillStyle = color;
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${p.name} (ELIMINATED)`, pHead.x, pHead.y - 20);
+          }
+          continue;
+        }
+
+        // 1. Draw smooth curved body stroke connecting segments
+        if (p.body && p.body.length > 1) {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 26;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
           if (p.isBoosting) {
-            ctx.shadowBlur = 12;
+            ctx.shadowBlur = 16;
             ctx.shadowColor = color;
           }
-          ctx.beginPath();
-          ctx.arc(seg.x, seg.y, segRadius, 0, Math.PI * 2);
-          ctx.fill();
 
-          if (i % 2 === 0) {
-            ctx.fillStyle = 'rgba(255,255,255,0.25)';
+          ctx.beginPath();
+          ctx.moveTo(p.body[0].x, p.body[0].y);
+
+          for (let i = 1; i < p.body.length - 1; i++) {
+            const xc = (p.body[i].x + p.body[i + 1].x) / 2;
+            const yc = (p.body[i].y + p.body[i + 1].y) / 2;
+            ctx.quadraticCurveTo(p.body[i].x, p.body[i].y, xc, yc);
+          }
+          ctx.lineTo(p.body[p.body.length - 1].x, p.body[p.body.length - 1].y);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+
+          // 2. Draw decorative inner scale spots along body
+          for (let i = 1; i < p.body.length; i += 2) {
+            const seg = p.body[i];
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
             ctx.beginPath();
-            ctx.arc(seg.x, seg.y, segRadius / 2, 0, Math.PI * 2);
+            ctx.arc(seg.x, seg.y, 5, 0, Math.PI * 2);
             ctx.fill();
           }
+        } else if (p.body && p.body[0]) {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(p.body[0].x, p.body[0].y, 14, 0, Math.PI * 2);
+          ctx.fill();
         }
-        ctx.shadowBlur = 0;
 
-        // Draw Head & Name Tag
+        // 3. Draw Head & Eyes
         const pHead = p.body[0];
-        ctx.fillStyle = isMe ? '#ffffff' : color;
-        ctx.beginPath();
-        ctx.arc(pHead.x, pHead.y, 16, 0, Math.PI * 2);
-        ctx.fill();
+        const pNext = p.body[1] || pHead;
+        if (pHead) {
+          const headAngle = Math.atan2(pHead.y - pNext.y, pHead.x - pNext.x);
 
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(p.name, pHead.x, pHead.y - 22);
+          ctx.save();
+          ctx.translate(pHead.x, pHead.y);
+          ctx.rotate(headAngle);
+
+          // Head Circle
+          ctx.fillStyle = isMe ? '#34d399' : color;
+          ctx.beginPath();
+          ctx.arc(0, 0, 16, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+
+          // Eye Sockets & Pupils
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath(); ctx.arc(6, -6, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(6, 6, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath(); ctx.arc(8, -6, 2.5, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(8, 6, 2.5, 0, Math.PI * 2); ctx.fill();
+
+          ctx.restore();
+
+          // Name Tag
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 12px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(p.name, pHead.x, pHead.y - 24);
+        }
       }
 
       ctx.restore();
@@ -371,8 +425,67 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
         snake.head.x += Math.cos(snake.angle) * currentSpeed * dt;
         snake.head.y += Math.sin(snake.angle) * currentSpeed * dt;
 
-        snake.head.x = Math.max(20, Math.min(MAP_WIDTH - 20, snake.head.x));
-        snake.head.y = Math.max(20, Math.min(MAP_HEIGHT - 20, snake.head.y));
+        // Wall boundary collision elimination
+        if (snake.head.x <= 10 || snake.head.x >= MAP_WIDTH - 10 || snake.head.y <= 10 || snake.head.y >= MAP_HEIGHT - 10) {
+          snake.dead = true;
+          for (const seg of snake.segments) {
+            state.orbs.push({
+              id: state.orbIdCounter++,
+              x: seg.x + (Math.random() - 0.5) * 10,
+              y: seg.y + (Math.random() - 0.5) * 10,
+              color: snake.color,
+              value: 2,
+              isLoot: true,
+            });
+          }
+          if (snake.isPlayer) {
+            setGameOver(true);
+          }
+          continue;
+        }
+
+        // Head-to-Opponent Body & Head-to-Head collision check
+        for (const other of state.snakes) {
+          if (other === snake || other.dead) continue;
+
+          // Head-to-Head collision
+          const headDist = Math.hypot(other.head.x - snake.head.x, other.head.y - snake.head.y);
+          if (headDist < 22) {
+            if (snake.segments.length < other.segments.length) {
+              snake.dead = true;
+            } else if (snake.segments.length > other.segments.length) {
+              other.dead = true;
+              if (snake.isPlayer) setKills(k => k + 1);
+            } else {
+              snake.dead = true;
+              other.dead = true;
+            }
+            if (snake.isPlayer && snake.dead) setGameOver(true);
+            if (other.isPlayer && other.dead) setGameOver(true);
+            break;
+          }
+
+          // Head-to-Body collision
+          const hitsBody = other.segments.some(seg => Math.hypot(seg.x - snake.head.x, seg.y - snake.head.y) < 16);
+          if (hitsBody) {
+            snake.dead = true;
+            for (const seg of snake.segments) {
+              state.orbs.push({
+                id: state.orbIdCounter++,
+                x: seg.x + (Math.random() - 0.5) * 10,
+                y: seg.y + (Math.random() - 0.5) * 10,
+                color: snake.color,
+                value: 2,
+                isLoot: true,
+              });
+            }
+            if (other.isPlayer) setKills(k => k + 1);
+            if (snake.isPlayer) setGameOver(true);
+            break;
+          }
+        }
+
+        if (snake.dead) continue;
 
         let prev = snake.head;
         for (let i = 0; i < snake.segments.length; i++) {
@@ -388,16 +501,43 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
           prev = seg;
         }
 
+        // Orb collection & Physical Growth
         for (let i = state.orbs.length - 1; i >= 0; i--) {
           const orb = state.orbs[i];
           const odx = orb.x - snake.head.x;
           const ody = orb.y - snake.head.y;
-          if (Math.hypot(odx, ody) < 20) {
+          if (Math.hypot(odx, ody) < 22) {
             state.orbs.splice(i, 1);
+
+            // Add segment to tail for physical growth
+            const lastSeg = snake.segments[snake.segments.length - 1] || snake.head;
+            snake.segments.push({ x: lastSeg.x, y: lastSeg.y });
+
             if (snake.isPlayer) {
               setLength(l => l + orb.value);
             }
+
+            // Spawn replacement orb so food map remains populated
+            state.orbs.push({
+              id: state.orbIdCounter++,
+              x: Math.random() * MAP_WIDTH,
+              y: Math.random() * MAP_HEIGHT,
+              color: Math.random() > 0.5 ? '#38bdf8' : '#f43f5e',
+              value: 1,
+              isLoot: false,
+            });
           }
+        }
+      }
+
+      // Respawn AI snakes that died so arena stays filled
+      for (const snake of state.snakes) {
+        if (!snake.isPlayer && snake.dead) {
+          const rx = Math.random() * (MAP_WIDTH - 100) + 50;
+          const ry = Math.random() * (MAP_HEIGHT - 100) + 50;
+          snake.head = { x: rx, y: ry };
+          snake.segments = Array(10 + Math.floor(Math.random() * 15)).fill({ x: rx, y: ry });
+          snake.dead = false;
         }
       }
     }
@@ -428,20 +568,54 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
     for (const snake of gameStateRef.current.snakes) {
       if (snake.dead) continue;
-      ctx.fillStyle = snake.color;
-      for (const seg of snake.segments) {
+
+      if (snake.segments && snake.segments.length > 1) {
+        ctx.strokeStyle = snake.color;
+        ctx.lineWidth = 22;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
         ctx.beginPath();
-        ctx.arc(seg.x, seg.y, 10, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(snake.segments[0].x, snake.segments[0].y);
+
+        for (let i = 1; i < snake.segments.length - 1; i++) {
+          const xc = (snake.segments[i].x + snake.segments[i + 1].x) / 2;
+          const yc = (snake.segments[i].y + snake.segments[i + 1].y) / 2;
+          ctx.quadraticCurveTo(snake.segments[i].x, snake.segments[i].y, xc, yc);
+        }
+        ctx.lineTo(snake.segments[snake.segments.length - 1].x, snake.segments[snake.segments.length - 1].y);
+        ctx.stroke();
       }
-      ctx.fillStyle = '#ffffff';
+
+      // Head & Eyes
+      const head = snake.head;
+      const nextSeg = snake.segments[0] || head;
+      const headAngle = Math.atan2(head.y - nextSeg.y, head.x - nextSeg.x);
+
+      ctx.save();
+      ctx.translate(head.x, head.y);
+      ctx.rotate(headAngle);
+
+      ctx.fillStyle = snake.color;
       ctx.beginPath();
-      ctx.arc(snake.head.x, snake.head.y, 12, 0, Math.PI * 2);
+      ctx.arc(0, 0, 14, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(5, -5, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(5, 5, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath(); ctx.arc(6.5, -5, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(6.5, 5, 2, 0, Math.PI * 2); ctx.fill();
+
+      ctx.restore();
     }
 
     ctx.restore();
-  }, !gameOver);
+  }, mode === 'multiplayer' || !gameOver);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -449,8 +623,35 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     const rect = canvas.getBoundingClientRect();
     const scaleX = CANVAS_WIDTH / rect.width;
     const scaleY = CANVAS_HEIGHT / rect.height;
-    inputRef.current.mouseX = (e.clientX - rect.left) * scaleX;
-    inputRef.current.mouseY = (e.clientY - rect.top) * scaleY;
+    const mouseX = (e.clientX - rect.left) * scaleX;
+    const mouseY = (e.clientY - rect.top) * scaleY;
+    inputRef.current.mouseX = mouseX;
+    inputRef.current.mouseY = mouseY;
+
+    if (mode === 'multiplayer' && driverRef.current && multiplayerState) {
+      const me = multiplayerState.players.find(p => p.seat === mySeat);
+      if (me && me.body && me.body[0]) {
+        const head = me.body[0];
+        const camX = Math.max(0, Math.min(MAP_WIDTH - CANVAS_WIDTH, head.x - CANVAS_WIDTH / 2));
+        const camY = Math.max(0, Math.min(MAP_HEIGHT - CANVAS_HEIGHT, head.y - CANVAS_HEIGHT / 2));
+        const worldMouseX = mouseX + camX;
+        const worldMouseY = mouseY + camY;
+
+        const dx = worldMouseX - head.x;
+        const dy = worldMouseY - head.y;
+        if (Math.hypot(dx, dy) > 25) {
+          let dir: SnakeWormDirection | null = null;
+          if (Math.abs(dx) > Math.abs(dy)) {
+            dir = dx > 0 ? 'right' : 'left';
+          } else {
+            dir = dy > 0 ? 'down' : 'up';
+          }
+          if (dir) {
+            driverRef.current.sendDirection(dir);
+          }
+        }
+      }
+    }
   };
 
   const handleMouseDown = () => {

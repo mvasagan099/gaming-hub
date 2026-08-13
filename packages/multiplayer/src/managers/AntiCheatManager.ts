@@ -104,8 +104,13 @@ export class AntiCheatManager {
       actionSequence: this.getNextActionSequence(player.id),
     };
     
-    // Real-time paddle movement is exempt from turn/rate anti-cheat limits
-    if (action.type === "paddle-move") {
+    // Real-time game inputs that can be sent frequently
+    if (
+      action.type === "paddle-move" ||
+      action.type === "direction" ||
+      action.type === "boost-start" ||
+      action.type === "boost-stop"
+    ) {
       return { valid: true, confidence: 1.0 };
     }
 

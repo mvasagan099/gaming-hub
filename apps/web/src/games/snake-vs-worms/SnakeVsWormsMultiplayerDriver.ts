@@ -32,8 +32,14 @@ export class SnakeVsWormsMultiplayerDriver {
       }
     });
 
-    // Send initial ready signal
-    useMultiplayerStore.getState().sendGameAction({ type: "ready" });
+    // Apply initial state if already present in store
+    const current = useMultiplayerStore.getState();
+    if (current.gameState) {
+      const engineState = current.gameState as unknown as SnakeVsWormsState;
+      if (this.onStateUpdateCb) {
+        this.onStateUpdateCb(engineState);
+      }
+    }
   }
 
   stop(): void {
@@ -56,9 +62,13 @@ export class SnakeVsWormsMultiplayerDriver {
     if (this.lastDirectionSent === direction) return;
 
     this.lastDirectionSent = direction;
-    useMultiplayerStore.getState().sendGameAction({
+    void useMultiplayerStore.getState().sendGameAction({
       type: "direction",
       direction,
+    }).then((res) => {
+      if (res && !res.ok) {
+        this.lastDirectionSent = null;
+      }
     });
   }
 

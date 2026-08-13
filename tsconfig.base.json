@@ -13,7 +13,6 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "noFallthroughCasesInSwitch": true,
-    "ignoreDeprecations": "5.0",
     "noEmit": true
   }
 }

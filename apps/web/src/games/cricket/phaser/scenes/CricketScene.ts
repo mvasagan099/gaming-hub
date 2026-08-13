@@ -191,6 +191,46 @@ export class CricketScene extends Phaser.Scene {
       return;
     }
 
+    // Bind Keyboard Shortcuts for Batting and Bowling
+    if (this.input.keyboard) {
+      this.input.keyboard.on('keydown-SPACE', () => {
+        if (this.role === 'batting') this.hitShot(false, 'up');
+      });
+      this.input.keyboard.on('keydown-UP', () => {
+        if (this.role === 'batting') this.hitShot(false, 'up');
+      });
+      this.input.keyboard.on('keydown-W', () => {
+        if (this.role === 'batting') this.hitShot(false, 'up');
+      });
+      this.input.keyboard.on('keydown-DOWN', () => {
+        if (this.role === 'batting') this.hitShot(false, 'straight');
+      });
+      this.input.keyboard.on('keydown-S', () => {
+        if (this.role === 'batting') this.hitShot(false, 'straight');
+      });
+      this.input.keyboard.on('keydown-LEFT', () => {
+        if (this.role === 'batting') this.hitShot(false, 'left');
+      });
+      this.input.keyboard.on('keydown-A', () => {
+        if (this.role === 'batting') this.hitShot(false, 'left');
+      });
+      this.input.keyboard.on('keydown-RIGHT', () => {
+        if (this.role === 'batting') this.hitShot(false, 'right');
+      });
+      this.input.keyboard.on('keydown-D', () => {
+        if (this.role === 'batting') this.hitShot(false, 'right');
+      });
+      this.input.keyboard.on('keydown-ONE', () => {
+        if (this.role === 'bowling') this.playerBowl('fast', this.hud.getCurrentPower());
+      });
+      this.input.keyboard.on('keydown-TWO', () => {
+        if (this.role === 'bowling') this.playerBowl('slow', this.hud.getCurrentPower());
+      });
+      this.input.keyboard.on('keydown-THREE', () => {
+        if (this.role === 'bowling') this.playerBowl('spin', this.hud.getCurrentPower());
+      });
+    }
+
     // Start auto bowl timer for the very first ball
     this.startNextBallTimer(3);
   }

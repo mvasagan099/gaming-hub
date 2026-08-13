@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { CricketState } from '@gaming-hub/game-engine';
 import { GameWrapper } from '../../components/GameWrapper';
 import { claimPracticeReward } from '../../services/api/practiceReward';
@@ -12,6 +12,8 @@ interface CricketProps {
   stake: number;
   onBack: () => void;
 }
+
+const EMPTY_PLAYERS: any[] = [];
 
 export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => {
   const isMultiplayer = mode === 'multiplayer';
@@ -29,7 +31,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
   const winner = useMultiplayerStore((s) => s.winner);
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const isSpectator = useMultiplayerStore((s) => s.isSpectator);
-  const roomPlayers = useMultiplayerStore((s) => s.room?.players ?? []);
+  const roomPlayers = useMultiplayerStore((s) => s.room?.players) ?? EMPTY_PLAYERS;
   const rematchState = useMultiplayerStore((s) => s.rematchState);
   const myUserId = roomPlayers.find((p) => p.seat === mySeat)?.id;
   const myRematchRequested = Boolean(myUserId && rematchState?.requestedBy?.includes(myUserId));
@@ -56,7 +58,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
     ? Boolean(remoteState?.finished || winner)
     : aiGameOver;
 
-  const handleGameOver = (runs: number, wickets: number, won: boolean) => {
+  const handleGameOver = useCallback((runs: number, wickets: number, won: boolean) => {
     setFinalRuns(runs);
     setFinalWickets(wickets);
     setIsWin(won);
@@ -64,7 +66,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
     if (won) {
       setTimeout(() => void claimPracticeReward('cricket'), 1000);
     }
-  };
+  }, []);
 
   const handleReplay = () => {
     if (isMultiplayer) {

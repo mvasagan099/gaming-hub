@@ -48,28 +48,28 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
 
   protected initBaseState(): Omit<InternalState, keyof BaseState> {
     const p0Body: Position[] = [
-      { x: 300, y: 1000 },
-      { x: 280, y: 1000 },
-      { x: 260, y: 1000 },
-      { x: 240, y: 1000 },
+      { x: 300, y: 600 },
+      { x: 280, y: 600 },
+      { x: 260, y: 600 },
+      { x: 240, y: 600 },
     ];
 
     const p1Body: Position[] = [
-      { x: 1700, y: 1000 },
-      { x: 1720, y: 1000 },
-      { x: 1740, y: 1000 },
-      { x: 1760, y: 1000 },
+      { x: 300, y: 1400 },
+      { x: 280, y: 1400 },
+      { x: 260, y: 1400 },
+      { x: 240, y: 1400 },
     ];
 
     const players: SnakeWormPlayerEntity[] = this.players.map((p, idx) => ({
       playerId: p.userId,
       seat: idx,
       type: idx === 0 ? "SNAKE" : "WORM",
-      name: idx === 0 ? "Snake (P1)" : "Worm (P2)",
+      name: idx === 0 ? "Snake (P1)" : `Player ${idx + 1}`,
       body: idx === 0 ? p0Body : p1Body,
-      direction: idx === 0 ? "right" : "left",
-      targetDirection: idx === 0 ? "right" : "left",
-      speed: 10.0,
+      direction: "right",
+      targetDirection: "right",
+      speed: 5.0,
       score: 0,
       foodCollected: 0,
       kills: 0,
@@ -79,6 +79,36 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
       pendingGrowth: 0,
       connected: true,
     }));
+
+    if (this.players.length === 1) {
+      for (let i = 1; i <= 4; i++) {
+        const aiX = 500 + (i % 2) * 800;
+        const aiY = 400 + Math.floor(i / 2) * 600;
+        players.push({
+          playerId: `ai-${i}`,
+          seat: i,
+          type: "WORM",
+          name: `Worm Bot ${i}`,
+          body: [
+            { x: aiX, y: aiY },
+            { x: aiX - 20, y: aiY },
+            { x: aiX - 40, y: aiY },
+            { x: aiX - 60, y: aiY },
+          ],
+          direction: "left",
+          targetDirection: "left",
+          speed: 5.0,
+          score: 0,
+          foodCollected: 0,
+          kills: 0,
+          boostEnergy: 100,
+          isBoosting: false,
+          status: "active",
+          pendingGrowth: 0,
+          connected: true,
+        });
+      }
+    }
 
     const food: SnakeWormFood[] = [];
     this.spawnInitialFood(food, players);
@@ -94,11 +124,11 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
   }
 
   private spawnInitialFood(foodList: SnakeWormFood[], players: SnakeWormPlayerEntity[]) {
-    const foodTypes: FoodType[] = ["normal", "normal", "normal", "golden", "boost", "normal", "normal", "golden", "boost", "normal"];
-    for (let i = 0; i < foodTypes.length; i++) {
+    const foodTypes: FoodType[] = ["normal", "normal", "normal", "golden", "boost"];
+    for (let i = 0; i < 150; i++) {
       const pos = this.findUnoccupiedPosition(players, foodList);
       if (pos) {
-        const type = foodTypes[i];
+        const type = foodTypes[i % foodTypes.length];
         foodList.push({
           id: `food-${i + 1}-${this.randomInt(100, 999)}`,
           x: pos.x,
@@ -226,17 +256,23 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
     for (const player of next.players) {
       if (player.status !== "active") continue;
 
-      let stepSize = 10;
+      let stepSize = 5;
       if (player.isBoosting && player.boostEnergy > 0) {
         player.boostEnergy = Math.max(0, player.boostEnergy - 2);
-        player.speed = 20.0;
-        stepSize = 20;
+        player.speed = 10.0;
+        stepSize = 10;
         if (player.boostEnergy === 0) {
           player.isBoosting = false;
         }
       } else {
         player.boostEnergy = Math.min(100, player.boostEnergy + 1);
-        player.speed = 10.0;
+        player.speed = 5.0;
+      }
+
+      if (player.playerId.startsWith("ai-") && this.randomInt(0, 100) < 5) {
+        const dirs: SnakeWormDirection[] = ["up", "down", "left", "right"];
+        const validDirs = dirs.filter((d) => OPPOSITE_DIRECTIONS[player.direction] !== d);
+        player.targetDirection = validDirs[this.randomInt(0, validDirs.length - 1)];
       }
 
       // Update direction if targetDirection is valid
@@ -284,49 +320,53 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
         continue;
       }
 
-      // Self collision
-      const hitSelf = player.body.slice(1).some((seg) => Math.hypot(seg.x - head.x, seg.y - head.y) < 8);
-      if (hitSelf) {
-        player.status = "eliminated";
+      // Self collision disabled per rule specification ("selfCollision": { "enabled": false })
+      // Self-collision must never eliminate a player.
+    }
+
+    // 3. Head-to-Head & Head-to-Body Collision Check for all active players
+    const activePlayers = next.players.filter((p) => p.status === "active");
+    for (let i = 0; i < activePlayers.length; i++) {
+      const p = activePlayers[i];
+      if (p.status !== "active") continue;
+      const pHead = p.body[0];
+
+      for (let j = i + 1; j < activePlayers.length; j++) {
+        const other = activePlayers[j];
+        if (other.status !== "active") continue;
+        const oHead = other.body[0];
+
+        // Head-to-Head collision
+        if (Math.hypot(pHead.x - oHead.x, pHead.y - oHead.y) < 18) {
+          if (p.body.length > other.body.length) {
+            other.status = "eliminated";
+            p.score += 100;
+            p.kills++;
+          } else if (other.body.length > p.body.length) {
+            p.status = "eliminated";
+            other.score += 100;
+            other.kills++;
+          } else {
+            p.status = "eliminated";
+            other.status = "eliminated";
+          }
+        }
       }
     }
 
-    // 3. Head-to-Head & Head-to-Body Collision Check
-    const activePlayers = next.players.filter((p) => p.status === "active");
-    if (activePlayers.length === 2) {
-      const p0 = activePlayers[0];
-      const p1 = activePlayers[1];
-      const head0 = p0.body[0];
-      const head1 = p1.body[0];
+    // Head-to-Opponent-Body collision
+    for (const p of activePlayers) {
+      if (p.status !== "active") continue;
+      const pHead = p.body[0];
 
-      // Head-to-Head collision
-      if (Math.hypot(head0.x - head1.x, head0.y - head1.y) < 18) {
-        if (p0.body.length > p1.body.length) {
-          p1.status = "eliminated";
-          p0.score += 100;
-          p0.kills++;
-        } else if (p1.body.length > p0.body.length) {
-          p0.status = "eliminated";
-          p1.score += 100;
-          p1.kills++;
-        } else {
-          p0.status = "eliminated";
-          p1.status = "eliminated";
-        }
-      } else {
-        // Head-to-Opponent-Body collision
-        const p0HitsP1Body = p1.body.slice(1).some((seg) => Math.hypot(seg.x - head0.x, seg.y - head0.y) < 18);
-        const p1HitsP0Body = p0.body.slice(1).some((seg) => Math.hypot(seg.x - head1.x, seg.y - head1.y) < 18);
-
-        if (p0HitsP1Body) {
-          p0.status = "eliminated";
-          p1.score += 100;
-          p1.kills++;
-        }
-        if (p1HitsP0Body) {
-          p1.status = "eliminated";
-          p0.score += 100;
-          p0.kills++;
+      for (const other of activePlayers) {
+        if (other.seat === p.seat || other.status !== "active") continue;
+        const hitsOtherBody = other.body.slice(1).some((seg) => Math.hypot(seg.x - pHead.x, seg.y - pHead.y) < 18);
+        if (hitsOtherBody) {
+          p.status = "eliminated";
+          other.score += 100;
+          other.kills++;
+          break;
         }
       }
     }
@@ -367,7 +407,15 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
 
     // 5. Game Over Verification
     const finalActive = next.players.filter((p) => p.status === "active");
-    if (finalActive.length === 1) {
+    const humanActive = finalActive.filter((p) => !p.playerId.startsWith("ai-"));
+
+    if (humanActive.length === 0) {
+      next.finished = true;
+      next.gameOver = true;
+      next.gameStatus = "finished";
+      next.winnerSeats = finalActive.length > 0 ? [finalActive[0].seat] : [];
+      next.endReason = "PLAYER_ELIMINATED";
+    } else if (finalActive.length === 1 && next.players.length > 1) {
       next.finished = true;
       next.gameOver = true;
       next.gameStatus = "finished";

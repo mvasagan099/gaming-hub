@@ -60,7 +60,7 @@ export const GAME_PLAY_CONFIGS: Record<GameId, GamePlayConfig> = {
     pauseOnDisconnect: false,
   }),
   "snake-vs-worms": baseConfig("snake-vs-worms", {
-    actionCooldownMs: 50,
+    actionCooldownMs: 0,
     defaultMatchTimerMs: 180_000,
     pauseOnDisconnect: false,
   }),

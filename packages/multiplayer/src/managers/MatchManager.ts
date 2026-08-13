@@ -67,7 +67,7 @@ export class MatchManager {
     if (!matchId || this.physicsIntervals.has(matchId)) return;
     
     const gameId = room.config.gameId;
-    if (gameId !== "table-tennis" && gameId !== "fruit-ninja") return;
+    if (gameId !== "table-tennis" && gameId !== "fruit-ninja" && gameId !== "snake-vs-worms") return;
     
     const intervalId = setInterval(() => {
       this.runPhysicsTick(room);
@@ -96,7 +96,9 @@ export class MatchManager {
       const result = engine.tick();
       if (result && result.ok) {
         const hasEvents = result.events && result.events.length > 0;
-        const isPhysicsActive = Boolean(result.state?.ball?.inPlay);
+        const isPhysicsActive = room.config.gameId === "table-tennis"
+          ? Boolean(result.state?.ball?.inPlay)
+          : true;
         if (hasEvents || isPhysicsActive) {
           await this.framework.syncManager.broadcastGameState(room, result.events ?? []);
         }

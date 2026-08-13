@@ -5,7 +5,7 @@ describe("SnakeVsWormsEngine - Shared World Arena Architecture", () => {
   const p0 = { userId: "user-1", seat: 0 };
   const p1 = { userId: "user-2", seat: 1 };
 
-  it("initializes 2-player match in 2000x2000 shared world with Snake (Seat 0, 300,1000) and Worm (Seat 1, 1700,1000)", () => {
+  it("initializes 2-player match in 2000x2000 shared world with Snake (Seat 0, 300,600) and Worm (Seat 1, 300,1400)", () => {
     const eng = new SnakeVsWormsEngine([p0, p1]);
     const state = eng.state;
 
@@ -16,11 +16,11 @@ describe("SnakeVsWormsEngine - Shared World Arena Architecture", () => {
 
     expect(state.players[0].seat).toBe(0);
     expect(state.players[0].type).toBe("SNAKE");
-    expect(state.players[0].body[0]).toEqual({ x: 300, y: 1000 });
+    expect(state.players[0].body[0]).toEqual({ x: 300, y: 600 });
 
     expect(state.players[1].seat).toBe(1);
     expect(state.players[1].type).toBe("WORM");
-    expect(state.players[1].body[0]).toEqual({ x: 1700, y: 1000 });
+    expect(state.players[1].body[0]).toEqual({ x: 300, y: 1400 });
 
     expect(state.food.length).toBeGreaterThan(0);
   });
@@ -63,11 +63,11 @@ describe("SnakeVsWormsEngine - Shared World Arena Architecture", () => {
     const eng = new SnakeVsWormsEngine([p0, p1]);
     const state = eng.state;
 
-    // Place golden food item in front of P0 head ({x: 310, y: 1000})
+    // Place golden food item in front of P0 head ({x: 310, y: 600})
     const testState = {
       ...state,
       food: [
-        { id: "food-test", x: 310, y: 1000, type: "golden" as const, score: 50, growth: 3 },
+        { id: "food-test", x: 310, y: 600, type: "golden" as const, score: 50, growth: 3 },
       ],
     };
     (eng as any).updateState(testState);
@@ -110,11 +110,11 @@ describe("SnakeVsWormsEngine - Shared World Arena Architecture", () => {
     expect(tickRes.winnerSeats).toEqual([1]);
   });
 
-  it("eliminates player on self collision", () => {
+  it("ignores self collision completely per rule specification", () => {
     const eng = new SnakeVsWormsEngine([p0, p1]);
     const state = eng.state;
 
-    // Form a loop for P0 where moving right hits segment at {x: 100, y: 100}
+    // Form a loop for P0 where moving right overlaps segment at {x: 100, y: 100}
     const testState = {
       ...state,
       players: [
@@ -136,9 +136,8 @@ describe("SnakeVsWormsEngine - Shared World Arena Architecture", () => {
     (eng as any).updateState(testState);
 
     const tickRes = eng.tick();
-    expect(tickRes.state.players[0].status).toBe("eliminated");
-    expect(tickRes.finished).toBe(true);
-    expect(tickRes.winnerSeats).toEqual([1]);
+    expect(tickRes.state.players[0].status).toBe("active");
+    expect(tickRes.finished).toBe(false);
   });
 
   it("eliminates player on head-to-opponent-body collision", () => {
@@ -149,6 +148,7 @@ describe("SnakeVsWormsEngine - Shared World Arena Architecture", () => {
     // P1 head moves up from {x: 1000, y: 980} to {x: 1000, y: 970}, leaving segment at {x: 1000, y: 1000} intact
     const testState = {
       ...state,
+      food: [],
       players: [
         {
           ...state.players[0],

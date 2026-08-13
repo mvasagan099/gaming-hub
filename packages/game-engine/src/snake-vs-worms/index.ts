@@ -1,2 +1,2 @@
 export * from "./types";
-export { SnakeVsWormsEngine, type SnakeVsWormsActionTyp } from "./engine";
+export { SnakeVsWormsEngine, type SnakeVsWormsEngineInstance } from "./engine";
