@@ -27,6 +27,7 @@ import type {
 } from "../types";
 import type { GameId } from "@gaming-hub/shared";
 import type { Socket } from "socket.io";
+import { getGamePlayConfig } from "../gameplay/gameConfigs";
 
 export interface CreateRoomOptions {
   gameId: GameId;
@@ -95,6 +96,8 @@ export class RoomManager {
     const roomId = randomUUID();
     const code = this.generateUniqueRoomCode();
     
+    const gamePlayConfig = getGamePlayConfig(gameId);
+
     // Create room configuration
     const config: RoomConfig = {
       gameId,
@@ -107,8 +110,8 @@ export class RoomManager {
       maxSpectators: this.framework.config.maxSpectators,
       settings: {
         rated: settings.rated ?? true,
-        turnTimerDurationMs: settings.turnTimerDurationMs ?? 30_000,
-        matchTimerDurationMs: settings.matchTimerDurationMs ?? 600_000,
+        turnTimerDurationMs: settings.turnTimerDurationMs ?? (gamePlayConfig?.defaultTurnTimerMs ?? (gameDef.mode === "turn-based" ? 30_000 : 0)),
+        matchTimerDurationMs: settings.matchTimerDurationMs ?? (gamePlayConfig?.defaultMatchTimerMs ?? 0),
         reconnectGracePeriodMs: settings.reconnectGracePeriodMs ?? this.framework.config.reconnectGracePeriodMs,
         afkTimeoutMs: settings.afkTimeoutMs ?? this.framework.config.afkTimeoutMs,
         allowRematch: settings.allowRematch ?? true,

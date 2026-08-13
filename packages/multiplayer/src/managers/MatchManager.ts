@@ -26,6 +26,7 @@ import type {
 import type { EngineInstance, EngineActionResult, EnginePlayer, EngineEvent } from "@gaming-hub/game-engine";
 import type { JsonObject } from "@gaming-hub/shared";
 import { getGameDefinition } from "@gaming-hub/shared";
+import { getGamePlayConfig } from "../gameplay/gameConfigs";
 
 export interface StartMatchOptions {
   roomId: RoomId;
@@ -170,8 +171,9 @@ export class MatchManager {
     
     const engineOptions: Record<string, unknown> = {};
     
-    // Add time control if configured
-    if (room.config.settings.turnTimerDurationMs) {
+    // Add time control if configured for turn-based games
+    const isTurnBased = getGamePlayConfig(room.config.gameId)?.turnBased ?? false;
+    if (isTurnBased && room.config.settings.turnTimerDurationMs && room.config.settings.turnTimerDurationMs > 0) {
       engineOptions.turnTimer = {
         turnDurationMs: room.config.settings.turnTimerDurationMs,
         warningThresholdMs: Math.floor(room.config.settings.turnTimerDurationMs * 0.25),
