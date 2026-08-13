@@ -99,6 +99,9 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
   // Multiplayer setup
   useEffect(() => {
+    setGameOver(false);
+    setMpWinner(null);
+
     if (mode === 'multiplayer' && room && mySeat !== null) {
       const names = room.players.map(p => p.displayName || `Player ${(p.seat ?? 0) + 1}`);
       const driver = new SnakeVsWormsMultiplayerDriver(mySeat, names);
@@ -106,7 +109,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
       driver.setOnStateUpdate((state: SnakeVsWormsState) => {
         setMultiplayerState(state);
-        if (state.finished) {
+        if (state.finished && state.gameStatus === 'finished') {
           setGameOver(true);
           const winSeat = state.winnerSeats && state.winnerSeats.length > 0 ? state.winnerSeats[0] : null;
           setMpWinner(winSeat);
@@ -169,11 +172,13 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     if (mode === 'multiplayer') return;
 
     const state = gameStateRef.current;
+    const startX = MAP_WIDTH / 2;
+    const startY = MAP_HEIGHT / 2;
     
     const player: Snake = {
       id: 'player',
-      head: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
-      segments: Array(15).fill({ x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 }),
+      head: { x: startX, y: startY },
+      segments: Array.from({ length: 15 }, (_, i) => ({ x: startX - i * 10, y: startY })),
       angle: 0,
       targetAngle: 0,
       color: PLAYER_COLOR,
@@ -185,12 +190,17 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     };
 
     const enemies: Snake[] = Array(12).fill(null).map((_, i) => {
-      const x = Math.random() * MAP_WIDTH;
-      const y = Math.random() * MAP_HEIGHT;
+      let x = startX;
+      let y = startY;
+      while (Math.hypot(x - startX, y - startY) < 350) {
+        x = 150 + Math.random() * (MAP_WIDTH - 300);
+        y = 150 + Math.random() * (MAP_HEIGHT - 300);
+      }
+      const initialSegCount = 10 + Math.floor(Math.random() * 15);
       return {
         id: `ai-${i}`,
         head: { x, y },
-        segments: Array(10 + Math.floor(Math.random() * 20)).fill({ x, y }),
+        segments: Array.from({ length: initialSegCount }, (_, segIdx) => ({ x: x - segIdx * 10, y })),
         angle: Math.random() * Math.PI * 2,
         targetAngle: Math.random() * Math.PI * 2,
         color: ENEMY_COLORS[i % ENEMY_COLORS.length],
@@ -198,7 +208,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
         isPlayer: false,
         dead: false,
         isBoosting: false,
-        lengthFloat: 0
+        lengthFloat: initialSegCount
       };
     });
 
@@ -212,6 +222,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     }));
 
     state.snakes = [player, ...enemies];
+    state.orbs = orbs;
     state.orbs = orbs;
     state.particles = [];
     state.orbIdCounter = 1000;
@@ -243,12 +254,18 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
       const me = mpState.players.find(p => p.seat === mySeat) || mpState.players[0];
       const head = me.body[0] || { x: 1000, y: 1000 };
 
-      // Camera follows local player head inside the 2000x2000 shared world
-      const camX = Math.max(0, Math.min(MAP_WIDTH - CANVAS_WIDTH, head.x - CANVAS_WIDTH / 2));
-      const camY = Math.max(0, Math.min(MAP_HEIGHT - CANVAS_HEIGHT, head.y - CANVAS_HEIGHT / 2));
+      // Smooth camera interpolation in 2000x2000 arena
+      const targetCamX = Math.max(0, Math.min(MAP_WIDTH - CANVAS_WIDTH, head.x - CANVAS_WIDTH / 2));
+      const targetCamY = Math.max(0, Math.min(MAP_HEIGHT - CANVAS_HEIGHT, head.y - CANVAS_HEIGHT / 2));
+
+      const cam = gameStateRef.current.camera;
+      cam.x += (targetCamX - cam.x) * 6 * dt;
+      cam.y += (targetCamY - cam.y) * 6 * dt;
+      cam.x = Math.max(0, Math.min(MAP_WIDTH - CANVAS_WIDTH, cam.x));
+      cam.y = Math.max(0, Math.min(MAP_HEIGHT - CANVAS_HEIGHT, cam.y));
 
       ctx.save();
-      ctx.translate(-camX, -camY);
+      ctx.translate(-cam.x, -cam.y);
 
       // Draw Grid Background
       ctx.strokeStyle = 'rgba(30, 41, 59, 0.5)';
@@ -378,6 +395,114 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
       }
 
       ctx.restore();
+
+      // ----------------------------------------------------
+      // SCREEN-SPACE CANVAS OVERLAYS (HUD, RADAR MINIMAP, TIMER)
+      // ----------------------------------------------------
+      const p1 = mpState.players.find(p => p.seat === 0);
+      const p2 = mpState.players.find(p => p.seat === 1);
+      const timerObj = mpState.timer as { remainingMs?: number } | undefined;
+      const remainingSecs = Math.max(0, Math.ceil(((timerObj?.remainingMs) ?? 180000) / 1000));
+      const mins = Math.floor(remainingSecs / 60);
+      const secs = remainingSecs % 60;
+      const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+      // A. Top Live Scoreboard Glass Header
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(CANVAS_WIDTH / 2 - 260, 14, 520, 48, 16);
+      ctx.fill();
+      ctx.stroke();
+
+      // P1 Badge (Emerald)
+      ctx.fillStyle = '#10b981';
+      ctx.font = 'bold 13px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`🐍 ${p1?.name || 'P1'}: ${p1?.score || 0}`, CANVAS_WIDTH / 2 - 240, 42);
+
+      // Timer Center Badge
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`⏱️ ${timeStr}`, CANVAS_WIDTH / 2, 43);
+
+      // P2 Badge (Blue)
+      ctx.fillStyle = '#3b82f6';
+      ctx.font = 'bold 13px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(`🐛 ${p2?.name || 'P2'}: ${p2?.score || 0}`, CANVAS_WIDTH / 2 + 240, 42);
+
+      // B. Bottom-Right Radar Minimap
+      const miniSize = 110;
+      const miniX = CANVAS_WIDTH - miniSize - 20;
+      const miniY = CANVAS_HEIGHT - miniSize - 20;
+      const scaleRatio = miniSize / MAP_WIDTH;
+
+      // Minimap Box
+      ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(miniX, miniY, miniSize, miniSize, 12);
+      ctx.fill();
+      ctx.stroke();
+
+      // Minimap Header
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('ARENA RADAR', miniX + 8, miniY + 12);
+
+      // Camera Viewport Indicator Box
+      const camRectX = miniX + cam.x * scaleRatio;
+      const camRectY = miniY + cam.y * scaleRatio;
+      const camRectW = CANVAS_WIDTH * scaleRatio;
+      const camRectH = CANVAS_HEIGHT * scaleRatio;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(camRectX, camRectY, camRectW, camRectH);
+
+      // Players on Minimap
+      if (p1 && p1.body && p1.body[0] && p1.status === 'active') {
+        const mx = miniX + p1.body[0].x * scaleRatio;
+        const my = miniY + p1.body[0].y * scaleRatio;
+        ctx.fillStyle = '#10b981';
+        ctx.beginPath(); ctx.arc(mx, my, 4, 0, Math.PI * 2); ctx.fill();
+      }
+      if (p2 && p2.body && p2.body[0] && p2.status === 'active') {
+        const mx = miniX + p2.body[0].x * scaleRatio;
+        const my = miniY + p2.body[0].y * scaleRatio;
+        ctx.fillStyle = '#3b82f6';
+        ctx.beginPath(); ctx.arc(mx, my, 4, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // C. Boost Meter Bar
+      const boostEnergy = me.boostEnergy ?? 100;
+      const boostBarWidth = 160;
+      const boostBarX = 20;
+      const boostBarY = CANVAS_HEIGHT - 35;
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(boostBarX, boostBarY, boostBarWidth, 16, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      const fillW = (Math.max(0, Math.min(100, boostEnergy)) / 100) * boostBarWidth;
+      ctx.fillStyle = me.isBoosting ? '#06b6d4' : '#10b981';
+      ctx.beginPath();
+      ctx.roundRect(boostBarX, boostBarY, fillW, 16, 8);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(me.isBoosting ? '⚡ BOOSTING!' : 'BOOST READY (SPACE)', boostBarX + boostBarWidth / 2, boostBarY + 12);
+
       return;
     }
 
@@ -730,21 +855,64 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
         </div>
 
         <div className="flex flex-col items-center gap-6 glass-panel p-6 rounded-3xl border border-slate-800 w-full max-w-xs shrink-0 shadow-2xl">
-          <div className="text-center w-full bg-slate-900/80 p-6 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
-             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent"></div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-              {mode === 'multiplayer' && multiplayerState ? (mySeat === 0 ? 'P1 SCORE (SNAKE)' : 'P2 SCORE (WORM)') : 'SCORE'}
-            </span>
-            <p className="text-5xl font-black text-emerald-400 mt-2 filter drop-shadow-md">
-              {mode === 'multiplayer' && multiplayerState ? (multiplayerState.players.find(p => p.seat === mySeat)?.score || 0) : length}
-            </p>
-          </div>
+          {mode === 'multiplayer' && multiplayerState ? (
+            <div className="w-full flex flex-col gap-4">
+              <div className="text-center font-black uppercase text-xs tracking-widest text-slate-400">Match Standings</div>
+              {multiplayerState.players.map((p) => {
+                const isMe = p.seat === mySeat;
+                const isP1 = p.seat === 0;
+                return (
+                  <div
+                    key={p.seat}
+                    className={`p-4 rounded-2xl border transition-all ${
+                      isMe ? 'bg-slate-800/90 border-amber-500/50 shadow-lg' : 'bg-slate-900/60 border-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`font-bold text-sm ${isP1 ? 'text-emerald-400' : 'text-blue-400'}`}>
+                        {isP1 ? '🐍 P1 (Snake)' : '🐛 P2 (Worm)'} {isMe && '(YOU)'}
+                      </span>
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                        p.status === 'active' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-400'
+                      }`}>
+                        {p.status}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-end">
+                      <div>
+                        <div className="text-2xl font-black text-white">{p.score}</div>
+                        <div className="text-[10px] text-slate-400 uppercase tracking-wider">Score</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-amber-400">{p.kills || 0}</div>
+                        <div className="text-[10px] text-slate-400 uppercase tracking-wider">Kills</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center w-full bg-slate-900/80 p-6 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent"></div>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                SCORE
+              </span>
+              <p className="text-5xl font-black text-emerald-400 mt-2 filter drop-shadow-md">
+                {length}
+              </p>
+              <div className="mt-3 flex justify-around text-xs text-slate-400 border-t border-slate-800/80 pt-3">
+                <div><span className="font-bold text-amber-400">{kills}</span> Kills</div>
+                <div><span className="font-bold text-emerald-400">{length}</span> Length</div>
+              </div>
+            </div>
+          )}
 
           <div className="w-full space-y-3 bg-slate-900/40 p-4 rounded-2xl border border-slate-800/50 text-sm text-slate-300">
              <div className="font-bold text-white uppercase text-xs tracking-wider">Controls</div>
-             <div><strong className="text-emerald-400">Move:</strong> Arrow Keys or WASD</div>
+             <div><strong className="text-emerald-400">Move:</strong> Mouse Steering, WASD, or Arrows</div>
              <div><strong className="text-cyan-400">Boost:</strong> Hold Spacebar or Mouse Click</div>
-             <div><strong className="text-rose-400">Goal:</strong> Collect food and eliminate opponent!</div>
+             <div><strong className="text-rose-400">Goal:</strong> Eat food & eliminate opponent!</div>
           </div>
         </div>
 

@@ -25,18 +25,18 @@ export class SnakeVsWormsMultiplayerDriver {
           this.onStateUpdateCb(engineState);
         }
 
-        if (engineState.finished && this.onMatchCompleteCb) {
+        if (engineState.finished && engineState.gameStatus === 'finished' && this.onMatchCompleteCb) {
           const winnerSeat = engineState.winnerSeats && engineState.winnerSeats.length > 0 ? engineState.winnerSeats[0] : null;
           this.onMatchCompleteCb(winnerSeat);
         }
       }
     });
 
-    // Apply initial state if already present in store
+    // Apply initial state if already present in store and not stale
     const current = useMultiplayerStore.getState();
     if (current.gameState) {
       const engineState = current.gameState as unknown as SnakeVsWormsState;
-      if (this.onStateUpdateCb) {
+      if (!engineState.finished && this.onStateUpdateCb) {
         this.onStateUpdateCb(engineState);
       }
     }

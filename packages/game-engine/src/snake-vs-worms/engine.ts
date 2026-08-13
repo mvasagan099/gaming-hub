@@ -26,7 +26,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
   private gridHeight = 2000;
 
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: SnakeVsWormsEngineOptions) {
-    const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 5000 };
+    const turnTimer = options?.turnTimer;
     const matchTimer = options?.matchTimer ?? { matchDurationMs: 180000, warningThresholdMs: 30000 };
     super(players, rng, {
       turnTimer,
@@ -432,15 +432,9 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
     return next;
   }
 
-  protected onTurnTimerExpired(seat: number, state: InternalState): EngineActionResult<InternalState> {
-    const winnerSeat = seat === 0 ? 1 : 0;
-    const next = this.cloneState(state);
-    next.finished = true;
-    next.gameOver = true;
-    next.gameStatus = "finished";
-    next.winnerSeats = [winnerSeat];
-    next.endReason = "TIMEOUT";
-    return { ok: true, state: next, events: [{ type: "match-timeout" }], finished: true, winnerSeats: [winnerSeat] };
+  protected onTurnTimerExpired(_seat: number, state: InternalState): EngineActionResult<InternalState> {
+    // Real-time continuous slither game — turn timer timeouts do not eliminate players or finish the match
+    return { ok: true, state, events: [], finished: false, winnerSeats: [] };
   }
 
   protected onMatchTimerExpired(state: InternalState): EngineActionResult<InternalState> {
