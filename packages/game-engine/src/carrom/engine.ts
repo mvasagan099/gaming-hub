@@ -19,6 +19,7 @@ import {
   calculateScore,
   checkWinCondition,
   returnOneOwnCoin,
+  placeCoinSafelyNearCenter,
 } from "./physics";
 
 export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromAction> {
@@ -86,9 +87,9 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
   protected initBaseState(): Omit<CarromState, keyof import("../base/MultiplayerGameEngine").BaseState> {
     const coins = createInitialCoins();
     const striker = createInitialStriker();
-    const carromPlayers: CarromPlayer[] = this.players.map((p, index) => ({
+    const carromPlayers: CarromPlayer[] = this.players.map((p) => ({
       seat: p.seat,
-      color: index === 0 ? "white" : "black",
+      color: p.seat === 0 ? "white" : "black",
       score: 0,
       queenPocketed: false,
       queenCovered: false,
@@ -103,6 +104,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       lastAction: null,
       lastActionSeat: null,
       lastActionAtMs: null,
+      strikerAtShotStart: null,
       strikerPlacementPhase: true,
       strikerPlacementSeat: 0,
       foulThisTurn: false,
@@ -183,6 +185,11 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     next.turnNumber++;
     next.turnStartedAtMs = now;
 
+    const player = next.players.find(p => p.seat === seat);
+    if (player) {
+      player.consecutiveFouls = 0;
+    }
+
     if (next.matchStartedAtMs === null) {
       next.matchStartedAtMs = now;
     }
@@ -213,6 +220,8 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     const next = this.cloneState(state);
     const player = next.players.find(p => p.seat === seat)!;
 
+    next.strikerAtShotStart = { ...next.striker };
+
     const maxSpeed = 27;
     const speed = action.power * maxSpeed;
     next.striker.vx = Math.cos(action.angle) * speed;
@@ -242,7 +251,8 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       // ── FOUL: striker pocketed ──────────────────────────────────────────────
       foul = true;
       player.fouls++;
-      player.consecutiveFouls++;
+      // Player actively took a shot, so reset consecutive AFK timeout counter
+      player.consecutiveFouls = 0;
       events.push({ type: "foul", seat, reason: "striker-pocketed" });
 
       // A foul voids any pending queen cover — the queen returns to the board.
@@ -252,8 +262,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
         const queenCoin = next.coins.find(c => c.type === "queen");
         if (queenCoin) {
           queenCoin.pocketed = false;
-          queenCoin.x = 300;
-          queenCoin.y = 300;
+          placeCoinSafelyNearCenter(queenCoin, next.coins);
           queenCoin.vx = 0;
           queenCoin.vy = 0;
           queenCoin.pocketedBy = null;
@@ -285,6 +294,11 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
 
         earnedExtraTurn = result.earnedExtraTurn;
         player.score += result.score;
+        const opponentSeat = seat === 0 ? 1 : 0;
+        const opponentPlayer = next.players.find(p => p.seat === opponentSeat);
+        if (opponentPlayer && result.opponentScore > 0) {
+          opponentPlayer.score += result.opponentScore;
+        }
         queenPocketedThisTurn = result.queenPocketed && !player.queenPocketed;
         queenCoveredThisTurn  = result.queenCovered  && !player.queenCovered;
         player.queenPocketed  = result.queenPocketed;
@@ -296,8 +310,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
           const queenCoin = next.coins.find(c => c.type === "queen");
           if (queenCoin) {
             queenCoin.pocketed = false;
-            queenCoin.x = 300; // board center X
-            queenCoin.y = 300; // board center Y
+            placeCoinSafelyNearCenter(queenCoin, next.coins);
             queenCoin.vx = 0;
             queenCoin.vy = 0;
             queenCoin.pocketedBy = null;

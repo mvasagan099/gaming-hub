@@ -8,12 +8,40 @@ import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPane
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import CarromMultiplayerDriver, { type CarromRemoteState } from './CarromMultiplayerDriver';
 import type { CarromCoin, CarromStriker, CarromPlayer } from '@gaming-hub/game-engine';
+import CarromMultiplayer from './CarromMultiplayer';
 
 interface CarromGameProps {
   mode: 'ai' | 'multiplayer';
   stake: number;
   onBack: () => void;
 }
+
+/**
+ * Thin router: multiplayer → CarromMultiplayer (new, clean),
+ * AI → CarromAI (original single-player implementation below).
+ */
+export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
+  const mySeat = useMultiplayerStore((s) => s.mySeat);
+  const room = useMultiplayerStore((s) => s.room);
+
+  if (mode === 'multiplayer') {
+    const names = (room?.players ?? [])
+      .slice()
+      .sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0))
+      .map((p) => p.displayName || `Player ${(p.seat ?? 0) + 1}`);
+
+    return (
+      <CarromMultiplayer
+        mySeat={mySeat ?? 0}
+        playerNames={names}
+        stake={stake}
+        onBack={onBack}
+      />
+    );
+  }
+
+  return <CarromAI mode={mode} stake={stake} onBack={onBack} />;
+};
 
 type CoinType = 'striker' | 'queen' | 'white' | 'black';
 
@@ -142,7 +170,7 @@ function createInitialCoins(): LocalCoin[] {
   return coins;
 }
 
-export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
+const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [score, setScore] = useState({ white: 0, black: 0 });
   
@@ -381,7 +409,7 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
     const driver = new CarromMultiplayerDriver(mySeat, names);
     driverRef.current = driver;
 
-    driver.setOnStateUpdate((state) => {
+    driver.onStateUpdate = (state: CarromRemoteState) => {
       const currentSeat = mySeatRef.current;
       if (currentSeat === null || currentSeat === undefined) return;
 
@@ -453,60 +481,39 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
       }
 
       applyServerState(state);
-    });
+    };
 
-    driver.setOnCoinPocketed(() => {
+    driver.onCoinPocketed = () => {
       // Do not hide coins prematurely on socket event arrival.
       // Allow client physics to roll the coin naturally into the hole.
       confetti();
-    });
+    };
 
-    driver.setOnStrikerPlaced((x, y, seat) => {
-      // Only move the visual striker position — do NOT change strikerPhase here.
-      // strikerPhase is updated exclusively by applyServerState (from server state.strikerPlacementPhase).
-      // Changing it here causes a race: opponent's place-striker event fires on our client
-      // and incorrectly switches us to 'aiming' while it's still the opponent's turn.
-      const currentSeat = mySeatRef.current;
-      const striker = coinsRef.current.find(c => c.type === 'striker');
-      if (striker && seat === currentSeat) {
-        // Only reposition locally if it was OUR striker placement (server-confirmed).
-        const pos = mapServerToLocal(x, y, 0, 0, currentSeat);
-        striker.x = pos.x;
-        striker.y = pos.y;
-      }
-    });
-
-    driver.setOnFoul((reason) => {
+    driver.onFoul = (reason: string) => {
       toast.error(`Foul: ${reason}`, { id: 'foul' });
-    });
+    };
 
-    driver.setOnCoinReturned((_coinId, coinType) => {
+    driver.onCoinReturned = (_coinId: string, coinType: string) => {
       toast(`${coinType === 'queen' ? 'Queen' : 'Coin'} returned to the board (striker foul penalty)`, { id: 'coin-returned' });
-    });
+    };
 
-    driver.setOnQueenReturned((reason) => {
+    driver.onQueenReturned = (reason: string) => {
       toast(
         reason === 'foul'
           ? 'Queen returned: the foul forfeits the pending cover'
           : 'Failed to cover the queen - it returns to the board',
         { id: 'queen-returned' },
       );
-    });
+    };
 
-    driver.setOnWin((winnerSeat) => {
+    driver.onWin = (winnerSeat: number) => {
       setGameOver(true);
       if (winnerSeat === mySeatRef.current) confetti({ particleCount: 100 });
-    });
+    };
 
-    // setOnTurnChange is intentionally NOT registered here.
-    // Reason: the 'turn-end' event fires in the SAME socket message as the strike state,
-    // which arrives while the animation is still playing. If we call setCurrentPlayer here
-    // the turn indicator flips immediately (while the striker is mid-air) and then the
-    // game-loop end-of-animation also tries to set it — causing a race.
-    // The ONLY authoritative turn update in multiplayer is inside the game-loop when
-    // isTurnActive && !anyMoving, where applyServerState is called with the latest
-    // server state (pendingServerStateRef || driver.lastState).
-    driver.setOnTurnChange((_nextSeat) => { /* handled in game-loop */ });
+    // onTurnEnd is intentionally a no-op here.
+    // Turn updates are driven exclusively by the game-loop once animation settles.
+    driver.onTurnEnd = (_nextSeat: number) => { /* handled in game-loop */ };
 
     driver.start();
 

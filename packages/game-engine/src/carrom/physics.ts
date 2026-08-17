@@ -105,6 +105,53 @@ export function isValidStrikerPlacement(x: number, seat: number, coins: CarromCo
  * returns to the board near the center (avoiding overlap with active coins).
  * Returns the returned coin, or null when the fouler has no pocketed coin left.
  */
+export function placeCoinSafelyNearCenter(coin: CarromCoin, coins: CarromCoin[]): void {
+  const centerX = CARROM_BOARD_WIDTH / 2;
+  const centerY = CARROM_BOARD_HEIGHT / 2;
+  const radius = coin.type === "queen" ? QUEEN_RADIUS : COIN_RADIUS;
+
+  let centerFree = true;
+  for (const other of coins) {
+    if (other === coin || other.pocketed) continue;
+    const otherR = other.type === "queen" ? QUEEN_RADIUS : COIN_RADIUS;
+    if (Math.hypot(other.x - centerX, other.y - centerY) < radius + otherR + 2) {
+      centerFree = false;
+      break;
+    }
+  }
+
+  if (centerFree) {
+    coin.x = centerX;
+    coin.y = centerY;
+    return;
+  }
+
+  for (let r = 20; r <= 100; r += 15) {
+    for (let i = 0; i < 12; i++) {
+      const angle = (i * Math.PI * 2) / 12;
+      const x = centerX + Math.cos(angle) * r;
+      const y = centerY + Math.sin(angle) * r;
+      let overlaps = false;
+      for (const other of coins) {
+        if (other === coin || other.pocketed) continue;
+        const otherR = other.type === "queen" ? QUEEN_RADIUS : COIN_RADIUS;
+        if (Math.hypot(other.x - x, other.y - y) < radius + otherR + 2) {
+          overlaps = true;
+          break;
+        }
+      }
+      if (!overlaps) {
+        coin.x = x;
+        coin.y = y;
+        return;
+      }
+    }
+  }
+
+  coin.x = centerX;
+  coin.y = centerY;
+}
+
 export function returnOneOwnCoin(
   coins: CarromCoin[],
   seat: number,
@@ -121,35 +168,7 @@ export function returnOneOwnCoin(
   coin.vx = 0;
   coin.vy = 0;
 
-  const centerX = CARROM_BOARD_WIDTH / 2;
-  const centerY = CARROM_BOARD_HEIGHT / 2;
-  const radius = coin.type === "queen" ? QUEEN_RADIUS : COIN_RADIUS;
-
-  for (let attempt = 0; attempt < 40; attempt++) {
-    const angle = rng() * Math.PI * 2;
-    const distance = 20 + rng() * 80;
-    const x = centerX + Math.cos(angle) * distance;
-    const y = centerY + Math.sin(angle) * distance;
-
-    let overlaps = false;
-    for (const other of coins) {
-      if (other === coin || other.pocketed) continue;
-      const otherR = other.type === "queen" ? QUEEN_RADIUS : COIN_RADIUS;
-      if (Math.hypot(other.x - x, other.y - y) < radius + otherR + 2) {
-        overlaps = true;
-        break;
-      }
-    }
-    if (!overlaps) {
-      coin.x = x;
-      coin.y = y;
-      return coin;
-    }
-  }
-
-  // Extremely unlikely fallback: place it on the board center.
-  coin.x = centerX;
-  coin.y = centerY;
+  placeCoinSafelyNearCenter(coin, coins);
   return coin;
 }
 
@@ -472,6 +491,7 @@ export function calculateScore(
   queenAlreadyCovered: boolean,
 ): {
   score: number;
+  opponentScore: number;
   queenPocketed: boolean;
   queenCovered: boolean;
   earnedExtraTurn: boolean;
@@ -479,6 +499,7 @@ export function calculateScore(
   queenNeedsReturn: boolean;
 } {
   let score = 0;
+  let opponentScore = 0;
   let newQueenPocketed = queenAlreadyPocketed;
   let newQueenCovered = queenAlreadyCovered;
   let pocketedOwnColor = false;
@@ -490,8 +511,9 @@ export function calculateScore(
     } else if (coin.type === playerColor) {
       score += 1;
       pocketedOwnColor = true;
+    } else {
+      opponentScore += 1;
     }
-    // Opponent coin: no points awarded, no extra turn.
   }
 
   let queenNeedsReturn = false;
@@ -528,6 +550,7 @@ export function calculateScore(
 
   return {
     score,
+    opponentScore,
     queenPocketed: newQueenPocketed,
     queenCovered: newQueenCovered,
     earnedExtraTurn,

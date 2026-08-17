@@ -93,6 +93,8 @@ export interface CarromState extends JsonObject {
   lastAction: CarromAction | null;
   lastActionSeat: number | null;
   lastActionAtMs: number | null;
+  /** Snapshot of striker position BEFORE the shot — used by clients to replay animation. */
+  strikerAtShotStart: CarromStriker | null;
   strikerPlacementPhase: boolean;
   strikerPlacementSeat: number | null;
   foulThisTurn: boolean;

@@ -83,13 +83,10 @@ export class StatisticsCollector {
   async finalize(room: RoomRuntime, result: MatchResult): Promise<void> {
     const durationMs = room.match ? Date.now() - room.match.startedAt : 0;
     for (const playerResult of result.players) {
-      const stats = this.statsByRoom.get(room.id)?.get(playerResult.playerId);
-      if (stats) {
-        this.framework.playerManager.updateStatistics(playerResult.playerId, {
-          timeSpentMs: durationMs,
-        });
-        await this.persistGameStats(room, playerResult, durationMs);
-      }
+      this.framework.playerManager.updateStatistics(playerResult.playerId, {
+        timeSpentMs: durationMs,
+      });
+      await this.persistGameStats(room, playerResult, durationMs);
     }
     this.statsByRoom.delete(room.id);
   }
