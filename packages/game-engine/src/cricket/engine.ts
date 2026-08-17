@@ -149,6 +149,9 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
       currentActor: "toss",
       target: null,
       pendingDelivery: null,
+      isProcessingDelivery: false,
+      activeDeliveryId: null,
+      deliverySequence: 0,
       team1Score: 0,
       team2Score: 0,
       team1Wickets: 0,
@@ -182,7 +185,7 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
   }
 
   protected validateGameAction(action: CricketAction, seat: number, state: CricketState): string | null {
-    if (state.finished) return "Match is finished";
+    if (state.finished) return "MATCH_FINISHED";
     if (state.paused) return "Match is paused";
     if (action.type === "toss-call") {
       if (state.currentActor !== "toss") return "Toss already completed";
@@ -190,13 +193,14 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
       return null;
     }
     if (state.currentActor === "toss") return "Toss in progress";
-    if (seat !== state.currentSeat) return "Not your turn";
 
     switch (action.type) {
       case "bowl":
-        if (state.currentActor !== "bowler") return "The batsman is at the crease";
+        if (state.finished) return "MATCH_FINISHED";
+        if (state.isProcessingDelivery) return "DELIVERY_IN_PROGRESS";
+        if (state.currentActor !== "bowler") return "NOT_BOWLER_TURN";
         if (seat !== state.bowlingTeam) return "Only the bowling side can bowl";
-        if (!CRICKET_DELIVERIES.includes(action.delivery)) return "Invalid delivery";
+        if (!CRICKET_DELIVERIES.includes(action.delivery)) return "INVALID_DELIVERY";
         if (
           action.power != null &&
           (typeof action.power !== "number" || action.power < 0 || action.power > 1)
@@ -205,6 +209,7 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
         }
         return null;
       case "bat":
+        if (seat !== state.currentSeat) return "Not your turn";
         if (state.currentActor !== "batsman") return "The bowler is at the crease";
         if (seat !== state.battingTeam) return "Only the batting side can bat";
         if (!CRICKET_SHOTS.includes(action.shot)) return "Invalid shot";
@@ -213,6 +218,7 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
         }
         return null;
       default:
+        if (seat !== state.currentSeat) return "Not your turn";
         return null;
     }
   }
@@ -249,17 +255,85 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
         return this.advanceTurn(next, now, events);
       }
       case "bowl": {
+        console.log("[CricketEngine] DELIVERY_REQUEST_RECEIVED", {
+          matchId: this.gameId,
+          delivery: action.delivery,
+          seat,
+          inning: state.inning,
+          battingTeam: state.battingTeam,
+          bowlingTeam: state.bowlingTeam,
+          currentActor: state.currentActor,
+          score: state.inning === 1 ? state.team1Score : state.team2Score,
+          balls: state.currentBall,
+          overs: state.currentOver,
+          isProcessingDelivery: state.isProcessingDelivery,
+        });
+
+        if (state.isProcessingDelivery) {
+          console.log("[CricketEngine] DELIVERY_REJECTED_ALREADY_ACTIVE", {
+            matchId: this.gameId,
+            activeDeliveryId: state.activeDeliveryId,
+            seat,
+          });
+        }
+
         const next = this.cloneState(state);
         const power = clamp(action.power ?? 0.5, 0, 1);
+        const sequence = state.deliverySequence + 1;
+        const deliveryId = `delivery-${sequence}`;
+
+        next.isProcessingDelivery = true;
+        next.activeDeliveryId = deliveryId;
+        next.deliverySequence = sequence;
+
+        console.log("[CricketEngine] DELIVERY_LOCK_ACQUIRED", {
+          matchId: this.gameId,
+          deliveryId,
+          sequence,
+          seat,
+        });
+
         next.pendingDelivery = { 
           delivery: action.delivery, 
           power, 
           line: action.line ?? null, 
-          length: action.length ?? null 
+          length: action.length ?? null,
+          deliveryId,
+          deliverySequence: sequence,
         };
         next.currentActor = "batsman";
         next.currentSeat = next.battingTeam;
-        events.push({ type: "ball-bowled", seat, delivery: action.delivery, power, line: action.line, length: action.length });
+        
+        console.log("[CricketEngine] DELIVERY_STARTED", {
+          matchId: this.gameId,
+          deliveryId,
+          sequence,
+          bowlerId: seat,
+          delivery: action.delivery,
+          power,
+        });
+
+        events.push({
+          type: "delivery-start",
+          matchId: this.gameId,
+          deliveryId,
+          deliverySequence: sequence,
+          bowlerId: seat,
+          delivery: action.delivery,
+          power,
+          line: action.line,
+          length: action.length,
+        });
+        events.push({
+          type: "ball-bowled",
+          seat,
+          delivery: action.delivery,
+          power,
+          line: action.line,
+          length: action.length,
+          deliveryId,
+          deliverySequence: sequence,
+        });
         return this.advanceTurn(next, now, events);
       }
       case "bat":
@@ -287,10 +361,41 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
 
     const delivery = CRICKET_DELIVERIES[this.randomInt(0, CRICKET_DELIVERIES.length - 1)];
     const next = this.cloneState(state);
-    next.pendingDelivery = { delivery, power: 0.5, line: null, length: null };
+    const sequence = state.deliverySequence + 1;
+    const deliveryId = `delivery-${sequence}`;
+
+    next.isProcessingDelivery = true;
+    next.activeDeliveryId = deliveryId;
+    next.deliverySequence = sequence;
+    next.pendingDelivery = { 
+      delivery, 
+      power: 0.5, 
+      line: null, 
+      length: null,
+      deliveryId,
+      deliverySequence: sequence,
+    };
     next.currentActor = "batsman";
     next.currentSeat = next.battingTeam;
-    events.push({ type: "ball-bowled", seat, delivery, power: 0.5, auto: true });
+    events.push({ 
+      type: "delivery-start", 
+      matchId: this.gameId,
+      deliveryId,
+      deliverySequence: sequence,
+      bowlerId: seat,
+      delivery,
+      power: 0.5,
+      auto: true,
+    });
+    events.push({ 
+      type: "ball-bowled", 
+      seat, 
+      delivery, 
+      power: 0.5, 
+      auto: true,
+      deliveryId,
+      deliverySequence: sequence,
+    });
     return this.advanceTurn(next, now, events);
   }
 
@@ -302,7 +407,17 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
     events: EngineEvent[],
   ): EngineActionResult<CricketState> {
     const next = this.cloneState(state);
-    const delivery: CricketPendingDelivery = next.pendingDelivery ?? { delivery: "fast", power: 0.5, line: null, length: null };
+    const activeDeliveryId = state.activeDeliveryId ?? `delivery-${state.deliverySequence || 1}`;
+    const activeSequence = state.deliverySequence || 1;
+
+    const delivery: CricketPendingDelivery = next.pendingDelivery ?? { 
+      delivery: "fast", 
+      power: 0.5, 
+      line: null, 
+      length: null,
+      deliveryId: activeDeliveryId,
+      deliverySequence: activeSequence,
+    };
 
     const weights = this.outcomeWeights(delivery.delivery, shot, timing, delivery.power);
     const outcome = this.rollOutcome(weights);
@@ -371,6 +486,16 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
     };
     next.balls.push(ball);
 
+    console.log("[CricketEngine] DELIVERY_RESULT", {
+      matchId: this.gameId,
+      deliveryId: activeDeliveryId,
+      sequence: activeSequence,
+      runs,
+      isWicket,
+      wicketType,
+      comment: ball.comment,
+    });
+
     events.push(
       {
         type: "shot-played",
@@ -378,16 +503,26 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
         shot,
         timing,
         delivery: delivery.delivery,
+        deliveryId: activeDeliveryId,
+        deliverySequence: activeSequence,
       },
       {
         type: "ball-result",
         seat: next.battingTeam,
+        deliveryId: activeDeliveryId,
+        deliverySequence: activeSequence,
         over: ball.over,
         ball: ball.ball,
         runs,
         wicket: isWicket,
         wicketType,
         comment: ball.comment,
+        score: next.inning === 1 ? next.team1Score : next.team2Score,
+        wickets: next.inning === 1 ? next.team1Wickets : next.team2Wickets,
+        balls: next.currentOver * 6 + next.currentBall + 1,
+        overs: next.currentOver,
+        battingPlayerId: next.battingTeam,
+        bowlingPlayerId: next.bowlingTeam,
       },
     );
 
@@ -398,6 +533,13 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
       events.push({ type: "over-complete", over: next.currentOver });
     }
     next.pendingDelivery = null;
+
+    console.log("[CricketEngine] BALL_COUNT_UPDATED", {
+      matchId: this.gameId,
+      over: next.currentOver,
+      ball: next.currentBall,
+      totalBalls: next.currentOver * 6 + next.currentBall,
+    });
 
     const totalBalls = next.currentOver * 6 + next.currentBall;
     if (totalBalls > 0) {
@@ -410,6 +552,20 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
         next.requiredRunRate = remaining / remainingOvers;
       }
     }
+
+    // Release delivery lock upon completing delivery calculation
+    next.isProcessingDelivery = false;
+    next.activeDeliveryId = null;
+    console.log("[CricketEngine] DELIVERY_COMPLETED", {
+      matchId: this.gameId,
+      deliveryId: activeDeliveryId,
+      sequence: activeSequence,
+    });
+    events.push({
+      type: "delivery-complete",
+      deliveryId: activeDeliveryId,
+      deliverySequence: activeSequence,
+    });
 
     const battingScore = next.inning === 1 ? next.team1Score : next.team2Score;
 
@@ -438,12 +594,33 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
         next.bowlingTeam = prevBatting;
         next.currentBatsman = next.battingTeam;
         next.currentBowler = next.bowlingTeam;
+
+        console.log("[CricketEngine] INNINGS_TRANSITION", {
+          matchId: this.gameId,
+          newInning: 2,
+          newBattingTeam: next.battingTeam,
+          newBowlingTeam: next.bowlingTeam,
+          target: next.target,
+        });
+
         events.push(
           { type: "inning-change", inning: 2, battingTeam: next.battingTeam, bowlingTeam: next.bowlingTeam },
           { type: "swap-roles", battingTeam: next.battingTeam, bowlingTeam: next.bowlingTeam },
+          { type: "role-change", innings: 2, battingTeam: next.battingTeam, bowlingTeam: next.bowlingTeam, target: next.target },
+          { type: "innings-ending", inning: 1, team1Score: next.team1Score, team1Wickets: next.team1Wickets },
+          { type: "innings-break", durationMs: 2000, target: next.target },
+          { type: "innings-start", inning: 2, battingTeam: next.battingTeam, bowlingTeam: next.bowlingTeam, target: next.target },
         );
         next.currentSeat = next.bowlingTeam;
         next.currentActor = "bowler";
+        console.log("[CricketEngine] NEXT_DELIVERY_READY", {
+          matchId: this.gameId,
+          inning: next.inning,
+          battingTeam: next.battingTeam,
+          bowlingTeam: next.bowlingTeam,
+          currentActor: next.currentActor,
+          currentSeat: next.currentSeat,
+        });
         return this.advanceTurn(next, now, events);
       }
 
@@ -477,6 +654,16 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
     // Next ball: the bowling side opens.
     next.currentSeat = next.bowlingTeam;
     next.currentActor = "bowler";
+
+    console.log("[CricketEngine] NEXT_DELIVERY_READY", {
+      matchId: this.gameId,
+      inning: next.inning,
+      battingTeam: next.battingTeam,
+      bowlingTeam: next.bowlingTeam,
+      currentActor: next.currentActor,
+      currentSeat: next.currentSeat,
+    });
+
     return this.advanceTurn(next, now, events);
   }
 

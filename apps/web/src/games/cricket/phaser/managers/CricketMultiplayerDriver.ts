@@ -215,7 +215,7 @@ export default class CricketMultiplayerDriver {
   canBowl(): boolean {
     if (this.destroyed || this.mySeat == null) return false;
     const s = this.lastState;
-    if (!s || s.finished || s.currentSeat !== this.mySeat) return false;
+    if (!s || s.finished || s.isProcessingDelivery || s.currentSeat !== this.mySeat) return false;
     return s.currentActor === "bowler";
   }
   

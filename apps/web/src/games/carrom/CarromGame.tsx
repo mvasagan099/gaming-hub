@@ -267,55 +267,50 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
       }
       coinsRef.current = mappedCoins;
     } else {
-      // Board already populated — update pocketed flags cleanly with animation!
+      // Board already populated — update coin positions & pocketed flags to match server ground truth!
       for (const localCoin of coinsRef.current) {
         if (localCoin.type === 'striker') continue;
-        const serverCoin = state.coins.find((c: any) => c.id === localCoin.id);
-        if (serverCoin && serverCoin.pocketed) {
-          if (localCoin.active && !localCoin.pocketing) {
-            // Find nearest pocket to localCoin
-            let nearestPocket = POCKETS[0];
-            let minDist = Infinity;
-            for (const p of POCKETS) {
-              const d = Math.hypot(localCoin.x - p.x, localCoin.y - p.y);
-              if (d < minDist) {
-                minDist = d;
-                nearestPocket = p;
+        const serverCoin = state.coins?.find((c: any) => c.id === localCoin.id);
+        if (serverCoin) {
+          if (serverCoin.pocketed) {
+            if (localCoin.active && !localCoin.pocketing) {
+              // Find nearest pocket to localCoin for smooth drop-in animation
+              let nearestPocket = POCKETS[0];
+              let minDist = Infinity;
+              for (const p of POCKETS) {
+                const d = Math.hypot(localCoin.x - p.x, localCoin.y - p.y);
+                if (d < minDist) {
+                  minDist = d;
+                  nearestPocket = p;
+                }
               }
-            }
-            if (minDist < 60) {
-              localCoin.pocketing = {
-                pocketX: nearestPocket.x,
-                pocketY: nearestPocket.y,
-                scale: 1.0,
-                opacity: 1.0,
-              };
-              localCoin.vx = 0;
-              localCoin.vy = 0;
-            } else {
+              if (minDist < 60) {
+                localCoin.pocketing = {
+                  pocketX: nearestPocket.x,
+                  pocketY: nearestPocket.y,
+                  scale: 1.0,
+                  opacity: 1.0,
+                };
+                localCoin.vx = 0;
+                localCoin.vy = 0;
+              } else {
+                localCoin.active = false;
+                localCoin.vx = 0;
+                localCoin.vy = 0;
+              }
+            } else if (!localCoin.pocketing) {
               localCoin.active = false;
-              localCoin.vx = 0;
-              localCoin.vy = 0;
             }
-          } else if (!localCoin.pocketing) {
-            localCoin.active = false;
+          } else {
+            // Active coin — update position to match server ground truth!
+            localCoin.active = true;
+            localCoin.pocketing = undefined;
+            const pos = mapServerToLocal(serverCoin.x, serverCoin.y, 0, 0, currentSeat);
+            localCoin.x = pos.x;
+            localCoin.y = pos.y;
+            localCoin.vx = 0;
+            localCoin.vy = 0;
           }
-        }
-      }
-
-      // Coins returned to the board (queen restored after a failed cover, or a
-      // due-owed coin returned after a striker foul) become active again.
-      for (const localCoin of coinsRef.current) {
-        if (localCoin.type === 'striker') continue;
-        const serverCoin = state.coins.find((c: any) => c.id === localCoin.id);
-        if (serverCoin && !serverCoin.pocketed && !localCoin.active) {
-          localCoin.active = true;
-          localCoin.pocketing = undefined;
-          const pos = mapServerToLocal(serverCoin.x, serverCoin.y, 0, 0, currentSeat);
-          localCoin.x = pos.x;
-          localCoin.y = pos.y;
-          localCoin.vx = 0;
-          localCoin.vy = 0;
         }
       }
 
@@ -388,6 +383,8 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
 
     driver.setOnStateUpdate((state) => {
       const currentSeat = mySeatRef.current;
+      if (currentSeat === null || currentSeat === undefined) return;
+
       const lastAction = state.lastAction as { type?: string; angle?: number; power?: number } | null;
       const lastActionAt = state.lastActionAtMs ?? null;
 
@@ -405,9 +402,23 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
         lastAnimatedActionAtRef.current = lastActionAt;
         pendingServerStateRef.current = state;
 
+        // Synchronize all coins to state.coins BEFORE starting shot animation!
+        for (const localCoin of coinsRef.current) {
+          if (localCoin.type === 'striker') continue;
+          const serverCoin = state.coins?.find((c: any) => c.id === localCoin.id);
+          if (serverCoin && !serverCoin.pocketed) {
+            localCoin.active = true;
+            localCoin.pocketing = undefined;
+            const pos = mapServerToLocal(serverCoin.x, serverCoin.y, 0, 0, currentSeat);
+            localCoin.x = pos.x;
+            localCoin.y = pos.y;
+            localCoin.vx = 0;
+            localCoin.vy = 0;
+          }
+        }
+
         if (state.lastActionSeat !== currentSeat) {
-          // Opponent shot — animate using only striker velocity; let collision physics
-          // naturally scatter the coins (no manual seeding to avoid double-velocity).
+          // Opponent shot — animate using striker velocity; let collision physics scatter coins.
           const angle = lastAction.angle ?? 0;
           const power = lastAction.power ?? 1;
 
@@ -419,6 +430,11 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
 
           const striker = coinsRef.current.find(c => c.type === 'striker');
           if (striker) {
+            if (state.striker) {
+              const pos = mapServerToLocal(state.striker.x, state.striker.y, 0, 0, currentSeat);
+              striker.x = pos.x;
+              striker.y = pos.y;
+            }
             striker.vx = Math.cos(localAngle) * forceMagnitude;
             striker.vy = Math.sin(localAngle) * forceMagnitude;
           }
@@ -587,25 +603,25 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
   }, [gameOver, score, rewardClaimed, uiTrigger, mode]);
 
   useEffect(() => {
-    if (gameOver || mode === 'multiplayer') return;
-    if (gameOver || isTurnActive || showRules || currentPlayer === 'ai') {
-      return;
-    }
+    if (gameOver || isTurnActive || showRules) return;
+    if (mode === 'ai' && currentPlayer === 'ai') return;
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          toast.error('Time is up! Opponent\'s turn.', { id: 'timeout-toast' });
-          setCurrentPlayer('ai');
-          setDragState('idle');
-          
-          const striker = coinsRef.current.find(c => c.type === 'striker');
-          if (striker) {
-            striker.x = BOARD_WIDTH / 2;
-            striker.y = 70;
-            striker.vx = 0;
-            striker.vy = 0;
+          if (mode === 'ai' && currentPlayer === 'player') {
+            toast.error('Time is up! Opponent\'s turn.', { id: 'timeout-toast' });
+            setCurrentPlayer('ai');
+            setDragState('idle');
+            
+            const striker = coinsRef.current.find(c => c.type === 'striker');
+            if (striker) {
+              striker.x = BOARD_WIDTH / 2;
+              striker.y = 70;
+              striker.vx = 0;
+              striker.vy = 0;
+            }
           }
           return 60;
         }
@@ -1427,29 +1443,129 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
       if (striker && striker.active) {
         const dx = dragStart.x - currentAim.x;
         const dy = dragStart.y - currentAim.y;
-        const angle = Math.atan2(dy, dx);
-        
-        const pullDist = Math.sqrt(dx * dx + dy * dy);
-        const maxPull = 150;
-        const powerRatio = Math.min(pullDist / maxPull, 1);
-        
-        const lineLength = powerRatio * 150;
-        const aimX = striker.x + Math.cos(angle) * lineLength;
-        const aimY = striker.y + Math.sin(angle) * lineLength;
+        const pullDist = Math.hypot(dx, dy);
 
-        ctx.strokeStyle = `rgba(${255 * powerRatio}, ${255 * (1 - powerRatio)}, 0, 0.8)`;
-        ctx.lineWidth = 3;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(striker.x, striker.y);
-        ctx.lineTo(aimX, aimY);
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.arc(striker.x, striker.y, striker.radius + (powerRatio * 5), 0, Math.PI * 2);
-        ctx.stroke();
-        
-        ctx.setLineDash([]);
+        if (pullDist > 5) {
+          const maxPull = 150;
+          const powerRatio = Math.min(pullDist / maxPull, 1);
+          const angle = Math.atan2(dy, dx);
+          const dirX = Math.cos(angle);
+          const dirY = Math.sin(angle);
+
+          // 1. Raycast against active coins to find first impact
+          let closestHit: { coin: LocalCoin; dist: number; ghostX: number; ghostY: number } | null = null;
+          const strikerR = striker.radius;
+
+          for (const c of coins) {
+            if (c.type === 'striker' || !c.active) continue;
+            const combinedR = strikerR + c.radius;
+            const vx = c.x - striker.x;
+            const vy = c.y - striker.y;
+
+            // Project coin position onto ray
+            const t = vx * dirX + vy * dirY;
+            if (t <= 0) continue; // Behind striker
+
+            // Perpendicular distance to ray
+            const perpDistSq = (vx * vx + vy * vy) - (t * t);
+            if (perpDistSq >= combinedR * combinedR) continue; // No collision
+
+            // Exact collision distance along ray
+            const d = t - Math.sqrt(combinedR * combinedR - perpDistSq);
+            if (d > 0 && (!closestHit || d < closestHit.dist)) {
+              const ghostX = striker.x + dirX * d;
+              const ghostY = striker.y + dirY * d;
+              closestHit = { coin: c, dist: d, ghostX, ghostY };
+            }
+          }
+
+          // 2. Determine aim line end point
+          let lineEndX = striker.x + dirX * 300;
+          let lineEndY = striker.y + dirY * 300;
+
+          if (closestHit) {
+            lineEndX = closestHit.ghostX;
+            lineEndY = closestHit.ghostY;
+          } else {
+            // Raycast to board cushions
+            const minX = BORDER_SIZE + strikerR;
+            const maxX = BOARD_WIDTH - BORDER_SIZE - strikerR;
+            const minY = BORDER_SIZE + strikerR;
+            const maxY = BOARD_HEIGHT - BORDER_SIZE - strikerR;
+
+            let tMin = 300;
+            if (dirX > 0) tMin = Math.min(tMin, (maxX - striker.x) / dirX);
+            else if (dirX < 0) tMin = Math.min(tMin, (minX - striker.x) / dirX);
+            if (dirY > 0) tMin = Math.min(tMin, (maxY - striker.y) / dirY);
+            else if (dirY < 0) tMin = Math.min(tMin, (minY - striker.y) / dirY);
+
+            lineEndX = striker.x + dirX * tMin;
+            lineEndY = striker.y + dirY * tMin;
+          }
+
+          // Draw main laser aim line (dotted gradient)
+          ctx.save();
+          ctx.strokeStyle = `rgba(${Math.round(255 * powerRatio)}, ${Math.round(255 * (1 - powerRatio))}, 50, 0.9)`;
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([6, 4]);
+          ctx.beginPath();
+          ctx.moveTo(striker.x, striker.y);
+          ctx.lineTo(lineEndX, lineEndY);
+          ctx.stroke();
+
+          if (closestHit) {
+            // Draw Ghost Striker Circle at impact
+            const { coin: targetCoin, ghostX, ghostY } = closestHit;
+            ctx.setLineDash([]);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+            ctx.lineWidth = 1.5;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.beginPath();
+            ctx.arc(ghostX, ghostY, strikerR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Target Coin Impact Vector
+            const cVecX = targetCoin.x - ghostX;
+            const cVecY = targetCoin.y - ghostY;
+            const cLen = Math.hypot(cVecX, cVecY) || 1;
+            const targetDirX = cVecX / cLen;
+            const targetDirY = cVecY / cLen;
+
+            // Draw Target Coin Trajectory Line
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(targetCoin.x, targetCoin.y);
+            ctx.lineTo(targetCoin.x + targetDirX * 60, targetCoin.y + targetDirY * 60);
+            ctx.stroke();
+
+            // Striker Deflection Line
+            const dot = dirX * targetDirX + dirY * targetDirY;
+            const defDirX = dirX - dot * targetDirX;
+            const defDirY = dirY - dot * targetDirY;
+            const defLen = Math.hypot(defDirX, defDirY) || 1;
+
+            ctx.strokeStyle = 'rgba(251, 191, 36, 0.7)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(ghostX, ghostY);
+            ctx.lineTo(ghostX + (defDirX / defLen) * 45, ghostY + (defDirY / defLen) * 45);
+            ctx.stroke();
+          }
+
+          // Draw Glowing Power Ring around Striker
+          ctx.setLineDash([]);
+          ctx.strokeStyle = `rgba(${Math.round(255 * powerRatio)}, ${Math.round(255 * (1 - powerRatio))}, 50, 0.9)`;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(striker.x, striker.y, striker.radius + 3 + powerRatio * 6, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.restore();
+        }
       }
     }
   }, []);
@@ -1467,23 +1583,33 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (gameOver || isTurnActive || showRules) return;
     
-    if (mode === 'multiplayer') {
-      if (!driverRef.current?.isMyTurn()) return;
-      if (strikerPhase === 'positioning' && driverRef.current.canPlaceStriker()) {
-        const striker = coinsRef.current.find(c => c.type === 'striker');
-        if (striker) {
-          if (strikerOverlapsCoin()) {
-            toast.error('Striker overlaps a coin — move it before confirming.', { id: 'overlap-error' });
-            return;
+    if (mode === 'multiplayer' && !driverRef.current?.isMyTurn()) return;
+    if (mode === 'ai' && currentPlayer === 'ai') return;
+
+    const { x, y } = getCanvasCoords(e);
+
+    // Interactive board baseline touch-positioning
+    if (strikerPhase === 'positioning' && y > 240) {
+      const newPos = Math.max(STRIKER_POS_MIN, Math.min(STRIKER_POS_MAX, x - BOARD_WIDTH / 2));
+      handleStrikerPosChange(newPos);
+
+      const striker = coinsRef.current.find(c => c.type === 'striker');
+      if (striker) {
+        const distToStriker = Math.hypot(x - striker.x, y - striker.y);
+        if (distToStriker <= striker.radius + 18) {
+          if (mode === 'multiplayer' && driverRef.current?.canPlaceStriker()) {
+            if (strikerOverlapsCoin()) {
+              toast.error('Striker overlaps a coin — move it before confirming.', { id: 'overlap-error' });
+              return;
+            }
+            driverRef.current.sendPlaceStriker(striker.x);
+            setStrikerPhase('aiming');
+          } else if (mode === 'ai') {
+            setStrikerPhase('aiming');
           }
-          driverRef.current.sendPlaceStriker(striker.x);
-          setStrikerPhase('aiming');
         }
       }
     }
-    if (mode === 'ai' && currentPlayer === 'ai') return;
-    
-    const { x, y } = getCanvasCoords(e);
     
     const striker = coinsRef.current.find(c => c.type === 'striker');
     let overlap = false;
@@ -1499,7 +1625,6 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
        }
     }
 
-    // In multiplayer the server validates striker placement — skip client-side overlap check
     if (mode === 'ai' && overlap) {
        toast.error('Cannot shoot! Reposition striker off overlapping coins first using the slider.', { id: 'overlap-error' });
        return;
@@ -1582,9 +1707,6 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
     if (mode !== 'multiplayer') return;
     const striker = coinsRef.current.find(c => c.type === 'striker');
     if (!striker || !driverRef.current?.canPlaceStriker()) return;
-    // Always send the final slider position when the thumb is released so the
-    // last confirmed coordinate reaches the server even if the user never taps
-    // the board afterwards.
     lastPlaceSendAtRef.current = Date.now();
     driverRef.current.sendPlaceStriker(striker.x);
   };
@@ -1598,7 +1720,6 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
           return;
         }
         driverRef.current.sendPlaceStriker(striker.x);
-        // Don't optimistically set phase here — onStateUpdate will update it
       }
     }
   };
@@ -1692,11 +1813,11 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="text-amber-500 font-bold">2.</span>
-                  <p className="text-slate-300 text-sm">Drag anywhere on the board to <strong>position your striker</strong> along the baseline.</p>
+                  <p className="text-slate-300 text-sm">Drag anywhere on the board or slider to <strong>position your striker</strong> along the baseline.</p>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="text-amber-500 font-bold">3.</span>
-                  <p className="text-slate-300 text-sm">Release to lock position (striker turns yellow). Then drag backwards to <strong>aim and shoot</strong>.</p>
+                  <p className="text-slate-300 text-sm">Drag backwards from the striker to <strong>aim and shoot</strong> using the laser trajectory line.</p>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="text-amber-500 font-bold">4.</span>
@@ -1774,8 +1895,7 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
                 />
               </div>
               
-              
-              <p className="text-xs text-slate-400 font-semibold tracking-widest uppercase">Slide to position striker</p>
+              <p className="text-xs text-slate-400 font-semibold tracking-widest uppercase">Slide or tap board to position striker</p>
               {placementOverlapping && (
                 <p className="text-xs text-rose-400 font-bold uppercase tracking-widest animate-pulse">
                   Striker overlaps a coin - move it
@@ -1794,7 +1914,7 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
                 <div className="w-full flex flex-col items-center gap-2 mb-1">
                    <div className={`px-4 py-2 rounded-full font-black text-sm uppercase shadow-lg transition-colors ${isMyTurn ? 'bg-emerald-500 text-white animate-pulse' : 'bg-rose-500 text-white'}`}>
                       {mode === 'multiplayer' 
-                        ? (isMyTurn ? 'Your Turn' : 'Opponent\'s Turn')
+                        ? (isMyTurn ? 'Your Turn' : "Opponent's Turn")
                         : (currentPlayer === 'player' ? 'Your Turn' : 'AI Turn')
                       }
                    </div>
@@ -1842,25 +1962,23 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
             );
           })()}
           
-          {mode === 'ai' && (
-            <>
-              <div className="mt-4 w-full flex flex-col items-center">
-                <div className={`text-4xl font-black tabular-nums transition-colors ${timeLeft <= 10 ? 'text-rose-500 animate-pulse' : 'text-slate-200'}`}>
-                  00:{timeLeft < 10 ? `0${timeLeft}` : timeLeft}
-                </div>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-                  {currentPlayer === 'ai' ? 'AI THINKING...' : 'TURN TIMER'}
-                </p>
-              </div>
-            </>
-          )}
-          
+          <div className="mt-4 w-full flex flex-col items-center">
+            <div className={`text-4xl font-black tabular-nums transition-colors ${timeLeft <= 10 ? 'text-rose-500 animate-pulse' : 'text-slate-200'}`}>
+              00:{timeLeft < 10 ? `0${timeLeft}` : timeLeft}
+            </div>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+              {mode === 'multiplayer'
+                ? (isMyTurn ? 'YOUR TURN TIMER' : 'OPPONENT TIMER')
+                : (currentPlayer === 'ai' ? 'AI THINKING...' : 'TURN TIMER')}
+            </p>
+          </div>
+
           <p className="text-xs text-slate-400 italic text-center mt-4 px-2">
-            {currentPlayer === 'ai' 
+            {currentPlayer === 'ai' || (mode === 'multiplayer' && !isMyTurn)
               ? 'Wait for opponent to shoot.' 
               : strikerPhase === 'positioning' 
-                ? mode === 'multiplayer' ? 'Slide to position, then tap the board to confirm.' : 'Drag to position striker.'
-                : mode === 'multiplayer' ? 'Drag back and release to shoot!' : 'Tap striker to reposition. Drag board to shoot!'}
+                ? 'Slide or tap board to position striker.'
+                : 'Drag backwards to aim and release to shoot!'}
           </p>
         </div>
 
@@ -1874,3 +1992,4 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
     </GameWrapper>
   );
 };
+

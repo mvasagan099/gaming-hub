@@ -148,4 +148,34 @@ describe("CricketEngine", () => {
     expect(res.state.finished).toBe(true);
     expect(res.state.winnerSeats).toEqual([eng.state.currentSeat]);
   });
+
+  it("atomically locks delivery and rejects duplicate bowl requests while processing", () => {
+    const eng = setup();
+    const bowlerSeat = eng.state.bowlingTeam;
+
+    // First bowl request succeeds and acquires delivery lock
+    const res1 = eng.apply({ type: "bowl", delivery: "fast" }, bowlerSeat);
+    expect(res1.ok).toBe(true);
+    expect(res1.state.isProcessingDelivery).toBe(true);
+    expect(res1.state.activeDeliveryId).toBe("delivery-1");
+    expect(res1.state.deliverySequence).toBe(1);
+
+    // Rapid second bowl request while delivery is processing is rejected
+    const res2 = eng.apply({ type: "bowl", delivery: "slow" }, bowlerSeat);
+    expect(res2.ok).toBe(false);
+    expect(res2.error).toBe("DELIVERY_IN_PROGRESS");
+
+    // Bat action resolves the shot and releases the delivery lock
+    const batRes = eng.apply({ type: "bat", shot: "straight", timing: "good" }, eng.state.battingTeam);
+    expect(batRes.ok).toBe(true);
+    expect(batRes.state.isProcessingDelivery).toBe(false);
+    expect(batRes.state.activeDeliveryId).toBeNull();
+
+    // Next delivery can acquire lock and generates delivery-2
+    const res3 = eng.apply({ type: "bowl", delivery: "spin" }, bowlerSeat);
+    expect(res3.ok).toBe(true);
+    expect(res3.state.isProcessingDelivery).toBe(true);
+    expect(res3.state.activeDeliveryId).toBe("delivery-2");
+    expect(res3.state.deliverySequence).toBe(2);
+  });
 });

@@ -70,6 +70,8 @@ export interface CricketPendingDelivery extends JsonObject {
   power: number;
   line: string | null;
   length: string | null;
+  deliveryId: string;
+  deliverySequence: number;
 }
 
 export interface CricketState extends JsonObject {
@@ -84,6 +86,9 @@ export interface CricketState extends JsonObject {
   currentActor: "bowler" | "batsman" | "toss";
   target: number | null;
   pendingDelivery: CricketPendingDelivery | null;
+  isProcessingDelivery: boolean;
+  activeDeliveryId: string | null;
+  deliverySequence: number;
   team1Score: number;
   team2Score: number;
   team1Wickets: number;

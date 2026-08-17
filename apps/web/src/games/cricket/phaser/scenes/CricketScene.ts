@@ -69,6 +69,7 @@ export class CricketScene extends Phaser.Scene {
   private role: "batting" | "bowling" = "batting";
   private bestScore: number = 0;
   private mode: "ai" | "multiplayer" = "ai";
+  private inning: 1 | 2 = 1;
   
   private onGameOver!: (runs: number, wickets: number, won: boolean) => void;
   private nextBallTimerEvent?: Phaser.Time.TimerEvent;
@@ -738,8 +739,41 @@ export class CricketScene extends Phaser.Scene {
     }
 
     const isBatting = this.mySeat != null && state.battingTeam === this.mySeat;
-    this.setRole(this.mySeat == null ? "batting" : (isBatting ? "batting" : "bowling"));
+    const targetRole = this.mySeat == null ? "batting" : (isBatting ? "batting" : "bowling");
 
+    const isInningsFlip = events.some(e => ["inning-change", "swap-roles", "role-change", "innings-break"].includes(e.type));
+
+    if (isInningsFlip) {
+      // Process ball result for last ball of Innings 1 first
+      const ballResultEvent = events.find(e => e.type === "ball-result");
+      if (ballResultEvent) {
+        this.onRemoteBallResult(ballResultEvent as Record<string, unknown> & { type: string });
+      }
+
+      this.hud.setControlsState(true);
+      this.isBowling = false;
+      this.isHit = false;
+      this.ball.setVisible(false);
+      this.ballShadow.setVisible(false);
+      this.trailEmitter.stop();
+      this.overHistory = [];
+      this.hud.updateOverHistory(this.overHistory);
+
+      const targetScore = state.target ?? (state.team1Score + 1);
+      this.hud.setTarget(targetScore);
+      this.hud.updateStatus(`INNINGS 1 ENDED! Target: ${targetScore} runs to win.`, "#fbbf24");
+
+      this.time.delayedCall(2000, () => {
+        this.setRole(targetRole);
+        this.syncScoreboard(state);
+        if (!state.finished) {
+          this.updateTurnStatus(state);
+        }
+      });
+      return;
+    }
+
+    this.setRole(targetRole);
     this.syncScoreboard(state);
 
     for (const ev of events) {
@@ -767,7 +801,6 @@ export class CricketScene extends Phaser.Scene {
     switch (ev.type) {
       case "ball-bowled":
         this.executeBowl(ev.delivery as CricketDelivery, (ev.power as number) ?? 0.5);
-        // The batsman can swing once the ball is in flight (if that's me).
         if (this.mySeat === this.remoteState?.battingTeam) {
           this.hud.setControlsState(false);
         }
@@ -779,14 +812,12 @@ export class CricketScene extends Phaser.Scene {
         this.onRemoteBallResult(ev);
         break;
       case "inning-change":
+      case "role-change":
+      case "innings-break":
+      case "swap-roles":
         this.overHistory = [];
         this.hud.updateOverHistory(this.overHistory);
-        this.hud.updateStatus(
-          this.role === "batting" ? "You're batting now!" : "You're bowling now!",
-          "#fbbf24",
-        );
         break;
-      case "swap-roles":
       case "target-chased":
         break;
       case "match-complete":
@@ -800,6 +831,8 @@ export class CricketScene extends Phaser.Scene {
   private onRemoteBallResult(ev: { type: string } & Record<string, unknown>) {
     this.isBowling = false;
     this.isHit = false;
+    this.tweens.killTweensOf(this.ball);
+    this.tweens.killTweensOf(this.ballShadow);
     this.ball.setVisible(false);
     this.ballShadow.setVisible(false);
     this.trailEmitter.stop();
@@ -813,7 +846,7 @@ export class CricketScene extends Phaser.Scene {
       this.audioManager.playWicket();
       this.audioManager.playCrowdGroan();
       this.playWicketAnimation();
-      this.hud.updateStatus((ev.comment as string) || "OUT!", "#f43f5e");
+      this.hud.updateStatus((ev.comment as string) || "OUT! Bowled him!", "#f43f5e");
       this.overHistory.push("W");
     } else if (runs >= 4) {
       this.audioManager.playCrowdRoar();
@@ -826,6 +859,7 @@ export class CricketScene extends Phaser.Scene {
       this.hud.updateStatus((ev.comment as string) || `${runs} RUNS!`, "#34d399");
       this.hud.showRunIndicator(runs);
       this.overHistory.push(String(runs));
+      this.autoRunBatsmen(runs);
     } else {
       this.audioManager.playCrowdGroan();
       this.hud.updateStatus((ev.comment as string) || "Dot ball.", "#9ca3af");
@@ -919,6 +953,17 @@ export class CricketScene extends Phaser.Scene {
     this.ball.setVisible(false);
     this.ballShadow.setVisible(false);
     
+    if (this.mode === 'multiplayer') {
+      if (this.role === 'batting') {
+        this.hud.setControlsState(true);
+        this.hud.updateStatus("Waiting for opponent to bowl...", "#94a3b8");
+      } else {
+        this.hud.updateStatus("Select a delivery to bowl!", "#fbbf24");
+        this.hud.setControlsState(false);
+      }
+      return;
+    }
+
     if (this.role === 'batting') {
       this.hud.setControlsState(true); // Disable hitting
       let timeLeft = seconds;
@@ -966,7 +1011,9 @@ export class CricketScene extends Phaser.Scene {
   }
 
   private playerBowl(type: 'fast' | 'slow' | 'spin', power: number) {
-    if (this.wickets >= 1 || this.balls >= this.maxBalls) return;
+    if (this.isBowling || this.isHit || this.wickets >= 1 || this.balls >= this.maxBalls) return;
+
+    this.hud.setControlsState(true);
 
     if (this.mode === 'multiplayer') {
       if (!this.multiplayerDriver?.canBowl()) {
@@ -975,18 +1022,18 @@ export class CricketScene extends Phaser.Scene {
         return;
       }
       
-      this.hud.setControlsState(true);
       this.hud.updateStatus("Delivery sent! Waiting...", "#93c5fd");
       this.multiplayerDriver.sendBowlAction(type, power);
       return;
     }
 
     this.executeBowl(type, power);
-    this.hud.setControlsState(true);
   }
 
 
   private executeBowl(type: CricketDelivery, powerMultiplier: number = 1.0) {
+    this.tweens.killTweensOf(this.ball);
+    this.tweens.killTweensOf(this.ballShadow);
     this.isBowling = true;
     this.isHit = false;
     this.aiHasSwung = false;
@@ -1608,20 +1655,56 @@ export class CricketScene extends Phaser.Scene {
     }
   }
   private checkInningsEnd(isWicket = false) {
+    // In multiplayer mode, match completion & innings transitions are authoritatively driven by server state events!
+    if (this.mode === 'multiplayer') {
+      return false;
+    }
+
+    // In Single Player / Practice AI Mode:
+    if (this.inning === 1) {
+      if (this.wickets >= 1 || this.balls >= this.maxBalls) {
+        this.hud.setControlsState(true);
+        this.inning = 2;
+        this.targetScore = this.runs + 1;
+        this.hud.setTarget(this.targetScore);
+        this.hud.setInnings(2);
+        
+        this.audioManager.playCrowdRoar();
+        this.hud.updateStatus(`INNINGS 1 OVER! Target: ${this.targetScore} runs to win.`, "#fbbf24");
+
+        this.time.delayedCall(2000, () => {
+          this.runs = 0;
+          this.wickets = 0;
+          this.balls = 0;
+          this.overHistory = [];
+          this.hud.updateScore(0, 0);
+          this.hud.updateOverHistory([]);
+          
+          const newRole = this.role === 'batting' ? 'bowling' : 'batting';
+          this.setRole(newRole);
+          
+          this.startNextBallTimer(3);
+        });
+        return true;
+      }
+      return false;
+    }
+
+    // Innings 2 in Single Player AI Mode:
     const isWin = this.role === 'batting' ? this.runs >= this.targetScore : this.runs < this.targetScore;
-    
-    if (this.runs >= this.targetScore || this.balls >= this.maxBalls || this.wickets >= 1) {
+    const isEnded = (this.role === 'batting' && this.runs >= this.targetScore) || 
+                    this.balls >= this.maxBalls || 
+                    this.wickets >= 1;
+
+    if (isEnded) {
       this.hud.setControlsState(true);
       
-      // Celebration Jump
-      const delay = isWicket ? 1000 : 0; // Wait for stump animation if it's a wicket
+      const delay = isWicket ? 1000 : 0;
       this.time.delayedCall(delay, () => {
         if ((this.role === 'bowling' && isWin) || (this.role === 'batting' && !isWin)) {
-          // Bowler & Fielders celebrate
           this.fielders.forEach(f => this.jumpCelebrate(f));
           this.jumpCelebrate(this.bowler);
         } else {
-          // Batsman and Non-Striker celebrate
           this.jumpCelebrate(this.batsman);
           this.jumpCelebrate(this.nonStriker);
         }
@@ -1823,13 +1906,17 @@ export class CricketScene extends Phaser.Scene {
         if (this.mode === 'ai') {
           this.handleMiss();
         } else {
-          // The authoritative result arrives as a `ball-result` event, so just
-          // park the ball until the server broadcasts the outcome.
+          // Park the ball and await authoritative server outcome, with a 1.5s fallback to prevent soft-locking.
           this.isBowling = false;
           this.isHit = false;
           this.trailEmitter.stop();
-          this.hud.setControlsState(true);
-          this.hud.updateStatus("Ball is away... waiting for the shot.", "#94a3b8");
+          this.hud.updateStatus("Ball delivered! Awaiting outcome...", "#fbbf24");
+
+          this.time.delayedCall(1500, () => {
+            if (!this.isBowling && !this.isHit && !this.multiplayerOver) {
+              this.handleMiss();
+            }
+          });
         }
       }
     } else if (this.isHit) {

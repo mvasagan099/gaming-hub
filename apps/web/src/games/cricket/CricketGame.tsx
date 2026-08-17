@@ -190,109 +190,6 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
               <span className="text-slate-300">Loading...</span>
             </div>
           </div>
-        ) : isMultiplayer && matchFinished ? (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xl animate-in fade-in duration-500 rounded-3xl">
-            <div className="bg-[#0f172a]/90 border border-white/10 p-10 rounded-[2rem] shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col items-center max-w-md w-full mx-4 relative overflow-hidden">
-              <div className={`absolute -top-32 -left-32 w-64 h-64 rounded-full blur-[100px] opacity-20 ${isMultiWin ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-              
-              <div className="text-7xl mb-6 drop-shadow-lg relative z-10">🏆</div>
-              <h2 className={`text-4xl font-black uppercase tracking-widest text-center mb-2 drop-shadow-sm relative z-10 ${
-                isSpectator ? 'text-slate-300'
-                : winnerSeats.length === 0 ? 'text-amber-400'
-                : isMultiWin ? 'text-emerald-400' : 'text-red-400'
-              }`}>
-                {isSpectator
-                  ? 'MATCH COMPLETE'
-                  : winnerSeats.length === 0
-                    ? "IT'S A TIE!"
-                    : isMultiWin
-                      ? 'YOU WIN!'
-                      : 'YOU LOSE!'}
-              </h2>
-              {winnerName && (
-                <p className="text-slate-300 text-xl text-center mb-4 font-bold relative z-10">
-                  Winner: <span className="text-amber-400">{winnerName}</span>
-                </p>
-              )}
-              <div className="flex gap-4 mb-8 relative z-10">
-                <div className="bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-center">
-                  <div className="text-[10px] uppercase tracking-widest text-slate-400 mb-1">
-                    {namesBySeat[0] ?? 'Team 1'}
-                  </div>
-                  <div className="text-2xl font-black text-white">
-                    {remoteState ? scoreOf(0) : '-'}
-                  </div>
-                </div>
-                <div className="bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-center">
-                  <div className="text-[10px] uppercase tracking-widest text-slate-400 mb-1">
-                    {namesBySeat[1] ?? 'Team 2'}
-                  </div>
-                  <div className="text-2xl font-black text-white">
-                    {remoteState ? scoreOf(1) : '-'}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-4 w-full relative z-10">
-                <button
-                  onClick={handleReplay}
-                  disabled={isMultiplayer && myRematchRequested}
-                  className={`flex-1 py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 font-black tracking-widest uppercase rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-amber-500/50 duration-300 ${
-                    isMultiplayer && myRematchRequested
-                      ? 'opacity-70 cursor-not-allowed'
-                      : 'hover:from-amber-400 hover:to-amber-500 hover:scale-105'
-                  }`}
-                >
-                  {isMultiplayer && myRematchRequested
-                    ? 'Rematch Requested...'
-                    : isMultiplayer && rematchState?.active && rematchState.requestedBy.length > 0
-                    ? 'Accept Rematch'
-                    : 'Rematch'}
-                </button>
-                <button
-                  onClick={onBack}
-                  className="flex-1 py-4 bg-white/10 hover:bg-white/20 text-white font-bold tracking-widest uppercase rounded-2xl transition-all border border-white/10 backdrop-blur-sm hover:scale-105 duration-300"
-                >
-                  Exit
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : !isMultiplayer && aiGameOver ? (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xl animate-in fade-in duration-500 rounded-3xl">
-            <div className="bg-[#0f172a]/90 border border-white/10 p-10 rounded-[2rem] shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col items-center max-w-sm w-full mx-4 relative overflow-hidden">
-              <div className={`absolute -top-32 -left-32 w-64 h-64 rounded-full blur-[100px] opacity-20 ${isWin ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-              
-              <div className="text-7xl mb-6 drop-shadow-lg relative z-10">🏆</div>
-              <h2 className={`text-4xl font-black uppercase tracking-widest text-center mb-2 drop-shadow-sm relative z-10 ${isWin ? 'text-emerald-400' : 'text-red-400'}`}>
-                {isWin ? 'YOU WIN!' : 'YOU LOSE!'}
-              </h2>
-              <p className="text-slate-300 text-xl text-center mb-8 font-bold relative z-10">
-                Final Score: <span className="text-white">{finalRuns}</span> / <span className="text-white">{finalWickets}</span>
-              </p>
-              
-              {isWin && (
-                <div className="bg-gradient-to-r from-emerald-950/80 to-emerald-900/80 border border-emerald-500/50 text-emerald-400 px-6 py-3 rounded-2xl text-sm font-bold flex items-center gap-3 mb-8 shadow-[0_0_20px_rgba(16,185,129,0.2)] relative z-10">
-                  <span className="text-xl">🪙</span> Match Won! +50 Coins
-                </div>
-              )}
-
-              <div className="flex gap-4 w-full relative z-10">
-                <button
-                  onClick={handleReplay}
-                  className="flex-1 py-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-900 font-black tracking-widest uppercase rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-amber-500/50 hover:scale-105 duration-300"
-                >
-                  Replay
-                </button>
-                <button
-                  onClick={onBack}
-                  className="flex-1 py-4 bg-white/10 hover:bg-white/20 text-white font-bold tracking-widest uppercase rounded-2xl transition-all border border-white/10 backdrop-blur-sm hover:scale-105 duration-300"
-                >
-                  Exit
-                </button>
-              </div>
-            </div>
-          </div>
         ) : (
           <div className="flex flex-col lg:flex-row items-center justify-center gap-6 w-full">
             <CricketPhaserGame
@@ -306,6 +203,115 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
                 <MultiplayerMatchPanel compact />
               </div>
             )}
+          </div>
+        )}
+        
+        {isMultiplayer && matchFinished && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4 animate-in fade-in duration-300">
+            <div className="bg-gradient-to-b from-slate-900/90 to-slate-950/95 border border-white/15 p-8 rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.8)] flex flex-col items-center max-w-md w-full mx-auto relative overflow-hidden text-center">
+              <div className={`absolute -top-32 -left-32 w-64 h-64 rounded-full blur-[100px] opacity-25 ${isMultiWin ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+              <div className="absolute -bottom-32 -right-32 w-64 h-64 rounded-full blur-[100px] opacity-25 bg-amber-500"></div>
+
+              <div className="text-7xl mb-4 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] relative z-10 animate-bounce">🏆</div>
+              <h2 className={`text-4xl font-black uppercase tracking-widest text-center mb-1 drop-shadow-sm relative z-10 ${
+                isSpectator ? 'text-slate-300'
+                : winnerSeats.length === 0 ? 'text-amber-400'
+                : isMultiWin ? 'text-emerald-400' : 'text-red-400'
+              }`}>
+                {isSpectator
+                  ? 'MATCH COMPLETE'
+                  : winnerSeats.length === 0
+                    ? "IT'S A TIE!"
+                    : isMultiWin
+                      ? 'VICTORY!'
+                      : 'DEFEAT!'}
+              </h2>
+              {winnerName && (
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm font-bold mb-6 relative z-10">
+                  <span>👑 Winner:</span> <span className="font-extrabold text-white">{winnerName}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4 w-full mb-8 relative z-10">
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center">
+                  <div className="text-[11px] uppercase font-bold tracking-widest text-slate-400 mb-1">
+                    {namesBySeat[0] ?? 'Team 1'}
+                  </div>
+                  <div className="text-2xl font-black text-amber-400">
+                    {remoteState ? scoreOf(0) : '-'}
+                  </div>
+                </div>
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center">
+                  <div className="text-[11px] uppercase font-bold tracking-widest text-slate-400 mb-1">
+                    {namesBySeat[1] ?? 'Team 2'}
+                  </div>
+                  <div className="text-2xl font-black text-cyan-400">
+                    {remoteState ? scoreOf(1) : '-'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-4 w-full relative z-10">
+                <button
+                  onClick={handleReplay}
+                  disabled={isMultiplayer && myRematchRequested}
+                  className={`flex-1 py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black tracking-widest uppercase rounded-2xl flex items-center justify-center gap-2 transition-all shadow-[0_0_30px_rgba(245,158,11,0.4)] ${
+                    isMultiplayer && myRematchRequested
+                      ? 'opacity-70 cursor-not-allowed'
+                      : 'hover:from-amber-400 hover:to-amber-500 hover:scale-105'
+                  }`}
+                >
+                  {isMultiplayer && myRematchRequested
+                    ? 'Rematch Requested...'
+                    : isMultiplayer && rematchState?.active && rematchState.requestedBy.length > 0
+                    ? 'Accept Rematch'
+                    : 'Rematch'}
+                </button>
+                <button
+                  onClick={onBack}
+                  className="flex-1 py-4 bg-white/10 hover:bg-white/20 text-white font-bold tracking-widest uppercase rounded-2xl transition-all border border-white/10 backdrop-blur-sm hover:scale-105 shadow-lg"
+                >
+                  Exit
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isMultiplayer && aiGameOver && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4 animate-in fade-in duration-300">
+            <div className="bg-gradient-to-b from-slate-900/90 to-slate-950/95 border border-white/15 p-8 rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.8)] flex flex-col items-center max-w-sm w-full mx-auto relative overflow-hidden text-center">
+              <div className={`absolute -top-32 -left-32 w-64 h-64 rounded-full blur-[100px] opacity-25 ${isWin ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+              
+              <div className="text-7xl mb-4 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] relative z-10 animate-bounce">🏆</div>
+              <h2 className={`text-4xl font-black uppercase tracking-widest text-center mb-2 drop-shadow-sm relative z-10 ${isWin ? 'text-emerald-400' : 'text-red-400'}`}>
+                {isWin ? 'VICTORY!' : 'DEFEAT!'}
+              </h2>
+              <p className="text-slate-300 text-lg text-center mb-6 font-bold relative z-10">
+                Final Score: <span className="text-amber-400 text-xl font-extrabold">{finalRuns}</span> / <span className="text-white text-xl font-extrabold">{finalWickets}</span>
+              </p>
+              
+              {isWin && (
+                <div className="bg-gradient-to-r from-emerald-950/90 to-emerald-900/90 border border-emerald-500/50 text-emerald-400 px-6 py-3 rounded-2xl text-sm font-bold flex items-center gap-3 mb-6 shadow-[0_0_20px_rgba(16,185,129,0.3)] relative z-10">
+                  <span className="text-xl">🪙</span> Match Won! +50 Coins
+                </div>
+              )}
+
+              <div className="flex gap-4 w-full relative z-10">
+                <button
+                  onClick={handleReplay}
+                  className="flex-1 py-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black tracking-widest uppercase rounded-2xl flex items-center justify-center gap-2 transition-all shadow-[0_0_30px_rgba(245,158,11,0.4)] hover:scale-105 duration-300"
+                >
+                  Replay
+                </button>
+                <button
+                  onClick={onBack}
+                  className="flex-1 py-4 bg-white/10 hover:bg-white/20 text-white font-bold tracking-widest uppercase rounded-2xl transition-all border border-white/10 backdrop-blur-sm hover:scale-105 duration-300"
+                >
+                  Exit
+                </button>
+              </div>
+            </div>
           </div>
         )}
         

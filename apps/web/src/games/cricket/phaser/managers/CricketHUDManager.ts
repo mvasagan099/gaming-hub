@@ -274,7 +274,8 @@ export class CricketHUDManager {
       const defZone = this.scene.add.zone(CENTER_X - 150, btnY, 140, 50).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
       defZone.on('pointerdown', () => {
         if (!this.isControlsDisabled) {
-          defBg.setAlpha(0.7);
+          this.setControlsState(true);
+          defBg.setAlpha(0.5);
           this.onHit('straight');
         }
       });
@@ -296,7 +297,8 @@ export class CricketHUDManager {
       const slogZone = this.scene.add.zone(CENTER_X + 150, btnY, 140, 50).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
       slogZone.on('pointerdown', () => {
         if (!this.isControlsDisabled) {
-          slogBg.setAlpha(0.7);
+          this.setControlsState(true);
+          slogBg.setAlpha(0.5);
           this.onHit('up');
         }
       });
@@ -328,7 +330,8 @@ export class CricketHUDManager {
         const zone = this.scene.add.zone(cx, btnY, 70, 70).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
         zone.on('pointerdown', () => {
           if (!this.isControlsDisabled) {
-            bg.setAlpha(0.7);
+            this.setControlsState(true);
+            bg.setAlpha(0.5);
             this.onBowl(t.id, this.currentPower);
           }
         });

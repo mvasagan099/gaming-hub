@@ -89,6 +89,9 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     camera: { x: 0, y: 0 }
   });
 
+  const mpRenderStateRef = useRef<Map<number, { body: { x: number; y: number }[]; angle: number }>>(new Map());
+  const animTimeRef = useRef(0);
+
   // Reward logic
   useEffect(() => {
     if (gameOver && kills >= 3 && !rewardClaimed) {
@@ -249,10 +252,54 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     // ----------------------------------------------------
     // MULTIPLAYER REAL-TIME SHARED 2000x2000 ARENA RENDER
     // ----------------------------------------------------
+    // ----------------------------------------------------
+    // MULTIPLAYER REAL-TIME SHARED 2000x2000 ARENA RENDER
+    // ----------------------------------------------------
     if (mode === 'multiplayer' && multiplayerState) {
       const mpState = multiplayerState;
+      animTimeRef.current += dt;
+      const animTime = animTimeRef.current;
+
       const me = mpState.players.find(p => p.seat === mySeat) || mpState.players[0];
-      const head = me.body[0] || { x: 1000, y: 1000 };
+      const meHeadTarget = me.body[0] || { x: 1000, y: 1000 };
+
+      // 1. Client-Side Position & Angle Interpolation for Butter-Smooth Motion
+      const renderMap = mpRenderStateRef.current;
+      for (const p of mpState.players) {
+        if (!p.body || p.body.length === 0) continue;
+        let pState = renderMap.get(p.seat);
+        if (!pState || pState.body.length !== p.body.length) {
+          pState = {
+            body: p.body.map(pt => ({ x: pt.x, y: pt.y })),
+            angle: 0
+          };
+          renderMap.set(p.seat, pState);
+        }
+
+        // Lerp each segment position smoothly towards target server position
+        const lerpFactor = Math.min(1, 18 * dt);
+        for (let i = 0; i < p.body.length; i++) {
+          const targetPt = p.body[i];
+          const currPt = pState.body[i] || { x: targetPt.x, y: targetPt.y };
+          currPt.x += (targetPt.x - currPt.x) * lerpFactor;
+          currPt.y += (targetPt.y - currPt.y) * lerpFactor;
+          pState.body[i] = currPt;
+        }
+
+        // Calculate smooth head angle
+        if (pState.body.length > 1) {
+          const headPt = pState.body[0];
+          const nextPt = pState.body[1];
+          const targetAngle = Math.atan2(headPt.y - nextPt.y, headPt.x - nextPt.x);
+          let angleDiff = targetAngle - pState.angle;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          pState.angle += angleDiff * Math.min(1, 12 * dt);
+        }
+      }
+
+      const myRenderState = renderMap.get(me.seat);
+      const head = (myRenderState && myRenderState.body[0]) || meHeadTarget;
 
       // Smooth camera interpolation in 2000x2000 arena
       const targetCamX = Math.max(0, Math.min(MAP_WIDTH - CANVAS_WIDTH, head.x - CANVAS_WIDTH / 2));
@@ -278,21 +325,30 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_WIDTH, y); ctx.stroke();
       }
 
-      // Draw Outer World Boundary
-      ctx.strokeStyle = '#ef4444';
+      // Draw Outer World Boundary with Pulsing Glow
+      const borderGlow = 0.5 + Math.sin(animTime * 4) * 0.3;
+      ctx.strokeStyle = `rgba(239, 68, 68, ${borderGlow})`;
       ctx.lineWidth = 8;
       ctx.strokeRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
 
-      // Draw Shared Food
+      // Draw Animated Shared Food (Pulsing glowing orbs)
       for (const food of mpState.food) {
         const color = food.type === 'golden' ? '#f59e0b' : (food.type === 'boost' ? '#06b6d4' : '#10b981');
-        const radius = food.type === 'golden' ? 10 : 7;
+        const baseRadius = food.type === 'golden' ? 10 : 7;
+        const pulse = Math.sin(animTime * 5 + food.x * 0.05 + food.y * 0.05) * 1.5;
+        const radius = Math.max(3, baseRadius + pulse);
 
         ctx.fillStyle = color;
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = food.type === 'golden' ? 14 : 8;
         ctx.shadowColor = color;
         ctx.beginPath();
         ctx.arc(food.x, food.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Inner shine highlight
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(food.x - radius * 0.3, food.y - radius * 0.3, radius * 0.3, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.shadowBlur = 0;
@@ -301,67 +357,97 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
       for (const p of mpState.players) {
         const isMe = p.seat === mySeat;
         const color = p.seat === 0 ? '#10b981' : '#3b82f6';
+        const renderState = renderMap.get(p.seat);
+        const pBody = renderState ? renderState.body : p.body;
 
         if (p.status === 'eliminated') {
-          if (p.body && p.body[0]) {
-            const pHead = p.body[0];
+          if (pBody && pBody[0]) {
+            const pHead = pBody[0];
             ctx.fillStyle = 'rgba(239, 68, 68, 0.6)';
             ctx.beginPath();
-            ctx.arc(pHead.x, pHead.y, 14, 0, Math.PI * 2);
+            ctx.arc(pHead.x, pHead.y, 16, 0, Math.PI * 2);
             ctx.fill();
+
+            // Animated death loot particle burst rings
+            const particleCount = 8;
+            for (let k = 0; k < particleCount; k++) {
+              const pAngle = (k / particleCount) * Math.PI * 2 + animTime * 3;
+              const pDist = 20 + Math.sin(animTime * 6 + k) * 6;
+              const px = pHead.x + Math.cos(pAngle) * pDist;
+              const py = pHead.y + Math.sin(pAngle) * pDist;
+              ctx.fillStyle = color;
+              ctx.beginPath();
+              ctx.arc(px, py, 4, 0, Math.PI * 2);
+              ctx.fill();
+            }
 
             ctx.fillStyle = '#ef4444';
             ctx.font = 'bold 12px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(`${p.name} (ELIMINATED)`, pHead.x, pHead.y - 20);
+            ctx.fillText(`${p.name} (ELIMINATED)`, pHead.x, pHead.y - 24);
           }
           continue;
         }
 
         // 1. Draw smooth curved body stroke connecting segments
-        if (p.body && p.body.length > 1) {
+        if (pBody && pBody.length > 1) {
           ctx.strokeStyle = color;
           ctx.lineWidth = 26;
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
 
           if (p.isBoosting) {
-            ctx.shadowBlur = 16;
+            ctx.shadowBlur = 20;
             ctx.shadowColor = color;
           }
 
           ctx.beginPath();
-          ctx.moveTo(p.body[0].x, p.body[0].y);
+          ctx.moveTo(pBody[0].x, pBody[0].y);
 
-          for (let i = 1; i < p.body.length - 1; i++) {
-            const xc = (p.body[i].x + p.body[i + 1].x) / 2;
-            const yc = (p.body[i].y + p.body[i + 1].y) / 2;
-            ctx.quadraticCurveTo(p.body[i].x, p.body[i].y, xc, yc);
+          for (let i = 1; i < pBody.length - 1; i++) {
+            const xc = (pBody[i].x + pBody[i + 1].x) / 2;
+            const yc = (pBody[i].y + pBody[i + 1].y) / 2;
+            ctx.quadraticCurveTo(pBody[i].x, pBody[i].y, xc, yc);
           }
-          ctx.lineTo(p.body[p.body.length - 1].x, p.body[p.body.length - 1].y);
+          ctx.lineTo(pBody[pBody.length - 1].x, pBody[pBody.length - 1].y);
           ctx.stroke();
           ctx.shadowBlur = 0;
 
           // 2. Draw decorative inner scale spots along body
-          for (let i = 1; i < p.body.length; i += 2) {
-            const seg = p.body[i];
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+          for (let i = 1; i < pBody.length; i += 2) {
+            const seg = pBody[i];
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
             ctx.beginPath();
             ctx.arc(seg.x, seg.y, 5, 0, Math.PI * 2);
             ctx.fill();
           }
-        } else if (p.body && p.body[0]) {
+
+          // 3. Boosting Speed Trail Particles
+          if (p.isBoosting) {
+            const tail = pBody[pBody.length - 1];
+            ctx.fillStyle = color;
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = '#06b6d4';
+            for (let b = 0; b < 3; b++) {
+              const bOffsetAngle = Math.random() * Math.PI * 2;
+              const bDist = Math.random() * 15;
+              ctx.beginPath();
+              ctx.arc(tail.x + Math.cos(bOffsetAngle) * bDist, tail.y + Math.sin(bOffsetAngle) * bDist, 4 + Math.random() * 4, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.shadowBlur = 0;
+          }
+        } else if (pBody && pBody[0]) {
           ctx.fillStyle = color;
           ctx.beginPath();
-          ctx.arc(p.body[0].x, p.body[0].y, 14, 0, Math.PI * 2);
+          ctx.arc(pBody[0].x, pBody[0].y, 14, 0, Math.PI * 2);
           ctx.fill();
         }
 
-        // 3. Draw Head & Eyes
-        const pHead = p.body[0];
-        const pNext = p.body[1] || pHead;
+        // 4. Draw Animated Head, Eyes & Tongue
+        const pHead = pBody[0];
         if (pHead) {
-          const headAngle = Math.atan2(pHead.y - pNext.y, pHead.x - pNext.x);
+          const headAngle = renderState ? renderState.angle : 0;
 
           ctx.save();
           ctx.translate(pHead.x, pHead.y);
@@ -369,20 +455,41 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
           // Head Circle
           ctx.fillStyle = isMe ? '#34d399' : color;
+          if (p.isBoosting) {
+            ctx.shadowBlur = 16;
+            ctx.shadowColor = '#06b6d4';
+          }
           ctx.beginPath();
           ctx.arc(0, 0, 16, 0, Math.PI * 2);
           ctx.fill();
           ctx.strokeStyle = '#ffffff';
           ctx.lineWidth = 2.5;
           ctx.stroke();
+          ctx.shadowBlur = 0;
 
-          // Eye Sockets & Pupils
+          // Animated Flicking Snake Tongue
+          if (Math.sin(animTime * 12 + p.seat) > 0.3) {
+            ctx.strokeStyle = '#f43f5e';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(16, 0);
+            ctx.lineTo(24, 0);
+            ctx.lineTo(27, -3);
+            ctx.moveTo(24, 0);
+            ctx.lineTo(27, 3);
+            ctx.stroke();
+          }
+
+          // Animated Eye Sockets & Pupils (Excited narrowing when boosting)
+          const eyeYOffset = p.isBoosting ? 5 : 6;
+          const pupilRadius = p.isBoosting ? 1.8 : 2.5;
+
           ctx.fillStyle = '#ffffff';
-          ctx.beginPath(); ctx.arc(6, -6, 5, 0, Math.PI * 2); ctx.fill();
-          ctx.beginPath(); ctx.arc(6, 6, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(6, -eyeYOffset, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(6, eyeYOffset, 5, 0, Math.PI * 2); ctx.fill();
           ctx.fillStyle = '#0f172a';
-          ctx.beginPath(); ctx.arc(8, -6, 2.5, 0, Math.PI * 2); ctx.fill();
-          ctx.beginPath(); ctx.arc(8, 6, 2.5, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(8, -eyeYOffset, pupilRadius, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(8, eyeYOffset, pupilRadius, 0, Math.PI * 2); ctx.fill();
 
           ctx.restore();
 
