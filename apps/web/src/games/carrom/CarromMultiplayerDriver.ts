@@ -298,6 +298,8 @@ export default class CarromMultiplayerDriver {
 
   // ── Internal state application ───────────────────────────────────────────────
 
+  private processedEventIds = new Set<string>();
+
   private _apply(
     state: CarromRemoteState | null,
     events: { type: string }[] = [],
@@ -310,9 +312,19 @@ export default class CarromMultiplayerDriver {
     // Notify UI with full state and events.
     this.onStateUpdate?.(state);
 
-    // Process events.
+    // Process events idempotently.
     for (const ev of events) {
       const e = ev as Record<string, unknown>;
+      const evId = String(
+        e["id"] ??
+        `${state.lastActionAtMs ?? state.version}:${e["type"]}:${e["coinId"] ?? e["seat"] ?? e["reason"] ?? ""}`
+      );
+      if (this.processedEventIds.has(evId)) {
+        console.warn("[CARROM] DUPLICATE_EVENT_IGNORED", evId);
+        continue;
+      }
+      this.processedEventIds.add(evId);
+
       switch (e["type"]) {
         case "coin-scored":
         case "coin-pocketed":

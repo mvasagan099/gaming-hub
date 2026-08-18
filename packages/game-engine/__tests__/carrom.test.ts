@@ -167,27 +167,109 @@ describe("CarromEngine turn calculation scenarios", () => {
     expect(res.score).toBe(2);
   });
 
-  it("Scenario 7: Queen only -> loses turn (must be covered according to rules)", async () => {
-    const { calculateScore } = await import("../src/carrom/physics");
-    const pocketedCoins = [
-      { id: "queen", type: "queen", x: 0, y: 0, vx: 0, vy: 0, pocketed: true, pocketedBy: null, pocketedAtTurn: null },
-    ] as any;
-    const res = calculateScore(pocketedCoins, "white", false, false);
-    expect(res.earnedExtraTurn).toBe(false);
-    expect(res.queenPocketed).toBe(true);
-    expect(res.queenCovered).toBe(false);
+  it("Scenario 7: TEST 1 - Queen captured alone enters PENDING_COVER, remains off-board, player keeps turn", () => {
+    const eng = setup();
+    // Position Queen near pocket moving in
+    const queen = eng.state.coins.find((c) => c.type === "queen")!;
+    queen.x = 48; queen.y = 48; queen.vx = -2; queen.vy = -2; queen.pocketed = false;
+    eng.apply({ type: "place-striker", x: 300 }, 0);
+    const shot = eng.apply({ type: "strike", angle: 0, power: 0.1 }, 0);
+
+    expect(shot.ok).toBe(true);
+    expect(shot.state.queenState).toBe("PENDING_COVER");
+    expect(shot.state.pendingQueenOwner).toBe(0);
+    expect(shot.state.currentSeat).toBe(0); // Same player gets cover attempt!
+    expect(shot.state.coins.find((c) => c.type === "queen")?.pocketed).toBe(true); // Queen remains pocketed/off-board
+    expect(shot.state.queenOnBoard).toBe(false);
   });
 
-  it("Scenario 8: Queen + own coin -> covered and keeps turn", async () => {
-    const { calculateScore } = await import("../src/carrom/physics");
-    const pocketedCoins = [
-      { id: "queen", type: "queen", x: 0, y: 0, vx: 0, vy: 0, pocketed: true, pocketedBy: null, pocketedAtTurn: null },
-      { id: "c1", type: "white", x: 0, y: 0, vx: 0, vy: 0, pocketed: true, pocketedBy: null, pocketedAtTurn: null },
-    ] as any;
-    const res = calculateScore(pocketedCoins, "white", false, false);
-    expect(res.earnedExtraTurn).toBe(true);
-    expect(res.queenPocketed).toBe(true);
-    expect(res.queenCovered).toBe(true);
-    expect(res.score).toBe(4); // 1 for white + 3 for queen
+  it("Scenario 7b: TEST 2 - Follow-up shot in PENDING_COVER pockets own coin -> COVERED and keeps turn", () => {
+    const eng = setup();
+    // Start with Queen in PENDING_COVER for seat 0
+    eng.state.queenState = "PENDING_COVER";
+    eng.state.pendingQueenOwner = 0;
+    const queen = eng.state.coins.find((c) => c.type === "queen")!;
+    queen.pocketed = true;
+
+    // Position a white coin (own coin) near pocket moving in
+    const whiteCoin = eng.state.coins.find((c) => c.type === "white")!;
+    whiteCoin.x = 48; whiteCoin.y = 48; whiteCoin.vx = -2; whiteCoin.vy = -2; whiteCoin.pocketed = false;
+
+    eng.apply({ type: "place-striker", x: 300 }, 0);
+    const shot = eng.apply({ type: "strike", angle: 0, power: 0.1 }, 0);
+
+    expect(shot.ok).toBe(true);
+    expect(shot.state.queenState).toBe("COVERED");
+    expect(shot.state.pendingQueenOwner).toBe(null);
+    expect(shot.state.players[0].queenCovered).toBe(true);
+    expect(shot.state.players[0].score).toBe(4); // 3 for queen + 1 for coin
+    expect(shot.state.currentSeat).toBe(0); // Player gets extra turn
+    expect(shot.state.coins.find((c) => c.type === "queen")?.pocketed).toBe(true);
+  });
+
+  it("Scenario 7c: TEST 3 - Follow-up shot in PENDING_COVER fails -> Queen returns to center, opponent gets turn", () => {
+    const eng = setup();
+    // Start with Queen in PENDING_COVER for seat 0
+    eng.state.queenState = "PENDING_COVER";
+    eng.state.pendingQueenOwner = 0;
+    const queen = eng.state.coins.find((c) => c.type === "queen")!;
+    queen.pocketed = true;
+
+    // Miss (light tap that pockets nothing)
+    eng.apply({ type: "place-striker", x: 300 }, 0);
+    const shot = eng.apply({ type: "strike", angle: 0, power: 0.05 }, 0);
+
+    expect(shot.ok).toBe(true);
+    expect(shot.state.queenState).toBe("ON_BOARD");
+    expect(shot.state.pendingQueenOwner).toBe(null);
+    expect(shot.state.players[0].queenCovered).toBe(false);
+    expect(shot.state.currentSeat).toBe(1); // Turn passes to Player 2
+    expect(shot.state.coins.find((c) => c.type === "queen")?.pocketed).toBe(false); // Returned to center
+    expect(shot.state.queenOnBoard).toBe(true);
+  });
+
+  it("Scenario 8: TEST 4 - Queen + own white coin in same shot -> immediate COVERED, extra turn", () => {
+    const eng = setup();
+    const queen = eng.state.coins.find((c) => c.type === "queen")!;
+    const whiteCoin = eng.state.coins.find((c) => c.type === "white")!;
+    queen.x = 48; queen.y = 48; queen.vx = -2; queen.vy = -2; queen.pocketed = false;
+    whiteCoin.x = 552; whiteCoin.y = 48; whiteCoin.vx = 2; whiteCoin.vy = -2; whiteCoin.pocketed = false;
+
+    eng.apply({ type: "place-striker", x: 300 }, 0);
+    const shot = eng.apply({ type: "strike", angle: 0, power: 0.1 }, 0);
+
+    expect(shot.ok).toBe(true);
+    expect(shot.state.queenState).toBe("COVERED");
+    expect(shot.state.pendingQueenOwner).toBe(null);
+    expect(shot.state.players[0].queenCovered).toBe(true);
+    expect(shot.state.players[0].score).toBe(4); // 3 for queen + 1 for coin
+    expect(shot.state.currentSeat).toBe(0); // Player gets extra turn
+    expect(shot.state.coins.find((c) => c.type === "queen")?.pocketed).toBe(true);
+  });
+
+  it("Scenario 9: Turn timeout passes turn to Player 2 without ending match and updates engine state", () => {
+    const eng = setup();
+    expect(eng.state.currentSeat).toBe(0);
+    expect(eng.state.turnNumber).toBe(0);
+
+    const res = eng.handleTimeout("turn", 0);
+    expect(res.ok).toBe(true);
+    expect(res.finished).toBe(false);
+    expect(eng.state.currentSeat).toBe(1);
+    expect(eng.state.turnNumber).toBe(1);
+    expect(eng.state.strikerPlacementSeat).toBe(1);
+  });
+
+  it("Scenario 10: Subsequent timeout passes turn back to Player 1", () => {
+    const eng = setup();
+    eng.handleTimeout("turn", 0);
+    expect(eng.state.currentSeat).toBe(1);
+    expect(eng.state.turnNumber).toBe(1);
+
+    const res2 = eng.handleTimeout("turn", 1);
+    expect(res2.ok).toBe(true);
+    expect(res2.finished).toBe(false);
+    expect(eng.state.currentSeat).toBe(0);
+    expect(eng.state.turnNumber).toBe(2);
   });
 });

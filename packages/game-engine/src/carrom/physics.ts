@@ -90,15 +90,16 @@ export function createInitialStriker(seat: number = 0): CarromStriker {
 }
 
 export function isValidStrikerPlacement(x: number, seat: number, coins: CarromCoin[] = []): boolean {
-  const margin = STRIKER_RADIUS + 5;
-  if (x < BASE_LINE_X_START + margin || x > BASE_LINE_X_END - margin) return false;
+  // Allow striker center anywhere between the left circle center (BASE_LINE_X_START = 129)
+  // and right circle center (BASE_LINE_X_END = 471), with 2px tolerance for float rounding.
+  if (x < BASE_LINE_X_START - 2 || x > BASE_LINE_X_END + 2) return false;
 
   // The striker may not overlap any active coin (server-authoritative rule).
   const y = seat === 0 ? BASE_LINE_Y : 93;
   for (const coin of coins) {
     if (coin.pocketed) continue;
     const r = coin.type === "queen" ? QUEEN_RADIUS : COIN_RADIUS;
-    if (Math.hypot(coin.x - x, coin.y - y) < STRIKER_RADIUS + r + 2) return false;
+    if (Math.hypot(coin.x - x, coin.y - y) < STRIKER_RADIUS + r + 1) return false;
   }
   return true;
 }
@@ -472,8 +473,10 @@ export function simulatePhysics(
             striker.vy = 0;
             pocketedStriker = true;
             events.push({
+              id: `striker-pocketed-${pocketIdx}-${frame + 1}`,
               type: "striker-pocketed",
               coinId: "striker",
+              coinType: "striker",
               pocketIndex: pocketIdx,
               frame: frame + 1,
             });
@@ -485,6 +488,7 @@ export function simulatePhysics(
             b.coinObj.vy = 0;
             pocketedCoins.push(b.coinObj);
             events.push({
+              id: `coin-pocketed-${b.coinObj.id}-${pocketIdx}-${frame + 1}`,
               type: "coin-pocketed",
               coinId: b.coinObj.id,
               coinType: b.coinObj.type,
@@ -543,79 +547,38 @@ export function simulatePhysics(
 export function calculateScore(
   pocketedCoins: CarromCoin[],
   playerColor: CoinType,
-  queenAlreadyPocketed: boolean,
-  queenAlreadyCovered: boolean,
+  _queenAlreadyPocketed: boolean = false,
+  _queenAlreadyCovered: boolean = false,
 ): {
   score: number;
   opponentScore: number;
-  queenPocketed: boolean;
-  queenCovered: boolean;
   earnedExtraTurn: boolean;
-  /** True when the queen returns to the board center (cover failed or not attempted). */
-  queenNeedsReturn: boolean;
   pocketedOwnColor: boolean;
   pocketedOpponentColor: boolean;
   pocketedQueenThisShot: boolean;
 } {
   let score = 0;
   let opponentScore = 0;
-  let newQueenPocketed = queenAlreadyPocketed;
-  let newQueenCovered = queenAlreadyCovered;
-  let pocketedOwnColor = false;
-  let pocketedOpponentColor = false;
-  let pocketedQueenThisShot = false;
+
+  const pocketedQueenThisShot = pocketedCoins.some((c) => c.type === "queen");
+  const ownCoinPocketedThisShot = pocketedCoins.some((c) => c.type === playerColor);
+  const pocketedOpponentColor = pocketedCoins.some((c) => c.type !== playerColor && c.type !== "queen");
 
   for (const coin of pocketedCoins) {
-    if (coin.type === "queen") {
-      pocketedQueenThisShot = true;
-    } else if (coin.type === playerColor) {
+    if (coin.type === playerColor) {
       score += 1;
-      pocketedOwnColor = true;
-    } else {
+    } else if (coin.type !== "queen") {
       opponentScore += 1;
-      pocketedOpponentColor = true;
     }
   }
 
-  let queenNeedsReturn = false;
-  const hasPendingCover = queenAlreadyPocketed && !queenAlreadyCovered;
-
-  if (pocketedQueenThisShot) {
-    if (pocketedOwnColor) {
-      // Queen pocketed AND own coin pocketed in the same shot → covered immediately.
-      newQueenPocketed = true;
-      newQueenCovered = true;
-      score += 3; // queen bonus
-    } else {
-      // Queen pocketed alone → stays off-board, must be covered on the next shot.
-      newQueenPocketed = true;
-      newQueenCovered = false;
-    }
-  } else if (hasPendingCover) {
-    if (pocketedOwnColor) {
-      // Covered the queen on the follow-up shot.
-      newQueenCovered = true;
-      score += 3; // queen bonus
-    } else {
-      // Failed to cover the queen → it returns to the board center.
-      queenNeedsReturn = true;
-      newQueenPocketed = false;
-      newQueenCovered = false;
-    }
-  }
-
-  // Extra turn: Player keeps turn IF AND ONLY IF at least one of their OWN coins was pocketed.
-  // Queen pocketed alone without an own coin does NOT grant an extra turn (turn passes to opponent).
-  const earnedExtraTurn = pocketedOwnColor;
+  const earnedExtraTurn = ownCoinPocketedThisShot || pocketedQueenThisShot;
 
   return {
     score,
     opponentScore,
-    queenPocketed: newQueenPocketed,
-    queenCovered: newQueenCovered,
     earnedExtraTurn,
-    queenNeedsReturn,
-    pocketedOwnColor,
+    pocketedOwnColor: ownCoinPocketedThisShot,
     pocketedOpponentColor,
     pocketedQueenThisShot,
   };
@@ -625,6 +588,18 @@ export function checkWinCondition(
   coins: CarromCoin[],
   _players: { seat: number; color: CoinType; score: number; queenPocketed: boolean; queenCovered: boolean }[],
 ): { winner: number | null; isDraw: boolean } {
+  if (!coins || coins.length === 0) {
+    return { winner: null, isDraw: false };
+  }
+
+  const totalWhite = coins.filter(c => c.type === "white").length;
+  const totalBlack = coins.filter(c => c.type === "black").length;
+
+  // A match cannot be won if coins have not been loaded or initialized
+  if (totalWhite < 9 || totalBlack < 9) {
+    return { winner: null, isDraw: false };
+  }
+
   const queenRemaining = coins.some(c => !c.pocketed && c.type === "queen");
   const whiteCoinsRemaining = coins.filter(c => !c.pocketed && c.type === "white").length;
   const blackCoinsRemaining = coins.filter(c => !c.pocketed && c.type === "black").length;

@@ -26,8 +26,9 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
   readonly gameId = "carrom" as const;
 
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: CarromEngineOptions) {
-    const turnTimer = options?.turnTimer ?? { turnDurationMs: 60000, warningThresholdMs: 10000 };
-    const matchTimer = options?.matchTimer ?? { matchDurationMs: 600000, warningThresholdMs: 30000 };
+    const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 10000 };
+    // Carrom matches are score/board based, so matchTimer is optional and not forced to 10 mins
+    const matchTimer = options?.matchTimer;
     super(players, rng, {
       turnTimer,
       matchTimer,
@@ -39,7 +40,26 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     });
   }
 
+  override get currentMatchDeadline(): number | null {
+    return null;
+  }
+
+  protected override onMatchTimerExpired(state: CarromState): EngineActionResult<CarromState> {
+    return {
+      ok: true,
+      state,
+      events: [{ type: "match-timer-tick" }],
+      finished: false,
+      winnerSeats: [],
+    };
+  }
+
   protected onTurnTimerExpired(seat: number, state: CarromState): EngineActionResult<CarromState> {
+    console.log("[CARROM TIMER] TURN_TIMEOUT", {
+      turnNumber: state.turnNumber,
+      playerId: state.currentTurnPlayerId,
+    });
+
     const next = this.cloneState(state);
     const player = next.players.find(p => p.seat === seat);
     if (player) {
@@ -47,34 +67,64 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       player.consecutiveFouls++;
     }
 
-    // Only forfeit if a player accumulates 3 consecutive AFK timeouts
-    if (player && player.consecutiveFouls >= 3) {
-      next.finished = true;
-      next.gameOver = true;
-      next.endReason = "afk-forfeit";
-      const winnerSeats = [seat === 0 ? 1 : 0];
-      next.winnerSeats = winnerSeats;
-      return {
-        ok: true,
-        state: next,
-        events: [{ type: "afk-forfeit", seat, winnerSeat: winnerSeats[0] }],
-        finished: true,
-        winnerSeats,
-      };
+    const events: EngineEvent[] = [];
+
+    // If player had a pending queen cover attempt and timed out, cover fails and queen returns
+    if (next.queenState === "PENDING_COVER" && next.pendingQueenOwner === seat) {
+      next.queenState = "ON_BOARD";
+      next.pendingQueenOwner = null;
+      if (player) {
+        player.queenPocketed = false;
+        player.queenCovered = false;
+      }
+      const queenCoin = next.coins.find((c) => c.type === "queen");
+      if (queenCoin) {
+        queenCoin.pocketed = false;
+        queenCoin.pocketedBy = null;
+        queenCoin.pocketedAtTurn = null;
+        placeCoinSafelyNearCenter(queenCoin, next.coins);
+      }
+      events.push({ type: "queen-returned", seat, reason: "cover-timeout" });
     }
 
-    // Regular turn timeout: pass the turn to opponent without ending the match
+    // Turn timeout: cancel positioning, reset striker for next player, start 30s timer.
+    // Carrom matches never auto-forfeit; the turn simply passes to the opponent.
+    const now = this.now();
     const nextSeat = seat === 0 ? 1 : 0;
+    const nextPlayerId = this.players.find(p => p.seat === nextSeat)?.userId ?? `seat-${nextSeat}`;
+    const prevPlayerId = state.currentTurnPlayerId;
+    next.turnNumber++;
     next.currentSeat = nextSeat;
-    next.turnStartedAtMs = this.now();
+    next.currentTurnPlayerId = nextPlayerId;
+    next.turnStartedAt = now;
+    next.turnStartedAtMs = now;
+    next.turnExpiresAt = now + 30000;
+    next.isShotInProgress = false;
     next.strikerPlacementPhase = true;
     next.strikerPlacementSeat = nextSeat;
     next.striker = createInitialStriker(nextSeat);
+    next.lastTrajectory = null;
+    next.strikerAtShotStart = null;
+    next.queenOnBoard = next.queenState === "ON_BOARD" && next.coins.some(c => !c.pocketed && c.type === "queen");
+
+    console.log("[CARROM TIMER] TURN_CHANGED", {
+      previousPlayerId: prevPlayerId,
+      nextPlayerId,
+      turnNumber: next.turnNumber,
+    });
+    console.log("[CARROM TIMER] TURN_STARTED", {
+      turnNumber: next.turnNumber,
+      playerId: nextPlayerId,
+      startedAt: next.turnStartedAt,
+      expiresAt: next.turnExpiresAt,
+    });
+
+    events.push({ type: "turn-timeout", seat, nextSeat, turnNumber: next.turnNumber });
 
     return {
       ok: true,
       state: next,
-      events: [{ type: "turn-timeout", seat, nextSeat }],
+      events,
       finished: false,
       winnerSeats: [],
     };
@@ -86,7 +136,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
 
   protected initBaseState(): Omit<CarromState, keyof import("../base/MultiplayerGameEngine").BaseState> {
     const coins = createInitialCoins();
-    const striker = createInitialStriker();
+    const striker = createInitialStriker(0);
     const carromPlayers: CarromPlayer[] = this.players.map((p) => ({
       seat: p.seat,
       color: p.seat === 0 ? "white" : "black",
@@ -97,6 +147,18 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       consecutiveFouls: 0,
     }));
 
+    const now = this.now();
+    const currentTurnPlayerId = this.players.find(p => p.seat === 0)?.userId ?? "seat-0";
+    const turnStartedAt = now;
+    const turnExpiresAt = now + 30000;
+
+    console.log("[CARROM TIMER] TURN_STARTED", {
+      turnNumber: 1,
+      playerId: currentTurnPlayerId,
+      startedAt: turnStartedAt,
+      expiresAt: turnExpiresAt,
+    });
+
     console.log("[CarromEngine] INITIAL_MATCH_STATE created", {
       totalCoins: coins.length,
       coins: coins.map(c => ({ id: c.id, type: c.type, x: Math.round(c.x), y: Math.round(c.y) })),
@@ -106,6 +168,10 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       coins,
       striker,
       players: carromPlayers,
+      currentTurnPlayerId,
+      turnStartedAt,
+      turnExpiresAt,
+      isShotInProgress: false,
       lastAction: null,
       lastActionSeat: null,
       lastActionAtMs: null,
@@ -115,6 +181,8 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       strikerPlacementSeat: 0,
       foulThisTurn: false,
       queenOnBoard: true,
+      queenState: "ON_BOARD",
+      pendingQueenOwner: null,
     };
   }
 
@@ -125,6 +193,9 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     switch (action.type) {
       case "place-striker": {
         if (state.currentSeat !== seat) return "Not your turn";
+        if (state.isShotInProgress) return "Shot in progress";
+        const now = this.now();
+        if (state.turnExpiresAt && now > state.turnExpiresAt + 1000) return "Turn expired";
         if (typeof action.x !== "number") return "Invalid x coordinate";
         if (!isValidStrikerPlacement(action.x, seat, state.coins)) return "Invalid striker placement position";
         return null;
@@ -132,6 +203,9 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
 
       case "strike": {
         if (state.currentSeat !== seat) return "Not your turn";
+        if (state.isShotInProgress) return "Shot in progress";
+        const now = this.now();
+        if (state.turnExpiresAt && now > state.turnExpiresAt + 1000) return "Turn expired";
         if (state.striker.pocketed) return "Striker was pocketed, place again";
         if (!state.striker.placed && action.x === undefined) return "Place the striker first";
         if (typeof action.angle !== "number" || typeof action.power !== "number") return "Invalid strike parameters";
@@ -225,6 +299,15 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     const next = this.cloneState(state);
     const player = next.players.find((p) => p.seat === seat)!;
 
+    const remaining = Math.max(0, (next.turnExpiresAt ?? (next.turnStartedAtMs ? next.turnStartedAtMs + 30000 : now + 30000)) - now);
+    console.log("[CARROM TIMER] SHOT_ACCEPTED", {
+      turnNumber: next.turnNumber,
+      playerId: next.currentTurnPlayerId,
+      remaining,
+    });
+
+    next.isShotInProgress = true;
+
     if (action.x !== undefined) {
       next.striker.x = action.x;
     }
@@ -292,116 +375,183 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       events.push({ ...physicsEvent, seat });
     }
 
-    let foul = false;
+    if (player) {
+      player.consecutiveFouls = 0;
+    }
+
+    if (next.matchStartedAtMs === null) {
+      next.matchStartedAtMs = now;
+    }
+
+    let foul = pocketedStriker;
     let earnedExtraTurn = false;
-    let queenPocketedThisTurn = false;
-    let queenCoveredThisTurn = false;
-    let queenReturnedThisTurn = false;
+    let queenPocketed = false;
+    let queenCovered = false;
+    let queenReturned = false;
 
-    if (pocketedStriker) {
-      // ── FOUL: striker pocketed ──────────────────────────────────────────────
-      foul = true;
+    // Reset striker after shot
+    next.striker.placed = false;
+    next.striker.pocketed = false;
+    next.striker.vx = 0;
+    next.striker.vy = 0;
+
+    const playerColor: CoinType = seat === 0 ? "white" : "black";
+    const result = calculateScore(pocketedCoins, playerColor);
+    const opponentSeat = seat === 0 ? 1 : 0;
+    const opponentPlayer = next.players.find((p) => p.seat === opponentSeat);
+
+    const queenPocketedThisShot = pocketedCoins.some((c) => c.type === "queen");
+    const ownCoinPocketedThisShot = pocketedCoins.some((c) => c.type === playerColor);
+    const queenCoveredThisShot = queenPocketedThisShot && ownCoinPocketedThisShot;
+
+    console.log("[CARROM] QUEEN_RESULT", {
+      seat,
+      pocketedCoins: pocketedCoins.map((c) => ({
+        id: c.id,
+        type: c.type,
+        pocketed: c.pocketed,
+      })),
+      playerColor,
+      queenPocketedThisShot,
+      ownCoinPocketedThisShot,
+      queenCoveredThisShot,
+      queenStateBefore: next.queenState,
+      pendingQueenOwnerBefore: next.pendingQueenOwner,
+      result,
+    });
+
+    if (foul) {
       player.fouls++;
-      // Player actively took a shot, so reset consecutive AFK timeout counter
-      player.consecutiveFouls = 0;
       events.push({ type: "foul", seat, reason: "striker-pocketed" });
-
-      // A foul voids any pending queen cover — the queen returns to the board.
-      if (player.queenPocketed && !player.queenCovered) {
-        player.queenPocketed = false;
-        queenReturnedThisTurn = true;
-        const queenCoin = next.coins.find(c => c.type === "queen");
-        if (queenCoin) {
-          queenCoin.pocketed = false;
-          placeCoinSafelyNearCenter(queenCoin, next.coins);
-          queenCoin.vx = 0;
-          queenCoin.vy = 0;
-          queenCoin.pocketedBy = null;
-          queenCoin.pocketedAtTurn = null;
-        }
-        events.push({ type: "queen-returned", seat, reason: "foul" });
-      }
-
-      // Due owed: one of the fouler's own pocketed coins returns to the board
-      // (and the corresponding point is taken back).
-      const returnedCoin = returnOneOwnCoin(next.coins, seat);
-      if (returnedCoin) {
+      const returned = returnOneOwnCoin(next.coins, seat);
+      if (returned) {
         player.score = Math.max(0, player.score - 1);
-        events.push({ type: "coin-returned", seat, coinId: returnedCoin.id, coinType: returnedCoin.type });
+        events.push({ type: "coin-returned", seat, coinId: returned.id, coinType: returned.type });
       }
+
+      // If queen was in pending cover or pocketed this shot, foul cancels it and queen returns to center
+      if (next.queenState === "PENDING_COVER" || queenPocketedThisShot) {
+        next.queenState = "ON_BOARD";
+        next.pendingQueenOwner = null;
+        player.queenPocketed = false;
+        player.queenCovered = false;
+        const qc = next.coins.find((c) => c.type === "queen");
+        if (qc) {
+          qc.pocketed = false;
+          qc.pocketedBy = null;
+          qc.pocketedAtTurn = null;
+          placeCoinSafelyNearCenter(qc, next.coins);
+          queenReturned = true;
+          events.push({ type: "queen-returned", seat, reason: "foul" });
+        }
+      }
+      earnedExtraTurn = false;
+    } else if (queenPocketedThisShot && ownCoinPocketedThisShot) {
+      // 1. Immediate cover: Queen + own coin in the same shot
+      next.queenState = "COVERED";
+      next.pendingQueenOwner = null;
+      player.queenPocketed = true;
+      player.queenCovered = true;
+      queenPocketed = true;
+      queenCovered = true;
+      player.score = Math.min(9, player.score + 3 + result.score);
+      const queenCoin = next.coins.find((c) => c.type === "queen");
+      if (queenCoin) {
+        queenCoin.pocketed = true;
+        queenCoin.pocketedBy = seat;
+        queenCoin.pocketedAtTurn = next.turnNumber;
+      }
+      events.push({ type: "queen-pocketed", seat });
+      events.push({ type: "queen-covered", seat });
+      earnedExtraTurn = true;
+    } else if (queenPocketedThisShot && !ownCoinPocketedThisShot) {
+      // 2. Queen captured alone: enters PENDING_COVER (remains off-board, same player gets follow-up cover shot)
+      next.queenState = "PENDING_COVER";
+      next.pendingQueenOwner = seat;
+      player.queenPocketed = true;
+      player.queenCovered = false;
+      queenPocketed = true;
+      queenCovered = false;
+      const queenCoin = next.coins.find((c) => c.type === "queen");
+      if (queenCoin) {
+        queenCoin.pocketed = true;
+        queenCoin.pocketedBy = seat;
+        queenCoin.pocketedAtTurn = next.turnNumber;
+      }
+      events.push({ type: "queen-pocketed", seat });
+      events.push({ type: "queen-pending-cover", seat });
+      earnedExtraTurn = true;
+    } else if (
+      next.queenState === "PENDING_COVER" &&
+      next.pendingQueenOwner === seat &&
+      ownCoinPocketedThisShot
+    ) {
+      // 3. Cover completed on follow-up shot
+      next.queenState = "COVERED";
+      next.pendingQueenOwner = null;
+      player.queenPocketed = true;
+      player.queenCovered = true;
+      queenPocketed = true;
+      queenCovered = true;
+      player.score = Math.min(9, player.score + 3 + result.score);
+      const queenCoin = next.coins.find((c) => c.type === "queen");
+      if (queenCoin) {
+        queenCoin.pocketed = true;
+        queenCoin.pocketedBy = seat;
+        queenCoin.pocketedAtTurn = next.turnNumber;
+      }
+      events.push({ type: "queen-covered", seat });
+      earnedExtraTurn = true;
+    } else if (
+      next.queenState === "PENDING_COVER" &&
+      next.pendingQueenOwner === seat
+    ) {
+      // 4. Cover attempt failed on follow-up shot (no own coin pocketed)
+      next.queenState = "ON_BOARD";
+      next.pendingQueenOwner = null;
+      player.queenPocketed = false;
+      player.queenCovered = false;
+      queenReturned = true;
+      const queenCoin = next.coins.find((c) => c.type === "queen");
+      if (queenCoin) {
+        queenCoin.pocketed = false;
+        queenCoin.pocketedBy = null;
+        queenCoin.pocketedAtTurn = null;
+        placeCoinSafelyNearCenter(queenCoin, next.coins);
+      }
+      events.push({ type: "queen-returned", seat, reason: "cover-failed" });
+      player.score = Math.min(9, player.score + result.score);
+      earnedExtraTurn = false;
+    } else if (ownCoinPocketedThisShot) {
+      // 5. Normal own coin pocketed
+      player.score = Math.min(9, player.score + result.score);
+      earnedExtraTurn = true;
     } else {
-      player.consecutiveFouls = 0;
+      // 6. Normal miss / opponent coin only
+      player.score = Math.min(9, player.score + result.score);
+      earnedExtraTurn = false;
+    }
 
-      // Always evaluate the pending-cover state, even when this shot pocketed nothing.
-      const hasPendingCover = player.queenPocketed && !player.queenCovered;
-      if (pocketedCoins.length > 0 || hasPendingCover) {
-        const playerColor: CoinType = seat === 0 ? "white" : "black";
-        const result = calculateScore(
-          pocketedCoins,
-          playerColor,
-          player.queenPocketed,
-          player.queenCovered,
-        );
+    if (opponentPlayer && result.opponentScore > 0) {
+      opponentPlayer.score = Math.min(9, opponentPlayer.score + result.opponentScore);
+    }
 
-        earnedExtraTurn = result.earnedExtraTurn;
-        player.score += result.score;
-        const opponentSeat = seat === 0 ? 1 : 0;
-        const opponentPlayer = next.players.find(p => p.seat === opponentSeat);
-        if (opponentPlayer && result.opponentScore > 0) {
-          opponentPlayer.score += result.opponentScore;
-        }
-        queenPocketedThisTurn = result.queenPocketed && !player.queenPocketed;
-        queenCoveredThisTurn  = result.queenCovered  && !player.queenCovered;
-        player.queenPocketed  = result.queenPocketed;
-        player.queenCovered   = result.queenCovered;
-
-        if (result.queenNeedsReturn) {
-          // Queen pocketed without cover → restore queen to board center
-          queenReturnedThisTurn = true;
-          const queenCoin = next.coins.find(c => c.type === "queen");
-          if (queenCoin) {
-            queenCoin.pocketed = false;
-            placeCoinSafelyNearCenter(queenCoin, next.coins);
-            queenCoin.vx = 0;
-            queenCoin.vy = 0;
-            queenCoin.pocketedBy = null;
-            queenCoin.pocketedAtTurn = null;
-          }
-          events.push({ type: "queen-returned", seat, reason: "not-covered" });
-        }
-
-        // Emit scored events for own/opponent coins only (queen handled above)
-        for (const coin of pocketedCoins) {
-          if (coin.type === "queen") continue; // already handled
-          coin.pocketedBy = seat;
-          coin.pocketedAtTurn = next.turnNumber;
-          events.push({
-            type: "coin-scored",
-            seat,
-            coinId: coin.id,
-            coinType: coin.type,
-            points: coin.type === playerColor ? 1 : 0,
-          });
-        }
-
-        if (queenPocketedThisTurn && !queenReturnedThisTurn) {
-          // Queen was permanently pocketed (covered)
-          const queenCoin = next.coins.find(c => c.type === "queen");
-          if (queenCoin) {
-            queenCoin.pocketedBy = seat;
-            queenCoin.pocketedAtTurn = next.turnNumber;
-          }
-          events.push({ type: "queen-pocketed", seat });
-        }
-        if (queenCoveredThisTurn) {
-          events.push({ type: "queen-covered", seat });
-        }
-      }
+    for (const coin of pocketedCoins) {
+      if (coin.type === "queen") continue;
+      coin.pocketedBy = seat;
+      coin.pocketedAtTurn = next.turnNumber;
+      events.push({
+        type: "coin-scored",
+        seat,
+        coinId: coin.id,
+        coinType: coin.type,
+        points: coin.type === playerColor ? 1 : 0,
+      });
     }
 
     next.turnNumber++;
     next.foulThisTurn = foul;
-    next.queenOnBoard = next.coins.some(c => !c.pocketed && c.type === "queen");
+    next.queenOnBoard = next.queenState === "ON_BOARD" && next.coins.some((c) => !c.pocketed && c.type === "queen");
     next.lastAction = action;
     next.lastActionSeat = seat;
     next.lastActionAtMs = now;
@@ -412,21 +562,22 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       next.gameOver = true;
       next.winnerSeats = [winCheck.winner];
       next.endReason = "win";
+      next.turnStartedAt = null;
+      next.turnExpiresAt = null;
       next.turnStartedAtMs = null;
-      next.matchStartedAtMs = null;
+      next.isShotInProgress = false;
       events.push({ type: "win", seat: winCheck.winner, score: next.players[winCheck.winner].score });
     } else if (winCheck.isDraw) {
       next.finished = true;
       next.gameOver = true;
       next.winnerSeats = [];
       next.endReason = "draw";
+      next.turnStartedAt = null;
+      next.turnExpiresAt = null;
       next.turnStartedAtMs = null;
-      next.matchStartedAtMs = null;
+      next.isShotInProgress = false;
       events.push({ type: "draw", reason: "all-coins-pocketed" });
     } else {
-      // ── Determine next player (calculated ONCE after complete shot resolution) ──
-      // Extra turn ONLY if player pocketed at least one own-color coin and did NOT foul.
-      // Foul, opponent coin only, queen alone, or miss always passes turn to opponent.
       const opponentSeat = seat === 0 ? 1 : 0;
       const nextSeat = (earnedExtraTurn && !foul) ? seat : opponentSeat;
       const turnReason = foul
@@ -437,29 +588,45 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
             ? "OPPONENT_OR_QUEEN_ONLY"
             : "NOTHING_POCKETED";
 
+      const nextPlayerId = this.players.find((p) => p.seat === nextSeat)?.userId ?? `seat-${nextSeat}`;
+      const prevPlayerId = next.currentTurnPlayerId;
+
       next.currentSeat = nextSeat;
+      next.currentTurnPlayerId = nextPlayerId;
+      next.turnStartedAt = now;
       next.turnStartedAtMs = now;
+      next.turnExpiresAt = now + 30000;
+      next.isShotInProgress = false;
       next.strikerPlacementPhase = true;
       next.strikerPlacementSeat = nextSeat;
       next.striker = createInitialStriker(nextSeat);
 
       const playerColor = seat === 0 ? "white" : "black";
-      const pocketedOwnCoin = pocketedCoins.some(c => c.type === playerColor);
-      const pocketedOpponentCoin = pocketedCoins.some(c => c.type !== playerColor && c.type !== "queen");
+      const ownCoinPocketed = pocketedCoins.some((c) => c.type === playerColor);
+      const queenPocketedThisShot = pocketedCoins.some((c) => c.type === "queen");
 
-      console.log("[CarromEngine] TURN_CALCULATION", {
-        shotId: now,
-        stateVersion: next.turnNumber,
-        shooterId: `seat-${seat}`,
-        previousTurnPlayerId: `seat-${seat}`,
-        pocketedCoinIds: pocketedCoins.map((c) => c.id),
-        pocketedOwnCoin,
-        pocketedOpponentCoin,
-        pocketedStriker,
+      console.log("[CARROM] TURN_DECISION", {
+        shotSeat: seat,
+        turnNumber: next.turnNumber,
+        ownCoinPocketed,
+        queenPocketed: queenPocketedThisShot,
+        queenCovered,
+        queenReturned,
         foul,
         earnedExtraTurn,
-        nextTurnPlayerId: `seat-${nextSeat}`,
-        reason: turnReason,
+        nextSeat,
+      });
+
+      console.log("[CARROM TIMER] TURN_CHANGED", {
+        previousPlayerId: prevPlayerId,
+        nextPlayerId,
+        turnNumber: next.turnNumber,
+      });
+      console.log("[CARROM TIMER] TURN_STARTED", {
+        turnNumber: next.turnNumber,
+        playerId: nextPlayerId,
+        startedAt: next.turnStartedAt,
+        expiresAt: next.turnExpiresAt,
       });
 
       events.push({
@@ -468,14 +635,19 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
         stateVersion: next.turnNumber,
         previousSeat: seat,
         currentSeat: nextSeat,
+        currentTurnPlayerId: nextPlayerId,
+        turnNumber: next.turnNumber,
+        turnStartedAt: next.turnStartedAt,
+        turnExpiresAt: next.turnExpiresAt,
+        earnedExtraTurn,
         reason: turnReason,
         foul,
       });
 
       if (foul) {
-        events.push({ type: "foul-turn-end", seat, nextSeat });
+        events.push({ type: "foul-turn-end", seat, nextSeat, turnNumber: next.turnNumber, earnedExtraTurn: false });
       } else {
-        events.push({ type: "turn-end", seat, nextSeat });
+        events.push({ type: "turn-end", seat, nextSeat, turnNumber: next.turnNumber, earnedExtraTurn });
       }
     }
 
@@ -488,6 +660,10 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       pocketedCoinIds: pocketedCoins.map((c) => c.id),
       pocketEvents: physicsEvents.filter((e) => e.type === "coin-pocketed" || e.type === "striker-pocketed"),
       turnPlayerId: `seat-${next.currentSeat}`,
+      currentTurnPlayerId: next.currentTurnPlayerId,
+      turnNumber: next.turnNumber,
+      turnStartedAt: next.turnStartedAt,
+      turnExpiresAt: next.turnExpiresAt,
     });
 
     return {

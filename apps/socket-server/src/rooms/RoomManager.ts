@@ -41,6 +41,7 @@ export class RoomManager {
   private readonly roomsByCode = new Map<string, RoomRuntime>();
   private readonly disconnectTimers = new Map<string, NodeJS.Timeout>();
   private readonly clockTimers = new Map<string, NodeJS.Timeout>();
+  private readonly activeTurnTimerKeys = new Map<string, string>();
   private readonly io: Server;
 
   constructor(io: Server) {
@@ -765,7 +766,53 @@ export class RoomManager {
     if (deadlines.length === 0) return;
     const next = deadlines.reduce((a, b) => (b.at < a.at ? b : a));
     const delay = Math.max(0, next.at - Date.now());
+
+    const rawState = (engine as any).state;
+    const matchId = room.match.matchId;
+    const turnNumber = rawState?.turnNumber ?? 0;
+    const currentSeat = rawState?.currentSeat ?? engine.currentSeat;
+    const timerKey = `${matchId}:${turnNumber}:${currentSeat}`;
+
+    this.activeTurnTimerKeys.set(room.id, timerKey);
+    console.log("[CARROM TIMER] TIMER_CREATED", {
+      timerKey,
+      turnNumber,
+      seat: currentSeat,
+      expiresAt: next.at,
+    });
+
     const timer = setTimeout(() => {
+      const activeKey = this.activeTurnTimerKeys.get(room.id);
+      const currentRawState = (room.match?.engine as any)?.state;
+      const currentTurn = currentRawState?.turnNumber ?? 0;
+      const currentSeatNow = currentRawState?.currentSeat ?? room.match?.engine.currentSeat;
+
+      console.log("[CARROM TIMER] TIMEOUT_CHECK", {
+        timerKey,
+        expectedTurn: turnNumber,
+        expectedSeat: currentSeat,
+        currentTurn,
+        currentSeat: currentSeatNow,
+        activeTimerKey: activeKey,
+      });
+
+      if (
+        activeKey !== timerKey ||
+        currentTurn !== turnNumber ||
+        currentSeatNow !== currentSeat ||
+        currentRawState?.finished
+      ) {
+        console.log("[CARROM TIMER] STALE_TIMEOUT_IGNORED", {
+          timerKey,
+          activeKey,
+          currentTurn,
+          currentSeat: currentSeatNow,
+        });
+        return;
+      }
+
+      console.log("[CARROM TIMER] TIMEOUT_ACCEPTED", { timerKey });
+      this.activeTurnTimerKeys.delete(room.id);
       void this.handleClockDeadline(room.id, next.kind, next.seat);
     }, delay + 50);
     timer.unref?.();
@@ -777,6 +824,11 @@ export class RoomManager {
     if (timer) {
       clearTimeout(timer);
       this.clockTimers.delete(roomId);
+    }
+    const previousKey = this.activeTurnTimerKeys.get(roomId);
+    if (previousKey) {
+      console.log("[CARROM TIMER] TIMER_CANCELLED", { previousKey });
+      this.activeTurnTimerKeys.delete(roomId);
     }
   }
 

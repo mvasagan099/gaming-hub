@@ -30,7 +30,7 @@ import CarromMultiplayerDriver, {
 } from "./CarromMultiplayerDriver";
 import type { CarromRemoteState } from "./CarromMultiplayerDriver";
 import type { CarromTrajectoryKeyframe } from "@gaming-hub/game-engine";
-import { Crown, Sparkles, CheckCircle2, AlertTriangle, Play, RefreshCw, X, MessageSquare } from "lucide-react";
+import { Crown, Sparkles, CheckCircle2, AlertTriangle, Play, RefreshCw, X, MessageSquare, Clock } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +59,8 @@ interface LocalCoin {
     scale: number;
     alpha: number;
     progress?: number;
+    shotId?: number | string;
+    pocketIndex?: number;
   };
 }
 
@@ -138,8 +140,8 @@ const POCKET_ZONE = 25;
 
 const STRIKER_Y = H - 77.5; // 422.5 (matches server BASE_LINE_Y 507 × 5/6)
 const OPPONENT_STRIKER_Y = 77.5; // 77.5 (matches server 93 × 5/6)
-const STRIKER_SLIDER_MIN = -120;
-const STRIKER_SLIDER_MAX = 120;
+const STRIKER_SLIDER_MIN = -142.5; // Left red circle center (107.5 - 250)
+const STRIKER_SLIDER_MAX = 142.5;  // Right red circle center (392.5 - 250)
 
 // Server maxSpeed=27 × scale(5/6)=22.5
 const SHOT_MAX_SPEED = 22.5;
@@ -738,6 +740,8 @@ const CarromMultiplayer: React.FC<Props> = ({
   const lastPlaceSentRef = useRef(0);
   const remoteTargetStrikerXRef = useRef<number | null>(null);
   const processedPocketEventsRef = useRef<Set<string>>(new Set());
+  const shotAnimCountRef = useRef<Record<string | number, number>>({});
+  const shotDupCountRef = useRef<Record<string | number, number>>({});
 
   // UI state
   const [dragState, setDragState] = useState<"idle" | "dragging" | "placing_striker">("idle");
@@ -756,10 +760,19 @@ const CarromMultiplayer: React.FC<Props> = ({
   const [scores, setScores] = useState<{ seat0: number; seat1: number }>({ seat0: 0, seat1: 0 });
   const [queenCovered, setQueenCovered] = useState(false);
   const [queenPocketed, setQueenPocketed] = useState(false);
+  const [queenState, setQueenState] = useState<"ON_BOARD" | "PENDING_COVER" | "COVERED">("ON_BOARD");
+  const [pendingQueenOwner, setPendingQueenOwner] = useState<number | null>(null);
   const [gameOver, setGameOver] = useState(false);
   const [winnerSeat, setWinnerSeat] = useState<number | null>(null);
-  const [showRules, setShowRules] = useState(true);
+  const [showRules, setShowRules] = useState(false);
   const [strikerOverlap, setStrikerOverlap] = useState(false);
+  const serverOffsetRef = useRef<number>(0);
+  const turnExpiresAtRef = useRef<number | null>(null);
+  const turnNumberRef = useRef<number>(0);
+  const lastLoggedSecRef = useRef<number>(-1);
+  const [turnSecondsRemaining, setTurnSecondsRemaining] = useState<number>(30);
+  const [turnExpiresAt, setTurnExpiresAt] = useState<number | null>(null);
+  const [turnNumber, setTurnNumber] = useState<number>(1);
 
   const room = useMultiplayerStore((s) => s.room);
 
@@ -904,7 +917,7 @@ const CarromMultiplayer: React.FC<Props> = ({
     };
 
     driver.onCoinPocketed = (_id, _type, _pocket) => {
-      confetti({ particleCount: 35, spread: 50, origin: { x: 0.5, y: 0.5 } });
+      // Coin pocketed - celebration confetti blast removed
     };
 
     driver.onCoinReturned = (_id, type) => {
@@ -965,18 +978,39 @@ const CarromMultiplayer: React.FC<Props> = ({
       const s1 = state.players.find((p) => p.seat === 1)?.score ?? 0;
       setScores({ seat0: s0, seat1: s1 });
 
-      // Queen status (relative to this player)
+      // Queen status (authoritative server state)
       const myPlayer = state.players.find((p) => p.seat === seat);
-      setQueenCovered(!!myPlayer?.queenCovered);
-      setQueenPocketed(!!myPlayer?.queenPocketed);
+      const qState = state.queenState ?? (myPlayer?.queenCovered ? "COVERED" : myPlayer?.queenPocketed ? "PENDING_COVER" : "ON_BOARD");
+      setQueenState(qState);
+      setPendingQueenOwner(state.pendingQueenOwner ?? null);
+      setQueenCovered(qState === "COVERED" || !!myPlayer?.queenCovered);
+      setQueenPocketed(qState === "COVERED" || qState === "PENDING_COVER" || !!myPlayer?.queenPocketed);
 
       const prevTurn = isMyTurnRef.current;
       const myTurn = state.currentSeat === seat;
       isMyTurnRef.current = myTurn;
       setIsMyTurn(myTurn);
 
-      // Initialize mover slider position when gaining turn
-      if (prevTurn !== myTurn && myTurn) {
+      if (typeof state.turnNumber === "number" && state.turnNumber < turnNumberRef.current) {
+        console.log("[CARROM TIMER] Ignoring stale state packet", { stateTurn: state.turnNumber, currentTurn: turnNumberRef.current });
+        return;
+      }
+      if (typeof state.turnNumber === "number") {
+        turnNumberRef.current = state.turnNumber;
+        setTurnNumber(state.turnNumber);
+      }
+
+      const serverTs = (state as any).serverTimestamp ?? state.lastActionAtMs ?? state.turnStartedAt;
+      if (serverTs) {
+        serverOffsetRef.current = serverTs - Date.now();
+      }
+
+      const exp = state.turnExpiresAt ?? (state.turnStartedAtMs ? state.turnStartedAtMs + 30000 : null);
+      turnExpiresAtRef.current = exp;
+      setTurnExpiresAt(exp);
+
+      // Initialize mover slider position when gaining turn or awarded an extra turn
+      if (myTurn && (prevTurn !== myTurn || state.strikerPlacementPhase)) {
         remoteTargetStrikerXRef.current = null;
         const sx = state.striker?.x;
         const initialOffset = sx !== undefined ? mapToClient(sx, 0, seat).x - W / 2 : 0;
@@ -1102,20 +1136,34 @@ const CarromMultiplayer: React.FC<Props> = ({
         const p2 = k2Map.get(c.id);
 
         if (p2 && p2.pocketed && typeof p2.pocketIndex === "number") {
-          const eventKey = `${traj.shotId}:${c.id}`;
-          if (processedPocketEventsRef.current.has(eventKey)) {
-            console.log("[CARROM] POCKET_EVENT_DUPLICATE_IGNORED", {
+          const matchId = useMultiplayerStore.getState().matchId ?? "match";
+          const pocketKey = `${traj.shotId}:${c.id}`;
+          const eventId = `${traj.shotId}:${c.id}:${p2.pocketIndex}`;
+
+          if (processedPocketEventsRef.current.has(pocketKey)) {
+            shotDupCountRef.current[traj.shotId] = (shotDupCountRef.current[traj.shotId] || 0) + 1;
+            console.warn("[CARROM] DUPLICATE_POCKET_EVENT_IGNORED", {
+              matchId,
               shotId: traj.shotId,
               coinId: c.id,
+              coinType: c.type,
+              pocketIndex: p2.pocketIndex,
+              eventId,
+              pocketKey,
             });
             continue;
           }
-          processedPocketEventsRef.current.add(eventKey);
+          processedPocketEventsRef.current.add(pocketKey);
+          shotAnimCountRef.current[traj.shotId] = (shotAnimCountRef.current[traj.shotId] || 0) + 1;
 
           console.log("[CARROM] POCKET_ANIMATION_STARTED", {
+            matchId,
             shotId: traj.shotId,
             coinId: c.id,
+            coinType: c.type,
             pocketIndex: p2.pocketIndex,
+            eventId,
+            animationState: "pocketing",
           });
 
           const p = getViewPocket(p2.pocketIndex, seat);
@@ -1129,6 +1177,8 @@ const CarromMultiplayer: React.FC<Props> = ({
             scale: 1,
             alpha: 1,
             progress: 0,
+            shotId: traj.shotId,
+            pocketIndex: p2.pocketIndex,
           };
           c.vx = 0;
           c.vy = 0;
@@ -1195,6 +1245,21 @@ const CarromMultiplayer: React.FC<Props> = ({
       }
 
       if (progress >= 1) {
+        const matchId = useMultiplayerStore.getState().matchId ?? "match";
+        console.log("[CARROM] SHOT_SUMMARY", {
+          matchId,
+          shotId: traj.shotId,
+          shooterId: `seat-${traj.targetState.lastActionSeat ?? 0}`,
+          pocketedCoins: traj.pocketEvents.map((pe) => ({
+            coinId: pe.coinId,
+            coinType: pe.coinType,
+            pocketIndex: pe.pocketIndex,
+          })),
+          pocketEventCount: traj.pocketEvents.length,
+          animationEventCount: shotAnimCountRef.current[traj.shotId] || 0,
+          duplicateEventCount: shotDupCountRef.current[traj.shotId] || 0,
+          finalTurnPlayerId: `seat-${traj.targetState.currentSeat}`,
+        });
         console.log("[CarromMultiplayer] ANIMATION_COMPLETE", {
           shotId: traj.shotId,
           playerSeat: seat,
@@ -1422,12 +1487,41 @@ const CarromMultiplayer: React.FC<Props> = ({
       c.pocketing.alpha = Math.max(0, 1 - pt * pt);
       c.spin = (c.spin || 0) + 0.15;
       if (pt >= 1) {
+        const matchId = useMultiplayerStore.getState().matchId ?? "match";
+        const pIndex = c.pocketing.pocketIndex ?? 0;
+        const pShotId = c.pocketing.shotId ?? "shot";
+        const pEventId = `${pShotId}:${c.id}:${pIndex}`;
+        console.log("[CARROM] POCKET_ANIMATION_COMPLETED", {
+          matchId,
+          shotId: pShotId,
+          coinId: c.id,
+          coinType: c.type,
+          pocketIndex: pIndex,
+          eventId: pEventId,
+          animationState: "pocketed",
+        });
         c.active = false;
         c.pocketed = true;
         c.pocketing = undefined;
-        console.log("[CARROM] POCKET_ANIMATION_COMPLETED", { coinId: c.id });
       } else {
         anyMoving = true;
+      }
+    }
+
+    // Update authoritative turn timer
+    if (turnExpiresAtRef.current && !isTurnActiveRef.current && !gameOver) {
+      const currentServerTime = Date.now() + serverOffsetRef.current;
+      const remMs = Math.max(0, turnExpiresAtRef.current - currentServerTime);
+      const remSec = Math.ceil(remMs / 1000);
+      setTurnSecondsRemaining(remSec);
+
+      if (remSec !== lastLoggedSecRef.current) {
+        lastLoggedSecRef.current = remSec;
+        console.log("[CARROM TIMER] TICK", {
+          turnNumber: turnNumberRef.current,
+          playerId: isMyTurnRef.current ? "you" : "opponent",
+          remaining: remSec,
+        });
       }
     }
 
@@ -1741,6 +1835,11 @@ const CarromMultiplayer: React.FC<Props> = ({
     // Minimum pull threshold to avoid accidental micro-clicks
     if (pullDist < 12) return;
 
+    if (turnSecondsRemaining <= 0) {
+      toast.error("Time's up! Turn expired.", { id: "turn-timeout" });
+      return;
+    }
+
     // Check if striker overlaps any coin before shooting
     if (checkStrikerOverlap()) {
       toast.error("Striker overlaps a coin — slide mover to a clear spot", { id: "overlap" });
@@ -1833,6 +1932,19 @@ const CarromMultiplayer: React.FC<Props> = ({
       if (Math.hypot(c.x - striker.x, c.y - striker.y) < striker.radius + c.radius) return true;
     }
     return false;
+  }
+
+  function getTimerVisualClass(sec: number) {
+    if (sec <= 0) return "text-rose-500 font-black border-rose-500/50 bg-rose-500/20";
+    if (sec <= 5) return "text-rose-400 font-black border-rose-500/40 bg-rose-500/15 animate-pulse";
+    if (sec <= 10) return "text-amber-400 font-extrabold border-amber-500/40 bg-amber-500/15";
+    return "text-emerald-400 font-bold border-emerald-500/30 bg-emerald-500/10";
+  }
+
+  function formatTime(sec: number) {
+    if (sec <= 0) return "TIME'S UP";
+    const s = Math.max(0, Math.min(30, sec));
+    return `00:${s.toString().padStart(2, "0")}`;
   }
 
   // ── Scores & Player Info ──────────────────────────────────────────────────
@@ -1967,22 +2079,27 @@ const CarromMultiplayer: React.FC<Props> = ({
             isTurnActive
               ? "bg-slate-800 text-slate-400 border-slate-700"
               : isMyTurn
-              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 animate-pulse"
+              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
               : "bg-slate-900 text-slate-400 border-slate-800"
           }`}>
             <span className={`w-1.5 h-1.5 rounded-full ${isMyTurn ? "bg-emerald-400 animate-ping" : "bg-slate-500"}`} />
             <span>{isTurnActive ? "Moving…" : isMyTurn ? "Your Turn" : "Opponent"}</span>
+            {!isTurnActive && !gameOver && (
+              <span className={`ml-1 font-mono text-[10px] px-1.5 py-0.5 rounded border shadow-sm ${getTimerVisualClass(turnSecondsRemaining)}`}>
+                {formatTime(turnSecondsRemaining)}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${
-              queenCovered
+            <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border transition-all ${
+              queenState === "COVERED" || queenCovered
                 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                : queenPocketed
-                ? "bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse"
+                : queenState === "PENDING_COVER"
+                ? (pendingQueenOwner === mySeat ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-950/40 animate-pulse font-black" : "bg-purple-500/20 text-purple-300 border-purple-500/40 animate-pulse font-bold")
                 : "bg-slate-800 text-slate-400 border-slate-700"
             }`}>
-              👑 {queenCovered ? "Covered" : queenPocketed ? "Needs Cover" : "Queen"}
+              👑 {queenState === "COVERED" || queenCovered ? "Covered" : queenState === "PENDING_COVER" ? (pendingQueenOwner === mySeat ? "COVER IT!" : "Cover Attempt") : "Queen"}
             </span>
             <button
               onClick={() => setShowMobileSidebar(true)}
@@ -2105,27 +2222,36 @@ const CarromMultiplayer: React.FC<Props> = ({
         {/* ═══ DESKTOP SIDEBAR PANEL (Unified Glassmorphism Card) ═══ */}
         <div className="hidden lg:flex flex-col gap-3 w-[320px] xl:w-[360px] h-full max-h-[min(calc(100vh-110px),760px)] flex-shrink-0 overflow-y-auto custom-scrollbar pr-1">
 
-          {/* Turn Banner */}
-          <div className={`flex items-center justify-center gap-2.5 px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all border ${
+          {/* Turn Banner & 30s Authoritative Timer */}
+          <div className={`flex items-center justify-between px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all border ${
             isMyTurn
               ? "bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-emerald-950/50"
               : "bg-slate-900/90 text-slate-400 border-slate-800 shadow-slate-950/50"
           }`}>
-            {isTurnActive ? (
-              <>
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                <span>Shot In Motion…</span>
-              </>
-            ) : isMyTurn ? (
-              <>
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>YOUR TURN</span>
-              </>
-            ) : (
-              <>
-                <span className="w-2.5 h-2.5 rounded-full bg-slate-500 animate-pulse" />
-                <span>OPPONENT&apos;S TURN</span>
-              </>
+            <div className="flex items-center gap-2">
+              {isTurnActive ? (
+                <>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                  <span>Shot In Motion…</span>
+                </>
+              ) : isMyTurn ? (
+                <>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>YOUR TURN</span>
+                </>
+              ) : (
+                <>
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-500 animate-pulse" />
+                  <span>OPPONENT&apos;S TURN</span>
+                </>
+              )}
+            </div>
+
+            {!isTurnActive && !gameOver && (
+              <div className={`px-2.5 py-1 rounded-xl text-[11px] font-mono tracking-wider flex items-center gap-1.5 border shadow-sm ${getTimerVisualClass(turnSecondsRemaining)}`}>
+                <Clock className="w-3.5 h-3.5" />
+                <span>{formatTime(turnSecondsRemaining)}</span>
+              </div>
             )}
           </div>
 
@@ -2182,14 +2308,14 @@ const CarromMultiplayer: React.FC<Props> = ({
                 <Crown className="w-4 h-4 text-rose-500" />
                 <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Queen</span>
               </div>
-              <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full border ${
-                queenCovered
+              <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full border transition-all ${
+                queenState === "COVERED" || queenCovered
                   ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                  : queenPocketed
-                  ? "bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse"
+                  : queenState === "PENDING_COVER"
+                  ? (pendingQueenOwner === mySeat ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-950/40 animate-pulse font-black" : "bg-purple-500/20 text-purple-300 border-purple-500/40 animate-pulse font-bold")
                   : "bg-slate-800 text-slate-400 border-slate-700"
               }`}>
-                {queenCovered ? "Covered ✓" : queenPocketed ? "Needs Cover!" : "On Board"}
+                {queenState === "COVERED" || queenCovered ? "Covered ✓" : queenState === "PENDING_COVER" ? (pendingQueenOwner === mySeat ? "COVER IT!" : "Opponent Covering") : "On Board"}
               </span>
             </div>
           </div>

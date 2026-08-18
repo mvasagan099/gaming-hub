@@ -485,9 +485,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
     };
 
     driver.onCoinPocketed = () => {
-      // Do not hide coins prematurely on socket event arrival.
-      // Allow client physics to roll the coin naturally into the hole.
-      confetti();
+      // Coin pocketed - celebration confetti blast removed
     };
 
     driver.onFoul = (reason: string) => {
@@ -873,7 +871,6 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
           const nb = prev.black + scoredBlack;
           return { white: nw, black: nb };
         });
-        if (scoredWhite > 0) confetti();
       }
 
       if (strikerFoulThisFrame) {

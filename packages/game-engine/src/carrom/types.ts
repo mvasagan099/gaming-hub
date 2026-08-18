@@ -89,16 +89,22 @@ export interface CarromTrajectoryKeyframe extends JsonObject {
   pieces: CarromPieceKeyframe[];
 }
 
+export type QueenState = "ON_BOARD" | "PENDING_COVER" | "COVERED";
+
 export interface CarromState extends JsonObject {
   coins: CarromCoin[];
   striker: CarromStriker;
   players: CarromPlayer[];
   currentSeat: number;
+  currentTurnPlayerId: string;
   finished: boolean;
   winnerSeats: number[];
   turnNumber: number;
+  turnStartedAt: number | null;
+  turnExpiresAt: number | null;
   turnStartedAtMs: number | null;
   matchStartedAtMs: number | null;
+  isShotInProgress: boolean;
   drawOfferedBy: number | null;
   paused: boolean;
   pausedAtMs: number | null;
@@ -114,6 +120,8 @@ export interface CarromState extends JsonObject {
   strikerPlacementSeat: number | null;
   foulThisTurn: boolean;
   queenOnBoard: boolean;
+  queenState: QueenState;
+  pendingQueenOwner: number | null;
   turnTimerConfig: TurnTimerConfig | null;
   matchTimerConfig: MatchTimerConfig | null;
   gameOver: boolean;

@@ -175,10 +175,15 @@ export abstract class MultiplayerGameEngine<
         winnerSeats: this.state.winnerSeats,
       };
     }
-    if (kind === "turn") {
-      return this.onTurnTimerExpired(seat ?? this.state.currentSeat, this.state);
+    const result =
+      kind === "turn"
+        ? this.onTurnTimerExpired(seat ?? this.state.currentSeat, this.state)
+        : this.onMatchTimerExpired(this.state);
+
+    if (result.ok) {
+      this.updateState(result.state);
     }
-    return this.onMatchTimerExpired(this.state);
+    return result;
   }
 
   protected startTurnTimer(state: S): void {
