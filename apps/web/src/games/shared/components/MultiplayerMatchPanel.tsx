@@ -17,6 +17,7 @@ import { usePublicProfile } from "../../../services/api/usePublicProfile";
 import { useMe } from "../../../services/api/useMe";
 import { MultiplayerMatchControls } from "./MultiplayerMatchControls";
 import { MultiplayerMatchChat } from "./MultiplayerMatchChat";
+import { InGameNotificationBanner } from "./InGameNotificationBanner";
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -327,6 +328,7 @@ export function MultiplayerMatchPanel({
 
   return (
     <div className={`${compact ? "w-[220px]" : "w-72"} flex flex-col gap-2.5 text-xs select-none`}>
+      <InGameNotificationBanner />
 
       {/* ── Disconnect Grace Countdown Overlay ─────────────────── */}
       {disconnectGrace && reconnectRemaining !== null && (

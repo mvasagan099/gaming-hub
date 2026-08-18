@@ -632,7 +632,7 @@ export function AdminGamesPage() {
                     value={newFeeInput}
                     onChange={(e) => setNewFeeInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAddEntryFee()}
-                    className="flex-1 px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:border-indigo-500"
+                    className="flex-1 px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-sm transition-all"
                   />
                   <button
                     type="button"
@@ -648,16 +648,16 @@ export function AdminGamesPage() {
               {/* Default Fee & Player Counts */}
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
                     Default Entry Fee
                   </label>
                   <select
                     value={formData.defaultEntryFee}
                     onChange={(e) => setFormData({ ...formData, defaultEntryFee: parseInt(e.target.value, 10) })}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none font-bold"
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-sm transition-all"
                   >
                     {formData.entryFees?.map((fee) => (
-                      <option key={fee} value={fee}>
+                      <option key={fee} value={fee} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
                         🪙 {fee} Coins
                       </option>
                     ))}
@@ -665,7 +665,7 @@ export function AdminGamesPage() {
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
                     Min Players
                   </label>
                   <input
@@ -674,12 +674,12 @@ export function AdminGamesPage() {
                     max={10}
                     value={formData.minPlayers ?? 2}
                     onChange={(e) => setFormData({ ...formData, minPlayers: parseInt(e.target.value, 10) })}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none"
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-sm transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
                     Max Players
                   </label>
                   <input
@@ -688,7 +688,7 @@ export function AdminGamesPage() {
                     max={10}
                     value={formData.maxPlayers ?? 2}
                     onChange={(e) => setFormData({ ...formData, maxPlayers: parseInt(e.target.value, 10) })}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none"
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-sm transition-all"
                   />
                 </div>
               </div>
@@ -696,7 +696,7 @@ export function AdminGamesPage() {
               {/* Timers */}
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
                     Turn Timer (s)
                   </label>
                   <input
@@ -704,12 +704,12 @@ export function AdminGamesPage() {
                     min={0}
                     value={formData.turnTimerSeconds ?? 30}
                     onChange={(e) => setFormData({ ...formData, turnTimerSeconds: parseInt(e.target.value, 10) })}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none"
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-sm transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
                     Match Duration (s)
                   </label>
                   <input
@@ -717,12 +717,12 @@ export function AdminGamesPage() {
                     min={0}
                     value={formData.matchDurationSeconds ?? 300}
                     onChange={(e) => setFormData({ ...formData, matchDurationSeconds: parseInt(e.target.value, 10) })}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none"
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-sm transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
                     Reconnect Grace (s)
                   </label>
                   <input
@@ -731,38 +731,38 @@ export function AdminGamesPage() {
                     max={300}
                     value={formData.reconnectWindowSeconds ?? 30}
                     onChange={(e) => setFormData({ ...formData, reconnectWindowSeconds: parseInt(e.target.value, 10) })}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none"
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-sm transition-all"
                   />
                 </div>
               </div>
 
               {/* Prize & Draw Configuration */}
-              <div className="p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/20 space-y-4">
-                <h4 className="font-bold text-sm text-indigo-400 flex items-center gap-2">
+              <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-500/20 space-y-4">
+                <h4 className="font-bold text-sm text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
                   <Trophy className="w-4 h-4" />
                   Prize Settlement & Draw Policy
                 </h4>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    <label className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider block mb-1.5">
                       Prize Mode
                     </label>
                     <select
                       value={formData.prizeMode}
                       onChange={(e) => setFormData({ ...formData, prizeMode: e.target.value as PrizeMode })}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm outline-none font-bold"
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-sm transition-all"
                     >
                       {PRIZE_MODES.map((pm) => (
-                        <option key={pm} value={pm}>
-                          {pm}
+                        <option key={pm} value={pm} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                          {pm.replace(/_/g, ' ')}
                         </option>
                       ))}
                     </select>
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    <label className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider block mb-1.5">
                       Winner Percentage (%)
                     </label>
                     <input
@@ -771,23 +771,23 @@ export function AdminGamesPage() {
                       max={100}
                       value={formData.winnerPercentage ?? 90}
                       onChange={(e) => setFormData({ ...formData, winnerPercentage: parseInt(e.target.value, 10) })}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm outline-none font-bold"
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-sm transition-all"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider block mb-1.5">
                     Draw Policy
                   </label>
                   <select
                     value={formData.drawPolicy}
                     onChange={(e) => setFormData({ ...formData, drawPolicy: e.target.value as DrawPolicy })}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm outline-none font-bold"
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-sm transition-all"
                   >
                     {DRAW_POLICIES.map((dp) => (
-                      <option key={dp} value={dp}>
-                        {dp}
+                      <option key={dp} value={dp} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                        {dp.replace(/_/g, ' ')}
                       </option>
                     ))}
                   </select>

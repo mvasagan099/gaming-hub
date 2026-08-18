@@ -54,7 +54,8 @@ const ResultBanner: React.FC<{ message: string; won: boolean }> = ({ message, wo
 export const CricketTossUI: React.FC<{ onTossComplete?: () => void }> = ({ onTossComplete }) => {
   const gameState = useMultiplayerStore((s) => s.gameState as unknown as CricketState | null);
   const mySeat = useMultiplayerStore((s) => s.mySeat);
-  const roomPlayers = useMultiplayerStore((s) => s.room?.players ?? []);
+  const room = useMultiplayerStore((s) => s.room);
+  const roomPlayers = room?.players ?? [];
 
   const [tossCalled, setTossCalled] = useState(false);
   const [calling, setCalling] = useState(false);

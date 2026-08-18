@@ -115,7 +115,8 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   const winner = useMultiplayerStore((s) => s.winner);
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const isSpectator = useMultiplayerStore((s) => s.isSpectator);
-  const roomPlayers = useMultiplayerStore((s) => s.room?.players ?? []);
+  const room = useMultiplayerStore((s) => s.room);
+  const roomPlayers = room?.players ?? [];
   
   const [score, setScore] = useState(0);
   const [gameOver, setGameOver] = useState(false);

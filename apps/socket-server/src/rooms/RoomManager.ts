@@ -25,6 +25,8 @@ import { secureRandomSource } from "../games/rng";
 import { GameSession } from "../games/GameSession";
 import { holdWagers, settleMatch, cancelMatch } from "../apiClient";
 import { assertGameEnabled, createMatchConfigSnapshot } from "../settings";
+import { GameEventBus } from "../events/GameEventBus";
+import { GameStateSyncManager } from "../sync/GameStateSyncManager";
 
 const DISCONNECT_GRACE_MS = 30_000;
 
@@ -472,11 +474,20 @@ export class RoomManager {
       data: { isReady: ready },
     });
 
+    const matchId = room.pendingMatchId ?? room.id;
     this.emitToRoom(room, ready ? "game:player-ready" : "game:player-unready", {
       roomId: room.id,
-      matchId: room.pendingMatchId ?? room.id,
+      matchId,
       playerId: user.userId,
     });
+    GameEventBus.broadcastEvent(
+      this.io,
+      room,
+      GameEventBus.createEnvelope(ready ? "PLAYER_READY" : "PLAYER_UNREADY", matchId, room.gameId, {
+        playerId: user.userId,
+        ready,
+      })
+    );
     this.broadcastRoomUpdate(room);
     this.emitLobbyState(room);
 
@@ -505,18 +516,50 @@ export class RoomManager {
     console.log("[MATCHMAKING] COUNTDOWN_STARTED", { matchId, roomId: room.id });
 
     this.emitToRoom(room, "game:countdown", { matchId, countdown: 3 });
+    GameEventBus.broadcastEvent(
+      this.io,
+      room,
+      GameEventBus.createEnvelope("COUNTDOWN_STARTED", matchId, room.gameId, {
+        value: 3,
+        countdown: 3,
+      })
+    );
 
     const step2 = setTimeout(() => {
       if (room.status !== "starting") return;
       this.emitToRoom(room, "game:countdown", { matchId, countdown: 2 });
+      GameEventBus.broadcastEvent(
+        this.io,
+        room,
+        GameEventBus.createEnvelope("COUNTDOWN_UPDATED", matchId, room.gameId, {
+          value: 2,
+          countdown: 2,
+        })
+      );
 
       const step1 = setTimeout(() => {
         if (room.status !== "starting") return;
         this.emitToRoom(room, "game:countdown", { matchId, countdown: 1 });
+        GameEventBus.broadcastEvent(
+          this.io,
+          room,
+          GameEventBus.createEnvelope("COUNTDOWN_UPDATED", matchId, room.gameId, {
+            value: 1,
+            countdown: 1,
+          })
+        );
 
         const step0 = setTimeout(async () => {
           if (room.status !== "starting") return;
           this.emitToRoom(room, "game:countdown", { matchId, countdown: 0 });
+          GameEventBus.broadcastEvent(
+            this.io,
+            room,
+            GameEventBus.createEnvelope("COUNTDOWN_UPDATED", matchId, room.gameId, {
+              value: 0,
+              countdown: 0,
+            })
+          );
           room.countdownTimer = null;
           try {
             await this.launchMatch(room, { userId: room.hostId }, socket);
@@ -824,7 +867,7 @@ export class RoomManager {
       startedAt: Date.now(),
     });
 
-    this.emitToRoom(room, "game:match-started", {
+    const matchStartedPayload = {
       matchId,
       gameId: room.gameId,
       entryFee: room.stake,
@@ -835,7 +878,40 @@ export class RoomManager {
         displayName: p.displayName,
       })),
       startedAt: Date.now(),
-    });
+    };
+
+    this.emitToRoom(room, "game:match-started", matchStartedPayload);
+    GameEventBus.broadcastEvent(
+      this.io,
+      room,
+      GameEventBus.createEnvelope("MATCH_STARTED", matchId, room.gameId, matchStartedPayload)
+    );
+
+    const initialSeat = engine.currentSeat ?? 0;
+    const initialPlayer = participants.find((p) => p.seat === initialSeat) ?? participants[0];
+    const turnStartedAtMs = Date.now();
+    const turnExpiresAtMs = engine.currentClockDeadline ?? (turnStartedAtMs + (snapshot.turnTimerSeconds * 1000));
+
+    // Initialize Authoritative State in GameStateSyncManager
+    const authoritativeState = GameStateSyncManager.initializeMatch(
+      matchId,
+      room.gameId,
+      engine.serialize(),
+      turnExpiresAtMs,
+      initialPlayer?.userId ?? null,
+    );
+    this.io.to(room.ioName).emit("game:state:authoritative", authoritativeState as any);
+
+    GameEventBus.broadcastEvent(
+      this.io,
+      room,
+      GameEventBus.createEnvelope("TURN_STARTED", matchId, room.gameId, {
+        playerId: initialPlayer?.userId ?? "",
+        turnNumber: 0,
+        turnStartedAtMs,
+        turnExpiresAtMs,
+      })
+    );
 
     const startedBy = room.players.get(starter.userId);
     if (startedBy && !startedBy.isSpectator) {
@@ -863,12 +939,28 @@ export class RoomManager {
   private emitGameState(room: RoomRuntime, events: { type: string }[]) {
     if (!room.match) return;
     const state = room.match.engine.serialize();
+    const stateVersion = GameEventBus.getStateVersion(room.match.matchId) || 1;
     const payload = {
       roomId: room.id,
       matchId: room.match.matchId,
       state,
       events,
+      sequenceNumber: stateVersion,
+      turnNumber: room.match.turnNumber ?? 0,
+      timestamp: Date.now(),
+      seat: null,
     };
+
+    // Broadcast standard envelope
+    GameEventBus.broadcastEvent(
+      this.io,
+      room,
+      GameEventBus.createEnvelope("GAME_STATE_UPDATED", room.match.matchId, room.gameId, {
+        matchId: room.match.matchId,
+        state,
+        events,
+      })
+    );
 
     // Get all active socket IDs for players in this room
     const targetSocketIds: string[] = [];
@@ -887,12 +979,12 @@ export class RoomManager {
     for (const socketId of targetSocketIds) {
       const socket = this.io.sockets.sockets.get(socketId);
       if (socket) {
-        socket.emit("game:state", payload);
+        socket.emit("game:state", payload as any);
       }
     }
     
     // Also broadcast to room for safety as fallback
-    this.io.to(room.ioName).emit("game:state", payload);
+    this.io.to(room.ioName).emit("game:state", payload as any);
     console.log(`[RoomManager] game:state broadcast to room ${room.ioName} for match ${room.match.matchId}`);
   }
 
@@ -1031,13 +1123,28 @@ export class RoomManager {
       throw new AppError("FORBIDDEN", "Spectators cannot play");
     }
 
+    if (GameStateSyncManager.isMatchFinished(room.match.matchId)) {
+      console.log(`[RoomManager] applyGameAction rejected: Match is already finished`);
+      throw new AppError("MATCH_FINISHED", "Match is already finished; late action rejected");
+    }
+
     const session = new GameSession(room.match);
     console.log(`[RoomManager] Applying action via GameSession for user ${user.userId}, seat ${player.seat}`);
     const result = await session.apply(user.userId, player.seat, action);
 
+    const actionId = (action as any).actionId ?? GameEventBus.generateEventId();
     if (!result.ok) {
       console.log(`[RoomManager] Action rejected:`, result.error);
-      const firstEvent = result.events[0];
+      GameEventBus.broadcastEvent(
+        this.io,
+        room,
+        GameEventBus.createEnvelope("GAME_ACTION_REJECTED", room.match.matchId, room.gameId, {
+          actionId,
+          actionType: action.type,
+          playerId: user.userId,
+          reason: result.error ?? "Action rejected",
+        })
+      );
       return {
         ok: false,
         error: result.error ?? "Action rejected",
@@ -1049,7 +1156,73 @@ export class RoomManager {
     }
 
     console.log(`[RoomManager] Action accepted, emitting game:state with ${result.events.length} events`);
+    GameEventBus.broadcastEvent(
+      this.io,
+      room,
+      GameEventBus.createEnvelope("GAME_ACTION_ACCEPTED", room.match.matchId, room.gameId, {
+        actionId,
+        actionType: action.type,
+        playerId: user.userId,
+      })
+    );
+
+    // Broadcast individual game-specific events with Carrom pocket deduplication
+    for (const ev of result.events) {
+      if (ev.type === "coin-pocketed" || ev.type === "CARROM_COIN_POCKETED") {
+        const shotId = (ev as any).shotId ?? (result.state as any)?.lastActionAtMs ?? Date.now();
+        const coinId = (ev as any).coinId ?? (ev as any).coin?.id ?? "unknown";
+        const isFirst = GameStateSyncManager.checkAndMarkCarromPocket(shotId, coinId);
+        if (!isFirst) {
+          console.log(`[CARROM] COIN_POCKETED_DEDUPLICATED (Ignored duplicate): ${shotId}:${coinId}`);
+          continue;
+        }
+        console.log(`[CARROM] COIN_POCKETED: ${shotId}:${coinId}`);
+      }
+
+      GameEventBus.broadcastEvent(
+        this.io,
+        room,
+        GameEventBus.createEnvelope(ev.type, room.match.matchId, room.gameId, ev)
+      );
+    }
+
     this.emitGameState(room, result.events);
+
+    // Update and broadcast authoritative match state
+    const currentSeat = room.match.engine.currentSeat;
+    const activePlayer = [...room.players.values()].find((p) => p.seat === currentSeat && !p.isSpectator);
+    const turnStartedAtMs = Date.now();
+    const turnExpiresAtMs = room.match.engine.currentClockDeadline ?? (turnStartedAtMs + 30000);
+
+    const authoritativeState = GameStateSyncManager.applyActionUpdate(
+      room.match.matchId,
+      actionId,
+      result.state,
+      {
+        currentPlayerId: activePlayer?.userId ?? null,
+        turnNumber: room.match.turnNumber,
+        turnStartedAt: turnStartedAtMs,
+        turnExpiresAt: turnExpiresAtMs,
+        status: result.finished ? "finished" : "playing",
+      },
+    );
+    this.io.to(room.ioName).emit("game:state:authoritative", authoritativeState as any);
+
+    // If active turn player changed, emit TURN_CHANGED
+    if (currentSeat !== undefined && !result.finished) {
+      GameEventBus.broadcastEvent(
+        this.io,
+        room,
+        GameEventBus.createEnvelope("TURN_CHANGED", room.match.matchId, room.gameId, {
+          previousPlayerId: user.userId,
+          nextPlayerId: activePlayer?.userId ?? "",
+          reason: (result.events[0] as any)?.reason ?? "NORMAL_MOVE",
+          turnNumber: room.match.turnNumber,
+          turnStartedAtMs,
+          turnExpiresAtMs,
+        })
+      );
+    }
 
     if (result.finished) {
       await this.finishMatch(room, result.winnerSeats);
@@ -1119,14 +1292,42 @@ export class RoomManager {
       scores,
     });
 
-    this.emitToRoom(room, "game:finished", {
+    const finishPayload = {
       matchId,
       gameId: room.gameId,
       resultType,
       winnerId,
       loserId,
+      winnerSeats,
+      scores,
       finalScores: scores,
-    });
+    };
+
+    this.emitToRoom(room, "game:finished", finishPayload);
+    GameEventBus.broadcastEvent(
+      this.io,
+      room,
+      GameEventBus.createEnvelope("GAME_FINISHED", matchId, room.gameId, finishPayload)
+    );
+
+    GameEventBus.broadcastEvent(
+      this.io,
+      room,
+      GameEventBus.createEnvelope("RESULT_CREATED", matchId, room.gameId, {
+        matchId,
+        resultId: `res_${matchId}`,
+      })
+    );
+
+    GameEventBus.broadcastEvent(
+      this.io,
+      room,
+      GameEventBus.createEnvelope("SETTLEMENT_STARTED", matchId, room.gameId, {
+        matchId,
+        totalPot: room.stake * participants.length,
+        entryFee: room.stake,
+      })
+    );
 
     try {
       const settlement = await settleMatch(matchId, {
@@ -1143,11 +1344,26 @@ export class RoomManager {
         resultType,
         coinsWon: winnerPayout,
       });
+
+      GameEventBus.broadcastEvent(
+        this.io,
+        room,
+        GameEventBus.createEnvelope("SETTLEMENT_COMPLETED", matchId, room.gameId, {
+          matchId,
+          prizePool: settlement?.result?.pot ?? (room.stake * participants.length),
+          winnerPayout,
+          refundPerPlayer: isDraw ? room.stake : 0,
+          isDraw,
+          winnerIds,
+        })
+      );
     } catch (error) {
       console.error(`Settlement failed for match ${matchId}`, error);
     }
 
     const finalState = room.match.engine.serialize();
+    GameStateSyncManager.finalizeMatch(matchId, finalState);
+
     room.match = null;
     room.rematch = null;
     room.status = "ended";
@@ -1309,6 +1525,14 @@ export class RoomManager {
         connectionStatus: "CONNECTED",
       });
 
+      GameEventBus.broadcastEvent(
+        this.io,
+        room,
+        GameEventBus.createEnvelope("PLAYER_RECONNECTED", matchId, room.gameId, {
+          playerId: user.userId,
+        })
+      );
+
       this.emitToRoom(room, "player:connection", {
         roomId: room.id,
         playerId: user.userId,
@@ -1376,6 +1600,15 @@ export class RoomManager {
           playerId: user.userId,
           reconnectExpiresAt,
         });
+
+        GameEventBus.broadcastEvent(
+          this.io,
+          room,
+          GameEventBus.createEnvelope("PLAYER_DISCONNECTED", matchId, room.gameId, {
+            playerId: user.userId,
+            reconnectExpiresAt,
+          })
+        );
 
         this.emitToRoom(room, "player:connection", {
           roomId: room.id,
@@ -1447,6 +1680,16 @@ export class RoomManager {
           winnerId,
         });
 
+        GameEventBus.broadcastEvent(
+          this.io,
+          room,
+          GameEventBus.createEnvelope("PLAYER_FORFEITED", room.match.matchId, room.gameId, {
+            playerId: userId,
+            winnerId,
+            reason: "RECONNECT_EXPIRED",
+          })
+        );
+
         await this.finishMatch(room, remainingPlayers.map((p) => p.seat!));
 
         console.log("[MATCH] FORFEIT_SETTLEMENT_COMPLETED", {
@@ -1463,6 +1706,20 @@ export class RoomManager {
         this.broadcastRoomUpdate(room);
       }
     }
+  }
+
+  syncState(roomId: string, matchId: string, lastStateVersion: number, clientKey = "default"): { stateVersion: number; fullState: JsonObject; actionSequence: number; stateHash?: string } {
+    const room = this.rooms.get(roomId);
+    if (!room || !room.match || room.match.matchId !== matchId) {
+      throw new AppError("NOT_FOUND", "Match not found for state sync");
+    }
+    const syncRes = GameStateSyncManager.handleStateSyncRequest(clientKey, matchId, lastStateVersion);
+    return {
+      stateVersion: syncRes.stateVersion,
+      actionSequence: syncRes.actionSequence,
+      fullState: syncRes.fullState as any,
+      stateHash: syncRes.stateHash,
+    };
   }
 
   /** Creates a pre-filled, auto-starting room for matchmaking. */

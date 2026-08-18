@@ -7,6 +7,11 @@ import type {
   MatchSettings,
   RoomFull,
   RoomPlayer,
+  GameEventEnvelope,
+  InGameNotification,
+  AuthoritativeMatchState,
+  AuthoritativeStateSyncRequest,
+  AuthoritativeStateSyncResponse,
 } from "@gaming-hub/shared";
 
 /**
@@ -70,6 +75,18 @@ export interface ClientToServerEvents {
 
   "game:state:ack": (payload: { roomId: string; matchId: string; timestamp: number }) => void;
 
+  "game:sync": (
+    payload: { roomId: string; matchId: string; lastStateVersion: number },
+    ack: Ack<{ stateVersion: number; fullState: JsonObject }>,
+  ) => void;
+
+  "game:state-sync": (
+    payload: AuthoritativeStateSyncRequest,
+    ack: Ack<AuthoritativeStateSyncResponse>,
+  ) => void;
+
+  "game:event:ack": (payload: { matchId: string; eventId: string; stateVersion: number }) => void;
+
   "carrom:striker-position": (payload: {
     roomId?: string;
     matchId?: string;
@@ -83,6 +100,11 @@ export interface ClientToServerEvents {
 }
 
 export interface ServerToClientEvents {
+  "game:event": (event: GameEventEnvelope) => void;
+  "game:notification": (notification: InGameNotification) => void;
+  "game:state:authoritative": (payload: AuthoritativeMatchState) => void;
+  "game:sync:response": (payload: { matchId: string; stateVersion: number; fullState: JsonObject }) => void;
+
   "room:update": (room: RoomFull) => void;
   "room:closed": (payload: { roomId: string; reason: string }) => void;
 

@@ -17,6 +17,8 @@ import pino from "pino";
 import { env } from "./env";
 import { authenticateToken, type AuthenticatedUser } from "./auth";
 import { assertFeatureEnabled } from "./settings";
+import { GameEventBus } from "./events/GameEventBus";
+import { GameStateSyncManager } from "./sync/GameStateSyncManager";
 
 const logger = pino({ level: env.LOG_LEVEL, transport: { target: "pino-pretty" } });
 
@@ -282,6 +284,33 @@ async function main(): Promise<void> {
     socket.on("game:state:ack", (payload) => {
       framework.syncManager.handleStateAck(user.userId, payload.roomId, payload.timestamp);
     });
+
+    socket.on("game:event:ack", (payload) => {
+      // Client event acknowledgement
+      console.log(`[GAME_EVENT_ACK] match: ${payload.matchId}, event: ${payload.eventId}, version: ${payload.stateVersion}`);
+    });
+
+    socket.on("game:sync", (payload, ack) =>
+      void guard(ack, async () => {
+        const syncRes = GameStateSyncManager.handleStateSyncRequest(
+          socket.id,
+          payload.matchId,
+          payload.lastStateVersion,
+        );
+        ack?.({ ok: true, data: { stateVersion: syncRes.stateVersion, fullState: syncRes.fullState.gameState } });
+      }),
+    );
+
+    socket.on("game:state-sync", (payload, ack) =>
+      void guard(ack, async () => {
+        const syncRes = GameStateSyncManager.handleStateSyncRequest(
+          socket.id,
+          payload.matchId,
+          payload.lastStateVersion,
+        );
+        ack?.({ ok: true, data: syncRes });
+      }),
+    );
 
     // ── Carrom Live Striker Mover Position Sync ──
     let lastStrikerSeq = -1;

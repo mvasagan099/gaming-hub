@@ -7,6 +7,14 @@ import type {
   JsonObject,
   MatchSettings,
   RoomFull,
+  GameEventEnvelope,
+  InGameNotification,
+  AuthoritativeMatchState,
+} from "@gaming-hub/shared";
+import {
+  isStaleStateVersion,
+  isSequentialStateVersion,
+  isStateVersionGap,
 } from "@gaming-hub/shared";
 import { createTypedSocket, type RematchUpdate, type TypedSocket } from "@gaming-hub/socket";
 import { useAuthStore } from "./authStore";
@@ -73,12 +81,18 @@ interface MultiplayerState {
   /** Queue intent preserved across transient reconnects so it can be re-joined. */
   pendingRequeue: { gameId: GameId; stake: number; settings: MatchSettings } | null;
   gameState: JsonObject | null;
+  authoritativeState: AuthoritativeMatchState | null;
   lastEvents: { type: string }[];
   matchId: string | null;
   winner: WinnerInfo | null;
   countdown: number | null;
   disconnectGrace: { playerId: string; reconnectExpiresAt: number } | null;
   lastStateVersion: number;
+  actionSequence: number;
+  lastActionId: string | null;
+  stateHash: string | null;
+  notifications: InGameNotification[];
+  activeNotification: InGameNotification | null;
   // Force re-render counter for deep state changes
   renderKey: number;
 
@@ -96,12 +110,16 @@ interface MultiplayerState {
   /** @deprecated use requestRematch */
   rematch: () => Promise<void>;
   clearError: () => void;
+  dismissNotification: (id: string) => void;
+  syncGameState: () => Promise<void>;
+  requestFullStateSync: (matchId?: string) => Promise<void>;
   joinMatchmaking: (gameId: GameId, stake: number, settings?: MatchSettings) => Promise<void>;
   leaveMatchmaking: () => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
   sendEmoji: (emoji: string) => Promise<void>;
   sendTyping: () => Promise<void>;
-  sendGameAction: (action: GameAction) => Promise<{ ok: boolean; error?: string }>;}
+  sendGameAction: (action: GameAction) => Promise<{ ok: boolean; error?: string }>;
+}
 
 function sessionToken(): string | null {
   return useAuthStore.getState().session?.access_token ?? null;
@@ -132,12 +150,16 @@ function clearRoom(set: (partial: Partial<MultiplayerState>) => void) {
     isSpectator: false,
     messages: [],
     gameState: null,
+    authoritativeState: null,
     lastEvents: [],
     matchId: null,
     winner: null,
     countdown: null,
     disconnectGrace: null,
     lastStateVersion: 0,
+    actionSequence: 0,
+    lastActionId: null,
+    stateHash: null,
     rematchState: null,
     typing: [],
   });
@@ -157,12 +179,18 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   matchmaking: { ...IDLE_MATCHMAKING },
   pendingRequeue: null,
   gameState: null,
+  authoritativeState: null,
   lastEvents: [],
   matchId: null,
   winner: null,
   countdown: null,
   disconnectGrace: null,
   lastStateVersion: 0,
+  actionSequence: 0,
+  lastActionId: null,
+  stateHash: null,
+  notifications: [],
+  activeNotification: null,
   renderKey: 0,
 
   connect: () => {
@@ -265,6 +293,53 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         console.log("[MultiplayerStore] Sent game:state:ack for match", payload.matchId);
       });
 
+      // ── Centralized Authoritative State Sync Listener ──
+      socket.on("game:state:authoritative", (authoritativeState: AuthoritativeMatchState) => {
+        const currentVersion = get().lastStateVersion;
+        const incomingVersion = authoritativeState.stateVersion;
+
+        // 1. If incomingStateVersion <= currentStateVersion -> IGNORE
+        if (isStaleStateVersion(incomingVersion, currentVersion)) {
+          console.log("[STATE] IGNORED_STALE", {
+            incomingVersion,
+            currentVersion,
+            matchId: authoritativeState.matchId,
+          });
+          return;
+        }
+
+        // 2. If incomingStateVersion === currentStateVersion + 1 -> APPLY
+        if (isSequentialStateVersion(incomingVersion, currentVersion) || currentVersion === 0) {
+          console.log("[STATE] APPLIED", {
+            stateVersion: incomingVersion,
+            actionSequence: authoritativeState.actionSequence,
+            matchId: authoritativeState.matchId,
+          });
+          set({
+            gameState: authoritativeState.gameState,
+            authoritativeState,
+            lastStateVersion: incomingVersion,
+            actionSequence: authoritativeState.actionSequence,
+            lastActionId: authoritativeState.lastActionId,
+            stateHash: authoritativeState.stateHash ?? null,
+            matchId: authoritativeState.matchId,
+            renderKey: (get().renderKey || 0) + 1,
+          });
+          return;
+        }
+
+        // 3. If incomingStateVersion > currentStateVersion + 1 -> REQUEST FULL SYNC
+        if (isStateVersionGap(incomingVersion, currentVersion)) {
+          console.warn("[STATE] DESYNC_DETECTED", {
+            incomingVersion,
+            currentVersion,
+            gap: incomingVersion - currentVersion,
+            matchId: authoritativeState.matchId,
+          });
+          void get().requestFullStateSync(authoritativeState.matchId);
+        }
+      });
+
       socket.on("game:over", (payload) => {
         set({
           winner: { winnerSeats: payload.winnerSeats, winnerIds: payload.winnerIds },
@@ -298,6 +373,105 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       socket.on("game:forfeit" as any, (payload: { matchId: string; forfeitedPlayerId: string; winnerId: string }) => {
         console.log("[MultiplayerStore] game:forfeit received", payload);
         set({ disconnectGrace: null });
+      });
+
+      // ── Centralized Real-Time Event System ──
+      const seenEventIds = new Set<string>();
+
+      socket.on("game:event", (envelope: GameEventEnvelope<any>) => {
+        console.log("[MultiplayerStore] game:event received:", envelope.eventType, "stateVersion:", envelope.stateVersion, "id:", envelope.eventId);
+
+        // Deduplication
+        if (seenEventIds.has(envelope.eventId)) {
+          console.log("[MultiplayerStore] Ignoring duplicate eventId:", envelope.eventId);
+          return;
+        }
+        seenEventIds.add(envelope.eventId);
+        if (seenEventIds.size > 1000) {
+          const first = seenEventIds.values().next().value;
+          if (first) seenEventIds.delete(first);
+        }
+
+        // Check for stale packets
+        const currentVersion = get().lastStateVersion;
+        if (envelope.stateVersion > 0 && envelope.stateVersion < currentVersion) {
+          console.warn("[MultiplayerStore] Ignoring stale event:", envelope.stateVersion, "<", currentVersion);
+          return;
+        }
+
+        // Detect version gaps (packet loss / reconnect) and trigger full state sync
+        if (currentVersion > 0 && envelope.stateVersion > currentVersion + 1) {
+          console.warn("[MultiplayerStore] State version gap detected:", currentVersion, "->", envelope.stateVersion, "- triggering sync");
+          void get().syncGameState();
+        }
+
+        // Apply state version
+        set({
+          lastStateVersion: Math.max(currentVersion, envelope.stateVersion),
+          renderKey: (get().renderKey || 0) + 1,
+        });
+
+        // Event-specific handling
+        if (envelope.eventType === "GAME_STATE_UPDATED" && envelope.payload?.state) {
+          set({
+            gameState: envelope.payload.state,
+            lastEvents: envelope.payload.events || [],
+            matchId: envelope.matchId,
+          });
+        } else if (envelope.eventType === "COUNTDOWN_UPDATED" && envelope.payload?.countdown !== undefined) {
+          set({ countdown: envelope.payload.countdown });
+        } else if (envelope.eventType === "PLAYER_DISCONNECTED" && envelope.payload) {
+          set({
+            disconnectGrace: {
+              playerId: envelope.payload.playerId,
+              reconnectExpiresAt: envelope.payload.reconnectExpiresAt,
+            },
+          });
+        } else if (envelope.eventType === "PLAYER_RECONNECTED" && envelope.payload) {
+          const current = get().disconnectGrace;
+          if (current && current.playerId === envelope.payload.playerId) {
+            set({ disconnectGrace: null });
+          }
+        } else if (envelope.eventType === "GAME_FINISHED" && envelope.payload) {
+          set({
+            winner: {
+              winnerSeats: envelope.payload.winnerSeats || [],
+              winnerIds: envelope.payload.winnerId ? [envelope.payload.winnerId] : [],
+            },
+            matchId: envelope.matchId,
+            disconnectGrace: null,
+          });
+        }
+
+        // Acknowledge receipt to server
+        socket.emit("game:event:ack", {
+          matchId: envelope.matchId,
+          eventId: envelope.eventId,
+          stateVersion: envelope.stateVersion,
+        });
+      });
+
+      socket.on("game:notification", (notification: InGameNotification) => {
+        console.log("[MultiplayerStore] game:notification received:", notification.title, "-", notification.message, `[${notification.priority}]`);
+
+        // Check if targeted to specific user
+        const currentUserId = useAuthStore.getState().user?.id;
+        if (notification.targetUserId && notification.targetUserId !== currentUserId) {
+          return;
+        }
+
+        set({
+          notifications: [...get().notifications.slice(-49), notification],
+          activeNotification: notification,
+        });
+
+        if (notification.ephemeralMs) {
+          setTimeout(() => {
+            if (get().activeNotification?.id === notification.id) {
+              set({ activeNotification: null });
+            }
+          }, notification.ephemeralMs);
+        }
       });
 
       socket.on("chat:message", (message) => {
@@ -560,6 +734,53 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     // State arrives via the `game:state` broadcast; applying it here too would
     // double-render the same event set on the acting client.
     return { ok: true };
+  },
+
+  dismissNotification: (id: string) => {
+    set({
+      notifications: get().notifications.filter((n) => n.id !== id),
+      activeNotification: get().activeNotification?.id === id ? null : get().activeNotification,
+    });
+  },
+
+  requestFullStateSync: async (matchIdParam?: string) => {
+    const socket = get().socket;
+    const room = get().room;
+    const matchId = matchIdParam ?? get().matchId;
+    if (!socket || !matchId) return;
+
+    console.log("[STATE] SYNC_REQUESTED", { matchId, lastStateVersion: get().lastStateVersion });
+
+    try {
+      const res = await socket.emitWithAck("game:state-sync", {
+        matchId,
+        lastStateVersion: get().lastStateVersion,
+        roomId: room?.id,
+      });
+
+      if (res.ok && res.data) {
+        const full = res.data.fullState;
+        console.log("[STATE] SYNC_COMPLETED", {
+          matchId,
+          stateVersion: res.data.stateVersion,
+          actionSequence: res.data.actionSequence,
+        });
+        set({
+          gameState: full.gameState,
+          authoritativeState: full,
+          lastStateVersion: res.data.stateVersion,
+          actionSequence: res.data.actionSequence,
+          stateHash: res.data.stateHash ?? null,
+          renderKey: (get().renderKey || 0) + 1,
+        });
+      }
+    } catch (err) {
+      console.error("[MultiplayerStore] game:state-sync error", err);
+    }
+  },
+
+  syncGameState: async () => {
+    return get().requestFullStateSync();
   },
 
   clearError: () => set({ error: null }),

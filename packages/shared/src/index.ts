@@ -18,4 +18,6 @@ export * from "./chess";
 export * from "./support";
 export * from "./kyc";
 export * from "./gameConfig";
+export * from "./gameEvents";
+export * from "./gameStateSync";
 
