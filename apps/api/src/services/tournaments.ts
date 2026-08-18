@@ -2,6 +2,7 @@ import { prisma } from "@gaming-hub/db";
 import type { Prisma } from "@gaming-hub/db";
 import { AppError, isGameId } from "@gaming-hub/shared";
 import type { TournamentStatus, TournamentFormat } from "@gaming-hub/shared";
+import { canTransitionTournamentStatus } from "@gaming-hub/shared";
 import { applyTransaction } from "./wallet";
 import { createNotification } from "./notifications";
 import { getCategorySettings } from "./settings";
@@ -120,7 +121,10 @@ export async function registerForTournament(userId: string, tournamentId: string
     include: { _count: { select: { players: true } } },
   });
   if (!tournament) throw new AppError("NOT_FOUND", "Tournament not found", 404);
-  if (tournament.status !== "UPCOMING") throw new AppError("TOURNAMENT_STARTED", "Tournament is not accepting registrations", 400);
+  // Accept registrations when status is UPCOMING (legacy) or REGISTRATION_OPEN
+  if (tournament.status !== "UPCOMING" && tournament.status !== "REGISTRATION_OPEN") {
+    throw new AppError("TOURNAMENT_STARTED", "Tournament is not accepting registrations", 400);
+  }
   if (tournament._count.players >= tournament.maxPlayers) throw new AppError("TOURNAMENT_FULL", "Tournament is full", 400);
 
   const existing = await prisma.tournamentPlayer.findUnique({
@@ -165,7 +169,10 @@ export async function registerForTournament(userId: string, tournamentId: string
 export async function cancelRegistration(userId: string, tournamentId: string) {
   const tournament = await prisma.tournament.findUnique({ where: { id: tournamentId } });
   if (!tournament) throw new AppError("NOT_FOUND", "Tournament not found", 404);
-  if (tournament.status !== "UPCOMING") throw new AppError("TOURNAMENT_STARTED", "Cannot cancel after the tournament starts", 400);
+  const acceptedStatuses = ["UPCOMING", "REGISTRATION_OPEN", "REGISTRATION_CLOSED"];
+  if (!acceptedStatuses.includes(tournament.status)) {
+    throw new AppError("TOURNAMENT_STARTED", "Cannot cancel after the tournament starts", 400);
+  }
 
   const entry = await prisma.tournamentPlayer.findUnique({
     where: { tournamentId_userId: { tournamentId, userId } },
@@ -198,7 +205,7 @@ export async function createTournament(input: CreateTournamentInput, createdBy: 
       gameId: input.gameId,
       title: input.title,
       description: input.description ?? "",
-      format: input.format ?? "BRACKET",
+      format: (input.format ?? "SINGLE_ELIMINATION") as TournamentFormat,
       prizePool: input.prizePool ?? 0,
       entryFee: input.entryFee ?? 0,
       maxPlayers: input.maxPlayers ?? 16,
@@ -207,6 +214,7 @@ export async function createTournament(input: CreateTournamentInput, createdBy: 
       bannerUrl: input.bannerUrl ?? null,
       rules: (input.rules ?? {}) as Prisma.InputJsonValue,
       createdBy,
+      status: "DRAFT",
     },
   });
 
@@ -254,7 +262,20 @@ export async function updateTournament(id: string, input: Partial<CreateTourname
 export async function setTournamentStatus(id: string, status: TournamentStatus, updatedBy: string | null) {
   const existing = await prisma.tournament.findUnique({ where: { id } });
   if (!existing) throw new AppError("NOT_FOUND", "Tournament not found", 404);
-  const tournament = await prisma.tournament.update({ where: { id }, data: { status } });
+
+  // Validate transition
+  if (!canTransitionTournamentStatus(existing.status as TournamentStatus, status)) {
+    throw new AppError(
+      "INVALID_ACTION",
+      `Cannot transition tournament from ${existing.status} to ${status}`,
+      409,
+    );
+  }
+
+  const tournament = await prisma.tournament.update({
+    where: { id },
+    data: { status, stateVersion: { increment: 1 } },
+  });
   audit({
     actorType: "user",
     actorId: updatedBy,

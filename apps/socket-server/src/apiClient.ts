@@ -71,3 +71,23 @@ export function cancelMatch(matchId: string, reason?: string) {
   );
 }
 
+/**
+ * Reports the result of a tournament match to the API, which drives
+ * automatic bracket advancement, round completion, and settlement.
+ * Fire-and-forget: failures are logged but do not break the game flow.
+ */
+export function reportTournamentMatchResult(params: {
+  matchId: string;
+  tournamentId: string;
+  roundId: string;
+  winnerId: string;
+  loserId?: string;
+  scores?: Record<string, number>;
+}) {
+  return internalRequest<{ ok: true }>(
+    "POST",
+    "/internal/tournament/match-result",
+    params as Record<string, unknown>,
+  );
+}
+

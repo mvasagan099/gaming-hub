@@ -20,4 +20,4 @@ export * from "./kyc";
 export * from "./gameConfig";
 export * from "./gameEvents";
 export * from "./gameStateSync";
-
+export * from "./tournament";

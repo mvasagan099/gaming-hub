@@ -23,7 +23,7 @@ import type { RoomPlayerRuntime, RoomRuntime } from "./types";
 import { generateRoomCode } from "../roomCode";
 import { secureRandomSource } from "../games/rng";
 import { GameSession } from "../games/GameSession";
-import { holdWagers, settleMatch, cancelMatch } from "../apiClient";
+import { holdWagers, settleMatch, cancelMatch, reportTournamentMatchResult } from "../apiClient";
 import { assertGameEnabled, createMatchConfigSnapshot } from "../settings";
 import { GameEventBus } from "../events/GameEventBus";
 import { GameStateSyncManager } from "../sync/GameStateSyncManager";
@@ -1359,6 +1359,23 @@ export class RoomManager {
       );
     } catch (error) {
       console.error(`Settlement failed for match ${matchId}`, error);
+    }
+
+    // Tournament bracket advancement (fire-and-forget)
+    const roomSettings = room.settings as Record<string, unknown>;
+    const tournamentId = typeof roomSettings.tournamentId === "string" ? roomSettings.tournamentId : null;
+    const tournamentRoundId = typeof roomSettings.tournamentRoundId === "string" ? roomSettings.tournamentRoundId : null;
+    if (tournamentId && tournamentRoundId && winnerId && !isDraw) {
+      reportTournamentMatchResult({
+        matchId,
+        tournamentId,
+        roundId: tournamentRoundId,
+        winnerId,
+        loserId: loserId ?? undefined,
+        scores,
+      }).catch((err) =>
+        console.error(`[TOURNAMENT] match-result report failed for ${matchId}`, err),
+      );
     }
 
     const finalState = room.match.engine.serialize();

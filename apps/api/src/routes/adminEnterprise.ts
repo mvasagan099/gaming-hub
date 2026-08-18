@@ -30,6 +30,13 @@ import {
   updateTournament,
 } from "../services/tournaments";
 import {
+  startTournament,
+  cancelTournamentWithRefunds,
+  settleTournament,
+  transitionTournamentStatus,
+  getTournamentBracket,
+} from "../services/tournamentEngine";
+import {
   assignTicket,
   getTicket,
   listAllTickets,
@@ -95,10 +102,11 @@ const tournamentCreateSchema = z.object({
   gameId: z.string(),
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(4000).default(""),
-  format: z.enum(["BRACKET", "KNOCKOUT", "ROUND_ROBIN", "SWISS"]).default("BRACKET"),
+  format: z.enum(["BRACKET", "KNOCKOUT", "ROUND_ROBIN", "SWISS", "SINGLE_ELIMINATION", "DOUBLE_ELIMINATION"]).default("SINGLE_ELIMINATION"),
   prizePool: z.number().int().min(0).max(1_000_000_000).default(0),
   entryFee: z.number().int().min(0).max(100_000).default(0),
   maxPlayers: z.number().int().min(2).max(256).default(16),
+  minPlayers: z.number().int().min(2).max(256).optional(),
   startTime: z.string(),
   endTime: z.string().nullable().optional(),
   bannerUrl: z.string().max(500).nullable().optional(),
@@ -385,6 +393,64 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     await deleteTournament(id, admin.id);
     return { ok: true };
   });
+
+  app.get("/api/admin/tournaments/:id/bracket", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view");
+    const { id } = routeParams(request);
+    return getTournamentBracket(id);
+  });
+
+  app.post("/api/admin/tournaments/:id/open-registration", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage");
+    const { id } = routeParams(request);
+    await transitionTournamentStatus(id, "REGISTRATION_OPEN" as any, admin.id);
+    return { ok: true };
+  });
+
+  app.post("/api/admin/tournaments/:id/close-registration", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage");
+    const { id } = routeParams(request);
+    await transitionTournamentStatus(id, "REGISTRATION_CLOSED" as any, admin.id);
+    return { ok: true };
+  });
+
+  app.post("/api/admin/tournaments/:id/start", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage");
+    const { id } = routeParams(request);
+    await startTournament(id, admin.id);
+    return { ok: true };
+  });
+
+  app.post("/api/admin/tournaments/:id/pause", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage");
+    const { id } = routeParams(request);
+    await transitionTournamentStatus(id, "PAUSED" as any, admin.id);
+    return { ok: true };
+  });
+
+  app.post("/api/admin/tournaments/:id/resume", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage");
+    const { id } = routeParams(request);
+    await transitionTournamentStatus(id, "IN_PROGRESS" as any, admin.id);
+    return { ok: true };
+  });
+
+  app.post("/api/admin/tournaments/:id/cancel", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage");
+    const { id } = routeParams(request);
+    const { reason } = (request.body as any) ?? {};
+    await cancelTournamentWithRefunds(id, reason ?? "Admin cancelled", admin.id);
+    return { ok: true };
+  });
+
+  app.post("/api/admin/tournaments/:id/settle", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage");
+    const { id } = routeParams(request);
+    await settleTournament(id);
+    return { ok: true };
+  });
+
+
 
   // ---- Coupons (admin) -----------------------------------------------------
   app.get("/api/admin/coupons", { preHandler: authenticate }, async (request) => {

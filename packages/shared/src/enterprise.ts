@@ -1,5 +1,6 @@
 import type { GameId } from "./games";
 import type { UserAchievement } from "./notification";
+import type { TournamentStatus, TournamentFormat } from "./tournament";
 
 // ---------------------------------------------------------------------------
 // Referrals
@@ -231,8 +232,9 @@ export interface SearchSuggestion {
 // Tournaments
 // ---------------------------------------------------------------------------
 
-export type TournamentStatus = "UPCOMING" | "LIVE" | "ENDED" | "CANCELLED";
-export type TournamentFormat = "BRACKET" | "KNOCKOUT" | "ROUND_ROBIN" | "SWISS";
+// TournamentStatus and TournamentFormat are defined in ./tournament.ts
+// (imported above for use in TournamentSummary interface)
+
 
 export interface TournamentSummary {
   id: string;

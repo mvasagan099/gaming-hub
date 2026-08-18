@@ -140,10 +140,21 @@ enum NotificationType {
 }
 
 enum TournamentStatus {
+  // Legacy values kept for backward compat
   UPCOMING
   LIVE
   ENDED
   CANCELLED
+  // Full lifecycle
+  DRAFT
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  STARTING
+  IN_PROGRESS
+  COMPLETED
+  SETTLING
+  SETTLED
+  PAUSED
 }
 
 enum TournamentFormat {
@@ -151,6 +162,29 @@ enum TournamentFormat {
   KNOCKOUT
   ROUND_ROBIN
   SWISS
+  SINGLE_ELIMINATION
+  DOUBLE_ELIMINATION
+}
+
+enum BracketSlotStatus {
+  PENDING
+  READY
+  IN_PROGRESS
+  COMPLETED
+  BYE
+  CANCELLED
+}
+
+enum SeedMethod {
+  RANDOM
+  RATING
+  ADMIN_DEFINED
+}
+
+enum TournamentSettlementStatus {
+  PENDING
+  PAID
+  FAILED
 }
 
 enum CouponStatus {
@@ -967,57 +1001,109 @@ model GameNotification {
 }
 
 model Tournament {
-  id          String           @id @default(uuid())
-  gameId      String
-  title       String
-  description String
-  bannerUrl   String?
-  format      TournamentFormat @default(BRACKET)
-  prizePool   Int              @default(0)
-  entryFee    Int              @default(0)
-  maxPlayers  Int              @default(8)
-  startTime   DateTime
-  endTime     DateTime?
-  rules       Json             @default("{}")
-  status      TournamentStatus @default(UPCOMING)
-  createdBy   String?
-  createdAt   DateTime         @default(now())
+  id                   String           @id @default(uuid())
+  gameId               String
+  title                String
+  description          String
+  bannerUrl            String?
+  format               TournamentFormat @default(SINGLE_ELIMINATION)
+  prizePool            Int              @default(0)
+  entryFee             Int              @default(0)
+  minPlayers           Int              @default(2)
+  maxPlayers           Int              @default(8)
+  startTime            DateTime
+  endTime              DateTime?
+  registrationEndsAt   DateTime?
+  rules                Json             @default("{}")
+  status               TournamentStatus @default(DRAFT)
+  seedMethod           SeedMethod       @default(RANDOM)
+  enableThirdPlace     Boolean          @default(false)
+  prizeDistribution    Json             @default("[]")
+  grossPool            Int              @default(0)
+  configSnapshot       Json?
+  stateVersion         Int              @default(0)
+  settledAt            DateTime?
+  createdBy            String?
+  createdAt            DateTime         @default(now())
 
   players TournamentPlayer[]
   rounds  TournamentRound[]
+  prizes  TournamentPrize[]
 
   @@index([status, startTime])
 }
 
 model TournamentPlayer {
-  id           String   @id @default(uuid())
-  tournamentId String
-  userId       String
-  nickname     String?
-  registeredAt DateTime @default(now())
-  seed         Int?
-  result       Int?
+  id               String   @id @default(uuid())
+  tournamentId     String
+  userId           String
+  nickname         String?
+  registeredAt     DateTime @default(now())
+  seed             Int?
+  result           Int?
+  finalRank        Int?
+  eliminated       Boolean  @default(false)
+  eliminatedInRound Int?
 
-  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tournament Tournament      @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prizes     TournamentPrize[]
 
   @@unique([tournamentId, userId])
 }
 
 model TournamentRound {
-  id           String  @id @default(uuid())
+  id           String            @id @default(uuid())
   tournamentId String
   roundNumber  Int
-  playerAId    String
-  playerBId    String
+  matchNumber  Int               @default(0)
+  status       BracketSlotStatus @default(PENDING)
+  isBye        Boolean           @default(false)
+  playerAId    String?
+  playerBId    String?
   winnerId     String?
-  matchId      String?
-  playerAScore Int     @default(0)
-  playerBScore Int     @default(0)
+  matchId      String?           @unique
+  playerAScore Int               @default(0)
+  playerBScore Int               @default(0)
+  nextSlotId   String?
+  scheduledAt  DateTime?
+  completedAt  DateTime?
 
   tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
 
-  @@unique([tournamentId, roundNumber, playerAId, playerBId])
+  @@unique([tournamentId, roundNumber, matchNumber])
+  @@index([tournamentId, roundNumber])
+  @@index([matchId])
+}
+
+model TournamentPrize {
+  id           String                    @id @default(uuid())
+  tournamentId String
+  userId       String
+  playerId     String
+  rank         Int
+  amount       Int
+  status       TournamentSettlementStatus @default(PENDING)
+  transactionId String?
+  paidAt       DateTime?
+  createdAt    DateTime                  @default(now())
+
+  tournament   Tournament       @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  player       TournamentPlayer @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId, status])
+}
+
+model TournamentResultIdempotency {
+  id           String   @id @default(uuid())
+  matchId      String   @unique
+  tournamentId String
+  roundId      String
+  winnerId     String
+  processedAt  DateTime @default(now())
+
+  @@index([tournamentId])
 }
 
 model Referral {
