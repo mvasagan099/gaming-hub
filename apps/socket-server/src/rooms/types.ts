@@ -10,9 +10,10 @@ export interface RoomPlayerRuntime {
   isReady: boolean;
   isHost: boolean;
   isSpectator: boolean;
-  connectionStatus: "connected" | "disconnected" | "reconnecting";
+  connectionStatus: "connected" | "disconnected" | "reconnecting" | "forfeited";
   socketIds: Set<string>;
   joinedAt: number;
+  reconnectExpiresAt?: number | null;
 }
 
 export interface MatchRuntime {
@@ -41,4 +42,8 @@ export interface RoomRuntime {
   createdAt: number;
   settings: Record<string, unknown>;
   rematch: RematchRuntime | null;
+  pendingMatchId?: string | null;
+  countdownStarted?: boolean;
+  countdownTimer?: NodeJS.Timeout | null;
 }
+

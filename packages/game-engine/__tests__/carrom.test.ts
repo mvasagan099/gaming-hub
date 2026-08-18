@@ -202,7 +202,7 @@ describe("CarromEngine turn calculation scenarios", () => {
     expect(shot.state.queenState).toBe("COVERED");
     expect(shot.state.pendingQueenOwner).toBe(null);
     expect(shot.state.players[0].queenCovered).toBe(true);
-    expect(shot.state.players[0].score).toBe(4); // 3 for queen + 1 for coin
+    expect(shot.state.players[0].score).toBe(1); // 1 for white coin, Queen affects queenState/win condition
     expect(shot.state.currentSeat).toBe(0); // Player gets extra turn
     expect(shot.state.coins.find((c) => c.type === "queen")?.pocketed).toBe(true);
   });
@@ -242,9 +242,59 @@ describe("CarromEngine turn calculation scenarios", () => {
     expect(shot.state.queenState).toBe("COVERED");
     expect(shot.state.pendingQueenOwner).toBe(null);
     expect(shot.state.players[0].queenCovered).toBe(true);
-    expect(shot.state.players[0].score).toBe(4); // 3 for queen + 1 for coin
+    expect(shot.state.players[0].score).toBe(1); // 1 for white coin
     expect(shot.state.currentSeat).toBe(0); // Player gets extra turn
     expect(shot.state.coins.find((c) => c.type === "queen")?.pocketed).toBe(true);
+  });
+
+  it("Scenario 8b: Queen + own + opponent in same shot -> Queen covered, +1 score, keeps turn", async () => {
+    const { calculateScore } = await import("../src/carrom/physics");
+    const pocketedCoins = [
+      { id: "queen", type: "queen", x: 0, y: 0, vx: 0, vy: 0, pocketed: true, pocketedBy: null, pocketedAtTurn: null },
+      { id: "c1", type: "white", x: 0, y: 0, vx: 0, vy: 0, pocketed: true, pocketedBy: null, pocketedAtTurn: null },
+      { id: "c2", type: "black", x: 0, y: 0, vx: 0, vy: 0, pocketed: true, pocketedBy: null, pocketedAtTurn: null },
+    ] as any;
+    const res = calculateScore(pocketedCoins, "white", false, false);
+    expect(res.earnedExtraTurn).toBe(true);
+    expect(res.score).toBe(1); // +1 for own coin, 0 for opponent coin
+    expect(res.opponentScore).toBe(1);
+    expect(res.pocketedQueenThisShot).toBe(true);
+  });
+
+  it("Scenario 8c: Win condition cases - 9 own coins + queen covered = WIN; otherwise NOT WIN", async () => {
+    const { checkWinCondition } = await import("../src/carrom/physics");
+    const allCoins = Array.from({ length: 19 }).map((_, i) => ({
+      id: `coin-${i}`,
+      type: i === 0 ? "queen" : i <= 9 ? "white" : "black",
+      pocketed: false,
+    })) as any;
+
+    // Case 1: 6 own coins + queen covered -> NOT WIN
+    const players1 = [
+      { seat: 0, color: "white" as const, score: 6, queenPocketed: true, queenCovered: true },
+      { seat: 1, color: "black" as const, score: 0, queenPocketed: false, queenCovered: false },
+    ];
+    // Pocket 6 white coins
+    for (let i = 1; i <= 6; i++) allCoins[i].pocketed = true;
+    allCoins[0].pocketed = true;
+    expect(checkWinCondition(allCoins, players1).winner).toBe(null);
+
+    // Case 2: 9 own coins + queen NOT covered -> NOT WIN
+    const players2 = [
+      { seat: 0, color: "white" as const, score: 9, queenPocketed: false, queenCovered: false },
+      { seat: 1, color: "black" as const, score: 0, queenPocketed: false, queenCovered: false },
+    ];
+    for (let i = 1; i <= 9; i++) allCoins[i].pocketed = true;
+    allCoins[0].pocketed = false;
+    expect(checkWinCondition(allCoins, players2).winner).toBe(null);
+
+    // Case 3: 9 own coins + queen covered -> WIN
+    const players3 = [
+      { seat: 0, color: "white" as const, score: 9, queenPocketed: true, queenCovered: true },
+      { seat: 1, color: "black" as const, score: 0, queenPocketed: false, queenCovered: false },
+    ];
+    allCoins[0].pocketed = true;
+    expect(checkWinCondition(allCoins, players3).winner).toBe(0);
   });
 
   it("Scenario 9: Turn timeout passes turn to Player 2 without ending match and updates engine state", () => {

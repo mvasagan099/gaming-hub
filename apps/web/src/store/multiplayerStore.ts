@@ -76,6 +76,9 @@ interface MultiplayerState {
   lastEvents: { type: string }[];
   matchId: string | null;
   winner: WinnerInfo | null;
+  countdown: number | null;
+  disconnectGrace: { playerId: string; reconnectExpiresAt: number } | null;
+  lastStateVersion: number;
   // Force re-render counter for deep state changes
   renderKey: number;
 
@@ -132,6 +135,9 @@ function clearRoom(set: (partial: Partial<MultiplayerState>) => void) {
     lastEvents: [],
     matchId: null,
     winner: null,
+    countdown: null,
+    disconnectGrace: null,
+    lastStateVersion: 0,
     rematchState: null,
     typing: [],
   });
@@ -154,6 +160,9 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   lastEvents: [],
   matchId: null,
   winner: null,
+  countdown: null,
+  disconnectGrace: null,
+  lastStateVersion: 0,
   renderKey: 0,
 
   connect: () => {
@@ -231,12 +240,19 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           });
         }
         
+        const incomingVersion = (payload as any).sequenceNumber ?? (gameState as any)?.turnNumber ?? 0;
+        if (incomingVersion > 0 && incomingVersion < get().lastStateVersion) {
+          console.warn("[MultiplayerStore] Discarding stale game:state packet:", incomingVersion, "<", get().lastStateVersion);
+          return;
+        }
+
         // Always increment renderKey and ensure proper state update
         set({
           gameState: payload.state,
           lastEvents: payload.events,
           matchId: payload.matchId,
           winner: null,
+          lastStateVersion: Math.max(get().lastStateVersion, incomingVersion),
           renderKey: (get().renderKey || 0) + 1, // Always force re-render
         });
 
@@ -255,9 +271,33 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           gameState: payload.state,
           lastEvents: [],
           matchId: payload.matchId,
+          disconnectGrace: null,
           rematchState: null,
           renderKey: get().renderKey + 1, // Force re-render
         });
+      });
+
+      socket.on("game:player-disconnected" as any, (payload: { matchId: string; playerId: string; reconnectExpiresAt: number }) => {
+        console.log("[MultiplayerStore] game:player-disconnected received", payload);
+        set({
+          disconnectGrace: {
+            playerId: payload.playerId,
+            reconnectExpiresAt: payload.reconnectExpiresAt,
+          },
+        });
+      });
+
+      socket.on("game:player-reconnected" as any, (payload: { matchId: string; playerId: string }) => {
+        console.log("[MultiplayerStore] game:player-reconnected received", payload);
+        const current = get().disconnectGrace;
+        if (current && current.playerId === payload.playerId) {
+          set({ disconnectGrace: null });
+        }
+      });
+
+      socket.on("game:forfeit" as any, (payload: { matchId: string; forfeitedPlayerId: string; winnerId: string }) => {
+        console.log("[MultiplayerStore] game:forfeit received", payload);
+        set({ disconnectGrace: null });
       });
 
       socket.on("chat:message", (message) => {
@@ -305,6 +345,18 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
       socket.on("matchmaking:found", () => {
         set({ matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
+      });
+
+      socket.on("game:countdown" as any, (payload: { countdown: number }) => {
+        set({ countdown: payload.countdown });
+      });
+
+      socket.on("game:match-started" as any, () => {
+        set({ countdown: null });
+      });
+
+      socket.on("game:match-cancelled" as any, (payload: { reason?: string }) => {
+        set({ countdown: null, error: payload?.reason ? `Match cancelled: ${payload.reason}` : "Match was cancelled" });
       });
 
       socket.on("error", (payload) => {

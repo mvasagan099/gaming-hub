@@ -67,6 +67,10 @@ function connectionLabel(status: RoomFull["players"][number]["connectionStatus"]
       return { label: "Reconnecting…", dot: "bg-amber-500" };
     case "disconnected":
       return { label: "Offline", dot: "bg-rose-500" };
+    case "forfeited":
+      return { label: "Forfeited", dot: "bg-rose-600" };
+    default:
+      return { label: "Offline", dot: "bg-slate-500" };
   }
 }
 
@@ -260,6 +264,7 @@ export const LobbyPage: React.FC = () => {
   const leaveRoom = useMultiplayerStore((s) => s.leaveRoom);
   const setReady = useMultiplayerStore((s) => s.setReady);
   const startGame = useMultiplayerStore((s) => s.startGame);
+  const countdown = useMultiplayerStore((s) => s.countdown);
   const joinMatchmaking = useMultiplayerStore((s) => s.joinMatchmaking);
   const leaveMatchmaking = useMultiplayerStore((s) => s.leaveMatchmaking);
   const sendMessage = useMultiplayerStore((s) => s.sendMessage);
@@ -738,6 +743,20 @@ export const LobbyPage: React.FC = () => {
                   </p>
                 </div>
               </div>
+
+              {(countdown !== null || room.status === "starting") && (
+                <div className="mt-4 p-4 rounded-2xl bg-indigo-950/90 border-2 border-indigo-500 shadow-xl shadow-indigo-500/30 flex flex-col items-center justify-center text-center animate-pulse">
+                  <p className="text-xs font-black uppercase tracking-widest text-indigo-300">
+                    MATCH STARTING IN
+                  </p>
+                  <p className="text-5xl font-black text-amber-400 my-1">
+                    {countdown === 0 ? "START!" : countdown ?? 3}
+                  </p>
+                  <p className="text-[11px] font-semibold text-slate-300">
+                    All players ready — initializing game engine...
+                  </p>
+                </div>
+              )}
 
               <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {participants.map((player, index) => {

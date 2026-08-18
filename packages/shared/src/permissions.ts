@@ -42,7 +42,15 @@ export type Permission =
   | "admin:roles:view"
   | "admin:roles:create"
   | "admin:roles:edit"
-  | "admin:roles:delete";
+  | "admin:roles:delete"
+  | "admin:games:view"
+  | "admin:games:manage"
+  | "games.config.read"
+  | "games.config.update"
+  | "games.enable"
+  | "games.disable"
+  | "games.entryFee.update"
+  | "games.prize.update";
 
 export const ROLE_PERMISSIONS: Record<DbUserRole, readonly Permission[]> = {
   USER: [],
@@ -92,6 +100,14 @@ export const ROLE_PERMISSIONS: Record<DbUserRole, readonly Permission[]> = {
     "admin:roles:create",
     "admin:roles:edit",
     "admin:roles:delete",
+    "admin:games:view",
+    "admin:games:manage",
+    "games.config.read",
+    "games.config.update",
+    "games.enable",
+    "games.disable",
+    "games.entryFee.update",
+    "games.prize.update",
   ],
   CUSTOM: [],
 };
@@ -132,6 +148,14 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
   "admin:roles:create",
   "admin:roles:edit",
   "admin:roles:delete",
+  "admin:games:view",
+  "admin:games:manage",
+  "games.config.read",
+  "games.config.update",
+  "games.enable",
+  "games.disable",
+  "games.entryFee.update",
+  "games.prize.update",
 ];
 
 export function hasPermission(role: DbUserRole, permission: Permission, customPermissions?: readonly Permission[]): boolean {

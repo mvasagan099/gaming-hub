@@ -40,14 +40,34 @@ export function holdWagers(matchId: string) {
 }
 
 /** Credits winners, updates stats/achievements and marks the match FINISHED. */
-export function settleMatch(matchId: string, rated = true) {
+export function settleMatch(
+  matchId: string,
+  options: {
+    winnerIds?: string[];
+    scores?: Record<string, number>;
+    resultType?: "WIN" | "LOSS" | "DRAW" | "FORFEIT";
+    rated?: boolean;
+    reason?: string;
+  } = {},
+) {
   return internalRequest<{
     ok: true;
     result: {
       matchId: string;
       winners: string[];
+      pot: number;
       payouts: { userId: string; amount: number }[];
       newlyUnlocked: { code: string; title: string; icon: string }[];
     };
-  }>("POST", `/internal/matches/${matchId}/settle`, { rated });
+  }>("POST", `/internal/matches/${matchId}/settle`, options);
 }
+
+/** Cancels a match and refunds entry wagers safely. */
+export function cancelMatch(matchId: string, reason?: string) {
+  return internalRequest<{ ok: true; status: string }>(
+    "POST",
+    `/internal/matches/${matchId}/cancel`,
+    { reason },
+  );
+}
+

@@ -418,6 +418,7 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
     next.drawOfferedBy = null;
     next.finished = true;
     next.gameOver = true;
+    next.draw = true;
     next.winnerSeats = [];
     next.result = "1/2-1/2";
     next.endReason = "agreement";

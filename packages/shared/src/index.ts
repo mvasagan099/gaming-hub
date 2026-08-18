@@ -17,3 +17,5 @@ export * from "./enterprise";
 export * from "./chess";
 export * from "./support";
 export * from "./kyc";
+export * from "./gameConfig";
+

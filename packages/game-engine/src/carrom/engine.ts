@@ -454,7 +454,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       player.queenCovered = true;
       queenPocketed = true;
       queenCovered = true;
-      player.score = Math.min(9, player.score + 3 + result.score);
+      player.score = Math.min(9, player.score + result.score);
       const queenCoin = next.coins.find((c) => c.type === "queen");
       if (queenCoin) {
         queenCoin.pocketed = true;
@@ -493,7 +493,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       player.queenCovered = true;
       queenPocketed = true;
       queenCovered = true;
-      player.score = Math.min(9, player.score + 3 + result.score);
+      player.score = Math.min(9, player.score + result.score);
       const queenCoin = next.coins.find((c) => c.type === "queen");
       if (queenCoin) {
         queenCoin.pocketed = true;
@@ -580,13 +580,23 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     } else {
       const opponentSeat = seat === 0 ? 1 : 0;
       const nextSeat = (earnedExtraTurn && !foul) ? seat : opponentSeat;
+      const playerColor = seat === 0 ? "white" : "black";
+      const ownCoinPocketed = pocketedCoins.some((c) => c.type === playerColor);
+      const queenPocketedThisShot = pocketedCoins.some((c) => c.type === "queen");
+
       const turnReason = foul
         ? "STRIKER_FOUL"
-        : earnedExtraTurn
-          ? "OWN_COIN_POCKETED"
-          : pocketedCoins.length > 0
-            ? "OPPONENT_OR_QUEEN_ONLY"
-            : "NOTHING_POCKETED";
+        : (queenPocketedThisShot && ownCoinPocketedThisShot) || (queenCovered)
+          ? "QUEEN_COVERED"
+          : (queenPocketedThisShot && !ownCoinPocketedThisShot)
+            ? "QUEEN_PENDING_COVER"
+            : (queenReturned)
+              ? "QUEEN_COVER_FAILED"
+              : earnedExtraTurn
+                ? "OWN_COIN"
+                : pocketedCoins.some((c) => c.type !== playerColor && c.type !== "queen")
+                  ? "OPPONENT_COIN"
+                  : "NOTHING_POCKETED";
 
       const nextPlayerId = this.players.find((p) => p.seat === nextSeat)?.userId ?? `seat-${nextSeat}`;
       const prevPlayerId = next.currentTurnPlayerId;
@@ -600,10 +610,6 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       next.strikerPlacementPhase = true;
       next.strikerPlacementSeat = nextSeat;
       next.striker = createInitialStriker(nextSeat);
-
-      const playerColor = seat === 0 ? "white" : "black";
-      const ownCoinPocketed = pocketedCoins.some((c) => c.type === playerColor);
-      const queenPocketedThisShot = pocketedCoins.some((c) => c.type === "queen");
 
       console.log("[CARROM] TURN_DECISION", {
         shotSeat: seat,
@@ -642,6 +648,8 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
         earnedExtraTurn,
         reason: turnReason,
         foul,
+        queenState: next.queenState,
+        queenCovered: !!player.queenCovered,
       });
 
       if (foul) {

@@ -29,6 +29,10 @@ export function MultiplayerMatchControls() {
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const isSpectator = useMultiplayerStore((s) => s.isSpectator);
   const rematchState = useMultiplayerStore((s) => s.rematchState);
+  const winner = useMultiplayerStore((s) => s.winner);
+  const countdown = useMultiplayerStore((s) => s.countdown);
+  const setReady = useMultiplayerStore((s) => s.setReady);
+  const startGame = useMultiplayerStore((s) => s.startGame);
   const sendGameAction = useMultiplayerStore((s) => s.sendGameAction);
   const requestRematch = useMultiplayerStore((s) => s.requestRematch);
   const acceptRematch = useMultiplayerStore((s) => s.acceptRematch);
@@ -107,6 +111,65 @@ export function MultiplayerMatchControls() {
 
   return (
     <div className="space-y-2">
+      {/* ── Lobby Ready & Countdown Controls ── */}
+      {(room.status === "waiting" || room.status === "starting" || countdown !== null) && (
+        <div className="space-y-2">
+          {countdown !== null || room.status === "starting" ? (
+            <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-indigo-950/80 border border-indigo-500/50 shadow-lg shadow-indigo-500/20 text-center animate-pulse">
+              <span className="text-[10px] font-black uppercase tracking-wider text-indigo-300">Match Starting</span>
+              <span className="text-3xl font-black text-amber-400 my-0.5">
+                {countdown === 0 ? "GO!" : countdown ?? 3}
+              </span>
+              <span className="text-[9px] text-slate-400">All players ready</span>
+            </div>
+          ) : isSpectator ? (
+            <div className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-400 text-xs">
+              Spectating lobby...
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(() => {
+                const meInRoom = room.players.find((p) => p.id === userId);
+                const isMeReady = meInRoom?.isReady ?? false;
+                const isHost = meInRoom?.isHost ?? false;
+                const allReady = room.players.filter((p) => !p.isSpectator).every((p) => p.isReady);
+
+                return (
+                  <>
+                    <button
+                      onClick={() => void setReady(!isMeReady)}
+                      className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-black text-sm tracking-wide shadow-md transition-all active:scale-95 ${
+                        isMeReady
+                          ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
+                          : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black shadow-orange-500/30"
+                      }`}
+                    >
+                      {isMeReady ? (
+                        <>
+                          <Check className="w-4 h-4" /> READY (CLICK TO UNREADY)
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4 fill-current" /> READY UP
+                        </>
+                      )}
+                    </button>
+
+                    {isHost && allReady && (
+                      <button
+                        onClick={() => void startGame()}
+                        className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition-all active:scale-95"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" /> START MATCH NOW
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+      )}
       {playing && canAct && baseEngine && (
         <div className="grid grid-cols-2 gap-2">
           {/* Resign */}
@@ -177,7 +240,79 @@ export function MultiplayerMatchControls() {
         </div>
       )}
 
-      {rematchChip}
+      {ended && (
+        <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-700 shadow-xl flex flex-col gap-2.5">
+          {/* Result Header Badge */}
+          {(() => {
+            const isWinner = winner?.winnerIds?.includes(userId ?? "");
+            const isDraw = winner && winner.winnerIds.length === 0;
+            const stake = room.stake;
+            const playerCount = room.players.length;
+            const totalPot = stake * playerCount;
+            const prizePool = Math.round(totalPot * 0.9);
+            const winnerPayout = winner && winner.winnerIds.length > 0 ? Math.round(prizePool / winner.winnerIds.length) : 0;
+            const netCoins = isWinner ? winnerPayout - stake : isDraw ? 0 : -stake;
+
+            return (
+              <>
+                <div
+                  className={`flex flex-col items-center justify-center p-3 rounded-xl text-center border shadow-md ${
+                    isWinner
+                      ? "bg-emerald-950/80 border-emerald-500/60 shadow-emerald-500/20 text-emerald-300"
+                      : isDraw
+                        ? "bg-amber-950/80 border-amber-500/60 shadow-amber-500/20 text-amber-300"
+                        : "bg-rose-950/80 border-rose-500/60 shadow-rose-500/20 text-rose-300"
+                  }`}
+                >
+                  <span className="text-xl font-black tracking-wide">
+                    {isWinner ? "🏆 YOU WIN!" : isDraw ? "🤝 MATCH DRAWN" : "💔 YOU LOST"}
+                  </span>
+                  <span className="text-[10px] font-semibold opacity-80 mt-0.5">
+                    {isWinner
+                      ? "Authoritative Victory!"
+                      : isDraw
+                        ? "Equal score — Entry fee refunded"
+                        : "Better luck next time"}
+                  </span>
+                </div>
+
+                {/* Coins Summary Card */}
+                {stake > 0 && (
+                  <div className="grid grid-cols-3 gap-1.5 p-2 rounded-xl bg-slate-950/60 border border-slate-800 text-center">
+                    <div>
+                      <div className="text-[9px] text-slate-500 font-bold uppercase">Entry</div>
+                      <div className="text-xs font-extrabold text-slate-300">{stake}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-slate-500 font-bold uppercase">Prize</div>
+                      <div className="text-xs font-extrabold text-amber-400">
+                        {isWinner ? winnerPayout : isDraw ? stake : 0}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-slate-500 font-bold uppercase">Net</div>
+                      <div
+                        className={`text-xs font-black ${
+                          netCoins > 0
+                            ? "text-emerald-400"
+                            : netCoins === 0
+                              ? "text-slate-400"
+                              : "text-rose-400"
+                        }`}
+                      >
+                        {netCoins > 0 ? `+${netCoins}` : netCoins}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+
+          {/* Rematch flow */}
+          {rematchChip}
+        </div>
+      )}
     </div>
   );
 }

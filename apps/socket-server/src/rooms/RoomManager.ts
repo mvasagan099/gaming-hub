@@ -23,10 +23,10 @@ import type { RoomPlayerRuntime, RoomRuntime } from "./types";
 import { generateRoomCode } from "../roomCode";
 import { secureRandomSource } from "../games/rng";
 import { GameSession } from "../games/GameSession";
-import { holdWagers, settleMatch } from "../apiClient";
-import { assertGameEnabled } from "../settings";
+import { holdWagers, settleMatch, cancelMatch } from "../apiClient";
+import { assertGameEnabled, createMatchConfigSnapshot } from "../settings";
 
-const DISCONNECT_GRACE_MS = 90_000;
+const DISCONNECT_GRACE_MS = 30_000;
 
 export interface CreateMatchInput {
   gameId: GameId;
@@ -42,6 +42,7 @@ export class RoomManager {
   private readonly disconnectTimers = new Map<string, NodeJS.Timeout>();
   private readonly clockTimers = new Map<string, NodeJS.Timeout>();
   private readonly activeTurnTimerKeys = new Map<string, string>();
+  private readonly processedForfeits = new Set<string>();
   private readonly io: Server;
 
   constructor(io: Server) {
@@ -201,7 +202,7 @@ export class RoomManager {
     if (!isGameEngineAvailable(input.gameId)) {
       throw new AppError("INVALID_ACTION", "This game is not playable online yet");
     }
-    await assertGameEnabled(input.gameId);
+    await assertGameEnabled(input.gameId, input.stake);
     const def = getGameDefinition(input.gameId);
     const maxPlayers = input.maxPlayers ?? def.maxPlayers;
     if (maxPlayers < def.minPlayers || maxPlayers > def.maxPlayers) {
@@ -209,6 +210,13 @@ export class RoomManager {
     }
     if (input.stake < 0) {
       throw new AppError("VALIDATION_ERROR", "Stake cannot be negative");
+    }
+
+    if (input.stake > 0) {
+      const wallet = await prisma.wallet.findUnique({ where: { userId: user.userId } });
+      if (!wallet || wallet.balance < input.stake) {
+        throw new AppError("INSUFFICIENT_BALANCE", `You need at least ${input.stake} coins to create a room with this entry fee`);
+      }
     }
 
     await this.ejectFromAllRooms(user, socket);
@@ -294,6 +302,16 @@ export class RoomManager {
     }
     if (room.isPrivate && !input.asSpectator) {
       throw new AppError("FORBIDDEN", "This room is private");
+    }
+    if (!input.asSpectator) {
+      await assertGameEnabled(room.gameId, room.stake);
+    }
+
+    if (!input.asSpectator && room.stake > 0) {
+      const wallet = await prisma.wallet.findUnique({ where: { userId: user.userId } });
+      if (!wallet || wallet.balance < room.stake) {
+        throw new AppError("INSUFFICIENT_BALANCE", `You need at least ${room.stake} coins to join this room`);
+      }
     }
 
     const seat = input.asSpectator ? null : this.nextFreeSeat(room);
@@ -386,6 +404,20 @@ export class RoomManager {
       this.clearRematch(room);
     }
 
+    if (room.countdownTimer) {
+      clearTimeout(room.countdownTimer);
+      room.countdownTimer = null;
+    }
+    room.countdownStarted = false;
+    if (room.status === "starting") {
+      room.status = "waiting";
+    }
+    if (room.pendingMatchId) {
+      void cancelMatch(room.pendingMatchId, "player_left_lobby");
+      room.pendingMatchId = null;
+      this.emitToRoom(room, "game:match-cancelled", { roomId: room.id, reason: "player_left_lobby" });
+    }
+
     // Abort an in-progress match when a participant quits.
     if (wasPlaying && room.match && player.seat !== null) {
       await this.abortMatch(room, "player_left");
@@ -395,35 +427,108 @@ export class RoomManager {
     this.broadcastRoomUpdate(room);
   }
 
+  private emitLobbyState(room: RoomRuntime) {
+    const participants = [...room.players.values()].filter((p) => !p.isSpectator);
+    const payload = {
+      matchId: room.match?.matchId ?? room.pendingMatchId ?? room.id,
+      roomId: room.id,
+      gameId: room.gameId,
+      entryFee: room.stake,
+      status: room.status === "starting" ? "countdown" : room.status,
+      players: participants.map((p) => ({
+        playerId: p.userId,
+        displayName: p.displayName,
+        avatarUrl: p.avatarUrl,
+        seat: p.seat,
+        isHost: p.isHost,
+        ready: p.isReady,
+        connected: p.connectionStatus === "connected",
+        entryReserved: room.stake === 0 || Boolean(room.pendingMatchId || room.match),
+      })),
+    };
+    this.emitToRoom(room, "game:lobby-state", payload);
+  }
+
   async setReady(user: AuthenticatedUser, roomId: string, ready: boolean, socket: Socket): Promise<RoomFull> {
     const room = this.getRoomOrThrow(roomId);
     const player = this.getPlayerOrThrow(room, user.userId);
     if (player.isSpectator) {
       throw new AppError("INVALID_ACTION", "Spectators cannot ready up");
     }
+    if (room.status === "starting") {
+      throw new AppError("INVALID_ACTION", "Countdown already started, ready state is locked");
+    }
     if (room.status !== "waiting") {
       throw new AppError("INVALID_ACTION", "Game already started");
     }
+
+    if (player.isReady === ready) {
+      return this.toRoomFull(room);
+    }
+
     player.isReady = ready;
     await prisma.roomPlayer.update({
       where: { roomId_userId: { roomId: room.id, userId: user.userId } },
       data: { isReady: ready },
     });
-    this.broadcastRoomUpdate(room);
 
-    // Auto-start once every participant is ready and connected.
-    const started = await this.maybeAutoStart(room, socket);
-    return started ?? this.toRoomFull(room);
+    this.emitToRoom(room, ready ? "game:player-ready" : "game:player-unready", {
+      roomId: room.id,
+      matchId: room.pendingMatchId ?? room.id,
+      playerId: user.userId,
+    });
+    this.broadcastRoomUpdate(room);
+    this.emitLobbyState(room);
+
+    // Auto-start countdown once every participant is ready and connected.
+    if (ready) {
+      this.maybeStartCountdown(room, socket);
+    }
+
+    return this.toRoomFull(room);
   }
 
-  /** Launches the match when everyone is ready and connected (used by ready-up auto-start). */
-  private async maybeAutoStart(room: RoomRuntime, socket: Socket): Promise<RoomFull | null> {
-    if (room.status !== "waiting") return null;
+  /** Launches the 3-2-1 countdown when everyone is ready and connected. */
+  private maybeStartCountdown(room: RoomRuntime, socket: Socket): void {
+    if (room.status !== "waiting" || room.countdownStarted) return;
     const participants = [...room.players.values()].filter((p) => !p.isSpectator);
-    if (participants.length < room.minPlayers) return null;
-    if (participants.some((p) => !p.isReady)) return null;
-    if (participants.some((p) => p.connectionStatus !== "connected")) return null;
-    return this.launchMatch(room, { userId: room.hostId }, socket);
+    if (participants.length < room.minPlayers) return;
+    if (participants.some((p) => !p.isReady)) return;
+    if (participants.some((p) => p.connectionStatus !== "connected")) return;
+
+    room.countdownStarted = true;
+    room.status = "starting";
+    this.broadcastRoomUpdate(room);
+    this.emitLobbyState(room);
+
+    const matchId = room.match?.matchId ?? room.pendingMatchId ?? room.id;
+    console.log("[MATCHMAKING] COUNTDOWN_STARTED", { matchId, roomId: room.id });
+
+    this.emitToRoom(room, "game:countdown", { matchId, countdown: 3 });
+
+    const step2 = setTimeout(() => {
+      if (room.status !== "starting") return;
+      this.emitToRoom(room, "game:countdown", { matchId, countdown: 2 });
+
+      const step1 = setTimeout(() => {
+        if (room.status !== "starting") return;
+        this.emitToRoom(room, "game:countdown", { matchId, countdown: 1 });
+
+        const step0 = setTimeout(async () => {
+          if (room.status !== "starting") return;
+          this.emitToRoom(room, "game:countdown", { matchId, countdown: 0 });
+          room.countdownTimer = null;
+          try {
+            await this.launchMatch(room, { userId: room.hostId }, socket);
+          } catch (err) {
+            console.error("Failed to launch match after countdown", err);
+          }
+        }, 1000);
+        room.countdownTimer = step0;
+      }, 1000);
+      room.countdownTimer = step1;
+    }, 1000);
+    room.countdownTimer = step2;
   }
 
   async startGame(user: AuthenticatedUser, roomId: string, socket: Socket): Promise<RoomFull> {
@@ -447,7 +552,8 @@ export class RoomManager {
       }
     }
 
-    return this.launchMatch(room, user, socket);
+    this.maybeStartCountdown(room, socket);
+    return this.toRoomFull(room);
   }
 
   /**
@@ -644,7 +750,9 @@ export class RoomManager {
       if (p.seat === null) p.seat = index;
     });
 
-    const matchId = randomUUID();
+    const matchId = room.pendingMatchId ?? randomUUID();
+    room.pendingMatchId = null;
+
     const engine = createEngine(
       room.gameId,
       participants.map((p) => ({ userId: p.userId, seat: p.seat! })),
@@ -652,40 +760,81 @@ export class RoomManager {
       this.engineOptions(room),
     );
 
-    // Persist the match row and players first; hold-wagers then moves it to ACTIVE.
-    const dbMatch = await prisma.match.create({
-      data: {
-        id: matchId,
-        roomId: room.id,
-        gameId: room.gameId,
-        status: "CREATED",
-        winnerIds: [],
-        stake: room.stake,
-      },
-    });
-    await prisma.matchPlayer.createMany({
-      data: participants.map((p) => ({
-        matchId,
-        userId: p.userId,
-        seat: p.seat!,
-        result: "PENDING",
-      })),
-    });
+    const existingMatch = await prisma.match.findUnique({ where: { id: matchId } });
+    if (!existingMatch) {
+      await prisma.match.create({
+        data: {
+          id: matchId,
+          roomId: room.id,
+          gameId: room.gameId,
+          status: "CREATED",
+          winnerIds: [],
+          stake: room.stake,
+        },
+      });
+      await prisma.matchPlayer.createMany({
+        data: participants.map((p) => ({
+          matchId,
+          userId: p.userId,
+          seat: p.seat!,
+          result: "PENDING",
+        })),
+      });
 
-    try {
-      await holdWagers(matchId);
-    } catch (error: any) {
-      console.error("[holdWagers error]", error);
-      await prisma.match.delete({ where: { id: matchId } }).catch(() => undefined);
-      const message = error?.message || "One or more players do not have enough coins for this stake";
-      throw new AppError("INSUFFICIENT_BALANCE", message);
+      console.log("[MATCHMAKING] MATCH_FOUND", {
+        matchId,
+        gameId: room.gameId,
+        entryFee: room.stake,
+        players: participants.map((p) => p.userId),
+      });
+      console.log("[MATCHMAKING] RESERVATION_STARTED", {
+        matchId,
+        entryFee: room.stake,
+      });
+
+      try {
+        await holdWagers(matchId);
+        console.log("[MATCHMAKING] RESERVATION_SUCCESS", {
+          matchId,
+          entryFee: room.stake,
+        });
+        console.log("[MATCHMAKING] MATCH_READY", { matchId });
+      } catch (error: any) {
+        console.error("[holdWagers error]", error);
+        await prisma.match.delete({ where: { id: matchId } }).catch(() => undefined);
+        const message = error?.message || "One or more players do not have enough coins for this stake";
+        throw new AppError("INSUFFICIENT_BALANCE", message);
+      }
     }
+
+    const snapshot = await createMatchConfigSnapshot(room.gameId, room.stake);
+    room.settings = { ...room.settings, configSnapshot: snapshot };
 
     room.match = { matchId, engine, turnNumber: 0 };
     room.status = "playing";
     await prisma.room.update({
       where: { id: room.id },
-      data: { status: "PLAYING" },
+      data: { status: "PLAYING", settings: room.settings as object },
+    });
+
+    console.log("[MATCHMAKING] MATCH_STARTED", {
+      matchId,
+      gameId: room.gameId,
+      configVersion: snapshot.configVersion,
+      startedAt: Date.now(),
+    });
+
+    this.emitToRoom(room, "game:match-started", {
+      matchId,
+      gameId: room.gameId,
+      entryFee: room.stake,
+      configSnapshot: snapshot,
+      players: participants.map((p) => ({
+        playerId: p.userId,
+        seat: p.seat!,
+        displayName: p.displayName,
+      })),
+      startedAt: Date.now(),
     });
 
     const startedBy = room.players.get(starter.userId);
@@ -702,8 +851,11 @@ export class RoomManager {
 
   private engineOptions(room: RoomRuntime): { timeControl?: ChessTimeControlConfig } | undefined {
     const timeControl = room.settings.timeControl as ChessTimeControlConfig | undefined;
-    if (!timeControl || timeControl.baseSeconds <= 0) return undefined;
-    return { timeControl };
+    if (timeControl && timeControl.baseSeconds > 0) return { timeControl };
+    if (room.gameId === "chess") {
+      return { timeControl: { baseSeconds: 300, incrementSeconds: 0, delaySeconds: 0 } };
+    }
+    return undefined;
   }
 
   // ------------------------------------------------------------------- games
@@ -918,20 +1070,79 @@ export class RoomManager {
     if (!room.match) return;
     this.clearClockTimer(room.id);
     const matchId = room.match.matchId;
+    const participants = [...room.players.values()].filter((p) => !p.isSpectator && p.seat !== null);
+
     const winnerIds = winnerSeats
       .map((seat) => {
-        const entry = [...room.players.values()].find((p) => p.seat === seat && !p.isSpectator);
+        const entry = participants.find((p) => p.seat === seat);
         return entry?.userId;
       })
       .filter((id): id is string => Boolean(id));
+
+    const isDraw = winnerSeats.length === 0;
+    const hasForfeit = participants.some((p) => p.connectionStatus === "forfeited");
+    const resultType: "WIN" | "LOSS" | "DRAW" | "FORFEIT" = hasForfeit
+      ? "FORFEIT"
+      : isDraw
+        ? "DRAW"
+        : "WIN";
+
+    const winnerId = winnerIds[0] ?? null;
+    const loserId = participants.find((p) => !winnerIds.includes(p.userId))?.userId ?? null;
+
+    // Extract per-player authoritative scores from engine
+    const scores: Record<string, number> = {};
+    const engineState = (room.match.engine as any).state;
+    for (const p of participants) {
+      if (engineState?.scores && p.seat !== null && engineState.scores[p.seat] !== undefined) {
+        scores[p.userId] = Number(engineState.scores[p.seat]) || 0;
+      } else if (engineState?.coins) {
+        const myColor = p.seat === 0 ? "white" : "black";
+        const pocketedCount = engineState.coins.filter((c: any) => c.type === myColor && c.pocketed).length;
+        scores[p.userId] = pocketedCount;
+      } else {
+        scores[p.userId] = 0;
+      }
+    }
 
     await prisma.match.update({
       where: { id: matchId },
       data: { winnerIds },
     });
 
+    console.log("[MATCH] MATCH_FINISHED", {
+      matchId,
+      gameId: room.gameId,
+      resultType,
+      winnerId,
+      loserId,
+      scores,
+    });
+
+    this.emitToRoom(room, "game:finished", {
+      matchId,
+      gameId: room.gameId,
+      resultType,
+      winnerId,
+      loserId,
+      finalScores: scores,
+    });
+
     try {
-      await settleMatch(matchId, room.settings.rated !== false);
+      const settlement = await settleMatch(matchId, {
+        winnerIds,
+        scores,
+        resultType,
+        rated: room.settings.rated !== false,
+      });
+
+      const winnerPayout = settlement?.result?.payouts?.find((p) => p.userId === winnerId)?.amount ?? 0;
+
+      this.emitToRoom(room, "game:settlement-completed", {
+        matchId,
+        resultType,
+        coinsWon: winnerPayout,
+      });
     } catch (error) {
       console.error(`Settlement failed for match ${matchId}`, error);
     }
@@ -956,17 +1167,13 @@ export class RoomManager {
     if (!room.match) return;
     this.clearClockTimer(room.id);
     const matchId = room.match.matchId;
-    const state = room.match.engine.serialize();
 
-    // Empty winners = draw => refunds via settlement.
-    await prisma.match.update({
-      where: { id: matchId },
-      data: { winnerIds: [] },
-    });
+    console.log("[MATCHMAKING] MATCH_CANCELLED", { matchId, reason });
+
     try {
-      await settleMatch(matchId, room.settings.rated !== false);
+      await cancelMatch(matchId, reason);
     } catch (error) {
-      console.error(`Settlement failed for aborted match ${matchId}`, error);
+      console.error(`Cancel failed for aborted match ${matchId}`, error);
     }
 
     room.match = null;
@@ -1076,6 +1283,7 @@ export class RoomManager {
       player.socketIds.add(socket.id);
       socket.join(room.ioName);
       player.connectionStatus = "connected";
+      player.reconnectExpiresAt = null;
 
       await prisma.roomPlayer.upsert({
         where: { roomId_userId: { roomId: room.id, userId: user.userId } },
@@ -1091,6 +1299,16 @@ export class RoomManager {
         update: { connectionStatus: "CONNECTED" },
       });
 
+      const matchId = room.match?.matchId ?? room.pendingMatchId ?? room.id;
+      console.log("[MATCH] PLAYER_RECONNECTED", { matchId, playerId: user.userId });
+
+      this.emitToRoom(room, "game:player-reconnected", {
+        matchId,
+        roomId: room.id,
+        playerId: user.userId,
+        connectionStatus: "CONNECTED",
+      });
+
       this.emitToRoom(room, "player:connection", {
         roomId: room.id,
         playerId: user.userId,
@@ -1099,9 +1317,8 @@ export class RoomManager {
       this.broadcastRoomUpdate(room);
       reconnected = this.toRoomFull(room);
 
-      // Re-emit the live game state to the rejoining player's socket only.
+      // Re-emit the full live game state snapshot to the rejoining player's socket only.
       if (room.match) {
-        // Force full state emission to the reconnected socket
         const userSocket = this.io.sockets.sockets.get(socket.id);
         if (userSocket) {
           const payload = {
@@ -1111,7 +1328,7 @@ export class RoomManager {
             events: [{ type: "reconnected" }],
           };
           userSocket.emit("game:state", payload);
-          console.log(`[RoomManager] Emitted game state to reconnected user ${user.userId} in room ${room.id}`);
+          console.log(`[RoomManager] Emitted full game state snapshot to reconnected user ${user.userId} in room ${room.id}`);
         } else {
           console.error(`[RoomManager] Failed to find socket for reconnected user ${user.userId}`);
         }
@@ -1136,6 +1353,15 @@ export class RoomManager {
       if (player.socketIds.size > 0) continue;
 
       this.clearDisconnectTimer(room.id, user.userId);
+      const matchId = room.match?.matchId ?? room.pendingMatchId ?? room.id;
+      const reconnectExpiresAt = Date.now() + DISCONNECT_GRACE_MS;
+      player.reconnectExpiresAt = reconnectExpiresAt;
+
+      console.log("[MATCH] PLAYER_DISCONNECTED", {
+        matchId,
+        playerId: user.userId,
+        reconnectExpiresAt,
+      });
 
       if (room.status === "playing") {
         player.connectionStatus = "reconnecting";
@@ -1143,6 +1369,14 @@ export class RoomManager {
           where: { roomId_userId: { roomId: room.id, userId: user.userId } },
           data: { connectionStatus: "RECONNECTING" },
         });
+
+        this.emitToRoom(room, "game:player-disconnected", {
+          matchId,
+          roomId: room.id,
+          playerId: user.userId,
+          reconnectExpiresAt,
+        });
+
         this.emitToRoom(room, "player:connection", {
           roomId: room.id,
           playerId: user.userId,
@@ -1154,7 +1388,7 @@ export class RoomManager {
           void this.handleDisconnectTimeout(room.id, user.userId);
         }, DISCONNECT_GRACE_MS);
         this.disconnectTimers.set(`${room.id}:${user.userId}`, timer);
-      } else if (room.status === "waiting") {
+      } else if (room.status === "waiting" || room.status === "starting") {
         await this.leaveRoomInternal(user, room, socket, false);
       }
     }
@@ -1168,7 +1402,19 @@ export class RoomManager {
     if (player.socketIds.size > 0) return;
 
     this.clearDisconnectTimer(roomId, userId);
-    player.connectionStatus = "disconnected";
+    const matchId = room.match?.matchId ?? room.pendingMatchId ?? room.id;
+
+    console.log("[MATCH] RECONNECT_EXPIRED", { matchId, playerId: userId });
+
+    const forfeitKey = `${matchId}:${userId}`;
+    if (this.processedForfeits.has(forfeitKey)) {
+      return;
+    }
+    this.processedForfeits.add(forfeitKey);
+
+    player.connectionStatus = "forfeited";
+    player.reconnectExpiresAt = null;
+
     await prisma.roomPlayer.update({
       where: { roomId_userId: { roomId, userId } },
       data: { connectionStatus: "DISCONNECTED" },
@@ -1179,8 +1425,36 @@ export class RoomManager {
       status: "disconnected",
     });
 
-    if (room.status === "playing") {
-      await this.abortMatch(room, "player_timeout");
+    if (room.status === "playing" && room.match) {
+      const remainingPlayers = [...room.players.values()].filter(
+        (p) => p.userId !== userId && !p.isSpectator && p.seat !== null,
+      );
+      if (remainingPlayers.length > 0) {
+        const winnerId = remainingPlayers[0].userId;
+        console.log("[MATCH] PLAYER_FORFEITED", {
+          matchId: room.match.matchId,
+          playerId: userId,
+          winnerId,
+        });
+        console.log("[MATCH] FORFEIT_SETTLEMENT_STARTED", {
+          matchId: room.match.matchId,
+        });
+
+        this.emitToRoom(room, "game:forfeit", {
+          matchId: room.match.matchId,
+          roomId: room.id,
+          forfeitedPlayerId: userId,
+          winnerId,
+        });
+
+        await this.finishMatch(room, remainingPlayers.map((p) => p.seat!));
+
+        console.log("[MATCH] FORFEIT_SETTLEMENT_COMPLETED", {
+          matchId: room.match.matchId,
+        });
+      } else {
+        await this.abortMatch(room, "player_timeout");
+      }
     } else {
       room.players.delete(userId);
       if (room.players.size === 0) {
@@ -1269,7 +1543,69 @@ export class RoomManager {
         })),
       });
 
-      return await this.launchMatch(room, users[0], sockets[0]);
+      const matchId = randomUUID();
+      room.pendingMatchId = matchId;
+
+      await prisma.match.create({
+        data: {
+          id: matchId,
+          roomId: id,
+          gameId,
+          status: "CREATED",
+          winnerIds: [],
+          stake,
+        },
+      });
+      await prisma.matchPlayer.createMany({
+        data: users.map((user, index) => ({
+          matchId,
+          userId: user.userId,
+          seat: index,
+          result: "PENDING",
+        })),
+      });
+
+      console.log("[MATCHMAKING] MATCH_FOUND", {
+        matchId,
+        gameId,
+        entryFee: stake,
+        players: users.map((u) => u.userId),
+      });
+      console.log("[MATCHMAKING] RESERVATION_STARTED", {
+        matchId,
+        entryFee: stake,
+      });
+
+      try {
+        await holdWagers(matchId);
+        console.log("[MATCHMAKING] RESERVATION_SUCCESS", {
+          matchId,
+          entryFee: stake,
+        });
+        console.log("[MATCHMAKING] MATCH_READY", { matchId });
+      } catch (error: any) {
+        console.error("[holdWagers error]", error);
+        await prisma.match.delete({ where: { id: matchId } }).catch(() => undefined);
+        const message = error?.message || "One or more players do not have enough coins for this stake";
+        throw new AppError("INSUFFICIENT_BALANCE", message);
+      }
+
+      this.emitToRoom(room, "game:match-found", {
+        matchId,
+        roomId: id,
+        gameId,
+        entryFee: stake,
+        players: users.map((u, i) => ({
+          playerId: u.userId,
+          seat: i,
+          ready: true,
+        })),
+        status: "ready",
+      });
+      this.emitLobbyState(room);
+
+      this.maybeStartCountdown(room, sockets[0]);
+      return this.toRoomFull(room);
     } catch (error) {
       // Roll back a room that never reached ACTIVE so nobody gets stuck.
       for (const socket of sockets) socket.leave(room.ioName);

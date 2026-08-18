@@ -26,6 +26,8 @@ import type {
 } from "../types";
 import type { Socket } from "socket.io";
 
+import type { ConnectionStatus } from "@gaming-hub/shared";
+
 export interface CreatePlayerOptions {
   id: PlayerId;
   userId: string;
@@ -40,7 +42,7 @@ export interface CreatePlayerOptions {
 
 export interface PlayerStatus {
   id: PlayerId;
-  connectionStatus: "connected" | "disconnected" | "reconnecting";
+  connectionStatus: ConnectionStatus;
   isReady: boolean;
   isHost: boolean;
   seat: number | null;

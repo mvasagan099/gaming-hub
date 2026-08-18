@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { GameMetadata, GameId } from '../types';
-import { Bot, Swords, Trophy } from 'lucide-react';
+import { Bot, Swords, Trophy, Loader2 } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
+import { apiClient } from '../services/api/client';
+import type { GameConfig } from '@gaming-hub/shared';
 
 interface GameModalProps {
   game: GameMetadata | null;
@@ -14,10 +16,41 @@ interface GameModalProps {
 export const MatchSetupModal: React.FC<GameModalProps> = ({ game, onClose, onStartGame }) => {
   const [selectedMode, setSelectedMode] = useState<'ai' | 'multiplayer'>('multiplayer');
   const [stake, setStake] = useState<number>(game?.minEntryFee ?? 100);
+  const [serverConfig, setServerConfig] = useState<GameConfig | null>(null);
+  const [loadingConfig, setLoadingConfig] = useState(false);
+
+  useEffect(() => {
+    if (!game) return;
+    let isMounted = true;
+    setLoadingConfig(true);
+
+    apiClient
+      .get<GameConfig>(`/games/${game.id}/config`)
+      .then((cfg) => {
+        if (isMounted && cfg) {
+          setServerConfig(cfg);
+          if (cfg.entryFees && cfg.entryFees.length > 0) {
+            setStake(cfg.defaultEntryFee ?? cfg.entryFees[0]);
+          }
+        }
+      })
+      .catch(() => {
+        // fallback to default if offline
+      })
+      .finally(() => {
+        if (isMounted) setLoadingConfig(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [game]);
 
   if (!game) return null;
 
-  const stakes = [game.minEntryFee, game.minEntryFee * 2, game.minEntryFee * 5, game.minEntryFee * 10];
+  const stakes = serverConfig?.entryFees ?? [50, 100, 500, 1000];
+  const winnerPct = serverConfig?.winnerPercentage ?? 90;
+  const prizePool = Math.round((stake * 2 * winnerPct) / 100);
 
   return (
     <Modal
@@ -39,8 +72,11 @@ export const MatchSetupModal: React.FC<GameModalProps> = ({ game, onClose, onSta
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => setSelectedMode('multiplayer')}
+            disabled={serverConfig?.onlineEnabled === false}
             className={`p-4 rounded-2xl border flex flex-col items-center gap-2 transition-all ${
-              selectedMode === 'multiplayer'
+              serverConfig?.onlineEnabled === false
+                ? 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
+                : selectedMode === 'multiplayer'
                 ? 'bg-accent-500/20 border-accent-500 text-accent-700 dark:text-white shadow-lg shadow-accent-500/10'
                 : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700/60 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
             }`}
@@ -48,7 +84,9 @@ export const MatchSetupModal: React.FC<GameModalProps> = ({ game, onClose, onSta
             <Swords className={`w-6 h-6 ${selectedMode === 'multiplayer' ? 'text-accent-400' : ''}`} />
             <div className="text-center">
               <p className="text-sm font-bold">Online PVP</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 transition-colors">Match with Real Players</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 transition-colors">
+                {serverConfig?.onlineEnabled === false ? 'Disabled by Admin' : 'Match with Real Players'}
+              </p>
             </div>
           </button>
 
@@ -68,31 +106,33 @@ export const MatchSetupModal: React.FC<GameModalProps> = ({ game, onClose, onSta
           </button>
         </div>
 
-        <div className="pt-2 space-y-2">
-          <div className="flex justify-between items-center text-xs">
-            <span className="font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider transition-colors">
-              Select Entry Stake
-            </span>
-            <span className="text-amber-400 font-bold flex items-center gap-1">
-              <Trophy className="w-3.5 h-3.5" /> Prize: {stake * 1.8} Coins
-            </span>
+        {selectedMode === 'multiplayer' && (
+          <div className="pt-2 space-y-2">
+            <div className="flex justify-between items-center text-xs">
+              <span className="font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider transition-colors">
+                Select Entry Stake
+              </span>
+              <span className="text-amber-400 font-bold flex items-center gap-1">
+                <Trophy className="w-3.5 h-3.5" /> Prize: {prizePool} Coins
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {stakes.map((val) => (
+                <button
+                  key={val}
+                  onClick={() => setStake(val)}
+                  className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                    stake === val
+                      ? 'bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/20'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                  }`}
+                >
+                  🪙 {val}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-4 gap-2">
-            {stakes.map((val) => (
-              <button
-                key={val}
-                onClick={() => setStake(val)}
-                className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                  stake === val
-                    ? 'bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/20'
-                    : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                }`}
-              >
-                🪙 {val}
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
 
       <Button

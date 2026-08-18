@@ -4,7 +4,7 @@ import type { ChessTimeControlConfig } from "./chess";
 
 export type RoomStatus = "waiting" | "starting" | "playing" | "ended";
 
-export type ConnectionStatus = "connected" | "disconnected" | "reconnecting";
+export type ConnectionStatus = "connected" | "disconnected" | "reconnecting" | "forfeited";
 
 export interface RoomPlayer extends Pick<User, "id" | "username" | "displayName" | "avatarUrl"> {
   seat: number | null;

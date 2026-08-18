@@ -586,31 +586,33 @@ export function calculateScore(
 
 export function checkWinCondition(
   coins: CarromCoin[],
-  _players: { seat: number; color: CoinType; score: number; queenPocketed: boolean; queenCovered: boolean }[],
+  players: { seat: number; color: CoinType; score: number; queenPocketed: boolean; queenCovered: boolean }[],
 ): { winner: number | null; isDraw: boolean } {
   if (!coins || coins.length === 0) {
     return { winner: null, isDraw: false };
   }
 
-  const totalWhite = coins.filter(c => c.type === "white").length;
-  const totalBlack = coins.filter(c => c.type === "black").length;
+  const totalWhite = coins.filter((c) => c.type === "white").length;
+  const totalBlack = coins.filter((c) => c.type === "black").length;
 
   // A match cannot be won if coins have not been loaded or initialized
   if (totalWhite < 9 || totalBlack < 9) {
     return { winner: null, isDraw: false };
   }
 
-  const queenRemaining = coins.some(c => !c.pocketed && c.type === "queen");
-  const whiteCoinsRemaining = coins.filter(c => !c.pocketed && c.type === "white").length;
-  const blackCoinsRemaining = coins.filter(c => !c.pocketed && c.type === "black").length;
+  const whiteCoinsRemaining = coins.filter((c) => !c.pocketed && c.type === "white").length;
+  const blackCoinsRemaining = coins.filter((c) => !c.pocketed && c.type === "black").length;
 
-  // Seat 0 plays WHITE (9 white coins). When all White coins are pocketed & Queen is off board -> Seat 0 wins!
-  if (whiteCoinsRemaining === 0 && !queenRemaining) {
+  const player0 = players.find((p) => p.seat === 0);
+  const player1 = players.find((p) => p.seat === 1);
+
+  // Player 1 (seat 0, white) wins ONLY when whiteCoinsRemaining === 0 AND player0.queenCovered === true
+  if (whiteCoinsRemaining === 0 && player0?.queenCovered === true) {
     return { winner: 0, isDraw: false };
   }
 
-  // Seat 1 plays BLACK (9 black coins). When all Black coins are pocketed & Queen is off board -> Seat 1 wins!
-  if (blackCoinsRemaining === 0 && !queenRemaining) {
+  // Player 2 (seat 1, black) wins ONLY when blackCoinsRemaining === 0 AND player1.queenCovered === true
+  if (blackCoinsRemaining === 0 && player1?.queenCovered === true) {
     return { winner: 1, isDraw: false };
   }
 

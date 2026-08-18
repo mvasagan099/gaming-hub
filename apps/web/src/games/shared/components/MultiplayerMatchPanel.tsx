@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import {
   Crown,
   Star,
@@ -54,6 +55,10 @@ function pingLabel(status: RoomPlayer["connectionStatus"]): {
       return { text: "High", color: "text-amber-400" };
     case "disconnected":
       return { text: "Lost", color: "text-rose-400" };
+    case "forfeited":
+      return { text: "Forfeit", color: "text-rose-500" };
+    default:
+      return { text: "Unknown", color: "text-slate-400" };
   }
 }
 
@@ -205,11 +210,13 @@ function ProfileCard({
             {ping.text}
           </span>
           {roomPlayer.isReady ? (
-            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">
-              Ready
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-black border border-emerald-500/40 animate-pulse">
+              READY ✓
             </span>
           ) : (
-            <span className="text-[8px] text-slate-500">Not ready</span>
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-amber-400/80 font-bold border border-slate-700">
+              WAITING…
+            </span>
           )}
         </div>
       </div>
@@ -295,7 +302,24 @@ export function MultiplayerMatchPanel({
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const isSpectator = useMultiplayerStore((s) => s.isSpectator);
   const userId = useAuthStore((s) => s.user?.id ?? null);
+  const disconnectGrace = useMultiplayerStore((s) => s.disconnectGrace);
   const { me } = useMe();
+
+  const [reconnectRemaining, setReconnectRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!disconnectGrace) {
+      setReconnectRemaining(null);
+      return;
+    }
+    const update = () => {
+      const remaining = Math.max(0, Math.ceil((disconnectGrace.reconnectExpiresAt - Date.now()) / 1000));
+      setReconnectRemaining(remaining);
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [disconnectGrace]);
 
   if (!room) return null;
 
@@ -303,6 +327,25 @@ export function MultiplayerMatchPanel({
 
   return (
     <div className={`${compact ? "w-[220px]" : "w-72"} flex flex-col gap-2.5 text-xs select-none`}>
+
+      {/* ── Disconnect Grace Countdown Overlay ─────────────────── */}
+      {disconnectGrace && reconnectRemaining !== null && (
+        <div className="p-3 rounded-2xl bg-rose-950/90 border-2 border-rose-500 shadow-lg shadow-rose-500/30 text-center animate-pulse flex flex-col items-center">
+          <div className="flex items-center gap-1.5 text-rose-300 text-xs font-black uppercase tracking-wider mb-0.5">
+            <WifiOff className="w-3.5 h-3.5 text-rose-400" />
+            <span>OPPONENT DISCONNECTED</span>
+          </div>
+          <p className="text-[10px] text-slate-300 font-semibold">
+            Waiting for reconnect...
+          </p>
+          <span className="text-3xl font-black text-amber-400 my-1">
+            {reconnectRemaining}s
+          </span>
+          <p className="text-[9px] text-slate-400 font-medium">
+            Forfeits if timer expires
+          </p>
+        </div>
+      )}
 
       {/* ── VS Separator ─────────────────────────────────────── */}
       <div className="flex items-center gap-2">

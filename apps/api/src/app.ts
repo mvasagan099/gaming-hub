@@ -34,6 +34,8 @@ import { kycRoutes } from "./routes/kyc";
 import { adminKycRoutes } from "./routes/adminKyc";
 import { adminRolesRoutes } from "./routes/adminRoles";
 import { featureFlagsRoutes } from "./routes/featureFlags";
+import { gamesRoutes } from "./routes/games";
+import { adminGamesRoutes } from "./routes/adminGames";
 import { isFeatureEnabled } from "./services/featureFlags";
 import { instrument } from "./services/metrics";
 
@@ -98,17 +100,16 @@ export function buildApp() {
     if (
       url === "/api/health" ||
       url.startsWith("/api/health/") ||
-      url.startsWith("/api/feature-flags") ||
+      url === "/api/features/flags" ||
       url.startsWith("/api/auth/") ||
-      url.startsWith("/api/admin/") ||
-      url.startsWith("/api/internal/")
+      url.startsWith("/api/admin/")
     ) {
       return;
     }
     if (await isFeatureEnabled("infra.maintenance")) {
       throw new AppError(
         "MAINTENANCE",
-        "The platform is currently under maintenance",
+        "The platform is currently undergoing scheduled maintenance. Please check back shortly.",
         503,
       );
     }
@@ -145,6 +146,8 @@ export function buildApp() {
   void app.register(adminKycRoutes);
   void app.register(adminRolesRoutes);
   void app.register(featureFlagsRoutes);
+  void app.register(gamesRoutes);
+  void app.register(adminGamesRoutes);
 
   return app;
 }

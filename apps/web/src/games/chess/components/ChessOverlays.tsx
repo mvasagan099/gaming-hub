@@ -23,6 +23,7 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
   const [promotionData, setPromotionData] = useState<{ from: string; to: string } | null>(null);
   const [hasRewarded, setHasRewarded] = useState(false);
   const [showDrawOffer, setShowDrawOffer] = useState(false);
+  const room = useMultiplayerStore((s) => s.room);
   const gameState = useMultiplayerStore((s) => s.gameState);
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const renderKey = useMultiplayerStore((s) => s.renderKey); // Force re-render on state changes
@@ -313,6 +314,33 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
             {!online && gameOverMsg.includes("White Wins") && (
               <div className="bg-emerald-950/50 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 mb-6 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
                 🪙 +50 Coins Added!
+              </div>
+            )}
+
+            {online && room && room.stake > 0 && (
+              <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-slate-950/80 border border-slate-800 text-center w-full mb-6">
+                <div>
+                  <div className="text-[10px] text-slate-500 font-bold uppercase">Entry</div>
+                  <div className="text-sm font-black text-slate-300">{room.stake}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-500 font-bold uppercase">Prize</div>
+                  <div className="text-sm font-black text-amber-400">
+                    {mpResult?.result === "win" ? Math.round(room.stake * 2 * 0.9) : mpResult?.result === "draw" ? room.stake : 0}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-500 font-bold uppercase">Net</div>
+                  <div className={`text-sm font-black ${
+                    mpResult?.result === "win" ? "text-emerald-400" : mpResult?.result === "draw" ? "text-slate-400" : "text-rose-400"
+                  }`}>
+                    {mpResult?.result === "win"
+                      ? `+${Math.round(room.stake * 2 * 0.9) - room.stake}`
+                      : mpResult?.result === "draw"
+                        ? "0"
+                        : `-${room.stake}`}
+                  </div>
+                </div>
               </div>
             )}
 

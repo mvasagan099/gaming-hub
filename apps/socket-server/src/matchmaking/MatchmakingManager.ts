@@ -1,4 +1,5 @@
 import type { Server, Socket } from "socket.io";
+import { prisma } from "@gaming-hub/db";
 import { AppError, getGameDefinition } from "@gaming-hub/shared";
 import type { GameId, MatchSettings } from "@gaming-hub/shared";
 import type { AuthenticatedUser } from "../auth";
@@ -77,9 +78,16 @@ export class MatchmakingManager {
     socket: Socket,
     settings?: MatchSettings,
   ): Promise<number> {
-    await assertGameEnabled(gameId);
+    await assertGameEnabled(gameId, stake);
     if (this.bucketOf(user.userId)) {
       throw new AppError("ALREADY_QUEUED", "You are already in the queue");
+    }
+
+    if (stake > 0) {
+      const wallet = await prisma.wallet.findUnique({ where: { userId: user.userId } });
+      if (!wallet || wallet.balance < stake) {
+        throw new AppError("INSUFFICIENT_BALANCE", `You need at least ${stake} coins to join matchmaking with this entry fee`);
+      }
     }
 
     const key = this.bucketKey(gameId, stake, settings);
@@ -98,7 +106,15 @@ export class MatchmakingManager {
     bucket.players.push({ user, socket, queuedAt: Date.now() });
     this.queues.set(key, bucket);
 
+    console.log("[MATCHMAKING] QUEUE_JOINED", {
+      playerId: user.userId,
+      gameId,
+      entryFee: stake,
+      position,
+    });
+
     socket.emit("matchmaking:queued", { position });
+    socket.emit("game:queue-joined", { position, gameId, entryFee: stake });
     return position;
   }
 

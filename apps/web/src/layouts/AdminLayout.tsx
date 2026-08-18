@@ -47,6 +47,7 @@ const NAV_GROUPS = [
       { path: '/admin/users', label: 'Users', icon: Users },
       { path: '/admin/kyc', label: 'KYC Verification', icon: FileCheck },
       { path: '/admin/roles', label: 'Roles & Permissions', icon: Shield },
+      { path: '/admin/games', label: 'Games Management', icon: Gamepad2 },
       { path: '/admin/matches', label: 'Matches', icon: Swords },
       { path: '/admin/rooms', label: 'Rooms', icon: Gamepad2 },
       { path: '/admin/tournaments', label: 'Tournaments', icon: Trophy },
