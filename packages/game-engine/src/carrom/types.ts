@@ -66,7 +66,7 @@ export interface MatchTimerConfig extends JsonObject {
 
 export type CarromAction =
   | { type: "place-striker"; x: number }
-  | { type: "strike"; angle: number; power: number }
+  | { type: "strike"; angle: number; power: number; x?: number }
   | { type: "resign" }
   | { type: "draw-offer" }
   | { type: "draw-accept" }
@@ -75,6 +75,19 @@ export type CarromAction =
   | { type: "resume" };
 
 export type CarromActionType = CarromAction["type"];
+
+export interface CarromPieceKeyframe extends JsonObject {
+  id: string;
+  x: number;
+  y: number;
+  pocketed: boolean;
+  pocketIndex: number | null;
+}
+
+export interface CarromTrajectoryKeyframe extends JsonObject {
+  frame: number;
+  pieces: CarromPieceKeyframe[];
+}
 
 export interface CarromState extends JsonObject {
   coins: CarromCoin[];
@@ -95,6 +108,8 @@ export interface CarromState extends JsonObject {
   lastActionAtMs: number | null;
   /** Snapshot of striker position BEFORE the shot — used by clients to replay animation. */
   strikerAtShotStart: CarromStriker | null;
+  /** Authoritative canonical trajectory keyframes recorded by the physics simulation. */
+  lastTrajectory: CarromTrajectoryKeyframe[] | null;
   strikerPlacementPhase: boolean;
   strikerPlacementSeat: number | null;
   foulThisTurn: boolean;

@@ -15,7 +15,8 @@
  */
 
 import { useMultiplayerStore, type WinnerInfo } from "../../store/multiplayerStore";
-import type { CarromState, CarromCoin, CarromStriker } from "@gaming-hub/game-engine";
+import { useAuthStore } from "../../store/authStore";
+import type { CarromState, CarromCoin, CarromStriker, CarromTrajectoryKeyframe } from "@gaming-hub/game-engine";
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -24,6 +25,24 @@ export interface CarromRemoteState extends CarromState {}
 export interface ClientPoint {
   x: number;
   y: number;
+}
+
+export interface PocketEventInfo {
+  coinId: string;
+  coinType: string;
+  pocketIndex: number;
+}
+
+export interface StrikeInfo {
+  isNew: boolean;
+  shotId: number | null;
+  angle: number;
+  power: number;
+  bySeat: number;
+  strikerPos: CarromStriker | null;
+  pocketedCoinIds: string[];
+  pocketEvents: PocketEventInfo[];
+  keyframes?: CarromTrajectoryKeyframe[] | null;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -35,35 +54,39 @@ export const CLIENT_SIZE = 500;
 /** Scale factor: server → client */
 export const SCALE = CLIENT_SIZE / SERVER_SIZE; // 5/6
 
-// ─── Coordinate helpers (exported for CarromMultiplayer) ─────────────────────
+// ─── Single Authoritative Coordinate Transforms ──────────────────────────────
 
-export function mapToClient(
-  sx: number,
-  sy: number,
+export function worldToView(
+  worldX: number,
+  worldY: number,
   mySeat: number
 ): ClientPoint {
   if (mySeat === 1) {
     return {
-      x: (SERVER_SIZE - sx) * SCALE,
-      y: (SERVER_SIZE - sy) * SCALE,
+      x: (SERVER_SIZE - worldX) * SCALE,
+      y: (SERVER_SIZE - worldY) * SCALE,
     };
   }
-  return { x: sx * SCALE, y: sy * SCALE };
+  return { x: worldX * SCALE, y: worldY * SCALE };
 }
 
-export function mapToServer(
-  cx: number,
-  cy: number,
+export function viewToWorld(
+  viewX: number,
+  viewY: number,
   mySeat: number
 ): ClientPoint {
   if (mySeat === 1) {
     return {
-      x: SERVER_SIZE - cx / SCALE,
-      y: SERVER_SIZE - cy / SCALE,
+      x: SERVER_SIZE - viewX / SCALE,
+      y: SERVER_SIZE - viewY / SCALE,
     };
   }
-  return { x: cx / SCALE, y: cy / SCALE };
+  return { x: viewX / SCALE, y: viewY / SCALE };
 }
+
+// Aliases for backwards compatibility
+export const mapToClient = worldToView;
+export const mapToServer = viewToWorld;
 
 /** Convert a local aim angle to a server angle (flip 180° for seat-1). */
 export function localAngleToServer(localAngle: number, mySeat: number): number {
@@ -107,6 +130,21 @@ export default class CarromMultiplayerDriver {
     this.playerNames = playerNames;
   }
 
+  private strikerSeq = 0;
+  private lastReceivedStrikerSeq = -1;
+  public onStrikerPositionUpdate?: (data: { seat: number; x: number; sequence: number }) => void;
+
+  private handleRemoteStrikerPosition = (data: {
+    seat: number;
+    x: number;
+    sequence: number;
+  }) => {
+    if (data.seat === this.mySeat) return;
+    if (data.sequence <= this.lastReceivedStrikerSeq) return;
+    this.lastReceivedStrikerSeq = data.sequence;
+    this.onStrikerPositionUpdate?.(data);
+  };
+
   start(): void {
     // Apply current state immediately so the board renders on mount.
     const s = useMultiplayerStore.getState();
@@ -115,6 +153,12 @@ export default class CarromMultiplayerDriver {
       s.lastEvents,
       s.winner
     );
+
+    // Attach socket listener for live striker position
+    const socket = s.socket;
+    if (socket) {
+      socket.on("carrom:striker-position", this.handleRemoteStrikerPosition);
+    }
 
     // Subscribe to future updates.
     this.unsubscribe = useMultiplayerStore.subscribe((state, prev) => {
@@ -131,6 +175,10 @@ export default class CarromMultiplayerDriver {
 
   stop(): void {
     this.destroyed = true;
+    const socket = useMultiplayerStore.getState().socket;
+    if (socket) {
+      socket.off("carrom:striker-position", this.handleRemoteStrikerPosition);
+    }
     this.unsubscribe?.();
     this.unsubscribe = null;
   }
@@ -144,7 +192,7 @@ export default class CarromMultiplayerDriver {
   canPlaceStriker(): boolean {
     const s = this.lastState;
     if (!s || s.finished) return false;
-    return s.strikerPlacementPhase && s.strikerPlacementSeat === this.mySeat;
+    return s.currentSeat === this.mySeat;
   }
 
   canStrike(): boolean {
@@ -185,6 +233,28 @@ export default class CarromMultiplayerDriver {
   // ── Actions ─────────────────────────────────────────────────────────────────
 
   /**
+   * Send a live striker position update via low-latency socket event.
+   * @param clientX  X in client canvas coordinates (0–500).
+   */
+  sendLiveStrikerPosition(clientX: number): void {
+    this.strikerSeq++;
+    const serverX = mapToServer(clientX, 0, this.mySeat).x;
+    const socket = useMultiplayerStore.getState().socket;
+    const room = useMultiplayerStore.getState().room;
+    const user = useAuthStore.getState().user;
+    if (socket && socket.connected && room) {
+      socket.emit("carrom:striker-position", {
+        roomId: room.id,
+        matchId: room.matchId ?? undefined,
+        playerId: user?.id,
+        x: serverX,
+        sequence: this.strikerSeq,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  /**
    * Send a place-striker action.
    * @param clientX  X in client canvas coordinates (0–500).
    */
@@ -200,15 +270,26 @@ export default class CarromMultiplayerDriver {
    * Send a strike action.
    * @param localAngle  Angle in client/canvas space (radians).
    * @param power       0–1.
+   * @param clientX     Optional striker X in client coordinates.
    */
   async sendStrike(
     localAngle: number,
-    power: number
+    power: number,
+    clientX?: number
   ): Promise<{ ok: boolean; error?: string }> {
     const serverAngle = localAngleToServer(localAngle, this.mySeat);
+    const serverX = clientX !== undefined ? mapToServer(clientX, 0, this.mySeat).x : undefined;
+    const action: { type: "strike"; angle: number; power: number; x?: number } = {
+      type: "strike",
+      angle: serverAngle,
+      power,
+    };
+    if (serverX !== undefined) {
+      action.x = serverX;
+    }
     const res = await useMultiplayerStore
       .getState()
-      .sendGameAction({ type: "strike", angle: serverAngle, power });
+      .sendGameAction(action);
     if (!res.ok && res.error) {
       return { ok: false, error: res.error };
     }
@@ -224,8 +305,9 @@ export default class CarromMultiplayerDriver {
   ): void {
     if (!state || this.destroyed) return;
     this.lastState = state;
+    this.lastEvents = events;
 
-    // Notify UI with full state first.
+    // Notify UI with full state and events.
     this.onStateUpdate?.(state);
 
     // Process events.
@@ -282,17 +364,14 @@ export default class CarromMultiplayerDriver {
     }
   }
 
+  public lastEvents: { type: string }[] = [];
+
   /**
-   * Returns true if the latest state contains a strike action that we have NOT
-   * yet animated.  Marks it as seen so subsequent calls return false.
+   * Returns authoritative strike information if the latest state contains a
+   * strike action that we have NOT yet animated. Marks it as seen so subsequent
+   * calls return isNew: false.
    */
-  consumeNewStrike(): {
-    isNew: boolean;
-    angle: number;
-    power: number;
-    bySeat: number;
-    strikerPos: CarromStriker | null;
-  } {
+  consumeNewStrike(): StrikeInfo {
     const s = this.lastState;
     const action = s?.lastAction as
       | { type?: string; angle?: number; power?: number }
@@ -306,14 +385,59 @@ export default class CarromMultiplayerDriver {
       actionAt !== this.lastAnimatedMs
     ) {
       this.lastAnimatedMs = actionAt;
+
+      // Extract all pocketed coins in authoritative state
+      const pocketedCoinIds = s?.coins.filter((c) => c.pocketed).map((c) => c.id) ?? [];
+
+      // Extract all pocket events
+      const pocketEvents: PocketEventInfo[] = [];
+      for (const ev of this.lastEvents) {
+        const e = ev as Record<string, unknown>;
+        if (
+          (e.type === "coin-pocketed" || e.type === "coin-scored" || e.type === "striker-pocketed") &&
+          (e.coinId || e.type === "striker-pocketed")
+        ) {
+          pocketEvents.push({
+            coinId: String(e.coinId ?? "striker"),
+            coinType: String(e.coinType ?? "striker"),
+            pocketIndex: Number(e.pocketIndex ?? 0),
+          });
+        }
+      }
+
+      // Extract trajectory keyframes from lastTrajectory or events
+      let keyframes = s?.lastTrajectory;
+      if (!keyframes) {
+        const trajEv = this.lastEvents.find(
+          (e) =>
+            (e as Record<string, unknown>).type === "shot-trajectory" ||
+            (e as Record<string, unknown>).type === "carrom:shot-start"
+        ) as { keyframes?: CarromTrajectoryKeyframe[] } | undefined;
+        if (trajEv?.keyframes) keyframes = trajEv.keyframes;
+      }
+
       return {
         isNew: true,
+        shotId: actionAt,
         angle: action.angle ?? 0,
         power: action.power ?? 1,
         bySeat: s?.lastActionSeat ?? 0,
         strikerPos: s?.strikerAtShotStart ?? s?.striker ?? null,
+        pocketedCoinIds,
+        pocketEvents,
+        keyframes,
       };
     }
-    return { isNew: false, angle: 0, power: 0, bySeat: 0, strikerPos: null };
+
+    return {
+      isNew: false,
+      shotId: null,
+      angle: 0,
+      power: 0,
+      bySeat: 0,
+      strikerPos: null,
+      pocketedCoinIds: [],
+      pocketEvents: [],
+    };
   }
 }

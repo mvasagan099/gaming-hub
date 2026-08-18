@@ -12,6 +12,7 @@ import {
   type CarromCoin,
   type CarromStriker,
   type CoinType,
+  type CarromTrajectoryKeyframe,
 } from "./types";
 
 export { BASE_LINE_Y } from "./types";
@@ -53,8 +54,10 @@ export function createInitialCoins(): CarromCoin[] {
 
   const types: CoinType[] = [
     "queen",
-    "white", "white", "white", "white", "white", "white", "white", "white", "white",
-    "black", "black", "black", "black", "black", "black", "black", "black", "black",
+    // Ring 1 (6 coins alternating)
+    "white", "black", "white", "black", "white", "black",
+    // Ring 2 (12 coins alternating)
+    "black", "white", "black", "white", "black", "white", "black", "white", "black", "white", "black", "white",
   ];
 
   for (let i = 0; i < positions.length && i < types.length; i++) {
@@ -174,19 +177,16 @@ export function returnOneOwnCoin(
 
 
 
-export function checkPocketCollision(x: number, y: number, vx: number, vy: number, _radius: number): number | null {
+export const POCKET_CAPTURE_RADIUS = 24;
+
+export function checkPocketCollision(x: number, y: number, _vx: number = 0, _vy: number = 0, _radius: number = COIN_RADIUS): number | null {
   for (let i = 0; i < POCKETS.length; i++) {
     const pocket = POCKETS[i];
     const dx = pocket.x - x;
     const dy = pocket.y - y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    // Coin center must be within 12px of pocket center (inner hole)
-    if (distance <= 12) {
-      if (distance <= 6) return i;
-      const dotProduct = vx * dx + vy * dy;
-      if (dotProduct > 0 || Math.hypot(vx, vy) > 0.05) {
-        return i;
-      }
+    const distance = Math.hypot(dx, dy);
+    if (distance <= POCKET_CAPTURE_RADIUS) {
+      return i;
     }
   }
   return null;
@@ -276,10 +276,16 @@ export function simulatePhysics(
   striker: CarromStriker,
   dt: number = 1 / 60,
   steps: number = 600,
-): { pocketedCoins: CarromCoin[]; pocketedStriker: boolean; events: any[] } {
+): {
+  pocketedCoins: CarromCoin[];
+  pocketedStriker: boolean;
+  events: any[];
+  keyframes: CarromTrajectoryKeyframe[];
+} {
   const events: any[] = [];
   let pocketedStriker = false;
   const pocketedCoins: CarromCoin[] = [];
+  const keyframes: CarromTrajectoryKeyframe[] = [];
 
   const innerMin = 33; // 22 * 1.5
   const innerMax = CARROM_BOARD_WIDTH - innerMin; // 567
@@ -299,12 +305,14 @@ export function simulatePhysics(
     vy: number;
     radius: number;
     mass: number;
+    pocketed: boolean;
+    pocketIndex?: number;
     coinObj?: CarromCoin;
   };
 
-  const bodies: Body[] = [];
+  const allBodies: Body[] = [];
   if (!striker.pocketed) {
-    bodies.push({
+    allBodies.push({
       id: "striker",
       isStriker: true,
       x: striker.x,
@@ -313,13 +321,14 @@ export function simulatePhysics(
       vy: striker.vy,
       radius: STRIKER_RADIUS,
       mass: STRIKER_MASS,
+      pocketed: false,
     });
   }
 
   for (const c of coins) {
     if (!c.pocketed) {
       const r = c.type === "queen" ? QUEEN_RADIUS : COIN_RADIUS;
-      bodies.push({
+      allBodies.push({
         id: c.id,
         isStriker: false,
         x: c.x,
@@ -328,18 +337,36 @@ export function simulatePhysics(
         vy: c.vy,
         radius: r,
         mass: COIN_MASS,
+        pocketed: false,
         coinObj: c,
       });
     }
   }
 
+  const recordKeyframe = (f: number) => {
+    const pieces = allBodies.map((b) => ({
+      id: b.id,
+      x: Math.round(b.x * 100) / 100,
+      y: Math.round(b.y * 100) / 100,
+      pocketed: b.pocketed,
+      pocketIndex: b.pocketIndex ?? null,
+    }));
+    keyframes.push({ frame: f, pieces });
+  };
+
+  // Record initial state at frame 0
+  recordKeyframe(0);
+
+  const processedPocketCoins = new Set<string>();
+
+  let settledFrame = 0;
   for (let frame = 0; frame < steps; frame++) {
     let anyMoving = false;
 
     for (let sub = 0; sub < maxSubSteps; sub++) {
-      // 1. Position integration & wall collision
-      for (const b of bodies) {
-        if (b.vx === 0 && b.vy === 0) continue;
+      // 1. Position integration & wall collision for active bodies
+      for (const b of allBodies) {
+        if (b.pocketed || (b.vx === 0 && b.vy === 0)) continue;
 
         b.x += b.vx * (subDt * 60);
         b.y += b.vy * (subDt * 60);
@@ -350,7 +377,7 @@ export function simulatePhysics(
         // Check if coin is in a pocket corner cutout zone (skip straight wall clamping near corners)
         let inPocketZone = false;
         for (const p of POCKETS) {
-          if (Math.hypot(b.x - p.x, b.y - p.y) < POCKET_RADIUS + 12) {
+          if (Math.hypot(b.x - p.x, b.y - p.y) <= POCKET_RADIUS) {
             inPocketZone = true;
             break;
           }
@@ -378,17 +405,18 @@ export function simulatePhysics(
         b.vx *= frictionPerSubstep;
         b.vy *= frictionPerSubstep;
 
-        if (Math.abs(b.vx) < 0.06) b.vx = 0;
-        if (Math.abs(b.vy) < 0.06) b.vy = 0;
+        if (Math.abs(b.vx) < 0.05) b.vx = 0;
+        if (Math.abs(b.vy) < 0.05) b.vy = 0;
 
         if (b.vx !== 0 || b.vy !== 0) anyMoving = true;
       }
 
       // 2. Circle-circle collisions
-      for (let i = 0; i < bodies.length; i++) {
-        for (let j = i + 1; j < bodies.length; j++) {
-          const b1 = bodies[i];
-          const b2 = bodies[j];
+      for (let i = 0; i < allBodies.length; i++) {
+        for (let j = i + 1; j < allBodies.length; j++) {
+          const b1 = allBodies[i];
+          const b2 = allBodies[j];
+          if (b1.pocketed || b2.pocketed) continue;
 
           const dx = b2.x - b1.x;
           const dy = b2.y - b1.y;
@@ -423,11 +451,19 @@ export function simulatePhysics(
         }
       }
 
-      // 3. Pocket collisions
-      for (let i = bodies.length - 1; i >= 0; i--) {
-        const b = bodies[i];
+      // 3. Pocket collisions (strictly once per piece)
+      for (let i = 0; i < allBodies.length; i++) {
+        const b = allBodies[i];
+        if (b.pocketed || processedPocketCoins.has(b.id)) continue;
+
         const pocketIdx = checkPocketCollision(b.x, b.y, b.vx, b.vy, b.radius);
         if (pocketIdx !== null) {
+          processedPocketCoins.add(b.id);
+          b.pocketed = true;
+          b.pocketIndex = pocketIdx;
+          b.vx = 0;
+          b.vy = 0;
+
           if (b.isStriker) {
             striker.pocketed = true;
             striker.x = b.x;
@@ -435,7 +471,12 @@ export function simulatePhysics(
             striker.vx = 0;
             striker.vy = 0;
             pocketedStriker = true;
-            events.push({ type: "striker-pocketed", pocketIndex: pocketIdx });
+            events.push({
+              type: "striker-pocketed",
+              coinId: "striker",
+              pocketIndex: pocketIdx,
+              frame: frame + 1,
+            });
           } else if (b.coinObj) {
             b.coinObj.pocketed = true;
             b.coinObj.x = b.x;
@@ -443,18 +484,33 @@ export function simulatePhysics(
             b.coinObj.vx = 0;
             b.coinObj.vy = 0;
             pocketedCoins.push(b.coinObj);
-            events.push({ type: "coin-pocketed", coinId: b.coinObj.id, coinType: b.coinObj.type, pocketIndex: pocketIdx });
+            events.push({
+              type: "coin-pocketed",
+              coinId: b.coinObj.id,
+              coinType: b.coinObj.type,
+              pocketIndex: pocketIdx,
+              frame: frame + 1,
+            });
           }
-          bodies.splice(i, 1);
         }
       }
     }
 
-    if (!anyMoving) break;
+    if (anyMoving && frame % 2 === 0) {
+      recordKeyframe(frame + 1);
+    }
+
+    if (!anyMoving) {
+      settledFrame = frame + 1;
+      break;
+    }
   }
 
+  // Record final settled keyframe
+  recordKeyframe(settledFrame || steps);
+
   // Update final position & velocity on source objects
-  for (const b of bodies) {
+  for (const b of allBodies) {
     if (b.isStriker) {
       striker.x = b.x;
       striker.y = b.y;
@@ -468,7 +524,7 @@ export function simulatePhysics(
     }
   }
 
-  return { pocketedCoins, pocketedStriker, events };
+  return { pocketedCoins, pocketedStriker, events, keyframes };
 }
 
 /**
@@ -497,12 +553,16 @@ export function calculateScore(
   earnedExtraTurn: boolean;
   /** True when the queen returns to the board center (cover failed or not attempted). */
   queenNeedsReturn: boolean;
+  pocketedOwnColor: boolean;
+  pocketedOpponentColor: boolean;
+  pocketedQueenThisShot: boolean;
 } {
   let score = 0;
   let opponentScore = 0;
   let newQueenPocketed = queenAlreadyPocketed;
   let newQueenCovered = queenAlreadyCovered;
   let pocketedOwnColor = false;
+  let pocketedOpponentColor = false;
   let pocketedQueenThisShot = false;
 
   for (const coin of pocketedCoins) {
@@ -513,6 +573,7 @@ export function calculateScore(
       pocketedOwnColor = true;
     } else {
       opponentScore += 1;
+      pocketedOpponentColor = true;
     }
   }
 
@@ -543,10 +604,9 @@ export function calculateScore(
     }
   }
 
-  // Extra turn: own coin always grants one; a queen pocketed alone grants one
-  // so the shooter gets a chance to cover it. A queen returned on the cover
-  // shot gives no extra turn.
-  const earnedExtraTurn = pocketedOwnColor || (pocketedQueenThisShot && !pocketedOwnColor);
+  // Extra turn: Player keeps turn IF AND ONLY IF at least one of their OWN coins was pocketed.
+  // Queen pocketed alone without an own coin does NOT grant an extra turn (turn passes to opponent).
+  const earnedExtraTurn = pocketedOwnColor;
 
   return {
     score,
@@ -555,6 +615,9 @@ export function calculateScore(
     queenCovered: newQueenCovered,
     earnedExtraTurn,
     queenNeedsReturn,
+    pocketedOwnColor,
+    pocketedOpponentColor,
+    pocketedQueenThisShot,
   };
 }
 

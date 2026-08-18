@@ -70,6 +70,15 @@ export interface ClientToServerEvents {
 
   "game:state:ack": (payload: { roomId: string; matchId: string; timestamp: number }) => void;
 
+  "carrom:striker-position": (payload: {
+    roomId?: string;
+    matchId?: string;
+    playerId?: string;
+    x: number;
+    sequence: number;
+    timestamp?: number;
+  }) => void;
+
   "ping": (payload: { timestamp: number }, callback: () => void) => void;
 }
 
@@ -106,6 +115,16 @@ export interface ServerToClientEvents {
     winnerSeats: number[];
     winnerIds: string[];
     state: JsonObject;
+  }) => void;
+
+  "carrom:striker-position": (payload: {
+    roomId: string;
+    matchId: string;
+    playerId: string;
+    seat: number;
+    x: number;
+    sequence: number;
+    timestamp: number;
   }) => void;
 
   "chat:message": (message: ChatMessage) => void;

@@ -12,6 +12,7 @@ import type {
   SocketErrorPayload,
 } from "@gaming-hub/socket";
 import { MultiplayerFramework } from "@gaming-hub/multiplayer";
+import { isValidStrikerPlacement } from "@gaming-hub/game-engine";
 import pino from "pino";
 import { env } from "./env";
 import { authenticateToken, type AuthenticatedUser } from "./auth";
@@ -280,6 +281,63 @@ async function main(): Promise<void> {
 
     socket.on("game:state:ack", (payload) => {
       framework.syncManager.handleStateAck(user.userId, payload.roomId, payload.timestamp);
+    });
+
+    // ── Carrom Live Striker Mover Position Sync ──
+    let lastStrikerSeq = -1;
+
+    socket.on("carrom:striker-position", (payload) => {
+      try {
+        const roomId =
+          payload.roomId ||
+          (payload.matchId ? framework.roomManager.getPlayerRoom(user.userId)?.id : undefined);
+        if (!roomId) return;
+        const room = framework.roomManager.getRoom(roomId);
+        if (!room || room.status !== "playing" || !room.match) return;
+
+        const player = room.players.get(user.userId);
+        if (!player || player.isSpectator || player.seat === null) return;
+
+        const engine = room.match.engine as any;
+        const state = engine?.state;
+        if (!state) return;
+
+        // 1. Verify player is currentTurnPlayer
+        if (state.currentSeat !== player.seat) return;
+
+        // 2. Verify sequence number — drop out-of-order/stale packets
+        if (typeof payload.sequence === "number" && payload.sequence <= lastStrikerSeq) {
+          return;
+        }
+        if (typeof payload.sequence === "number") {
+          lastStrikerSeq = payload.sequence;
+        }
+
+        // 3. Validate canonical board X
+        const canonicalX = payload.x;
+        if (typeof canonicalX !== "number" || isNaN(canonicalX)) return;
+        if (!isValidStrikerPlacement(canonicalX, player.seat, state.coins)) return;
+
+        // 4. Update authoritative striker X on engine
+        state.striker.x = canonicalX;
+        state.striker.placed = true;
+        state.striker.placedBy = player.seat;
+
+        // 5. Broadcast to BOTH players in room
+        const broadcastPayload = {
+          roomId: room.id,
+          matchId: room.match.matchId,
+          playerId: user.userId,
+          seat: player.seat,
+          x: canonicalX,
+          sequence: payload.sequence,
+          timestamp: payload.timestamp ?? Date.now(),
+        };
+
+        io.to(room.ioName).emit("carrom:striker-position", broadcastPayload);
+      } catch (err) {
+        logger.error({ err }, "[carrom:striker-position] error");
+      }
     });
 
     // Rematch

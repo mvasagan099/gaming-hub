@@ -97,6 +97,11 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       consecutiveFouls: 0,
     }));
 
+    console.log("[CarromEngine] INITIAL_MATCH_STATE created", {
+      totalCoins: coins.length,
+      coins: coins.map(c => ({ id: c.id, type: c.type, x: Math.round(c.x), y: Math.round(c.y) })),
+    });
+
     return {
       coins,
       striker,
@@ -105,6 +110,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       lastActionSeat: null,
       lastActionAtMs: null,
       strikerAtShotStart: null,
+      lastTrajectory: null,
       strikerPlacementPhase: true,
       strikerPlacementSeat: 0,
       foulThisTurn: false,
@@ -118,8 +124,6 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
 
     switch (action.type) {
       case "place-striker": {
-        if (!state.strikerPlacementPhase) return "Not in striker placement phase";
-        if (state.strikerPlacementSeat !== seat) return "Not your turn to place striker";
         if (state.currentSeat !== seat) return "Not your turn";
         if (typeof action.x !== "number") return "Invalid x coordinate";
         if (!isValidStrikerPlacement(action.x, seat, state.coins)) return "Invalid striker placement position";
@@ -128,12 +132,15 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
 
       case "strike": {
         if (state.currentSeat !== seat) return "Not your turn";
-        if (state.strikerPlacementPhase) return "Place the striker first";
+        if (state.striker.pocketed) return "Striker was pocketed, place again";
+        if (!state.striker.placed && action.x === undefined) return "Place the striker first";
         if (typeof action.angle !== "number" || typeof action.power !== "number") return "Invalid strike parameters";
         if (action.power < 0 || action.power > 1) return "Power must be between 0 and 1";
         // Math.atan2 returns [-π, π]; after seat-1 flip it can reach [-2π, 2π]
         if (Math.abs(action.angle) > Math.PI * 2) return "Angle must be between -2π and 2π";
-        if (state.striker.pocketed) return "Striker was pocketed, place again";
+        if (action.x !== undefined && !isValidStrikerPlacement(action.x, seat, state.coins)) {
+          return "Invalid striker placement position";
+        }
         return null;
       }
 
@@ -182,10 +189,8 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     next.lastAction = action;
     next.lastActionSeat = seat;
     next.lastActionAtMs = now;
-    next.turnNumber++;
-    next.turnStartedAtMs = now;
 
-    const player = next.players.find(p => p.seat === seat);
+    const player = next.players.find((p) => p.seat === seat);
     if (player) {
       player.consecutiveFouls = 0;
     }
@@ -211,15 +216,19 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
   }
 
   private applyStrike(
-    action: CarromAction & { type: "strike"; angle: number; power: number },
+    action: CarromAction & { type: "strike"; angle: number; power: number; x?: number },
     seat: number,
     state: CarromState,
     now: number,
     events: EngineEvent[],
   ): EngineActionResult<CarromState> {
     const next = this.cloneState(state);
-    const player = next.players.find(p => p.seat === seat)!;
+    const player = next.players.find((p) => p.seat === seat)!;
 
+    if (action.x !== undefined) {
+      next.striker.x = action.x;
+    }
+    next.striker.y = seat === 0 ? BASE_LINE_Y : 93;
     next.strikerAtShotStart = { ...next.striker };
 
     const maxSpeed = 27;
@@ -230,12 +239,54 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     next.strikerPlacementPhase = false;
 
     // 600 steps = 10 s of simulated physics — fully settles all realistic shots
-    const { pocketedCoins, pocketedStriker, events: physicsEvents } = simulatePhysics(
+    const { pocketedCoins, pocketedStriker, events: physicsEvents, keyframes } = simulatePhysics(
       next.coins,
       next.striker,
       1 / 60,
       600,
     );
+
+    next.lastTrajectory = keyframes;
+
+    console.log("[CarromEngine] SHOT_START_WORLD", {
+      shotId: now,
+      shooterSeat: seat,
+      strikerStartWorld: next.strikerAtShotStart,
+      power: action.power,
+      angle: action.angle,
+    });
+    console.log("[CarromEngine] SHOT_KEYFRAMES_WORLD", {
+      shotId: now,
+      totalKeyframes: keyframes.length,
+      firstKeyframe: keyframes[0],
+      lastKeyframe: keyframes[keyframes.length - 1],
+    });
+    console.log("[CarromEngine] SHOT_RESULT_WORLD", {
+      shotId: now,
+      pocketedCoins: pocketedCoins.map((c) => ({ id: c.id, type: c.type, x: c.x, y: c.y })),
+      pocketedStriker,
+    });
+
+    events.push({
+      type: "carrom:shot-start",
+      shotId: now,
+      shooterId: `seat-${seat}`,
+      shooterSeat: seat,
+      serverTimestamp: now,
+      strikerStartWorld: next.strikerAtShotStart,
+      strikerVelocityWorld: { vx: next.striker.vx, vy: next.striker.vy },
+      shotPower: action.power,
+      shotDirectionWorld: action.angle,
+      keyframes,
+    });
+
+    events.push({
+      type: "shot-trajectory",
+      shotId: now,
+      shooterSeat: seat,
+      keyframes,
+      pocketEvents: physicsEvents.filter((e) => e.type === "coin-pocketed" || e.type === "striker-pocketed"),
+    });
 
     for (const physicsEvent of physicsEvents) {
       events.push({ ...physicsEvent, seat });
@@ -348,6 +399,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       }
     }
 
+    next.turnNumber++;
     next.foulThisTurn = foul;
     next.queenOnBoard = next.coins.some(c => !c.pocketed && c.type === "queen");
     next.lastAction = action;
@@ -372,23 +424,53 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       next.matchStartedAtMs = null;
       events.push({ type: "draw", reason: "all-coins-pocketed" });
     } else {
-      // ── Determine next player ──────────────────────────────────────────────
-      // Extra turn ONLY if player pocketed at least one own-color coin.
-      // Foul always passes turn to opponent regardless of other pockets.
-      const nextSeat = (earnedExtraTurn && !foul) ? seat : (seat === 0 ? 1 : 0);
+      // ── Determine next player (calculated ONCE after complete shot resolution) ──
+      // Extra turn ONLY if player pocketed at least one own-color coin and did NOT foul.
+      // Foul, opponent coin only, queen alone, or miss always passes turn to opponent.
+      const opponentSeat = seat === 0 ? 1 : 0;
+      const nextSeat = (earnedExtraTurn && !foul) ? seat : opponentSeat;
+      const turnReason = foul
+        ? "STRIKER_FOUL"
+        : earnedExtraTurn
+          ? "OWN_COIN_POCKETED"
+          : pocketedCoins.length > 0
+            ? "OPPONENT_OR_QUEEN_ONLY"
+            : "NOTHING_POCKETED";
+
       next.currentSeat = nextSeat;
       next.turnStartedAtMs = now;
       next.strikerPlacementPhase = true;
       next.strikerPlacementSeat = nextSeat;
       next.striker = createInitialStriker(nextSeat);
 
-      console.log("[CarromEngine] TURN DECISION",
-        "| shooter:", seat,
-        "| nextSeat:", nextSeat,
-        "| earnedExtraTurn:", earnedExtraTurn,
-        "| foul:", foul,
-        "| queenReturn:", queenReturnedThisTurn,
-      );
+      const playerColor = seat === 0 ? "white" : "black";
+      const pocketedOwnCoin = pocketedCoins.some(c => c.type === playerColor);
+      const pocketedOpponentCoin = pocketedCoins.some(c => c.type !== playerColor && c.type !== "queen");
+
+      console.log("[CarromEngine] TURN_CALCULATION", {
+        shotId: now,
+        stateVersion: next.turnNumber,
+        shooterId: `seat-${seat}`,
+        previousTurnPlayerId: `seat-${seat}`,
+        pocketedCoinIds: pocketedCoins.map((c) => c.id),
+        pocketedOwnCoin,
+        pocketedOpponentCoin,
+        pocketedStriker,
+        foul,
+        earnedExtraTurn,
+        nextTurnPlayerId: `seat-${nextSeat}`,
+        reason: turnReason,
+      });
+
+      events.push({
+        type: "turn-change",
+        shotId: now,
+        stateVersion: next.turnNumber,
+        previousSeat: seat,
+        currentSeat: nextSeat,
+        reason: turnReason,
+        foul,
+      });
 
       if (foul) {
         events.push({ type: "foul-turn-end", seat, nextSeat });
@@ -396,6 +478,17 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
         events.push({ type: "turn-end", seat, nextSeat });
       }
     }
+
+    events.push({
+      type: "carrom:shot-result",
+      shotId: now,
+      stateVersion: next.turnNumber,
+      finalStrikerWorld: { ...next.striker },
+      finalCoinsWorld: next.coins.map((c) => ({ ...c })),
+      pocketedCoinIds: pocketedCoins.map((c) => c.id),
+      pocketEvents: physicsEvents.filter((e) => e.type === "coin-pocketed" || e.type === "striker-pocketed"),
+      turnPlayerId: `seat-${next.currentSeat}`,
+    });
 
     return {
       ok: true,

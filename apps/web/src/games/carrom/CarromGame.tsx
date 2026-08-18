@@ -134,9 +134,10 @@ function createInitialCoins(): LocalCoin[] {
 
   const types: CoinType[] = [
     "queen",
-    "white", "white", "white", "white", "white", "white",
-    "white", "white", "white",
-    "black", "black", "black", "black", "black", "black", "black", "black", "black",
+    // Ring 1 (6 coins alternating)
+    "white", "black", "white", "black", "white", "black",
+    // Ring 2 (12 coins alternating)
+    "black", "white", "black", "white", "black", "white", "black", "white", "black", "white", "black", "white",
   ];
 
   const positions: { x: number; y: number }[] = [{ x: cx, y: cy }];
@@ -1336,91 +1337,164 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
          }
       }
 
+      // Fixed per-player striker color (matches the shooter's coin color) so it never
+      // changes mid-turn. Both players derive the same color from the turn holder's seat.
+      const shooterIsWhite =
+        mySeatParam === null
+          ? currentPlayer === 'player'
+          : currentPlayer === 'player'
+            ? mySeatParam === 0
+            : mySeatParam === 1;
+
+      ctx.save();
+      ctx.translate(drawX, drawY);
+      ctx.rotate(c.angle || 0);
+
       if (c.type === 'striker') {
-        // Fixed per-player striker color (matches the shooter's coin color) so it never
-        // changes mid-turn. Both players derive the same color from the turn holder's seat.
-        const shooterIsWhite =
-          mySeatParam === null
-            ? currentPlayer === 'player'
-            : currentPlayer === 'player'
-              ? mySeatParam === 0
-              : mySeatParam === 1;
-
-        const grad = ctx.createRadialGradient(drawX - c.radius * 0.3, drawY - c.radius * 0.3, c.radius * 0.1, drawX, drawY, c.radius);
-        if (shooterIsWhite) {
-          grad.addColorStop(0, '#fafaf9'); grad.addColorStop(1, '#d6d3d1');
-        } else {
-          grad.addColorStop(0, '#44403c'); grad.addColorStop(1, '#1c1917');
-        }
-        ctx.fillStyle = grad;
-        ctx.strokeStyle = shooterIsWhite ? 'rgba(28,25,23,0.85)' : 'rgba(255,255,255,0.7)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(drawX, drawY, c.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-        if (isOverlapping) {
-          ctx.strokeStyle = '#ef4444';
-          ctx.lineWidth = 3;
+          const grad = ctx.createRadialGradient(-c.radius * 0.35, -c.radius * 0.35, c.radius * 0.05, 0, 0, c.radius);
+          if (shooterIsWhite) {
+            grad.addColorStop(0, '#ffffff'); grad.addColorStop(0.3, '#f1f5f9');
+            grad.addColorStop(0.7, '#cbd5e1'); grad.addColorStop(1, '#64748b');
+          } else {
+            grad.addColorStop(0, '#94a3b8'); grad.addColorStop(0.3, '#475569');
+            grad.addColorStop(0.7, '#1e293b'); grad.addColorStop(1, '#090d16');
+          }
+          ctx.fillStyle = grad;
           ctx.beginPath();
-          ctx.arc(drawX, drawY, c.radius + 3, 0, Math.PI * 2);
+          ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = shooterIsWhite ? 'rgba(15,23,42,0.9)' : 'rgba(248,250,252,0.85)';
+          ctx.lineWidth = 2.2;
           ctx.stroke();
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 6px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('MOVE', drawX, drawY);
+
+          ctx.strokeStyle = shooterIsWhite ? 'rgba(71,85,105,0.45)' : 'rgba(226,232,240,0.45)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(0, 0, c.radius * 0.72, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // 8 Precision Radial Crosshairs (Rotate when spinning!)
+          ctx.strokeStyle = shooterIsWhite ? 'rgba(30,41,59,0.5)' : 'rgba(255,255,255,0.5)';
+          ctx.lineWidth = 1.0;
+          for (let k = 0; k < 8; k++) {
+            const a = (k * Math.PI * 2) / 8;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * (c.radius * 0.45), Math.sin(a) * (c.radius * 0.45));
+            ctx.lineTo(Math.cos(a) * (c.radius * 0.68), Math.sin(a) * (c.radius * 0.68));
+            ctx.stroke();
+          }
+
+          // Glowing Azure Gem Core
+          const gemGrad = ctx.createRadialGradient(-1, -1, 1, 0, 0, c.radius * 0.28);
+          gemGrad.addColorStop(0, '#7dd3fc'); gemGrad.addColorStop(0.5, '#0284c7'); gemGrad.addColorStop(1, '#0369a1');
+          ctx.fillStyle = gemGrad;
+          ctx.beginPath();
+          ctx.arc(0, 0, c.radius * 0.26, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (isOverlapping) {
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(0, 0, c.radius + 3, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 6px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('MOVE', 0, 0);
+          }
+        } else if (c.type === 'queen') {
+          const qg = ctx.createRadialGradient(-c.radius * 0.35, -c.radius * 0.35, c.radius * 0.05, 0, 0, c.radius);
+          qg.addColorStop(0, '#fca5a5'); qg.addColorStop(0.35, '#ef4444');
+          qg.addColorStop(0.7, '#b91c1c'); qg.addColorStop(1, '#450a0a');
+          ctx.fillStyle = qg;
+          ctx.beginPath();
+          ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = '#350505';
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+
+          ctx.strokeStyle = '#fde047';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(0, 0, c.radius * 0.65, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // 6 Royal Gold Spokes
+          ctx.strokeStyle = 'rgba(254,240,138,0.75)';
+          ctx.lineWidth = 1.0;
+          for (let k = 0; k < 6; k++) {
+            const a = (k * Math.PI * 2) / 6;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * (c.radius * 0.3), Math.sin(a) * (c.radius * 0.3));
+            ctx.lineTo(Math.cos(a) * (c.radius * 0.62), Math.sin(a) * (c.radius * 0.62));
+            ctx.stroke();
+          }
+
+          ctx.fillStyle = '#fef08a';
+          ctx.beginPath();
+          ctx.arc(0, 0, c.radius * 0.28, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#fff1f2';
+          ctx.beginPath();
+          ctx.arc(0, 0, c.radius * 0.14, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          const isWhite = c.type === 'white';
+          const outerGrad = ctx.createRadialGradient(-c.radius * 0.35, -c.radius * 0.35, c.radius * 0.05, 0, 0, c.radius);
+          if (isWhite) {
+            outerGrad.addColorStop(0, '#fffef0'); outerGrad.addColorStop(0.4, '#fef3c7');
+            outerGrad.addColorStop(0.8, '#f59e0b'); outerGrad.addColorStop(1, '#b45309');
+          } else {
+            outerGrad.addColorStop(0, '#334155'); outerGrad.addColorStop(0.35, '#1e293b');
+            outerGrad.addColorStop(0.75, '#0f172a'); outerGrad.addColorStop(1, '#020617');
+          }
+          ctx.fillStyle = outerGrad;
+          ctx.beginPath();
+          ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = isWhite ? '#78350f' : '#020617';
+          ctx.lineWidth = 1.3;
+          ctx.stroke();
+
+          const grooveCol = isWhite ? 'rgba(146,64,14,0.6)' : 'rgba(203,213,225,0.3)';
+          ctx.strokeStyle = grooveCol;
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(0, 0, c.radius * 0.65, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // 6 Radial Notches
+          for (let k = 0; k < 6; k++) {
+            const a = (k * Math.PI * 2) / 6;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * (c.radius * 0.32), Math.sin(a) * (c.radius * 0.32));
+            ctx.lineTo(Math.cos(a) * (c.radius * 0.62), Math.sin(a) * (c.radius * 0.62));
+            ctx.stroke();
+          }
+
+          const innerGrad = ctx.createRadialGradient(-c.radius * 0.2, -c.radius * 0.2, 1, 0, 0, c.radius * 0.45);
+          if (isWhite) {
+            innerGrad.addColorStop(0, '#ffffff'); innerGrad.addColorStop(1, '#fde68a');
+          } else {
+            innerGrad.addColorStop(0, '#475569'); innerGrad.addColorStop(1, '#0f172a');
+          }
+          ctx.fillStyle = innerGrad;
+          ctx.beginPath();
+          ctx.arc(0, 0, c.radius * 0.48, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = isWhite ? '#92400e' : '#e2e8f0';
+          ctx.beginPath();
+          ctx.arc(0, 0, c.radius * 0.16, 0, Math.PI * 2);
+          ctx.fill();
         }
-      } else if (c.type === 'queen') {
-        ctx.fillStyle = '#cc1a1a';
-        ctx.strokeStyle = '#8b0000';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(drawX, drawY, c.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,180,180,0.7)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(drawX, drawY, c.radius * 0.55, 0, Math.PI * 2);
-        ctx.stroke();
-      } else {
-        const isWhite = c.type === 'white';
-        const outerColor = isWhite ? '#e8c990' : '#2a1205';
-        const innerColor = isWhite ? '#f5dba0' : '#1a0808';
-        const ringColor = isWhite ? '#1a0808' : '#8a6a40';
-        const highlightColor = isWhite ? 'rgba(255,255,255,0.5)' : 'rgba(180,120,50,0.25)';
-
-        ctx.fillStyle = outerColor;
-        ctx.strokeStyle = '#1a1008';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(drawX, drawY, c.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.strokeStyle = ringColor;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(drawX, drawY, c.radius * 0.65, 0, Math.PI * 2);
-        ctx.stroke();
-
-        ctx.fillStyle = innerColor;
-        ctx.beginPath();
-        ctx.arc(drawX, drawY, c.radius * 0.55, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = ringColor;
-        ctx.beginPath();
-        ctx.arc(drawX, drawY, c.radius * 0.18, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = highlightColor;
-        ctx.beginPath();
-        ctx.arc(drawX - c.radius * 0.3, drawY - c.radius * 0.3, c.radius * 0.25, 0, Math.PI * 2);
-        ctx.fill();
-      }
 
       ctx.restore();
     }
