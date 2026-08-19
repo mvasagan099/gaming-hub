@@ -5,7 +5,9 @@ import type DiceManager from "./DiceManager";
 import type { SnakeManager } from "./SnakeManager";
 import type { LadderManager } from "./LadderManager";
 import type { HUDManager } from "./HUDManager";
+import type FeedbackText from "../ui/FeedbackText";
 import { GameEvents } from "../events/GameEvents";
+import { ANIM, animDuration, prefersReducedMotion } from "../constants";
 
 export interface MoveHistoryEntry {
   playerName: string;
@@ -25,6 +27,7 @@ export default class GameManager {
   private snakeManager: SnakeManager;
   private ladderManager: LadderManager;
   private hud: HUDManager;
+  private feedback: FeedbackText;
 
   private currentPlayer = 1;
   private totalPlayers = 2;
@@ -41,7 +44,8 @@ export default class GameManager {
     dice: DiceManager,
     snakeManager: SnakeManager,
     ladderManager: LadderManager,
-    hud: HUDManager
+    hud: HUDManager,
+    feedback: FeedbackText,
   ) {
     this.scene = scene;
     this.board = board;
@@ -50,6 +54,7 @@ export default class GameManager {
     this.snakeManager = snakeManager;
     this.ladderManager = ladderManager;
     this.hud = hud;
+    this.feedback = feedback;
   }
 
   init(mode: GameMode = "ai", totalPlayers = 2): void {
@@ -63,7 +68,8 @@ export default class GameManager {
 
     this.scene.events.on(GameEvents.DICE_ROLLED, this.onDiceRolled, this);
     this.hud.updateTurn(this.currentPlayer);
-    this.dice.setBias('normal');
+    this.players.setActivePlayer(this.currentPlayer);
+    this.dice.setBias("normal");
     this.dice.enable();
   }
 
@@ -82,8 +88,7 @@ export default class GameManager {
       if (this.consecutiveSixes === 3) {
         this.hud.addLog(`${player.name} rolled three 6s! Turn cancelled.`);
         const startTile = this.turnStartTile.get(this.currentPlayer) ?? 1;
-        
-        // Return player to start of turn
+
         this.players.snapToTile(player.id, startTile, () => {
           const entry: MoveHistoryEntry = {
             playerName: player.name,
@@ -93,7 +98,7 @@ export default class GameManager {
             event: "no-move",
           };
           this.moveHistory.push(entry);
-          this.scene.time.delayedCall(800, () => this.changeTurn(false));
+          this.scene.time.delayedCall(animDuration(800), () => this.changeTurn(false));
         });
         return;
       }
@@ -108,6 +113,9 @@ export default class GameManager {
     if (targetTile > 100) {
       targetTile = fromTile;
       this.hud.addLog(`${player.name} needs ${100 - fromTile} to finish!`);
+      const pos = this.board.getTilePosition(fromTile);
+      this.feedback.overshoot(pos.x, pos.y);
+
       const entry: MoveHistoryEntry = {
         playerName: player.name,
         rolled: value,
@@ -116,16 +124,15 @@ export default class GameManager {
         event: "no-move",
       };
       this.moveHistory.push(entry);
-      this.scene.time.delayedCall(800, () => this.changeTurn(value === 6));
+      this.scene.time.delayedCall(animDuration(800), () => this.changeTurn(value === 6));
       return;
     }
 
     this.dice.disable();
     this.hud.addLog(`${player.name} rolled a ${value}!`);
 
-    // Move token tile-by-tile to the rolled position
+    // Move token tile-by-tile
     this.players.movePlayer(this.currentPlayer, value, () => {
-      // After tile-by-tile movement: check snakes and ladders
       this.resolveSpecialTile(player.id, fromTile, targetTile, value);
     });
   }
@@ -134,46 +141,86 @@ export default class GameManager {
     playerId: number,
     fromTile: number,
     landedTile: number,
-    rolled: number
+    rolled: number,
   ): void {
     const player = this.players.getPlayer(playerId);
     if (!player) return;
 
     let finalTile = landedTile;
     let event: "normal" | "snake" | "ladder" = "normal";
+    const reduced = prefersReducedMotion();
 
-    // Resolve snakes and ladders first — a ladder can carry a token onto tile
-    // 100, which must count as a win (e.g. ladder 80 → 100).
     if (this.snakeManager.hasSnake(landedTile)) {
       finalTile = this.snakeManager.getTail(landedTile) ?? landedTile;
       event = "snake";
       this.hud.addLog(`🐍 ${player.name} got bitten! Slides to ${finalTile}`);
       this.moveHistory.push({ playerName: player.name, rolled, from: fromTile, to: finalTile, event: "snake" });
       this.scene.events.emit(GameEvents.SNAKE_HIT, playerId, landedTile, finalTile);
+
+      // Highlight snake and show feedback
+      const headPos = this.board.getTilePosition(landedTile);
+      this.feedback.snakeHit(headPos.x, headPos.y);
+      this.snakeManager.highlightSnake(landedTile);
+      this.snakeManager.animateHighlightIn(this.scene);
+
     } else if (this.ladderManager.hasLadder(landedTile)) {
       finalTile = this.ladderManager.getTop(landedTile) ?? landedTile;
       event = "ladder";
       this.hud.addLog(`🪜 ${player.name} climbs ladder to ${finalTile}!`);
       this.moveHistory.push({ playerName: player.name, rolled, from: fromTile, to: finalTile, event: "ladder" });
       this.scene.events.emit(GameEvents.LADDER_CLIMB, playerId, landedTile, finalTile);
+
+      // Highlight ladder and show feedback
+      const botPos = this.board.getTilePosition(landedTile);
+      this.feedback.ladderClimb(botPos.x, botPos.y);
+      this.ladderManager.highlightLadder(landedTile, this.scene);
+
     } else {
       this.moveHistory.push({ playerName: player.name, rolled, from: fromTile, to: landedTile, event: "normal" });
       this.hud.updatePlayerTile(playerId, landedTile);
     }
 
     const finish = () => {
+      // Unhighlight any snake/ladder
+      this.snakeManager.animateHighlightOut(this.scene);
+      this.ladderManager.unhighlightAll(this.scene);
+
       if (finalTile === 100) {
         this.triggerWin(player.name);
         return;
       }
-      if (rolled === 6) this.hud.addLog(`${player.name} gets an extra turn!`);
+      if (rolled === 6) {
+        this.hud.addLog(`${player.name} gets an extra turn!`);
+        const tilePos = this.board.getTilePosition(finalTile);
+        this.feedback.extraTurn(tilePos.x, tilePos.y - 20);
+      }
       this.handleBump(playerId, finalTile, () => {
-        const delay = event === "normal" ? 200 : 300;
+        const delay = event === "normal" ? animDuration(200) : animDuration(400);
         this.scene.time.delayedCall(delay, () => this.changeTurn(rolled === 6));
       });
     };
 
     if (event === "snake" || event === "ladder") {
+      // Use path-following animation for snake, direct slide for ladder
+      if (event === "snake" && !reduced) {
+        const path = this.snakeManager.getSnakePath(landedTile, this.board);
+        if (path.length > 0) {
+          this.scene.time.delayedCall(animDuration(ANIM.snakePause), () => {
+            this.players.animateAlongPath(playerId, path, finish);
+          });
+          return;
+        }
+      }
+      if (event === "ladder" && !reduced) {
+        const path = this.ladderManager.getLadderPath(landedTile, this.board);
+        if (path.length > 0) {
+          this.scene.time.delayedCall(animDuration(ANIM.ladderPause), () => {
+            this.players.animateAlongPath(playerId, path, finish);
+          });
+          return;
+        }
+      }
+      // Fallback: direct snap
       this.players.snapToTile(playerId, finalTile, finish);
     } else {
       finish();
@@ -181,23 +228,20 @@ export default class GameManager {
   }
 
   private handleBump(actingPlayerId: number, tile: number, onComplete: () => void): void {
-     if (tile === 1 || tile === 100) {
-        onComplete();
-        return;
-     }
+    if (tile === 1 || tile === 100) {
+      onComplete();
+      return;
+    }
 
-     const allPlayers = this.players.getPlayers();
-     const bumpedPlayer = allPlayers.find(p => p.id !== actingPlayerId && p.tile === tile);
+    const allPlayers = this.players.getPlayers();
+    const bumpedPlayer = allPlayers.find(p => p.id !== actingPlayerId && p.tile === tile);
 
-     if (bumpedPlayer) {
-        this.hud.addLog(`⚔️ Player ${actingPlayerId} bumped ${bumpedPlayer.name} back to start!`);
-        // We can emit an event here for particles/audio later
-        this.players.snapToTile(bumpedPlayer.id, 1, () => {
-           onComplete();
-        });
-     } else {
-        onComplete();
-     }
+    if (bumpedPlayer) {
+      this.hud.addLog(`⚔️ ${bumpedPlayer.name} bumped back to start!`);
+      this.players.snapToTile(bumpedPlayer.id, 1, onComplete);
+    } else {
+      onComplete();
+    }
   }
 
   private triggerWin(playerName: string): void {
@@ -213,29 +257,29 @@ export default class GameManager {
     if (this.gameOver) return;
 
     if (!rolledSix) {
-      // Cycle to next player
       this.currentPlayer = (this.currentPlayer % this.totalPlayers) + 1;
       this.consecutiveSixes = 0;
     }
 
     this.scene.events.emit(GameEvents.TURN_CHANGED, this.currentPlayer);
     this.hud.updateTurn(this.currentPlayer);
+    this.players.setActivePlayer(this.currentPlayer);
 
-    // Bias check: if current player is > 20 tiles behind the leader, give them a high roll bias
+    // Bias check
     const allPlayers = this.players.getPlayers();
     const maxTile = Math.max(...allPlayers.map(p => p.tile));
     const currPlayerTile = allPlayers.find(p => p.id === this.currentPlayer)?.tile ?? 1;
     if (maxTile - currPlayerTile >= 20) {
-       this.dice.setBias('high');
+      this.dice.setBias("high");
     } else {
-       this.dice.setBias('normal');
+      this.dice.setBias("normal");
     }
 
-    // If AI mode and current player is player 2 → trigger AI turn
+    // AI auto-roll
     if (this.mode === "ai" && this.currentPlayer === 2) {
       this.dice.setWaiting("AI");
-      this.scene.time.delayedCall(1200, () => {
-        if (!this.gameOver) this.dice.rollForAI();   // ← bypasses enabled guard
+      this.scene.time.delayedCall(animDuration(1200), () => {
+        if (!this.gameOver) this.dice.rollForAI();
       });
     } else {
       this.dice.unlock();

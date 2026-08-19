@@ -12,6 +12,7 @@ import {
   getTournamentBracket,
   getPlayerTournamentStatus,
 } from "../services/tournamentEngine";
+import { TournamentMatchService } from "../services/tournamentMatchService";
 
 export async function tournamentsRoutes(app: FastifyInstance) {
   /** List tournaments (filterable by status/gameId) */
@@ -77,5 +78,16 @@ export async function tournamentsRoutes(app: FastifyInstance) {
       getPlayerTournamentStatus(id, user.id),
     ]);
     return { detail, bracket, myStatus };
+  });
+
+  /** Current active tournament match for the player */
+  app.get("/api/tournaments/:id/current-match", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { id } = routeParams(request);
+    const match = await TournamentMatchService.getCurrentMatchForPlayer(id, user.id);
+    if (!match) {
+      throw new AppError("NOT_FOUND", "No active tournament match", 404);
+    }
+    return match;
   });
 }

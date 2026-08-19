@@ -16,7 +16,8 @@ export async function notificationsRoutes(app: FastifyInstance) {
     const user = requireUser(request);
     const q = queryParams(request);
     const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
-    return listNotifications(user.id, page, pageSize);
+    const unreadOnly = queryString(q.unreadOnly) === "true";
+    return listNotifications(user.id, page, pageSize, { unreadOnly });
   });
 
   app.get("/api/notifications/unread-count", { preHandler: authenticate }, async (request) => {
@@ -24,6 +25,12 @@ export async function notificationsRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/notifications/:id/read", { preHandler: authenticate }, async (request) => {
+    const { id } = routeParams(request);
+    await markNotificationRead(requireUser(request).id, id);
+    return { ok: true };
+  });
+
+  app.patch("/api/notifications/:id/read", { preHandler: authenticate }, async (request) => {
     const { id } = routeParams(request);
     await markNotificationRead(requireUser(request).id, id);
     return { ok: true };

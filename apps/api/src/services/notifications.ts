@@ -19,15 +19,25 @@ export async function createNotification(
   });
 }
 
-export async function listNotifications(userId: string, page: number, pageSize: number) {
+export async function listNotifications(
+  userId: string,
+  page: number,
+  pageSize: number,
+  options?: { unreadOnly?: boolean },
+) {
+  const where: Prisma.AppNotificationWhereInput = {
+    userId,
+    ...(options?.unreadOnly ? { readAt: null } : {}),
+  };
+
   const [items, total] = await Promise.all([
     prisma.appNotification.findMany({
-      where: { userId },
+      where,
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
-    prisma.appNotification.count({ where: { userId } }),
+    prisma.appNotification.count({ where }),
   ]);
 
   return {
@@ -38,6 +48,8 @@ export async function listNotifications(userId: string, page: number, pageSize: 
       title: n.title,
       body: n.body,
       data: n.data as Record<string, unknown> | null,
+      tournamentEventType: n.tournamentEventType ?? null,
+      referenceId: n.referenceId ?? null,
       readAt: n.readAt?.toISOString() ?? null,
       createdAt: n.createdAt.toISOString(),
     })),
@@ -74,6 +86,22 @@ export async function deleteNotification(userId: string, notificationId: string)
 export async function deleteAllNotifications(userId: string) {
   return prisma.appNotification.deleteMany({
     where: { userId },
+  });
+}
+
+export async function markNotificationsReadByType(
+  userId: string,
+  tournamentEventType: string,
+  referenceId?: string,
+) {
+  const where: Prisma.AppNotificationWhereInput = {
+    userId,
+    tournamentEventType,
+    ...(referenceId ? { referenceId } : {}),
+  };
+  return prisma.appNotification.updateMany({
+    where,
+    data: { readAt: new Date() },
   });
 }
 

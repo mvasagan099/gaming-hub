@@ -2,7 +2,8 @@ import { createServer, type Server as HttpServer } from "node:http";
 import { Server, type Socket } from "socket.io";
 import { Redis } from "ioredis";
 import { createAdapter } from "@socket.io/redis-adapter";
-import { AppError } from "@gaming-hub/shared";
+import { AppError, getGameDefinition, isGameId } from "@gaming-hub/shared";
+import type { RoomStatus } from "@gaming-hub/shared";
 import type { ErrorCode } from "@gaming-hub/shared";
 import { matchmakingJoinSchema } from "@gaming-hub/shared";
 import type {
@@ -34,7 +35,16 @@ function toErrorPayload(error: unknown): SocketErrorPayload {
   return { code: "INTERNAL_ERROR", message: "An unexpected error occurred" };
 }
 
+let io!: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents>;
+
 async function main(): Promise<void> {
+  // Create Socket.IO server first so it's available for internal API handlers
+  io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents>(undefined as any, {
+    cors: { origin: parseOrigins(env.CORS_ORIGIN), credentials: true },
+    transports: ["websocket", "polling"],
+    maxHttpBufferSize: 32 * 1024,
+  });
+
   const httpServer: HttpServer = createServer((req, res) => {
     if (req.url === "/health/live" || req.url === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -43,7 +53,7 @@ async function main(): Promise<void> {
     }
     if (req.url === "/health/ready") {
       // Check framework health
-      const framework = MultiplayerFramework.getInstance({ io: null as unknown as Server });
+      const framework = MultiplayerFramework.getInstance({ io });
       const health = framework.isInitialized() ? { status: "ok" } : { status: "not_ready" };
       res.writeHead(health.status === "ok" ? 200 : 503, { "Content-Type": "application/json" });
       res.end(JSON.stringify(health));
@@ -86,15 +96,275 @@ async function main(): Promise<void> {
       });
       return;
     }
+
+    if (req.method === "POST" && req.url === "/internal/tournament/create-match") {
+      // Internal endpoint for creating tournament matches with metadata
+      if (req.headers["x-internal-key"] !== env.INTERNAL_API_KEY) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "UNAUTHORIZED" }));
+        return;
+      }
+      let body = "";
+      req.on("data", (chunk: Buffer) => {
+        body += chunk;
+        if (body.length > 32 * 1024) req.destroy();
+      });
+      req.on("end", async () => {
+        try {
+          const parsed = JSON.parse(body) as {
+            playerIds?: string[];
+            gameId?: string;
+            tournamentId?: string;
+            tournamentRoundId?: string;
+            tournamentMatchNumber?: number;
+          };
+          const playerIds = Array.isArray(parsed.playerIds) ? parsed.playerIds : [];
+          const gameId = typeof parsed.gameId === "string" ? parsed.gameId : "";
+          const tournamentId = typeof parsed.tournamentId === "string" ? parsed.tournamentId : "";
+          const tournamentRoundId = typeof parsed.tournamentRoundId === "string" ? parsed.tournamentRoundId : "";
+          const tournamentMatchNumber = typeof parsed.tournamentMatchNumber === "number" ? parsed.tournamentMatchNumber : 0;
+
+          if (playerIds.length !== 2 || !gameId || !tournamentId || !tournamentRoundId) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ ok: false, error: "VALIDATION_ERROR: playerIds (2), gameId, tournamentId, tournamentRoundId required" }));
+            return;
+          }
+
+          if (!isGameId(gameId)) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ ok: false, error: "VALIDATION_ERROR: Invalid gameId" }));
+            return;
+          }
+
+          // Get users and their sockets
+          const users: AuthenticatedUser[] = [];
+          const sockets: Socket[] = [];
+          for (const playerId of playerIds) {
+            // Find socket for user
+            let foundSocket: Socket | null = null;
+            for (const s of io.sockets.sockets.values()) {
+              if ((s.data as { userId?: string }).userId === playerId) {
+                foundSocket = s;
+                break;
+              }
+            }
+            if (!foundSocket) {
+              res.writeHead(400, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ ok: false, error: `Player ${playerId} not connected` }));
+              return;
+            }
+            const token = (foundSocket.handshake.auth as { token?: string })?.token ?? "";
+            const user = await authenticateToken(token);
+            users.push(user);
+            sockets.push(foundSocket);
+          }
+
+          // Create tournament match directly with prisma
+          const { prisma } = await import("@gaming-hub/db");
+          const { getGameDefinition } = await import("@gaming-hub/shared");
+          const { randomUUID } = await import("node:crypto");
+          const { createEngine, secureRandomSource } = await import("@gaming-hub/game-engine");
+          const { holdWagers } = await import("./apiClient");
+
+          const def = getGameDefinition(gameId);
+          const maxPlayers = def.maxPlayers;
+
+          // Leave any existing rooms
+          for (let i = 0; i < users.length; i++) {
+            const user = users[i];
+            const socket = sockets[i];
+            // Eject from existing rooms
+            const existingRoom = framework.roomManager.getPlayerRoom(user.userId);
+            if (existingRoom) {
+              await framework.roomManager.leaveRoom(existingRoom.id, user.userId, socket);
+            }
+          }
+
+          const roomId = randomUUID();
+          const code = Array.from({ length: 6 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
+          const now = Date.now();
+
+          // Tournament matches have 0 stake - entry fee already handled
+          const stake = 0;
+
+          // Include tournament metadata in room settings
+          const settings = {
+            tournamentId,
+            tournamentRoundId,
+            tournamentMatchNumber,
+            tournamentEntryHandled: true,
+          };
+
+          // Create room in database
+          await prisma.room.create({
+            data: {
+              id: roomId,
+              code,
+              gameId,
+              hostId: users[0].userId,
+              status: "WAITING",
+              isPrivate: true,
+              stake,
+              minPlayers: def.minPlayers,
+              maxPlayers,
+              settings: settings as any,
+            },
+          });
+          await prisma.roomPlayer.createMany({
+            data: users.map((user, index) => ({
+              roomId,
+              userId: user.userId,
+              seat: index,
+              isHost: index === 0,
+              isReady: true,
+              isSpectator: false,
+              connectionStatus: "CONNECTED",
+            })),
+          });
+
+          const matchId = randomUUID();
+
+          // Create match in database
+          await prisma.match.create({
+            data: {
+              id: matchId,
+              roomId,
+              gameId,
+              status: "CREATED",
+              winnerIds: [],
+              stake,
+            },
+          });
+          await prisma.matchPlayer.createMany({
+            data: users.map((user, index) => ({
+              matchId,
+              userId: user.userId,
+              seat: index,
+              result: "PENDING",
+            })),
+          });
+
+          // Create engine
+          const enginePlayers = users.map((user, index) => ({
+            userId: user.userId,
+            seat: index,
+          }));
+          const engine = createEngine(gameId, enginePlayers, secureRandomSource(), {});
+
+          // Create room config
+          const roomConfig = {
+            gameId,
+            isPrivate: true,
+            stake,
+            maxPlayers,
+            minPlayers: def.minPlayers,
+            password: null,
+            allowSpectators: true,
+            maxSpectators: framework.config.maxSpectators,
+            settings: {
+              rated: true,
+              turnTimerDurationMs: 0,
+              matchTimerDurationMs: 0,
+              reconnectGracePeriodMs: framework.config.reconnectGracePeriodMs,
+              afkTimeoutMs: framework.config.afkTimeoutMs,
+              allowRematch: false,
+              ...settings,
+            },
+          };
+
+          // Create room runtime
+          const roomRuntime = {
+            id: roomId,
+            code,
+            ioName: `room:${roomId}`,
+            config: roomConfig,
+            hostId: users[0].userId,
+            status: "waiting" as RoomStatus,
+            players: new Map(),
+            spectators: new Map(),
+            createdAt: now,
+            expiresAt: now + framework.config.roomExpirationMs,
+            locked: false,
+            match: {
+              matchId,
+              engine,
+              turnNumber: 0,
+              startedAt: now,
+              pausedAt: null,
+              pausedBy: null,
+              finishedAt: null,
+              winnerIds: [],
+              winnerSeats: [],
+              stateSnapshots: [{ turnNumber: 0, timestamp: now, state: engine.serialize() }],
+              actionHistory: [],
+            },
+            rematch: null,
+            chatHistory: [],
+            eventLog: [],
+          };
+
+          // Add players to room runtime
+          users.forEach((user, index) => {
+            const player = framework.playerManager.createPlayer({
+              id: user.userId,
+              userId: user.userId,
+              username: user.username,
+              displayName: user.displayName,
+              avatarUrl: user.avatarUrl,
+              seat: index,
+              isReady: true,
+              isHost: index === 0,
+              isSpectator: false,
+            }, sockets[index].id);
+            roomRuntime.players.set(user.userId, player);
+            sockets[index].join(roomRuntime.ioName);
+          });
+
+          // Store room
+          framework.roomManager.registerRoom(roomRuntime);
+
+          // Join sockets to room
+          sockets.forEach((socket) => socket.join(roomRuntime.ioName));
+
+          console.log("[TOURNAMENT] MATCH_CREATED", {
+            matchId,
+            tournamentId,
+            roundId: tournamentRoundId,
+            matchNumber: tournamentMatchNumber,
+            players: users.map((u) => u.userId),
+          });
+
+          // Emit match found event
+          framework.syncManager.broadcastToRoom(roomRuntime, "game:match-found", {
+            matchId,
+            roomId,
+            gameId,
+            entryFee: 0,
+            players: users.map((u, i) => ({
+              playerId: u.userId,
+              seat: i,
+              ready: true,
+            })),
+            status: "ready",
+          });
+          await framework.syncManager.broadcastRoomUpdate(roomRuntime);
+
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, roomId, matchId }));
+        } catch (error: any) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: false, error: error?.message || "INTERNAL_ERROR" }));
+        }
+      });
+      return;
+    }
+
     res.writeHead(404);
     res.end();
   });
 
-  const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents>(httpServer, {
-    cors: { origin: parseOrigins(env.CORS_ORIGIN), credentials: true },
-    transports: ["websocket", "polling"],
-    maxHttpBufferSize: 32 * 1024,
-  });
+  // Attach Socket.IO to HTTP server
+  io.attach(httpServer);
 
   if (env.REDIS_URL) {
     const pub = new Redis(env.REDIS_URL);
@@ -105,7 +375,7 @@ async function main(): Promise<void> {
 
   // Initialize Multiplayer Framework
   const framework = MultiplayerFramework.getInstance({
-    io,
+    io: io,
     reconnectGracePeriodMs: 90_000,
     afkTimeoutMs: 60_000,
     roomExpirationMs: 30 * 60 * 1000,

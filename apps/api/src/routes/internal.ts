@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { AppError } from "@gaming-hub/shared";
 import { env } from "../env";
-import { routeParams } from "../lib/http";
+import { routeParams, queryString } from "../lib/http";
 import { holdMatchWagers, settleMatch, GameCoinService } from "../services/settlement";
 import { processMatchResult } from "../services/tournamentEngine";
+import { TournamentMatchService } from "../services/tournamentMatchService";
 
 /**
  * Internal endpoints consumed only by the socket server. Protected by a shared
@@ -90,5 +91,21 @@ export async function internalRoutes(app: FastifyInstance) {
     });
 
     return { ok: true };
+  });
+
+  /**
+   * Get current tournament match for a player
+   */
+  app.get("/internal/tournament/:id/current-match", { config: { rateLimit: RATE_LIMIT } }, async (request) => {
+    const { id } = routeParams(request);
+    const query = request.query as { userId?: string };
+    const userId = query.userId ?? "";
+
+    if (!userId) {
+      throw new AppError("VALIDATION_ERROR", "userId query parameter is required", 422);
+    }
+
+    const match = await TournamentMatchService.getCurrentMatchForPlayer(id, userId);
+    return { ok: true, match };
   });
 }

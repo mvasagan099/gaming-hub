@@ -31,8 +31,14 @@ import type {
   SupportTicket,
   SystemMetrics,
   TicketMessage,
+  TournamentBracket,
+  TournamentCurrentMatchResponse,
   TournamentDetail,
+  TournamentHistoryEntry,
+  TournamentLeaderboardEntry,
   TournamentParticipationStat,
+  TournamentPlayerStats,
+  TournamentPlayerStatus,
   TournamentSummary,
   TransactionPage,
   UserAchievement,
@@ -90,6 +96,102 @@ interface PopularGameEntry {
 interface AdminTournament extends TournamentSummary {
   id: string;
   createdAt: string;
+}
+
+export interface AdminTournamentDetail {
+  id: string;
+  gameId: string;
+  title: string;
+  description: string;
+  format: string;
+  prizePool: number;
+  entryFee: number;
+  grossPool: number;
+  minPlayers: number;
+  maxPlayers: number;
+  status: string;
+  seedMethod: string;
+  startTime: string;
+  endTime: string | null;
+  registrationEndsAt: string | null;
+  settledAt: string | null;
+  stateVersion: number;
+  createdAt: string;
+  players: {
+    id: string;
+    userId: string;
+    seed: number | null;
+    finalRank: number | null;
+    eliminated: boolean;
+    eliminatedInRound: number | null;
+    registeredAt: string;
+    user: { id: string; username: string; displayName: string; avatarUrl: string | null };
+    prizes: { amount: number; rank: number; status: string }[];
+  }[];
+  prizes: { userId: string; rank: number; amount: number; status: string; paidAt: string | null }[];
+  rounds: {
+    id: string;
+    roundNumber: number;
+    matchNumber: number;
+    status: string;
+    isBye: boolean;
+    playerAId: string | null;
+    playerBId: string | null;
+    winnerId: string | null;
+    matchId: string | null;
+    playerAScore: number;
+    playerBScore: number;
+    scheduledAt: string | null;
+    completedAt: string | null;
+  }[];
+  _count: { players: number; rounds: number };
+}
+
+export interface AdminTournamentBracket {
+  tournamentId: string;
+  format: string;
+  totalRounds: number;
+  rounds: {
+    roundNumber: number;
+    slots: {
+      id: string;
+      roundNumber: number;
+      matchNumber: number;
+      status: string;
+      isBye: boolean;
+      playerAId: string | null;
+      playerBId: string | null;
+      winnerId: string | null;
+      matchId: string | null;
+      playerAScore: number;
+      playerBScore: number;
+      nextSlotId: string | null;
+      scheduledAt: string | null;
+      completedAt: string | null;
+    }[];
+  }[];
+}
+
+export interface TournamentHealthReport {
+  tournamentId: string;
+  status: string;
+  currentRound: number | null;
+  totalRounds: number;
+  activeMatches: number;
+  pendingMatches: number;
+  completedMatches: number;
+  missingMatches: number;
+  unprocessedResults: number;
+  settlementStatus: string;
+  health: 'HEALTHY' | 'WARNING' | 'ERROR';
+}
+
+export interface TournamentReconcileResult {
+  tournamentId: string;
+  status: string;
+  repaired: string[];
+  warnings: string[];
+  errors: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -183,6 +285,21 @@ export const tournamentsApi = {
   detail: (id: string) => apiClient.get<TournamentDetail>(`/tournaments/${id}`),
   register: (id: string) => apiClient.post<{ ok: boolean }>(`/tournaments/${id}/register`),
   cancel: (id: string) => apiClient.post<{ ok: boolean }>(`/tournaments/${id}/cancel`),
+  bracket: (id: string) => apiClient.get<TournamentBracket>(`/tournaments/${id}/bracket`),
+  myStatus: (id: string) => apiClient.get<TournamentPlayerStatus>(`/tournaments/${id}/my-status`),
+  state: (id: string) =>
+    apiClient.get<{ detail: TournamentDetail; bracket: TournamentBracket; myStatus: TournamentPlayerStatus }>(`/tournaments/${id}/state`),
+  currentMatch: (id: string) => apiClient.get<TournamentCurrentMatchResponse>(`/tournaments/${id}/current-match`),
+  history: (page = 1, pageSize = 20) =>
+    apiClient.get<Page<TournamentHistoryEntry>>(`/tournaments/history?page=${page}&pageSize=${pageSize}`),
+  stats: () => apiClient.get<TournamentPlayerStats>('/tournaments/stats'),
+  leaderboard: (params: { page?: number; pageSize?: number; period?: string } = {}) => {
+    const qs = new URLSearchParams();
+    qs.set('page', String(params.page ?? 1));
+    qs.set('pageSize', String(params.pageSize ?? 20));
+    if (params.period) qs.set('period', params.period);
+    return apiClient.get<Page<TournamentLeaderboardEntry>>(`/tournaments/leaderboard?${qs.toString()}`);
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -393,10 +510,25 @@ export const adminApi = {
     if (status) qs.set('status', status);
     return apiClient.get<Page<AdminTournament>>(`/admin/tournaments?${qs.toString()}`);
   },
+  tournamentDetail: (id: string) =>
+    apiClient.get<AdminTournamentDetail>(`/admin/tournaments/${id}`),
+  tournamentBracket: (id: string) =>
+    apiClient.get<AdminTournamentBracket>(`/admin/tournaments/${id}/bracket`),
+  tournamentHealth: (id: string) =>
+    apiClient.get<TournamentHealthReport>(`/admin/tournaments/${id}/health`),
+  tournamentReconcile: (id: string) =>
+    apiClient.post<TournamentReconcileResult>(`/admin/tournaments/${id}/reconcile`),
   createTournament: (input: Record<string, unknown>) => apiClient.post('/admin/tournaments', input),
   updateTournament: (id: string, input: Record<string, unknown>) => apiClient.patch(`/admin/tournaments/${id}`, input),
-  setTournamentStatus: (id: string, status: string) => apiClient.patch(`/admin/tournaments/${id}/status`, { status }),
   deleteTournament: (id: string) => apiClient.delete(`/admin/tournaments/${id}`),
+  openRegistration: (id: string) => apiClient.post(`/admin/tournaments/${id}/open-registration`),
+  closeRegistration: (id: string) => apiClient.post(`/admin/tournaments/${id}/close-registration`),
+  startTournament: (id: string) => apiClient.post(`/admin/tournaments/${id}/start`),
+  pauseTournament: (id: string) => apiClient.post(`/admin/tournaments/${id}/pause`),
+  resumeTournament: (id: string) => apiClient.post(`/admin/tournaments/${id}/resume`),
+  cancelTournament: (id: string, reason?: string) =>
+    apiClient.post(`/admin/tournaments/${id}/cancel`, { reason }),
+  settleTournament: (id: string) => apiClient.post(`/admin/tournaments/${id}/settle`),
 
   coupons: (page = 1, pageSize = 50, status?: string) => {
     const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });

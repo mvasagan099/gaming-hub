@@ -1,42 +1,88 @@
-import { useEffect, useState } from 'react';
-import { Trophy, Users, Swords, CalendarClock } from 'lucide-react';
-import { tournamentsApi } from '../../services/api/enterprise';
+import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Trophy, Users, Swords, CalendarClock, Search, Filter, Loader2 } from 'lucide-react';
 import { GAME_DEFINITIONS } from '@gaming-hub/shared';
-import type { TournamentDetail, TournamentFormat, TournamentStatus, TournamentSummary } from '@gaming-hub/shared';
+import type { TournamentFormat, TournamentStatus, GameId } from '@gaming-hub/shared';
+import { tournamentsApi } from '../../services/api/enterprise';
+import type { TournamentSummary } from '@gaming-hub/shared';
 import { Skeleton } from '../../components/Skeleton';
 import { Button } from '../../components/ui/Button';
+import { Badge } from '../../components/ui/Badge';
+import { EmptyState } from '../../components/EmptyState';
 
-const STATUS_STYLES: Record<TournamentStatus, string> = {
-  UPCOMING: 'bg-blue-500/10 text-blue-600',
-  LIVE: 'bg-green-500/10 text-green-600',
-  ENDED: 'bg-gray-500/10 text-gray-600',
-  CANCELLED: 'bg-red-500/10 text-red-600',
+const gameById = new Map(GAME_DEFINITIONS.map((g) => [g.id, g]));
+
+const STATUS_BADGE: Record<string, { variant: 'success' | 'warning' | 'danger' | 'accent' | 'default' | 'outline'; label: string }> = {
+  UPCOMING: { variant: 'default', label: 'Upcoming' },
+  LIVE: { variant: 'success', label: 'Live' },
+  ENDED: { variant: 'outline', label: 'Ended' },
+  CANCELLED: { variant: 'danger', label: 'Cancelled' },
+  DRAFT: { variant: 'outline', label: 'Draft' },
+  REGISTRATION_OPEN: { variant: 'accent', label: 'Registration Open' },
+  REGISTRATION_CLOSED: { variant: 'default', label: 'Registration Closed' },
+  STARTING: { variant: 'warning', label: 'Starting Soon' },
+  IN_PROGRESS: { variant: 'success', label: 'In Progress' },
+  COMPLETED: { variant: 'accent', label: 'Completed' },
+  SETTLING: { variant: 'warning', label: 'Settling' },
+  SETTLED: { variant: 'success', label: 'Settled' },
+  PAUSED: { variant: 'warning', label: 'Paused' },
 };
 
-const FORMAT_LABELS: Record<TournamentFormat, string> = {
+const STATUS_FILTERS = [
+  { value: '', label: 'ALL' },
+  { value: 'REGISTRATION_OPEN', label: 'OPEN' },
+  { value: 'UPCOMING', label: 'UPCOMING' },
+  { value: 'IN_PROGRESS', label: 'LIVE' },
+  { value: 'COMPLETED', label: 'COMPLETED' },
+  { value: 'SETTLED', label: 'SETTLED' },
+] as const;
+
+const FORMAT_LABELS: Record<string, string> = {
+  SINGLE_ELIMINATION: 'Single Elim',
   BRACKET: 'Bracket',
   KNOCKOUT: 'Knockout',
   ROUND_ROBIN: 'Round Robin',
   SWISS: 'Swiss',
+  DOUBLE_ELIMINATION: 'Double Elim',
 };
 
-const gameById = new Map(GAME_DEFINITIONS.map((g) => [g.id, g]));
+function formatRelativeTime(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diff = d.getTime() - now.getTime();
+  if (diff < 0) return 'Started';
+  const hours = Math.floor(diff / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  if (hours > 24) return `${Math.floor(hours / 24)}d`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
 
-export const TournamentsPage: React.FC = () => {
+export function TournamentsPage() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<TournamentSummary[]>([]);
-  const [detail, setDetail] = useState<TournamentDetail | null>(null);
-  const [filter, setFilter] = useState<'UPCOMING' | 'LIVE' | 'ENDED' | ''>('UPCOMING');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [gameFilter, setGameFilter] = useState('');
+  const [formatFilter, setFormatFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 24;
 
-  const load = async () => {
+  const load = async (p = page) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await tournamentsApi.list({ pageSize: 100, status: filter || undefined });
+      const data = await tournamentsApi.list({
+        page: p,
+        pageSize,
+        status: statusFilter || undefined,
+        gameId: gameFilter || undefined,
+      });
       setItems(data.items);
+      setTotal(data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load tournaments');
     } finally {
@@ -45,229 +91,209 @@ export const TournamentsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    load();
-  }, [filter]);
+    setPage(1);
+    load(1);
+  }, [statusFilter, gameFilter]);
 
-  const openDetail = async (id: string) => {
-    setActionError(null);
-    try {
-      const d = await tournamentsApi.detail(id);
-      setDetail(d);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to load tournament');
-    }
-  };
+  const filtered = useMemo(() => {
+    if (!search) return items;
+    const q = search.toLowerCase();
+    return items.filter((t) => t.title.toLowerCase().includes(q) || t.id.toLowerCase().includes(q));
+  }, [items, search]);
 
-  const handleRegister = async () => {
-    if (!detail) return;
-    setSubmitting(true);
-    setActionError(null);
-    try {
-      await tournamentsApi.register(detail.id);
-      const d = await tournamentsApi.detail(detail.id);
-      setDetail(d);
-      await load();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to register');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleCancel = async () => {
-    if (!detail) return;
-    setSubmitting(true);
-    setActionError(null);
-    try {
-      await tournamentsApi.cancel(detail.id);
-      const d = await tournamentsApi.detail(detail.id);
-      setDetail(d);
-      await load();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to cancel registration');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-8 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white">Tournaments</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Compete for prize pools across your favorite games.
-          </p>
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-black text-slate-900 dark:text-white">Tournaments</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          Compete for prize pools across your favorite games.
+        </p>
+      </div>
+
+      {error && (
+        <div className="mb-4 rounded-2xl border border-rose-500/50 bg-rose-500/10 p-4 text-sm text-rose-600">
+          {error}
         </div>
-        <div className="flex gap-1 rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
-          {(['UPCOMING', 'LIVE', 'ENDED', ''] as const).map((f) => (
+      )}
+
+      {/* Filters */}
+      <div className="mb-6 space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search tournaments..."
+              className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-4 text-sm outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            />
+          </div>
+          <select
+            value={gameFilter}
+            onChange={(e) => setGameFilter(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+          >
+            <option value="">All Games</option>
+            {GAME_DEFINITIONS.map((g) => (
+              <option key={g.id} value={g.id}>{g.icon} {g.name}</option>
+            ))}
+          </select>
+          <select
+            value={formatFilter}
+            onChange={(e) => setFormatFilter(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+          >
+            <option value="">All Formats</option>
+            {Object.entries(FORMAT_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Status pills */}
+        <div className="flex flex-wrap gap-1.5">
+          {STATUS_FILTERS.map((f) => (
             <button
-              key={f || 'ALL'}
-              onClick={() => setFilter(f)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
-                filter === f ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow' : 'text-slate-500 dark:text-slate-400'
+              key={f.value || 'ALL'}
+              onClick={() => setStatusFilter(f.value)}
+              className={`rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+                statusFilter === f.value
+                  ? 'bg-indigo-500 text-white shadow'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
               }`}
             >
-              {f || 'ALL'}
+              {f.label}
             </button>
           ))}
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-2xl border border-red-500/50 bg-red-500/10 p-4 text-sm text-red-600">{error}</div>
-      )}
-
+      {/* Content */}
       {loading ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          <Skeleton className="h-48 w-full" />
-          <Skeleton className="h-48 w-full" />
-        </div>
-      ) : items.length === 0 ? (
-        <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-10 text-center">
-          <Trophy className="mx-auto h-8 w-8 text-slate-400" />
-          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">No tournaments found.</p>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {items.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => void openDetail(t.id)}
-              className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-6 text-left hover:border-indigo-500/40 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">{gameById.get(t.gameId)?.icon ?? '🏆'}</span>
-                  <div>
-                    <h2 className="text-sm font-black text-slate-900 dark:text-white">{t.title}</h2>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {gameById.get(t.gameId)?.name ?? t.gameId} · {FORMAT_LABELS[t.format]}
-                    </p>
-                  </div>
-                </div>
-                <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${STATUS_STYLES[t.status]}`}>
-                  {t.status}
-                </span>
-              </div>
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/80 p-2">
-                  <p className="text-base font-black text-amber-500">🪙 {t.prizePool.toLocaleString()}</p>
-                  <p className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold uppercase">Prize pool</p>
-                </div>
-                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/80 p-2">
-                  <p className="text-base font-black text-slate-900 dark:text-white">{t.entryFee}</p>
-                  <p className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold uppercase">Entry</p>
-                </div>
-                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/80 p-2">
-                  <p className="text-base font-black text-slate-900 dark:text-white">
-                    {t.registeredCount}/{t.maxPlayers}
-                  </p>
-                  <p className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold uppercase">Players</p>
-                </div>
-              </div>
-              <div className="mt-3 flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
-                <CalendarClock className="h-3.5 w-3.5" />
-                {new Date(t.startTime).toLocaleString()}
-              </div>
-            </button>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-52 w-full rounded-2xl" />
           ))}
         </div>
-      )}
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={<Trophy className="size-7" />}
+          title="No tournaments found"
+          description={search ? 'Try adjusting your search or filters.' : 'Check back later for new tournaments.'}
+        />
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((t) => (
+              <TournamentCard key={t.id} tournament={t} onClick={() => navigate(`/tournaments/${t.id}`)} />
+            ))}
+          </div>
 
-      {detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDetail(null)}>
-          <div
-            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white">{detail.title}</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {gameById.get(detail.gameId)?.name ?? detail.gameId} · {FORMAT_LABELS[detail.format]} ·{' '}
-                  {new Date(detail.startTime).toLocaleString()}
-                </p>
-              </div>
-              <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${STATUS_STYLES[detail.status]}`}>
-                {detail.status}
+          {totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => { setPage(page - 1); load(page - 1); }}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-slate-500">
+                Page {page} / {totalPages}
               </span>
-            </div>
-
-            {detail.description && (
-              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{detail.description}</p>
-            )}
-
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <div className="rounded-xl bg-slate-50 dark:bg-slate-800/80 p-3 text-center">
-                <p className="text-xl font-black text-amber-500">🪙 {detail.prizePool.toLocaleString()}</p>
-                <p className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold uppercase">Prize pool</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 dark:bg-slate-800/80 p-3 text-center">
-                <p className="text-xl font-black text-slate-900 dark:text-white">{detail.entryFee}</p>
-                <p className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold uppercase">Entry fee</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 dark:bg-slate-800/80 p-3 text-center">
-                <p className="text-xl font-black text-slate-900 dark:text-white">
-                  {detail.registeredCount}/{detail.maxPlayers}
-                </p>
-                <p className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold uppercase">Players</p>
-              </div>
-            </div>
-
-            <div className="mt-5">
-              <h3 className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900 dark:text-white">
-                <Users size={14} /> Registered players
-              </h3>
-              {detail.players.length === 0 ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400">No players registered yet.</p>
-              ) : (
-                <ul className="max-h-40 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-800">
-                  {detail.players.map((p) => (
-                    <li key={p.userId} className="flex items-center gap-2 px-3 py-2">
-                      <span className="text-sm">{p.seed ? `#${p.seed}` : '·'}</span>
-                      <span className="flex-1 text-sm font-semibold text-slate-900 dark:text-white">{p.displayName}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {actionError && (
-              <div className="mt-4 rounded-xl border border-red-500/50 bg-red-500/10 p-3 text-xs text-red-600">
-                {actionError}
-              </div>
-            )}
-
-            <div className="mt-5 flex gap-2">
-              {detail.status === 'UPCOMING' && !detail.registered && (
-                <Button
-                  variant="primary"
-                  onClick={() => void handleRegister()}
-                  disabled={submitting || detail.registeredCount >= detail.maxPlayers}
-                >
-                  <Swords className="mr-1.5 h-4 w-4" />
-                  {submitting ? 'Registering...' : 'Register'}
-                </Button>
-              )}
-              {detail.registered && detail.status === 'UPCOMING' && (
-                <Button variant="outline" onClick={() => void handleCancel()} disabled={submitting}>
-                  {submitting ? 'Cancelling...' : 'Cancel registration'}
-                </Button>
-              )}
-              {detail.registered && detail.status !== 'UPCOMING' && (
-                <span className="rounded-xl bg-green-500/10 px-3 py-2 text-xs font-bold text-green-600">Registered</span>
-              )}
-              {detail.status === 'UPCOMING' && detail.registeredCount >= detail.maxPlayers && !detail.registered && (
-                <span className="rounded-xl bg-red-500/10 px-3 py-2 text-xs font-bold text-red-600">Full</span>
-              )}
-              <Button variant="ghost" onClick={() => setDetail(null)}>
-                Close
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => { setPage(page + 1); load(page + 1); }}
+              >
+                Next
               </Button>
             </div>
-          </div>
-        </div>
+          )}
+        </>
       )}
     </div>
   );
-};
+}
+
+function TournamentCard({
+  tournament: t,
+  onClick,
+}: {
+  tournament: TournamentSummary;
+  onClick: () => void;
+}) {
+  const game = gameById.get(t.gameId);
+  const statusInfo = STATUS_BADGE[t.status] ?? { variant: 'outline' as const, label: t.status };
+  const isRegOpen = t.status === 'REGISTRATION_OPEN';
+  const isFull = t.registeredCount >= t.maxPlayers;
+
+  return (
+    <button
+      onClick={onClick}
+      className="group rounded-2xl border border-slate-200 bg-white p-5 text-left transition-all hover:border-indigo-400 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-indigo-500"
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <span className="text-2xl">{game?.icon ?? '🏆'}</span>
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-black text-slate-900 dark:text-white">{t.title}</h3>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              {game?.name ?? t.gameId} · {FORMAT_LABELS[t.format] ?? t.format}
+            </p>
+          </div>
+        </div>
+        <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+      </div>
+
+      {/* Stats */}
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/80">
+          <p className="text-base font-black text-amber-500">🪙 {t.prizePool.toLocaleString()}</p>
+          <p className="text-[9px] font-semibold uppercase text-slate-500 dark:text-slate-400">Prize Pool</p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/80">
+          <p className="text-base font-black text-slate-900 dark:text-white">{t.entryFee.toLocaleString()}</p>
+          <p className="text-[9px] font-semibold uppercase text-slate-500 dark:text-slate-400">Entry</p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/80">
+          <p className="text-base font-black text-slate-900 dark:text-white">
+            {t.registeredCount}<span className="text-sm text-slate-400">/{t.maxPlayers}</span>
+          </p>
+          <p className="text-[9px] font-semibold uppercase text-slate-500 dark:text-slate-400">Players</p>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="mt-3 flex items-center justify-between">
+        <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+          <CalendarClock className="size-3.5" />
+          {isRegOpen ? (
+            <span>Closes in {formatRelativeTime(t.registrationEndsAt ?? t.startTime)}</span>
+          ) : t.status === 'IN_PROGRESS' || t.status === 'LIVE' ? (
+            <span className="font-medium text-emerald-600 dark:text-emerald-400">In Progress</span>
+          ) : (
+            <span>{new Date(t.startTime).toLocaleDateString()}</span>
+          )}
+        </div>
+        {isRegOpen && !isFull && (
+          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+            JOIN NOW
+          </span>
+        )}
+        {isRegOpen && isFull && (
+          <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-400">
+            FULL
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}

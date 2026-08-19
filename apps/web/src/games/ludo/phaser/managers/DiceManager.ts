@@ -1,26 +1,28 @@
 import Phaser from "phaser";
 import { LudoEvents } from "../events/LudoEvents";
+import { ANIM, animDuration, prefersReducedMotion } from "../constants";
 
 const DOT_PATTERNS: Array<Array<[number, number]>> = [
   /* 1 */ [[0, 0]],
-  /* 2 */ [[-10, -10], [10, 10]],
-  /* 3 */ [[-10, -10], [0, 0], [10, 10]],
-  /* 4 */ [[-10, -10], [10, -10], [-10, 10], [10, 10]],
-  /* 5 */ [[-10, -10], [10, -10], [0, 0], [-10, 10], [10, 10]],
-  /* 6 */ [[-10, -12], [10, -12], [-10, 0], [10, 0], [-10, 12], [10, 12]],
+  /* 2 */ [[-12, -12], [12, 12]],
+  /* 3 */ [[-12, -12], [0, 0], [12, 12]],
+  /* 4 */ [[-12, -12], [12, -12], [-12, 12], [12, 12]],
+  /* 5 */ [[-12, -12], [12, -12], [0, 0], [-12, 12], [12, 12]],
+  /* 6 */ [[-12, -14], [12, -14], [-12, 0], [12, 0], [-12, 14], [12, 14]],
 ];
 
 export default class DiceManager {
-  private scene:        Phaser.Scene;
-  private container!:  Phaser.GameObjects.Container;
-  private diceGfx!:    Phaser.GameObjects.Graphics;
-  private hitArea!:    Phaser.GameObjects.Rectangle;
-  private rollBtn!:    Phaser.GameObjects.Rectangle;
-  private rollLabel!:  Phaser.GameObjects.Text;
+  private scene: Phaser.Scene;
+  private container!: Phaser.GameObjects.Container;
+  private diceGfx!: Phaser.GameObjects.Graphics;
+  private hitArea!: Phaser.GameObjects.Rectangle;
+  private rollBtn!: Phaser.GameObjects.Rectangle;
+  private rollBtnStroke!: Phaser.GameObjects.Rectangle;
+  private rollLabel!: Phaser.GameObjects.Text;
 
-  private value      = 1;
-  private rolling    = false;
-  private enabled    = true;
+  private value = 1;
+  private rolling = false;
+  private enabled = true;
   private selectMode = false;
   private onRollCb: (() => void) | null = null;
   private onRollCompleteCb: (() => void) | null = null;
@@ -33,29 +35,43 @@ export default class DiceManager {
     this.diceGfx = this.scene.add.graphics();
     this.drawFace(this.value);
 
-    // Invisible click target on the dice face
-    this.hitArea = this.scene.add.rectangle(0, -16, 66, 66, 0xffffff, 0);
+    // Invisible click target — larger for easier tapping
+    this.hitArea = this.scene.add.rectangle(0, -18, 74, 74, 0xffffff, 0);
     this.hitArea.setInteractive({ useHandCursor: true });
     this.hitArea.on("pointerdown", () => this.handlePointerDown());
-    this.hitArea.on("pointerover", () => { if (this.enabled) this.scene.tweens.add({ targets: this.container, scale: 1.05, duration: 100 }); });
-    this.hitArea.on("pointerout",  () => { this.scene.tweens.add({ targets: this.container, scale: 1.0,  duration: 100 }); });
+    this.hitArea.on("pointerover", () => {
+      if (this.enabled) this.scene.tweens.add({ targets: this.container, scaleX: 1.06, scaleY: 1.06, duration: 100 });
+    });
+    this.hitArea.on("pointerout", () => {
+      this.scene.tweens.add({ targets: this.container, scaleX: 1, scaleY: 1, duration: 100 });
+    });
 
-    // Roll button
-    this.rollBtn = this.scene.add.rectangle(0, 44, 160, 38, 0x7c3aed);
+    // Modern rounded button with shadow
+    const btnW = 164;
+    const btnH = 40;
+    const btnY = 46;
+
+    // Button shadow
+    const btnShadow = this.scene.add.rectangle(2, btnY + 2, btnW, btnH, 0x000000, 0.2);
+    btnShadow.setStrokeStyle(0);
+
+    // Button background
+    this.rollBtn = this.scene.add.rectangle(0, btnY, btnW, btnH, 0x7c3aed);
     this.rollBtn.setStrokeStyle(2, 0xa78bfa);
     this.rollBtn.setInteractive({ useHandCursor: true });
     this.rollBtn.on("pointerdown", () => this.handlePointerDown());
     this.rollBtn.on("pointerover", () => { if (this.enabled) this.rollBtn.setFillStyle(0x6d28d9); });
-    this.rollBtn.on("pointerout",  () => { this.rollBtn.setFillStyle(0x7c3aed); });
+    this.rollBtn.on("pointerout", () => { this.rollBtn.setFillStyle(0x7c3aed); });
 
-    this.rollLabel = this.scene.add.text(0, 44, "🎲  ROLL DICE", {
-      fontSize:   "13px",
-      color:      "#ffffff",
+    this.rollLabel = this.scene.add.text(0, btnY, "ROLL DICE", {
+      fontSize: "13px",
+      color: "#ffffff",
       fontFamily: "Outfit, sans-serif",
-      fontStyle:  "bold",
+      fontStyle: "bold",
     }).setOrigin(0.5);
 
     this.container = this.scene.add.container(x, y, [
+      btnShadow,
       this.diceGfx,
       this.hitArea,
       this.rollBtn,
@@ -76,25 +92,39 @@ export default class DiceManager {
 
   private drawFace(face: number, highlighted = false): void {
     this.diceGfx.clear();
-    const s = 30; const r = 8;
-    const borderColor = highlighted ? 0xf59e0b : 0x1e293b;
+    const s = 33;
+    const r = 10;
+    const dotR = 5.5;
 
+    // Drop shadow
+    this.diceGfx.fillStyle(0x000000, 0.12);
+    this.diceGfx.fillRoundedRect(-s + 3, -s - 18 + 3, s * 2, s * 2, r);
+
+    // Main face
     this.diceGfx.fillStyle(0xffffff, 1);
-    this.diceGfx.fillRoundedRect(-s, -s - 16, s * 2, s * 2, r);
-    this.diceGfx.lineStyle(highlighted ? 3 : 2, borderColor, 1);
-    this.diceGfx.strokeRoundedRect(-s, -s - 16, s * 2, s * 2, r);
+    this.diceGfx.fillRoundedRect(-s, -s - 18, s * 2, s * 2, r);
 
+    // Inner subtle gradient line at top
+    this.diceGfx.fillStyle(0xf1f5f9, 0.6);
+    this.diceGfx.fillRoundedRect(-s, -s - 18, s * 2, 4, { tl: r, tr: r, bl: 0, br: 0 });
+
+    // Border
+    const borderColor = highlighted ? 0xf59e0b : 0x1e293b;
+    this.diceGfx.lineStyle(highlighted ? 3 : 2, borderColor, 1);
+    this.diceGfx.strokeRoundedRect(-s, -s - 18, s * 2, s * 2, r);
+
+    // Dots
     const clamp = Math.max(1, Math.min(face, 6));
-    const dots  = DOT_PATTERNS[clamp - 1] ?? DOT_PATTERNS[0];
+    const dots = DOT_PATTERNS[clamp - 1] ?? DOT_PATTERNS[0];
     this.diceGfx.fillStyle(0x1e293b, 1);
     for (const [dx, dy] of dots) {
-      this.diceGfx.fillCircle(dx, dy - 16, 5);
+      this.diceGfx.fillCircle(dx, dy - 18, dotR);
     }
   }
 
   // ─── State control ─────────────────────────────────────────────────────────────
 
-  enable(label = "🎲  ROLL DICE"): void {
+  enable(label = "ROLL DICE"): void {
     this.enabled = true;
     this.selectMode = false;
     this.rollBtn.setFillStyle(0x7c3aed).setAlpha(1);
@@ -106,71 +136,56 @@ export default class DiceManager {
   disable(): void {
     this.enabled = false;
     this.selectMode = false;
-    this.rollBtn.setFillStyle(0x1e293b).setAlpha(0.6);
+    this.rollBtn.setFillStyle(0x1e293b).setAlpha(0.55);
     if (this.rollBtn?.input) this.rollBtn.disableInteractive();
     if (this.hitArea?.input) this.hitArea.disableInteractive();
-    this.rollLabel.setAlpha(0.5);
+    this.rollLabel.setAlpha(0.45);
   }
 
-  /** Show "waiting" state visually without blocking rollForAI() */
   setWaiting(label: string): void {
     this.enabled = false;
     this.selectMode = false;
-    this.rollBtn.setFillStyle(0x1e293b).setAlpha(0.6);
+    this.rollBtn.setFillStyle(0x1e293b).setAlpha(0.55);
     if (this.rollBtn?.input) this.rollBtn.disableInteractive();
     if (this.hitArea?.input) this.hitArea.disableInteractive();
-    this.rollLabel.setText(label).setAlpha(0.7);
+    this.rollLabel.setText(label).setAlpha(0.65);
   }
 
-  /** Show prompt to select a token (after rolling, multiple moves available) */
   setSelectMode(): void {
     this.enabled = false;
     this.selectMode = true;
     this.rollBtn.setFillStyle(0xd97706).setAlpha(1);
     this.rollBtn.setInteractive({ useHandCursor: true });
     this.hitArea.setInteractive({ useHandCursor: true });
-    this.rollLabel.setText("👇 SELECT TOKEN").setAlpha(1);
+    this.rollLabel.setText("SELECT TOKEN").setAlpha(1);
   }
 
   private flashSelectHint(): void {
     this.scene.tweens.add({
       targets: this.container,
-      scale: 1.12,
-      duration: 90,
+      scaleX: 1.14,
+      scaleY: 1.14,
+      duration: animDuration(80),
       yoyo: true,
       ease: "Sine.InOut",
     });
   }
 
-  /** Override the roll button label without changing enabled state. */
   setPrompt(label: string): void {
     this.rollLabel.setText(label);
-    if (this.enabled) {
-      this.rollLabel.setAlpha(1);
-    } else {
-      this.rollLabel.setAlpha(0.7);
-    }
+    this.rollLabel.setAlpha(this.enabled ? 1 : 0.65);
   }
 
-  /**
-   * Hook for the online driver: when set, clicking the dice/button forwards
-   * to the callback instead of rolling locally (server-authoritative).
-   */
   setOnRoll(cb: (() => void) | null): void {
     this.onRollCb = cb;
   }
 
-  /** Instantly display a value without animation (reconnect / remote sync). */
   setValue(value: number): void {
     const clamped = Math.max(1, Math.min(6, value));
     this.value = clamped;
     this.drawFace(clamped, clamped === 6);
   }
 
-  /**
-   * Play the roll animation but settle on the given authoritative value.
-   * Used when a `game:state` broadcast reports a server-side roll.
-   */
   rollTo(value: number, onComplete?: () => void): void {
     this.rolling = false;
     this.onRollCompleteCb = onComplete ?? null;
@@ -179,7 +194,6 @@ export default class DiceManager {
 
   // ─── Roll ─────────────────────────────────────────────────────────────────────
 
-  /** Human click — requires enabled state */
   roll(): void {
     if (this.rolling || !this.enabled) return;
     if (this.onRollCb) {
@@ -189,7 +203,6 @@ export default class DiceManager {
     this.startRoll();
   }
 
-  /** AI-triggered roll — bypasses enabled guard */
   rollForAI(): void {
     if (this.rolling) return;
     this.startRoll();
@@ -200,21 +213,29 @@ export default class DiceManager {
     this.disable();
     this.scene.events.emit(LudoEvents.DICE_ROLL_STARTED);
 
+    const reduced = prefersReducedMotion();
     let count = 0;
-    const totalFrames = 12;
+    const totalFrames = reduced ? 4 : ANIM.diceRollFrames;
 
     const tick = () => {
       count++;
       const temp = Phaser.Math.Between(1, 6);
       this.drawFace(temp);
-      this.scene.tweens.add({
-        targets:  this.container,
-        scale:    count % 2 === 0 ? 1.1 : 0.95,
-        duration: 55,
-        ease:     "Sine.InOut",
-      });
+
+      // Rotation shake during roll
+      if (!reduced) {
+        this.scene.tweens.add({
+          targets: this.container,
+          scaleX: count % 2 === 0 ? 1.08 : 0.95,
+          scaleY: count % 2 === 0 ? 0.95 : 1.08,
+          angle: count % 2 === 0 ? ANIM.diceRotationAmount * 180 : -ANIM.diceRotationAmount * 180,
+          duration: animDuration(ANIM.diceFrameDelay),
+          ease: "Sine.InOut",
+        });
+      }
+
       if (count < totalFrames) {
-        this.scene.time.delayedCall(65, tick);
+        this.scene.time.delayedCall(animDuration(ANIM.diceFrameDelay), tick);
       } else {
         this.finishRoll(finalValue);
       }
@@ -227,14 +248,17 @@ export default class DiceManager {
     const isSix = this.value === 6;
     this.drawFace(this.value, isSix);
 
+    // Landing bounce with scale pop
     this.scene.tweens.add({
-      targets:  this.container,
-      scale:    1.2,
-      duration: 120,
-      ease:     "Back.Out",
-      yoyo:     true,
+      targets: this.container,
+      scaleX: ANIM.diceLandingScale,
+      scaleY: ANIM.diceLandingScale,
+      angle: 0,
+      duration: animDuration(ANIM.diceLandingDuration),
+      ease: "Back.Out",
+      yoyo: true,
       onComplete: () => {
-        this.container.setScale(1);
+        this.container.setScale(1).setAngle(0);
         this.rolling = false;
         this.scene.events.emit(LudoEvents.DICE_ROLLED, this.value);
         if (this.onRollCompleteCb) {

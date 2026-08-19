@@ -9,7 +9,8 @@ export type JobName =
   | "update-tournament-statuses"
   | "revoke-expired-sessions"
   | "cleanup-search-history"
-  | "cleanup-error-events";
+  | "cleanup-error-events"
+  | "tournament-scheduler";
 
 const JOB_LABELS: Record<JobName, string> = {
   "cleanup-expired-coupons": "Mark expired coupons",
@@ -18,6 +19,7 @@ const JOB_LABELS: Record<JobName, string> = {
   "revoke-expired-sessions": "Revoke stale login sessions",
   "cleanup-search-history": "Prune old search history",
   "cleanup-error-events": "Purge resolved error events",
+  "tournament-scheduler": "Tournament recovery & reconciliation",
 };
 
 type JobResult = {
@@ -84,6 +86,35 @@ async function runCleanupErrorEvents(): Promise<JobResult> {
   return { processed: result.count };
 }
 
+async function runTournamentSchedulerJob(): Promise<JobResult> {
+  const { runTournamentScheduler } = await import("./tournamentScheduler");
+  const result = await runTournamentScheduler();
+  const processed =
+    result.registrationsClosed +
+    result.tournamentsStarted +
+    result.matchesRecovered +
+    result.resultsRecovered +
+    result.byesRecovered +
+    result.nextRoundMatchesRecovered +
+    result.settlementsRetried;
+  return {
+    processed,
+    details: {
+      registrationsClosed: result.registrationsClosed,
+      tournamentsStarted: result.tournamentsStarted,
+      matchesRecovered: result.matchesRecovered,
+      resultsRecovered: result.resultsRecovered,
+      byesRecovered: result.byesRecovered,
+      nextRoundMatchesRecovered: result.nextRoundMatchesRecovered,
+      staleMatchesDetected: result.staleMatchesDetected,
+      settlementsRetried: result.settlementsRetried,
+      referencesCleaned: result.referencesChecked.cleaned,
+      inconsistencies: result.referencesChecked.inconsistencies,
+      errors: result.errors,
+    },
+  };
+}
+
 const JOB_RUNNERS: Record<JobName, () => Promise<JobResult>> = {
   "cleanup-expired-coupons": runCleanupExpiredCoupons,
   "cleanup-expired-announcements": runCleanupExpiredAnnouncements,
@@ -91,6 +122,7 @@ const JOB_RUNNERS: Record<JobName, () => Promise<JobResult>> = {
   "revoke-expired-sessions": runRevokeExpiredSessions,
   "cleanup-search-history": runCleanupSearchHistory,
   "cleanup-error-events": runCleanupErrorEvents,
+  "tournament-scheduler": runTournamentSchedulerJob,
 };
 
 export function getJobList() {
@@ -152,6 +184,7 @@ export async function runScheduledJobs(): Promise<void> {
   await runJob("update-tournament-statuses").catch(() => undefined);
   await runJob("cleanup-expired-coupons").catch(() => undefined);
   await runJob("cleanup-search-history").catch(() => undefined);
+  await runJob("tournament-scheduler").catch(() => undefined);
 }
 
 export async function listJobRuns(page: number, pageSize: number) {

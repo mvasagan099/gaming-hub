@@ -10,7 +10,10 @@ import { HUDManager } from "../managers/HUDManager";
 import { AudioManager } from "../managers/AudioManager";
 import { ParticleManager } from "../managers/ParticleManager";
 import WinnerPopup from "../ui/WinnerPopup";
+import { FeedbackText } from "../ui/FeedbackText";
+import { CountdownOverlay } from "../ui/CountdownOverlay";
 import { GameEvents } from "../events/GameEvents";
+import { ANIM, animDuration, prefersReducedMotion } from "../constants";
 import type { MoveHistoryEntry } from "../managers/GameManager";
 
 export default class SnakeLadderScene extends Phaser.Scene {
@@ -25,23 +28,26 @@ export default class SnakeLadderScene extends Phaser.Scene {
   private audio!: AudioManager;
   private particles!: ParticleManager;
   private winnerPopup!: WinnerPopup;
+  private feedback!: FeedbackText;
+  private countdown!: CountdownOverlay;
 
   constructor() {
     super("SnakeLadderScene");
   }
 
   create(): void {
-    const mode  = (this.registry.get("mode")  as "ai" | "pvp") ?? "ai";
+    const mode = (this.registry.get("mode") as "ai" | "pvp") ?? "ai";
     const count = (this.registry.get("players") as number) ?? 2;
     const mySeat = (this.registry.get("seat") as number | null | undefined) ?? null;
     const names = (this.registry.get("names") as string[] | undefined) ?? [];
+    const reduced = prefersReducedMotion();
 
     // ── 1. Board (depth 0–3) ─────────────────────────────────────────────
     this.board = new BoardManager(this, 680);
     this.board.drawBoard();
 
     // ── 2. Snakes & Ladders (depth 4–5) ─────────────────────────────────
-    this.snakeManager  = new SnakeManager();
+    this.snakeManager = new SnakeManager();
     this.ladderManager = new LadderManager();
     this.snakeManager.drawSnakes(this, this.board);
     this.ladderManager.drawLadders(this, this.board);
@@ -54,49 +60,76 @@ export default class SnakeLadderScene extends Phaser.Scene {
     this.playerManager.createPlayers(count);
     if (names.length > 0) this.playerManager.setNames(names);
 
-    // ── 5. HUD sidebar (depth 10, below dice) ───────────────────────────
+    // ── 5. HUD sidebar (depth 10) ───────────────────────────────────────
     this.hud = new HUDManager(this);
     this.hud.create(count);
     if (names.length > 0) this.hud.setNames(names);
 
-    // ── 6. Dice (depth 100, topmost interactive element) ────────────────
+    // ── 6. Dice (depth 100) ─────────────────────────────────────────────
     this.dice = new DiceManager(this);
     this.dice.create(912, 210);
 
-    // ── 7. Winner popup (depth 200) ──────────────────────────────────────
+    // ── 7. Feedback text ─────────────────────────────────────────────────
+    this.feedback = new FeedbackText(this);
+
+    // ── 8. Winner popup (depth 200) ──────────────────────────────────────
     this.winnerPopup = new WinnerPopup(this, this.particles);
     this.winnerPopup.create();
 
-    // ── 8. Audio ─────────────────────────────────────────────────────────
+    // ── 9. Countdown overlay ─────────────────────────────────────────────
+    this.countdown = new CountdownOverlay(this);
+
+    // ── 10. Audio ────────────────────────────────────────────────────────
     this.audio = new AudioManager(this);
     this.audio.init();
+    this.hud.onSoundToggle(() => this.audio.toggleMute());
 
-    // ── 9. Game logic — server-driven in multiplayer, local otherwise ────
-    if (mode === "pvp") {
-      this.multiplayerDriver = new MultiplayerDriver(
-        this,
-        this.board,
-        this.playerManager,
-        this.dice,
-        this.hud,
-        this.winnerPopup,
-        mySeat,
-      );
-      this.multiplayerDriver.start();
-    } else {
-      this.gameManager = new GameManager(
-        this,
-        this.board,
-        this.playerManager,
-        this.dice,
-        this.snakeManager,
-        this.ladderManager,
-        this.hud
-      );
-      this.gameManager.init(mode, count);
+    // ── 11. Board entry animation ────────────────────────────────────────
+    if (!reduced) {
+      this.cameras.main.fadeIn(animDuration(ANIM.boardEntryDuration), 0, 0, 0);
     }
 
-    // ── 10. Event bindings ────────────────────────────────────────────────
+    // ── 12. Start game logic ─────────────────────────────────────────────
+    const startGame = () => {
+      if (mode === "pvp") {
+        this.multiplayerDriver = new MultiplayerDriver(
+          this,
+          this.board,
+          this.playerManager,
+          this.dice,
+          this.hud,
+          this.snakeManager,
+          this.ladderManager,
+          this.feedback,
+          this.winnerPopup,
+          mySeat,
+        );
+        this.multiplayerDriver.start();
+      } else {
+        this.gameManager = new GameManager(
+          this,
+          this.board,
+          this.playerManager,
+          this.dice,
+          this.snakeManager,
+          this.ladderManager,
+          this.hud,
+          this.feedback,
+        );
+        this.gameManager.init(mode, count);
+      }
+    };
+
+    // Check if game is already in progress (reconnect) — skip countdown
+    const isReconnect = mode === "pvp" && mySeat != null;
+    if (isReconnect) {
+      startGame();
+    } else {
+      // Show countdown, then start
+      this.countdown.show(names, count, startGame);
+    }
+
+    // ── 13. Event bindings ────────────────────────────────────────────────
     this.events.on(GameEvents.DICE_ROLL_STARTED, () => {
       this.audio.play("roll");
     });
@@ -105,23 +138,21 @@ export default class SnakeLadderScene extends Phaser.Scene {
       this.audio.play("move");
     });
 
-    this.events.on(GameEvents.SNAKE_HIT, (playerId: number, from: number, to: number) => {
+    this.events.on(GameEvents.SNAKE_HIT, (_playerId: number, from: number, _to: number) => {
       this.audio.play("snake");
       const fromPos = this.board.getTilePosition(from);
-      this.particles.burstAt(fromPos.x, fromPos.y, 20);
-      void playerId; void to;
+      this.particles.burstAt(fromPos.x, fromPos.y, reduced ? 10 : 20);
     });
 
-    this.events.on(GameEvents.LADDER_CLIMB, (playerId: number, from: number, to: number) => {
+    this.events.on(GameEvents.LADDER_CLIMB, (_playerId: number, from: number, _to: number) => {
       this.audio.play("ladder");
       const fromPos = this.board.getTilePosition(from);
       this.particles.tileSparkle(fromPos.x, fromPos.y, 0x10b981);
-      void playerId; void to;
     });
 
     this.events.on(GameEvents.GAME_OVER, (payload: { name: string; history: MoveHistoryEntry[] }) => {
       this.audio.play("win");
-      this.time.delayedCall(600, () => {
+      this.time.delayedCall(animDuration(600), () => {
         this.winnerPopup.show(payload.name, payload.history);
       });
     });

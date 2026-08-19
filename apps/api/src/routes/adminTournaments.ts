@@ -21,6 +21,10 @@ import {
   createTournamentMatch,
   transitionTournamentStatus,
 } from "../services/tournamentEngine";
+import {
+  reconcileTournament,
+  getTournamentHealth,
+} from "../services/tournamentScheduler";
 
 const createTournamentSchema = z.object({
   gameId: z.string().min(1),
@@ -33,9 +37,11 @@ const createTournamentSchema = z.object({
   maxPlayers: z.number().int().min(2).max(128).optional(),
   startTime: z.string().datetime({ offset: true }),
   endTime: z.string().datetime({ offset: true }).nullable().optional(),
+  registrationStartsAt: z.string().datetime({ offset: true }).nullable().optional(),
   registrationEndsAt: z.string().datetime({ offset: true }).nullable().optional(),
   bannerUrl: z.string().url().nullable().optional(),
   rules: z.record(z.string(), z.unknown()).optional(),
+  autoStartWhenFull: z.boolean().optional(),
   prizeDistribution: z
     .array(z.object({ rank: z.number().int().min(1), percentage: z.number().min(0).max(100) }))
     .optional(),
@@ -102,8 +108,10 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
 
     const input: any = { ...body };
     if (body.registrationEndsAt !== undefined) {
-      // Pass through registrationEndsAt as extra field
       input.registrationEndsAt = body.registrationEndsAt ? new Date(body.registrationEndsAt) : null;
+    }
+    if (body.registrationStartsAt !== undefined) {
+      input.registrationStartsAt = body.registrationStartsAt ? new Date(body.registrationStartsAt) : null;
     }
     if (body.prizeDistribution) {
       input.prizeDistribution = body.prizeDistribution;
@@ -112,18 +120,21 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
     const tournament = await createTournament(input, admin.id);
 
     // Update extra fields not in base createTournament
-    if (body.minPlayers !== undefined || body.registrationEndsAt !== undefined || body.prizeDistribution !== undefined) {
+    const extraUpdates: Record<string, unknown> = {};
+    if (body.minPlayers !== undefined) extraUpdates.minPlayers = body.minPlayers;
+    if (body.registrationEndsAt !== undefined) {
+      extraUpdates.registrationEndsAt = body.registrationEndsAt ? new Date(body.registrationEndsAt) : null;
+    }
+    if (body.registrationStartsAt !== undefined) {
+      extraUpdates.registrationStartsAt = body.registrationStartsAt ? new Date(body.registrationStartsAt) : null;
+    }
+    if (body.autoStartWhenFull !== undefined) extraUpdates.autoStartWhenFull = body.autoStartWhenFull;
+    if (body.prizeDistribution !== undefined) extraUpdates.prizeDistribution = body.prizeDistribution;
+
+    if (Object.keys(extraUpdates).length > 0) {
       await prisma.tournament.update({
         where: { id: tournament.id },
-        data: {
-          ...(body.minPlayers !== undefined ? { minPlayers: body.minPlayers } : {}),
-          ...(body.registrationEndsAt !== undefined
-            ? { registrationEndsAt: body.registrationEndsAt ? new Date(body.registrationEndsAt) : null }
-            : {}),
-          ...(body.prizeDistribution !== undefined
-            ? { prizeDistribution: body.prizeDistribution as any }
-            : {}),
-        },
+        data: extraUpdates as any,
       });
     }
 
@@ -159,18 +170,21 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
     const updated = await updateTournament(id, body as any, admin.id);
 
     // Apply extra fields
-    if (body.minPlayers !== undefined || body.registrationEndsAt !== undefined || body.prizeDistribution !== undefined) {
+    const extraUpdates: Record<string, unknown> = {};
+    if (body.minPlayers !== undefined) extraUpdates.minPlayers = body.minPlayers;
+    if (body.registrationEndsAt !== undefined) {
+      extraUpdates.registrationEndsAt = body.registrationEndsAt ? new Date(body.registrationEndsAt) : null;
+    }
+    if (body.registrationStartsAt !== undefined) {
+      extraUpdates.registrationStartsAt = body.registrationStartsAt ? new Date(body.registrationStartsAt) : null;
+    }
+    if (body.autoStartWhenFull !== undefined) extraUpdates.autoStartWhenFull = body.autoStartWhenFull;
+    if (body.prizeDistribution !== undefined) extraUpdates.prizeDistribution = body.prizeDistribution;
+
+    if (Object.keys(extraUpdates).length > 0) {
       await prisma.tournament.update({
         where: { id },
-        data: {
-          ...(body.minPlayers !== undefined ? { minPlayers: body.minPlayers } : {}),
-          ...(body.registrationEndsAt !== undefined
-            ? { registrationEndsAt: body.registrationEndsAt ? new Date(body.registrationEndsAt) : null }
-            : {}),
-          ...(body.prizeDistribution !== undefined
-            ? { prizeDistribution: body.prizeDistribution as any }
-            : {}),
-        },
+        data: extraUpdates as any,
       });
     }
 
@@ -306,5 +320,29 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
       category: "admin", targetType: "tournament", targetId: id,
     });
     return { ok: true };
+  });
+
+  // ------------------------------------------------------------------
+  // Tournament health
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/:id/health", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const { id } = routeParams(request);
+    return getTournamentHealth(id);
+  });
+
+  // ------------------------------------------------------------------
+  // Tournament reconciliation (manual trigger)
+  // ------------------------------------------------------------------
+  app.post("/api/admin/tournaments/:id/reconcile", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
+    const { id } = routeParams(request);
+    const result = await reconcileTournament(id);
+    auditFromRequest(request, {
+      actorType: "user", actorId: admin.id, action: "admin.tournament.reconciled",
+      category: "admin", targetType: "tournament", targetId: id,
+      meta: { repaired: result.repaired.length, warnings: result.warnings.length, errors: result.errors.length },
+    });
+    return result;
   });
 }

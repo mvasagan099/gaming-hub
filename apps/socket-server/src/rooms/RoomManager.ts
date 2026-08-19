@@ -1897,4 +1897,162 @@ export class RoomManager {
       throw error;
     }
   }
+
+  /**
+   * Creates a pre-filled room for a tournament match.
+   * Tournament matches have 0 stake (entry fee already paid during registration).
+   * Settings include tournament metadata for bracket advancement.
+   */
+  async createTournamentMatch(
+    users: AuthenticatedUser[],
+    sockets: Socket[],
+    gameId: GameId,
+    tournamentMetadata: {
+      tournamentId: string;
+      tournamentRoundId: string;
+      tournamentMatchNumber: number;
+    }
+  ): Promise<RoomFull> {
+    const def = getGameDefinition(gameId);
+    if (users.length < def.minPlayers || users.length > def.maxPlayers) {
+      throw new AppError("INVALID_ACTION", "Wrong number of tournament match players");
+    }
+    if (sockets.length !== users.length) {
+      throw new AppError("INVALID_ACTION", "Tournament match players are not connected");
+    }
+
+    // Leave any existing rooms
+    await Promise.all(users.map((user, index) => this.ejectFromAllRooms(user, sockets[index])));
+
+    const id = randomUUID();
+    const code = this.uniqueCode();
+    const now = Date.now();
+
+    // Tournament matches have 0 stake - entry fee already handled
+    const stake = 0;
+
+    // Include tournament metadata in room settings
+    const settings = {
+      tournamentId: tournamentMetadata.tournamentId,
+      tournamentRoundId: tournamentMetadata.tournamentRoundId,
+      tournamentMatchNumber: tournamentMetadata.tournamentMatchNumber,
+      tournamentEntryHandled: true,
+    };
+
+    const room: RoomRuntime = {
+      id,
+      code,
+      ioName: `room:${id}`,
+      gameId,
+      hostId: users[0].userId,
+      status: "waiting",
+      isPrivate: true,
+      stake,
+      minPlayers: def.minPlayers,
+      maxPlayers: def.maxPlayers,
+      players: new Map(),
+      match: null,
+      createdAt: now,
+      settings,
+      rematch: null,
+    };
+
+    users.forEach((user, index) => {
+      const player = this.makePlayer(user, index, index === 0, true, false);
+      player.socketIds.add(sockets[index].id);
+      room.players.set(user.userId, player);
+      sockets[index].join(room.ioName);
+    });
+
+    this.rooms.set(id, room);
+    this.roomsByCode.set(code, room);
+
+    try {
+      await prisma.room.create({
+        data: {
+          id,
+          code,
+          gameId,
+          hostId: users[0].userId,
+          status: "WAITING",
+          isPrivate: true,
+          stake,
+          minPlayers: def.minPlayers,
+          maxPlayers: def.maxPlayers,
+          settings: settings as object,
+        },
+      });
+      await prisma.roomPlayer.createMany({
+        data: users.map((user, index) => ({
+          roomId: id,
+          userId: user.userId,
+          seat: index,
+          isHost: index === 0,
+          isReady: true,
+          isSpectator: false,
+          connectionStatus: "CONNECTED",
+        })),
+      });
+
+      const matchId = randomUUID();
+      room.pendingMatchId = matchId;
+
+      await prisma.match.create({
+        data: {
+          id: matchId,
+          roomId: id,
+          gameId,
+          status: "CREATED",
+          winnerIds: [],
+          stake,
+        },
+      });
+      await prisma.matchPlayer.createMany({
+        data: users.map((user, index) => ({
+          matchId,
+          userId: user.userId,
+          seat: index,
+          result: "PENDING",
+        })),
+      });
+
+      console.log("[TOURNAMENT] MATCH_CREATED", {
+        matchId,
+        tournamentId: tournamentMetadata.tournamentId,
+        roundId: tournamentMetadata.tournamentRoundId,
+        matchNumber: tournamentMetadata.tournamentMatchNumber,
+        players: users.map((u) => u.userId),
+      });
+
+      this.emitToRoom(room, "game:match-found", {
+        matchId,
+        roomId: id,
+        gameId,
+        entryFee: 0,
+        players: users.map((u, i) => ({
+          playerId: u.userId,
+          seat: i,
+          ready: true,
+        })),
+        status: "ready",
+      });
+      this.emitLobbyState(room);
+
+      this.maybeStartCountdown(room, sockets[0]);
+      return this.toRoomFull(room);
+    } catch (error) {
+      // Roll back
+      for (const socket of sockets) socket.leave(room.ioName);
+      this.rooms.delete(id);
+      this.roomsByCode.delete(code);
+      for (const player of room.players.values()) {
+        this.clearDisconnectTimer(id, player.userId);
+      }
+      if (room.status === "waiting") {
+        await prisma.roomPlayer.deleteMany({ where: { roomId: id } }).catch(() => undefined);
+        await prisma.room.delete({ where: { id } }).catch(() => undefined);
+      }
+      throw error;
+    }
+  }
 }

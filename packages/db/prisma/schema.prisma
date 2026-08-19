@@ -301,6 +301,7 @@ model User {
   conversations      ConversationMember[]
   sentMessages       Message[]
   searchHistory      SearchHistory[]
+  notificationPreference NotificationPreference?
   supportTickets     SupportTicket[]
   ticketMessages     TicketMessage[]
   loginSessions      LoginSession[]
@@ -668,12 +669,16 @@ model AppNotification {
   title     String
   body      String
   data      Json?
+  tournamentEventType String?
+  referenceId         String?
   readAt    DateTime?
   createdAt DateTime         @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt])
+  @@index([userId, type])
+  @@index([tournamentEventType])
 }
 
 model ChatMessage {
@@ -1013,6 +1018,7 @@ model Tournament {
   maxPlayers           Int              @default(8)
   startTime            DateTime
   endTime              DateTime?
+  registrationStartsAt DateTime?
   registrationEndsAt   DateTime?
   rules                Json             @default("{}")
   status               TournamentStatus @default(DRAFT)
@@ -1020,6 +1026,7 @@ model Tournament {
   enableThirdPlace     Boolean          @default(false)
   prizeDistribution    Json             @default("[]")
   grossPool            Int              @default(0)
+  autoStartWhenFull    Boolean          @default(false)
   configSnapshot       Json?
   stateVersion         Int              @default(0)
   settledAt            DateTime?
@@ -1327,6 +1334,34 @@ model CronJobRun {
   meta       Json?
 
   @@index([jobName, startedAt])
+}
+
+// ============================================================================
+// Tournament Notifications
+// ============================================================================
+
+model TournamentNotificationIdempotency {
+  id           String   @id @default(uuid())
+  tournamentId String
+  playerId     String
+  eventType    String
+  referenceId  String?
+  createdAt    DateTime @default(now())
+
+  @@unique([tournamentId, playerId, eventType, referenceId])
+  @@index([tournamentId, eventType])
+}
+
+model NotificationPreference {
+  id                       String   @id @default(uuid())
+  userId                   String   @unique
+  tournamentNotifications  Boolean  @default(true)
+  matchReadyNotifications  Boolean  @default(true)
+  prizeNotifications       Boolean  @default(true)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model SiteSetting {

@@ -5,8 +5,12 @@ import type BoardManager from "./BoardManager";
 import type PlayerManager from "./PlayerManager";
 import type DiceManager from "./DiceManager";
 import type { HUDManager } from "./HUDManager";
+import type { SnakeManager } from "./SnakeManager";
+import type { LadderManager } from "./LadderManager";
+import type FeedbackText from "../ui/FeedbackText";
 import type WinnerPopup from "../ui/WinnerPopup";
 import type { WinnerInfo } from "../../../../store/multiplayerStore";
+import { ANIM, animDuration, prefersReducedMotion } from "../constants";
 
 interface RemotePlayerState {
   seat: number;
@@ -34,11 +38,9 @@ interface RemoteEvent {
 }
 
 /**
- * Renders a server-authoritative Snake & Ladder match. All game state comes
- * from the multiplayer store (fed by `game:state` / `game:over` socket
- * events); this class only animates the result and forwards dice clicks as
- * `{ type: "roll" }` actions. Input is enabled only when it is the local
- * player's turn and the match is not finished.
+ * Renders a server-authoritative Snake & Ladder match.
+ * All game state comes from the multiplayer store; this class only
+ * animates the result and forwards dice clicks as `{ type: "roll" }` actions.
  */
 export default class MultiplayerDriver {
   private scene: Phaser.Scene;
@@ -46,6 +48,9 @@ export default class MultiplayerDriver {
   private players: PlayerManager;
   private dice: DiceManager;
   private hud: HUDManager;
+  private snakeManager: SnakeManager;
+  private ladderManager: LadderManager;
+  private feedback: FeedbackText;
   private winnerPopup: WinnerPopup;
   private readonly mySeat: number | null;
 
@@ -61,6 +66,9 @@ export default class MultiplayerDriver {
     players: PlayerManager,
     dice: DiceManager,
     hud: HUDManager,
+    snakeManager: SnakeManager,
+    ladderManager: LadderManager,
+    feedback: FeedbackText,
     winnerPopup: WinnerPopup,
     mySeat: number | null,
   ) {
@@ -69,6 +77,9 @@ export default class MultiplayerDriver {
     this.players = players;
     this.dice = dice;
     this.hud = hud;
+    this.snakeManager = snakeManager;
+    this.ladderManager = ladderManager;
+    this.feedback = feedback;
     this.winnerPopup = winnerPopup;
     this.mySeat = mySeat;
   }
@@ -107,7 +118,6 @@ export default class MultiplayerDriver {
   }
 
   private onRoll(): void {
-    // Disable immediately so double-clicks cannot fire two actions.
     this.dice.disable();
     void useMultiplayerStore.getState().sendGameAction({ type: "roll" }).then((res) => {
       if (!res.ok && res.error) this.hud.addLog(res.error);
@@ -130,8 +140,10 @@ export default class MultiplayerDriver {
     if (freshStart) {
       this.winShown = false;
       this.winnerPopup.hide();
+      // Kill any stale tweens from a previous game
+      this.scene.tweens.killAll();
       for (const p of s.players ?? []) {
-        this.players.snapToTile(p.seat + 1, 1);
+        this.players.placeAt(p.seat + 1, 1);
       }
     }
 
@@ -168,6 +180,7 @@ export default class MultiplayerDriver {
 
   private resolveMove(seat: number, evs: RemoteEvent[]): void {
     const playerId = seat + 1;
+    const reduced = prefersReducedMotion();
     const ladder = evs.find((e) => e.type === "ladder");
     const snake = evs.find((e) => e.type === "snake");
     const rollback = evs.find((e) => e.type === "rollback");
@@ -175,14 +188,67 @@ export default class MultiplayerDriver {
     if (ladder && ladder.to != null) {
       this.hud.addLog(`🪜 ${this.seatName(seat)} climbs a ladder to ${ladder.to}`);
       this.scene.events.emit(GameEvents.LADDER_CLIMB, playerId, ladder.from ?? 0, ladder.to);
-      this.players.snapToTile(playerId, ladder.to, () => this.afterMovement(evs));
+
+      const botPos = this.board.getTilePosition(ladder.from ?? 0);
+      this.feedback.ladderClimb(botPos.x, botPos.y);
+      this.ladderManager.highlightLadder(ladder.from ?? 0, this.scene);
+
+      if (!reduced) {
+        const path = this.ladderManager.getLadderPath(ladder.from ?? 0, this.board);
+        this.scene.time.delayedCall(animDuration(ANIM.ladderPause), () => {
+          if (path.length > 0) {
+            this.players.animateAlongPath(playerId, path, () => {
+              this.ladderManager.unhighlightAll(this.scene);
+              this.afterMovement(evs);
+            });
+          } else {
+            this.players.snapToTile(playerId, ladder.to!, () => {
+              this.ladderManager.unhighlightAll(this.scene);
+              this.afterMovement(evs);
+            });
+          }
+        });
+        return;
+      }
+
+      this.players.snapToTile(playerId, ladder.to, () => {
+        this.ladderManager.unhighlightAll(this.scene);
+        this.afterMovement(evs);
+      });
       return;
     }
 
     if (snake && snake.to != null) {
       this.hud.addLog(`🐍 ${this.seatName(seat)} slides down a snake to ${snake.to}`);
       this.scene.events.emit(GameEvents.SNAKE_HIT, playerId, snake.from ?? 0, snake.to);
-      this.players.snapToTile(playerId, snake.to, () => this.afterMovement(evs));
+
+      const headPos = this.board.getTilePosition(snake.from ?? 0);
+      this.feedback.snakeHit(headPos.x, headPos.y);
+      this.snakeManager.highlightSnake(snake.from ?? 0);
+      this.snakeManager.animateHighlightIn(this.scene);
+
+      if (!reduced) {
+        const path = this.snakeManager.getSnakePath(snake.from ?? 0, this.board);
+        this.scene.time.delayedCall(animDuration(ANIM.snakePause), () => {
+          if (path.length > 0) {
+            this.players.animateAlongPath(playerId, path, () => {
+              this.snakeManager.animateHighlightOut(this.scene);
+              this.afterMovement(evs);
+            });
+          } else {
+            this.players.snapToTile(playerId, snake.to!, () => {
+              this.snakeManager.animateHighlightOut(this.scene);
+              this.afterMovement(evs);
+            });
+          }
+        });
+        return;
+      }
+
+      this.players.snapToTile(playerId, snake.to, () => {
+        this.snakeManager.animateHighlightOut(this.scene);
+        this.afterMovement(evs);
+      });
       return;
     }
 
@@ -218,6 +284,7 @@ export default class MultiplayerDriver {
     }
 
     this.hud.updateTurn((s.currentSeat ?? 0) + 1);
+    this.players.setActivePlayer((s.currentSeat ?? 0) + 1);
     if (s.logs) this.hud.setLogs(s.logs);
 
     this.updateDice(s);
@@ -229,7 +296,7 @@ export default class MultiplayerDriver {
 
     if (this.mySeat == null) {
       this.dice.disable();
-      this.dice.setPrompt("Spectating…");
+      this.dice.setPrompt("Spectating...");
       return;
     }
 
@@ -240,10 +307,10 @@ export default class MultiplayerDriver {
 
     if (s.currentSeat === this.mySeat) {
       this.dice.enable();
-      this.dice.setPrompt("🎲 ROLL DICE");
+      this.dice.setPrompt("ROLL DICE");
     } else {
       this.dice.disable();
-      this.dice.setPrompt(`${this.seatName(s.currentSeat ?? 0)}'s turn…`);
+      this.dice.setPrompt(`${this.seatName(s.currentSeat ?? 0)}'s turn...`);
     }
   }
 
@@ -253,8 +320,8 @@ export default class MultiplayerDriver {
     const seats = (s.winnerSeats && s.winnerSeats.length > 0)
       ? s.winnerSeats
       : (storeWinner?.winnerSeats && storeWinner.winnerSeats.length > 0)
-      ? storeWinner.winnerSeats
-      : [];
+        ? storeWinner.winnerSeats
+        : [];
 
     if (seats.length === 0 && !s.finished && !storeWinner) return;
 
@@ -263,11 +330,11 @@ export default class MultiplayerDriver {
     const won = this.mySeat != null && winnerSeat === this.mySeat;
     const name = this.seatName(winnerSeat);
 
-    this.scene.time.delayedCall(700, () => {
+    this.scene.time.delayedCall(animDuration(700), () => {
       this.winnerPopup.show(name, [], { mode: "multiplayer", won });
       this.winnerPopup.setActions(
         () => this.rematch(),
-        () => this.close()
+        () => this.close(),
       );
     });
   }

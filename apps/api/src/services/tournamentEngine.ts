@@ -17,8 +17,9 @@ import {
   isSupportedTournamentFormat,
 } from "@gaming-hub/shared";
 import { applyTransaction } from "./wallet";
-import { createNotification } from "./notifications";
 import { audit } from "./audit";
+import { TournamentMatchService } from "./tournamentMatchService";
+import { TournamentNotificationService } from "./tournamentNotificationService";
 
 // ---------------------------------------------------------------------------
 // State machine transition (with DB update)
@@ -204,8 +205,28 @@ async function processAllByeSlots(tournamentId: string): Promise<void> {
     where: { tournamentId, isBye: true, status: "BYE" },
   });
 
+  if (byeSlots.length === 0) return;
+
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: { title: true },
+  });
+  const totalRoundsAgg = await prisma.tournamentRound.aggregate({
+    where: { tournamentId },
+    _max: { roundNumber: true },
+  });
+  const totalRounds = totalRoundsAgg._max.roundNumber ?? 1;
+
   for (const slot of byeSlots) {
     if (slot.playerAId && slot.nextSlotId) {
+      await TournamentNotificationService.notifyBye({
+        tournamentId,
+        tournamentTitle: tournament?.title ?? "Tournament",
+        roundNumber: slot.roundNumber,
+        totalRounds,
+        playerId: slot.playerAId,
+        nextSlotId: slot.nextSlotId,
+      });
       await advanceToNextSlot(tournamentId, slot.id, slot.playerAId);
     }
   }
@@ -323,9 +344,48 @@ export async function processMatchResult(params: ProcessMatchResultParams): Prom
     });
   });
 
+  // Fetch tournament info for notifications
+  const tournamentInfo = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: { title: true },
+  });
+  const totalRoundsAgg = await prisma.tournamentRound.aggregate({
+    where: { tournamentId },
+    _max: { roundNumber: true },
+  });
+  const totalRounds = totalRoundsAgg._max.roundNumber ?? 1;
+
+  // Notify loser of elimination
+  if (loserId) {
+    const rankEstimate = totalRounds - slot.roundNumber + 2;
+    await TournamentNotificationService.notifyEliminated({
+      tournamentId,
+      tournamentTitle: tournamentInfo?.title ?? "Tournament",
+      loserId,
+      roundNumber: slot.roundNumber,
+      totalRounds,
+      finalRank: rankEstimate,
+      matchId,
+    });
+  }
+
   // Advance winner to next slot
   if (slot.nextSlotId) {
     await advanceToNextSlot(tournamentId, roundId, winnerId);
+    const nextSlot = await prisma.tournamentRound.findUnique({
+      where: { id: slot.nextSlotId },
+      select: { roundNumber: true },
+    });
+    await TournamentNotificationService.notifyAdvanced({
+      tournamentId,
+      tournamentTitle: tournamentInfo?.title ?? "Tournament",
+      winnerId,
+      roundNumber: slot.roundNumber,
+      totalRounds,
+      nextRoundNumber: nextSlot?.roundNumber ?? null,
+      nextSlotId: slot.nextSlotId,
+      matchId,
+    });
   }
 
   // Check if this round is complete and generate the next round if needed
@@ -356,19 +416,25 @@ async function advanceToNextSlot(
   const fillA = nextSlot.playerAId === null;
   const fillB = !fillA && nextSlot.playerBId === null;
 
-  if (!fillA && !fillB) return; // Both already filled
+if (!fillA && !fillB) return; // Both already filled
+
+  const newStatus =
+    (fillA && nextSlot.playerBId !== null) || (fillB && nextSlot.playerAId !== null)
+      ? "READY"
+      : "PENDING";
 
   await prisma.tournamentRound.update({
     where: { id: nextSlot.id },
     data: {
       ...(fillA ? { playerAId: winnerId } : { playerBId: winnerId }),
-      // Auto-ready when both players are assigned
-      status:
-        (fillA && nextSlot.playerBId !== null) || (fillB && nextSlot.playerAId !== null)
-          ? "READY"
-          : "PENDING",
+      status: newStatus,
     },
   });
+
+  // If the next slot is now READY, create the match immediately
+  if (newStatus === "READY") {
+    await TournamentMatchService.advanceAndCreateNextMatch(tournamentId, winnerId, completedRoundId);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -430,15 +496,38 @@ async function finalizeTournament(tournamentId: string): Promise<void> {
       data: { finalRank: 1 },
     });
 
+    // Set runner-up to rank 2
+    const finalSlot = finalSlots.find((s) => s.winnerId !== null);
+    if (finalSlot) {
+      const runnerUpId = finalSlot.playerAId === champion ? finalSlot.playerBId : finalSlot.playerAId;
+      if (runnerUpId) {
+        await prisma.tournamentPlayer.updateMany({
+          where: { tournamentId, userId: runnerUpId },
+          data: { finalRank: 2 },
+        });
+        await TournamentNotificationService.notifyFinalRoundComplete({
+          tournamentId,
+          tournamentTitle: tournament.title,
+          winnerId: champion,
+          loserId: runnerUpId,
+          matchId: finalSlot.matchId ?? "",
+        });
+      }
+    }
+
     // Notify champion
-    await createNotification(
-      champion,
-      "TOURNAMENT",
-      "🏆 Tournament Champion!",
-      `You won the tournament: ${tournament.title}!`,
-      { tournamentId },
-    );
+    await TournamentNotificationService.notifyWinner({
+      tournamentId,
+      tournamentTitle: tournament.title,
+      winnerId: champion,
+    });
   }
+
+  // Notify all non-champion participants that tournament completed
+  await TournamentNotificationService.notifyCompleted({
+    tournamentId,
+    tournamentTitle: tournament.title,
+  });
 
   // Transition to COMPLETED
   if (canTransitionTournamentStatus(currentStatus, "COMPLETED")) {
@@ -481,6 +570,8 @@ export async function settleTournament(tournamentId: string): Promise<void> {
     .filter((p) => p.finalRank !== null)
     .sort((a, b) => (a.finalRank ?? 999) - (b.finalRank ?? 999));
 
+  const paidOut: { userId: string; rank: number; amount: number }[] = [];
+
   await prisma.$transaction(async (tx) => {
     for (const prize of prizes) {
       const player = rankedPlayers.find((p) => p.finalRank === prize.rank);
@@ -519,13 +610,7 @@ export async function settleTournament(tournamentId: string): Promise<void> {
         },
       });
 
-      await createNotification(
-        player.userId,
-        "TOURNAMENT",
-        `Prize Awarded: ${prize.amount} coins`,
-        `You finished #${prize.rank} in ${tournament.title} and earned ${prize.amount} coins!`,
-        { tournamentId, rank: prize.rank, amount: prize.amount },
-      );
+      paidOut.push({ userId: player.userId, rank: prize.rank, amount: prize.amount });
     }
 
     await tx.tournament.update({
@@ -535,6 +620,17 @@ export async function settleTournament(tournamentId: string): Promise<void> {
   });
 
   await transitionTournamentStatus(tournamentId, "SETTLED", null);
+
+  // Send prize-credited notifications after wallet commit succeeds
+  for (const p of paidOut) {
+    await TournamentNotificationService.notifyPrizeCredited({
+      tournamentId,
+      tournamentTitle: tournament.title,
+      playerId: p.userId,
+      rank: p.rank,
+      amount: p.amount,
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -582,15 +678,23 @@ export async function cancelTournamentWithRefunds(
     });
   });
 
-  // Notify all players
-  for (const player of tournament.players) {
-    await createNotification(
-      player.userId,
-      "TOURNAMENT",
-      "Tournament Cancelled",
-      `${tournament.title} has been cancelled. ${tournament.entryFee > 0 ? "Your entry fee has been refunded." : ""}`,
-      { tournamentId },
-    );
+  // Notify all players of cancellation
+  await TournamentNotificationService.notifyCancelled({
+    tournamentId,
+    tournamentTitle: tournament.title,
+    reason,
+  });
+
+  // Send individual refund notifications after wallet commit
+  if (tournament.entryFee > 0) {
+    for (const player of tournament.players) {
+      await TournamentNotificationService.notifyRefunded({
+        tournamentId,
+        tournamentTitle: tournament.title,
+        playerId: player.userId,
+        amount: tournament.entryFee,
+      });
+    }
   }
 
   audit({
@@ -648,26 +752,20 @@ export async function startTournament(
   }
   await transitionTournamentStatus(tournamentId, "STARTING", startedBy);
 
-  // Build bracket
+// Build bracket
   await buildSingleEliminationBracket(tournamentId);
+
+  // Create all immediately playable matches (Round 1)
+  await TournamentMatchService.createReadyMatchesForTournament(tournamentId);
 
   // Transition to IN_PROGRESS
   await transitionTournamentStatus(tournamentId, "IN_PROGRESS", startedBy);
 
-  // Notify all players
-  const players = await prisma.tournamentPlayer.findMany({
-    where: { tournamentId },
-    select: { userId: true },
+  // Notify all players tournament has started
+  await TournamentNotificationService.notifyTournamentStarted({
+    tournamentId,
+    tournamentTitle: tournament.title,
   });
-  for (const p of players) {
-    await createNotification(
-      p.userId,
-      "TOURNAMENT",
-      "Tournament Started!",
-      `${tournament.title} has started! Check your bracket.`,
-      { tournamentId },
-    );
-  }
 
   audit({
     actorType: "user",

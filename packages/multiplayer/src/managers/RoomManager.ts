@@ -484,6 +484,25 @@ export class RoomManager {
   getRoomCount(): number {
     return this.rooms.size;
   }
+
+  /**
+   * Register a room (for internal use by framework extensions).
+   */
+  registerRoom(room: RoomRuntime): void {
+    this.rooms.set(room.id, room);
+    this.roomsByCode.set(room.code, room);
+  }
+
+  /**
+   * Unregister a room.
+   */
+  unregisterRoom(roomId: RoomId): void {
+    const room = this.rooms.get(roomId);
+    if (room) {
+      this.roomsByCode.delete(room.code);
+      this.rooms.delete(roomId);
+    }
+  }
   
   /**
    * Close a room.

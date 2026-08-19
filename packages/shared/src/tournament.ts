@@ -230,4 +230,71 @@ export interface TournamentPlayerStatus {
   finalRank: number | null;
   currentRoundId: string | null;
   currentMatchId: string | null;
+  currentRound: number | null;
+  opponent: { id: string; username: string; displayName: string; avatarUrl: string | null } | null;
+  matchStatus: BracketSlotStatus | null;
+}
+
+export interface TournamentMatchMetadata {
+  tournamentId: string;
+  tournamentRoundId: string;
+  tournamentMatchNumber: number;
+  tournamentEntryHandled: true;
+}
+
+export interface TournamentCurrentMatchResponse {
+  tournamentId: string;
+  roundId: string;
+  matchId: string;
+  opponent: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+  } | null;
+  status: BracketSlotStatus;
+  roundNumber: number;
+  matchNumber: number;
+}
+
+// ---------------------------------------------------------------------------
+// Player history, stats, leaderboard
+// ---------------------------------------------------------------------------
+
+export interface TournamentHistoryEntry {
+  tournamentId: string;
+  title: string;
+  gameId: string;
+  format: TournamentFormat;
+  status: TournamentStatus;
+  entryFee: number;
+  prizePool: number;
+  registeredAt: string;
+  finalRank: number | null;
+  eliminated: boolean;
+  eliminatedInRound: number | null;
+  prizeWon: number;
+  startTime: string;
+}
+
+export interface TournamentPlayerStats {
+  tournamentsPlayed: number;
+  tournamentsWon: number;
+  finalsReached: number;
+  topThreeFinishes: number;
+  totalEntryFees: number;
+  totalPrizesWon: number;
+  bestRank: number | null;
+}
+
+export interface TournamentLeaderboardEntry {
+  rank: number;
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  wins: number;
+  finalsReached: number;
+  tournamentsPlayed: number;
+  totalPrizeWon: number;
 }

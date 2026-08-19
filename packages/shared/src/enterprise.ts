@@ -244,16 +244,23 @@ export interface TournamentSummary {
   format: TournamentFormat;
   prizePool: number;
   entryFee: number;
+  minPlayers: number;
   maxPlayers: number;
   registeredCount: number;
+  grossPool: number;
   startTime: string;
+  registrationStartsAt: string | null;
+  registrationEndsAt: string | null;
   status: TournamentStatus;
+  autoStartWhenFull: boolean;
 }
 
 export interface TournamentDetail extends TournamentSummary {
   bannerUrl: string | null;
   rules: Record<string, unknown>;
   endTime: string | null;
+  prizeDistribution: unknown;
+  stateVersion: number;
   registered: boolean;
   players: TournamentPlayerEntry[];
 }

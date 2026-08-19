@@ -11,8 +11,11 @@ import { DEFAULT_SETTINGS, type LudoSettings, type PlayerColor } from "../types/
 import { LudoEvents } from "../events/LudoEvents";
 import { PLAYER_COLORS_ORDER } from "../data/boardLayout";
 import WinnerPopup from "../ui/WinnerPopup";
+import FeedbackText from "../ui/FeedbackText";
+import CountdownOverlay from "../ui/CountdownOverlay";
 import ParticleManager from "../../../snake-ladder/phaser/managers/ParticleManager";
 import AudioManager from "../../../snake-ladder/phaser/managers/AudioManager";
+import { prefersReducedMotion } from "../constants";
 
 export default class LudoScene extends Phaser.Scene {
   private board!: BoardManager;
@@ -26,6 +29,8 @@ export default class LudoScene extends Phaser.Scene {
   private particles!: ParticleManager;
   private audio!: AudioManager;
   private winnerPopup!: WinnerPopup;
+  private feedback!: FeedbackText;
+  private countdown!: CountdownOverlay;
 
   constructor() {
     super("LudoScene");
@@ -37,28 +42,28 @@ export default class LudoScene extends Phaser.Scene {
     const mySeat      = (this.registry.get("seat") as number | null | undefined) ?? null;
     const names       = (this.registry.get("names") as string[] | undefined) ?? [];
     const online      = (this.registry.get("online") as boolean | undefined) ?? false;
+    const isReconnect = (this.registry.get("reconnect") as boolean | undefined) ?? false;
 
-    // Settings
     const settings: LudoSettings = {
       ...DEFAULT_SETTINGS,
       playerCount: playerCount === 2 ? 2 : 4,
       mode,
     };
-    // 1. Board
-    this.board = new BoardManager(this);
-    this.board.drawBoard();
 
-    // 2. Pure rule engine & AI
-    this.ruleEngine = new LudoRuleEngine(settings);
-    this.ai = new LudoAI();
-
-    // 3. Audio & Particles
+    // 1. Audio & Particles
     this.audio = new AudioManager(this);
     this.audio.init();
     this.particles = new ParticleManager(this);
 
-    // 4. Token Manager — created for the active colors so token ids always
-    //    match the server-authoritative state in online matches.
+    // 2. Board
+    this.board = new BoardManager(this);
+    this.board.drawBoard();
+
+    // 3. Rule engine & AI
+    this.ruleEngine = new LudoRuleEngine(settings);
+    this.ai = new LudoAI();
+
+    // 4. Token Manager
     this.tokenManager = new TokenManager(this);
     const activeColors: PlayerColor[] =
       playerCount === 2 ? ["red", "green"] : PLAYER_COLORS_ORDER.slice(0, playerCount);
@@ -82,37 +87,66 @@ export default class LudoScene extends Phaser.Scene {
       this.hud.applyColors(activeColors);
     }
 
+    // Sound toggle
+    this.hud.setSoundToggleCallback(() => {
+      this.audio.play("roll");
+    });
+
     // 6. Dice
     this.dice = new DiceManager(this);
     this.dice.create(912, 210);
 
-    // 7. Winner Popup
+    // 7. Feedback Text
+    this.feedback = new FeedbackText(this);
+
+    // 8. Winner Popup
     this.winnerPopup = new WinnerPopup(this, this.particles);
     this.winnerPopup.create();
 
-    // 8. Game logic — server-driven when online, local otherwise
-    if (online) {
-      this.multiplayerDriver = new LudoMultiplayerDriver(
-        this,
-        this.tokenManager,
-        this.dice,
-        this.hud,
-        this.winnerPopup,
-        mySeat,
-        names,
-      );
-      this.multiplayerDriver.start();
+    // 9. Countdown Overlay
+    this.countdown = new CountdownOverlay(this);
+
+    // 10. Game logic
+    const startGame = () => {
+      if (online) {
+        this.multiplayerDriver = new LudoMultiplayerDriver(
+          this,
+          this.tokenManager,
+          this.dice,
+          this.hud,
+          this.winnerPopup,
+          mySeat,
+          names,
+          this.feedback,
+        );
+        this.multiplayerDriver.start();
+      } else {
+        this.gameManager = new GameManager(
+          this,
+          this.board,
+          this.tokenManager,
+          this.dice,
+          this.hud,
+          this.ruleEngine,
+          this.ai,
+          this.feedback,
+        );
+        this.gameManager.init(mode, playerCount === 2 ? 2 : 4);
+      }
+    };
+
+    // Board entry animation, then countdown (for fresh games only)
+    if (!isReconnect && !online) {
+      this.board.animateBoardEntry(() => {
+        this.countdown.show(
+          names.length > 0 ? names : ["Player 1", "Player 2", "Player 3", "Player 4"],
+          playerCount,
+          () => startGame(),
+        );
+      });
     } else {
-      this.gameManager = new GameManager(
-        this,
-        this.board,
-        this.tokenManager,
-        this.dice,
-        this.hud,
-        this.ruleEngine,
-        this.ai
-      );
-      this.gameManager.init(mode, playerCount === 2 ? 2 : 4);
+      // Online/reconnect: skip countdown, just animate board
+      this.board.animateBoardEntry(() => startGame());
     }
 
     // ─── Event Bindings ───────────────────────────────────────────────────────
@@ -122,29 +156,33 @@ export default class LudoScene extends Phaser.Scene {
     });
 
     this.events.on(LudoEvents.TOKEN_CAPTURED, () => {
-      this.audio.play("snake"); // Reuse snake hiss for capture effect
-      const current = this.gameManager.getState();
-      // Update progress texts on HUD
-      current.players.forEach((p, idx) => {
-        this.hud.updateProgress(idx, p.tokensDone);
-      });
+      this.audio.play("snake");
+      if (this.gameManager) {
+        const current = this.gameManager.getState();
+        current.players.forEach((p, idx) => {
+          this.hud.updateProgress(idx, p.tokensDone);
+        });
+      }
     });
 
     this.events.on(LudoEvents.TOKEN_FINISHED, () => {
       this.audio.play("win");
-      const current = this.gameManager.getState();
-      current.players.forEach((p, idx) => {
-        this.hud.updateProgress(idx, p.tokensDone);
-      });
+      if (this.gameManager) {
+        const current = this.gameManager.getState();
+        current.players.forEach((p, idx) => {
+          this.hud.updateProgress(idx, p.tokensDone);
+        });
+      }
     });
 
     this.events.on(LudoEvents.TOKEN_SAFE, () => {
-      this.audio.play("ladder"); // Reuse ladder rung shine for safe tiles
+      this.audio.play("ladder");
     });
 
     this.events.on(LudoEvents.GAME_OVER, (payload: { winner: string; playerName: string }) => {
       this.audio.play("win");
-      this.winnerPopup.show(payload.playerName, this.gameManager.getHistory());
+      const history = this.gameManager?.getHistory() ?? [];
+      this.winnerPopup.show(payload.playerName, history);
     });
   }
 }

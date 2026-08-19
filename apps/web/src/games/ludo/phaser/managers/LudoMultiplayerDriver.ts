@@ -5,8 +5,10 @@ import type TokenManager from "./TokenManager";
 import type DiceManager from "./DiceManager";
 import type HUDManager from "./HUDManager";
 import type WinnerPopup from "../ui/WinnerPopup";
+import type FeedbackText from "../ui/FeedbackText";
 import { LudoRuleEngine } from "../engine/LudoRuleEngine";
 import { DEFAULT_SETTINGS, type PlayerColor } from "../types/ludo.types";
+import { mainPathPixel, homeColPixel, HOME_COL_BASE } from "../data/boardLayout";
 
 interface RemoteToken {
   id: string;
@@ -53,9 +55,7 @@ interface RemoteEvent {
 
 /**
  * Renders a server-authoritative Ludo match. All game state comes from the
- * multiplayer store (fed by `game:state` / `game:over` socket events); this
- * class only animates the server's dice rolls and token moves, and forwards
- * local input as `{ type: "roll" }` / `{ type: "move", tokenId }` actions.
+ * multiplayer store. Animates dice rolls and token moves, forwards local input.
  * Input is enabled only when it is the local player's turn.
  */
 export default class LudoMultiplayerDriver {
@@ -64,6 +64,7 @@ export default class LudoMultiplayerDriver {
   private dice: DiceManager;
   private hud: HUDManager;
   private winnerPopup: WinnerPopup;
+  private feedback: FeedbackText | null;
   private readonly mySeat: number | null;
   private readonly names: string[];
   private ruleEngine: LudoRuleEngine;
@@ -83,12 +84,14 @@ export default class LudoMultiplayerDriver {
     winnerPopup: WinnerPopup,
     mySeat: number | null,
     names: string[],
+    feedback: FeedbackText | null = null,
   ) {
     this.scene = scene;
     this.tokenManager = tokenManager;
     this.dice = dice;
     this.hud = hud;
     this.winnerPopup = winnerPopup;
+    this.feedback = feedback;
     this.mySeat = mySeat;
     this.names = names;
     const count = names.length === 2 || mySeat != null ? 2 : (DEFAULT_SETTINGS.playerCount as 2 | 4);
@@ -124,6 +127,8 @@ export default class LudoMultiplayerDriver {
     this.unsubscribe = null;
     this.dice.setOnRoll(null);
     this.scene.events.off(LudoEvents.TOKEN_SELECTED, this.onTokenSelected, this);
+    // Kill all running tweens for reconnect safety
+    this.tokenManager.killAllTweens();
   }
 
   private get effectiveMySeat(): number | null {
@@ -226,19 +231,39 @@ export default class LudoMultiplayerDriver {
     const path = this.ruleEngine.buildMovePath(prevToken, dice);
     const color = moveEvent.color ?? prevToken.color;
 
+    // Show dice feedback
+    if (this.feedback && s.dice != null) {
+      const pos = this.getTokenPixel(color, prevToken);
+      this.feedback.diceResult(s.dice, pos.x, pos.y - 30);
+    }
+
     this.tokenManager.moveAlongPath(prevToken.id, path, color, () => {
       if (this.destroyed) return;
 
       const finish = evs.find((e) => e.type === "finish");
       if (finish) {
-        this.hud.addLog(`🎉 ${color.toUpperCase()} token reached Home!`);
+        this.hud.addLog(`${color.toUpperCase()} token reached Home!`);
         this.scene.events.emit(LudoEvents.TOKEN_FINISHED);
+        if (this.feedback) {
+          const pos = this.getTokenPixel(color, { ...prevToken, position: 57 });
+          this.feedback.home(pos.x, pos.y);
+        }
+        this.tokenManager.animateHomeEntry(prevToken.id);
       }
 
       const capture = evs.find((e) => e.type === "capture");
       if (capture?.capturedTokenId) {
-        this.hud.addLog(`⚔️ Captured ${color.toUpperCase()} token!`);
+        this.hud.addLog(`Captured ${color.toUpperCase()} token!`);
         this.scene.events.emit(LudoEvents.TOKEN_CAPTURED);
+        if (this.feedback) {
+          const victim = s.players
+            ?.flatMap((p) => p.tokens)
+            .find((t) => t.id === capture.capturedTokenId);
+          if (victim) {
+            const pos = this.getTokenPixel(victim.color, victim);
+            this.feedback.capture(pos.x, pos.y);
+          }
+        }
         const victim = s.players
           ?.flatMap((p) => p.tokens)
           .find((t) => t.id === capture.capturedTokenId);
@@ -264,6 +289,8 @@ export default class LudoMultiplayerDriver {
       s.players.forEach((p) => {
         this.tokenManager.updateTokens(p.tokens);
         this.hud.updateProgress(p.seat, p.tokensDone);
+        const activeCount = p.tokens.filter((t) => t.state !== "finished").length;
+        this.hud.updateTokenCount(p.seat, activeCount);
       });
     }
 
@@ -279,7 +306,7 @@ export default class LudoMultiplayerDriver {
     const mySeat = this.effectiveMySeat;
 
     if (mySeat == null) {
-      this.dice.setWaiting("Spectating…");
+      this.dice.setWaiting("Spectating...");
       this.tokenManager.clearAllGlows();
       return;
     }
@@ -291,7 +318,7 @@ export default class LudoMultiplayerDriver {
     }
 
     if (s.currentSeat !== mySeat) {
-      this.dice.setWaiting(`${this.seatName(s.currentSeat ?? 0)}'s turn…`);
+      this.dice.setWaiting(`${this.seatName(s.currentSeat ?? 0)}'s turn...`);
       this.tokenManager.clearAllGlows();
       return;
     }
@@ -300,13 +327,13 @@ export default class LudoMultiplayerDriver {
       this.dice.setSelectMode();
       this.tokenManager.highlightClickable(s.legalMoves ?? []);
       if (s.currentSeat === mySeat) {
-        this.hud.showSelectionBanner("👇 TAP A HIGHLIGHTED TOKEN TO MOVE!");
+        this.hud.showSelectionBanner("TAP A HIGHLIGHTED TOKEN TO MOVE!");
       } else {
         this.hud.hideSelectionBanner();
       }
     } else {
       this.hud.hideSelectionBanner();
-      this.dice.enable("🎲 ROLL DICE");
+      this.dice.enable("ROLL DICE");
       this.tokenManager.clearAllGlows();
     }
   }
@@ -339,6 +366,16 @@ export default class LudoMultiplayerDriver {
     this.winShown = false;
     this.pendingWin = false;
     void useMultiplayerStore.getState().rematch();
+  }
+
+  /** Get pixel position for feedback text placement. */
+  private getTokenPixel(color: PlayerColor, token: { position: number }): { x: number; y: number } {
+    if (token.position === -1) return { x: 400, y: 400 };
+    const homeBase = HOME_COL_BASE[color];
+    if (token.position >= homeBase) {
+      return homeColPixel(color, token.position - homeBase);
+    }
+    return mainPathPixel(token.position);
   }
 }
 

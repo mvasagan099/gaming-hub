@@ -1,16 +1,17 @@
 import Phaser from "phaser";
 import type BoardManager from "./BoardManager";
 import { GameEvents } from "../events/GameEvents";
+import { ANIM, animDuration, prefersReducedMotion } from "../constants";
 
 export interface Player {
   id: number;
   name: string;
   tile: number;
   container: Phaser.GameObjects.Container;
-  circle: Phaser.GameObjects.Arc;
   label: Phaser.GameObjects.Text;
   finished: boolean;
   color: number;
+  glowRing: Phaser.GameObjects.Arc;
 }
 
 /** Per-player pixel offsets so tokens don't overlap on the same tile */
@@ -29,6 +30,7 @@ export default class PlayerManager {
   private board: BoardManager;
   private players: Player[] = [];
   private isMoving = false;
+  private activePlayerId: number | null = null;
 
   constructor(scene: Phaser.Scene, board: BoardManager) {
     this.scene = scene;
@@ -43,55 +45,62 @@ export default class PlayerManager {
   }
 
   private createPlayer(id: number): Player {
-    const color   = PLAYER_COLORS[(id - 1) % PLAYER_COLORS.length] ?? 0x94a3b8;
+    const color = PLAYER_COLORS[(id - 1) % PLAYER_COLORS.length] ?? 0x94a3b8;
     const initial = PLAYER_INITIALS[(id - 1) % PLAYER_INITIALS.length] ?? `P${id}`;
-    const offset  = OFFSETS[(id - 1) % OFFSETS.length] ?? { x: 0, y: 0 };
+    const offset = OFFSETS[(id - 1) % OFFSETS.length] ?? { x: 0, y: 0 };
     const startPos = this.board.getTilePosition(1);
 
-    // 3D pawn graphic using layered circles
     const g = this.scene.add.graphics();
 
+    // Outer glow ring (semi-transparent)
+    const glowRing = this.scene.add.circle(0, 0, 22, color, ANIM.tokenGlowAlphaNormal);
+
     // Shadow ellipse beneath pawn
-    g.fillStyle(0x000000, 0.3);
-    g.fillEllipse(2, 5, 26, 8);
+    g.fillStyle(0x000000, 0.35);
+    g.fillEllipse(2, 6, 28, 10);
 
-    // Main body
+    // Main body — two-tone gradient (lighter top, darker bottom)
     g.fillStyle(color, 1);
-    g.fillCircle(0, 0, 14);
+    g.fillCircle(0, 0, 16);
 
-    // Dark border
+    // Darker lower hemisphere
     const darkColor = Phaser.Display.Color.IntegerToColor(color);
-    darkColor.darken(45);
-    g.lineStyle(2.5, darkColor.color, 1);
-    g.strokeCircle(0, 0, 14);
+    darkColor.darken(30);
+    g.fillStyle(darkColor.color, 0.5);
+    g.fillEllipse(0, 5, 28, 14);
+
+    // Border
+    const borderColor = Phaser.Display.Color.IntegerToColor(color);
+    borderColor.darken(50);
+    g.lineStyle(2.5, borderColor.color, 1);
+    g.strokeCircle(0, 0, 16);
 
     // Dome highlight (upper-left arc)
-    g.fillStyle(0xffffff, 0.3);
-    g.fillEllipse(-4, -5, 12, 8);
+    g.fillStyle(0xffffff, 0.35);
+    g.fillEllipse(-4, -5, 14, 10);
 
     // Specular dot
-    g.fillStyle(0xffffff, 0.65);
-    g.fillCircle(-5, -6, 3);
+    g.fillStyle(0xffffff, 0.7);
+    g.fillCircle(-5, -6, 3.5);
 
     // Label text
     const label = this.scene.add.text(0, 1, initial, {
-      fontSize: "10px",
+      fontSize: "11px",
       color: "#ffffff",
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
+      stroke: "#000000",
+      strokeThickness: 2,
     }).setOrigin(0.5);
-
-    // Transparent arc used as type-compatible circle reference
-    const circle = this.scene.add.circle(0, 0, 14, color, 0);
 
     const container = this.scene.add.container(
       startPos.x + offset.x,
       startPos.y + offset.y,
-      [g, circle, label]
+      [glowRing, g, label],
     );
     container.setDepth(50);
 
-    return { id, name: `Player ${id}`, tile: 1, container, circle, label, finished: false, color };
+    return { id, name: `Player ${id}`, tile: 1, container, label, finished: false, color, glowRing };
   }
 
 
@@ -130,10 +139,40 @@ export default class PlayerManager {
     });
   }
 
+  /** Set the active (current-turn) player — glows the active token, dims others. */
+  setActivePlayer(playerId: number): void {
+    if (this.activePlayerId === playerId) return;
+    this.activePlayerId = playerId;
+    const reduced = prefersReducedMotion();
+
+    for (const p of this.players) {
+      const isActive = p.id === playerId;
+      const targetScale = isActive ? ANIM.activeTokenScale : ANIM.normalTokenScale;
+      const targetGlowAlpha = isActive ? ANIM.tokenGlowAlphaActive : ANIM.tokenGlowAlphaNormal;
+
+      if (reduced) {
+        p.container.setScale(targetScale);
+        p.glowRing.setAlpha(targetGlowAlpha);
+      } else {
+        this.scene.tweens.add({
+          targets: p.container,
+          scale: targetScale,
+          duration: animDuration(250),
+          ease: "Back.Out",
+        });
+        this.scene.tweens.add({
+          targets: p.glowRing,
+          alpha: targetGlowAlpha,
+          duration: animDuration(250),
+          ease: "Sine.InOut",
+        });
+      }
+    }
+  }
+
   /**
    * Animate token moving tile-by-tile from current position.
    * Calls onComplete when done.
-   * Note: dice is disabled during movement so concurrent calls cannot happen.
    */
   movePlayer(playerId: number, steps: number, onComplete?: () => void): void {
     const player = this.getPlayer(playerId);
@@ -141,39 +180,46 @@ export default class PlayerManager {
       onComplete?.();
       return;
     }
-    // Force-reset any stale flag so the move always starts cleanly
     this.isMoving = false;
-
-
     this.isMoving = true;
     this.scene.events.emit(GameEvents.MOVEMENT_STARTED, player.id);
 
-    const startTile  = player.tile;
+    const startTile = player.tile;
     const targetTile = Math.min(startTile + steps, 100);
 
     if (startTile + steps > 100) {
-      // Over-shoot: stay put (caller already resolved this case)
       this.isMoving = false;
       onComplete?.();
       return;
     }
 
     const offset = OFFSETS[(player.id - 1) % OFFSETS.length] ?? { x: 0, y: 0 };
-    let current  = startTile;
+    let current = startTile;
+    const reduced = prefersReducedMotion();
 
     const hop = () => {
       if (current >= targetTile) {
         player.tile = targetTile;
         this.isMoving = false;
         this.scene.events.emit(GameEvents.MOVEMENT_FINISHED, player.id, targetTile);
-        // Bounce on landing
+
+        if (reduced) {
+          onComplete?.();
+          return;
+        }
+
+        // Landing bounce with squish
         this.scene.tweens.add({
           targets: player.container,
-          y: player.container.y - 8,
-          duration: 100,
+          scaleX: ANIM.landingBounceScale,
+          scaleY: ANIM.landingSquashY,
+          duration: animDuration(80),
           ease: "Sine.Out",
           yoyo: true,
-          onComplete: () => onComplete?.(),
+          onComplete: () => {
+            player.container.setScale(1);
+            onComplete?.();
+          },
         });
         return;
       }
@@ -182,25 +228,29 @@ export default class PlayerManager {
       const pos = this.board.getTilePosition(current);
       this.scene.events.emit(GameEvents.TILE_REACHED, player.id, current);
 
-      // Move container directly to target tile
+      const stepDur = reduced ? 0 : animDuration(ANIM.tokenStepDuration);
+
+      // Move container to next tile
       this.scene.tweens.add({
         targets: player.container,
         x: pos.x + offset.x,
         y: pos.y + offset.y,
-        duration: 150,
-        ease: "Linear",
+        duration: stepDur,
+        ease: ANIM.tokenStepEase,
         onComplete: hop,
       });
-      
-      // Bounce the children inside the container
-      const [g, circle, label] = player.container.list;
-      this.scene.tweens.add({
-        targets: [g, circle, label],
-        y: -25, // bounce height
-        duration: 75,
-        yoyo: true,
-        ease: "Sine.Out",
-      });
+
+      if (!reduced) {
+        // Hop the graphics inside the container
+        const children = player.container.list;
+        this.scene.tweens.add({
+          targets: children,
+          y: ANIM.bounceHeight,
+          duration: animDuration(ANIM.bounceDuration),
+          yoyo: true,
+          ease: "Sine.Out",
+        });
+      }
     };
 
     hop();
@@ -213,35 +263,95 @@ export default class PlayerManager {
   snapToTile(playerId: number, tile: number, onComplete?: () => void): void {
     const player = this.getPlayer(playerId);
     if (!player) {
-      this.isMoving = false;   // always reset
+      this.isMoving = false;
       onComplete?.();
       return;
     }
 
     player.tile = tile;
-    const pos    = this.board.getTilePosition(tile);
+    const pos = this.board.getTilePosition(tile);
     const offset = OFFSETS[(player.id - 1) % OFFSETS.length] ?? { x: 0, y: 0 };
+    const reduced = prefersReducedMotion();
+    const dur = reduced ? 0 : animDuration(ANIM.snakeDuration);
 
     this.scene.tweens.add({
       targets: player.container,
       x: pos.x + offset.x,
       y: pos.y + offset.y,
-      duration: 500,
-      ease: "Back.Out",
+      duration: dur,
+      ease: "Cubic.InOut",
       onComplete: () => {
-        this.isMoving = false;   // ← critical: unblock future moves
+        this.isMoving = false;
         this.scene.events.emit(GameEvents.MOVEMENT_FINISHED, player.id, tile);
         onComplete?.();
       },
     });
   }
 
+  /**
+   * Animate token following a curved path (for snake/ladder visual).
+   * Each point in the path is visited sequentially, then onComplete fires.
+   */
+  animateAlongPath(
+    playerId: number,
+    path: Phaser.Math.Vector2[],
+    onComplete?: () => void,
+  ): void {
+    const player = this.getPlayer(playerId);
+    if (!player || path.length === 0) {
+      this.isMoving = false;
+      onComplete?.();
+      return;
+    }
+
+    const offset = OFFSETS[(player.id - 1) % OFFSETS.length] ?? { x: 0, y: 0 };
+    const reduced = prefersReducedMotion();
+    const stepDur = reduced ? 0 : animDuration(Math.round(ANIM.snakeDuration / path.length));
+
+    let i = 0;
+    const step = () => {
+      if (i >= path.length) {
+        const last = path[path.length - 1];
+        player.tile = this.getClosestTile(last);
+        this.isMoving = false;
+        this.scene.events.emit(GameEvents.MOVEMENT_FINISHED, player.id, player.tile);
+        onComplete?.();
+        return;
+      }
+      const pt = path[i];
+      this.scene.tweens.add({
+        targets: player.container,
+        x: pt.x + offset.x,
+        y: pt.y + offset.y,
+        duration: stepDur,
+        ease: "Sine.InOut",
+        onComplete: () => { i++; step(); },
+      });
+    };
+    step();
+  }
+
+  /** Find the closest tile number to a world position. */
+  private getClosestTile(pos: Phaser.Math.Vector2): number {
+    let best = 1;
+    let bestDist = Infinity;
+    for (let t = 1; t <= 100; t++) {
+      const tp = this.board.getTilePosition(t);
+      const d = Phaser.Math.Distance.Between(pos.x, pos.y, tp.x, tp.y);
+      if (d < bestDist) { bestDist = d; best = t; }
+    }
+    return best;
+  }
+
   reset(): void {
     this.isMoving = false;
+    this.activePlayerId = null;
     this.players.forEach((player, idx) => {
-      player.tile     = 1;
+      player.tile = 1;
       player.finished = false;
-      const pos    = this.board.getTilePosition(1);
+      player.container.setScale(1);
+      player.glowRing.setAlpha(ANIM.tokenGlowAlphaNormal);
+      const pos = this.board.getTilePosition(1);
       const offset = OFFSETS[idx % OFFSETS.length] ?? { x: 0, y: 0 };
       player.container.setPosition(pos.x + offset.x, pos.y + offset.y);
     });

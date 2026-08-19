@@ -74,20 +74,41 @@ export function cancelMatch(matchId: string, reason?: string) {
 /**
  * Reports the result of a tournament match to the API, which drives
  * automatic bracket advancement, round completion, and settlement.
- * Fire-and-forget: failures are logged but do not break the game flow.
+ * Retries up to 3 times on failure before giving up (scheduler will
+ * independently recover the result).
  */
-export function reportTournamentMatchResult(params: {
+export async function reportTournamentMatchResult(params: {
   matchId: string;
   tournamentId: string;
   roundId: string;
   winnerId: string;
   loserId?: string;
   scores?: Record<string, number>;
-}) {
-  return internalRequest<{ ok: true }>(
-    "POST",
-    "/internal/tournament/match-result",
-    params as Record<string, unknown>,
+}): Promise<void> {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 1_000;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await internalRequest<{ ok: true }>(
+        "POST",
+        "/internal/tournament/match-result",
+        params as Record<string, unknown>,
+      );
+      return; // Success
+    } catch (error) {
+      console.error(
+        `[TOURNAMENT] match-result report attempt ${attempt}/${MAX_RETRIES} failed for ${params.matchId}:`,
+        error,
+      );
+      if (attempt < MAX_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+      }
+    }
+  }
+
+  console.error(
+    `[TOURNAMENT] match-result report gave up after ${MAX_RETRIES} attempts for ${params.matchId}. Scheduler will recover.`,
   );
 }
 

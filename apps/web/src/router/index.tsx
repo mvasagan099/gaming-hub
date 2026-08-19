@@ -24,6 +24,9 @@ const AnnouncementsPage = lazy(() => import("../pages/Announcements/Announcement
 const TicketsPage = lazy(() => import("../pages/Tickets/TicketsPage").then((m) => ({ default: m.TicketsPage })));
 const MessagesPage = lazy(() => import("../pages/Messages/MessagesPage").then((m) => ({ default: m.MessagesPage })));
 const TournamentsPage = lazy(() => import("../pages/Tournaments/TournamentsPage").then((m) => ({ default: m.TournamentsPage })));
+const TournamentDetailPage = lazy(() => import("../pages/Tournaments/TournamentDetailPage").then((m) => ({ default: m.TournamentDetailPage })));
+const TournamentHistoryPage = lazy(() => import("../pages/Tournaments/TournamentHistoryPage").then((m) => ({ default: m.TournamentHistoryPage })));
+const TournamentLeaderboardPage = lazy(() => import("../pages/Tournaments/TournamentLeaderboardPage").then((m) => ({ default: m.TournamentLeaderboardPage })));
 const SearchPage = lazy(() => import("../pages/Search/SearchPage").then((m) => ({ default: m.SearchPage })));
 const FriendsPage = lazy(() => import("../pages/Friends/FriendsPage").then((m) => ({ default: m.FriendsPage })));
 const AchievementsPage = lazy(() => import("../pages/Achievements/AchievementsPage").then((m) => ({ default: m.AchievementsPage })));
@@ -43,6 +46,7 @@ const AdminAuditPage = lazy(() => import("../pages/admin/AdminAuditPage").then((
 const AdminSettingsPage = lazy(() => import("../pages/admin/AdminSettingsPage").then((m) => ({ default: m.AdminSettingsPage })));
 const AdminFeaturesPage = lazy(() => import("../pages/admin/AdminFeaturesPage").then((m) => ({ default: m.AdminFeaturesPage })));
 const AdminTournamentsPage = lazy(() => import("../pages/admin/AdminTournamentsPage").then((m) => ({ default: m.AdminTournamentsPage })));
+const AdminTournamentDetailPage = lazy(() => import("../pages/admin/AdminTournamentDetailPage").then((m) => ({ default: m.AdminTournamentDetailPage })));
 const AdminCouponsPage = lazy(() => import("../pages/admin/AdminCouponsPage").then((m) => ({ default: m.AdminCouponsPage })));
 const AdminAnnouncementsPage = lazy(() => import("../pages/admin/AdminAnnouncementsPage").then((m) => ({ default: m.AdminAnnouncementsPage })));
 const AdminCrmPage = lazy(() => import("../pages/admin/AdminCrmPage").then((m) => ({ default: m.AdminCrmPage })));
@@ -100,6 +104,9 @@ export const router = createBrowserRouter([
           { path: "tickets", element: <SuspensePage><FeatureGate flag="support.tickets"><TicketsPage /></FeatureGate></SuspensePage> },
           { path: "messages", element: <SuspensePage><FeatureGate flag="social.messaging"><MessagesPage /></FeatureGate></SuspensePage> },
           { path: "tournaments", element: <SuspensePage><FeatureGate flag="content.tournaments"><TournamentsPage /></FeatureGate></SuspensePage> },
+          { path: "tournaments/:id", element: <SuspensePage><FeatureGate flag="content.tournaments"><TournamentDetailPage /></FeatureGate></SuspensePage> },
+          { path: "tournaments/history", element: <SuspensePage><FeatureGate flag="content.tournaments"><TournamentHistoryPage /></FeatureGate></SuspensePage> },
+          { path: "tournaments/leaderboard", element: <SuspensePage><FeatureGate flag="content.tournaments"><TournamentLeaderboardPage /></FeatureGate></SuspensePage> },
           { path: "search", element: <SuspensePage><SearchPage /></SuspensePage> },
           { path: "friends", element: <SuspensePage><FeatureGate flag="social.friends"><FriendsPage /></FeatureGate></SuspensePage> },
           { path: "achievements", element: <SuspensePage><AchievementsPage /></SuspensePage> },
@@ -128,6 +135,7 @@ export const router = createBrowserRouter([
           { path: "matches", element: <SuspensePage><AdminMatchesPage /></SuspensePage> },
           { path: "rooms", element: <SuspensePage><AdminRoomsPage /></SuspensePage> },
           { path: "tournaments", element: <SuspensePage><AdminTournamentsPage /></SuspensePage> },
+          { path: "tournaments/:id", element: <SuspensePage><AdminTournamentDetailPage /></SuspensePage> },
           { path: "coupons", element: <SuspensePage><AdminCouponsPage /></SuspensePage> },
           { path: "announcements", element: <SuspensePage><AdminAnnouncementsPage /></SuspensePage> },
           { path: "crm", element: <SuspensePage><AdminCrmPage /></SuspensePage> },

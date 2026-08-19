@@ -4,11 +4,12 @@ import { AppError, isGameId } from "@gaming-hub/shared";
 import type { TournamentStatus, TournamentFormat } from "@gaming-hub/shared";
 import { canTransitionTournamentStatus } from "@gaming-hub/shared";
 import { applyTransaction } from "./wallet";
-import { createNotification } from "./notifications";
 import { getCategorySettings } from "./settings";
 import { isFeatureEnabled } from "./featureFlags";
 import { audit } from "./audit";
 import { checkAndUnlock } from "./achievements";
+import { notifyUserSocket } from "./socketBridge";
+import { TournamentNotificationService } from "./tournamentNotificationService";
 
 export interface CreateTournamentInput {
   gameId: string;
@@ -55,10 +56,15 @@ export async function listTournaments(page: number, pageSize: number, status?: T
       format: t.format,
       prizePool: t.prizePool,
       entryFee: t.entryFee,
+      minPlayers: t.minPlayers,
       maxPlayers: t.maxPlayers,
+      grossPool: t.grossPool,
       registeredCount: t._count.players,
       startTime: t.startTime.toISOString(),
+      registrationStartsAt: t.registrationStartsAt?.toISOString() ?? null,
+      registrationEndsAt: t.registrationEndsAt?.toISOString() ?? null,
       status: t.status,
+      autoStartWhenFull: t.autoStartWhenFull,
     })),
     total,
     page,
@@ -92,12 +98,19 @@ export async function getTournamentDetail(id: string, userId: string | null) {
     format: tournament.format,
     prizePool: tournament.prizePool,
     entryFee: tournament.entryFee,
+    minPlayers: tournament.minPlayers,
     maxPlayers: tournament.maxPlayers,
     startTime: tournament.startTime.toISOString(),
     endTime: tournament.endTime?.toISOString() ?? null,
+    registrationStartsAt: tournament.registrationStartsAt?.toISOString() ?? null,
+    registrationEndsAt: tournament.registrationEndsAt?.toISOString() ?? null,
     status: tournament.status,
     bannerUrl: tournament.bannerUrl,
     rules: tournament.rules,
+    grossPool: tournament.grossPool,
+    prizeDistribution: tournament.prizeDistribution,
+    autoStartWhenFull: tournament.autoStartWhenFull,
+    stateVersion: tournament.stateVersion,
     registered: Boolean(myEntry),
     players: tournament.players.map((p) => ({
       userId: p.userId,
@@ -126,6 +139,15 @@ export async function registerForTournament(userId: string, tournamentId: string
     throw new AppError("TOURNAMENT_STARTED", "Tournament is not accepting registrations", 400);
   }
   if (tournament._count.players >= tournament.maxPlayers) throw new AppError("TOURNAMENT_FULL", "Tournament is full", 400);
+
+  // Check registration window
+  const now = new Date();
+  if (tournament.registrationStartsAt && now < tournament.registrationStartsAt) {
+    throw new AppError("TOURNAMENT_REGISTRATION_NOT_OPEN", "Registration has not started yet", 400);
+  }
+  if (tournament.registrationEndsAt && now > tournament.registrationEndsAt) {
+    throw new AppError("TOURNAMENT_REGISTRATION_CLOSED", "Registration has closed", 400);
+  }
 
   const existing = await prisma.tournamentPlayer.findUnique({
     where: { tournamentId_userId: { tournamentId, userId } },
@@ -161,8 +183,27 @@ export async function registerForTournament(userId: string, tournamentId: string
     meta: { title: tournament.title, entryFee: tournament.entryFee },
   });
 
-  await createNotification(userId, "TOURNAMENT", `Registered: ${tournament.title}`,
-    "You are registered. Good luck!", { tournamentId });
+  const updatedCount = await prisma.tournamentPlayer.count({ where: { tournamentId } });
+
+  await TournamentNotificationService.notifyRegistration({
+    tournamentId,
+    playerId: userId,
+    tournamentTitle: tournament.title,
+    entryFee: tournament.entryFee,
+    playerCount: updatedCount,
+    maxPlayers: tournament.maxPlayers,
+    startTime: tournament.startTime,
+  });
+
+  // Emit registration-updated to all tournament subscribers
+  const regPayload = {
+    tournamentId,
+    registeredPlayers: updatedCount,
+    maxPlayers: tournament.maxPlayers,
+    remainingSlots: tournament.maxPlayers - updatedCount,
+  };
+  await notifyUserSocket(userId, "tournament:player-registered", { tournamentId, seed: null });
+
   return { ok: true };
 }
 
@@ -188,6 +229,11 @@ export async function cancelRegistration(userId: string, tournamentId: string) {
       }
     }
   });
+
+  // Emit registration-updated
+  const updatedCount = await prisma.tournamentPlayer.count({ where: { tournamentId } });
+  await notifyUserSocket(userId, "tournament:player-unregistered", { tournamentId });
+
   return { ok: true };
 }
 
