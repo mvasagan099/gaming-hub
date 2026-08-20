@@ -79,7 +79,7 @@ export class SliceManager {
     if (this.points.length < 2) return;
 
     // Choose trail neon color based on combo state
-    let auraColor = FRUIT_NINJA_VISUAL_CONFIG.trail.defaultColor; // 0x38bdf8
+    let auraColor: number = FRUIT_NINJA_VISUAL_CONFIG.trail.defaultColor; // 0x38bdf8
     if (this.isComboActive) {
       auraColor = this.comboTier >= 4
         ? FRUIT_NINJA_VISUAL_CONFIG.trail.criticalColor // Golden

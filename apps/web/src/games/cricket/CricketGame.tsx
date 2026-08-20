@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { CricketState } from '@gaming-hub/game-engine';
 import { GameWrapper } from '../../components/GameWrapper';
 import { claimPracticeReward } from '../../services/api/practiceReward';
@@ -154,6 +154,11 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
   const [showTossUI, setShowTossUI] = useState(false);
   const [tossComplete, setTossComplete] = useState(false);
 
+  // ── Broadcast HUD state ───────────────────────────────────────────────────
+  const [gameEvent, setGameEvent] = useState<{ type: string; runs?: number } | null>(null);
+  const [overHistory, setOverHistory] = useState<string[]>([]);
+  const eventCounterRef = useRef(0);
+
   const gameState = useMultiplayerStore((s) => s.gameState);
   const winner = useMultiplayerStore((s) => s.winner);
   const mySeat = useMultiplayerStore((s) => s.mySeat);
@@ -198,6 +203,22 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
     if (won) {
       setTimeout(() => void claimPracticeReward('cricket'), 1000);
     }
+  }, []);
+
+  const handleGameEvent = useCallback((type: string, data?: Record<string, unknown>) => {
+    // Trigger re-render with new event (uses counter to force re-trigger on same event type)
+    eventCounterRef.current += 1;
+    const runs = data?.runs as number | undefined;
+    setGameEvent({ type, runs });
+
+    // Update over history for ball tracker
+    if (type === 'four') setOverHistory(prev => [...prev.slice(-5), '4']);
+    else if (type === 'six') setOverHistory(prev => [...prev.slice(-5), '6']);
+    else if (type === 'wicket') setOverHistory(prev => [...prev.slice(-5), 'W']);
+    else if (type === 'runs' && runs != null) setOverHistory(prev => [...prev.slice(-5), String(runs)]);
+
+    // Clear banner after 2.5s
+    setTimeout(() => setGameEvent(null), 2500);
   }, []);
 
   const handleReplay = () => {
@@ -338,6 +359,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
                 role={isMultiplayer ? 'batting' : (playerRole ?? 'batting')}
                 overs={isMultiplayer ? 5 : matchOvers}
                 onGameOver={isMultiplayer ? undefined : handleGameOver}
+                onGameEvent={handleGameEvent}
               />
             </div>
 
@@ -356,7 +378,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
         )}
       </div>
 
-      {/* ══ MODERN CRICKET GLASSMORPHIC OVERLAYS ══ */}
+      {/* ══ CRICKET OVERLAYS — BROADCAST HUD + GAME-OVER MODAL ══ */}
       <CricketOverlays
         isGameOver={matchFinished}
         isWin={isMultiplayer ? isMultiWin : isWin}
@@ -369,6 +391,20 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
         isMultiplayer={isMultiplayer}
         onReplay={handleReplay}
         onExit={onBack}
+        showBroadcastHUD={matchStarted && !matchFinished}
+        gameEvent={gameEvent}
+        overHistory={overHistory}
+        liveScore={isMultiplayer ? (remoteState ? (mySeat === 0 ? remoteState.team1Score : remoteState.team2Score) : 0) : undefined}
+        liveWickets={isMultiplayer ? (remoteState ? (mySeat === 0 ? remoteState.team1Wickets : remoteState.team2Wickets) : 0) : undefined}
+        liveOvers={isMultiplayer ? (remoteState ? `${remoteState.currentOver}.${remoteState.currentBall}/${remoteState.totalOvers}` : '0.0') : undefined}
+        liveTarget={isMultiplayer ? (remoteState?.target ?? null) : null}
+        runRate={isMultiplayer && remoteState ? (() => {
+          const balls = (remoteState.currentOver ?? 0) * 6 + (remoteState.currentBall ?? 0);
+          const sc = mySeat === 0 ? remoteState.team1Score : remoteState.team2Score;
+          return balls > 0 ? (sc / (balls / 6)).toFixed(1) : '0.0';
+        })() : undefined}
+        inning={isMultiplayer ? (remoteState?.inning as 1 | 2 ?? 1) : 1}
+        teamName={isMultiplayer ? (namesBySeat[mySeat ?? 0] ?? 'YOU') : (playerRole === 'batting' ? 'BATTING' : 'BOWLING')}
       />
 
       {/* ══ TOSS UI ══ */}

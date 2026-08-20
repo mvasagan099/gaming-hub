@@ -106,8 +106,15 @@ export default class FruitNinjaScene extends Phaser.Scene {
 
       this.events.once("shutdown", () => {
         this.multiplayerDriver?.stop();
+        if (this.spawnEvent) this.spawnEvent.destroy();
+        if (this.matchTimerEvent) this.matchTimerEvent.destroy();
       });
     }
+
+    this.events.once("shutdown", () => {
+      if (this.spawnEvent) this.spawnEvent.destroy();
+      if (this.matchTimerEvent) this.matchTimerEvent.destroy();
+    });
 
     // 7. Event Bindings
     this.events.off(FruitEvents.FRUIT_SLICED);

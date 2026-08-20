@@ -100,6 +100,8 @@ export interface FruitNinjaState extends BaseState {
   /** Per-seat server-clock time of the last scored slice, ms. */
   lastSliceAtMs: number[];
   winnerSeat: number | null;
+  /** Whether the match is driven by client actions (slice-fruit / miss-fruit / bomb-hit). */
+  actionDriven: boolean;
 }
 
 export type FruitNinjaAction =

@@ -7,13 +7,16 @@ interface CricketPhaserGameProps {
   role?: 'batting' | 'bowling';
   overs?: number;
   onGameOver?: (runs: number, wickets: number, won: boolean) => void;
+  onGameEvent?: (type: string, data?: Record<string, unknown>) => void;
 }
 
-export function CricketPhaserGame({ mode, role, overs, onGameOver }: CricketPhaserGameProps) {
+export function CricketPhaserGame({ mode, role, overs, onGameOver, onGameEvent }: CricketPhaserGameProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const onGameOverRef = useRef(onGameOver);
   onGameOverRef.current = onGameOver;
+  const onGameEventRef = useRef(onGameEvent);
+  onGameEventRef.current = onGameEvent;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -40,9 +43,12 @@ export function CricketPhaserGame({ mode, role, overs, onGameOver }: CricketPhas
 
     gameRef.current = new Phaser.Game(config);
 
-    // Pass data to the scene. In multiplayer mode the scene reads the
-    // authoritative state/events from the multiplayer store itself, so role
-    // and overs are only meaningful for the local AI mode.
+    // Listen for cricket game events emitted by CricketScene
+    const handleGameEvent = (data: { type: string } & Record<string, unknown>) => {
+      onGameEventRef.current?.(data.type, data);
+    };
+    gameRef.current.events.on('cricket:game_event', handleGameEvent);
+
     gameRef.current.scene.start("CricketScene", {
       mode,
       role: role ?? 'batting',
@@ -52,6 +58,7 @@ export function CricketPhaserGame({ mode, role, overs, onGameOver }: CricketPhas
 
     return () => {
       if (gameRef.current) {
+        gameRef.current.events.off('cricket:game_event', handleGameEvent);
         gameRef.current.destroy(true);
         gameRef.current = null;
       }

@@ -90,6 +90,7 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
       scores: players.map(() => 0),
       lastSliceAtMs: players.map(() => 0),
       winnerSeat: null,
+      actionDriven: false,
     };
   }
 
@@ -134,12 +135,12 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
 
   // ─── Physics tick (driven by the MatchManager loop, ~60Hz) ─────────────────
 
-  tick(): { state: FruitNinjaState; events: EngineEvent[]; finished: boolean; winnerSeats: number[] } {
+  tick(): EngineActionResult<FruitNinjaState> {
     const now = this.now();
     const state = this.state as FruitNinjaState;
 
     if (state.finished || state.paused) {
-      return { state, events: [], finished: state.finished, winnerSeats: state.winnerSeats ?? [] };
+      return { ok: true, state, events: [], finished: state.finished, winnerSeats: state.winnerSeats ?? [] };
     }
 
     const events: EngineEvent[] = [];
@@ -165,7 +166,7 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
       if (now >= deadline) {
         const result = this.resolveByTimer(next);
         this.writeState(result.state);
-        return { state: result.state, events: result.events, finished: true, winnerSeats: result.winnerSeats };
+        return { ok: true, state: result.state, events: result.events, finished: true, winnerSeats: result.winnerSeats };
       }
 
       this.processSpawns(next, now, events);
@@ -175,12 +176,12 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
       const finished = this.processExpiry(next, now, events);
       if (finished) {
         this.writeState(next);
-        return { state: next, events, finished: true, winnerSeats: next.winnerSeats ?? [] };
+        return { ok: true, state: next, events, finished: true, winnerSeats: next.winnerSeats ?? [] };
       }
     }
 
     this.writeState(next);
-    return { state: next, events, finished: next.finished ?? false, winnerSeats: next.winnerSeats ?? [] };
+    return { ok: true, state: next, events, finished: next.finished ?? false, winnerSeats: next.winnerSeats ?? [] };
   }
 
   private writeState(next: FruitNinjaState): void {
@@ -284,6 +285,20 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
   private processExpiry(state: FruitNinjaState, now: number, events: EngineEvent[]): boolean {
     const remaining: Target[] = [];
 
+    // If the match is driven by client actions (slice-fruit / miss-fruit / bomb-hit),
+    // clients manage their own misses and slicing locally. Do not penalize lives on background targets.
+    if (state.actionDriven) {
+      for (const tg of state.targets) {
+        if (now >= tg.expiresAt || tg.y > FIELD_HEIGHT + 100) {
+          events.push({ type: "target-expired", targetId: tg.id });
+        } else {
+          remaining.push(tg);
+        }
+      }
+      state.targets = remaining;
+      return false;
+    }
+
     for (const tg of state.targets) {
       const expired = now >= tg.expiresAt || tg.y > FIELD_HEIGHT + 100;
       if (!expired) {
@@ -380,6 +395,7 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
 
     switch (action.type) {
       case "slice-fruit": {
+        next.actionDriven = true;
         const pts = action.points ?? 10;
         next.scores[seat] = (next.scores[seat] ?? 0) + pts;
         const p = next.players[seat];
@@ -393,6 +409,7 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
       }
 
       case "miss-fruit": {
+        next.actionDriven = true;
         const p = next.players[seat];
         if (p) {
           p.combos = 0;
@@ -415,6 +432,7 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
       }
 
       case "bomb-hit": {
+        next.actionDriven = true;
         const p = next.players[seat];
         if (p) {
           p.combos = 0;
