@@ -12,24 +12,26 @@ export interface Player {
   finished: boolean;
   color: number;
   glowRing: Phaser.GameObjects.Arc;
+  shadowGraphic: Phaser.GameObjects.Graphics;
+  pawnGraphic: Phaser.GameObjects.Graphics;
 }
 
-/** Per-player pixel offsets so tokens don't overlap on the same tile */
-const OFFSETS: Array<{ x: number; y: number }> = [
-  { x: -12, y: -12 },
-  { x:  12, y:  12 },
-  { x: -12, y:  12 },
-  { x:  12, y: -12 },
-];
-
-const PLAYER_COLORS = [0xef4444, 0x10b981, 0x3b82f6, 0xf59e0b];
+export const PLAYER_COLORS = [0x3b82f6, 0xef4444, 0x10b981, 0xf59e0b];
+export const PLAYER_HEX = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b"];
 const PLAYER_INITIALS = ["P1", "P2", "P3", "P4"];
+
+const OFFSETS = [
+  { x: -10, y: -10 },
+  { x:  10, y: -10 },
+  { x: -10, y:  10 },
+  { x:  10, y:  10 },
+];
 
 export default class PlayerManager {
   private scene: Phaser.Scene;
   private board: BoardManager;
   private players: Player[] = [];
-  private isMoving = false;
+  public isMoving = false;
   private activePlayerId: number | null = null;
 
   constructor(scene: Phaser.Scene, board: BoardManager) {
@@ -50,59 +52,111 @@ export default class PlayerManager {
     const offset = OFFSETS[(id - 1) % OFFSETS.length] ?? { x: 0, y: 0 };
     const startPos = this.board.getTilePosition(1);
 
-    const g = this.scene.add.graphics();
+    // ── 1. Dynamic Contact Shadow Graphic ──
+    const shadowGraphic = this.scene.add.graphics();
+    this.drawTokenShadow(shadowGraphic, 1, 1);
 
-    // Outer glow ring (semi-transparent)
-    const glowRing = this.scene.add.circle(0, 0, 22, color, ANIM.tokenGlowAlphaNormal);
+    // ── 2. Pulsing Active Aura Ring ──
+    const glowRing = this.scene.add.circle(0, 0, 24, color, ANIM.tokenGlowAlphaNormal);
 
-    // Shadow ellipse beneath pawn
-    g.fillStyle(0x000000, 0.35);
-    g.fillEllipse(2, 6, 28, 10);
+    // ── 3. 3D Volumetric Pawn Graphic ──
+    const pawnGraphic = this.scene.add.graphics();
+    this.draw3DPawn(pawnGraphic, color);
 
-    // Main body — two-tone gradient (lighter top, darker bottom)
-    g.fillStyle(color, 1);
-    g.fillCircle(0, 0, 16);
-
-    // Darker lower hemisphere
-    const darkColor = Phaser.Display.Color.IntegerToColor(color);
-    darkColor.darken(30);
-    g.fillStyle(darkColor.color, 0.5);
-    g.fillEllipse(0, 5, 28, 14);
-
-    // Border
-    const borderColor = Phaser.Display.Color.IntegerToColor(color);
-    borderColor.darken(50);
-    g.lineStyle(2.5, borderColor.color, 1);
-    g.strokeCircle(0, 0, 16);
-
-    // Dome highlight (upper-left arc)
-    g.fillStyle(0xffffff, 0.35);
-    g.fillEllipse(-4, -5, 14, 10);
-
-    // Specular dot
-    g.fillStyle(0xffffff, 0.7);
-    g.fillCircle(-5, -6, 3.5);
-
-    // Label text
-    const label = this.scene.add.text(0, 1, initial, {
+    // ── 4. Embossed Player Label ──
+    const label = this.scene.add.text(0, -2, initial, {
       fontSize: "11px",
       color: "#ffffff",
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
       stroke: "#000000",
-      strokeThickness: 2,
+      strokeThickness: 2.5,
     }).setOrigin(0.5);
 
     const container = this.scene.add.container(
       startPos.x + offset.x,
       startPos.y + offset.y,
-      [glowRing, g, label],
+      [shadowGraphic, glowRing, pawnGraphic, label],
     );
     container.setDepth(50);
 
-    return { id, name: `Player ${id}`, tile: 1, container, label, finished: false, color, glowRing };
+    return {
+      id,
+      name: `Player ${id}`,
+      tile: 1,
+      container,
+      label,
+      finished: false,
+      color,
+      glowRing,
+      shadowGraphic,
+      pawnGraphic,
+    };
   }
 
+  private drawTokenShadow(g: Phaser.GameObjects.Graphics, scale = 1, alpha = 0.45): void {
+    g.clear();
+    // Multi-tier soft contact shadow under pawn
+    g.fillStyle(0x000000, alpha * 0.5);
+    g.fillEllipse(1, 9, 32 * scale, 12 * scale);
+    g.fillStyle(0x000000, alpha);
+    g.fillEllipse(0, 8, 22 * scale, 8 * scale);
+  }
+
+  private draw3DPawn(g: Phaser.GameObjects.Graphics, color: number): void {
+    g.clear();
+
+    const darkColor = Phaser.Display.Color.IntegerToColor(color);
+    darkColor.darken(45);
+
+    const midDark = Phaser.Display.Color.IntegerToColor(color);
+    midDark.darken(25);
+
+    const brightColor = Phaser.Display.Color.IntegerToColor(color);
+    brightColor.lighten(20);
+
+    // ── Layer 1: Metallic Beveled Base Rim ──
+    g.fillStyle(0x000000, 0.4);
+    g.fillEllipse(0, 7, 30, 11);
+
+    g.fillStyle(darkColor.color, 1);
+    g.fillEllipse(0, 6, 28, 10);
+
+    g.fillStyle(color, 1);
+    g.fillEllipse(0, 4, 26, 9);
+
+    g.fillStyle(0xffffff, 0.4);
+    g.fillEllipse(-4, 2, 16, 4);
+
+    // ── Layer 2: Conical Pawn Waist & Body ──
+    g.fillStyle(darkColor.color, 1);
+    g.fillCircle(0, 0, 15);
+
+    // Lower shaded hemisphere
+    g.fillStyle(midDark.color, 1);
+    g.fillCircle(0, -1, 14.5);
+
+    // Main vibrant body
+    g.fillStyle(color, 1);
+    g.fillCircle(-1, -2, 13.5);
+
+    // ── Layer 3: Spherical Crown Dome ──
+    // Directional highlight (top-left light source)
+    g.fillStyle(brightColor.color, 0.9);
+    g.fillEllipse(-3, -4, 16, 12);
+
+    // Primary specular sheen
+    g.fillStyle(0xffffff, 0.5);
+    g.fillEllipse(-4, -5, 11, 7);
+
+    // Intense specular glint spot
+    g.fillStyle(0xffffff, 0.95);
+    g.fillCircle(-5, -6, 3);
+
+    // Inset golden rim border
+    g.lineStyle(1.5, 0x000000, 0.35);
+    g.strokeCircle(0, 0, 15);
+  }
 
   getPlayers(): Player[] {
     return this.players;
@@ -112,7 +166,6 @@ export default class PlayerManager {
     return this.players.find((p) => p.id === id);
   }
 
-  /** Instantly place a token on a tile (used for authoritative sync). */
   placeAt(playerId: number, tile: number): void {
     const player = this.getPlayer(playerId);
     if (!player) return;
@@ -122,7 +175,6 @@ export default class PlayerManager {
     player.container.setPosition(pos.x + offset.x, pos.y + offset.y);
   }
 
-  /** Override token names + initials with real display names (multiplayer). */
   setNames(names: string[]): void {
     this.players.forEach((player, index) => {
       const name = names[index];
@@ -139,7 +191,6 @@ export default class PlayerManager {
     });
   }
 
-  /** Set the active (current-turn) player — glows the active token, dims others. */
   setActivePlayer(playerId: number): void {
     if (this.activePlayerId === playerId) return;
     this.activePlayerId = playerId;
@@ -170,17 +221,12 @@ export default class PlayerManager {
     }
   }
 
-  /**
-   * Animate token moving tile-by-tile from current position.
-   * Calls onComplete when done.
-   */
   movePlayer(playerId: number, steps: number, onComplete?: () => void): void {
     const player = this.getPlayer(playerId);
     if (!player) {
       onComplete?.();
       return;
     }
-    this.isMoving = false;
     this.isMoving = true;
     this.scene.events.emit(GameEvents.MOVEMENT_STARTED, player.id);
 
@@ -208,12 +254,11 @@ export default class PlayerManager {
           return;
         }
 
-        // Landing bounce with squish
         this.scene.tweens.add({
           targets: player.container,
           scaleX: ANIM.landingBounceScale,
           scaleY: ANIM.landingSquashY,
-          duration: animDuration(80),
+          duration: animDuration(ANIM.landingBounceDuration / 2),
           ease: "Sine.Out",
           yoyo: true,
           onComplete: () => {
@@ -230,7 +275,6 @@ export default class PlayerManager {
 
       const stepDur = reduced ? 0 : animDuration(ANIM.tokenStepDuration);
 
-      // Move container to next tile
       this.scene.tweens.add({
         targets: player.container,
         x: pos.x + offset.x,
@@ -241,25 +285,32 @@ export default class PlayerManager {
       });
 
       if (!reduced) {
-        // Hop the graphics inside the container
-        const children = player.container.list;
+        const liftTargets = [player.pawnGraphic, player.label, player.glowRing];
         this.scene.tweens.add({
-          targets: children,
-          y: ANIM.bounceHeight,
-          duration: animDuration(ANIM.bounceDuration),
+          targets: liftTargets,
+          y: ANIM.tokenLiftHeight,
+          duration: animDuration(ANIM.tokenLiftDuration),
           yoyo: true,
           ease: "Sine.Out",
         });
+
+        this.scene.tweens.add({
+          targets: player.shadowGraphic,
+          scaleX: ANIM.tokenShadowMinScale,
+          scaleY: ANIM.tokenShadowMinScale,
+          alpha: 0.25,
+          duration: animDuration(ANIM.tokenLiftDuration),
+          yoyo: true,
+          ease: "Sine.Out",
+          onComplete: () => {
+            this.drawTokenShadow(player.shadowGraphic, 1, ANIM.tokenShadowMaxAlpha);
+          },
+        });
       }
     };
-
     hop();
   }
 
-  /**
-   * Slide token to a tile after a snake or ladder event.
-   * Always resets isMoving so the next turn can proceed.
-   */
   snapToTile(playerId: number, tile: number, onComplete?: () => void): void {
     const player = this.getPlayer(playerId);
     if (!player) {
@@ -288,10 +339,6 @@ export default class PlayerManager {
     });
   }
 
-  /**
-   * Animate token following a curved path (for snake/ladder visual).
-   * Each point in the path is visited sequentially, then onComplete fires.
-   */
   animateAlongPath(
     playerId: number,
     path: Phaser.Math.Vector2[],
@@ -331,7 +378,6 @@ export default class PlayerManager {
     step();
   }
 
-  /** Find the closest tile number to a world position. */
   private getClosestTile(pos: Phaser.Math.Vector2): number {
     let best = 1;
     let bestDist = Infinity;

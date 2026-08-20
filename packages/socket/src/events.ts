@@ -97,15 +97,19 @@ export interface ClientToServerEvents {
   }) => void;
 
   "ping": (payload: { timestamp: number }, callback: () => void) => void;
+
+  "tournament:subscribe": (payload: { tournamentId: string }, ack?: Ack<{ subscribed: boolean }>) => void;
+  "tournament:unsubscribe": (payload: { tournamentId: string }) => void;
 }
 
 export interface ServerToClientEvents {
-  "game:event": (event: GameEventEnvelope) => void;
-  "game:notification": (notification: InGameNotification) => void;
-  "game:state:authoritative": (payload: AuthoritativeMatchState) => void;
-  "game:sync:response": (payload: { matchId: string; stateVersion: number; fullState: JsonObject }) => void;
-
   "room:update": (room: RoomFull) => void;
+  "room:updated": (room: RoomFull) => void;
+  "room:player-joined": (player: RoomPlayer) => void;
+  "room:player-left": (payload: { userId: string; newHostUserId: string }) => void;
+  "room:player-ready": (payload: { userId: string; ready: boolean }) => void;
+  "room:started": (payload: { roomId: string; matchId: string; initialTurn?: number }) => void;
+  "room:kicked": (payload: { roomId: string; reason: string }) => void;
   "room:closed": (payload: { roomId: string; reason: string }) => void;
 
   "player:joined": (payload: { roomId: string; player: RoomPlayer }) => void;
@@ -116,6 +120,12 @@ export interface ServerToClientEvents {
     status: RoomPlayer["connectionStatus"];
   }) => void;
   "player:kicked": (payload: { roomId: string; playerId: string; byUserId: string; reason: string }) => void;
+
+  "game:notification": (payload: InGameNotification) => void;
+  "game:event": (envelope: GameEventEnvelope) => void;
+  "game:authoritative-state": (state: AuthoritativeMatchState) => void;
+  "game:state:authoritative": (payload: AuthoritativeMatchState) => void;
+  "game:sync:response": (payload: { matchId: string; stateVersion: number; fullState: JsonObject }) => void;
 
   "rematch:update": (payload: RematchUpdate) => void;
 
@@ -157,6 +167,16 @@ export interface ServerToClientEvents {
   "matchmaking:found": (payload: { roomId: string }) => void;
 
   "wallet:updated": (payload: WalletUpdatePayload) => void;
+
+  "tournament:updated": (data: { tournamentId: string; stateVersion: number }) => void;
+  "tournament:match-created": (data: { tournamentId: string; matchId: string; roundNumber: number }) => void;
+  "tournament:match-started": (data: { tournamentId: string; matchId: string }) => void;
+  "tournament:match-completed": (data: { tournamentId: string; matchId: string; winnerId?: string }) => void;
+  "tournament:player-advanced": (data: { tournamentId: string; userId: string; roundNumber: number }) => void;
+  "tournament:player-eliminated": (data: { tournamentId: string; userId: string; roundNumber: number }) => void;
+  "tournament:final-started": (data: { tournamentId: string }) => void;
+  "tournament:completed": (data: { tournamentId: string; winnerId: string }) => void;
+  "tournament:settlement-completed": (data: { tournamentId: string }) => void;
 
   "latency:ping": (payload: { timestamp: number }, ack: () => void) => void;
 

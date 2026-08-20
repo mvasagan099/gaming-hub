@@ -2,18 +2,19 @@ import Phaser from "phaser";
 import { ladders, ladderLookup } from "../data/ladders";
 import type BoardManager from "./BoardManager";
 
-/** Classic wooden ladder colour set */
+/** Classic rich teak & brass wooden ladder palette */
 const LADDER_COLORS = {
-  railDark:  0x5c3317,
-  railMain:  0x8B4513,
-  railLight: 0xcd853f,
-  rungDark:  0x4a2800,
-  rungMain:  0x6b3a2a,
-  rungLight: 0xb07040,
-  shine:     0xdeb887,
-  capTop:    0xf0c060,
-  capBot:    0xa07030,
   shadow:    0x000000,
+  railDark:  0x3e1d08, // Dark walnut under-rail
+  railMain:  0x78350f, // Rich warm teak wood
+  railLight: 0xb45309, // Top lit edge
+  railShine: 0xfde68a, // Specular wood glint
+  rungDark:  0x2e1405, // Bottom rung shadow
+  rungMain:  0x5b2707, // Main wooden rung
+  rungLight: 0x9a3412, // Top rung highlight
+  brassCap:  0xf59e0b, // Polished brass cap
+  brassShine:0xfef08a, // Specular brass glint
+  rivet:     0xd97706, // Brass rivet studs
 };
 
 interface LadderEntry {
@@ -43,7 +44,7 @@ export class LadderManager {
       const bot = board.getTilePosition(ladder.start);
       const top = board.getTilePosition(ladder.end);
 
-      this.drawLadder(scene, bot, top);
+      this.draw3DWoodLadder(scene, bot, top);
 
       const highlightG = scene.add.graphics();
       highlightG.setDepth(5);
@@ -66,18 +67,10 @@ export class LadderManager {
 
     const hg = entry.highlightGraphics;
     hg.clear();
-    // Draw a glowing overlay along the ladder
-    const dx = entry.top.x - entry.bottom.x;
-    const dy = entry.top.y - entry.bottom.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const nx = dx / len;
-    const ny = dy / len;
-    const px = -ny;
-    const py = nx;
-
-    hg.lineStyle(12, 0xfbbf24, 0.25);
+    // Radiant golden glow along the entire ladder structure
+    hg.lineStyle(16, 0xf59e0b, 0.3);
     hg.lineBetween(entry.bottom.x, entry.bottom.y, entry.top.x, entry.top.y);
-    hg.lineStyle(6, 0xfde68a, 0.4);
+    hg.lineStyle(8, 0xfde68a, 0.6);
     hg.lineBetween(entry.bottom.x, entry.bottom.y, entry.top.x, entry.top.y);
 
     this.activeHighlight = hg;
@@ -96,12 +89,12 @@ export class LadderManager {
     });
   }
 
-  /** Get a straight-line path from bottom to top for token animation. */
+  /** Get a sampled straight-line path from bottom to top for token animation. */
   getLadderPath(bottomTile: number, board: BoardManager): Phaser.Math.Vector2[] {
     const entry = this.entries.find(e => e.start === bottomTile);
     if (!entry) return [];
     const points: Phaser.Math.Vector2[] = [];
-    const steps = 6;
+    const steps = 8;
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
       points.push(new Phaser.Math.Vector2(
@@ -112,7 +105,7 @@ export class LadderManager {
     return points;
   }
 
-  private drawLadder(
+  private draw3DWoodLadder(
     scene: Phaser.Scene,
     bottom: Phaser.Math.Vector2,
     top: Phaser.Math.Vector2,
@@ -130,38 +123,53 @@ export class LadderManager {
     const px = -ny;
     const py = nx;
 
-    const halfGap = 9;
-    const railW = 6;
+    const halfGap = 10;
+    const railW = 7;
     const rungW = 5;
-    const rungOver = 3;
+    const rungOver = 4;
 
     const l0 = { x: bottom.x + px * halfGap, y: bottom.y + py * halfGap };
     const l1 = { x: top.x + px * halfGap, y: top.y + py * halfGap };
     const r0 = { x: bottom.x - px * halfGap, y: bottom.y - py * halfGap };
     const r1 = { x: top.x - px * halfGap, y: top.y - py * halfGap };
 
-    // Drop shadow
-    g.lineStyle(railW + 6, LADDER_COLORS.shadow, 0.18);
-    g.lineBetween(l0.x + 2, l0.y + 2, l1.x + 2, l1.y + 2);
-    g.lineBetween(r0.x + 2, r0.y + 2, r1.x + 2, r1.y + 2);
+    const shadowOffset = { x: 7, y: 9 };
 
-    // Left rail
+    // ── 1. Soft 3D Directional Cast Shadow on Board ──
+    g.lineStyle(railW + 8, LADDER_COLORS.shadow, 0.16);
+    g.lineBetween(l0.x + shadowOffset.x, l0.y + shadowOffset.y, l1.x + shadowOffset.x, l1.y + shadowOffset.y);
+    g.lineBetween(r0.x + shadowOffset.x, r0.y + shadowOffset.y, r1.x + shadowOffset.x, r1.y + shadowOffset.y);
+
+    g.lineStyle(railW + 2, LADDER_COLORS.shadow, 0.3);
+    g.lineBetween(l0.x + shadowOffset.x * 0.6, l0.y + shadowOffset.y * 0.6, l1.x + shadowOffset.x * 0.6, l1.y + shadowOffset.y * 0.6);
+    g.lineBetween(r0.x + shadowOffset.x * 0.6, r0.y + shadowOffset.y * 0.6, r1.x + shadowOffset.x * 0.6, r1.y + shadowOffset.y * 0.6);
+
+    // ── 2. Left Wooden Rail (3D cylindrical wood) ──
+    // Dark underside
     g.lineStyle(railW + 2, LADDER_COLORS.railDark, 1);
     g.lineBetween(l0.x, l0.y, l1.x, l1.y);
+    // Warm Teak body
     g.lineStyle(railW, LADDER_COLORS.railMain, 1);
     g.lineBetween(l0.x, l0.y, l1.x, l1.y);
-    g.lineStyle(2, LADDER_COLORS.shine, 0.6);
-    g.lineBetween(l0.x + px, l0.y + py, l1.x + px, l1.y + py);
+    // Top highlight bevel
+    g.lineStyle(2.5, LADDER_COLORS.railLight, 0.9);
+    g.lineBetween(l0.x + px * 1.5, l0.y + py * 1.5, l1.x + px * 1.5, l1.y + py * 1.5);
+    // Specular wood shine
+    g.lineStyle(1, LADDER_COLORS.railShine, 0.65);
+    g.lineBetween(l0.x + px * 2, l0.y + py * 2, l1.x + px * 2, l1.y + py * 2);
 
-    // Right rail
+    // ── 3. Right Wooden Rail ──
+    // Dark underside
     g.lineStyle(railW + 2, LADDER_COLORS.railDark, 1);
     g.lineBetween(r0.x, r0.y, r1.x, r1.y);
+    // Warm Teak body
     g.lineStyle(railW, LADDER_COLORS.railMain, 1);
     g.lineBetween(r0.x, r0.y, r1.x, r1.y);
-    g.lineStyle(2, LADDER_COLORS.shine, 0.6);
-    g.lineBetween(r0.x - px, r0.y - py, r1.x - px, r1.y - py);
+    // Top highlight bevel
+    g.lineStyle(2.5, LADDER_COLORS.railLight, 0.9);
+    g.lineBetween(r0.x + px * 1.5, r0.y + py * 1.5, r1.x + px * 1.5, r1.y + py * 1.5);
 
-    // Rungs
+    // ── 4. 3D Cylindrical Wooden Rungs & Rivet Studs ──
     const numRungs = Math.max(3, Math.floor(len / 22));
     for (let i = 1; i < numRungs; i++) {
       const t = i / numRungs;
@@ -173,45 +181,55 @@ export class LadderManager {
       const rx1 = cx - px * (halfGap + rungOver);
       const ry1 = cy - py * (halfGap + rungOver);
 
-      g.lineStyle(rungW + 3, LADDER_COLORS.shadow, 0.2);
-      g.lineBetween(rx0 + nx, ry0 + ny, rx1 + nx, ry1 + ny);
-      g.lineStyle(rungW, LADDER_COLORS.rungDark, 1);
-      g.lineBetween(rx0 + nx * 1.5, ry0 + ny * 1.5, rx1 + nx * 1.5, ry1 + ny * 1.5);
+      // Rung drop shadow
+      g.lineStyle(rungW + 4, LADDER_COLORS.shadow, 0.22);
+      g.lineBetween(rx0 + shadowOffset.x * 0.7, ry0 + shadowOffset.y * 0.7, rx1 + shadowOffset.x * 0.7, ry1 + shadowOffset.y * 0.7);
+
+      // Rung dark underside
+      g.lineStyle(rungW + 1.5, LADDER_COLORS.rungDark, 1);
+      g.lineBetween(rx0 + nx * 1.2, ry0 + ny * 1.2, rx1 + nx * 1.2, ry1 + ny * 1.2);
+
+      // Rung body
       g.lineStyle(rungW, LADDER_COLORS.rungMain, 1);
       g.lineBetween(rx0, ry0, rx1, ry1);
-      g.lineStyle(2, LADDER_COLORS.rungLight, 0.8);
-      g.lineBetween(rx0 - nx, ry0 - ny, rx1 - nx, ry1 - ny);
+
+      // Rung top specular highlight
+      g.lineStyle(1.8, LADDER_COLORS.rungLight, 0.9);
+      g.lineBetween(rx0 - nx * 1.2, ry0 - ny * 1.2, rx1 - nx * 1.2, ry1 - ny * 1.2);
+
+      // Brass Rivet Studs at Rail Junctions
+      const jLeft = { x: cx + px * halfGap, y: cy + py * halfGap };
+      const jRight = { x: cx - px * halfGap, y: cy - py * halfGap };
+
+      g.fillStyle(LADDER_COLORS.rivet, 1);
+      g.fillCircle(jLeft.x, jLeft.y, 2.2);
+      g.fillCircle(jRight.x, jRight.y, 2.2);
+      g.fillStyle(0xffffff, 0.8);
+      g.fillCircle(jLeft.x - 0.6, jLeft.y - 0.6, 0.8);
+      g.fillCircle(jRight.x - 0.6, jRight.y - 0.6, 0.8);
     }
 
-    // End caps
-    const capRadius = 5;
-    g.fillStyle(LADDER_COLORS.capBot, 1);
-    g.fillCircle(l0.x, l0.y, capRadius);
-    g.fillCircle(r0.x, r0.y, capRadius);
-    g.lineStyle(2, LADDER_COLORS.railDark, 1);
-    g.strokeCircle(l0.x, l0.y, capRadius);
-    g.strokeCircle(r0.x, r0.y, capRadius);
+    // ── 5. Polished Brass End-Caps ──
+    const capRadius = 5.5;
+    const caps = [l0, r0, l1, r1];
+    for (const c of caps) {
+      // Brass cap shadow
+      g.fillStyle(0x000000, 0.35);
+      g.fillCircle(c.x + 1.5, c.y + 2, capRadius);
+      // Brass cap dark rim
+      g.fillStyle(LADDER_COLORS.railDark, 1);
+      g.fillCircle(c.x, c.y, capRadius);
+      // Brass cap golden face
+      g.fillStyle(LADDER_COLORS.brassCap, 1);
+      g.fillCircle(c.x, c.y, capRadius - 1);
+      // Specular glint
+      g.fillStyle(LADDER_COLORS.brassShine, 0.9);
+      g.fillCircle(c.x - 1.2, c.y - 1.2, 1.8);
+    }
 
-    g.fillStyle(LADDER_COLORS.capTop, 1);
-    g.fillCircle(l1.x, l1.y, capRadius);
-    g.fillCircle(r1.x, r1.y, capRadius);
-    g.lineStyle(2, LADDER_COLORS.railDark, 1);
-    g.strokeCircle(l1.x, l1.y, capRadius);
-    g.strokeCircle(r1.x, r1.y, capRadius);
-
-    // UP arrow at top
-    const arrowTip = { x: top.x + nx * 14, y: top.y + ny * 14 };
-    const arrowL = { x: top.x - px * 7, y: top.y - py * 7 };
-    const arrowR = { x: top.x + px * 7, y: top.y + py * 7 };
-
-    g.fillStyle(0xf9e79f, 0.85);
-    g.beginPath();
-    g.moveTo(arrowTip.x, arrowTip.y);
-    g.lineTo(arrowL.x, arrowL.y);
-    g.lineTo(arrowR.x, arrowR.y);
-    g.closePath();
-    g.fillPath();
+    // Polished brass end-caps are rendered above
   }
 }
 
 export default LadderManager;
+

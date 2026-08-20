@@ -2,21 +2,15 @@ import Phaser from "phaser";
 import type { Token, PlayerColor } from "../types/ludo.types";
 import { LudoEvents } from "../events/LudoEvents";
 import { yardSpawnPixel, mainPathPixel, homeColPixel, HOME_COL_BASE, CELL_SIZE } from "../data/boardLayout";
-import { ANIM, animDuration, prefersReducedMotion } from "../constants";
+import { ANIM, LUDO_TOKEN_VISUAL_CONFIG, animDuration, prefersReducedMotion } from "../constants";
+import { LudoTokenRenderer, LUDO_TOKEN_PALETTES } from "./LudoTokenRenderer";
 
 const STACK_OFFSETS: Array<{ x: number; y: number }> = [
-  { x: -8, y: -8 },
-  { x:  8, y: -8 },
-  { x: -8, y:  8 },
-  { x:  8, y:  8 },
+  { x: -7, y: -7 },
+  { x:  7, y: -7 },
+  { x: -7, y:  7 },
+  { x:  7, y:  7 },
 ];
-
-const TOKEN_COLORS: Record<PlayerColor, { main: number; dark: number; light: number }> = {
-  red:    { main: 0xef4444, dark: 0xb91c1c, light: 0xfca5a5 },
-  blue:   { main: 0x3b82f6, dark: 0x1d4ed8, light: 0x93c5fd },
-  green:  { main: 0x22c55e, dark: 0x15803d, light: 0x86efac },
-  yellow: { main: 0xeab308, dark: 0xa16207, light: 0xfde047 },
-};
 
 const COLOR_INITIALS: Record<PlayerColor, string[]> = {
   red:    ["R1", "R2", "R3", "R4"],
@@ -28,17 +22,19 @@ const COLOR_INITIALS: Record<PlayerColor, string[]> = {
 interface TokenObject {
   token: Token;
   container: Phaser.GameObjects.Container;
-  graphics: Phaser.GameObjects.Graphics;
+  shadowGraphics: Phaser.GameObjects.Graphics;
   glowGraphics: Phaser.GameObjects.Graphics;
+  bodyGraphics: Phaser.GameObjects.Graphics;
   label: Phaser.GameObjects.Text;
   glowTween?: Phaser.Tweens.Tween;
   idleTween?: Phaser.Tweens.Tween;
+  isSelected?: boolean;
 }
 
 export default class TokenManager {
   private scene: Phaser.Scene;
   private tokenObjects = new Map<string, TokenObject>();
-  private tokenRadius = Math.round(CELL_SIZE * 0.35);
+  private tokenRadius = Math.round(CELL_SIZE * 0.36);
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -52,260 +48,127 @@ export default class TokenManager {
 
   private createToken(token: Token): void {
     const { x, y } = this.getPixelForToken(token);
-    const palette = TOKEN_COLORS[token.color];
+    const palette = LUDO_TOKEN_PALETTES[token.color];
     const radius = this.tokenRadius;
     const label = COLOR_INITIALS[token.color][token.index] ?? token.id;
 
-    // Glow ring (rendered behind the token body)
+    // 1. Contact Shadow Graphics (Layer 0)
+    const shadowGfx = this.scene.add.graphics();
+    LudoTokenRenderer.drawContactShadow(shadowGfx, radius, 0);
+
+    // 2. Radiant Turn Glow Aura Graphics (Layer 1)
     const glowGfx = this.scene.add.graphics();
-    glowGfx.setAlpha(ANIM.tokenGlowAlphaNormal);
+    LudoTokenRenderer.drawAuraRing(glowGfx, token.color, radius, false, 0);
 
-    const g = this.scene.add.graphics();
+    // 3. Volumetric 3D Physical Token Body (Layer 2)
+    const bodyGfx = this.scene.add.graphics();
+    LudoTokenRenderer.draw3DTokenBody(bodyGfx, token.color, radius);
 
-    // Drop shadow — elliptical
-    g.fillStyle(0x000000, 0.25);
-    g.fillEllipse(2, radius * 0.35 + 4, radius * 2.4, radius * 0.7);
-
-    // Main body — two-tone with inner gradient feel
-    g.fillStyle(palette.main, 1);
-    g.fillCircle(0, 0, radius);
-
-    // Upper highlight arc (3D dome effect)
-    g.fillStyle(0xffffff, 0.22);
-    g.fillEllipse(-radius * 0.25, -radius * 0.3, radius * 1.1, radius * 0.75);
-
-    // Specular dot
-    g.fillStyle(0xffffff, 0.65);
-    g.fillCircle(-radius * 0.3, -radius * 0.35, radius * 0.18);
-
-    // Dark border
-    g.lineStyle(2, palette.dark, 0.9);
-    g.strokeCircle(0, 0, radius);
-
-    const txt = this.scene.add.text(0, 1, label, {
-      fontSize: "8px",
+    // 4. Embossed Typography Initial Crest (Layer 3)
+    const txt = this.scene.add.text(0, -0.5, label, {
+      fontSize: "9px",
       color: "#ffffff",
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
-      stroke: "#00000033",
-      strokeThickness: 1,
+      stroke: palette.textStroke,
+      strokeThickness: 2,
+      shadow: {
+        offsetX: 0,
+        offsetY: 1,
+        color: "#00000088",
+        blur: 2,
+        stroke: true,
+        fill: true,
+      },
     }).setOrigin(0.5);
 
-    // Hit area
-    const hitArea = this.scene.add.circle(0, 0, radius, 0xffffff, 0);
+    // 5. Interactive Hit Area
+    const hitArea = this.scene.add.circle(0, 0, radius + 2, 0xffffff, 0);
     hitArea.setInteractive({ useHandCursor: true });
     hitArea.on("pointerdown", () => {
-      this.scene.events.emit(LudoEvents.TOKEN_SELECTED, token.id);
+      this.onTokenClicked(token.id);
     });
 
-    const container = this.scene.add.container(x, y, [glowGfx, g, txt, hitArea]);
-    container.setDepth(50);
+    const container = this.scene.add.container(x, y, [
+      shadowGfx,
+      glowGfx,
+      bodyGfx,
+      txt,
+      hitArea,
+    ]);
+    container.setDepth(50 + token.index);
 
     const obj: TokenObject = {
       token,
       container,
-      graphics: g,
+      shadowGraphics: shadowGfx,
       glowGraphics: glowGfx,
+      bodyGraphics: bodyGfx,
       label: txt,
     };
     this.tokenObjects.set(token.id, obj);
 
     if (token.state === "yard") {
+      container.setScale(LUDO_TOKEN_VISUAL_CONFIG.yardScale);
       this.startIdleAnimation(obj);
+    } else if (token.state === "finished") {
+      container.setScale(LUDO_TOKEN_VISUAL_CONFIG.finishedScale);
+    } else {
+      container.setScale(LUDO_TOKEN_VISUAL_CONFIG.baseScale);
     }
   }
 
-  // ─── Glow ring drawing ───────────────────────────────────────────────────────
-
-  private drawGlowRing(obj: TokenObject, active: boolean): void {
-    const g = obj.glowGraphics;
-    g.clear();
-    const palette = TOKEN_COLORS[obj.token.color];
-    const r = this.tokenRadius + (active ? ANIM.tokenGlowRadiusExtra : 0);
-
-    g.fillStyle(palette.main, active ? ANIM.tokenGlowAlphaActive : ANIM.tokenGlowAlphaNormal);
-    g.fillCircle(0, 0, r + 4);
-    g.lineStyle(2, palette.light, active ? 0.7 : 0.3);
-    g.strokeCircle(0, 0, r + 2);
-  }
-
-  // ─── Movement ────────────────────────────────────────────────────────────────
-
-  moveAlongPath(tokenId: string, path: number[], color: PlayerColor, onComplete?: () => void): void {
-    const obj = this.tokenObjects.get(tokenId);
-    if (!obj || path.length === 0) { onComplete?.(); return; }
-
-    this.stopIdleAnimation(obj);
-    this.drawGlowRing(obj, false);
-    obj.glowGraphics.setAlpha(1);
-
-    let stepIndex = 0;
-    const reduced = prefersReducedMotion();
-
-    const hop = () => {
-      if (stepIndex >= path.length) {
-        this.bounceOnLand(obj);
-        this.scene.time.delayedCall(animDuration(150), () => onComplete?.());
-        return;
-      }
-
-      const pos = path[stepIndex]!;
-      const pixel = this.positionToPixel(color, pos, obj.token.index);
-      stepIndex++;
-
-      if (reduced) {
-        obj.container.setPosition(pixel.x, pixel.y);
-        hop();
-        return;
-      }
-
-      // Hop arc: up then down with slight squash
-      this.scene.tweens.add({
-        targets: obj.container,
-        x: pixel.x,
-        y: pixel.y - ANIM.bounceHeight,
-        scaleX: ANIM.landingBounceScale,
-        scaleY: ANIM.landingSquashY,
-        duration: animDuration(ANIM.tokenStepDuration),
-        ease: ANIM.tokenStepEase,
-        onComplete: () => {
-          this.scene.tweens.add({
-            targets: obj.container,
-            y: pixel.y,
-            scaleX: 1,
-            scaleY: 1,
-            duration: animDuration(ANIM.bounceDuration),
-            ease: "Sine.Out",
-            onComplete: hop,
-          });
-        },
-      });
-    };
-
-    hop();
-  }
-
-  /** Fly token back to yard after capture with shake + arc */
-  sendToYard(tokenId: string, color: PlayerColor, tokenIndex: number, onComplete?: () => void): void {
-    const obj = this.tokenObjects.get(tokenId);
-    if (!obj) { onComplete?.(); return; }
-
-    const { x, y } = yardSpawnPixel(color, tokenIndex);
-    const reduced = prefersReducedMotion();
-
-    if (reduced) {
-      obj.container.setPosition(x, y);
-      this.startIdleAnimation(obj);
-      onComplete?.();
-      return;
-    }
-
-    // Flash white to indicate capture
-    const flash = this.scene.add.graphics();
-    flash.setDepth(55);
-    flash.fillStyle(0xffffff, ANIM.captureFlashAlpha);
-    flash.fillCircle(obj.container.x, obj.container.y, this.tokenRadius + 6);
-    this.scene.tweens.add({
-      targets: flash,
-      alpha: 0,
-      duration: animDuration(ANIM.captureFlashDuration),
-      onComplete: () => flash.destroy(),
-    });
-
-    // Shake then fly back
-    this.scene.tweens.add({
-      targets: obj.container,
-      x: obj.container.x + ANIM.captureShakeDistance,
-      duration: animDuration(ANIM.captureShakeDuration),
-      ease: "Linear",
-      yoyo: true,
-      repeat: 2,
-      onComplete: () => {
-        this.scene.tweens.add({
-          targets: obj.container,
-          x,
-          y,
-          scaleX: 0.6,
-          scaleY: 0.6,
-          duration: animDuration(400),
-          ease: "Back.In",
-          onComplete: () => {
-            this.scene.tweens.add({
-              targets: obj.container,
-              scaleX: 1,
-              scaleY: 1,
-              duration: animDuration(200),
-              ease: "Back.Out",
-              onComplete: () => {
-                this.startIdleAnimation(obj);
-                onComplete?.();
-              },
-            });
-          },
-        });
-      },
-    });
-  }
-
-  // ─── Home entry celebration ──────────────────────────────────────────────────
-
-  animateHomeEntry(tokenId: string): void {
+  private onTokenClicked(tokenId: string): void {
     const obj = this.tokenObjects.get(tokenId);
     if (!obj) return;
 
-    const reduced = prefersReducedMotion();
-    if (reduced) return;
+    // Small selection scale bounce
+    if (!prefersReducedMotion()) {
+      this.scene.tweens.add({
+        targets: obj.container,
+        scaleX: LUDO_TOKEN_VISUAL_CONFIG.selectedScale,
+        scaleY: LUDO_TOKEN_VISUAL_CONFIG.selectedScale,
+        duration: animDuration(120),
+        yoyo: true,
+        ease: "Sine.Out",
+      });
+    }
 
-    this.scene.tweens.add({
-      targets: obj.container,
-      scaleX: ANIM.homeEntryScale,
-      scaleY: ANIM.homeEntryScale,
-      duration: animDuration(ANIM.homeEntryDuration),
-      ease: ANIM.homeEntryBounce,
-      yoyo: true,
-    });
-
-    // Particle-like ring burst
-    const palette = TOKEN_COLORS[obj.token.color];
-    const ring = this.scene.add.graphics();
-    ring.setDepth(55);
-    ring.lineStyle(3, palette.main, 0.8);
-    ring.strokeCircle(obj.container.x, obj.container.y, this.tokenRadius);
-    this.scene.tweens.add({
-      targets: ring,
-      alpha: 0,
-      scaleX: 2,
-      scaleY: 2,
-      duration: animDuration(500),
-      ease: "Cubic.Out",
-      onComplete: () => ring.destroy(),
-    });
+    this.scene.events.emit(LudoEvents.TOKEN_SELECTED, tokenId);
   }
 
-  // ─── Highlight / Selection ────────────────────────────────────────────────────
+  // ─── Turn Glow & Selection ──────────────────────────────────────────────────
+
+  private drawGlowRing(obj: TokenObject, active: boolean, alpha = 0.5): void {
+    LudoTokenRenderer.drawAuraRing(obj.glowGraphics, obj.token.color, this.tokenRadius, active, alpha);
+  }
 
   glowToken(tokenId: string): void {
     const obj = this.tokenObjects.get(tokenId);
     if (!obj) return;
 
     obj.glowTween?.stop();
-    this.drawGlowRing(obj, true);
+
+    const proxy = { alpha: LUDO_TOKEN_VISUAL_CONFIG.auraPulseMinAlpha };
 
     obj.glowTween = this.scene.tweens.add({
-      targets: obj.glowGraphics,
-      alpha: { from: ANIM.tokenGlowAlphaActive, to: 0.25 },
-      duration: animDuration(350),
+      targets: proxy,
+      alpha: LUDO_TOKEN_VISUAL_CONFIG.auraPulseMaxAlpha,
+      duration: animDuration(LUDO_TOKEN_VISUAL_CONFIG.auraPulseDuration),
       ease: "Sine.InOut",
       yoyo: true,
       repeat: -1,
+      onUpdate: () => {
+        this.drawGlowRing(obj, true, proxy.alpha);
+      },
     });
 
-    // Scale bounce
+    // Gentle scale up for active legal token
     this.scene.tweens.add({
       targets: obj.container,
-      scaleX: ANIM.activeTokenScale,
-      scaleY: ANIM.activeTokenScale,
-      duration: animDuration(200),
+      scaleX: LUDO_TOKEN_VISUAL_CONFIG.activeScale,
+      scaleY: LUDO_TOKEN_VISUAL_CONFIG.activeScale,
+      duration: animDuration(180),
       ease: "Back.Out",
     });
   }
@@ -316,13 +179,20 @@ export default class TokenManager {
 
     obj.glowTween?.stop();
     obj.glowTween = undefined;
-    this.drawGlowRing(obj, false);
+    this.drawGlowRing(obj, false, 0);
+
+    const targetScale = obj.token.state === "yard"
+      ? LUDO_TOKEN_VISUAL_CONFIG.yardScale
+      : obj.token.state === "finished"
+        ? LUDO_TOKEN_VISUAL_CONFIG.finishedScale
+        : LUDO_TOKEN_VISUAL_CONFIG.baseScale;
 
     this.scene.tweens.add({
       targets: obj.container,
-      scaleX: ANIM.normalTokenScale,
-      scaleY: ANIM.normalTokenScale,
+      scaleX: targetScale,
+      scaleY: targetScale,
       duration: animDuration(150),
+      ease: "Sine.Out",
     });
   }
 
@@ -339,13 +209,10 @@ export default class TokenManager {
     }
   }
 
-  // ─── Active player highlight (persistent glow on all tokens of a color) ─────
-
   setActivePlayer(color: PlayerColor): void {
     for (const [, obj] of this.tokenObjects) {
       if (obj.token.color === color && obj.token.state === "yard") {
-        this.drawGlowRing(obj, true);
-        obj.glowGraphics.setAlpha(0.35);
+        this.drawGlowRing(obj, true, 0.4);
       }
     }
   }
@@ -353,31 +220,261 @@ export default class TokenManager {
   clearActivePlayer(): void {
     for (const [, obj] of this.tokenObjects) {
       if (obj.token.state === "yard") {
-        this.drawGlowRing(obj, false);
-        obj.glowGraphics.setAlpha(ANIM.tokenGlowAlphaNormal);
+        this.drawGlowRing(obj, false, 0);
       }
     }
   }
 
-  // ─── Win celebration ─────────────────────────────────────────────────────────
+  // ─── 3D Step-by-Step Hop Movement ──────────────────────────────────────────
+
+  moveAlongPath(tokenId: string, path: number[], color: PlayerColor, onComplete?: () => void): void {
+    const obj = this.tokenObjects.get(tokenId);
+    if (!obj || path.length === 0) { onComplete?.(); return; }
+
+    this.stopIdleAnimation(obj);
+    this.clearGlow(tokenId);
+    obj.container.setDepth(100); // Bring moving token above other board objects
+
+    let stepIndex = 0;
+    const reduced = prefersReducedMotion();
+
+    const hop = () => {
+      if (stepIndex >= path.length) {
+        // Restore final resting depth and bounce on arrival
+        obj.container.setDepth(50 + obj.token.index);
+        this.bounceOnLand(obj);
+        this.scene.time.delayedCall(animDuration(160), () => onComplete?.());
+        return;
+      }
+
+      const pos = path[stepIndex]!;
+      const pixel = this.positionToPixel(color, pos, obj.token.index);
+      const isFirstStepFromYard = (stepIndex === 0 && obj.token.state === "yard");
+      stepIndex++;
+
+      if (reduced) {
+        obj.container.setPosition(pixel.x, pixel.y);
+        obj.container.setScale(LUDO_TOKEN_VISUAL_CONFIG.baseScale);
+        hop();
+        return;
+      }
+
+      // Dynamic 3D hop: Upward lift + Dynamic shadow scaling + Landing squash & stretch
+      const hopLift = LUDO_TOKEN_VISUAL_CONFIG.hopLiftY;
+      const stepTime = animDuration(LUDO_TOKEN_VISUAL_CONFIG.stepDuration);
+      const tiltAngle = (stepIndex % 2 === 0 ? 1 : -1) * Phaser.Math.DegToRad(LUDO_TOKEN_VISUAL_CONFIG.motionTiltDeg);
+
+      // Phase 1: 3D Lift & Travel
+      const liftProxy = { t: 0 };
+      this.scene.tweens.add({
+        targets: liftProxy,
+        t: 1,
+        duration: stepTime * 0.55,
+        ease: "Sine.Out",
+        onUpdate: () => {
+          LudoTokenRenderer.drawContactShadow(obj.shadowGraphics, this.tokenRadius, liftProxy.t);
+        },
+      });
+
+      this.scene.tweens.add({
+        targets: obj.container,
+        x: pixel.x,
+        y: pixel.y + hopLift,
+        rotation: tiltAngle,
+        scaleX: isFirstStepFromYard ? LUDO_TOKEN_VISUAL_CONFIG.baseScale * 1.05 : 1.05,
+        scaleY: isFirstStepFromYard ? LUDO_TOKEN_VISUAL_CONFIG.baseScale * 1.05 : 1.05,
+        duration: stepTime * 0.55,
+        ease: "Cubic.Out",
+        onComplete: () => {
+          // Phase 2: 3D Descent & Landing
+          const dropProxy = { t: 1 };
+          this.scene.tweens.add({
+            targets: dropProxy,
+            t: 0,
+            duration: stepTime * 0.45,
+            ease: "Sine.In",
+            onUpdate: () => {
+              LudoTokenRenderer.drawContactShadow(obj.shadowGraphics, this.tokenRadius, dropProxy.t);
+            },
+          });
+
+          this.scene.tweens.add({
+            targets: obj.container,
+            y: pixel.y,
+            rotation: 0,
+            scaleX: LUDO_TOKEN_VISUAL_CONFIG.baseScale * LUDO_TOKEN_VISUAL_CONFIG.landingSquashScaleX,
+            scaleY: LUDO_TOKEN_VISUAL_CONFIG.baseScale * LUDO_TOKEN_VISUAL_CONFIG.landingSquashScaleY,
+            duration: stepTime * 0.45,
+            ease: "Sine.In",
+            onComplete: () => {
+              // Squash & stretch rebound
+              this.scene.tweens.add({
+                targets: obj.container,
+                scaleX: LUDO_TOKEN_VISUAL_CONFIG.baseScale,
+                scaleY: LUDO_TOKEN_VISUAL_CONFIG.baseScale,
+                duration: animDuration(50),
+                ease: "Sine.Out",
+                onComplete: hop,
+              });
+            },
+          });
+        },
+      });
+    };
+
+    hop();
+  }
+
+  private bounceOnLand(obj: TokenObject): void {
+    if (prefersReducedMotion()) return;
+    this.scene.tweens.add({
+      targets: obj.container,
+      y: obj.container.y + LUDO_TOKEN_VISUAL_CONFIG.landingBounceY,
+      duration: animDuration(LUDO_TOKEN_VISUAL_CONFIG.stepDuration * 0.6),
+      ease: "Sine.Out",
+      yoyo: true,
+    });
+  }
+
+  // ─── Capture Animation (Shockwave & Smooth Return) ──────────────────────────
+
+  sendToYard(tokenId: string, color: PlayerColor, tokenIndex: number, onComplete?: () => void): void {
+    const obj = this.tokenObjects.get(tokenId);
+    if (!obj) { onComplete?.(); return; }
+
+    const { x, y } = yardSpawnPixel(color, tokenIndex);
+    const reduced = prefersReducedMotion();
+
+    if (reduced) {
+      obj.container.setPosition(x, y);
+      obj.container.setScale(LUDO_TOKEN_VISUAL_CONFIG.yardScale);
+      this.startIdleAnimation(obj);
+      onComplete?.();
+      return;
+    }
+
+    // 1. Expanding impact shockwave
+    const shockGfx = this.scene.add.graphics();
+    shockGfx.setPosition(obj.container.x, obj.container.y);
+    shockGfx.setDepth(90);
+
+    const shockProxy = { progress: 0 };
+    this.scene.tweens.add({
+      targets: shockProxy,
+      progress: 1,
+      duration: animDuration(LUDO_TOKEN_VISUAL_CONFIG.shockwaveDuration),
+      ease: "Cubic.Out",
+      onUpdate: () => {
+        LudoTokenRenderer.drawImpactShockwave(shockGfx, color, shockProxy.progress);
+      },
+      onComplete: () => shockGfx.destroy(),
+    });
+
+    // 2. Token shake reaction
+    this.scene.tweens.add({
+      targets: obj.container,
+      x: obj.container.x + LUDO_TOKEN_VISUAL_CONFIG.captureShakeDistance,
+      duration: animDuration(LUDO_TOKEN_VISUAL_CONFIG.captureShakeDuration),
+      ease: "Sine.InOut",
+      yoyo: true,
+      repeat: 2,
+      onComplete: () => {
+        // 3. Smooth 3D flight back to home yard slot
+        obj.container.setDepth(95);
+
+        // Shadow shrinks during high arc flight
+        LudoTokenRenderer.drawContactShadow(obj.shadowGraphics, this.tokenRadius, 0.8);
+
+        this.scene.tweens.add({
+          targets: obj.container,
+          x,
+          y,
+          scaleX: LUDO_TOKEN_VISUAL_CONFIG.yardScale * 0.7,
+          scaleY: LUDO_TOKEN_VISUAL_CONFIG.yardScale * 0.7,
+          duration: animDuration(LUDO_TOKEN_VISUAL_CONFIG.captureFlyDuration),
+          ease: "Cubic.InOut",
+          onComplete: () => {
+            obj.container.setDepth(50 + obj.token.index);
+            LudoTokenRenderer.drawContactShadow(obj.shadowGraphics, this.tokenRadius, 0);
+
+            // Rebound landing in yard
+            this.scene.tweens.add({
+              targets: obj.container,
+              scaleX: LUDO_TOKEN_VISUAL_CONFIG.yardScale,
+              scaleY: LUDO_TOKEN_VISUAL_CONFIG.yardScale,
+              duration: animDuration(180),
+              ease: "Back.Out",
+              onComplete: () => {
+                this.startIdleAnimation(obj);
+                onComplete?.();
+              },
+            });
+          },
+        });
+      },
+    });
+  }
+
+  // ─── Home Entry Celebration ────────────────────────────────────────────────
+
+  animateHomeEntry(tokenId: string): void {
+    const obj = this.tokenObjects.get(tokenId);
+    if (!obj) return;
+
+    if (prefersReducedMotion()) {
+      obj.container.setScale(LUDO_TOKEN_VISUAL_CONFIG.finishedScale);
+      return;
+    }
+
+    // Radiant victory ring burst
+    const ring = this.scene.add.graphics();
+    ring.setPosition(obj.container.x, obj.container.y);
+    ring.setDepth(90);
+
+    const ringProxy = { progress: 0 };
+    this.scene.tweens.add({
+      targets: ringProxy,
+      progress: 1,
+      duration: animDuration(600),
+      ease: "Cubic.Out",
+      onUpdate: () => {
+        LudoTokenRenderer.drawImpactShockwave(ring, obj.token.color, ringProxy.progress);
+      },
+      onComplete: () => ring.destroy(),
+    });
+
+    this.scene.tweens.add({
+      targets: obj.container,
+      scaleX: 1.35,
+      scaleY: 1.35,
+      duration: animDuration(250),
+      ease: "Back.Out",
+      yoyo: true,
+      onComplete: () => {
+        obj.container.setScale(LUDO_TOKEN_VISUAL_CONFIG.finishedScale);
+      },
+    });
+  }
+
+  // ─── Winner Celebration ─────────────────────────────────────────────────────
 
   celebrateWinner(color: PlayerColor): void {
     for (const [, obj] of this.tokenObjects) {
       if (obj.token.color !== color) continue;
       this.scene.tweens.add({
         targets: obj.container,
-        y: obj.container.y - 20,
-        scaleX: 1.4,
-        scaleY: 1.4,
-        duration: animDuration(400),
+        y: obj.container.y - 18,
+        scaleX: 1.25,
+        scaleY: 1.25,
+        duration: animDuration(350),
         ease: "Back.Out",
         yoyo: true,
-        repeat: 3,
+        repeat: 4,
       });
     }
   }
 
-  // ─── Token sync ──────────────────────────────────────────────────────────────
+  // ─── Synchronization & Idle Animations ─────────────────────────────────────
 
   syncToken(token: Token): void {
     const obj = this.tokenObjects.get(token.id);
@@ -389,8 +486,8 @@ export default class TokenManager {
       this.stopIdleAnimation(obj);
       this.scene.tweens.add({
         targets: obj.container,
-        scaleX: 0.7,
-        scaleY: 0.7,
+        scaleX: LUDO_TOKEN_VISUAL_CONFIG.finishedScale,
+        scaleY: LUDO_TOKEN_VISUAL_CONFIG.finishedScale,
         duration: animDuration(300),
       });
     }
@@ -412,18 +509,18 @@ export default class TokenManager {
 
     if (token.state === "finished") {
       this.stopIdleAnimation(obj);
-      this.scene.tweens.add({
-        targets: obj.container,
-        scaleX: 0.7,
-        scaleY: 0.7,
-        duration: animDuration(300),
-      });
-    } else if (token.state === "yard" && !obj.idleTween) {
-      this.startIdleAnimation(obj);
+      obj.container.setScale(LUDO_TOKEN_VISUAL_CONFIG.finishedScale);
+    } else if (token.state === "yard") {
+      obj.container.setScale(LUDO_TOKEN_VISUAL_CONFIG.yardScale);
+      if (!obj.idleTween) {
+        this.startIdleAnimation(obj);
+      }
+    } else {
+      obj.container.setScale(LUDO_TOKEN_VISUAL_CONFIG.baseScale);
+      this.stopIdleAnimation(obj);
     }
   }
 
-  /** Kill all running tweens (reconnect safety). */
   killAllTweens(): void {
     for (const [, obj] of this.tokenObjects) {
       this.scene.tweens.killTweensOf(obj.container);
@@ -433,7 +530,22 @@ export default class TokenManager {
     }
   }
 
-  // ─── Private helpers ──────────────────────────────────────────────────────────
+  private startIdleAnimation(obj: TokenObject): void {
+    obj.idleTween?.stop();
+    obj.idleTween = this.scene.tweens.add({
+      targets: obj.container,
+      y: obj.container.y - 3,
+      duration: 1000 + Math.random() * 400,
+      ease: "Sine.InOut",
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
+  private stopIdleAnimation(obj: TokenObject): void {
+    obj.idleTween?.stop();
+    obj.idleTween = undefined;
+  }
 
   private getPixelForToken(token: Token): { x: number; y: number } {
     if (token.position === -1) return yardSpawnPixel(token.color, token.index);
@@ -456,37 +568,10 @@ export default class TokenManager {
     return { x: base.x + offset.x, y: base.y + offset.y };
   }
 
-  private bounceOnLand(obj: TokenObject): void {
-    if (prefersReducedMotion()) return;
-    this.scene.tweens.add({
-      targets: obj.container,
-      y: obj.container.y - ANIM.bounceHeight,
-      duration: animDuration(ANIM.landingBounceDuration),
-      ease: "Sine.Out",
-      yoyo: true,
-    });
-  }
-
-  private startIdleAnimation(obj: TokenObject): void {
-    obj.idleTween?.stop();
-    obj.idleTween = this.scene.tweens.add({
-      targets: obj.container,
-      y: obj.container.y - 4,
-      duration: 800 + Math.random() * 400,
-      ease: "Sine.InOut",
-      yoyo: true,
-      repeat: -1,
-    });
-  }
-
-  private stopIdleAnimation(obj: TokenObject): void {
-    obj.idleTween?.stop();
-    obj.idleTween = undefined;
-  }
-
   getTokenObject(id: string): TokenObject | undefined {
     return this.tokenObjects.get(id);
   }
 }
 
 export { TokenManager };
+

@@ -263,7 +263,7 @@ export function TournamentDetailPage() {
             {myStatus?.seed && (
               <span className="text-sm text-slate-500">Seed #{myStatus.seed}</span>
             )}
-            {detail.status !== 'CANCELLED' && (
+            {detail.status === 'REGISTRATION_OPEN' && (
               <Button variant="outline" size="sm" loading={isJoining} onClick={handleCancel}>
                 Cancel Registration
               </Button>

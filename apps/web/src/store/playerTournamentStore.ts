@@ -77,10 +77,10 @@ export const usePlayerTournamentStore = create<PlayerTournamentState>((set, get)
     const existing = get().socket;
     if (existing) existing.disconnect();
 
-    const token = useAuthStore.getState().session?.access_token;
-    if (!token) return;
-
-    const socket = createTypedSocket(getSocketUrl(), { auth: { token } });
+    const socket = createTypedSocket({
+      url: getSocketUrl(),
+      token: () => useAuthStore.getState().session?.access_token ?? null,
+    });
 
     socket.on('connect', () => {
       set({ connected: true });

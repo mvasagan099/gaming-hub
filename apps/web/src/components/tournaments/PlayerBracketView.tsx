@@ -64,7 +64,8 @@ export function PlayerBracketView({ bracket, myStatus, players, onPlayMatch }: P
                   playerB={getPlayer(slot.playerBId)}
                   winner={getPlayer(slot.winnerId)}
                   isMySlot={slot.playerAId === myId || slot.playerBId === myId}
-                  isCurrentMatch={myStatus.currentMatchId === slot.matchId}
+                  isCurrentMatch={Boolean(myStatus.currentMatchId && myStatus.currentMatchId === slot.matchId)}
+                  myId={myId ?? null}
                   myStatus={myStatus}
                   onPlay={() => slot.matchId && onPlayMatch(slot.matchId)}
                 />
@@ -84,6 +85,7 @@ function BracketSlotCard({
   winner,
   isMySlot,
   isCurrentMatch,
+  myId,
   myStatus,
   onPlay,
 }: {
@@ -93,6 +95,7 @@ function BracketSlotCard({
   winner: { userId: string; username: string; displayName: string } | null;
   isMySlot: boolean;
   isCurrentMatch: boolean;
+  myId: string | null;
   myStatus: TournamentPlayerStatus;
   onPlay: () => void;
 }) {
@@ -124,9 +127,9 @@ function BracketSlotCard({
         <div className="py-2 text-center text-[10px] italic text-slate-400">BYE</div>
       ) : (
         <div className="space-y-1">
-          <PlayerRow player={playerA} score={slot.playerAScore} isWinner={winner?.userId === playerA?.userId} isMe={playerA?.userId === myStatus.seed} />
+          <PlayerRow player={playerA} score={slot.playerAScore} isWinner={winner?.userId === playerA?.userId} isMe={Boolean(myId && playerA?.userId === myId)} />
           <div className="text-center text-[9px] font-bold text-slate-300 dark:text-slate-600">vs</div>
-          <PlayerRow player={playerB} score={slot.playerBScore} isWinner={winner?.userId === playerB?.userId} isMe={playerB?.userId === myStatus.seed} />
+          <PlayerRow player={playerB} score={slot.playerBScore} isWinner={winner?.userId === playerB?.userId} isMe={Boolean(myId && playerB?.userId === myId)} />
         </div>
       )}
 

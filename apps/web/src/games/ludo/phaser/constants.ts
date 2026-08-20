@@ -55,6 +55,53 @@ export const ANIM = {
   reducedMotionScale: 0.3,
 } as const;
 
+/** Centralized 3D physical token styling, lighting, and animation constants. */
+export const LUDO_TOKEN_VISUAL_CONFIG = {
+  // Physical Dimensions & Scales
+  baseScale: 1.0,
+  activeScale: 1.08,
+  selectedScale: 1.12,
+  yardScale: 0.95,
+  homeScale: 0.85,
+  finishedScale: 0.72,
+
+  // 3D Lighting & Shadows
+  lightAngleDeg: 315, // Top-left key light
+  shadowOffsetX: 3,
+  shadowOffsetY: 4.5,
+  shadowAlphaBase: 0.32,
+  shadowAlphaLifted: 0.16,
+  shadowScaleBase: 1.0,
+  shadowScaleLifted: 0.78,
+  shadowScaleLand: 1.18,
+
+  // 3D Cylinder & Dome Heights
+  rimHeight: 3.2,
+  domeInsetRatio: 0.82,
+  specularAlpha: 0.75,
+  specularCatchAlpha: 0.95,
+
+  // Hop & Movement Timing
+  stepDuration: 120,
+  hopLiftY: -12,
+  landingBounceY: -5,
+  landingSquashScaleX: 1.10,
+  landingSquashScaleY: 0.92,
+  motionTiltDeg: 2.0,
+
+  // Capture Shockwave & Physics
+  captureShakeDistance: 6,
+  captureShakeDuration: 70,
+  captureFlyDuration: 380,
+  shockwaveRingRadius: 28,
+  shockwaveDuration: 400,
+
+  // Aura & Turn Glow
+  auraPulseMinAlpha: 0.25,
+  auraPulseMaxAlpha: 0.85,
+  auraPulseDuration: 550,
+} as const;
+
 /** Check if the user prefers reduced motion. */
 export function prefersReducedMotion(): boolean {
   try {

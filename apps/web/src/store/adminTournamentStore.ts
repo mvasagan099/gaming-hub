@@ -51,8 +51,9 @@ export const useAdminTournamentStore = create<AdminTournamentState>((set, get) =
     const token = getSocketToken();
     if (!token) return;
 
-    const socket = createTypedSocket(getSocketUrl(), {
-      auth: { token },
+    const socket = createTypedSocket({
+      url: getSocketUrl(),
+      token: () => getSocketToken() ?? null,
     });
 
     socket.on('connect', () => {
@@ -109,7 +110,7 @@ export const useAdminTournamentStore = create<AdminTournamentState>((set, get) =
       });
     });
 
-    socket.on('tournament:player-advanced', (data: { tournamentId: string; playerId: string }) => {
+    socket.on('tournament:player-advanced', (data: { tournamentId: string; userId: string; roundNumber: number }) => {
       if (data.tournamentId !== tournamentId) return;
       get().addEvent({
         id: `evt_${++eventCounter}`,
@@ -120,7 +121,7 @@ export const useAdminTournamentStore = create<AdminTournamentState>((set, get) =
       });
     });
 
-    socket.on('tournament:player-eliminated', (data: { tournamentId: string; playerId: string }) => {
+    socket.on('tournament:player-eliminated', (data: { tournamentId: string; userId: string; roundNumber: number }) => {
       if (data.tournamentId !== tournamentId) return;
       get().addEvent({
         id: `evt_${++eventCounter}`,

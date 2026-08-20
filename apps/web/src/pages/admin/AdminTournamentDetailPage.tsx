@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Shield, ShieldAlert, Trophy, Swords, Users, DollarSign, Activity, Clock, Zap, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import type { TournamentStatus } from '@gaming-hub/shared';
@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/Ta
 import { Modal } from '../../components/ui/Modal';
 import { AdminTournamentBracketView } from '../../components/admin/tournaments/AdminTournamentBracket';
 
-const gameById = new Map(GAME_DEFINITIONS.map((g) => [g.id, g]));
+const gameById = new Map<string, (typeof GAME_DEFINITIONS)[number]>(GAME_DEFINITIONS.map((g) => [g.id, g]));
 
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'default' | 'accent' | 'outline'> = {
   DRAFT: 'outline',
@@ -44,7 +44,7 @@ const HEALTH_VARIANT: Record<string, 'success' | 'warning' | 'danger'> = {
 
 interface ActionDef {
   label: string;
-  action: () => Promise<void>;
+  action: () => Promise<unknown>;
   variant: 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost';
   requiresConfirm?: boolean;
   confirmMessage?: string;

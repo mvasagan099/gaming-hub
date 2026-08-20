@@ -42,9 +42,24 @@ export default class SnakeLadderScene extends Phaser.Scene {
     const names = (this.registry.get("names") as string[] | undefined) ?? [];
     const reduced = prefersReducedMotion();
 
+    // ── 0. Atmospheric Ambient Backdrop & Vignette (depth -1) ───────────
+    const bgG = this.add.graphics();
+    bgG.setDepth(-1);
+
+    // Deep gradient fill
+    bgG.fillGradientStyle(0x0b1120, 0x0b1120, 0x030712, 0x030712, 1);
+    bgG.fillRect(0, 0, 1024, 800);
+
+    // Ambient radial lighting behind board
+    bgG.fillStyle(0x1e3a8a, 0.25);
+    bgG.fillCircle(400, 400, 360);
+    bgG.fillStyle(0x3b82f6, 0.08);
+    bgG.fillCircle(400, 400, 240);
+
     // ── 1. Board (depth 0–3) ─────────────────────────────────────────────
     this.board = new BoardManager(this, 680);
     this.board.drawBoard();
+
 
     // ── 2. Snakes & Ladders (depth 4–5) ─────────────────────────────────
     this.snakeManager = new SnakeManager();

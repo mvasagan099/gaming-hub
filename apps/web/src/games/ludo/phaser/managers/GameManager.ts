@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { LudoGameState, TokenMove, Token, Player, GameMode, AIDifficulty } from "../types/ludo.types";
+import type { LudoGameState, TokenMove, Token, Player, PlayerColor, GameMode, AIDifficulty } from "../types/ludo.types";
 import { LudoEvents } from "../events/LudoEvents";
 import type BoardManager from "./BoardManager";
 import type TokenManager from "./TokenManager";

@@ -48,7 +48,8 @@ export default class BoardManager {
     const children = this.scene.children.list;
     for (const child of children) {
       if (child === this.highlightGraphics) continue;
-      child.setAlpha(0);
+      const alphaObj = child as unknown as { setAlpha?: (alpha: number) => void };
+      alphaObj.setAlpha?.(0);
       if (!reduced) {
         this.scene.tweens.add({
           targets: child,
@@ -59,7 +60,7 @@ export default class BoardManager {
           delay: Math.random() * 100,
         });
       } else {
-        child.setAlpha(1);
+        alphaObj.setAlpha?.(1);
       }
     }
     this.scene.time.delayedCall(animDuration(ANIM.boardEntryDuration + 150), () => onComplete?.());

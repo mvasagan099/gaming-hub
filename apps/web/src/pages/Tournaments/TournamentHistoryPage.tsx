@@ -9,7 +9,7 @@ import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/Skeleton';
 import { EmptyState } from '../../components/EmptyState';
 
-const gameById = new Map(GAME_DEFINITIONS.map((g) => [g.id, g]));
+const gameById = new Map<string, (typeof GAME_DEFINITIONS)[number]>(GAME_DEFINITIONS.map((g) => [g.id, g]));
 
 export function TournamentHistoryPage() {
   const [items, setItems] = useState<TournamentHistoryEntry[]>([]);

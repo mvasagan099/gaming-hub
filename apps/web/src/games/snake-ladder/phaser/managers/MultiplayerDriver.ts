@@ -224,8 +224,7 @@ export default class MultiplayerDriver {
 
       const headPos = this.board.getTilePosition(snake.from ?? 0);
       this.feedback.snakeHit(headPos.x, headPos.y);
-      this.snakeManager.highlightSnake(snake.from ?? 0);
-      this.snakeManager.animateHighlightIn(this.scene);
+      this.snakeManager.triggerSnakeReaction(snake.from ?? 0, this.scene);
 
       if (!reduced) {
         const path = this.snakeManager.getSnakePath(snake.from ?? 0, this.board);

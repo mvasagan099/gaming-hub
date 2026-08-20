@@ -157,11 +157,10 @@ export default class GameManager {
       this.moveHistory.push({ playerName: player.name, rolled, from: fromTile, to: finalTile, event: "snake" });
       this.scene.events.emit(GameEvents.SNAKE_HIT, playerId, landedTile, finalTile);
 
-      // Highlight snake and show feedback
+      // Highlight snake, trigger bite reaction, and show feedback
       const headPos = this.board.getTilePosition(landedTile);
       this.feedback.snakeHit(headPos.x, headPos.y);
-      this.snakeManager.highlightSnake(landedTile);
-      this.snakeManager.animateHighlightIn(this.scene);
+      this.snakeManager.triggerSnakeReaction(landedTile, this.scene);
 
     } else if (this.ladderManager.hasLadder(landedTile)) {
       finalTile = this.ladderManager.getTop(landedTile) ?? landedTile;
