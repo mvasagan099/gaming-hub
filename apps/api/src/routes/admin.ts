@@ -11,6 +11,7 @@ import { authenticate } from "../plugins/authenticate";
 import { requireUser, parseSchema, routeParams, queryParams, queryString } from "../lib/http";
 import { requirePermission } from "../lib/permissions";
 import { applyTransaction } from "../services/wallet";
+import { WalletTransactionService } from "../services/walletTransactionService";
 import { auditFromRequest } from "../services/audit";
 import {
   approveWalletRequest,
@@ -142,6 +143,24 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     return { ok: true, balance: wallet.balance };
+  });
+
+  // ---- Wallet transactions ledger -------------------------------------------
+  app.get("/api/admin/wallet/transactions", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const q = queryParams(request);
+    const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
+    const userId = queryString(q.userId) || undefined;
+    const walletType = (queryString(q.walletType) as any) || undefined;
+    const referenceType = (queryString(q.referenceType) as any) || undefined;
+    const referenceId = queryString(q.referenceId) || undefined;
+    const type = (queryString(q.type) as any) || undefined;
+
+    return WalletTransactionService.adminListTransactions(
+      { userId, walletType, referenceType, referenceId, type },
+      page,
+      pageSize,
+    );
   });
 
   // ---- Wallet requests ------------------------------------------------------

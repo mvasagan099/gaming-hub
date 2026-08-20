@@ -327,8 +327,10 @@ export function WalletPage() {
               <table className="w-full text-left text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-black uppercase tracking-wider text-slate-400 bg-slate-50/50 dark:bg-slate-800/30">
-                    <th className="px-6 py-3.5">TYPE</th>
+                    <th className="px-6 py-3.5">TYPE & REFERENCE</th>
+                    <th className="px-6 py-3.5">DIRECTION</th>
                     <th className="px-6 py-3.5">AMOUNT</th>
+                    <th className="px-6 py-3.5">BALANCE</th>
                     <th className="px-6 py-3.5">STATUS</th>
                     <th className="px-6 py-3.5">DATE</th>
                   </tr>
@@ -336,6 +338,9 @@ export function WalletPage() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                   {txs?.items.map((t) => {
                     const isCredit = t.type === "CREDIT";
+                    const meta = (t.meta && typeof t.meta === "object" ? t.meta : {}) as Record<string, unknown>;
+                    const status = typeof meta.status === "string" ? meta.status : "COMPLETED";
+
                     return (
                       <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
                         <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
@@ -346,19 +351,36 @@ export function WalletPage() {
                               {isCredit ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
                             </span>
                             <div>
-                              <div>{REFERENCE_LABELS[t.referenceType] ?? t.referenceType}</div>
-                              <div className="text-[11px] font-normal text-slate-400">{t.walletType} Wallet</div>
+                              <div className="font-extrabold">{REFERENCE_LABELS[t.referenceType] ?? t.referenceType}</div>
+                              <div className="text-[11px] font-normal text-slate-400">
+                                {t.referenceId ? `Ref: ${t.referenceId.slice(0, 16)}` : `${t.walletType} Wallet`}
+                              </div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 font-black">
-                          <span className={isCredit ? "text-emerald-500" : "text-rose-500"}>
-                            {isCredit ? "+" : "-"}{t.amount.toFixed(2)} Coins
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black tracking-wider uppercase ${
+                            isCredit ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                          }`}>
+                            {isCredit ? "CREDIT" : "DEBIT"}
                           </span>
                         </td>
+                        <td className="px-6 py-4 font-black">
+                          <span className={isCredit ? "text-emerald-500" : "text-rose-500"}>
+                            {isCredit ? "+" : "-"}{t.amount.toLocaleString()} 🪙
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">
+                          <div className="text-xs">🪙 {t.balanceAfter.toLocaleString()}</div>
+                          <div className="text-[10px] text-slate-400 font-normal">Balance after</div>
+                        </td>
                         <td className="px-6 py-4">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                            Completed
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                            status === "REFUNDED"
+                              ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                              : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                          }`}>
+                            {status}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-xs font-medium text-slate-400">

@@ -649,6 +649,7 @@ model Transaction {
   userId        String
   type          TransactionType
   amount        Int
+  balanceBefore Int?                     @default(0)
   balanceAfter  Int
   walletType    String                   @default("MAIN")
   referenceType TransactionReferenceType
@@ -660,6 +661,7 @@ model Transaction {
 
   @@index([userId, createdAt])
   @@index([referenceType, createdAt])
+  @@index([referenceId])
 }
 
 model AppNotification {

@@ -63,18 +63,30 @@ export async function listTransactions(
   ]);
 
   return {
-    items: items.map((t) => ({
-      id: t.id,
-      userId: t.userId,
-      type: t.type,
-      amount: t.amount,
-      balanceAfter: t.balanceAfter,
-      walletType: t.walletType,
-      referenceType: t.referenceType,
-      referenceId: t.referenceId,
-      meta: t.meta,
-      createdAt: t.createdAt.toISOString(),
-    })),
+    items: items.map((t) => {
+      const metaObj = (t.meta && typeof t.meta === "object" ? t.meta : {}) as Record<string, unknown>;
+      const isDebit = t.type === "DEBIT";
+      const balanceBefore = typeof metaObj.balanceBefore === "number"
+        ? metaObj.balanceBefore
+        : isDebit
+          ? t.balanceAfter + t.amount
+          : t.balanceAfter - t.amount;
+
+      return {
+        id: t.id,
+        userId: t.userId,
+        type: t.type,
+        direction: (isDebit ? "DEBIT" : "CREDIT") as "CREDIT" | "DEBIT",
+        amount: t.amount,
+        balanceBefore,
+        balanceAfter: t.balanceAfter,
+        walletType: t.walletType,
+        referenceType: t.referenceType,
+        referenceId: t.referenceId,
+        meta: t.meta,
+        createdAt: t.createdAt.toISOString(),
+      };
+    }),
     total,
     page,
     pageSize,
@@ -168,17 +180,26 @@ export async function applyTransaction(
   }
 
   const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
+  const balanceAfter = wallet[field];
+  const balanceBefore = balanceAfter - amount;
+
+  const transactionMeta = {
+    balanceBefore,
+    balanceAfter,
+    direction: isDebit ? "DEBIT" : "CREDIT",
+    ...meta,
+  };
 
   await tx.transaction.create({
     data: {
       userId,
       type: (isDebit ? "DEBIT" : "CREDIT") as TransactionType,
       amount: Math.abs(amount),
-      balanceAfter: wallet[field],
+      balanceAfter,
       walletType,
       referenceType,
       referenceId,
-      meta: meta as Prisma.InputJsonValue,
+      meta: transactionMeta as Prisma.InputJsonValue,
     },
   });
 
@@ -193,7 +214,8 @@ export async function applyTransaction(
       type: isDebit ? "DEBIT" : "CREDIT",
       amount: Math.abs(amount),
       walletType,
-      balanceAfter: wallet[field],
+      balanceBefore,
+      balanceAfter,
       referenceType,
       referenceId,
       ...meta,

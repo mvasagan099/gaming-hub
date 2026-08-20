@@ -164,12 +164,32 @@ export async function registerForTournament(userId: string, tournamentId: string
   }
 
   await prisma.$transaction(async (tx) => {
-    if (tournament.entryFee > 0) {
-      if (wallet.balance < tournament.entryFee) {
-        throw new AppError("INSUFFICIENT_BALANCE", "Insufficient balance for entry fee", 400);
-      }
-      await applyTransaction(tx, userId, -tournament.entryFee, "TOURNAMENT_ENTRY", tournament.id, { tournamentTitle: tournament.title });
+    // 1. Validate live tournament capacity inside transaction to eliminate race conditions
+    const currentCount = await tx.tournamentPlayer.count({ where: { tournamentId } });
+    if (currentCount >= tournament.maxPlayers) {
+      throw new AppError("TOURNAMENT_FULL", "Tournament is full", 400);
     }
+
+    // 2. Validate user registration inside transaction
+    const existingInTx = await tx.tournamentPlayer.findUnique({
+      where: { tournamentId_userId: { tournamentId, userId } },
+    });
+    if (existingInTx) {
+      throw new AppError("TOURNAMENT_ALREADY_REGISTERED", "You are already registered", 400);
+    }
+
+    // 3. Atomically debit entry fee with balance guard
+    if (tournament.entryFee > 0) {
+      const transactionId = `tournament-entry-${tournament.id}-${userId}`;
+      await applyTransaction(tx, userId, -tournament.entryFee, "TOURNAMENT_ENTRY", tournament.id, {
+        transactionId,
+        tournamentTitle: tournament.title,
+        entryFee: tournament.entryFee,
+        status: "COMPLETED",
+      });
+    }
+
+    // 4. Create registration record
     await tx.tournamentPlayer.create({ data: { tournamentId, userId } });
   });
 
@@ -196,12 +216,6 @@ export async function registerForTournament(userId: string, tournamentId: string
   });
 
   // Emit registration-updated to all tournament subscribers
-  const regPayload = {
-    tournamentId,
-    registeredPlayers: updatedCount,
-    maxPlayers: tournament.maxPlayers,
-    remainingSlots: tournament.maxPlayers - updatedCount,
-  };
   await notifyUserSocket(userId, "tournament:player-registered", { tournamentId, seed: null });
 
   return { ok: true };
@@ -225,7 +239,13 @@ export async function cancelRegistration(userId: string, tournamentId: string) {
     if (tournament.entryFee > 0) {
       const tournamentSettings = await getCategorySettings("tournament");
       if (tournamentSettings.refundOnCancel) {
-        await applyTransaction(tx, userId, tournament.entryFee, "TOURNAMENT_ENTRY", tournament.id, { refund: true });
+        const transactionId = `tournament-cancel-refund-${tournament.id}-${userId}`;
+        await applyTransaction(tx, userId, tournament.entryFee, "TOURNAMENT_ENTRY", tournament.id, {
+          transactionId,
+          refund: true,
+          reason: "player_cancelled_registration",
+          status: "REFUNDED",
+        });
       }
     }
   });

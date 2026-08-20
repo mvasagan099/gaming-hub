@@ -205,7 +205,7 @@ export class GameCoinService {
           if (refundPerPlayer > 0) {
             const transactionId = `draw-refund-${match.id}-${player.userId}`;
             payouts.push({ userId: player.userId, amount: refundPerPlayer });
-            await applyTransaction(tx, player.userId, refundPerPlayer, "MATCH_WAGER", match.id, {
+            await applyTransaction(tx, player.userId, refundPerPlayer, "WAGER_REFUND", match.id, {
               transactionId,
               gameId: match.gameId,
               reason: "draw_refund",
@@ -343,7 +343,7 @@ export class GameCoinService {
       if (match.status === "ACTIVE" && match.stake > 0) {
         for (const player of match.players) {
           const transactionId = `cancel-refund-${match.id}-${player.userId}`;
-          await applyTransaction(tx, player.userId, match.stake, "MATCH_WAGER", match.id, {
+          await applyTransaction(tx, player.userId, match.stake, "WAGER_REFUND", match.id, {
             transactionId,
             gameId: match.gameId,
             reason,

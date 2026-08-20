@@ -583,13 +583,14 @@ export async function settleTournament(tournamentId: string): Promise<void> {
       );
       if (alreadyPaid) continue;
 
+      const transactionId = `tournament-prize-${tournamentId}-${player.userId}-${prize.rank}`;
       await applyTransaction(
         tx,
         player.userId,
         prize.amount,
         "TOURNAMENT_PRIZE",
         tournamentId,
-        { rank: prize.rank, tournamentTitle: tournament.title },
+        { transactionId, rank: prize.rank, tournamentTitle: tournament.title, status: "COMPLETED" },
       );
 
       await tx.tournamentPrize.upsert({
@@ -661,13 +662,14 @@ export async function cancelTournamentWithRefunds(
     // Refund entry fees if tournament was paid
     if (tournament.entryFee > 0) {
       for (const player of tournament.players) {
+        const transactionId = `tournament-cancel-refund-${tournamentId}-${player.userId}`;
         await applyTransaction(
           tx,
           player.userId,
           tournament.entryFee,
           "TOURNAMENT_ENTRY",
           tournamentId,
-          { refund: true, reason },
+          { transactionId, refund: true, reason, status: "REFUNDED" },
         );
       }
     }
