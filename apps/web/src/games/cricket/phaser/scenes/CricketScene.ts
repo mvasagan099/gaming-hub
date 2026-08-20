@@ -239,65 +239,66 @@ export class CricketScene extends Phaser.Scene {
   private drawBackground() {
     const graphics = this.add.graphics();
 
-    // Sky with gradient
-    graphics.fillGradientStyle(0x020617, 0x020617, 0x0f172a, 0x0f172a, 1);
+    // ── 1. Sky with Deep Atmospheric Gradient ──
+    graphics.fillGradientStyle(0x020617, 0x020617, 0x0f172a, 0x1e293b, 1);
     graphics.fillRect(0, 0, GAME_W, HORIZON_Y);
 
-    // Starry night subtle effect
-    graphics.fillStyle(0xffffff, 0.5);
-    for (let i = 0; i < 50; i++) {
-      graphics.fillCircle(Math.random() * GAME_W, Math.random() * HORIZON_Y, Math.random() * 1.5);
+    // Starry night sky
+    graphics.fillStyle(0xffffff, 0.6);
+    for (let i = 0; i < 45; i++) {
+      const sx = (Math.sin(i * 99 + 1) * 0.5 + 0.5) * GAME_W;
+      const sy = (Math.cos(i * 37 + 2) * 0.5 + 0.5) * (HORIZON_Y - 70);
+      graphics.fillCircle(sx, sy, i % 3 === 0 ? 1.5 : 1);
     }
 
-    // Stadium Lights (Glowing)
-    const drawLight = (x: number, y: number) => {
-      // Glow
-      graphics.fillStyle(0xffffff, 0.1);
-      graphics.fillCircle(x, y, 40);
-      graphics.fillStyle(0xffffff, 0.2);
-      graphics.fillCircle(x, y, 25);
-      // Core
-      graphics.fillStyle(0xffffff, 1);
-      graphics.fillCircle(x, y, 12);
-    };
-    
-    drawLight(100, 50);
-    drawLight(200, 30);
-    drawLight(GAME_W - 100, 50);
-    drawLight(GAME_W - 200, 30);
-    
-    // Light beams
-    graphics.fillGradientStyle(0xffffff, 0xffffff, 0xffffff, 0xffffff, 0.15, 0.15, 0, 0);
-    graphics.fillTriangle(100, 50, 0, HORIZON_Y, 200, HORIZON_Y);
-    graphics.fillTriangle(GAME_W - 100, 50, GAME_W - 200, HORIZON_Y, GAME_W, HORIZON_Y);
+    // ── 2. Stadium Grandstands Architecture ──
+    const standTopY = HORIZON_Y - 95;
+    graphics.fillStyle(0x0b1329, 1);
+    graphics.fillRect(0, standTopY, GAME_W, 95);
 
-    // Stadium stands (layered behind crowd)
-    graphics.fillStyle(0x0f172a, 1); // Darker stands
-    graphics.fillRect(0, HORIZON_Y - 70, GAME_W, 70);
-    graphics.lineStyle(2, 0x334155, 0.4);
+    // Seating Tier Rows
+    graphics.lineStyle(1.5, 0x334155, 0.5);
+    for (let r = 0; r < 5; r++) {
+      const lineY = standTopY + 18 + r * 15;
+      graphics.beginPath();
+      graphics.moveTo(0, lineY);
+      graphics.lineTo(GAME_W, lineY);
+      graphics.strokePath();
+    }
+
+    // ── 3. LED Sponsor Ribbon Banner ──
+    const ribbonY = HORIZON_Y - 20;
+    graphics.fillStyle(0x090d16, 1);
+    graphics.fillRect(0, ribbonY, GAME_W, 20);
+    graphics.lineStyle(1.5, 0x38bdf8, 0.85);
     graphics.beginPath();
-    graphics.moveTo(0, HORIZON_Y - 20); graphics.lineTo(GAME_W, HORIZON_Y - 20);
-    graphics.moveTo(0, HORIZON_Y - 40); graphics.lineTo(GAME_W, HORIZON_Y - 40);
-    graphics.moveTo(0, HORIZON_Y - 60); graphics.lineTo(GAME_W, HORIZON_Y - 60);
+    graphics.moveTo(0, ribbonY);
+    graphics.lineTo(GAME_W, ribbonY);
+    graphics.moveTo(0, HORIZON_Y);
+    graphics.lineTo(GAME_W, HORIZON_Y);
     graphics.strokePath();
 
-    // Grass with professional stadium stripes
-    for (let y = HORIZON_Y; y < GAME_H; y += 40) {
-      const isDark = Math.floor((y - HORIZON_Y) / 40) % 2 === 0;
-      // Using rich emerald/green hues
+    // ── 4. Outfield Grass with Professional Lawn Stripes ──
+    const stripeH = 38;
+    for (let y = HORIZON_Y; y < GAME_H; y += stripeH) {
+      const isDark = Math.floor((y - HORIZON_Y) / stripeH) % 2 === 0;
       graphics.fillStyle(isDark ? 0x064e3b : 0x047857, 1);
-      graphics.fillRect(0, y, GAME_W, 40);
+      graphics.fillRect(0, y, GAME_W, stripeH);
     }
 
-    // Horizon line (a white line representing stadium boundary)
-    graphics.lineStyle(4, 0xffffff, 0.8);
+    // Boundary Rope
+    graphics.lineStyle(3, 0xffffff, 0.9);
     graphics.beginPath();
     graphics.moveTo(0, HORIZON_Y);
     graphics.lineTo(GAME_W, HORIZON_Y);
     graphics.strokePath();
 
-    // Pitch (Trapezoid) with gradient
-    graphics.fillGradientStyle(0xb45309, 0xb45309, 0xd97706, 0xd97706, 1); // Rich amber/dirt color
+    // 30-Yard Fielding Circle Oval
+    graphics.lineStyle(2, 0xffffff, 0.22);
+    graphics.strokeEllipse(CENTER_X, (PITCH_TOP_Y + PITCH_BOT_Y) / 2, GAME_W * 0.84, (PITCH_BOT_Y - PITCH_TOP_Y) * 1.3);
+
+    // ── 5. Realistic 3D Trapezoidal Dirt Pitch ──
+    graphics.fillGradientStyle(0x9a3412, 0x9a3412, 0xd97706, 0xd97706, 1);
     graphics.beginPath();
     graphics.moveTo(CENTER_X - PITCH_TOP_W / 2, PITCH_TOP_Y);
     graphics.lineTo(CENTER_X + PITCH_TOP_W / 2, PITCH_TOP_Y);
@@ -306,107 +307,157 @@ export class CricketScene extends Phaser.Scene {
     graphics.closePath();
     graphics.fillPath();
 
-    // Creases (Perspective lines)
-    graphics.lineStyle(4, 0xffffff, 0.9);
-    // Top crease
+    // Pitch Wear Marks
+    graphics.fillStyle(0x78350f, 0.35);
+    for (let f = 0; f < 10; f++) {
+      const fy = PITCH_TOP_Y + 30 + f * 26;
+      const progress = (fy - PITCH_TOP_Y) / (PITCH_BOT_Y - PITCH_TOP_Y);
+      const curW = PITCH_TOP_W + (PITCH_BOT_W - PITCH_TOP_W) * progress;
+      const fx = CENTER_X + (Math.sin(f * 45) * 0.35) * (curW / 2);
+      graphics.fillEllipse(fx, fy, 12 + progress * 8, 4 + progress * 3);
+    }
+
+    // ── 6. Crease Markings ──
+    graphics.lineStyle(3.5, 0xffffff, 0.95);
+    // Bowler's Crease (Top)
     graphics.beginPath();
-    graphics.moveTo(CENTER_X - PITCH_TOP_W/2 - 15, PITCH_TOP_Y + 20);
-    graphics.lineTo(CENTER_X + PITCH_TOP_W/2 + 15, PITCH_TOP_Y + 20);
+    graphics.moveTo(CENTER_X - PITCH_TOP_W / 2 - 12, PITCH_TOP_Y + 18);
+    graphics.lineTo(CENTER_X + PITCH_TOP_W / 2 + 12, PITCH_TOP_Y + 18);
     graphics.strokePath();
-    // Bottom crease
+
+    // Batsman's Popping Crease (Bottom)
     graphics.beginPath();
-    graphics.moveTo(CENTER_X - PITCH_BOT_W/2 + 25, PITCH_BOT_Y - 40);
-    graphics.lineTo(CENTER_X + PITCH_BOT_W/2 - 25, PITCH_BOT_Y - 40);
+    graphics.moveTo(CENTER_X - PITCH_BOT_W / 2 + 25, PITCH_BOT_Y - 45);
+    graphics.lineTo(CENTER_X + PITCH_BOT_W / 2 - 25, PITCH_BOT_Y - 45);
     graphics.strokePath();
+
+    // Return Creases
+    graphics.lineStyle(2, 0xffffff, 0.8);
+    graphics.beginPath();
+    graphics.moveTo(CENTER_X - PITCH_BOT_W / 2 + 45, PITCH_BOT_Y - 70);
+    graphics.lineTo(CENTER_X - PITCH_BOT_W / 2 + 45, PITCH_BOT_Y);
+    graphics.moveTo(CENTER_X + PITCH_BOT_W / 2 - 45, PITCH_BOT_Y - 70);
+    graphics.lineTo(CENTER_X + PITCH_BOT_W / 2 - 45, PITCH_BOT_Y);
+    graphics.strokePath();
+
+    // ── 7. 4-Corner High-Mast Floodlight Towers & Volumetric Beams ──
+    const drawTower = (lx: number, ly: number, targetX: number) => {
+      // Atmospheric Light Cones
+      graphics.fillGradientStyle(0xffffff, 0xffffff, 0xffffff, 0xffffff, 0.22, 0.22, 0, 0);
+      graphics.fillTriangle(lx, ly, targetX - 160, HORIZON_Y + 300, targetX + 160, HORIZON_Y + 300);
+
+      // Steel Floodlight Bank
+      graphics.fillStyle(0x334155, 1);
+      graphics.fillRect(lx - 22, ly - 8, 44, 16);
+
+      // Glowing Light Bulbs
+      graphics.fillStyle(0xffffff, 1);
+      for (let b = 0; b < 6; b++) {
+        graphics.fillCircle(lx - 16 + b * 6.5, ly, 3.5);
+      }
+    };
+
+    drawTower(110, 45, GAME_W * 0.35);
+    drawTower(GAME_W - 110, 45, GAME_W * 0.65);
   }
 
   private generateTextures() {
     const g = this.add.graphics();
     
-    // Ball
+    // ── 1. Volumetric 3D Cricket Ball (Leather Red with Stitched Seam & Catchlight) ──
     g.clear();
-    g.fillStyle(0xe11d48, 1);
-    g.fillCircle(8, 8, 8);
-    g.lineStyle(2, 0x000000);
-    g.strokeCircle(8, 8, 8);
-    g.generateTexture('tex_ball', 16, 16);
+    g.fillStyle(0xdc2626, 1);
+    g.fillCircle(10, 10, 10);
+    // Darker underside shadow
+    g.fillStyle(0x991b1b, 0.6);
+    g.beginPath();
+    g.arc(10, 10, 10, 0, Math.PI);
+    g.fill();
+    // Stitched White Seam Line
+    g.lineStyle(1.5, 0xffffff, 0.9);
+    g.beginPath();
+    g.moveTo(2, 10);
+    g.lineTo(18, 10);
+    g.strokePath();
+    // Specular Catchlight
+    g.fillStyle(0xffffff, 0.85);
+    g.fillCircle(7, 7, 2.5);
+    g.generateTexture('tex_ball', 20, 20);
 
-    // Particle - basic white circle
+    // Particle
     g.clear();
     g.fillStyle(0xffffff, 1);
     g.fillCircle(4, 4, 4);
     g.generateTexture('tex_particle', 8, 8);
 
-    // Dust particle - slightly brown
+    // Dust particle
     g.clear();
-    g.fillStyle(0xd6d3d1, 1);
+    g.fillStyle(0xd97706, 1);
     g.fillCircle(3, 3, 3);
     g.generateTexture('tex_dust', 6, 6);
 
-    // Fielder (Human in white uniform)
+    // Fielder (White Test/ODI Uniform)
     g.clear();
-    // Head
-    g.fillStyle(0xfca5a5, 1); // Skin tone
+    g.fillStyle(0xfca5a5, 1); // Skin
     g.fillCircle(12, 8, 6);
-    // Cap (Black dome and peak)
-    g.fillStyle(0x111827, 1);
+    g.fillStyle(0x1e3a8a, 1); // Blue Cap
     g.beginPath();
     g.arc(12, 7, 6, Math.PI, 0);
     g.fill();
-    g.fillRect(4, 7, 10, 2); // Peak
-    // Body (Black jersey)
-    g.fillStyle(0x111827, 1); 
+    g.fillRect(4, 7, 10, 2);
+    g.fillStyle(0x2563eb, 1); // Jersey
     g.fillRoundedRect(5, 14, 14, 12, 4);
-    // Legs (White pants)
-    g.fillStyle(0xffffff, 1);
+    g.fillStyle(0xffffff, 1); // Pants
     g.fillRect(7, 26, 4, 8);
     g.fillRect(13, 26, 4, 8);
     g.generateTexture('tex_fielder', 24, 34);
 
     // Bowler (Human)
     g.clear();
-    // Head
-    g.fillStyle(0xfca5a5, 1); // Skin tone
+    g.fillStyle(0xfca5a5, 1); // Skin
     g.fillCircle(15, 10, 8);
-    // Cap (Black dome and peak)
-    g.fillStyle(0x111827, 1);
+    g.fillStyle(0x1e3a8a, 1); // Cap
     g.beginPath();
     g.arc(15, 9, 8, Math.PI, 0);
     g.fill();
-    g.fillRect(5, 9, 14, 2); // Peak
-    // Body (Black jersey)
-    g.fillStyle(0x111827, 1); 
+    g.fillRect(5, 9, 14, 2);
+    g.fillStyle(0x2563eb, 1); // Jersey
     g.fillRoundedRect(7, 18, 16, 14, 4);
-    // Legs (White pants)
-    g.fillStyle(0xffffff, 1);
+    g.fillStyle(0xffffff, 1); // Pants
     g.fillRect(9, 32, 5, 10);
     g.fillRect(16, 32, 5, 10);
     g.generateTexture('tex_bowler', 30, 42);
 
-    // Batsman (Human) - MUCH LARGER & DETAILED to match bat
+    // Batsman (3D Proportioned Model with Helmet, Grill, Jersey, Gloves, and Strapped Pads)
     g.clear();
-    // Helmet Shell
-    g.fillStyle(0x1e3a8a, 1); // Blue Helmet
+    // Helmet Shell (Navy Blue 3D Sphere)
+    g.fillStyle(0x1e3a8a, 1);
     g.fillCircle(50, 24, 24);
-    // Helmet Peak
+    g.fillStyle(0x3b82f6, 0.4);
+    g.fillCircle(44, 18, 12);
+    // Helmet Peak / Visor
     g.fillStyle(0x1e3a8a, 1);
     g.fillRect(26, 24, 24, 6);
-    // Helmet Grill (Gray)
-    g.lineStyle(2, 0xd1d5db);
+    // Metallic Face Grill
+    g.lineStyle(2, 0xd1d5db, 0.95);
     g.beginPath();
     g.moveTo(28, 30); g.lineTo(50, 44);
     g.moveTo(34, 30); g.lineTo(50, 48);
+    g.moveTo(40, 30); g.lineTo(50, 52);
     g.strokePath();
-    // Face
+    // Face skin beneath grill
     g.fillStyle(0xfca5a5, 1); 
     g.fillRoundedRect(34, 28, 32, 16, 4);
-    // Body (Blue Jersey)
-    g.fillStyle(0x3b82f6, 1); 
+    // Team Jersey (Blue with Gold Trim)
+    g.fillStyle(0x2563eb, 1); 
     g.fillRoundedRect(24, 48, 52, 40, 8);
-    // Front Arm (Sleeve)
-    g.fillStyle(0x3b82f6, 1);
+    g.lineStyle(2.5, 0xfbbf24, 1);
+    g.beginPath();
+    g.moveTo(40, 48); g.lineTo(50, 60); g.lineTo(60, 48);
+    g.strokePath();
+    // Arms & Gloves
+    g.fillStyle(0x2563eb, 1);
     g.fillRect(14, 50, 12, 24);
-    // Gloves (White with Green details)
     g.fillStyle(0xffffff, 1);
     g.fillRoundedRect(74, 74, 16, 16, 4);
     g.fillStyle(0x22c55e, 1); // Green trim
@@ -423,28 +474,31 @@ export class CricketScene extends Phaser.Scene {
     g.fillRect(54, 108, 16, 4);
     g.generateTexture('tex_batsman', 100, 120);
 
-    // Bat (Detailed)
+    // 3D Cricket Bat (Wooden Blade, Cane Handle Grip, Sponsor Sticker, Toe Guard)
     g.clear();
-    // Handle grip
-    g.fillStyle(0x334155, 1); // Dark grey grip
-    g.fillRect(3, 0, 6, 25);
-    // Blade
-    g.fillStyle(0xfef08a, 1); // Wood color
-    g.fillRect(0, 25, 12, 50);
-    // Toe guard
-    g.fillStyle(0x000000, 1);
-    g.fillRect(0, 75, 12, 5);
-    g.generateTexture('tex_bat', 12, 80);
+    // Cane Grip
+    g.fillStyle(0x334155, 1);
+    g.fillRect(3, 0, 8, 25);
+    // Wooden Blade with 3D Bevel
+    g.fillStyle(0xfef08a, 1);
+    g.fillRect(0, 25, 14, 54);
+    g.fillStyle(0xca8a04, 0.4);
+    g.fillRect(10, 25, 4, 54);
+    // Sponsor Sticker
+    g.fillStyle(0xdc2626, 1);
+    g.fillRect(2, 32, 10, 16);
+    // Toe Guard
+    g.fillStyle(0x0f172a, 1);
+    g.fillRect(0, 79, 14, 4);
+    g.generateTexture('tex_bat', 14, 84);
 
-    // Crowd textures (Human audience busts)
+    // Crowd silhouettes
     const colors = [0xf43f5e, 0x3b82f6, 0xeab308, 0xa855f7, 0x22c55e];
     colors.forEach((color, idx) => {
       g.clear();
-      // Body (Shirt)
       g.fillStyle(color, 1);
       g.fillRoundedRect(4, 10, 16, 14, 4);
-      // Head
-      g.fillStyle(0xfca5a5, 1); // Skin tone
+      g.fillStyle(0xfca5a5, 1);
       g.fillCircle(12, 6, 6);
       g.generateTexture(`tex_crowd_${idx}`, 24, 24);
     });

@@ -13,9 +13,9 @@ import { PLAYER_COLORS_ORDER } from "../data/boardLayout";
 import WinnerPopup from "../ui/WinnerPopup";
 import FeedbackText from "../ui/FeedbackText";
 import CountdownOverlay from "../ui/CountdownOverlay";
+import MovePathOverlay from "../ui/MovePathOverlay";
 import ParticleManager from "../../../snake-ladder/phaser/managers/ParticleManager";
 import AudioManager from "../../../snake-ladder/phaser/managers/AudioManager";
-import { prefersReducedMotion } from "../constants";
 
 export default class LudoScene extends Phaser.Scene {
   private board!: BoardManager;
@@ -31,6 +31,7 @@ export default class LudoScene extends Phaser.Scene {
   private winnerPopup!: WinnerPopup;
   private feedback!: FeedbackText;
   private countdown!: CountdownOverlay;
+  private pathOverlay!: MovePathOverlay;
 
   constructor() {
     super("LudoScene");
@@ -59,11 +60,14 @@ export default class LudoScene extends Phaser.Scene {
     this.board = new BoardManager(this);
     this.board.drawBoard();
 
-    // 3. Rule engine & AI
+    // 3. Move Path Overlay (Behind tokens, above board)
+    this.pathOverlay = new MovePathOverlay(this);
+
+    // 4. Rule engine & AI
     this.ruleEngine = new LudoRuleEngine(settings);
     this.ai = new LudoAI();
 
-    // 4. Token Manager
+    // 5. Token Manager
     this.tokenManager = new TokenManager(this);
     const activeColors: PlayerColor[] =
       playerCount === 2 ? ["red", "green"] : PLAYER_COLORS_ORDER.slice(0, playerCount);
@@ -78,7 +82,7 @@ export default class LudoScene extends Phaser.Scene {
     );
     this.tokenManager.createTokens(initialTokens);
 
-    // 5. HUD & UI
+    // 6. HUD & UI
     this.hud = new HUDManager(this);
     this.hud.create(playerCount);
     this.hud.setMySeat(online ? (mySeat ?? 0) : 0);
@@ -92,21 +96,21 @@ export default class LudoScene extends Phaser.Scene {
       this.audio.play("roll");
     });
 
-    // 6. Dice
+    // 7. Dice
     this.dice = new DiceManager(this);
-    this.dice.create(912, 210);
+    this.dice.create(912, 205);
 
-    // 7. Feedback Text
+    // 8. Feedback Text
     this.feedback = new FeedbackText(this);
 
-    // 8. Winner Popup
+    // 9. Winner Popup
     this.winnerPopup = new WinnerPopup(this, this.particles);
     this.winnerPopup.create();
 
-    // 9. Countdown Overlay
+    // 10. Countdown Overlay
     this.countdown = new CountdownOverlay(this);
 
-    // 10. Game logic
+    // 11. Game logic
     const startGame = () => {
       if (online) {
         this.multiplayerDriver = new LudoMultiplayerDriver(
@@ -118,6 +122,7 @@ export default class LudoScene extends Phaser.Scene {
           mySeat,
           names,
           this.feedback,
+          this.pathOverlay,
         );
         this.multiplayerDriver.start();
       } else {
@@ -130,6 +135,7 @@ export default class LudoScene extends Phaser.Scene {
           this.ruleEngine,
           this.ai,
           this.feedback,
+          this.pathOverlay,
         );
         this.gameManager.init(mode, playerCount === 2 ? 2 : 4);
       }
@@ -186,4 +192,5 @@ export default class LudoScene extends Phaser.Scene {
     });
   }
 }
+
 export { LudoScene };

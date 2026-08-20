@@ -4,6 +4,7 @@ import { LudoEvents } from "../events/LudoEvents";
 import { yardSpawnPixel, mainPathPixel, homeColPixel, HOME_COL_BASE, CELL_SIZE } from "../data/boardLayout";
 import { ANIM, LUDO_TOKEN_VISUAL_CONFIG, animDuration, prefersReducedMotion } from "../constants";
 import { LudoTokenRenderer, LUDO_TOKEN_PALETTES } from "./LudoTokenRenderer";
+import type MovePathOverlay from "../ui/MovePathOverlay";
 
 const STACK_OFFSETS: Array<{ x: number; y: number }> = [
   { x: -7, y: -7 },
@@ -28,6 +29,7 @@ interface TokenObject {
   label: Phaser.GameObjects.Text;
   glowTween?: Phaser.Tweens.Tween;
   idleTween?: Phaser.Tweens.Tween;
+  isActionable?: boolean;
   isSelected?: boolean;
 }
 
@@ -35,9 +37,18 @@ export default class TokenManager {
   private scene: Phaser.Scene;
   private tokenObjects = new Map<string, TokenObject>();
   private tokenRadius = Math.round(CELL_SIZE * 0.36);
+  private pathOverlay: MovePathOverlay | null = null;
+  private pathProvider: ((tokenId: string) => number[]) | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+  }
+
+  setPathOverlay(overlay: MovePathOverlay, pathProvider?: (tokenId: string) => number[]): void {
+    this.pathOverlay = overlay;
+    if (pathProvider) {
+      this.pathProvider = pathProvider;
+    }
   }
 
   createTokens(tokens: Token[]): void {
@@ -83,10 +94,19 @@ export default class TokenManager {
     }).setOrigin(0.5);
 
     // 5. Interactive Hit Area
-    const hitArea = this.scene.add.circle(0, 0, radius + 2, 0xffffff, 0);
+    const hitArea = this.scene.add.circle(0, 0, radius + 4, 0xffffff, 0);
     hitArea.setInteractive({ useHandCursor: true });
+
     hitArea.on("pointerdown", () => {
       this.onTokenClicked(token.id);
+    });
+
+    hitArea.on("pointerover", () => {
+      this.onTokenHover(token.id, true);
+    });
+
+    hitArea.on("pointerout", () => {
+      this.onTokenHover(token.id, false);
     });
 
     const container = this.scene.add.container(x, y, [
@@ -118,9 +138,45 @@ export default class TokenManager {
     }
   }
 
+  private onTokenHover(tokenId: string, isHover: boolean): void {
+    const obj = this.tokenObjects.get(tokenId);
+    if (!obj || !obj.isActionable) return;
+
+    if (isHover) {
+      if (this.pathOverlay && this.pathProvider) {
+        const path = this.pathProvider(tokenId);
+        if (path && path.length > 0) {
+          this.pathOverlay.showPath(path, obj.token.color);
+        }
+      }
+      this.scene.tweens.add({
+        targets: obj.container,
+        scaleX: LUDO_TOKEN_VISUAL_CONFIG.selectedScale,
+        scaleY: LUDO_TOKEN_VISUAL_CONFIG.selectedScale,
+        duration: animDuration(100),
+        ease: "Sine.Out",
+      });
+    } else {
+      if (this.pathOverlay) {
+        this.pathOverlay.clear();
+      }
+      this.scene.tweens.add({
+        targets: obj.container,
+        scaleX: LUDO_TOKEN_VISUAL_CONFIG.activeScale,
+        scaleY: LUDO_TOKEN_VISUAL_CONFIG.activeScale,
+        duration: animDuration(100),
+        ease: "Sine.Out",
+      });
+    }
+  }
+
   private onTokenClicked(tokenId: string): void {
     const obj = this.tokenObjects.get(tokenId);
     if (!obj) return;
+
+    if (this.pathOverlay) {
+      this.pathOverlay.clear();
+    }
 
     // Small selection scale bounce
     if (!prefersReducedMotion()) {
@@ -139,27 +195,42 @@ export default class TokenManager {
 
   // ─── Turn Glow & Selection ──────────────────────────────────────────────────
 
-  private drawGlowRing(obj: TokenObject, active: boolean, alpha = 0.5): void {
-    LudoTokenRenderer.drawAuraRing(obj.glowGraphics, obj.token.color, this.tokenRadius, active, alpha);
+  private drawGlowRing(obj: TokenObject, active: boolean, alpha = 0.5, rotation = 0): void {
+    LudoTokenRenderer.drawAuraRing(
+      obj.glowGraphics,
+      obj.token.color,
+      this.tokenRadius,
+      active,
+      alpha,
+      rotation,
+    );
   }
 
   glowToken(tokenId: string): void {
     const obj = this.tokenObjects.get(tokenId);
     if (!obj) return;
 
+    obj.isActionable = true;
     obj.glowTween?.stop();
 
-    const proxy = { alpha: LUDO_TOKEN_VISUAL_CONFIG.auraPulseMinAlpha };
+    const proxy = {
+      alpha: LUDO_TOKEN_VISUAL_CONFIG.auraPulseMinAlpha,
+      rotation: 0,
+    };
 
     obj.glowTween = this.scene.tweens.add({
       targets: proxy,
       alpha: LUDO_TOKEN_VISUAL_CONFIG.auraPulseMaxAlpha,
-      duration: animDuration(LUDO_TOKEN_VISUAL_CONFIG.auraPulseDuration),
-      ease: "Sine.InOut",
-      yoyo: true,
+      rotation: Math.PI * 2,
+      duration: animDuration(LUDO_TOKEN_VISUAL_CONFIG.auraPulseDuration * 2),
+      ease: "Linear",
       repeat: -1,
       onUpdate: () => {
-        this.drawGlowRing(obj, true, proxy.alpha);
+        const pulse =
+          LUDO_TOKEN_VISUAL_CONFIG.auraPulseMinAlpha +
+          (LUDO_TOKEN_VISUAL_CONFIG.auraPulseMaxAlpha - LUDO_TOKEN_VISUAL_CONFIG.auraPulseMinAlpha) *
+            Math.abs(Math.sin(proxy.rotation * 2));
+        this.drawGlowRing(obj, true, pulse, proxy.rotation);
       },
     });
 
@@ -177,6 +248,7 @@ export default class TokenManager {
     const obj = this.tokenObjects.get(tokenId);
     if (!obj) return;
 
+    obj.isActionable = false;
     obj.glowTween?.stop();
     obj.glowTween = undefined;
     this.drawGlowRing(obj, false, 0);
@@ -197,6 +269,9 @@ export default class TokenManager {
   }
 
   clearAllGlows(): void {
+    if (this.pathOverlay) {
+      this.pathOverlay.clear();
+    }
     for (const id of this.tokenObjects.keys()) {
       this.clearGlow(id);
     }
@@ -229,7 +304,14 @@ export default class TokenManager {
 
   moveAlongPath(tokenId: string, path: number[], color: PlayerColor, onComplete?: () => void): void {
     const obj = this.tokenObjects.get(tokenId);
-    if (!obj || path.length === 0) { onComplete?.(); return; }
+    if (!obj || path.length === 0) {
+      onComplete?.();
+      return;
+    }
+
+    if (this.pathOverlay) {
+      this.pathOverlay.clear();
+    }
 
     this.stopIdleAnimation(obj);
     this.clearGlow(tokenId);
@@ -336,11 +418,14 @@ export default class TokenManager {
     });
   }
 
-  // ─── Capture Animation (Shockwave & Smooth Return) ──────────────────────────
+  // ─── Capture Animation (Shockwave, Shake & Smooth Arc Return) ──────────────────
 
   sendToYard(tokenId: string, color: PlayerColor, tokenIndex: number, onComplete?: () => void): void {
     const obj = this.tokenObjects.get(tokenId);
-    if (!obj) { onComplete?.(); return; }
+    if (!obj) {
+      onComplete?.();
+      return;
+    }
 
     const { x, y } = yardSpawnPixel(color, tokenIndex);
     const reduced = prefersReducedMotion();
@@ -383,7 +468,7 @@ export default class TokenManager {
         obj.container.setDepth(95);
 
         // Shadow shrinks during high arc flight
-        LudoTokenRenderer.drawContactShadow(obj.shadowGraphics, this.tokenRadius, 0.8);
+        LudoTokenRenderer.drawContactShadow(obj.shadowGraphics, this.tokenRadius, 0.85);
 
         this.scene.tweens.add({
           targets: obj.container,
@@ -522,6 +607,9 @@ export default class TokenManager {
   }
 
   killAllTweens(): void {
+    if (this.pathOverlay) {
+      this.pathOverlay.clear();
+    }
     for (const [, obj] of this.tokenObjects) {
       this.scene.tweens.killTweensOf(obj.container);
       this.scene.tweens.killTweensOf(obj.glowGraphics);
@@ -574,4 +662,3 @@ export default class TokenManager {
 }
 
 export { TokenManager };
-

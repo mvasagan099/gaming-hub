@@ -32,7 +32,7 @@ export async function claimPracticeReward(gameId: string): Promise<PracticeRewar
   rewardCooldowns.set(gameId, now + REWARD_COOLDOWN_MS);
 
   try {
-    const result = await apiClient.post<PracticeRewardResult>("/api/wallet/practice-reward", { gameId });
+    const result = await apiClient.post<PracticeRewardResult>("/wallet/practice-reward", { gameId });
     if (result.claimed) {
       notifyWalletChanged();
     }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Phaser from "phaser";
 import { ChessEvents } from "../phaser/events/ChessEvents";
-import { Trophy, Shield, XCircle, RotateCcw, Flag, Handshake } from "lucide-react";
+import { Trophy, Shield, XCircle, RotateCcw, Flag, Handshake, Sparkles, Swords } from "lucide-react";
 import { claimPracticeReward } from "../../../services/api/practiceReward";
 import { useMultiplayerStore } from "../../../store/multiplayerStore";
 
@@ -22,30 +22,24 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
   const [mpResult, setMpResult] = useState<MpResult | null>(null);
   const [promotionData, setPromotionData] = useState<{ from: string; to: string } | null>(null);
   const [hasRewarded, setHasRewarded] = useState(false);
-  const [showDrawOffer, setShowDrawOffer] = useState(false);
+  const [showResignConfirm, setShowResignConfirm] = useState(false);
+  const [showMatchIntro, setShowMatchIntro] = useState(true);
+
   const room = useMultiplayerStore((s) => s.room);
-  const gameState = useMultiplayerStore((s) => s.gameState);
   const mySeat = useMultiplayerStore((s) => s.mySeat);
-  const renderKey = useMultiplayerStore((s) => s.renderKey); // Force re-render on state changes
   const sendGameAction = useMultiplayerStore((s) => s.sendGameAction);
 
-  const drawOfferedBySeat = gameState?.drawOfferedBy;
-  const isDrawOfferedByOpponent =
-    online &&
-    drawOfferedBySeat != null &&
-    drawOfferedBySeat !== mySeat &&
-    !gameState?.finished;
-
-  const isDrawOfferedByMe =
-    online &&
-    drawOfferedBySeat != null &&
-    drawOfferedBySeat === mySeat &&
-    !gameState?.finished;
+  // Match intro timer (< 1.8s)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setShowMatchIntro(false);
+    }, 1800);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (!game) return;
 
-    // We need to wait for the scene to be ready
     const timer = setInterval(() => {
       const scene = game.scene.getScene("ChessScene");
       if (scene) {
@@ -66,7 +60,6 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
 
           setGameOverMsg(msg);
 
-          // Only reward once per game over if White (Human) wins
           if (msg.includes("White Wins") && !hasRewarded) {
             setHasRewarded(true);
             setTimeout(() => {
@@ -95,267 +88,157 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
     }
   };
 
-  const handleResign = () => {
+  const handleResignConfirmed = () => {
     sendGameAction?.({ type: "resign" });
+    setShowResignConfirm(false);
   };
 
-  const handleOfferDraw = () => {
-    sendGameAction?.({ type: "draw-offer" });
-    setShowDrawOffer(false);
-  };
-
-  const handleAcceptDraw = () => {
-    sendGameAction?.({ type: "draw-accept" });
-    setShowDrawOffer(false);
-  };
-
-  const handleDeclineDraw = () => {
-    sendGameAction?.({ type: "draw-decline" });
-    setShowDrawOffer(false);
-  };
+  const opponentPlayer = room?.players?.find((p) => p.seat !== mySeat);
+  const myPlayer = room?.players?.find((p) => p.seat === mySeat);
 
   return (
     <>
-      {/* PAWN PROMOTION MODAL */}
+      {/* ── MATCH INTRO OVERLAY (< 1.8s) ── */}
+      {showMatchIntro && !gameOverMsg && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-none animate-out fade-out duration-500">
+          <div className="flex flex-col items-center justify-center p-6 bg-slate-900/90 border border-amber-500/40 rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.8)] transform scale-105 animate-in zoom-in-95 duration-300">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center border border-amber-500/40 mb-3 shadow-[0_0_20px_rgba(245,158,11,0.25)]">
+              <Swords className="w-6 h-6 text-amber-400" />
+            </div>
+
+            <h3 className="text-xl font-black text-white uppercase tracking-wider mb-2">Match Starting</h3>
+
+            <div className="flex items-center gap-6 my-2">
+              <div className="text-center">
+                <p className="text-sm font-black text-amber-300 truncate max-w-[100px]">{myPlayer?.displayName || "You"}</p>
+                <p className="text-[10px] text-slate-400 uppercase font-bold">White</p>
+              </div>
+              <span className="text-xs font-black text-amber-500">VS</span>
+              <div className="text-center">
+                <p className="text-sm font-black text-sky-300 truncate max-w-[100px]">{opponentPlayer?.displayName || "Opponent"}</p>
+                <p className="text-[10px] text-slate-400 uppercase font-bold">Black</p>
+              </div>
+            </div>
+
+            <div className="mt-3 px-4 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-[11px] font-black text-amber-400 tracking-widest uppercase">
+              Play!
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PAWN PROMOTION MODAL ── */}
       {promotionData && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#0f172a] border border-sky-500/30 p-6 rounded-2xl shadow-2xl flex flex-col items-center">
-            <h3 className="text-sky-400 font-bold uppercase tracking-wider mb-4">Promote Pawn</h3>
-            <div className="flex gap-4">
-              <button
-                onClick={() => handlePromotion("q")}
-                className="w-16 h-16 bg-slate-800 hover:bg-sky-900/50 rounded-xl border border-slate-700 hover:border-sky-500 transition-all flex items-center justify-center text-4xl text-white"
-              >
-                ♕
-              </button>
-              <button
-                onClick={() => handlePromotion("r")}
-                className="w-16 h-16 bg-slate-800 hover:bg-sky-900/50 rounded-xl border border-slate-700 hover:border-sky-500 transition-all flex items-center justify-center text-4xl text-white"
-              >
-                ♖
-              </button>
-              <button
-                onClick={() => handlePromotion("b")}
-                className="w-16 h-16 bg-slate-800 hover:bg-sky-900/50 rounded-xl border border-slate-700 hover:border-sky-500 transition-all flex items-center justify-center text-4xl text-white"
-              >
-                ♗
-              </button>
-              <button
-                onClick={() => handlePromotion("n")}
-                className="w-16 h-16 bg-slate-800 hover:bg-sky-900/50 rounded-xl border border-slate-700 hover:border-sky-500 transition-all flex items-center justify-center text-4xl text-white"
-              >
-                ♘
-              </button>
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-amber-500/40 p-6 rounded-3xl shadow-2xl flex flex-col items-center max-w-sm w-full mx-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center border border-amber-500/40 mb-3 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+              <Sparkles className="w-6 h-6 text-amber-400" />
             </div>
-          </div>
-        </div>
-      )}
+            <h3 className="text-white font-black text-lg uppercase tracking-wider mb-1">Promote Pawn</h3>
+            <p className="text-slate-400 text-xs mb-5 text-center">Choose your promoted piece</p>
 
-      {/* DRAW OFFER MODAL / BANNER */}
-      {(showDrawOffer || isDrawOfferedByOpponent) && online && !gameOverMsg && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#0f172a] border border-amber-500/40 p-6 rounded-2xl shadow-2xl flex flex-col items-center max-w-md w-full mx-4">
-            <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 mb-3 border border-amber-500/40 animate-pulse">
-              <Handshake className="w-6 h-6" />
-            </div>
-            <h3 className="text-amber-400 font-black uppercase tracking-wider text-base mb-2">
-              {isDrawOfferedByOpponent ? "Draw Offer Received" : "Offer a Draw"}
-            </h3>
-            <p className="text-slate-300 text-xs mb-6 text-center leading-relaxed">
-              {isDrawOfferedByOpponent
-                ? "Your opponent has offered a draw. Would you like to accept or decline?"
-                : isDrawOfferedByMe
-                ? "You offered a draw. Waiting for opponent to respond..."
-                : "Offer a draw to your opponent for this match?"}
-            </p>
-            <div className="flex gap-3 w-full">
-              {isDrawOfferedByOpponent ? (
-                <>
-                  <button
-                    onClick={handleAcceptDraw}
-                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-emerald-600/20"
-                  >
-                    Accept Draw
-                  </button>
-                  <button
-                    onClick={handleDeclineDraw}
-                    className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-rose-600/20"
-                  >
-                    Decline
-                  </button>
-                </>
-              ) : isDrawOfferedByMe ? (
+            <div className="grid grid-cols-4 gap-3 w-full">
+              {[
+                { type: "q" as const, symbol: "♕", name: "Queen" },
+                { type: "r" as const, symbol: "♖", name: "Rook" },
+                { type: "b" as const, symbol: "♗", name: "Bishop" },
+                { type: "n" as const, symbol: "♘", name: "Knight" },
+              ].map((p) => (
                 <button
-                  onClick={handleDeclineDraw}
-                  className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all border border-slate-700"
+                  key={p.type}
+                  onClick={() => handlePromotion(p.type)}
+                  className="group flex flex-col items-center justify-center p-3.5 bg-slate-800/80 hover:bg-amber-500/20 rounded-2xl border border-slate-700 hover:border-amber-500/60 transition-all hover:scale-105 active:scale-95 shadow-lg"
                 >
-                  Withdraw Offer
+                  <span className="text-3xl text-white group-hover:text-amber-400 transition-colors drop-shadow-md mb-1">{p.symbol}</span>
+                  <span className="text-[10px] font-bold text-slate-400 group-hover:text-amber-300 uppercase tracking-wider">{p.name}</span>
                 </button>
-              ) : (
-                <>
-                  <button
-                    onClick={handleOfferDraw}
-                    className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-amber-600/20"
-                  >
-                    Offer Draw
-                  </button>
-                  <button
-                    onClick={() => setShowDrawOffer(false)}
-                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all border border-slate-700"
-                  >
-                    Cancel
-                  </button>
-                </>
-              )}
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      {/* IN-GAME ACTIONS (bottom overlay) */}
-      {online && !gameOverMsg && !promotionData && !showDrawOffer && (
-        <div className="absolute bottom-4 right-4 z-40 flex gap-2">
-          {isDrawOfferedByOpponent ? (
-            <>
+      {/* ── RESIGN CONFIRMATION MODAL ── */}
+      {showResignConfirm && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-rose-500/40 p-6 rounded-3xl shadow-2xl flex flex-col items-center max-w-xs w-full mx-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 flex items-center justify-center border border-rose-500/40 mb-3 shadow-[0_0_15px_rgba(244,63,94,0.2)]">
+              <Flag className="w-6 h-6 text-rose-400" />
+            </div>
+            <h3 className="text-white font-black text-lg uppercase tracking-wider mb-1">Resign Game?</h3>
+            <p className="text-slate-400 text-xs mb-5 text-center">Are you sure you want to forfeit this match?</p>
+
+            <div className="flex gap-2.5 w-full">
               <button
-                onClick={handleAcceptDraw}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/30 flex items-center gap-2 animate-bounce"
+                onClick={() => setShowResignConfirm(false)}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-colors uppercase tracking-wider"
               >
-                <Handshake className="w-4 h-4" /> Accept Draw
+                Cancel
               </button>
               <button
-                onClick={handleDeclineDraw}
-                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-all border border-slate-700"
+                onClick={handleResignConfirmed}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl transition-colors shadow-lg shadow-rose-600/30 uppercase tracking-wider"
               >
-                Decline
+                Resign
               </button>
-            </>
-          ) : isDrawOfferedByMe ? (
-            <button
-              disabled
-              className="px-4 py-2 bg-amber-600/50 text-amber-200 text-xs font-bold rounded-xl border border-amber-500/30 flex items-center gap-2 cursor-not-allowed"
-            >
-              <Handshake className="w-4 h-4 animate-pulse" /> Draw Offered...
-            </button>
-          ) : (
-            <button
-              onClick={() => setShowDrawOffer(true)}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-amber-600/20 flex items-center gap-2"
-            >
-              <Handshake className="w-4 h-4" /> Draw
-            </button>
-          )}
-          <button
-            onClick={handleResign}
-            className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-rose-600/20 flex items-center gap-2"
-          >
-            <Flag className="w-4 h-4" /> Resign
-          </button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* GAME OVER MODAL */}
+      {/* ── VICTORY / GAME OVER RESULT MODAL ── */}
       {gameOverMsg && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-[#0f172a] border border-slate-700 p-8 rounded-3xl shadow-2xl flex flex-col items-center max-w-sm w-full mx-4 transform transition-all scale-100 animate-in zoom-in-95 duration-500">
-            
-            {mpResult ? (
-              <div className={`w-20 h-20 rounded-full flex items-center justify-center border-2 mb-4 ${
-                mpResult.result === "win"
-                  ? "bg-emerald-500/20 border-emerald-500/50 animate-bounce"
-                  : mpResult.result === "draw"
-                    ? "bg-slate-500/20 border-slate-500/50"
-                    : "bg-rose-500/20 border-rose-500/50"
-              }`}>
-                {mpResult.result === "win" ? (
-                  <Trophy className="w-10 h-10 text-emerald-400" />
-                ) : mpResult.result === "draw" ? (
-                  <Shield className="w-10 h-10 text-slate-400" />
-                ) : (
-                  <XCircle className="w-10 h-10 text-rose-400" />
-                )}
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-amber-500/40 p-8 rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.9)] flex flex-col items-center max-w-sm w-full mx-4 text-center">
+            {/* Header Icon */}
+            {mpResult?.result === "win" || gameOverMsg.includes("White Wins") ? (
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/20 flex items-center justify-center border border-amber-500/50 mb-4 shadow-[0_0_25px_rgba(245,158,11,0.3)] animate-bounce">
+                <Trophy className="w-8 h-8 text-amber-400" />
               </div>
-            ) : gameOverMsg.includes("White Wins") ? (
-              <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center border-2 border-emerald-500/50 mb-4 animate-bounce">
-                <Trophy className="w-10 h-10 text-emerald-400" />
-              </div>
-            ) : gameOverMsg.includes("Draw") ? (
-              <div className="w-20 h-20 rounded-full bg-slate-500/20 flex items-center justify-center border-2 border-slate-500/50 mb-4">
-                <Shield className="w-10 h-10 text-slate-400" />
+            ) : mpResult?.result === "draw" || gameOverMsg.includes("Draw") ? (
+              <div className="w-16 h-16 rounded-2xl bg-sky-500/20 flex items-center justify-center border border-sky-500/50 mb-4 shadow-[0_0_25px_rgba(56,189,248,0.3)]">
+                <Handshake className="w-8 h-8 text-sky-400" />
               </div>
             ) : (
-              <div className="w-20 h-20 rounded-full bg-rose-500/20 flex items-center justify-center border-2 border-rose-500/50 mb-4">
-                <XCircle className="w-10 h-10 text-rose-400" />
+              <div className="w-16 h-16 rounded-2xl bg-rose-500/20 flex items-center justify-center border border-rose-500/50 mb-4 shadow-[0_0_25px_rgba(244,63,94,0.3)]">
+                <XCircle className="w-8 h-8 text-rose-400" />
               </div>
             )}
 
-            <h2 className={`text-3xl font-black uppercase tracking-widest text-center mb-2 ${
-              mpResult
-                ? mpResult.result === "win"
-                  ? "text-emerald-400"
-                  : mpResult.result === "draw"
-                    ? "text-slate-300"
-                    : "text-rose-500"
-                : gameOverMsg.includes("White Wins") ? "text-emerald-400" : gameOverMsg.includes("Draw") ? "text-slate-300" : "text-rose-500"
-            }`}>
-              {mpResult
-                ? mpResult.result === "win"
-                  ? "YOU WON!"
-                  : mpResult.result === "draw"
-                    ? "DRAW"
-                    : `${mpResult.name.toUpperCase()} WON`
-                : gameOverMsg.includes("White Wins") ? "YOU WON!" : gameOverMsg.includes("Draw") ? "DRAW" : "AI WON..."}
+            {/* Title */}
+            <h2 className="text-2xl font-black text-white tracking-wide uppercase mb-1">
+              {mpResult?.result === "win" || gameOverMsg.includes("White Wins")
+                ? "Victory!"
+                : mpResult?.result === "draw" || gameOverMsg.includes("Draw")
+                  ? "Draw Match"
+                  : "Game Over"}
             </h2>
-            
-            <p className="text-slate-400 text-sm text-center mb-6 font-medium">
-              {mpResult ? (mpResult.result === "draw" ? "Draw" : `Checkmate! ${mpResult.name} wins`) : gameOverMsg}
+
+            <p className="text-sm font-bold text-amber-400/90 uppercase tracking-widest mb-4">
+              {gameOverMsg.replace("MP|win|", "").replace("MP|lose|", "").replace("MP|draw|", "")}
             </p>
 
-            {!online && gameOverMsg.includes("White Wins") && (
-              <div className="bg-emerald-950/50 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 mb-6 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-                🪙 +50 Coins Added!
+            {/* Match Rewards */}
+            {gameOverMsg.includes("White Wins") && (
+              <div className="w-full py-2.5 px-4 bg-amber-500/10 border border-amber-500/30 rounded-xl font-bold text-xs text-amber-400 mb-5 flex items-center justify-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                <span>+50 Coins Practice Reward!</span>
               </div>
             )}
 
-            {online && room && room.stake > 0 && (
-              <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-slate-950/80 border border-slate-800 text-center w-full mb-6">
-                <div>
-                  <div className="text-[10px] text-slate-500 font-bold uppercase">Entry</div>
-                  <div className="text-sm font-black text-slate-300">{room.stake}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-slate-500 font-bold uppercase">Prize</div>
-                  <div className="text-sm font-black text-amber-400">
-                    {mpResult?.result === "win" ? Math.round(room.stake * 2 * 0.9) : mpResult?.result === "draw" ? room.stake : 0}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-slate-500 font-bold uppercase">Net</div>
-                  <div className={`text-sm font-black ${
-                    mpResult?.result === "win" ? "text-emerald-400" : mpResult?.result === "draw" ? "text-slate-400" : "text-rose-400"
-                  }`}>
-                    {mpResult?.result === "win"
-                      ? `+${Math.round(room.stake * 2 * 0.9) - room.stake}`
-                      : mpResult?.result === "draw"
-                        ? "0"
-                        : `-${room.stake}`}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-3 w-full">
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-2.5 w-full">
               <button
                 onClick={onReplay}
-                className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/20"
+                className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-xl shadow-amber-500/30 transform hover:scale-[1.02] active:scale-[0.98] transition-all tracking-wider uppercase flex items-center justify-center gap-2"
               >
-                <RotateCcw className="w-4 h-4" /> Replay
+                <RotateCcw className="w-4 h-4" /> Play Again
               </button>
               <button
                 onClick={onClose}
-                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-all border border-slate-700"
+                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 transition-colors uppercase tracking-wider"
               >
-                Close
+                Exit to Lobby
               </button>
             </div>
           </div>
@@ -364,3 +247,5 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
     </>
   );
 };
+
+export default ChessOverlays;

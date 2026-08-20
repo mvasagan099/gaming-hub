@@ -6,6 +6,7 @@ import type DiceManager from "./DiceManager";
 import type HUDManager from "./HUDManager";
 import type WinnerPopup from "../ui/WinnerPopup";
 import type FeedbackText from "../ui/FeedbackText";
+import type MovePathOverlay from "../ui/MovePathOverlay";
 import { LudoRuleEngine } from "../engine/LudoRuleEngine";
 import { DEFAULT_SETTINGS, type PlayerColor } from "../types/ludo.types";
 import { mainPathPixel, homeColPixel, HOME_COL_BASE } from "../data/boardLayout";
@@ -65,6 +66,7 @@ export default class LudoMultiplayerDriver {
   private hud: HUDManager;
   private winnerPopup: WinnerPopup;
   private feedback: FeedbackText | null;
+  private pathOverlay: MovePathOverlay | null;
   private readonly mySeat: number | null;
   private readonly names: string[];
   private ruleEngine: LudoRuleEngine;
@@ -85,6 +87,7 @@ export default class LudoMultiplayerDriver {
     mySeat: number | null,
     names: string[],
     feedback: FeedbackText | null = null,
+    pathOverlay: MovePathOverlay | null = null,
   ) {
     this.scene = scene;
     this.tokenManager = tokenManager;
@@ -92,6 +95,7 @@ export default class LudoMultiplayerDriver {
     this.hud = hud;
     this.winnerPopup = winnerPopup;
     this.feedback = feedback;
+    this.pathOverlay = pathOverlay;
     this.mySeat = mySeat;
     this.names = names;
     const count = names.length === 2 || mySeat != null ? 2 : (DEFAULT_SETTINGS.playerCount as 2 | 4);
@@ -99,6 +103,18 @@ export default class LudoMultiplayerDriver {
   }
 
   start(): void {
+    if (this.pathOverlay) {
+      this.tokenManager.setPathOverlay(this.pathOverlay, (tokenId: string) => {
+        if (!this.lastState?.dice) return [];
+        const mySeat = this.effectiveMySeat;
+        if (mySeat == null) return [];
+        const player = this.lastState.players?.find((p) => p.seat === mySeat);
+        const token = player?.tokens.find((t) => t.id === tokenId);
+        if (!token) return [];
+        return this.ruleEngine.buildMovePath(token, this.lastState.dice);
+      });
+    }
+
     this.dice.setOnRoll(() => this.onRoll());
     this.scene.events.on(LudoEvents.TOKEN_SELECTED, this.onTokenSelected, this);
 

@@ -5,18 +5,16 @@ import {
   CELL_SIZE,
   YARDS,
   YARD_TOKEN_OFFSETS,
-  ZONE_COLORS,
   HOME_COL_COORDS,
   MAIN_PATH,
   SAFE_TILES,
   START_POSITION,
   HOME_COL_BASE,
-  cellToPixel,
   mainPathPixel,
   homeColPixel,
   yardSpawnPixel,
 } from "../data/boardLayout";
-import { ANIM, animDuration } from "../constants";
+import { ANIM, LUDO_DESIGN_CONFIG, animDuration } from "../constants";
 
 const PLAYER_COLORS: PlayerColor[] = ["red", "blue", "green", "yellow"];
 
@@ -29,20 +27,20 @@ export default class BoardManager {
   }
 
   drawBoard(): void {
-    this.drawBackground();
+    this.drawBoardShadowAndSlab();
     this.drawYards();
     this.drawMainPath();
     this.drawHomeColumns();
     this.drawCenterStar();
     this.drawSafeStars();
     this.drawStartArrows();
-    this.drawBorder();
+    this.drawBorderBevel();
 
     this.highlightGraphics = this.scene.add.graphics();
-    this.highlightGraphics.setDepth(3);
+    this.highlightGraphics.setDepth(35);
   }
 
-  /** Board entry animation — fade + slight slide from above */
+  /** Board entry animation — subtle lift & fade */
   animateBoardEntry(onComplete?: () => void): void {
     const reduced = this.scene.registry.get("prefersReducedMotion") ?? false;
     const children = this.scene.children.list;
@@ -54,183 +52,252 @@ export default class BoardManager {
         this.scene.tweens.add({
           targets: child,
           alpha: 1,
-          y: `+=${12}`,
+          y: `+=${10}`,
           duration: animDuration(ANIM.boardEntryDuration),
           ease: "Cubic.Out",
-          delay: Math.random() * 100,
+          delay: Math.random() * 80,
         });
       } else {
         alphaObj.setAlpha?.(1);
       }
     }
-    this.scene.time.delayedCall(animDuration(ANIM.boardEntryDuration + 150), () => onComplete?.());
+    this.scene.time.delayedCall(animDuration(ANIM.boardEntryDuration + 100), () => onComplete?.());
   }
 
-  // ─── Background ─────────────────────────────────────────────────────────────
+  // ─── 3D Board Shadow & Elevated Slab ─────────────────────────────────────────
 
-  private drawBackground(): void {
+  private drawBoardShadowAndSlab(): void {
     const g = this.scene.add.graphics();
     g.setDepth(0);
-    // Warm off-white with subtle radial feel
-    g.fillStyle(0xf8f6f1, 1);
-    g.fillRect(0, 0, BOARD_PX, BOARD_PX);
-    // Subtle inner shadow for depth
-    g.fillStyle(0x000000, 0.04);
-    g.fillRect(0, 0, BOARD_PX, 6);
-    g.fillRect(0, 0, 6, BOARD_PX);
+
+    const cornerR = LUDO_DESIGN_CONFIG.boardCornerRadius;
+    const pad = 4;
+    const w = BOARD_PX - pad * 2;
+    const h = BOARD_PX - pad * 2;
+
+    // 1. Soft Multi-Stage 3D Ambient Drop Shadow under board slab
+    g.fillStyle(0x000000, 0.4);
+    g.fillRoundedRect(pad + 10, pad + 16, w, h, cornerR + 4);
+    g.fillStyle(0x000000, 0.25);
+    g.fillRoundedRect(pad + 6, pad + 10, w, h, cornerR + 2);
+    g.fillStyle(0x000000, 0.15);
+    g.fillRoundedRect(pad + 2, pad + 4, w, h, cornerR);
+
+    // 2. 3D Board Base Chassis (Midnight Navy Slab)
+    g.fillStyle(0x0a0f1d, 1);
+    g.fillRoundedRect(pad, pad, w, h, cornerR);
+
+    // 3. Satin Board Playfield Surface
+    const inset = 6;
+    g.fillStyle(0x0f172a, 1);
+    g.fillRoundedRect(pad + inset, pad + inset, w - inset * 2, h - inset * 2, cornerR - 4);
+
+    // 4. Subtle Top-Left Specular Surface Sheen
+    g.fillStyle(0xffffff, 0.03);
+    g.fillRoundedRect(pad + inset, pad + inset, w - inset * 2, (h - inset * 2) * 0.45, {
+      tl: cornerR - 4,
+      tr: cornerR - 4,
+      bl: 0,
+      br: 0,
+    });
   }
 
-  // ─── Yards ──────────────────────────────────────────────────────────────────
+  // ─── Player Home / Yard Quadrants ────────────────────────────────────────────
 
   private drawYards(): void {
     const g = this.scene.add.graphics();
     g.setDepth(1);
 
     for (const color of PLAYER_COLORS) {
-      const zone = ZONE_COLORS[color];
+      const c = LUDO_DESIGN_CONFIG.colors[color];
       const yard = YARDS[color];
-      const x = yard.col * CELL_SIZE;
-      const y = yard.row * CELL_SIZE;
-      const size = 6 * CELL_SIZE;
-      const cornerR = 14;
+      const x = yard.col * CELL_SIZE + 4;
+      const y = yard.row * CELL_SIZE + 4;
+      const size = 6 * CELL_SIZE - 8;
+      const cornerR = 18;
 
-      // Yard background — rounded outer rect
-      g.fillStyle(zone.main, 1);
+      // 1. Yard Outer Raised Card (Modern Glass Panel)
+      g.fillStyle(0x090d16, 0.95);
       g.fillRoundedRect(x, y, size, size, cornerR);
 
-      // Inner white area with rounded corners
-      const pad = CELL_SIZE * 0.5;
-      g.fillStyle(0xffffff, 0.92);
-      g.fillRoundedRect(x + pad, y + pad, size - pad * 2, size - pad * 2, 12);
+      // Yard team-colored ambient glow gradient at base
+      g.fillStyle(c.main, 0.12);
+      g.fillRoundedRect(x, y, size, size, cornerR);
 
-      // Token spawn circles — modern ring style
+      // Yard Metallic Border
+      g.lineStyle(2.0, c.main, 0.85);
+      g.strokeRoundedRect(x, y, size, size, cornerR);
+
+      // Top-left bevel highlight
+      g.lineStyle(1.5, 0xffffff, 0.3);
+      g.strokeRoundedRect(x + 1, y + 1, size - 2, size - 2, cornerR - 1);
+
+      // 2. Inner Recessed Floor Arena
+      const pad = CELL_SIZE * 0.45;
+      const innerW = size - pad * 2;
+      const innerH = size - pad * 2;
+      g.fillStyle(0x030712, 0.8);
+      g.fillRoundedRect(x + pad, y + pad, innerW, innerH, 14);
+      g.lineStyle(1.5, c.dark, 0.5);
+      g.strokeRoundedRect(x + pad, y + pad, innerW, innerH, 14);
+
+      // 3. 3D Recessed Token Pedestals / Sockets
       for (let ti = 0; ti < 4; ti++) {
         const offset = YARD_TOKEN_OFFSETS[ti]!;
         const cx = (yard.col + offset.col) * CELL_SIZE + CELL_SIZE / 2;
         const cy = (yard.row + offset.row) * CELL_SIZE + CELL_SIZE / 2;
-        const r = CELL_SIZE * 0.4;
+        const r = CELL_SIZE * 0.42;
 
-        // Outer glow ring
-        g.fillStyle(zone.light, 0.3);
-        g.fillCircle(cx, cy, r + 2);
+        // Outer LED-glow halo
+        g.fillStyle(c.glow, 0.2);
+        g.fillCircle(cx, cy, r + 4);
 
-        // Main circle
-        g.fillStyle(zone.light, 1);
+        // Recessed rim bevel
+        g.fillStyle(0x0a0f1d, 1);
         g.fillCircle(cx, cy, r);
 
-        // Border
-        g.lineStyle(2.5, zone.dark, 0.7);
-        g.strokeCircle(cx, cy, r);
+        // Dark cavity socket
+        g.fillStyle(0x020617, 1);
+        g.fillCircle(cx, cy, r - 3);
 
-        // Inner dot
-        g.fillStyle(zone.dark, 0.25);
-        g.fillCircle(cx, cy, r * 0.3);
+        // Inner glowing team core
+        g.fillStyle(c.main, 0.25);
+        g.fillCircle(cx, cy, r * 0.5);
+
+        // Socket metallic stroke
+        g.lineStyle(1.8, c.light, 0.8);
+        g.strokeCircle(cx, cy, r - 1.5);
       }
 
-      // Yard label
+      // 4. Modern Minimalist Team Name Badge
       const cx = x + size / 2;
       const cy = y + size / 2;
-      this.scene.add.text(cx, cy + size * 0.28, color.toUpperCase(), {
+
+      // Small central crest pill
+      g.fillStyle(0x0f172a, 0.9);
+      g.fillRoundedRect(cx - 38, cy + size * 0.26 - 10, 76, 20, 10);
+      g.lineStyle(1, c.main, 0.6);
+      g.strokeRoundedRect(cx - 38, cy + size * 0.26 - 10, 76, 20, 10);
+
+      this.scene.add.text(cx, cy + size * 0.26, color.toUpperCase(), {
         fontSize: "10px",
         color: "#ffffff",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
-        stroke: "#00000044",
-        strokeThickness: 2,
       }).setOrigin(0.5).setDepth(2);
     }
   }
 
-  // ─── Main path ──────────────────────────────────────────────────────────────
+  // ─── Playable Main Path Cells ────────────────────────────────────────────────
 
   private drawMainPath(): void {
     const g = this.scene.add.graphics();
-    g.setDepth(1);
+    g.setDepth(2);
 
     for (let pos = 0; pos < MAIN_PATH.length; pos++) {
       const coord = MAIN_PATH[pos];
       if (!coord) continue;
       const x = coord.col * CELL_SIZE;
       const y = coord.row * CELL_SIZE;
-      const inset = 1.5;
-      const radius = 4;
+      const inset = 2.0;
+      const radius = 6;
+      const w = CELL_SIZE - inset * 2;
+      const h = CELL_SIZE - inset * 2;
 
-      // Determine fill color
-      let fillColor = 0xffffff;
+      // Determine cell styling
       let isStart = false;
       let startColor: PlayerColor | undefined;
       for (const color of PLAYER_COLORS) {
         if (START_POSITION[color] === pos) {
-          fillColor = ZONE_COLORS[color].main;
           isStart = true;
           startColor = color;
           break;
         }
       }
 
-      // Rounded tile
-      g.fillStyle(fillColor, 1);
-      g.fillRoundedRect(x + inset, y + inset, CELL_SIZE - inset * 2, CELL_SIZE - inset * 2, radius);
+      if (isStart && startColor) {
+        const c = LUDO_DESIGN_CONFIG.colors[startColor];
+        // Start Tile — Team colored illuminated slab
+        g.fillStyle(c.main, 1.0);
+        g.fillRoundedRect(x + inset, y + inset, w, h, radius);
 
-      // Subtle top highlight on non-start tiles
-      if (!isStart) {
-        g.fillStyle(0xffffff, 0.15);
-        g.fillRoundedRect(x + inset, y + inset, CELL_SIZE - inset * 2, 3, { tl: radius, tr: radius, bl: 0, br: 0 });
+        // Top specular highlight
+        g.fillStyle(0xffffff, 0.35);
+        g.fillRoundedRect(x + inset, y + inset, w, 4, { tl: radius, tr: radius, bl: 0, br: 0 });
+
+        // Outer glow stroke
+        g.lineStyle(1.8, c.light, 0.9);
+        g.strokeRoundedRect(x + inset, y + inset, w, h, radius);
+      } else {
+        // Standard Modern Neutral Cell (Dark Glass Inset)
+        g.fillStyle(0x131d31, 1.0);
+        g.fillRoundedRect(x + inset, y + inset, w, h, radius);
+
+        // Subtle top bevel highlight
+        g.fillStyle(0xffffff, 0.08);
+        g.fillRoundedRect(x + inset, y + inset, w, 3, { tl: radius, tr: radius, bl: 0, br: 0 });
+
+        // Clean separator stroke
+        g.lineStyle(1.2, 0x1e293b, 0.8);
+        g.strokeRoundedRect(x + inset, y + inset, w, h, radius);
       }
-
-      // Thin border
-      g.lineStyle(1, isStart && startColor ? ZONE_COLORS[startColor].dark : 0xd1d5db, isStart ? 0.6 : 0.5);
-      g.strokeRoundedRect(x + inset, y + inset, CELL_SIZE - inset * 2, CELL_SIZE - inset * 2, radius);
     }
   }
 
-  // ─── Home columns ───────────────────────────────────────────────────────────
+  // ─── Home Columns ───────────────────────────────────────────────────────────
 
   private drawHomeColumns(): void {
     const g = this.scene.add.graphics();
-    g.setDepth(1);
+    g.setDepth(2);
 
     for (const color of PLAYER_COLORS) {
-      const zone = ZONE_COLORS[color];
+      const c = LUDO_DESIGN_CONFIG.colors[color];
       const coords = HOME_COL_COORDS[color];
 
       coords.forEach((coord, step) => {
         const x = coord.col * CELL_SIZE;
         const y = coord.row * CELL_SIZE;
-        const inset = 1.5;
-        const radius = 4;
+        const inset = 2.0;
+        const radius = 6;
+        const w = CELL_SIZE - inset * 2;
+        const h = CELL_SIZE - inset * 2;
 
-        // Gradient: lighter at entry → saturated at home
-        const t = step / (coords.length - 1);
+        // Progressive gradient from entry to home center
+        const t = (step + 1) / coords.length;
         const interpolated = Phaser.Display.Color.Interpolate.ColorWithColor(
-          Phaser.Display.Color.IntegerToColor(zone.light),
-          Phaser.Display.Color.IntegerToColor(zone.main),
+          Phaser.Display.Color.IntegerToColor(c.dark),
+          Phaser.Display.Color.IntegerToColor(c.main),
           100,
           Math.round(t * 100),
         );
-        g.fillStyle(interpolated.color, 1);
-        g.fillRoundedRect(x + inset, y + inset, CELL_SIZE - inset * 2, CELL_SIZE - inset * 2, radius);
 
-        // Border
-        g.lineStyle(1, zone.dark, 0.35);
-        g.strokeRoundedRect(x + inset, y + inset, CELL_SIZE - inset * 2, CELL_SIZE - inset * 2, radius);
+        g.fillStyle(interpolated.color, 0.95);
+        g.fillRoundedRect(x + inset, y + inset, w, h, radius);
 
-        // Arrow indicator toward center (subtle)
+        // Top-left bevel highlight
+        g.fillStyle(0xffffff, 0.25 + t * 0.15);
+        g.fillRoundedRect(x + inset, y + inset, w, 3.5, { tl: radius, tr: radius, bl: 0, br: 0 });
+
+        // Glowing border
+        g.lineStyle(1.4, c.light, 0.7 + t * 0.3);
+        g.strokeRoundedRect(x + inset, y + inset, w, h, radius);
+
+        // Directional glowing dot towards center
         if (step < coords.length - 1) {
-          g.fillStyle(zone.dark, 0.15);
           const cx = x + CELL_SIZE / 2;
           const cy = y + CELL_SIZE / 2;
+          g.fillStyle(0xffffff, 0.5);
           g.fillCircle(cx, cy, 3);
         }
       });
     }
   }
 
-  // ─── Center ─────────────────────────────────────────────────────────────────
+  // ─── Multi-Faceted Center Home Area ─────────────────────────────────────────
 
   private drawCenterStar(): void {
     const g = this.scene.add.graphics();
-    g.setDepth(1);
+    g.setDepth(2);
 
     const cx = 7.5 * CELL_SIZE;
     const cy = 7.5 * CELL_SIZE;
@@ -241,15 +308,17 @@ export default class BoardManager {
       [9 * CELL_SIZE, 9 * CELL_SIZE],
       [6 * CELL_SIZE, 9 * CELL_SIZE],
     ];
+
     const triangleColors: number[] = [
-      ZONE_COLORS.red.main,
-      ZONE_COLORS.blue.main,
-      ZONE_COLORS.green.main,
-      ZONE_COLORS.yellow.main,
+      LUDO_DESIGN_CONFIG.colors.red.main,
+      LUDO_DESIGN_CONFIG.colors.blue.main,
+      LUDO_DESIGN_CONFIG.colors.green.main,
+      LUDO_DESIGN_CONFIG.colors.yellow.main,
     ];
 
+    // 1. Triangular Home Quadrants
     corners.forEach(([tx, ty], i) => {
-      g.fillStyle(triangleColors[i] ?? 0xcccccc, 1);
+      g.fillStyle(triangleColors[i] ?? 0x334155, 1.0);
       g.beginPath();
       g.moveTo(tx, ty);
       const next = corners[(i + 1) % 4]!;
@@ -257,25 +326,54 @@ export default class BoardManager {
       g.lineTo(cx, cy);
       g.closePath();
       g.fillPath();
+
+      // Subtle inner shadow along triangle borders
+      g.lineStyle(1.5, 0x000000, 0.4);
+      g.beginPath();
+      g.moveTo(tx, ty);
+      g.lineTo(cx, cy);
+      g.strokePath();
     });
 
-    // White center circle
-    g.fillStyle(0xffffff, 1);
-    g.fillCircle(cx, cy, CELL_SIZE * 0.7);
+    // 2. Polished Center Gold Hub
+    const hubR = CELL_SIZE * 0.75;
 
-    // Subtle ring
-    g.lineStyle(2, 0xf59e0b, 0.5);
-    g.strokeCircle(cx, cy, CELL_SIZE * 0.7);
+    // Ambient glow halo
+    g.fillStyle(0xf59e0b, 0.25);
+    g.fillCircle(cx, cy, hubR + 4);
 
-    // Star
+    // Midnight gold hub disc
+    g.fillStyle(0x0f172a, 1.0);
+    g.fillCircle(cx, cy, hubR);
+
+    // Inner gold ring
+    g.fillStyle(0xf59e0b, 0.2);
+    g.fillCircle(cx, cy, hubR - 2);
+
+    // Metallic gold rim stroke
+    g.lineStyle(2.5, 0xf59e0b, 1.0);
+    g.strokeCircle(cx, cy, hubR);
+
+    g.lineStyle(1.5, 0xfef08a, 0.8);
+    g.strokeCircle(cx, cy, hubR - 3);
+
+    // 3. Central 3D Star Crest
     this.scene.add.text(cx, cy, "★", {
-      fontSize: "24px",
+      fontSize: "26px",
       color: "#f59e0b",
       fontFamily: "Outfit, sans-serif",
-    }).setOrigin(0.5).setDepth(2);
+      shadow: {
+        offsetX: 0,
+        offsetY: 2,
+        color: "#000000",
+        blur: 4,
+        stroke: true,
+        fill: true,
+      },
+    }).setOrigin(0.5).setDepth(3);
   }
 
-  // ─── Safe stars ─────────────────────────────────────────────────────────────
+  // ─── Safe Star Tiles ────────────────────────────────────────────────────────
 
   private drawSafeStars(): void {
     for (const pos of SAFE_TILES) {
@@ -283,23 +381,32 @@ export default class BoardManager {
       if (isStart) continue;
 
       const { x, y } = mainPathPixel(pos);
-      // Star with subtle glow background
       const g = this.scene.add.graphics();
-      g.setDepth(2);
-      g.fillStyle(0xf59e0b, 0.12);
-      g.fillCircle(x, y, 10);
+      g.setDepth(3);
+
+      // Subtle gold ambient glow on safe tile
+      g.fillStyle(0xf59e0b, 0.18);
+      g.fillCircle(x, y, 12);
+
+      g.lineStyle(1.5, 0xf59e0b, 0.6);
+      g.strokeCircle(x, y, 10);
 
       this.scene.add.text(x, y, "★", {
-        fontSize: "12px",
+        fontSize: "13px",
         color: "#f59e0b",
         fontFamily: "Outfit, sans-serif",
-        stroke: "#78350f",
-        strokeThickness: 1,
-      }).setOrigin(0.5).setDepth(2);
+        shadow: {
+          offsetX: 0,
+          offsetY: 1,
+          color: "#000000",
+          blur: 2,
+          fill: true,
+        },
+      }).setOrigin(0.5).setDepth(3);
     }
   }
 
-  // ─── Start arrows ───────────────────────────────────────────────────────────
+  // ─── Start Arrows ───────────────────────────────────────────────────────────
 
   private drawStartArrows(): void {
     const arrows: Record<PlayerColor, string> = {
@@ -313,58 +420,66 @@ export default class BoardManager {
       const pos = START_POSITION[color];
       const { x, y } = mainPathPixel(pos);
       this.scene.add.text(x, y, arrows[color], {
-        fontSize: "16px",
+        fontSize: "17px",
         color: "#ffffff",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
-        stroke: "#00000033",
-        strokeThickness: 1,
-      }).setOrigin(0.5).setDepth(2);
+        shadow: {
+          offsetX: 0,
+          offsetY: 1,
+          color: "#00000088",
+          blur: 2,
+          stroke: true,
+          fill: true,
+        },
+      }).setOrigin(0.5).setDepth(3);
     }
   }
 
-  // ─── Border ─────────────────────────────────────────────────────────────────
+  // ─── 3D Board Rim & Beveled Border ──────────────────────────────────────────
 
-  private drawBorder(): void {
+  private drawBorderBevel(): void {
     const g = this.scene.add.graphics();
-    g.setDepth(2);
-    // Modern double-border with corner radius
-    g.lineStyle(5, 0x1e293b, 1);
-    g.strokeRect(0, 0, BOARD_PX, BOARD_PX);
-    g.lineStyle(2, 0xf59e0b, 0.5);
-    g.strokeRect(3, 3, BOARD_PX - 6, BOARD_PX - 6);
-    // Outer shadow at bottom-right
-    g.fillStyle(0x000000, 0.08);
-    g.fillRect(BOARD_PX, 4, 4, BOARD_PX);
-    g.fillRect(4, BOARD_PX, BOARD_PX, 4);
+    g.setDepth(30);
+
+    const pad = 4;
+    const w = BOARD_PX - pad * 2;
+    const h = BOARD_PX - pad * 2;
+    const cornerR = LUDO_DESIGN_CONFIG.boardCornerRadius;
+
+    // Metallic Outer Chamfer Rim
+    g.lineStyle(3, 0x1e293b, 1.0);
+    g.strokeRoundedRect(pad, pad, w, h, cornerR);
+
+    // Subtle Gold Accent Pinstripe
+    g.lineStyle(1.5, 0xf59e0b, 0.5);
+    g.strokeRoundedRect(pad + 3, pad + 3, w - 6, h - 6, cornerR - 2);
   }
 
   // ─── Highlights ─────────────────────────────────────────────────────────────
 
   highlightYardToken(color: PlayerColor, tokenIndex: number): void {
     const { x, y } = yardSpawnPixel(color, tokenIndex);
-    this.addHighlight(x, y, ZONE_COLORS[color].main);
+    this.addHighlight(x, y, LUDO_DESIGN_CONFIG.colors[color].glow);
   }
 
   highlightMainTile(pos: number, color: PlayerColor): void {
     const { x, y } = mainPathPixel(pos);
-    this.addHighlight(x, y, ZONE_COLORS[color].main);
+    this.addHighlight(x, y, LUDO_DESIGN_CONFIG.colors[color].glow);
   }
 
   highlightHomeColTile(color: PlayerColor, step: number): void {
     const { x, y } = homeColPixel(color, step);
-    this.addHighlight(x, y, ZONE_COLORS[color].main);
+    this.addHighlight(x, y, LUDO_DESIGN_CONFIG.colors[color].glow);
   }
 
   private addHighlight(x: number, y: number, color: number): void {
     const r = CELL_SIZE * 0.45;
-    // Glow ring
-    this.highlightGraphics.lineStyle(3, color, 1);
+    this.highlightGraphics.lineStyle(2.5, color, 0.9);
     this.highlightGraphics.strokeCircle(x, y, r);
     this.highlightGraphics.fillStyle(color, 0.2);
     this.highlightGraphics.fillCircle(x, y, r);
 
-    // Animated pulse
     this.scene.tweens.add({
       targets: this.highlightGraphics,
       alpha: 0.5,
@@ -381,7 +496,7 @@ export default class BoardManager {
     this.highlightGraphics.setAlpha(1);
   }
 
-  // ─── Public pixel accessors ─────────────────────────────────────────────────
+  // ─── Public Pixel Accessors ─────────────────────────────────────────────────
 
   getPixelForPosition(
     color: PlayerColor,

@@ -4,6 +4,10 @@ import { claimPracticeReward } from '../../services/api/practiceReward';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
+import { BUBBLE_SHOOTER_VISUAL_CONFIG, prefersReducedMotion } from './constants/bubbleShooterVisualConfig';
+import { Bubble3DRenderer } from './utils/bubble3DRenderer';
+import { BubbleShooterOverlays } from './components/BubbleShooterOverlays';
+import { Trophy, Zap, Flame, RefreshCcw, HelpCircle, Shield } from 'lucide-react';
 
 interface BubbleShooterProps {
   mode: 'ai' | 'multiplayer';
@@ -11,7 +15,7 @@ interface BubbleShooterProps {
   onBack: () => void;
 }
 
-// Server-authoritative state mirror (see packages/game-engine/src/bubble-shooter).
+// Server-authoritative state mirror
 type RemoteBubble = { row: number; col: number; color: string; type: 'normal' | 'bomb' | 'rainbow' };
 type RemotePlayer = {
   seat: number;
@@ -30,33 +34,79 @@ type RemoteState = {
   result: 'none' | 'win' | 'draw';
 };
 
-// Brighter colors
-const COLORS = ['#fb7185', '#818cf8', '#34d399', '#fbbf24', '#c084fc']; // Brighter versions of rose, indigo, emerald, amber, purple
-const SPECIALS = ['bomb', 'rainbow'];
-const RADIUS = 11;
-const DIAMETER = RADIUS * 2;
-const ROWS = 15; // Max rows before game over
-const COLS = 13; // Max cols in a normal row
-const ROW_HEIGHT = RADIUS * Math.sqrt(3);
-const CANVAS_WIDTH = COLS * DIAMETER; // 13 * 22 = 286
-const CANVAS_HEIGHT = 460;
+const COLORS = ['#fb7185', '#818cf8', '#34d399', '#fbbf24', '#c084fc'];
+const RADIUS = BUBBLE_SHOOTER_VISUAL_CONFIG.radius; // 16
+const DIAMETER = RADIUS * 2; // 32
+const ROWS = BUBBLE_SHOOTER_VISUAL_CONFIG.rows;
+const COLS = BUBBLE_SHOOTER_VISUAL_CONFIG.cols;
+const ROW_HEIGHT = RADIUS * Math.sqrt(3); // ~27.7
+const CANVAS_WIDTH = BUBBLE_SHOOTER_VISUAL_CONFIG.canvasWidth; // 384
+const CANVAS_HEIGHT = BUBBLE_SHOOTER_VISUAL_CONFIG.canvasHeight; // 580
 const SHOOTER_X = CANVAS_WIDTH / 2;
-const SHOOTER_Y = CANVAS_HEIGHT - 25;
-const SPEED = 850;
+const SHOOTER_Y = CANVAS_HEIGHT - 36;
+const SPEED = BUBBLE_SHOOTER_VISUAL_CONFIG.speed; // 1200
 
-type GridBubble = { row: number; col: number; x: number; y: number; color: string; type: 'normal' | 'bomb' | 'rainbow' };
-type MovingBubble = { x: number; y: number; vx: number; vy: number; color: string; type: 'normal' | 'bomb' | 'rainbow' };
-type Particle = { x: number; y: number; vx: number; vy: number; life: number; color: string };
-type FloatingText = { x: number; y: number; text: string; life: number; color: string };
+type GridBubble = {
+  row: number;
+  col: number;
+  x: number;
+  y: number;
+  color: string;
+  type: 'normal' | 'bomb' | 'rainbow';
+  popScale?: number;
+};
+
+type MovingBubble = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  color: string;
+  type: 'normal' | 'bomb' | 'rainbow';
+};
+
+type FallingBubble = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rotation: number;
+  vRot: number;
+  color: string;
+  type: 'normal' | 'bomb' | 'rainbow';
+};
+
+type Particle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  color: string;
+  size: number;
+};
+
+type FloatingText = {
+  x: number;
+  y: number;
+  text: string;
+  life: number;
+  maxLife: number;
+  color: string;
+  scale: number;
+};
 
 function getGridX(row: number, col: number) {
-  const xOffset = (Math.abs(row % 2) === 0) ? RADIUS : DIAMETER;
+  const xOffset = Math.abs(row % 2) === 0 ? RADIUS : DIAMETER;
   return xOffset + col * DIAMETER;
 }
+
 function getGridY(row: number, topOffset: number) {
   return RADIUS + (row + topOffset) * ROW_HEIGHT;
 }
 
+// ─── Multiplayer Opponent Mini-Board Preview ─────────────────────────────────
 const OpponentMiniBoard: React.FC<{ player: RemotePlayer; name: string }> = ({ player, name }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -67,24 +117,18 @@ const OpponentMiniBoard: React.FC<{ player: RemotePlayer; name: string }> = ({ p
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
     const scale = canvas.width / CANVAS_WIDTH;
     ctx.save();
     ctx.scale(scale, scale);
 
+    // Dark arena background
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     player.grid.forEach((b) => {
       const x = getGridX(b.row, b.col);
       const y = getGridY(b.row, player.topOffset);
-      ctx.fillStyle = b.color;
-      ctx.beginPath();
-      ctx.arc(x, y, RADIUS, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      Bubble3DRenderer.drawBubble(ctx, x, y, b.color, b.type, RADIUS * 0.9);
     });
 
     ctx.restore();
@@ -98,9 +142,9 @@ const OpponentMiniBoard: React.FC<{ player: RemotePlayer; name: string }> = ({ p
       </div>
       <canvas
         ref={canvasRef}
-        width={143}
-        height={230}
-        className="rounded-xl border border-slate-800 bg-[#0f172a] shadow-inner"
+        width={160}
+        height={240}
+        className="rounded-xl border border-slate-800 bg-[#070b14] shadow-inner"
       />
     </div>
   );
@@ -111,56 +155,58 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const gameState = useMultiplayerStore((s) => s.gameState);
-  const renderKey = useMultiplayerStore((s) => s.renderKey); // Force re-render on state changes
   const winner = useMultiplayerStore((s) => s.winner);
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const isSpectator = useMultiplayerStore((s) => s.isSpectator);
   const room = useMultiplayerStore((s) => s.room);
   const roomPlayers = room?.players ?? [];
-  
+
   const [score, setScore] = useState(0);
+  const [shotsUntilDrop, setShotsUntilDrop] = useState(2);
+  const [bestCombo, setBestCombo] = useState(0);
+  const [poppedCount, setPoppedCount] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [win, setWin] = useState(false);
   const [lose, setLose] = useState(false);
   const [rewardClaimed, setRewardClaimed] = useState(false);
-  const [showRules, setShowRules] = useState(true);
+  const [showRules, setShowRules] = useState(false);
 
   // Game State Refs
   const gridRef = useRef<GridBubble[]>([]);
-  
-  // Shot counter for row drop (every 2 shots)
   const shotsFiredRef = useRef(0);
-
-  const nextBubbleRef = useRef<{color: string, type: 'normal' | 'bomb' | 'rainbow'}>({ color: COLORS[0], type: 'normal' });
+  const nextBubbleRef = useRef<{ color: string; type: 'normal' | 'bomb' | 'rainbow' }>({ color: COLORS[0]!, type: 'normal' });
+  const loadedBubbleRef = useRef<{ color: string; type: 'normal' | 'bomb' | 'rainbow' }>({ color: COLORS[1]!, type: 'normal' });
   const movingBubbleRef = useRef<MovingBubble | null>(null);
+  const fallingBubblesRef = useRef<FallingBubble[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const floatingTextsRef = useRef<FloatingText[]>([]);
   const mousePosRef = useRef({ x: SHOOTER_X, y: 0 });
   const topOffsetRef = useRef(0);
   const screenShakeRef = useRef(0);
   const shootingRef = useRef(false);
+  const comboStreakRef = useRef(0);
 
-  const getNextBubble = useCallback((): {color: string, type: 'normal' | 'bomb' | 'rainbow'} => {
-    // 3% chance for a bomb, 3% chance for a rainbow
+  const getNextBubble = useCallback((): { color: string; type: 'normal' | 'bomb' | 'rainbow' } => {
     const rand = Math.random();
     if (rand < 0.03) return { color: '#000000', type: 'bomb' };
     if (rand < 0.06) return { color: '#ffffff', type: 'rainbow' };
-    
-    // Otherwise pick a color from existing bubbles
+
     if (gridRef.current.length > 0) {
-      const activeColors = Array.from(new Set(gridRef.current.filter(b => b.type === 'normal').map(b => b.color)));
+      const activeColors = Array.from(new Set(gridRef.current.filter((b) => b.type === 'normal').map((b) => b.color)));
       if (activeColors.length > 0) {
-        return { color: activeColors[Math.floor(Math.random() * activeColors.length)], type: 'normal' };
+        return { color: activeColors[Math.floor(Math.random() * activeColors.length)]!, type: 'normal' };
       }
     }
-    return { color: COLORS[Math.floor(Math.random() * COLORS.length)], type: 'normal' };
+    return { color: COLORS[Math.floor(Math.random() * COLORS.length)]!, type: 'normal' };
   }, []);
 
   const initGrid = useCallback(() => {
     topOffsetRef.current = 0;
     shotsFiredRef.current = 0;
     screenShakeRef.current = 0;
-    
+    comboStreakRef.current = 0;
+    setShotsUntilDrop(2);
+
     const initialRows = 5;
     const grid: GridBubble[] = [];
     for (let r = 0; r < initialRows; r++) {
@@ -171,12 +217,13 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
           col: c,
           x: getGridX(r, c),
           y: getGridY(r, 0),
-          color: COLORS[Math.floor(Math.random() * COLORS.length)],
-          type: 'normal'
+          color: COLORS[Math.floor(Math.random() * COLORS.length)]!,
+          type: 'normal',
         });
       }
     }
     gridRef.current = grid;
+    loadedBubbleRef.current = getNextBubble();
     nextBubbleRef.current = getNextBubble();
   }, [getNextBubble]);
 
@@ -186,8 +233,7 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
     }
   }, [initGrid, isMultiplayer]);
 
-  // In multiplayer the board, score and next bubble are authoritative from the
-  // server. Apply my player's board on every `game:state` / `game:over`.
+  // Multiplayer State Synchronization
   useEffect(() => {
     if (!isMultiplayer || !gameState || mySeat == null) return;
     const s = gameState as unknown as RemoteState;
@@ -201,6 +247,7 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
     }));
     topOffsetRef.current = me.topOffset;
     shotsFiredRef.current = me.shotsFired;
+    setShotsUntilDrop(2 - (me.shotsFired % 2));
     nextBubbleRef.current = me.nextBubble;
     movingBubbleRef.current = null;
     shootingRef.current = false;
@@ -226,42 +273,60 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
     }
   }, [gameState, mySeat, isMultiplayer]);
 
+  // ─── 60 FPS Game Loop ───────────────────────────────────────────────────────
   useGameLoop((dt) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const spawnParticles = (x: number, y: number, color: string, count = 8) => {
+    const spawnParticles = (x: number, y: number, color: string, count = 10) => {
+      const theme = BUBBLE_SHOOTER_VISUAL_CONFIG.bubbleThemes[color];
+      const pColors = theme ? theme.particles : [color, '#ffffff'];
+
       for (let i = 0; i < count; i++) {
+        const pColor = pColors[Math.floor(Math.random() * pColors.length)]!;
         particlesRef.current.push({
-          x, y,
-          vx: (Math.random() - 0.5) * 600,
-          vy: (Math.random() - 0.5) * 600,
-          life: 1.0,
-          color: color === '#ffffff' ? COLORS[Math.floor(Math.random()*COLORS.length)] : color
+          x,
+          y,
+          vx: (Math.random() - 0.5) * 550,
+          vy: (Math.random() - 0.5) * 550 - 80,
+          life: 0.6,
+          maxLife: 0.6,
+          color: pColor,
+          size: Math.random() * 4 + 2,
         });
       }
     };
 
     const spawnFloatingText = (x: number, y: number, text: string, color: string) => {
-       floatingTextsRef.current.push({ x, y, text, life: 1.5, color });
+      floatingTextsRef.current.push({
+        x,
+        y,
+        text,
+        life: 1.2,
+        maxLife: 1.2,
+        color,
+        scale: 1.3,
+      });
     };
 
     const triggerScreenShake = (intensity: number) => {
-       screenShakeRef.current = intensity;
+      if (!prefersReducedMotion()) {
+        screenShakeRef.current = intensity;
+      }
     };
 
     const getGridNeighbors = (row: number, col: number) => {
       const neighbors = [
-        [0, -1], [0, 1], [-1, 0], [1, 0]
+        [0, -1], [0, 1], [-1, 0], [1, 0],
       ];
       if (row % 2 === 0) {
         neighbors.push([-1, -1], [1, -1]);
       } else {
         neighbors.push([-1, 1], [1, 1]);
       }
-      return neighbors.map(n => ({ r: row + n[0], c: col + n[1] }));
+      return neighbors.map((n) => ({ r: row + n[0]!, c: col + n[1]! }));
     };
 
     const checkMatches = (startRow: number, startCol: number, color: string) => {
@@ -272,7 +337,7 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
 
       while (toCheck.length > 0) {
         const { r, c } = toCheck.pop()!;
-        const bubble = gridRef.current.find(b => b.row === r && b.col === c);
+        const bubble = gridRef.current.find((b) => b.row === r && b.col === c);
         if (bubble && (bubble.color === color || bubble.type === 'rainbow')) {
           matched.push(bubble);
           const neighbors = getGridNeighbors(r, c);
@@ -289,49 +354,67 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
     };
 
     const getBombRadius = (startRow: number, startCol: number) => {
-       const matched: GridBubble[] = [];
-       const n1 = getGridNeighbors(startRow, startCol);
-       const allN = new Set([`${startRow},${startCol}`]);
-       n1.forEach(n => allN.add(`${n.r},${n.c}`));
-       
-       n1.forEach(n => {
-          const n2 = getGridNeighbors(n.r, n.c);
-          n2.forEach(nn => allN.add(`${nn.r},${nn.c}`));
-       });
+      const matched: GridBubble[] = [];
+      const n1 = getGridNeighbors(startRow, startCol);
+      const allN = new Set([`${startRow},${startCol}`]);
+      n1.forEach((n) => allN.add(`${n.r},${n.c}`));
 
-       gridRef.current.forEach(b => {
-          if (allN.has(`${b.row},${b.col}`)) matched.push(b);
-       });
-       return matched;
+      n1.forEach((n) => {
+        const n2 = getGridNeighbors(n.r, n.c);
+        n2.forEach((nn) => allN.add(`${nn.r},${nn.c}`));
+      });
+
+      gridRef.current.forEach((b) => {
+        if (allN.has(`${b.row},${b.col}`)) matched.push(b);
+      });
+      return matched;
     };
 
     const dropFloatingBubbles = () => {
       const visited = new Set<string>();
-      const toCheck = gridRef.current.filter(b => b.row === -topOffsetRef.current).map(b => ({ r: b.row, c: b.col }));
-      toCheck.forEach(b => visited.add(`${b.r},${b.c}`));
+      const toCheck = gridRef.current
+        .filter((b) => b.row === -topOffsetRef.current)
+        .map((b) => ({ r: b.row, c: b.col }));
+      toCheck.forEach((b) => visited.add(`${b.r},${b.c}`));
 
       while (toCheck.length > 0) {
         const { r, c } = toCheck.pop()!;
         const neighbors = getGridNeighbors(r, c);
         for (const n of neighbors) {
           const key = `${n.r},${n.c}`;
-          if (!visited.has(key) && gridRef.current.some(b => b.row === n.r && b.col === n.c)) {
+          if (!visited.has(key) && gridRef.current.some((b) => b.row === n.r && b.col === n.c)) {
             visited.add(key);
             toCheck.push(n);
           }
         }
       }
 
-      const floating = gridRef.current.filter(b => !visited.has(`${b.row},${b.col}`));
+      const floating = gridRef.current.filter((b) => !visited.has(`${b.row},${b.col}`));
       if (floating.length > 0) {
-        floating.forEach(b => spawnParticles(b.x, b.y, b.color, 4));
-        gridRef.current = gridRef.current.filter(b => visited.has(`${b.row},${b.col}`));
-        
+        // Convert to physical falling bubbles with rotation and gravity
+        floating.forEach((b) => {
+          spawnParticles(b.x, b.y, b.color, 5);
+          fallingBubblesRef.current.push({
+            x: b.x,
+            y: b.y,
+            vx: (Math.random() - 0.5) * 160,
+            vy: -Math.random() * 120,
+            rotation: 0,
+            vRot: (Math.random() - 0.5) * 8,
+            color: b.color,
+            type: b.type,
+          });
+        });
+
+        gridRef.current = gridRef.current.filter((b) => visited.has(`${b.row},${b.col}`));
+
         const pts = floating.length * 30;
-        setScore(s => s + pts);
-        if (floating.length > 2) {
-           spawnFloatingText(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, `+${pts} DROP!`, '#38bdf8');
-           triggerScreenShake(8);
+        setScore((s) => s + pts);
+        setPoppedCount((p) => p + floating.length);
+
+        if (floating.length >= 2) {
+          spawnFloatingText(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20, `+${pts} DROP!`, '#38bdf8');
+          triggerScreenShake(7);
         }
       }
     };
@@ -346,19 +429,19 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
           col: c,
           x: getGridX(r, c),
           y: getGridY(r, topOffsetRef.current),
-          color: COLORS[Math.floor(Math.random() * COLORS.length)],
-          type: 'normal'
+          color: COLORS[Math.floor(Math.random() * COLORS.length)]!,
+          type: 'normal',
         });
       }
-      
-      gridRef.current.forEach(b => {
+
+      gridRef.current.forEach((b) => {
         b.y = getGridY(b.row, topOffsetRef.current);
       });
-      triggerScreenShake(3); 
+      triggerScreenShake(4);
     };
 
     const checkGameOver = () => {
-      const isOver = gridRef.current.some(b => b.y + RADIUS >= SHOOTER_Y - 5);
+      const isOver = gridRef.current.some((b) => b.y + RADIUS >= SHOOTER_Y - 10);
       if (isOver) {
         setGameOver(true);
       }
@@ -373,7 +456,7 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
       for (let r = -topOffsetRef.current; r < -topOffsetRef.current + maxRowsToCheck; r++) {
         const cols = Math.abs(r % 2) === 0 ? COLS : COLS - 1;
         for (let c = 0; c < cols; c++) {
-          const existing = gridRef.current.find(b => b.row === r && b.col === c);
+          const existing = gridRef.current.find((b) => b.row === r && b.col === c);
           if (!existing) {
             const gx = getGridX(r, c);
             const gy = getGridY(r, topOffsetRef.current);
@@ -390,58 +473,78 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
       let matchColor = bubble.color;
       let matched: GridBubble[] = [];
 
-      // Handle Rainbow: take color of nearest neighbor
+      // Handle Rainbow Wildcard
       if (bubble.type === 'rainbow') {
-         const neighbors = getGridNeighbors(bestRow, bestCol);
-         let foundColor = false;
-         for (const n of neighbors) {
-            const neigh = gridRef.current.find(b => b.row === n.r && b.col === n.c);
-            if (neigh && neigh.type === 'normal') {
-               matchColor = neigh.color;
-               foundColor = true;
-               break;
-            }
-         }
-         if (!foundColor) matchColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+        const neighbors = getGridNeighbors(bestRow, bestCol);
+        let foundColor = false;
+        for (const n of neighbors) {
+          const neigh = gridRef.current.find((b) => b.row === n.r && b.col === n.c);
+          if (neigh && neigh.type === 'normal') {
+            matchColor = neigh.color;
+            foundColor = true;
+            break;
+          }
+        }
+        if (!foundColor) matchColor = COLORS[Math.floor(Math.random() * COLORS.length)]!;
       }
 
-      // Add to grid temporarily to evaluate matches
-      const newBubble: GridBubble = { row: bestRow, col: bestCol, x: getGridX(bestRow, bestCol), y: getGridY(bestRow, topOffsetRef.current), color: matchColor, type: bubble.type };
+      // Add to grid
+      const newBubble: GridBubble = {
+        row: bestRow,
+        col: bestCol,
+        x: getGridX(bestRow, bestCol),
+        y: getGridY(bestRow, topOffsetRef.current),
+        color: matchColor,
+        type: bubble.type,
+      };
       gridRef.current.push(newBubble);
 
       if (bubble.type === 'bomb') {
-         matched = getBombRadius(bestRow, bestCol);
+        matched = getBombRadius(bestRow, bestCol);
       } else {
-         matched = checkMatches(bestRow, bestCol, matchColor);
+        matched = checkMatches(bestRow, bestCol, matchColor);
       }
 
       if (matched.length >= 3 || bubble.type === 'bomb') {
-        // Success
-        matched.forEach(b => spawnParticles(b.x, b.y, b.color, bubble.type === 'bomb' ? 12 : 6));
-        gridRef.current = gridRef.current.filter(b => !matched.includes(b));
-        
-        const pts = matched.length * 10 * (bubble.type === 'bomb' ? 2 : 1);
-        setScore(s => s + pts);
-        
-        if (matched.length >= 5 || bubble.type === 'bomb') {
-           spawnFloatingText(newBubble.x, newBubble.y, bubble.type === 'bomb' ? "BOOM!" : "GREAT!", bubble.type === 'bomb' ? '#f43f5e' : '#10b981');
-           triggerScreenShake(bubble.type === 'bomb' ? 15 : 6);
+        // Success match
+        comboStreakRef.current += 1;
+        if (comboStreakRef.current > bestCombo) {
+          setBestCombo(comboStreakRef.current);
+        }
+
+        matched.forEach((b) => spawnParticles(b.x, b.y, b.color, bubble.type === 'bomb' ? 16 : 8));
+        gridRef.current = gridRef.current.filter((b) => !matched.includes(b));
+
+        const pts = matched.length * 10 * (bubble.type === 'bomb' ? 2 : 1) + (comboStreakRef.current > 1 ? comboStreakRef.current * 10 : 0);
+        setScore((s) => s + pts);
+        setPoppedCount((p) => p + matched.length);
+
+        if (matched.length >= 4 || bubble.type === 'bomb' || comboStreakRef.current >= 2) {
+          const label = bubble.type === 'bomb'
+            ? '💣 BOOM!'
+            : comboStreakRef.current >= 3
+              ? `⚡ ${comboStreakRef.current}x COMBO!`
+              : '✨ GREAT!';
+          spawnFloatingText(newBubble.x, newBubble.y, label, bubble.type === 'bomb' ? '#f43f5e' : '#10b981');
+          triggerScreenShake(bubble.type === 'bomb' ? 14 : 5);
         }
 
         dropFloatingBubbles();
       } else {
-         // Did not match
-         spawnFloatingText(newBubble.x, newBubble.y, "MISS!", '#94a3b8');
+        comboStreakRef.current = 0;
+        spawnFloatingText(newBubble.x, newBubble.y, 'MISS', '#94a3b8');
       }
 
-      // Increment shot counter and check for row drop (every 2 shots)
+      // Increment shot counter & drop row every 2 shots
       shotsFiredRef.current += 1;
+      const left = 2 - (shotsFiredRef.current % 2);
+      setShotsUntilDrop(left === 0 ? 2 : left);
+
       if (shotsFiredRef.current >= 2) {
-         shotsFiredRef.current = 0;
-         addNewRow();
+        shotsFiredRef.current = 0;
+        addNewRow();
       }
 
-      // Check win/loss
       if (gridRef.current.length === 0) {
         setWin(true);
       } else {
@@ -449,28 +552,40 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
       }
     };
 
+    // ── Update Logic ──
     const update = () => {
       // Screen shake decay
       if (screenShakeRef.current > 0) {
-         screenShakeRef.current -= dt * 30;
-         if (screenShakeRef.current < 0) screenShakeRef.current = 0;
+        screenShakeRef.current -= dt * 25;
+        if (screenShakeRef.current < 0) screenShakeRef.current = 0;
       }
 
+      // Moving Bubble Physics
       if (movingBubbleRef.current) {
         const b = movingBubbleRef.current;
         b.x += b.vx * dt;
         b.y += b.vy * dt;
+
+        // Fading tail particles
+        if (Math.random() < 0.4) {
+          particlesRef.current.push({
+            x: b.x + (Math.random() - 0.5) * 4,
+            y: b.y + (Math.random() - 0.5) * 4,
+            vx: -b.vx * 0.1,
+            vy: -b.vy * 0.1,
+            life: 0.25,
+            maxLife: 0.25,
+            color: b.color,
+            size: 3,
+          });
+        }
 
         // Wall collisions
         if (b.x - RADIUS < 0) { b.x = RADIUS; b.vx *= -1; }
         if (b.x + RADIUS > CANVAS_WIDTH) { b.x = CANVAS_WIDTH - RADIUS; b.vx *= -1; }
         if (b.y - RADIUS < 0) {
           b.y = RADIUS;
-          // Multiplayer: the server resolves the shot; the local flight is a
-          // prediction only, so stop here without mutating the board.
-          if (!isMultiplayer) {
-            snapBubble(b);
-          }
+          if (!isMultiplayer) snapBubble(b);
           movingBubbleRef.current = null;
           return;
         }
@@ -486,202 +601,210 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
         }
 
         if (hit) {
-          if (!isMultiplayer) {
-            snapBubble(b);
-          }
+          if (!isMultiplayer) snapBubble(b);
           movingBubbleRef.current = null;
         }
       }
 
-      // Particles
-      particlesRef.current.forEach(p => {
+      // Falling Detached Bubbles Physics
+      fallingBubblesRef.current.forEach((fb) => {
+        fb.x += fb.vx * dt;
+        fb.y += fb.vy * dt;
+        fb.vy += BUBBLE_SHOOTER_VISUAL_CONFIG.timing.dropGravity * dt;
+        fb.rotation += fb.vRot * dt;
+      });
+      fallingBubblesRef.current = fallingBubblesRef.current.filter((fb) => fb.y < CANVAS_HEIGHT + 50);
+
+      // Particle physics
+      particlesRef.current.forEach((p) => {
         p.x += p.vx * dt;
         p.y += p.vy * dt;
-        p.vy += 1800 * dt; // gravity
-        p.life -= 2.0 * dt;
+        p.vy += 1200 * dt;
+        p.life -= dt;
       });
-      particlesRef.current = particlesRef.current.filter(p => p.life > 0);
+      particlesRef.current = particlesRef.current.filter((p) => p.life > 0);
 
-      // Floating Texts
-      floatingTextsRef.current.forEach(t => {
-         t.y -= 40 * dt;
-         t.life -= dt;
+      // Floating text popups
+      floatingTextsRef.current.forEach((t) => {
+        t.y -= 45 * dt;
+        t.life -= dt;
       });
-      floatingTextsRef.current = floatingTextsRef.current.filter(t => t.life > 0);
+      floatingTextsRef.current = floatingTextsRef.current.filter((t) => t.life > 0);
     };
 
-    const drawBubble = (x: number, y: number, color: string, type: 'normal'|'bomb'|'rainbow', alpha: number = 1.0) => {
-       ctx.save();
-       ctx.globalAlpha = alpha;
-       
-       if (type === 'bomb') {
-          // Draw bomb
-          ctx.fillStyle = '#1e293b';
-          ctx.beginPath(); ctx.arc(x, y, RADIUS, 0, Math.PI * 2); ctx.fill();
-          // highlight
-          ctx.fillStyle = 'rgba(255,255,255,0.4)';
-          ctx.beginPath(); ctx.arc(x - 3, y - 3, RADIUS/3, 0, Math.PI * 2); ctx.fill();
-          // fuse
-          ctx.strokeStyle = '#fb923c'; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.moveTo(x + RADIUS/2, y - RADIUS/2); ctx.lineTo(x + RADIUS + 2, y - RADIUS - 2); ctx.stroke();
-          // spark
-          if (Math.random() > 0.5) {
-             ctx.fillStyle = '#fef08a';
-             ctx.beginPath(); ctx.arc(x + RADIUS + 2, y - RADIUS - 2, 2, 0, Math.PI*2); ctx.fill();
+    // ── Raycast Trajectory Math ──
+    const getTrajectoryPoints = () => {
+      if (movingBubbleRef.current) return { points: [], phantom: undefined };
+
+      const points: Array<{ x: number; y: number }> = [{ x: SHOOTER_X, y: SHOOTER_Y }];
+      let tx = SHOOTER_X;
+      let ty = SHOOTER_Y;
+
+      const dx = mousePosRef.current.x - SHOOTER_X;
+      const dy = mousePosRef.current.y - SHOOTER_Y;
+      const angle = Math.atan2(dy, dx);
+
+      let tvx = Math.cos(angle);
+      let tvy = Math.sin(angle);
+
+      let bounces = 0;
+      const step = 4;
+      let hit = false;
+      let phantom: { x: number; y: number; color: string; type: 'normal' | 'bomb' | 'rainbow' } | undefined;
+
+      for (let iter = 0; iter < 450 && !hit; iter++) {
+        tx += tvx * step;
+        ty += tvy * step;
+
+        if (tx - RADIUS <= 0) {
+          tx = RADIUS;
+          tvx *= -1;
+          points.push({ x: tx, y: ty });
+          bounces++;
+        } else if (tx + RADIUS >= CANVAS_WIDTH) {
+          tx = CANVAS_WIDTH - RADIUS;
+          tvx *= -1;
+          points.push({ x: tx, y: ty });
+          bounces++;
+        }
+
+        if (ty - RADIUS <= 0) {
+          hit = true;
+          points.push({ x: tx, y: ty });
+          break;
+        }
+
+        for (const gb of gridRef.current) {
+          if (Math.hypot(tx - gb.x, ty - gb.y) < DIAMETER - 1) {
+            hit = true;
+            points.push({ x: tx, y: ty });
+            phantom = {
+              x: tx,
+              y: ty,
+              color: loadedBubbleRef.current.color,
+              type: loadedBubbleRef.current.type,
+            };
+            break;
           }
-       } else if (type === 'rainbow') {
-          // Draw rainbow (radial with multiple stops)
-          const grad = ctx.createRadialGradient(x - 3, y - 3, 1, x, y, RADIUS);
-          grad.addColorStop(0, '#ffffff');
-          grad.addColorStop(0.3, COLORS[0]);
-          grad.addColorStop(0.6, COLORS[2]);
-          grad.addColorStop(1, COLORS[1]);
-          ctx.fillStyle = grad;
-          ctx.beginPath(); ctx.arc(x, y, RADIUS, 0, Math.PI * 2); ctx.fill();
-       } else {
-          // Base vibrant color
-          ctx.fillStyle = color;
-          ctx.beginPath(); ctx.arc(x, y, RADIUS - 0.5, 0, Math.PI * 2); ctx.fill();
-          
-          // Subtle 3D shading overlay (white highlight to slightly dark edge)
-          const grad = ctx.createRadialGradient(x - 3, y - 3, 0, x, y, RADIUS);
-          grad.addColorStop(0, 'rgba(255,255,255,0.7)');
-          grad.addColorStop(0.4, 'rgba(255,255,255,0)');
-          grad.addColorStop(0.7, 'rgba(0,0,0,0)');
-          grad.addColorStop(1, 'rgba(0,0,0,0.5)'); // Slightly dark edge for 3D feel
-          
-          ctx.fillStyle = grad;
-          ctx.beginPath(); ctx.arc(x, y, RADIUS - 0.5, 0, Math.PI * 2); ctx.fill();
-          
-          // Outer gloss reflection
-          ctx.fillStyle = 'rgba(255,255,255,0.4)';
-          ctx.beginPath(); ctx.ellipse(x, y - RADIUS/2.5, RADIUS/1.8, RADIUS/4, 0, 0, Math.PI * 2); ctx.fill();
-       }
-       ctx.restore();
+        }
+        if (bounces > BUBBLE_SHOOTER_VISUAL_CONFIG.aimGuide.bounceLimit) break;
+      }
+
+      if (!hit && points[points.length - 1]?.x !== tx) {
+        points.push({ x: tx, y: ty });
+      }
+
+      return { points, phantom };
     };
 
-    const drawTrajectory = () => {
-       if (movingBubbleRef.current) return;
-       
-       let tx = SHOOTER_X;
-       let ty = SHOOTER_Y;
-       
-       const dx = mousePosRef.current.x - SHOOTER_X;
-       const dy = mousePosRef.current.y - SHOOTER_Y;
-       const angle = Math.atan2(dy, dx);
-       
-       let tvx = Math.cos(angle);
-       let tvy = Math.sin(angle);
-       
-       ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-       ctx.lineWidth = 2;
-       ctx.setLineDash([4, 6]);
-       ctx.beginPath();
-       ctx.moveTo(tx, ty);
-
-       // Simulate raycast
-       let bounces = 0;
-       const step = 4;
-       let hit = false;
-
-       for(let iter = 0; iter < 400 && !hit; iter++) {
-          tx += tvx * step;
-          ty += tvy * step;
-
-          if (tx - RADIUS <= 0) { tx = RADIUS; tvx *= -1; ctx.lineTo(tx, ty); bounces++; }
-          else if (tx + RADIUS >= CANVAS_WIDTH) { tx = CANVAS_WIDTH - RADIUS; tvx *= -1; ctx.lineTo(tx, ty); bounces++; }
-          
-          if (ty - RADIUS <= 0) { hit = true; ctx.lineTo(tx, ty); break; }
-
-          for (const gb of gridRef.current) {
-            if (Math.hypot(tx - gb.x, ty - gb.y) < DIAMETER - 1) {
-               hit = true;
-               ctx.lineTo(tx, ty);
-               
-               // Draw predicted placement phantom
-               drawBubble(tx, ty, nextBubbleRef.current.color, nextBubbleRef.current.type, 0.5);
-               break;
-            }
-          }
-          if (bounces > 3) break; // limit bounces
-       }
-       
-       if (!hit) ctx.lineTo(tx, ty);
-       ctx.stroke();
-       ctx.setLineDash([]);
-    };
-
+    // ── Drawing Frame ──
     const draw = () => {
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       ctx.save();
       if (screenShakeRef.current > 0) {
-         const sx = (Math.random() - 0.5) * screenShakeRef.current;
-         const sy = (Math.random() - 0.5) * screenShakeRef.current;
-         ctx.translate(sx, sy);
+        const sx = (Math.random() - 0.5) * screenShakeRef.current;
+        const sy = (Math.random() - 0.5) * screenShakeRef.current;
+        ctx.translate(sx, sy);
       }
 
-      // Background Grid
-      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-      for (let y = getGridY(-topOffsetRef.current, topOffsetRef.current); y < CANVAS_HEIGHT; y += ROW_HEIGHT) {
-         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CANVAS_WIDTH, y); ctx.stroke();
+      // 1. Dark Dojo / Arena Gradient Background
+      const arenaGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+      arenaGrad.addColorStop(0, '#090f1d');
+      arenaGrad.addColorStop(0.5, '#070b14');
+      arenaGrad.addColorStop(1, '#05070c');
+      ctx.fillStyle = arenaGrad;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      // Central ambient spotlight glow
+      const spotGrad = ctx.createRadialGradient(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 20, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 240);
+      spotGrad.addColorStop(0, 'rgba(56, 189, 248, 0.06)');
+      spotGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = spotGrad;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      // Subtle hexagonal grid guidelines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+      ctx.lineWidth = 1;
+      for (let y = getGridY(-topOffsetRef.current, topOffsetRef.current); y < CANVAS_HEIGHT - 60; y += ROW_HEIGHT) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(CANVAS_WIDTH, y);
+        ctx.stroke();
       }
 
-      // Grid
-      gridRef.current.forEach(b => {
-         drawBubble(b.x, b.y, b.color, b.type);
+      // Danger Line (Shooter Threshold)
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.25)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.moveTo(0, SHOOTER_Y - 10);
+      ctx.lineTo(CANVAS_WIDTH, SHOOTER_Y - 10);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 2. Bubble Grid
+      gridRef.current.forEach((b) => {
+        Bubble3DRenderer.drawBubble(ctx, b.x, b.y, b.color, b.type);
       });
 
-      // Moving Bubble
+      // 3. Falling Detached Bubbles
+      fallingBubblesRef.current.forEach((fb) => {
+        Bubble3DRenderer.drawBubble(ctx, fb.x, fb.y, fb.color, fb.type, RADIUS, 0.9, 1.0, fb.rotation);
+      });
+
+      // 4. Moving In-Flight Bubble
       if (movingBubbleRef.current) {
         const b = movingBubbleRef.current;
-        drawBubble(b.x, b.y, b.color, b.type);
+        Bubble3DRenderer.drawBubble(ctx, b.x, b.y, b.color, b.type, RADIUS * 1.08);
       }
 
-      // Particles
-      particlesRef.current.forEach(p => {
+      // 5. Particles
+      particlesRef.current.forEach((p) => {
+        ctx.save();
+        ctx.globalAlpha = p.life / p.maxLife;
         ctx.fillStyle = p.color;
-        ctx.globalAlpha = p.life;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, RADIUS / 2, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
-        ctx.globalAlpha = 1.0;
+        ctx.restore();
       });
 
-      // Floating Texts
-      floatingTextsRef.current.forEach(t => {
-         ctx.fillStyle = t.color;
-         ctx.globalAlpha = t.life;
-         ctx.font = '900 16px sans-serif';
-         ctx.textAlign = 'center';
-         ctx.fillText(t.text, t.x, t.y);
-         ctx.globalAlpha = 1.0;
+      // 6. Floating Text Popups
+      floatingTextsRef.current.forEach((t) => {
+        ctx.save();
+        ctx.globalAlpha = t.life / t.maxLife;
+        ctx.fillStyle = t.color;
+        ctx.font = '900 16px Outfit, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#000000';
+        ctx.shadowBlur = 6;
+        ctx.fillText(t.text, t.x, t.y);
+        ctx.restore();
       });
 
-      // Trajectory
-      drawTrajectory();
+      // 7. Aiming Trajectory Guide
+      if (!movingBubbleRef.current && !gameOver && !win && !lose && !showRules) {
+        const { points, phantom } = getTrajectoryPoints();
+        Bubble3DRenderer.drawAimGuide(ctx, points, phantom);
+      }
 
-      // Shooter Base
-      ctx.fillStyle = '#1e293b';
-      ctx.beginPath();
-      ctx.arc(SHOOTER_X, SHOOTER_Y, RADIUS + 15, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Cannon Barrel (aimed at mouse)
+      // 8. 3D Shooter Cannon
       const dx = mousePosRef.current.x - SHOOTER_X;
       const dy = mousePosRef.current.y - SHOOTER_Y;
       const angle = Math.atan2(dy, dx);
-      ctx.save();
-      ctx.translate(SHOOTER_X, SHOOTER_Y);
-      ctx.rotate(angle);
-      ctx.fillStyle = '#334155';
-      ctx.fillRect(0, -RADIUS, RADIUS*2.5, RADIUS*2);
-      ctx.restore();
 
-      // Next Bubble to shoot (loaded)
-      if (!movingBubbleRef.current) {
-        drawBubble(SHOOTER_X, SHOOTER_Y, nextBubbleRef.current.color, nextBubbleRef.current.type);
-      }
+      Bubble3DRenderer.drawShooter(
+        ctx,
+        SHOOTER_X,
+        SHOOTER_Y,
+        angle,
+        loadedBubbleRef.current.color,
+        loadedBubbleRef.current.type,
+        nextBubbleRef.current.color,
+        nextBubbleRef.current.type,
+        !!movingBubbleRef.current
+      );
 
       ctx.restore();
     };
@@ -690,24 +813,32 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
     draw();
   }, !(gameOver || win || lose || showRules));
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // ─── Input Handlers (Mouse & Touch) ─────────────────────────────────────────
+  const updateAimCoords = (clientX: number, clientY: number) => {
     if (!canvasRef.current || movingBubbleRef.current || gameOver || win || lose) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    
-    // Scale factor to convert CSS pixels to Canvas internal pixels
+
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-    
-    // Calculate angle but clamp it so you can't shoot downwards
+
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+
     let dx = x - SHOOTER_X;
     let dy = y - SHOOTER_Y;
-    if (dy > -10) dy = -10; // Prevent shooting down
-    
+    if (dy > -15) dy = -15; // Clamp so player cannot aim down
+
     mousePosRef.current = { x: SHOOTER_X + dx, y: SHOOTER_Y + dy };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    updateAimCoords(e.clientX, e.clientY);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const touch = e.touches[0];
+    if (touch) updateAimCoords(touch.clientX, touch.clientY);
   };
 
   const canShoot = useCallback(() => {
@@ -725,8 +856,6 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
     const dy = mousePosRef.current.y - SHOOTER_Y;
     const angle = Math.atan2(dy, dx);
 
-    // Multiplayer: the server owns the board. Fire the current next bubble and
-    // animate a local prediction while the authoritative state round-trips.
     if (isMultiplayer) {
       if (shootingRef.current || !canShoot()) return;
       shootingRef.current = true;
@@ -736,7 +865,7 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
         vx: Math.cos(angle) * SPEED,
         vy: Math.sin(angle) * SPEED,
         color: nextBubbleRef.current.color,
-        type: nextBubbleRef.current.type
+        type: nextBubbleRef.current.type,
       };
 
       void useMultiplayerStore.getState().sendGameAction({ type: 'shoot', angle }).then((res) => {
@@ -753,10 +882,12 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
       y: SHOOTER_Y,
       vx: Math.cos(angle) * SPEED,
       vy: Math.sin(angle) * SPEED,
-      color: nextBubbleRef.current.color,
-      type: nextBubbleRef.current.type
+      color: loadedBubbleRef.current.color,
+      type: loadedBubbleRef.current.type,
     };
 
+    // Cycle Next Bubble into Loaded slot
+    loadedBubbleRef.current = nextBubbleRef.current;
     nextBubbleRef.current = getNextBubble();
   };
 
@@ -773,11 +904,14 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
       return;
     }
     setScore(0);
+    setBestCombo(0);
+    setPoppedCount(0);
     setGameOver(false);
     setWin(false);
     setLose(false);
     setRewardClaimed(false);
     movingBubbleRef.current = null;
+    fallingBubblesRef.current = [];
     particlesRef.current = [];
     floatingTextsRef.current = [];
     initGrid();
@@ -788,211 +922,142 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   const winnerSeats = isMultiplayer
     ? remoteState?.winnerSeats ?? winner?.winnerSeats ?? []
     : [];
-  const matchFinished = isMultiplayer
-    ? Boolean(remoteState?.finished || winner)
-    : false;
   const namesBySeat: Record<number, string> = {};
   for (const p of roomPlayers) {
     if (p.seat != null) namesBySeat[p.seat] = p.displayName;
   }
   const winnerSeat = winnerSeats[0] != null ? winnerSeats[0] : null;
-  const winnerName = winnerSeat != null
-    ? (namesBySeat[winnerSeat] ?? `Player ${winnerSeat + 1}`)
-    : null;
+  const winnerName = winnerSeat != null ? (namesBySeat[winnerSeat] ?? `Player ${winnerSeat + 1}`) : null;
 
   return (
-    <GameWrapper title="Bubble Shooter Master" gameId="bubble-shooter" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="flex flex-col lg:flex-row items-center justify-center gap-8 w-full max-w-6xl relative mx-auto h-full p-4 lg:p-8">
+    <GameWrapper title="Bubble Shooter 3D" gameId="bubble-shooter" mode={mode} stake={stake} onBack={onBack} isFullscreen>
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-6 w-full max-w-6xl relative mx-auto h-full p-2 lg:p-4 select-none">
         
-        {/* LEFT SIDEBAR: SCORE */}
-        <div className="flex flex-col items-center gap-6 glass-panel p-8 rounded-3xl border border-slate-800 w-full max-w-xs shrink-0 order-2 lg:order-1 shadow-2xl">
-          <div className="text-center w-full bg-slate-900/80 p-6 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
-             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent"></div>
-             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Score</span>
-             <p className="text-5xl font-black text-amber-400 mt-2 filter drop-shadow-md">{score}</p>
-          </div>
-          <div className="w-full mt-4 space-y-3 bg-slate-900/40 p-4 rounded-2xl border border-slate-800/50">
-             <h3 className="text-white font-bold mb-3 uppercase tracking-wider text-xs">How to Play</h3>
-             <ul className="space-y-3">
-               <li className="flex items-start gap-3 text-sm text-slate-300">
-                 <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center shrink-0 border border-emerald-700/50 text-emerald-400 font-bold text-xs">1</div>
-                 Aim with your mouse, click to shoot.
-               </li>
-               <li className="flex items-start gap-3 text-sm text-slate-300">
-                 <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center shrink-0 border border-emerald-700/50 text-emerald-400 font-bold text-xs">2</div>
-                 Match 3 or more bubbles of the same color to pop them.
-               </li>
-             </ul>
-          </div>
-        </div>
-        
-        {/* CENTER GAME CANVAS */}
-        <div className="relative group w-full flex-1 max-w-[500px] flex items-center justify-center order-1 lg:order-2 h-full">
-           
-          {/* RULES OVERLAY */}
-          {showRules && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in rounded-3xl">
-              <div className="bg-slate-900 border border-indigo-500/30 p-8 rounded-3xl shadow-2xl flex flex-col max-w-[280px] w-full mx-4">
-                <h2 className="text-2xl font-black uppercase tracking-wider text-center text-white mb-6">🎯 Rules</h2>
-                <ul className="space-y-3 mb-8">
-                  <li className="text-slate-300 text-sm">🔵 <b>Match 3+</b> to pop bubbles.</li>
-                  <li className="text-slate-300 text-sm">🔴 <b>Drop:</b> Every 2 shots, the ceiling drops a row!</li>
-                  <li className="text-slate-300 text-sm">💥 <b>Bomb:</b> Destroys everything nearby.</li>
-                  <li className="text-slate-300 text-sm">🌈 <b>Rainbow:</b> Matches any color.</li>
-                </ul>
-                <button
-                  onClick={() => setShowRules(false)}
-                  className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-black text-sm uppercase rounded-xl transition-all shadow-lg shadow-indigo-500/25"
-                >
-                  Let's Play!
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* WIN/LOSS OVERLAY */}
-          {(gameOver || win || lose) && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in rounded-3xl">
-              <div className="bg-slate-900 border border-amber-500/30 p-8 rounded-3xl shadow-2xl flex flex-col items-center max-w-[280px] w-full mx-4">
-                <div className="text-6xl mb-4">{win ? '🏆' : gameOver ? '⏳' : winnerSeats.length === 0 ? '🤝' : '❌'}</div>
-                <h2 className={`text-3xl font-black uppercase tracking-widest text-center mb-2 ${win ? 'text-emerald-400' : 'text-rose-500'}`}>
-                  {win ? 'YOU WIN!' : gameOver ? "YOU'RE OUT!" : winnerSeats.length === 0 ? 'DRAW!' : 'GAME OVER'}
-                </h2>
-                <p className="text-slate-300 text-sm text-center mb-6 font-bold">
-                  Final Score: {score}
-                </p>
-
-                {lose && winnerName && (
-                  <div className="bg-indigo-950/50 border border-indigo-500/30 text-indigo-300 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 mb-6">
-                    🏁 {winnerName} cleared their board!
-                  </div>
-                )}
-
-                {win && !isMultiplayer && (
-                  <div className="bg-emerald-950/50 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 mb-6">
-                    🪙 +50 Coins Added!
-                  </div>
-                )}
-
-                {gameOver && !matchFinished && (
-                  <p className="text-slate-400 text-xs text-center mb-6 font-bold">
-                    Waiting for the match to end...
-                  </p>
-                )}
-
-                <div className="flex gap-3 w-full">
-                  {!(gameOver && !matchFinished) && (
-                    <button
-                      onClick={handleReplay}
-                      className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg text-sm"
-                    >
-                      {isMultiplayer ? 'Rematch' : 'Replay'}
-                    </button>
-                  )}
-                  <button
-                    onClick={onBack}
-                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-all border border-slate-700 text-sm"
-                  >
-                    Exit
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <canvas
-            ref={canvasRef}
-            width={CANVAS_WIDTH}
-            height={CANVAS_HEIGHT}
-            onMouseMove={handleMouseMove}
-            onClick={handleShoot}
-            className="bg-[#0f172a] rounded-3xl border-4 border-indigo-900/50 shadow-[0_0_50px_rgba(99,102,241,0.15)] cursor-crosshair w-full max-w-[600px] h-auto max-h-[85vh] object-contain transition-transform duration-300 group-hover:scale-[1.02]"
-          />
-        </div>
-
-          {/* RIGHT SIDEBAR: SHOTS TILL DROP / SCOREBOARD */}
-          <div className="flex flex-col items-center gap-6 glass-panel p-8 rounded-3xl border border-slate-800 w-full max-w-xs shrink-0 order-3 shadow-2xl">
-            {isMultiplayer ? (
-              <div className="text-center w-full bg-slate-900/80 p-6 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
-                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent"></div>
-                 <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Scoreboard</span>
-                 <div className="w-full mt-3 space-y-2">
-                   {serverPlayers.length === 0 && (
-                     <p className="text-xs text-slate-500 font-bold">Waiting for the match to start...</p>
-                   )}
-                   {serverPlayers.map((p) => {
-                     const isMe = p.seat === mySeat;
-                     const statusColor =
-                       p.status === 'won' ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/40'
-                       : p.status === 'eliminated' ? 'text-rose-400 border-rose-500/40 bg-rose-950/40'
-                       : 'text-slate-300 border-slate-700 bg-slate-800/60';
-                     const statusLabel =
-                       p.status === 'won' ? 'Won' : p.status === 'eliminated' ? 'Out' : 'Playing';
-                     return (
-                       <div key={p.seat} className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-left ${isMe ? 'border-indigo-500/50 bg-indigo-950/40' : 'border-slate-800 bg-slate-900/40'}`}>
-                         <span className="text-xs font-bold text-slate-200 truncate">
-                           {isMe ? 'You' : (namesBySeat[p.seat] ?? p.name)}
-                           {isMe && <span className="ml-1 text-indigo-400">•</span>}
-                         </span>
-                         <span className="flex items-center gap-2 shrink-0">
-                           <span className="text-xs font-black text-amber-400">{p.score}</span>
-                           <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${statusColor}`}>{statusLabel}</span>
-                         </span>
-                       </div>
-                     );
-                   })}
-                 </div>
-              </div>
-            ) : (
-              <div className="text-center w-full bg-slate-900/80 p-6 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
-                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-rose-500 to-transparent"></div>
-                 <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Shots Till Drop</span>
-                 <p className="text-3xl font-black text-rose-500 mt-2 filter drop-shadow-md">Every 2</p>
-              </div>
-            )}
-
-            {isMultiplayer && (
-              <div className="w-full space-y-3 mt-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block text-center">Live Opponent</span>
-                {serverPlayers
-                  .filter((p) => p.seat !== mySeat)
-                  .map((opp) => (
-                    <OpponentMiniBoard
-                      key={opp.seat}
-                      player={opp}
-                      name={namesBySeat[opp.seat] ?? opp.name}
-                    />
-                  ))}
-              </div>
-            )}
+        {/* CENTER PLAYFIELD CONTAINER */}
+        <div className="relative flex flex-col items-center justify-center w-full max-w-[440px] shrink-0">
           
-          <div className="w-full mt-4 space-y-3 bg-slate-900/40 p-4 rounded-2xl border border-slate-800/50">
-             <h3 className="text-white font-bold mb-3 uppercase tracking-wider text-xs">Power-Ups</h3>
-             <ul className="space-y-4">
-               <li className="flex items-center gap-3 text-sm text-slate-300">
-                 <div className="w-8 h-8 rounded-full bg-slate-800 border-2 border-[#fb923c] flex items-center justify-center shrink-0">💣</div>
-                 <div>
-                   <strong className="text-white block text-xs">Bomb Bubble</strong>
-                   <span className="text-xs text-slate-400">Destroys a large area.</span>
-                 </div>
-               </li>
-               <li className="flex items-center gap-3 text-sm text-slate-300">
-                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-rose-500 via-emerald-500 to-indigo-500 border border-slate-600 flex items-center justify-center shrink-0">✨</div>
-                 <div>
-                   <strong className="text-white block text-xs">Rainbow Bubble</strong>
-                   <span className="text-xs text-slate-400">Matches any color.</span>
-                 </div>
-               </li>
-             </ul>
+          {/* TOP MODERN HUD PILLS */}
+          <div className="w-full flex items-center justify-between gap-2.5 mb-2.5 px-1">
+            {/* Score Pill */}
+            <div className="flex-1 py-2 px-3.5 bg-slate-900/90 border border-amber-500/40 rounded-2xl flex items-center justify-between shadow-lg">
+              <div className="flex items-center gap-1.5">
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Score</span>
+              </div>
+              <span className="text-base font-black font-mono text-white">{score.toLocaleString()}</span>
+            </div>
+
+            {/* Shots Until Drop Pill */}
+            <div className="py-2 px-3.5 bg-slate-900/90 border border-rose-500/40 rounded-2xl flex items-center gap-2 shadow-lg">
+              <Flame className="w-3.5 h-3.5 text-rose-400" />
+              <div className="text-center">
+                <span className="text-[9px] font-bold text-slate-400 uppercase block">Drop in</span>
+                <span className="text-xs font-black text-rose-400">{shotsUntilDrop} Shots</span>
+              </div>
+            </div>
+
+            {/* Rules Button */}
+            <button
+              onClick={() => setShowRules(true)}
+              className="p-2.5 bg-slate-900/90 border border-indigo-500/40 hover:border-indigo-400 rounded-2xl text-indigo-400 transition-colors shadow-lg"
+              title="View Rules"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* MAIN 3D CANVAS PLAYFIELD */}
+          <div className="relative w-full aspect-[384/580] max-h-[82vh] bg-[#070b14] rounded-3xl overflow-hidden border-2 border-indigo-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center">
+            {/* Ambient Background Glow Flares */}
+            <div className="pointer-events-none absolute -top-24 -left-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-24 -right-24 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl" />
+
+            <canvas
+              ref={canvasRef}
+              width={CANVAS_WIDTH}
+              height={CANVAS_HEIGHT}
+              onMouseMove={handleMouseMove}
+              onClick={handleShoot}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleShoot}
+              className="w-full h-full object-contain cursor-crosshair"
+            />
+
+            {/* Glassmorphic Overlays */}
+            <BubbleShooterOverlays
+              isWin={win}
+              isGameOver={gameOver}
+              isLose={lose}
+              score={score}
+              bestCombo={bestCombo}
+              poppedCount={poppedCount}
+              isMultiplayer={isMultiplayer}
+              winnerName={winnerName}
+              showRules={showRules}
+              onCloseRules={() => setShowRules(false)}
+              onReplay={handleReplay}
+              onExit={onBack}
+            />
           </div>
         </div>
 
+        {/* MULTIPLAYER / OPPONENT SIDE PANEL */}
+        {isMultiplayer && (
+          <div className="w-full max-w-xs flex flex-col gap-4">
+            <div className="bg-slate-900/90 p-5 rounded-3xl border border-slate-800 shadow-2xl">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-3 text-center">Scoreboard</span>
+              <div className="space-y-2">
+                {serverPlayers.map((p) => {
+                  const isMe = p.seat === mySeat;
+                  const statusColor =
+                    p.status === 'won'
+                      ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/40'
+                      : p.status === 'eliminated'
+                        ? 'text-rose-400 border-rose-500/40 bg-rose-950/40'
+                        : 'text-slate-300 border-slate-700 bg-slate-800/60';
+                  const statusLabel =
+                    p.status === 'won' ? 'Won' : p.status === 'eliminated' ? 'Out' : 'Playing';
+                  return (
+                    <div
+                      key={p.seat}
+                      className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-left ${
+                        isMe ? 'border-indigo-500/50 bg-indigo-950/40' : 'border-slate-800 bg-slate-900/40'
+                      }`}
+                    >
+                      <span className="text-xs font-bold text-slate-200 truncate">
+                        {isMe ? 'You' : (namesBySeat[p.seat] ?? p.name)}
+                        {isMe && <span className="ml-1 text-indigo-400">•</span>}
+                      </span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-black text-amber-400">{p.score}</span>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${statusColor}`}>
+                          {statusLabel}
+                        </span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Live Opponent Board Preview */}
+            <div className="w-full space-y-3">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block text-center">Live Opponent</span>
+              {serverPlayers
+                .filter((p) => p.seat !== mySeat)
+                .map((opp) => (
+                  <OpponentMiniBoard key={opp.seat} player={opp} name={namesBySeat[opp.seat] ?? opp.name} />
+                ))}
+            </div>
+
+            <div className="hidden xl:block">
+              <MultiplayerMatchPanel compact />
+            </div>
+          </div>
+        )}
       </div>
-      {mode === 'multiplayer' && (
-        <div className="hidden xl:block flex-shrink-0 self-start">
-          <MultiplayerMatchPanel compact />
-        </div>
-      )}
     </GameWrapper>
   );
 };
+
+export default BubbleShooterGame;

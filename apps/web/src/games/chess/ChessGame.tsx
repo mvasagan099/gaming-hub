@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { GameWrapper } from "../../components/GameWrapper";
 import { ChessPhaserGame } from "./ChessPhaserGame";
 import { useMultiplayerStore } from "../../store/multiplayerStore";
-import { Trophy, RefreshCcw, Shield, Cpu, Zap } from "lucide-react";
+import { Trophy, RefreshCcw, Shield, Cpu, Zap, Sparkles } from "lucide-react";
 
 interface ChessGameProps {
   mode: "ai" | "multiplayer";
@@ -48,13 +48,23 @@ export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, 
   if (isPlaying) {
     return (
       <GameWrapper title="Chess Master" gameId="chess" mode={initialMode} stake={stake} onBack={isMultiplayer ? onBack : resetGame} isFullscreen>
-        <div className="relative flex flex-col items-center justify-center w-full max-w-5xl mx-auto my-4">
-          <ChessPhaserGame mode={playMode} level={aiLevel} theme={theme} online={isMultiplayer} players={participants.length || 2} seat={seat} names={names} onBack={onBack} onReplay={handleReplay} />
+        <div className="relative flex flex-col items-center justify-center w-full max-w-6xl mx-auto my-3">
+          <ChessPhaserGame
+            mode={playMode}
+            level={aiLevel}
+            theme={theme}
+            online={isMultiplayer}
+            players={participants.length || 2}
+            seat={seat}
+            names={names}
+            onBack={onBack}
+            onReplay={handleReplay}
+          />
           
           {!isMultiplayer && (
             <button
               onClick={handleReplay}
-              className="mt-4 px-6 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-bold text-rose-400 text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg transition-all"
+              className="mt-3 px-6 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-bold text-rose-400 text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg transition-all hover:scale-105 active:scale-95"
             >
               <RefreshCcw className="w-4 h-4" /> Reset Match
             </button>
@@ -66,106 +76,111 @@ export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, 
 
   return (
     <GameWrapper title="Chess Master" gameId="chess" mode={initialMode} stake={stake} onBack={onBack}>
-      <div className="flex flex-row items-center justify-center w-full max-w-3xl mx-auto gap-4">
+      <div className="flex flex-col md:flex-row items-center justify-center w-full max-w-3xl mx-auto gap-5">
         {/* Main Panel */}
-        <div className="flex flex-col items-center justify-center w-full max-w-sm p-4 max-h-[90vh] overflow-y-auto glass-panel rounded-3xl border border-slate-800 shadow-2xl scrollbar-hide">
-        {/* Crown header */}
-        <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center border border-amber-500/40 mb-1 animate-bounce">
-          <Trophy className="w-5 h-5 text-amber-400" />
-        </div>
+        <div className="relative flex flex-col items-center justify-center w-full max-w-sm p-6 glass-panel rounded-3xl border border-amber-500/30 shadow-[0_15px_40px_rgba(0,0,0,0.6)] bg-gradient-to-b from-slate-900/90 via-slate-950/95 to-slate-950">
+          {/* Crown header */}
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500/30 to-amber-400/10 flex items-center justify-center border border-amber-500/50 mb-3 shadow-[0_0_20px_rgba(245,158,11,0.25)]">
+            <Trophy className="w-7 h-7 text-amber-400" />
+          </div>
 
-        <h2 className="text-lg font-black text-white tracking-wide text-center">CHESS MASTER</h2>
-        <p className="text-[10px] text-slate-400 uppercase tracking-widest text-center mt-0.5">Vite + Phaser 3 + chess.js</p>
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <h2 className="text-2xl font-black text-white tracking-wide text-center">CHESS MASTER</h2>
+            <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+          </div>
+          <p className="text-[11px] text-amber-400/80 font-bold uppercase tracking-widest text-center">3D Staunton Edition</p>
 
-        {/* Play Mode Selection */}
-        <div className="w-full mt-2">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 text-left">Opponent Type</label>
-          <div className="grid grid-cols-2 gap-2">
+          {/* Play Mode Selection */}
+          <div className="w-full mt-5">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 text-left">Opponent Type</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setPlayMode("ai")}
+                className={`py-3 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1.5 ${
+                  playMode === "ai"
+                    ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                }`}
+              >
+                <Cpu className="w-4 h-4" />
+                <span>Vs Computer</span>
+              </button>
+              <button
+                onClick={() => setPlayMode("pvp")}
+                className={`py-3 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1.5 ${
+                  playMode === "pvp"
+                    ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                }`}
+              >
+                <Shield className="w-4 h-4" />
+                <span>Pass &amp; Play</span>
+              </button>
+            </div>
+          </div>
+
+          {/* AI Level Selection */}
+          {playMode === "ai" && (
+            <div className="w-full mt-3.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 text-left">Difficulty Level</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[1, 2, 3].map((lvl) => (
+                  <button
+                    key={lvl}
+                    onClick={() => setAiLevel(lvl)}
+                    className={`py-2 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1 ${
+                      aiLevel === lvl
+                        ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+                        : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>{lvl === 1 ? "Easy" : lvl === 2 ? "Medium" : "Hard"}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Stake and play button */}
+          <div className="w-full mt-5 pt-4 border-t border-slate-800/80">
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Entry Fee</span>
+              <span className="text-base font-black text-amber-400 flex items-center gap-1">
+                🪙 {stake} <span className="text-xs font-bold text-slate-400">Coins</span>
+              </span>
+            </div>
+
             <button
-              onClick={() => setPlayMode("ai")}
-              className={`py-2 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1 ${
-                playMode === "ai"
-                  ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10"
-                  : "bg-slate-850 border-slate-700 text-slate-400 hover:border-slate-600"
-              }`}
+              onClick={startGame}
+              className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-[0_0_25px_rgba(245,158,11,0.4)] transform hover:scale-[1.02] active:scale-[0.98] transition-all tracking-wider uppercase flex items-center justify-center gap-2"
             >
-              <Cpu className="w-3.5 h-3.5" />
-              <span>Vs computer</span>
-            </button>
-            <button
-              onClick={() => setPlayMode("pvp")}
-              className={`py-2 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1 ${
-                playMode === "pvp"
-                  ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10"
-                  : "bg-slate-850 border-slate-700 text-slate-400 hover:border-slate-600"
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span>Pass & Play</span>
+              <Trophy className="w-4 h-4" /> Start Match
             </button>
           </div>
         </div>
 
-        {/* AI Level Selection (Only visible if AI mode is selected) */}
-        {playMode === "ai" && (
-          <div className="w-full mt-2">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 text-left">AI Level</label>
-            <div className="grid grid-cols-3 gap-2">
-              {[1, 2, 3].map((lvl) => (
+        {/* Side Panel for Theme */}
+        <div className="flex flex-col items-center w-full max-w-[200px] p-5 glass-panel rounded-3xl border border-slate-800 shadow-2xl bg-slate-900/80">
+          <div className="w-full">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3 text-center">Board Theme</label>
+            <div className="flex flex-col gap-2.5">
+              {(["classic", "wood", "cyber"] as const).map((t) => (
                 <button
-                  key={lvl}
-                  onClick={() => setAiLevel(lvl)}
-                  className={`py-2 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1 ${
-                    aiLevel === lvl
-                      ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10"
-                      : "bg-slate-850 border-slate-700 text-slate-400 hover:border-slate-600"
+                  key={t}
+                  onClick={() => setTheme(t)}
+                  className={`py-3 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1 uppercase tracking-wider ${
+                    theme === t
+                      ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+                      : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
                   }`}
                 >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>{lvl === 1 ? "Easy" : lvl === 2 ? "Medium" : "Hard"}</span>
+                  <span>{t}</span>
                 </button>
               ))}
             </div>
           </div>
-        )}
-
-        {/* Stake and play button */}
-        <div className="w-full mt-3 pt-2 border-t border-slate-800">
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Entry Fee</span>
-            <span className="text-base font-black text-amber-400">🪙 {stake} Coins</span>
-          </div>
-
-          <button
-            onClick={startGame}
-            className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs rounded-xl shadow-xl shadow-amber-500/25 transform hover:scale-[1.02] active:scale-[0.98] transition-all tracking-wider uppercase"
-          >
-            Start Match
-          </button>
         </div>
-      </div>
-
-      {/* Side Panel for Theme */}
-      <div className="flex flex-col items-center w-[180px] p-4 glass-panel rounded-3xl border border-slate-800 shadow-2xl">
-        <div className="w-full">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3 text-center">Board Theme</label>
-          <div className="flex flex-col gap-3">
-            {(["classic", "wood", "cyber"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTheme(t)}
-                className={`py-3 rounded-xl font-black text-[10px] border transition-all flex flex-col items-center gap-1 uppercase tracking-wider ${
-                  theme === t
-                    ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10"
-                    : "bg-slate-850 border-slate-700 text-slate-400 hover:border-slate-600"
-                }`}
-              >
-                <span>{t}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
       </div>
     </GameWrapper>
   );

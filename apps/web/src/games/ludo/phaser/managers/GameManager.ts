@@ -1,11 +1,12 @@
 import Phaser from "phaser";
-import type { LudoGameState, TokenMove, Token, Player, PlayerColor, GameMode, AIDifficulty } from "../types/ludo.types";
+import type { LudoGameState, TokenMove, PlayerColor, GameMode } from "../types/ludo.types";
 import { LudoEvents } from "../events/LudoEvents";
 import type BoardManager from "./BoardManager";
 import type TokenManager from "./TokenManager";
 import type DiceManager from "./DiceManager";
 import type HUDManager from "./HUDManager";
 import type FeedbackText from "../ui/FeedbackText";
+import type MovePathOverlay from "../ui/MovePathOverlay";
 import { LudoRuleEngine } from "../engine/LudoRuleEngine";
 import { LudoAI } from "../ai/LudoAI";
 import { mainPathPixel, homeColPixel, HOME_COL_BASE } from "../data/boardLayout";
@@ -23,6 +24,7 @@ export default class GameManager {
   private dice: DiceManager;
   private hud: HUDManager;
   private feedback: FeedbackText | null;
+  private pathOverlay: MovePathOverlay | null;
   private ruleEngine: LudoRuleEngine;
   private ai: LudoAI;
 
@@ -41,6 +43,7 @@ export default class GameManager {
     ruleEngine: LudoRuleEngine,
     ai: LudoAI,
     feedback: FeedbackText | null = null,
+    pathOverlay: MovePathOverlay | null = null,
   ) {
     this.scene = scene;
     this.board = board;
@@ -48,6 +51,7 @@ export default class GameManager {
     this.dice = dice;
     this.hud = hud;
     this.feedback = feedback;
+    this.pathOverlay = pathOverlay;
     this.ruleEngine = ruleEngine;
     this.ai = ai;
   }
@@ -62,6 +66,14 @@ export default class GameManager {
     this.state.players.forEach((player, idx) => {
       player.isAI = mode === "ai" && idx !== 0;
     });
+
+    if (this.pathOverlay) {
+      this.tokenManager.setPathOverlay(this.pathOverlay, (tokenId: string) => {
+        const move = this.legalMoves.find((m) => m.token.id === tokenId);
+        if (!move) return [];
+        return this.ruleEngine.buildMovePath(move.token, this.state.dice);
+      });
+    }
 
     this.scene.events.off(LudoEvents.DICE_ROLLED);
     this.scene.events.off(LudoEvents.TOKEN_SELECTED);
@@ -285,3 +297,5 @@ export default class GameManager {
     this.init(this.mode, playerCount);
   }
 }
+
+export { GameManager };

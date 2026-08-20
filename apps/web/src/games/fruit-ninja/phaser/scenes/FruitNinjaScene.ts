@@ -27,12 +27,12 @@ export default class FruitNinjaScene extends Phaser.Scene {
 
   private mode!: string;
   private lives = 3;
-  private spawnEvent!: Phaser.Time.TimerEvent;
-  private zenTimerEvent!: Phaser.Time.TimerEvent;
-  private matchTimerEvent!: Phaser.Time.TimerEvent;
+  private spawnEvent?: Phaser.Time.TimerEvent;
+  private matchTimerEvent?: Phaser.Time.TimerEvent;
   private matchTimeLeft = 60;
   private gameOver = false;
-  
+  private isStarted = false;
+
   // Combo tracking
   private lastSliceTime = 0;
   private comboCount = 0;
@@ -45,16 +45,20 @@ export default class FruitNinjaScene extends Phaser.Scene {
     this.mode = this.registry.get("mode") || "classic";
     this.isMultiplayer = !!this.registry.get("isMultiplayer");
     this.gameOver = false;
+    this.isStarted = false;
     this.lives = 3;
     this.matchTimeLeft = 60;
     this.comboCount = 0;
     this.lastSliceTime = 0;
 
-    // 1. Generate Textures
+    // 0. Render Authentic Dojo Wooden Board Arena Background (Depth 0)
+    this.drawDojoBackground();
+
+    // 1. Generate 3D Textures & Particles
     this.texturesMgr = new TextureManager(this);
     this.texturesMgr.generateTextures();
 
-    // 2. Audio & Particles
+    // 2. Audio & Particle Manager
     this.audio = new AudioManager(this);
     this.audio.init();
 
@@ -78,9 +82,9 @@ export default class FruitNinjaScene extends Phaser.Scene {
       const currentStore = useMultiplayerStore.getState();
       this.mySeat = currentStore.mySeat;
       const names = currentStore.room?.players.map((p) => p.displayName) ?? [];
-      
+
       this.multiplayerDriver = new FruitNinjaMultiplayerDriver(this.mySeat, names);
-      
+
       this.multiplayerDriver.setOnStateUpdate((state: FruitNinjaState) => {
         if (this.gameOver && !state.finished && !useMultiplayerStore.getState().winner) {
           this.restartGameForRematch();
@@ -105,58 +109,44 @@ export default class FruitNinjaScene extends Phaser.Scene {
       });
     }
 
-    this.scheduleNextSpawn();
-
-    // Match Timer for 60s
-    this.matchTimerEvent = this.time.addEvent({
-      delay: 1000,
-      callback: () => {
-        if (this.gameOver) return;
-        this.matchTimeLeft--;
-        this.hud.updateTimer(this.matchTimeLeft);
-        if (this.matchTimeLeft <= 0) {
-          this.triggerGameOver();
-        }
-      },
-      loop: true,
-    });
-
-    // ─── Event Bindings ───────────────────────────────────────────────────────
+    // 7. Event Bindings
     this.events.off(FruitEvents.FRUIT_SLICED);
     this.events.off(FruitEvents.BOMB_EXPLODED);
     this.events.off(FruitEvents.LIFE_LOST);
 
     this.events.on(FruitEvents.FRUIT_SLICED, (def: FruitDef) => {
+      if (this.gameOver) return;
       this.audio.play("move");
-      let baseScore = this.scoreManager.registerSlice(def);
-      
+      this.scoreManager.registerSlice(def);
+
       if (this.multiplayerDriver) {
         this.multiplayerDriver.sendFruitSliced(def.points);
       }
 
-      // Combo Logic
+      // Combo Tracking
       const now = this.time.now;
-      if (now - this.lastSliceTime < 250) {
-         this.comboCount++;
-         this.sliceManager.setComboActive(true);
+      if (now - this.lastSliceTime < 280) {
+        this.comboCount++;
+        this.sliceManager.setComboActive(true, this.comboCount);
       } else {
-         if (this.comboCount >= 3) {
-            const bonus = this.comboCount * 10;
-            this.scoreManager.addPoints(bonus);
-            this.hud.showCombo(this.comboCount, bonus);
-            this.cameras.main.shake(100, 0.005 * this.comboCount);
-         }
-         this.comboCount = 1;
-         this.sliceManager.setComboActive(false);
+        if (this.comboCount >= 3) {
+          const bonus = this.comboCount * 10;
+          this.scoreManager.addPoints(bonus);
+          this.hud.showCombo(this.comboCount, bonus);
+          this.cameras.main.shake(120, 0.006 * Math.min(this.comboCount, 5));
+        }
+        this.comboCount = 1;
+        this.sliceManager.setComboActive(false);
       }
       this.lastSliceTime = now;
-      
+
       this.hud.updateScore(this.scoreManager.getScore());
     });
 
     this.events.on(FruitEvents.BOMB_EXPLODED, () => {
-      this.audio.play("snake"); // Blast sound
-      this.cameras.main.shake(300, 0.02);
+      if (this.gameOver) return;
+      this.audio.play("snake");
+      this.scoreManager.registerBomb();
       this.comboCount = 0;
       this.sliceManager.setComboActive(false);
 
@@ -167,8 +157,9 @@ export default class FruitNinjaScene extends Phaser.Scene {
     });
 
     this.events.on(FruitEvents.LIFE_LOST, () => {
-      if (this.mode === "zen") return;
-      
+      if (this.mode === "zen" || this.gameOver) return;
+
+      this.scoreManager.registerMiss();
       this.comboCount = 0;
       this.sliceManager.setComboActive(false);
       this.lives--;
@@ -182,82 +173,77 @@ export default class FruitNinjaScene extends Phaser.Scene {
         this.triggerGameOver();
       }
     });
+
+    // 8. Start with Cinematic 3-2-1 SLICE intro
+    this.hud.playStartIntro(() => {
+      this.isStarted = true;
+      this.scheduleNextSpawn();
+      this.startTimer();
+    });
   }
 
-  private scheduleNextSpawn() {
-     if (this.gameOver) return;
-     
-     const score = this.scoreManager.getScore();
-     
-     const delay = Math.max(400, 1100 - (score * 5));
-     const maxFruits = Math.min(6, 1 + Math.floor(score / 50));
-     const minFruits = Math.max(1, Math.floor(maxFruits / 2));
-     const spawnCount = Phaser.Math.Between(minFruits, maxFruits);
-     const velMult = Math.min(1.4, 1 + (score / 500));
+  /**
+   * Renders a warm wooden dojo board background with natural wood grain,
+   * subtle plank seams, and a warm central spotlight that makes every fruit pop!
+   */
+  private drawDojoBackground(): void {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const g = this.add.graphics().setDepth(0);
 
-     this.spawnEvent = this.time.delayedCall(delay, () => {
-        if (this.gameOver) return;
-        
-        for (let i = 0; i < spawnCount; i++) {
-           this.time.delayedCall(i * 150, () => {
-              if (!this.gameOver) this.fruitManager.spawnFruit(velMult);
-           });
+    // 1. Base dark walnut dojo tone
+    g.fillStyle(0x23140a, 1.0);
+    g.fillRect(0, 0, w, h);
+
+    // 2. Horizontal wooden planks
+    const plankHeight = 70;
+    const plankColors = [0x2e1a0e, 0x361f11, 0x29160a, 0x331c0e, 0x2b170c, 0x3a2113, 0x281509];
+
+    for (let y = 0; y < h; y += plankHeight) {
+      const idx = Math.floor(y / plankHeight) % plankColors.length;
+      g.fillStyle(plankColors[idx]!, 1.0);
+      g.fillRect(0, y, w, plankHeight);
+
+      // Plank top highlight line
+      g.fillStyle(0xffffff, 0.04);
+      g.fillRect(0, y, w, 1.5);
+
+      // Plank bottom shadow seam
+      g.fillStyle(0x0f0703, 0.85);
+      g.fillRect(0, y + plankHeight - 2, w, 2);
+
+      // Subtle horizontal wood grain lines
+      g.lineStyle(0.6, 0x4a2d18, 0.12);
+      for (let gy = y + 8; gy < y + plankHeight - 8; gy += 10) {
+        g.beginPath();
+        g.moveTo(0, gy);
+        for (let gx = 0; gx <= w; gx += 30) {
+          const wave = Math.sin(gx * 0.02 + gy * 0.1) * 1.5;
+          g.lineTo(gx, gy + wave);
         }
-        
-        this.scheduleNextSpawn();
-     });
-  }
-
-  update(): void {
-    if (this.gameOver) return;
-    
-    const now = this.time.now;
-    if (this.comboCount >= 3 && now - this.lastSliceTime > 300) {
-       const bonus = this.comboCount * 10;
-       this.scoreManager.addPoints(bonus);
-       this.hud.showCombo(this.comboCount, bonus);
-       this.cameras.main.shake(100, 0.005 * this.comboCount);
-       this.comboCount = 0;
-       this.sliceManager.setComboActive(false);
-    } else if (now - this.lastSliceTime > 300) {
-       this.comboCount = 0;
-       this.sliceManager.setComboActive(false);
+        g.strokePath();
+      }
     }
 
-    this.fruitManager.update();
-    this.sliceManager.update();
+    // 3. Warm Central Spotlight Vignette (Makes all fruit colors burst with contrast)
+    const haloGfx = this.add.graphics().setDepth(1);
+    haloGfx.fillStyle(0x854d0e, 0.18);
+    haloGfx.fillCircle(w / 2, h / 2, 280);
+
+    haloGfx.fillStyle(0xd97706, 0.10);
+    haloGfx.fillCircle(w / 2, h / 2, 180);
+
+    // 4. Subtle Outer Vignette Border
+    g.lineStyle(1.5, 0x000000, 0.4);
+    g.strokeRect(0, 0, w, h);
   }
 
-  private restartGameForRematch(): void {
-    this.gameOver = false;
-    this.matchTimeLeft = 60;
-    this.lives = 3;
-    this.comboCount = 0;
-    this.lastSliceTime = 0;
-
-    if (this.gameOverCard) {
-      this.gameOverCard.destroy();
-      this.gameOverCard = null;
-    }
-
-    if (this.spawnEvent) this.spawnEvent.destroy();
-    if (this.zenTimerEvent) this.zenTimerEvent.destroy();
+  private startTimer(): void {
     if (this.matchTimerEvent) this.matchTimerEvent.destroy();
-
-    this.scoreManager.reset();
-    this.fruitManager.clearAll();
-    this.sliceManager.clear();
-    this.hud.updateScore(0);
-    this.hud.updateOpponentScore(0);
-    this.hud.updateLives(3);
-    this.hud.updateTimer(60);
-
-    this.scheduleNextSpawn();
-
     this.matchTimerEvent = this.time.addEvent({
       delay: 1000,
       callback: () => {
-        if (this.gameOver) return;
+        if (this.gameOver || !this.isStarted) return;
         this.matchTimeLeft--;
         this.hud.updateTimer(this.matchTimeLeft);
         if (this.matchTimeLeft <= 0) {
@@ -268,7 +254,77 @@ export default class FruitNinjaScene extends Phaser.Scene {
     });
   }
 
-  private gameOverCard: Phaser.GameObjects.Container | null = null;
+  private scheduleNextSpawn(): void {
+    if (this.gameOver || !this.isStarted) return;
+
+    const score = this.scoreManager.getScore();
+    const delay = Math.max(380, 1050 - score * 4.5);
+    const maxFruits = Math.min(5, 1 + Math.floor(score / 60));
+    const minFruits = Math.max(1, Math.floor(maxFruits / 2));
+    const spawnCount = Phaser.Math.Between(minFruits, maxFruits);
+    const velMult = Math.min(1.35, 1 + score / 550);
+
+    this.spawnEvent = this.time.delayedCall(delay, () => {
+      if (this.gameOver || !this.isStarted) return;
+
+      for (let i = 0; i < spawnCount; i++) {
+        this.time.delayedCall(i * 140, () => {
+          if (!this.gameOver && this.isStarted) {
+            this.fruitManager.spawnFruit(velMult);
+          }
+        });
+      }
+
+      this.scheduleNextSpawn();
+    });
+  }
+
+  update(): void {
+    if (this.gameOver) return;
+
+    const now = this.time.now;
+    if (this.comboCount >= 3 && now - this.lastSliceTime > 300) {
+      const bonus = this.comboCount * 10;
+      this.scoreManager.addPoints(bonus);
+      this.hud.showCombo(this.comboCount, bonus);
+      this.cameras.main.shake(120, 0.006 * Math.min(this.comboCount, 5));
+      this.comboCount = 0;
+      this.sliceManager.setComboActive(false);
+      this.hud.updateScore(this.scoreManager.getScore());
+    } else if (now - this.lastSliceTime > 300) {
+      this.comboCount = 0;
+      this.sliceManager.setComboActive(false);
+    }
+
+    this.fruitManager.update();
+    this.sliceManager.update();
+  }
+
+  private restartGameForRematch(): void {
+    this.gameOver = false;
+    this.isStarted = false;
+    this.matchTimeLeft = 60;
+    this.lives = 3;
+    this.comboCount = 0;
+    this.lastSliceTime = 0;
+
+    if (this.spawnEvent) this.spawnEvent.destroy();
+    if (this.matchTimerEvent) this.matchTimerEvent.destroy();
+
+    this.scoreManager.reset();
+    this.fruitManager.clearAll();
+    this.sliceManager.clear();
+    this.hud.updateScore(0);
+    this.hud.updateOpponentScore(0);
+    this.hud.updateLives(3);
+    this.hud.updateTimer(60);
+
+    this.hud.playStartIntro(() => {
+      this.isStarted = true;
+      this.scheduleNextSpawn();
+      this.startTimer();
+    });
+  }
 
   private triggerGameOver(winner?: WinnerInfo | null, finalState?: FruitNinjaState): void {
     if (this.gameOver && !winner && this.isMultiplayer) {
@@ -277,159 +333,19 @@ export default class FruitNinjaScene extends Phaser.Scene {
     this.gameOver = true;
 
     if (this.spawnEvent) this.spawnEvent.destroy();
-    if (this.zenTimerEvent) this.zenTimerEvent.destroy();
     if (this.matchTimerEvent) this.matchTimerEvent.destroy();
-    
+
     this.sliceManager.clear();
     this.fruitManager.clearAll();
 
-    if (this.gameOverCard) {
-      this.gameOverCard.destroy();
-      this.gameOverCard = null;
-    }
+    const endReason = finalState?.endReason ?? (useMultiplayerStore.getState().gameState as unknown as FruitNinjaState)?.endReason;
 
-    const w = this.scale.width;
-    const h = this.scale.height;
-
-    let titleText = "GAME OVER";
-    let subtitleText = "MATCH COMPLETE";
-    let titleColor = "#ef4444";
-    let borderColor = 0xef4444;
-
-    const mySeat = this.mySeat ?? useMultiplayerStore.getState().mySeat;
-
-    if (this.isMultiplayer) {
-      const activeWinner = winner ?? useMultiplayerStore.getState().winner;
-      const winnerSeats = activeWinner?.winnerSeats ?? finalState?.winnerSeats ?? [];
-      const endReason = finalState?.endReason ?? (useMultiplayerStore.getState().gameState as unknown as FruitNinjaState)?.endReason;
-
-      const iWon = mySeat !== null && winnerSeats.includes(mySeat);
-      const isDraw = winnerSeats.length > 1;
-
-      if (winnerSeats.length === 0) {
-        titleText = "MATCH ENDED";
-        titleColor = "#f59e0b";
-        borderColor = 0xf59e0b;
-        subtitleText = "Calculating Winner...";
-      } else if (iWon) {
-        this.audio.play("win");
-        titleText = "YOU WIN! 🎉";
-        titleColor = "#f59e0b";
-        borderColor = 0xf59e0b;
-        if (endReason === "bomb_elimination") {
-          subtitleText = "Opponent Hit A Bomb!";
-        } else if (endReason === "player_eliminated") {
-          subtitleText = "Opponent Ran Out Of Lives!";
-        } else if (endReason === "timer_expired") {
-          subtitleText = "Highest Score Wins!";
-        } else if (endReason === "resignation") {
-          subtitleText = "Opponent Resigned!";
-        }
-      } else if (isDraw) {
-        titleText = "MATCH DRAW 🤝";
-        titleColor = "#38bdf8";
-        borderColor = 0x38bdf8;
-        subtitleText = "Equal Scores!";
-      } else {
-        titleText = "YOU LOST 💔";
-        titleColor = "#ef4444";
-        borderColor = 0xef4444;
-        if (endReason === "bomb_elimination") {
-          subtitleText = "Bomb Exploded! (Eliminated)";
-        } else if (endReason === "player_eliminated") {
-          subtitleText = "Out of Lives! (Eliminated)";
-        } else if (endReason === "timer_expired") {
-          subtitleText = "Opponent Has Higher Score!";
-        } else if (endReason === "resignation") {
-          subtitleText = "You Resigned!";
-        }
-      }
-    } else if (this.mode === "zen") {
-      titleText = "TIME'S UP";
-      titleColor = "#4ade80";
-      borderColor = 0x4ade80;
-    }
-
-    const container = this.add.container(0, 0).setDepth(100);
-    this.gameOverCard = container;
-
-    // Show game over banner
-    const card = this.add.rectangle(w / 2, h / 2, 340, 200, 0x0f172a);
-    card.setStrokeStyle(3, borderColor);
-    container.add(card);
-
-    const title = this.add.text(w / 2, h / 2 - 50, titleText, {
-      fontSize:   "26px",
-      color:      titleColor,
-      fontFamily: "Outfit, sans-serif",
-      fontStyle:  "bold",
-    }).setOrigin(0.5);
-    container.add(title);
-
-    const score = this.add.text(w / 2, h / 2, `Your Score: ${this.scoreManager.getScore()}`, {
-      fontSize:   "16px",
-      color:      "#f59e0b",
-      fontFamily: "Outfit, sans-serif",
-      fontStyle:  "bold",
-    }).setOrigin(0.5);
-    container.add(score);
-
-    if (!this.isMultiplayer) {
-      const replayBtn = this.add.rectangle(w / 2, h / 2 + 50, 150, 36, 0x16a34a);
-      replayBtn.setStrokeStyle(2, 0x4ade80).setInteractive({ useHandCursor: true });
-      replayBtn.on("pointerdown", () => this.scene.restart());
-      container.add(replayBtn);
-
-      const replayLabel = this.add.text(w / 2, h / 2 + 50, "PLAY AGAIN", {
-        fontSize:   "11px",
-        color:      "#ffffff",
-        fontFamily: "Outfit, sans-serif",
-        fontStyle:  "bold",
-      }).setOrigin(0.5);
-      container.add(replayLabel);
-    } else {
-      const sub = this.add.text(w / 2, h / 2 + 20, subtitleText, {
-        fontSize:   "12px",
-        color:      "#94a3b8",
-        fontFamily: "Outfit, sans-serif",
-        fontStyle:  "bold",
-      }).setOrigin(0.5);
-      container.add(sub);
-
-      // Rematch Button
-      const rematchBtn = this.add.rectangle(w / 2 - 65, h / 2 + 60, 110, 32, 0x2563eb);
-      rematchBtn.setStrokeStyle(2, 0x60a5fa).setInteractive({ useHandCursor: true });
-      rematchBtn.on("pointerdown", () => {
-        void useMultiplayerStore.getState().requestRematch();
-      });
-      container.add(rematchBtn);
-
-      const rematchLabel = this.add.text(w / 2 - 65, h / 2 + 60, "REMATCH", {
-        fontSize:   "11px",
-        color:      "#ffffff",
-        fontFamily: "Outfit, sans-serif",
-        fontStyle:  "bold",
-      }).setOrigin(0.5);
-      container.add(rematchLabel);
-
-      // Exit Lobby Button
-      const exitBtn = this.add.rectangle(w / 2 + 65, h / 2 + 60, 110, 32, 0x334155);
-      exitBtn.setStrokeStyle(2, 0x64748b).setInteractive({ useHandCursor: true });
-      exitBtn.on("pointerdown", () => {
-        void useMultiplayerStore.getState().leaveRoom();
-      });
-      container.add(exitBtn);
-
-      const exitLabel = this.add.text(w / 2 + 65, h / 2 + 60, "EXIT LOBBY", {
-        fontSize:   "11px",
-        color:      "#ffffff",
-        fontFamily: "Outfit, sans-serif",
-        fontStyle:  "bold",
-      }).setOrigin(0.5);
-      container.add(exitLabel);
-    }
-
-    this.events.emit(FruitEvents.GAME_OVER, this.scoreManager.getScore());
+    // Emit event with rich stats to FruitNinjaOverlays.tsx
+    this.events.emit(FruitEvents.GAME_OVER, {
+      stats: this.scoreManager.getStats(),
+      winner: winner ?? useMultiplayerStore.getState().winner,
+      endReason,
+    });
   }
 }
 export { FruitNinjaScene };

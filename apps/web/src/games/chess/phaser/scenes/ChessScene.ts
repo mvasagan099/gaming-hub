@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import BoardManager from "../managers/BoardManager";
+import BoardManager, { BOARD_OFFSET_X, BOARD_OFFSET_Y, BOARD_PX, CELL_SIZE } from "../managers/BoardManager";
 import PieceManager from "../managers/PieceManager";
 import GameManager from "../managers/GameManager";
 import ChessMultiplayerDriver from "../managers/ChessMultiplayerDriver";
@@ -7,7 +7,6 @@ import HUDManager from "../managers/HUDManager";
 import ThemeManager from "../managers/ThemeManager";
 import AudioManager from "../../../snake-ladder/phaser/managers/AudioManager";
 import type { ChessSettings } from "../types/chess.types";
-import { ChessAI } from "../ai/ChessAI";
 import { ChessEvents } from "../events/ChessEvents";
 
 export default class ChessScene extends Phaser.Scene {
@@ -44,16 +43,15 @@ export default class ChessScene extends Phaser.Scene {
 
     this.themeManager = new ThemeManager(theme);
 
-    // 2. Board Manager (depth 0–3)
+    // 2. Board Manager (depth 0–4)
     this.board = new BoardManager(this, this.themeManager);
     this.board.drawBoard(online && seat === 1);
 
     // 3. Piece Manager (depth 50)
     this.pieceManager = new PieceManager(this, this.board);
 
-    // 4. HUD Manager (depth 10)
+    // 4. In-scene HUD
     this.hud = new HUDManager(this);
-    this.hud.create();
 
     // 5. Game logic — server-driven in multiplayer, local otherwise
     if (online) {
@@ -85,12 +83,11 @@ export default class ChessScene extends Phaser.Scene {
       const hitObjects = this.input.hitTestPointer(pointer);
       if (hitObjects && hitObjects.length > 0) return;
 
-      const px = pointer.x - 20; // BOARD_OFFSET_X
-      const py = pointer.y - 20; // BOARD_OFFSET_Y
-      // Board dimensions are 640x640
-      if (px >= 0 && px <= 640 && py >= 0 && py <= 640) {
-        const col = Math.floor(px / 80); // CELL_SIZE = 80
-        const row = Math.floor(py / 80);
+      const px = pointer.x - BOARD_OFFSET_X;
+      const py = pointer.y - BOARD_OFFSET_Y;
+      if (px >= 0 && px <= BOARD_PX && py >= 0 && py <= BOARD_PX) {
+        const col = Math.floor(px / CELL_SIZE);
+        const row = Math.floor(py / CELL_SIZE);
         const square = this.board.gridToSquare(col, row);
         if (square) {
           this.events.emit(ChessEvents.SQUARE_CLICKED, square);

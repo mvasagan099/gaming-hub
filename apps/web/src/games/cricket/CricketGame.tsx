@@ -6,6 +6,7 @@ import { CricketPhaserGame } from './CricketPhaserGame';
 import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { CricketTossUI } from './components/CricketTossUI';
+import { CricketOverlays } from './components/CricketOverlays';
 
 interface CricketProps {
   mode: 'ai' | 'multiplayer';
@@ -355,117 +356,20 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
         )}
       </div>
 
-      {/* ══ MULTIPLAYER GAME OVER OVERLAY ══ */}
-      {isMultiplayer && matchFinished && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xl p-4 animate-in fade-in duration-300">
-          <div className="relative bg-gradient-to-b from-slate-900/95 to-slate-950/98 border border-white/15 p-8 rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.8)] flex flex-col items-center max-w-md w-full mx-auto overflow-hidden text-center">
-            {/* Glow */}
-            <div className={`absolute -top-32 -left-32 w-64 h-64 rounded-full blur-[100px] opacity-20 ${isMultiWin ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-            <div className="absolute -bottom-32 -right-32 w-64 h-64 rounded-full blur-[100px] opacity-20 bg-amber-500" />
-
-            <div className="text-7xl mb-4 relative z-10 animate-bounce">
-              {isSpectator ? '🏏' : winnerSeats.length === 0 ? '🤝' : isMultiWin ? '🏆' : '💔'}
-            </div>
-            <h2 className={`text-4xl font-black uppercase tracking-widest mb-1 relative z-10 ${
-              isSpectator ? 'text-slate-300'
-              : winnerSeats.length === 0 ? 'text-amber-400'
-              : isMultiWin ? 'text-emerald-400' : 'text-rose-400'
-            }`}>
-              {isSpectator
-                ? 'MATCH COMPLETE'
-                : winnerSeats.length === 0
-                  ? "IT'S A TIE!"
-                  : isMultiWin
-                    ? 'VICTORY!'
-                    : 'DEFEAT!'}
-            </h2>
-            {winnerName && (
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-black mb-6 relative z-10 uppercase tracking-widest">
-                👑 Winner: <span className="font-extrabold text-white">{winnerName}</span>
-              </div>
-            )}
-
-            {/* Score grid */}
-            <div className="grid grid-cols-2 gap-3 w-full mb-8 relative z-10">
-              {[0, 1].map(team => (
-                <div key={team} className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col items-center">
-                  <div className="text-[10px] uppercase font-black tracking-widest text-slate-400 mb-0.5">
-                    {namesBySeat[team] ?? `Player ${team + 1}`}
-                    {team === mySeat && <span className="text-amber-400 ml-1">(YOU)</span>}
-                  </div>
-                  <div className={`text-2xl font-black ${team === 0 ? 'text-amber-400' : 'text-sky-400'}`}>
-                    {remoteState ? scoreOf(team) : '-'}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-3 w-full relative z-10">
-              <button
-                onClick={handleReplay}
-                disabled={isMultiplayer && myRematchRequested}
-                className={`flex-1 py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black tracking-widest uppercase rounded-2xl transition-all text-sm shadow-[0_0_30px_rgba(245,158,11,0.4)] ${
-                  isMultiplayer && myRematchRequested
-                    ? 'opacity-60 cursor-not-allowed'
-                    : 'hover:from-amber-400 hover:to-amber-500 hover:scale-105'
-                }`}
-              >
-                {isMultiplayer && myRematchRequested
-                  ? '⏳ Waiting…'
-                  : isMultiplayer && rematchState?.active && rematchState.requestedBy.length > 0
-                  ? '✓ Accept Rematch'
-                  : '🔄 Rematch'}
-              </button>
-              <button
-                onClick={onBack}
-                className="flex-1 py-4 bg-white/10 hover:bg-white/20 text-white font-black tracking-widest uppercase rounded-2xl transition-all border border-white/10 text-sm hover:scale-105"
-              >
-                Exit
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══ AI GAME OVER OVERLAY ══ */}
-      {!isMultiplayer && aiGameOver && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xl p-4 animate-in fade-in duration-300">
-          <div className="relative bg-gradient-to-b from-slate-900/95 to-slate-950/98 border border-white/15 p-8 rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.8)] flex flex-col items-center max-w-sm w-full mx-auto overflow-hidden text-center">
-            <div className={`absolute -top-24 left-1/2 -translate-x-1/2 w-48 h-48 rounded-full blur-[80px] opacity-20 ${isWin ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-
-            <div className="text-7xl mb-4 relative z-10 animate-bounce">{isWin ? '🏆' : '💔'}</div>
-            <h2 className={`text-4xl font-black uppercase tracking-widest mb-2 relative z-10 ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {isWin ? 'VICTORY!' : 'DEFEAT!'}
-            </h2>
-            <p className="text-slate-300 text-base mb-6 font-bold relative z-10">
-              Final Score: <span className="text-amber-400 text-xl font-extrabold">{finalRuns}</span>
-              <span className="text-slate-500 mx-1">/</span>
-              <span className="text-white text-xl font-extrabold">{finalWickets}</span>
-            </p>
-
-            {isWin && (
-              <div className="bg-emerald-950/90 border border-emerald-500/50 text-emerald-400 px-6 py-3 rounded-2xl text-xs font-black flex items-center gap-3 mb-6 shadow-[0_0_20px_rgba(16,185,129,0.3)] relative z-10 uppercase tracking-widest">
-                🪙 Match Won! +50 Coins
-              </div>
-            )}
-
-            <div className="flex gap-3 w-full relative z-10">
-              <button
-                onClick={handleReplay}
-                className="flex-1 py-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black tracking-widest uppercase rounded-2xl transition-all shadow-[0_0_30px_rgba(245,158,11,0.4)] hover:scale-105 text-sm"
-              >
-                🔄 Replay
-              </button>
-              <button
-                onClick={onBack}
-                className="flex-1 py-4 bg-white/10 hover:bg-white/20 text-white font-black tracking-widest uppercase rounded-2xl transition-all border border-white/10 hover:scale-105 text-sm"
-              >
-                Exit
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ══ MODERN CRICKET GLASSMORPHIC OVERLAYS ══ */}
+      <CricketOverlays
+        isGameOver={matchFinished}
+        isWin={isMultiplayer ? isMultiWin : isWin}
+        isDraw={isMultiplayer && winnerSeats.length === 0}
+        score={isMultiplayer ? (remoteState ? (mySeat === 0 ? remoteState.team1Score : remoteState.team2Score) : 0) : finalRuns}
+        wickets={isMultiplayer ? (remoteState ? (mySeat === 0 ? remoteState.team1Wickets : remoteState.team2Wickets) : 0) : finalWickets}
+        overs={isMultiplayer ? (remoteState ? `${remoteState.currentOver}.${remoteState.currentBall}` : '0.0') : `${matchOvers}.0`}
+        target={isMultiplayer ? (remoteState?.target ?? null) : null}
+        wonBy={isMultiplayer && winnerName ? `Winner: ${winnerName}` : undefined}
+        isMultiplayer={isMultiplayer}
+        onReplay={handleReplay}
+        onExit={onBack}
+      />
 
       {/* ══ TOSS UI ══ */}
       {isMultiplayer && showTossUI && remoteState && (

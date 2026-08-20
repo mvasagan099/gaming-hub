@@ -1,92 +1,87 @@
 import Phaser from "phaser";
-import type { FruitDef } from "../types/fruit.types";
+import type { FruitDef, FruitStats } from "../types/fruit.types";
+import { FRUIT_NINJA_VISUAL_CONFIG } from "../constants/fruitNinjaVisualConfig";
 
 export class ScoreManager {
   private scene: Phaser.Scene;
   private score = 0;
   private comboCount = 0;
+  private longestCombo = 0;
+  private slicedCount = 0;
+  private bombsHit = 0;
+  private missedCount = 0;
   private lastSliceTime = 0;
-  private readonly comboWindow = 350; // time in ms to stack combo slices
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
   }
 
-  registerSlice(def: FruitDef): number {
+  registerSlice(def: FruitDef): { score: number; combo: number; isCombo: boolean } {
     const now = this.scene.time.now;
     this.score += def.points;
+    this.slicedCount++;
 
-    // Check if within combo window
-    if (now - this.lastSliceTime < this.comboWindow) {
+    let isCombo = false;
+    if (now - this.lastSliceTime < FRUIT_NINJA_VISUAL_CONFIG.combos.windowMs) {
       this.comboCount++;
+      if (this.comboCount >= 3) {
+        isCombo = true;
+      }
     } else {
-      // Evaluate last combo if any
-      this.evaluateCombo();
-      this.comboCount = 1; // start new combo count
+      this.comboCount = 1;
+    }
+
+    if (this.comboCount > this.longestCombo) {
+      this.longestCombo = this.comboCount;
     }
 
     this.lastSliceTime = now;
-    return this.score;
+    return { score: this.score, combo: this.comboCount, isCombo };
   }
 
-  evaluateCombo(): void {
-    if (this.comboCount >= 3) {
-      const bonus = this.comboCount; // 3 points for 3x combo, etc.
-      this.score += bonus;
+  addPoints(points: number): void {
+    this.score += points;
+  }
 
-      // Emit visual combo popup text
-      const x = this.scene.input.activePointer.x;
-      const y = Math.max(120, this.scene.input.activePointer.y - 40);
-      this.showComboPopup(x, y, this.comboCount);
-    }
+  registerMiss(): void {
+    this.missedCount++;
     this.comboCount = 0;
   }
 
-  private showComboPopup(x: number, y: number, count: number): void {
-    const textStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-      fontSize:   "26px",
-      color:      "#f59e0b", // Gold color
-      fontFamily: "Outfit, sans-serif",
-      fontStyle:  "bold",
-      stroke:     "#0f172a",
-      strokeThickness: 5,
-    };
-
-    const txt = this.scene.add.text(x, y, `${count}x COMBO!`, textStyle).setOrigin(0.5);
-    txt.setDepth(50);
-    txt.setScale(0.5);
-
-    // Bounce and fade animation
-    this.scene.tweens.add({
-      targets:  txt,
-      scale:    1.2,
-      y:        y - 50,
-      duration: 350,
-      ease:     "Back.Out",
-      onComplete: () => {
-        this.scene.tweens.add({
-          targets:  txt,
-          alpha:    0,
-          scale:    0.8,
-          duration: 300,
-          delay:    300,
-          onComplete: () => txt.destroy(),
-        });
-      },
-    });
+  registerBomb(): void {
+    this.bombsHit++;
+    this.comboCount = 0;
   }
 
   getScore(): number {
     return this.score;
   }
 
-  addPoints(points: number): void {
-     this.score += points;
+  getComboCount(): number {
+    return this.comboCount;
+  }
+
+  getLongestCombo(): number {
+    return this.longestCombo;
+  }
+
+  getStats(): FruitStats {
+    return {
+      score: this.score,
+      slicedCount: this.slicedCount,
+      combosCount: this.longestCombo,
+      bombsHit: this.bombsHit,
+      missedCount: this.missedCount,
+    };
   }
 
   reset(): void {
     this.score = 0;
     this.comboCount = 0;
+    this.longestCombo = 0;
+    this.slicedCount = 0;
+    this.bombsHit = 0;
+    this.missedCount = 0;
     this.lastSliceTime = 0;
   }
 }

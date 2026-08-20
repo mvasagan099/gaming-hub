@@ -3,7 +3,7 @@ import { GameWrapper } from "../../components/GameWrapper";
 import { LudoPhaserGame } from "./LudoPhaserGame";
 import { useMultiplayerStore } from "../../store/multiplayerStore";
 import { MultiplayerMatchPanel } from "../shared/components/MultiplayerMatchPanel";
-import { Trophy, Users, Shield, Cpu, RefreshCcw } from "lucide-react";
+import { Trophy, Users, Shield, Cpu, RefreshCcw, Sparkles } from "lucide-react";
 
 interface LudoGameProps {
   mode: "ai" | "multiplayer";
@@ -18,7 +18,6 @@ export const LudoGame: React.FC<LudoGameProps> = ({ mode: initialMode, stake, on
   const isSpectator = useMultiplayerStore((s) => s.isSpectator);
 
   const [isPlaying, setIsPlaying] = useState(isMultiplayer);
-  const [playerCount, setPlayerCount] = useState<2>(2);
   const [playMode, setPlayMode] = useState<"ai" | "pvp">(isMultiplayer ? "pvp" : "ai");
 
   const participants = room?.players ?? [];
@@ -57,7 +56,7 @@ export const LudoGame: React.FC<LudoGameProps> = ({ mode: initialMode, stake, on
             {!isMultiplayer && (
               <button
                 onClick={handleReplay}
-                className="px-6 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-bold text-rose-400 text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg transition-all"
+                className="px-6 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-bold text-rose-400 text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg transition-all hover:scale-105 active:scale-95"
               >
                 <RefreshCcw className="w-4 h-4" /> Reset Match
               </button>
@@ -78,65 +77,70 @@ export const LudoGame: React.FC<LudoGameProps> = ({ mode: initialMode, stake, on
     <GameWrapper title="Ludo Champion" gameId="ludo" mode={initialMode} stake={stake} onBack={onBack}>
       <div className="flex flex-col lg:flex-row gap-6 w-full max-w-5xl mx-auto items-start justify-center">
         {/* Setup Card */}
-        <div className="flex flex-col items-center justify-center w-full max-w-sm mx-auto p-5 glass-panel rounded-3xl border border-slate-800 shadow-2xl">
-          {/* Crown header */}
-          <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center border border-amber-500/40 mb-2 animate-bounce">
-            <Trophy className="w-6 h-6 text-amber-400" />
+        <div className="relative flex flex-col items-center justify-center w-full max-w-sm mx-auto p-6 glass-panel rounded-3xl border border-amber-500/30 shadow-[0_15px_40px_rgba(0,0,0,0.6)] bg-gradient-to-b from-slate-900/90 via-slate-950/95 to-slate-950">
+          {/* Glowing Header Badge */}
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500/30 to-amber-400/10 flex items-center justify-center border border-amber-500/50 mb-3 shadow-[0_0_20px_rgba(245,158,11,0.25)]">
+            <Trophy className="w-7 h-7 text-amber-400" />
           </div>
 
-          <h2 className="text-xl font-black text-white tracking-wide text-center">LUDO CHAMPION</h2>
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest text-center mt-0.5">Vite + Phaser 3 Engine</p>
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <h2 className="text-2xl font-black text-white tracking-wide text-center">LUDO CHAMPION</h2>
+            <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+          </div>
+          <p className="text-[11px] text-amber-400/80 font-bold uppercase tracking-widest text-center">3D Premium Edition</p>
 
           {/* Players Badge */}
-          <div className="w-full mt-4">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 text-left">Players</label>
-            <div className="w-full py-2 px-3 bg-amber-500/10 border border-amber-500/30 rounded-xl font-bold text-xs text-amber-400 flex items-center justify-center gap-2">
+          <div className="w-full mt-5">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 text-left">Players</label>
+            <div className="w-full py-2.5 px-4 bg-amber-500/10 border border-amber-500/30 rounded-xl font-bold text-xs text-amber-400 flex items-center justify-center gap-2 shadow-inner">
               <Users className="w-4 h-4 text-amber-400" />
               <span>2 Players Match</span>
             </div>
           </div>
 
           {/* Opponent Selection */}
-          <div className="w-full mt-3">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 text-left">Game Mode</label>
+          <div className="w-full mt-3.5">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 text-left">Game Mode</label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setPlayMode("ai")}
-                className={`py-2 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1 ${
+                className={`py-3 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1.5 ${
                   playMode === "ai"
-                    ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10"
-                    : "bg-slate-850 border-slate-700 text-slate-400 hover:border-slate-600"
+                    ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
                 }`}
               >
-                <Cpu className="w-3.5 h-3.5" />
+                <Cpu className="w-4 h-4" />
                 <span>Player vs AI</span>
               </button>
               <button
                 onClick={() => setPlayMode("pvp")}
-                className={`py-2 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1 ${
+                className={`py-3 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1.5 ${
                   playMode === "pvp"
-                    ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10"
-                    : "bg-slate-850 border-slate-700 text-slate-400 hover:border-slate-600"
+                    ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
                 }`}
               >
-                <Shield className="w-3.5 h-3.5" />
+                <Shield className="w-4 h-4" />
                 <span>Pass &amp; Play</span>
               </button>
             </div>
           </div>
 
-          {/* Stake and play button */}
-          <div className="w-full mt-4 pt-3 border-t border-slate-800">
+          {/* Stake and Play Button */}
+          <div className="w-full mt-5 pt-4 border-t border-slate-800/80">
             <div className="flex justify-between items-center mb-4">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Entry Fee</span>
-              <span className="text-base font-black text-amber-400">🪙 {stake} Coins</span>
+              <span className="text-base font-black text-amber-400 flex items-center gap-1">
+                🪙 {stake} <span className="text-xs font-bold text-slate-400">Coins</span>
+              </span>
             </div>
 
             <button
               onClick={startGame}
-              className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs rounded-xl shadow-xl shadow-amber-500/25 transform hover:scale-[1.02] active:scale-[0.98] transition-all tracking-wider uppercase"
+              className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-[0_0_25px_rgba(245,158,11,0.4)] transform hover:scale-[1.02] active:scale-[0.98] transition-all tracking-wider uppercase flex items-center justify-center gap-2"
             >
-              Start Match
+              <Trophy className="w-4 h-4" /> Start Match
             </button>
           </div>
         </div>

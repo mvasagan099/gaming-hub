@@ -10,7 +10,13 @@ interface LudoPhaserGameProps {
   names?: string[];
 }
 
-export const LudoPhaserGame: React.FC<LudoPhaserGameProps> = ({ mode, players, online = false, seat = null, names = [] }) => {
+export const LudoPhaserGame: React.FC<LudoPhaserGameProps> = ({
+  mode,
+  players,
+  online = false,
+  seat = null,
+  names = [],
+}) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
 
@@ -22,7 +28,7 @@ export const LudoPhaserGame: React.FC<LudoPhaserGameProps> = ({ mode, players, o
       width: 1024,
       height: 800,
       parent: containerRef.current,
-      backgroundColor: "#090d16",
+      backgroundColor: "#070b14",
       scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -49,7 +55,10 @@ export const LudoPhaserGame: React.FC<LudoPhaserGameProps> = ({ mode, players, o
   }, [mode, players, online, seat, names]);
 
   return (
-    <div className="relative mx-auto w-full max-w-[1024px] aspect-[1024/800] h-auto max-h-[85vh] bg-[#090d16] rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex justify-center items-center">
+    <div className="relative mx-auto w-full max-w-[1024px] aspect-[1024/800] h-auto max-h-[88vh] bg-[#070b14] rounded-3xl border border-slate-800/80 shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden flex justify-center items-center backdrop-blur-md">
+      {/* Subtle ambient lighting flares behind the board */}
+      <div className="absolute -top-32 -left-32 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
       <div ref={containerRef} className="w-full h-full" />
     </div>
   );

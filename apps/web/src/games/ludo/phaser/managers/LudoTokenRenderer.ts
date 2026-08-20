@@ -26,7 +26,7 @@ export const LUDO_TOKEN_PALETTES: Record<PlayerColor, LudoTokenPalette> = {
   },
   blue: {
     body: 0x2563eb,        // Royal sapphire blue torso
-    bodyDark: 0x1e40af,    // Deep navy lateral shade
+    bodyDark: 0x1d4ed8,    // Deep navy lateral shade
     rimDark: 0x0f172a,     // Midnight base rim
     topCap: 0x3b82f6,      // Glossy sapphire top cap
     topCapLight: 0x93c5fd, // Sky blue specular crest
@@ -63,7 +63,7 @@ export const LUDO_TOKEN_PALETTES: Record<PlayerColor, LudoTokenPalette> = {
 export class LudoTokenRenderer {
   /**
    * Draws the directional contact shadow under the token.
-   * Dynamically adjusts scale and opacity when the token lifts in 3D space during a hop.
+   * Dynamically adjusts scale, blur, and opacity when the token lifts in 3D space during a hop.
    */
   static drawContactShadow(
     g: Phaser.GameObjects.Graphics,
@@ -84,21 +84,21 @@ export class LudoTokenRenderer {
     );
 
     const offX = LUDO_TOKEN_VISUAL_CONFIG.shadowOffsetX * (1 + liftFactor * 0.4);
-    const offY = (LUDO_TOKEN_VISUAL_CONFIG.shadowOffsetY + liftFactor * 4) * scale;
+    const offY = (LUDO_TOKEN_VISUAL_CONFIG.shadowOffsetY + liftFactor * 5) * scale;
 
     // 1. Soft outer ambient blur shadow
-    g.fillStyle(0x000000, alpha * 0.6);
-    g.fillEllipse(offX, offY + 1, radius * 2.5 * scale, radius * 1.15 * scale);
+    g.fillStyle(0x000000, alpha * 0.55);
+    g.fillEllipse(offX, offY + 1.5, radius * 2.5 * scale, radius * 1.2 * scale);
 
     // 2. Medium contact shadow
     g.fillStyle(0x000000, alpha * 0.9);
     g.fillEllipse(offX, offY, radius * 2.1 * scale, radius * 0.9 * scale);
 
-    // 3. Dense ambient occlusion core directly under base
-    if (liftFactor < 0.4) {
-      const coreAlpha = (1 - liftFactor / 0.4) * 0.45;
+    // 3. Dense ambient occlusion core directly under base (only when resting/near ground)
+    if (liftFactor < 0.35) {
+      const coreAlpha = (1 - liftFactor / 0.35) * 0.5;
       g.fillStyle(0x000000, coreAlpha);
-      g.fillEllipse(offX * 0.6, offY * 0.6, radius * 1.5 * scale, radius * 0.65 * scale);
+      g.fillEllipse(offX * 0.5, offY * 0.5, radius * 1.5 * scale, radius * 0.65 * scale);
     }
   }
 
@@ -115,7 +115,7 @@ export class LudoTokenRenderer {
     const p = LUDO_TOKEN_PALETTES[color];
     const rimH = LUDO_TOKEN_VISUAL_CONFIG.rimHeight;
 
-    // ── 1. 3D Base Skirt / Dark Rim (provides physical cylinder thickness) ──
+    // ── 1. 3D Base Skirt / Dark Rim (cylinder thickness) ──
     g.fillStyle(p.rimDark, 1.0);
     g.fillCircle(0, rimH, radius);
 
@@ -135,7 +135,7 @@ export class LudoTokenRenderer {
     g.fillStyle(p.bodyDark, 1.0);
     g.fillCircle(0, 0, radius);
 
-    // Main primary color body disc
+    // Main primary color body disc (slight top-left offset for volume)
     g.fillStyle(p.body, 1.0);
     g.fillCircle(-0.6, -0.6, radius - 0.5);
 
@@ -145,8 +145,8 @@ export class LudoTokenRenderer {
     g.arc(0, 0, radius - 0.8, Phaser.Math.DegToRad(340), Phaser.Math.DegToRad(140), false);
     g.strokePath();
 
-    // Light top-left flank contour
-    g.lineStyle(1.6, p.topCapLight, 0.65);
+    // Light top-left flank contour (key light)
+    g.lineStyle(1.6, p.topCapLight, 0.7);
     g.beginPath();
     g.arc(0, 0, radius - 0.8, Phaser.Math.DegToRad(160), Phaser.Math.DegToRad(320), false);
     g.strokePath();
@@ -163,16 +163,16 @@ export class LudoTokenRenderer {
     g.fillCircle(-0.4, -0.5, capRadius);
 
     // Top cap inner bevel highlight arc (upper-left)
-    g.fillStyle(p.topCapLight, 0.45);
+    g.fillStyle(p.topCapLight, 0.5);
     g.fillEllipse(-capRadius * 0.25, -capRadius * 0.35, capRadius * 1.3, capRadius * 0.8);
 
     // Concentric inner bevel groove ring
     g.lineStyle(1.2, p.bodyDark, 0.75);
     g.strokeCircle(0, 0, capRadius * 0.72);
 
-    // ── 4. Specular Spinal Catch-Light & Glossy Glints ──
+    // ── 4. Specular Catch-Light & Glossy Glints ──
     // Outer specular crescent
-    g.lineStyle(1.4, 0xffffff, 0.5);
+    g.lineStyle(1.4, 0xffffff, 0.55);
     g.beginPath();
     g.arc(
       -capRadius * 0.15,
@@ -185,7 +185,7 @@ export class LudoTokenRenderer {
     g.strokePath();
 
     // Secondary specular soft halo
-    g.fillStyle(0xffffff, 0.4);
+    g.fillStyle(0xffffff, 0.45);
     g.fillCircle(-radius * 0.32, -radius * 0.36, radius * 0.28);
 
     // Sharp pinpoint primary catch-light (light source: top-left)
@@ -193,7 +193,7 @@ export class LudoTokenRenderer {
     g.fillCircle(-radius * 0.32, -radius * 0.36, radius * 0.16);
 
     // Subtle bottom-right counter-reflection glint (ambient bounce light)
-    g.fillStyle(p.topCapLight, 0.28);
+    g.fillStyle(p.topCapLight, 0.3);
     g.fillEllipse(radius * 0.35, radius * 0.38, radius * 0.45, radius * 0.25);
   }
 
@@ -206,6 +206,7 @@ export class LudoTokenRenderer {
     radius: number,
     active: boolean,
     pulseAlpha = 0.5,
+    rotationAngle = 0,
   ): void {
     g.clear();
     if (!active && pulseAlpha <= 0.05) return;
@@ -215,17 +216,29 @@ export class LudoTokenRenderer {
 
     // Outer soft radiant glow
     g.fillStyle(p.glow, pulseAlpha * 0.35);
-    g.fillCircle(0, 0, baseR + 6);
+    g.fillCircle(0, 0, baseR + 7);
 
     // Inner vibrant glow
     g.fillStyle(p.glow, pulseAlpha * 0.65);
-    g.fillCircle(0, 0, baseR + 3);
+    g.fillCircle(0, 0, baseR + 3.5);
 
-    // Crisp high-contrast aura ring
-    g.lineStyle(2.0, 0xffffff, pulseAlpha * 0.95);
+    // High-contrast aura ring
+    g.lineStyle(2.2, 0xffffff, pulseAlpha * 0.95);
     g.strokeCircle(0, 0, baseR + 1.5);
-    g.lineStyle(1.4, p.topCapLight, pulseAlpha * 0.9);
+    g.lineStyle(1.5, p.topCapLight, pulseAlpha * 0.9);
     g.strokeCircle(0, 0, baseR);
+
+    // Rotating 4-point orbital energy pips
+    if (active) {
+      const pipDist = baseR + 4;
+      for (let i = 0; i < 4; i++) {
+        const ang = rotationAngle + (i * Math.PI) / 2;
+        const px = Math.cos(ang) * pipDist;
+        const py = Math.sin(ang) * pipDist;
+        g.fillStyle(0xffffff, pulseAlpha * 0.85);
+        g.fillCircle(px, py, 1.8);
+      }
+    }
   }
 
   /**
@@ -242,24 +255,24 @@ export class LudoTokenRenderer {
     const p = LUDO_TOKEN_PALETTES[color];
     const maxR = LUDO_TOKEN_VISUAL_CONFIG.shockwaveRingRadius;
     const currentR = maxR * progress;
-    const alpha = (1 - progress) * 0.9;
+    const alpha = (1 - progress) * 0.95;
 
     // Expanding shockwave ring
-    g.lineStyle(3.0 * (1 - progress * 0.5), p.glow, alpha);
+    g.lineStyle(3.2 * (1 - progress * 0.5), p.glow, alpha);
     g.strokeCircle(0, 0, currentR);
 
     // Inner bright white shockwave
-    g.lineStyle(1.5 * (1 - progress), 0xffffff, alpha);
+    g.lineStyle(1.8 * (1 - progress), 0xffffff, alpha);
     g.strokeCircle(0, 0, currentR * 0.85);
 
-    // 4 radial particle burst spikes
-    const particleDist = currentR * 1.15;
-    for (let i = 0; i < 4; i++) {
-      const angle = (Math.PI / 2) * i + (Math.PI / 4) * progress;
+    // Radial particle burst spikes
+    const particleDist = currentR * 1.18;
+    for (let i = 0; i < 6; i++) {
+      const angle = ((Math.PI * 2) / 6) * i + (Math.PI / 4) * progress;
       const px = Math.cos(angle) * particleDist;
       const py = Math.sin(angle) * particleDist;
       g.fillStyle(0xffffff, alpha);
-      g.fillCircle(px, py, 2.0 * (1 - progress));
+      g.fillCircle(px, py, 2.2 * (1 - progress));
     }
   }
 }

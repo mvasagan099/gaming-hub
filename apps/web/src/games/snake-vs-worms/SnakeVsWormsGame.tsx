@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GameWrapper } from '../../components/GameWrapper';
 import { claimPracticeReward } from '../../services/api/practiceReward';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
@@ -6,6 +6,10 @@ import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPane
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { SnakeVsWormsMultiplayerDriver } from './SnakeVsWormsMultiplayerDriver';
 import type { SnakeVsWormsState, SnakeWormDirection } from '@gaming-hub/game-engine';
+import { SNAKE_WORMS_VISUAL_CONFIG } from './constants/snakeVsWormsVisualConfig';
+import { SnakeVsWorms3DRenderer, type Point2D } from './utils/snakeVsWorms3DRenderer';
+import { SnakeVsWormsOverlays } from './components/SnakeVsWormsOverlays';
+import { Trophy, Flame, Swords, Zap } from 'lucide-react';
 
 interface SnakeVsWormsProps {
   mode: 'ai' | 'multiplayer';
@@ -13,58 +17,53 @@ interface SnakeVsWormsProps {
   onBack: () => void;
 }
 
-interface Point {
-  x: number;
-  y: number;
-}
-
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  color: string;
-}
-
 interface Snake {
   id: string;
-  head: Point;
-  segments: Point[];
+  head: Point2D;
+  segments: Point2D[];
   angle: number;
   targetAngle: number;
-  color: string;
+  skinKey: string;
   speed: number;
   isPlayer: boolean;
   dead: boolean;
   isBoosting: boolean;
   lengthFloat: number;
+  name: string;
+  respawnTime?: number;
 }
 
 interface Orb {
   id: number;
   x: number;
   y: number;
-  color: string;
+  type: 'normal' | 'golden' | 'boost';
   value: number;
   isLoot: boolean;
 }
 
-const CANVAS_WIDTH = 900;
-const CANVAS_HEIGHT = 600;
-const MAP_WIDTH = 2000;
-const MAP_HEIGHT = 2000;
-const BASE_SPEED = 200;
+const CANVAS_WIDTH = SNAKE_WORMS_VISUAL_CONFIG.canvasWidth; // 900
+const CANVAS_HEIGHT = SNAKE_WORMS_VISUAL_CONFIG.canvasHeight; // 600
+const MAP_WIDTH = SNAKE_WORMS_VISUAL_CONFIG.mapWidth; // 2000
+const MAP_HEIGHT = SNAKE_WORMS_VISUAL_CONFIG.mapHeight; // 2000
+const BASE_SPEED = 220;
+const SEG_DISTANCE = 11;
 
-const PLAYER_COLOR = '#10b981'; // Emerald
-const ENEMY_COLORS = ['#f43f5e', '#a855f7', '#3b82f6', '#f59e0b', '#ec4899', '#06b6d4'];
+const DIR_ANGLES: Record<SnakeWormDirection, number> = {
+  right: 0,
+  down: Math.PI / 2,
+  left: Math.PI,
+  up: -Math.PI / 2,
+};
 
 export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onBack }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [length, setLength] = useState(15);
   const [kills, setKills] = useState(0);
+  const [score, setScore] = useState(0);
+  const [boostEnergy, setBoostEnergy] = useState(100);
   const [gameOver, setGameOver] = useState(false);
+  const [isWin, setIsWin] = useState(false);
   const [rewardClaimed, setRewardClaimed] = useState(false);
 
   // Multiplayer state
@@ -72,41 +71,127 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
   const [mpWinner, setMpWinner] = useState<number | null>(null);
   const driverRef = useRef<SnakeVsWormsMultiplayerDriver | null>(null);
 
-  const mySeat = useMultiplayerStore(s => s.mySeat);
-  const room = useMultiplayerStore(s => s.room);
+  const mySeat = useMultiplayerStore((s) => s.mySeat);
+  const room = useMultiplayerStore((s) => s.room);
 
   const inputRef = useRef({
-    mouseX: CANVAS_WIDTH / 2,
+    mouseX: CANVAS_WIDTH / 2 + 100,
     mouseY: CANVAS_HEIGHT / 2,
-    isBoosting: false
+    hasPointer: false,
+    isBoosting: false,
   });
 
   const gameStateRef = useRef({
     snakes: [] as Snake[],
     orbs: [] as Orb[],
-    particles: [] as Particle[],
-    orbIdCounter: 0,
-    camera: { x: 0, y: 0 }
+    camera: { x: MAP_WIDTH / 2 - CANVAS_WIDTH / 2, y: MAP_HEIGHT / 2 - CANVAS_HEIGHT / 2 },
+    orbIdCounter: 1,
   });
 
-  const mpRenderStateRef = useRef<Map<number, { body: { x: number; y: number }[]; angle: number }>>(new Map());
+  const mpRenderStateRef = useRef<Map<number, { body: Point2D[]; angle: number }>>(new Map());
   const animTimeRef = useRef(0);
 
-  // Reward logic
-  useEffect(() => {
-    if (gameOver && kills >= 3 && !rewardClaimed) {
-      setRewardClaimed(true);
-      setTimeout(() => void claimPracticeReward('snake-vs-worms'), 1000);
-    }
-  }, [gameOver, kills, rewardClaimed]);
+  // Single-player AI Init
+  const initGame = useCallback(() => {
+    if (mode === 'multiplayer') return;
 
-  // Multiplayer setup
+    const state = gameStateRef.current;
+    const startX = MAP_WIDTH / 2;
+    const startY = MAP_HEIGHT / 2;
+
+    const player: Snake = {
+      id: 'player',
+      head: { x: startX, y: startY },
+      segments: Array.from({ length: 15 }, (_, i) => ({ x: startX - i * SEG_DISTANCE, y: startY })),
+      angle: 0,
+      targetAngle: 0,
+      skinKey: 'player',
+      speed: BASE_SPEED,
+      isPlayer: true,
+      dead: false,
+      isBoosting: false,
+      lengthFloat: 15,
+      name: 'You (Dragon)',
+    };
+
+    const skinKeys = ['ruby', 'amethyst', 'p2', 'gold', 'cyan'];
+    const enemies: Snake[] = Array(12).fill(null).map((_, i) => {
+      let x = startX;
+      let y = startY;
+      while (Math.hypot(x - startX, y - startY) < 350) {
+        x = 180 + Math.random() * (MAP_WIDTH - 360);
+        y = 180 + Math.random() * (MAP_HEIGHT - 360);
+      }
+      const initialSegCount = 12 + Math.floor(Math.random() * 16);
+      const angle = Math.random() * Math.PI * 2;
+      return {
+        id: `ai-${i}`,
+        head: { x, y },
+        segments: Array.from({ length: initialSegCount }, (_, segIdx) => ({
+          x: x - Math.cos(angle) * segIdx * SEG_DISTANCE,
+          y: y - Math.sin(angle) * segIdx * SEG_DISTANCE,
+        })),
+        angle,
+        targetAngle: angle,
+        skinKey: skinKeys[i % skinKeys.length]!,
+        speed: BASE_SPEED,
+        isPlayer: false,
+        dead: false,
+        isBoosting: false,
+        lengthFloat: initialSegCount,
+        name: `Worm Bot ${i + 1}`,
+      };
+    });
+
+    const orbs: Orb[] = Array(320).fill(null).map((_, i) => {
+      const rand = Math.random();
+      const type: 'normal' | 'golden' | 'boost' = rand < 0.12 ? 'golden' : rand < 0.22 ? 'boost' : 'normal';
+      return {
+        id: i,
+        x: 50 + Math.random() * (MAP_WIDTH - 100),
+        y: 50 + Math.random() * (MAP_HEIGHT - 100),
+        type,
+        value: type === 'golden' ? 5 : type === 'boost' ? 2 : 1,
+        isLoot: false,
+      };
+    });
+
+    state.snakes = [player, ...enemies];
+    state.orbs = orbs;
+    state.camera = { x: startX - CANVAS_WIDTH / 2, y: startY - CANVAS_HEIGHT / 2 };
+    state.orbIdCounter = 1000;
+
+    inputRef.current.mouseX = CANVAS_WIDTH / 2 + 100;
+    inputRef.current.mouseY = CANVAS_HEIGHT / 2;
+
+    setLength(15);
+    setKills(0);
+    setScore(0);
+    setBoostEnergy(100);
+    setGameOver(false);
+    setIsWin(false);
+    setRewardClaimed(false);
+  }, [mode]);
+
+  useEffect(() => {
+    initGame();
+  }, [initGame]);
+
+  // Practice Reward
+  useEffect(() => {
+    if (gameOver && (kills >= 3 || isWin) && !rewardClaimed && mode !== 'multiplayer') {
+      setRewardClaimed(true);
+      void claimPracticeReward('snake-vs-worms');
+    }
+  }, [gameOver, kills, isWin, rewardClaimed, mode]);
+
+  // Multiplayer Driver Lifecycle
   useEffect(() => {
     setGameOver(false);
     setMpWinner(null);
 
     if (mode === 'multiplayer' && room && mySeat !== null) {
-      const names = room.players.map(p => p.displayName || `Player ${(p.seat ?? 0) + 1}`);
+      const names = room.players.map((p) => p.displayName || `Player ${(p.seat ?? 0) + 1}`);
       const driver = new SnakeVsWormsMultiplayerDriver(mySeat, names);
       driverRef.current = driver;
 
@@ -114,13 +199,15 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
         setMultiplayerState(state);
         if (state.finished && state.gameStatus === 'finished') {
           setGameOver(true);
-          const winSeat = state.winnerSeats && state.winnerSeats.length > 0 ? state.winnerSeats[0] : null;
+          const winSeat = state.winnerSeats && state.winnerSeats.length > 0 ? state.winnerSeats[0]! : null;
           setMpWinner(winSeat);
+          setIsWin(winSeat === mySeat);
         }
       });
 
       driver.setOnMatchComplete((winSeat: number | null) => {
         setMpWinner(winSeat);
+        setIsWin(winSeat === mySeat);
         setGameOver(true);
       });
 
@@ -133,7 +220,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     }
   }, [mode, room, mySeat]);
 
-  // Input Listeners for controls and boost
+  // Keyboard Steering & Boost
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
@@ -149,7 +236,19 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
         if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') dir = 'down';
         if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') dir = 'left';
         if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') dir = 'right';
-        if (dir) driverRef.current.sendDirection(dir);
+        if (dir) {
+          inputRef.current.hasPointer = false;
+          driverRef.current.sendDirection(dir);
+        }
+      } else {
+        // Single player keyboard steering
+        const player = gameStateRef.current.snakes.find((s) => s.isPlayer);
+        if (player) {
+          if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') player.targetAngle = -Math.PI / 2;
+          if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') player.targetAngle = Math.PI / 2;
+          if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') player.targetAngle = Math.PI;
+          if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') player.targetAngle = 0;
+        }
       }
     };
 
@@ -170,866 +269,472 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     };
   }, [mode]);
 
-  // Single-player AI Init
-  const initGame = () => {
-    if (mode === 'multiplayer') return;
-
-    const state = gameStateRef.current;
-    const startX = MAP_WIDTH / 2;
-    const startY = MAP_HEIGHT / 2;
-    
-    const player: Snake = {
-      id: 'player',
-      head: { x: startX, y: startY },
-      segments: Array.from({ length: 15 }, (_, i) => ({ x: startX - i * 10, y: startY })),
-      angle: 0,
-      targetAngle: 0,
-      color: PLAYER_COLOR,
-      speed: BASE_SPEED,
-      isPlayer: true,
-      dead: false,
-      isBoosting: false,
-      lengthFloat: 15
-    };
-
-    const enemies: Snake[] = Array(12).fill(null).map((_, i) => {
-      let x = startX;
-      let y = startY;
-      while (Math.hypot(x - startX, y - startY) < 350) {
-        x = 150 + Math.random() * (MAP_WIDTH - 300);
-        y = 150 + Math.random() * (MAP_HEIGHT - 300);
-      }
-      const initialSegCount = 10 + Math.floor(Math.random() * 15);
-      return {
-        id: `ai-${i}`,
-        head: { x, y },
-        segments: Array.from({ length: initialSegCount }, (_, segIdx) => ({ x: x - segIdx * 10, y })),
-        angle: Math.random() * Math.PI * 2,
-        targetAngle: Math.random() * Math.PI * 2,
-        color: ENEMY_COLORS[i % ENEMY_COLORS.length],
-        speed: BASE_SPEED,
-        isPlayer: false,
-        dead: false,
-        isBoosting: false,
-        lengthFloat: initialSegCount
-      };
-    });
-
-    const orbs: Orb[] = Array(300).fill(null).map((_, i) => ({
-      id: i,
-      x: Math.random() * MAP_WIDTH,
-      y: Math.random() * MAP_HEIGHT,
-      color: Math.random() > 0.5 ? '#38bdf8' : '#f43f5e',
-      value: 1,
-      isLoot: false
-    }));
-
-    state.snakes = [player, ...enemies];
-    state.orbs = orbs;
-    state.orbs = orbs;
-    state.particles = [];
-    state.orbIdCounter = 1000;
-    
-    setLength(15);
-    setKills(0);
-    setGameOver(false);
-    setRewardClaimed(false);
+  // Pointer Coordinates
+  const updatePointer = (clientX: number, clientY: number) => {
+    if (!canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = CANVAS_WIDTH / rect.width;
+    const scaleY = CANVAS_HEIGHT / rect.height;
+    inputRef.current.mouseX = (clientX - rect.left) * scaleX;
+    inputRef.current.mouseY = (clientY - rect.top) * scaleY;
+    inputRef.current.hasPointer = true;
   };
 
-  useEffect(() => {
-    initGame();
-  }, [gameOver, mode]);
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    updatePointer(e.clientX, e.clientY);
+  };
 
-  // Main Render Loop
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches[0]) updatePointer(e.touches[0].clientX, e.touches[0].clientY);
+  };
+
+  // ─── 60 FPS Main Loop ───────────────────────────────────────────────────────
   useGameLoop((dt) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    animTimeRef.current += dt;
+    const animTime = animTimeRef.current;
 
-    // ----------------------------------------------------
-    // MULTIPLAYER REAL-TIME SHARED 2000x2000 ARENA RENDER
-    // ----------------------------------------------------
-    // ----------------------------------------------------
-    // MULTIPLAYER REAL-TIME SHARED 2000x2000 ARENA RENDER
-    // ----------------------------------------------------
+    // ──────────────────────────────────────────────────────────────────────────
+    // 1. MULTIPLAYER RENDERING MODE
+    // ──────────────────────────────────────────────────────────────────────────
     if (mode === 'multiplayer' && multiplayerState) {
       const mpState = multiplayerState;
-      animTimeRef.current += dt;
-      const animTime = animTimeRef.current;
-
-      const me = mpState.players.find(p => p.seat === mySeat) || mpState.players[0];
+      const me = mpState.players.find((p) => p.seat === mySeat) || mpState.players[0]!;
       const meHeadTarget = me.body[0] || { x: 1000, y: 1000 };
 
-      // 1. Client-Side Position & Angle Interpolation for Butter-Smooth Motion
+      // ── Process Mouse / Touch Steering in Multiplayer ──
+      if (driverRef.current && me && me.status === 'active' && me.body[0] && inputRef.current.hasPointer) {
+        const screenHeadX = me.body[0].x - gameStateRef.current.camera.x;
+        const screenHeadY = me.body[0].y - gameStateRef.current.camera.y;
+        const dx = inputRef.current.mouseX - screenHeadX;
+        const dy = inputRef.current.mouseY - screenHeadY;
+
+        if (Math.hypot(dx, dy) > 20) {
+          let desiredDir: SnakeWormDirection;
+          if (Math.abs(dx) > Math.abs(dy)) {
+            desiredDir = dx > 0 ? 'right' : 'left';
+          } else {
+            desiredDir = dy > 0 ? 'down' : 'up';
+          }
+
+          // Handle 180-degree turn avoidance (steer into orthogonal axis first)
+          if (
+            (me.direction === 'left' && desiredDir === 'right') ||
+            (me.direction === 'right' && desiredDir === 'left')
+          ) {
+            if (Math.abs(dy) > 10) desiredDir = dy > 0 ? 'down' : 'up';
+          } else if (
+            (me.direction === 'up' && desiredDir === 'down') ||
+            (me.direction === 'down' && desiredDir === 'up')
+          ) {
+            if (Math.abs(dx) > 10) desiredDir = dx > 0 ? 'right' : 'left';
+          }
+
+          driverRef.current.sendDirection(desiredDir);
+        }
+      }
+
+      // ── Smooth Player Interpolation ──
       const renderMap = mpRenderStateRef.current;
       for (const p of mpState.players) {
         if (!p.body || p.body.length === 0) continue;
         let pState = renderMap.get(p.seat);
         if (!pState || pState.body.length !== p.body.length) {
           pState = {
-            body: p.body.map(pt => ({ x: pt.x, y: pt.y })),
-            angle: 0
+            body: p.body.map((pt) => ({ x: pt.x, y: pt.y })),
+            angle: DIR_ANGLES[p.direction] ?? 0,
           };
           renderMap.set(p.seat, pState);
         }
 
-        // Lerp each segment position smoothly towards target server position
-        const lerpFactor = Math.min(1, 18 * dt);
+        const lerpFactor = Math.min(1, 20 * dt);
         for (let i = 0; i < p.body.length; i++) {
-          const targetPt = p.body[i];
+          const targetPt = p.body[i]!;
           const currPt = pState.body[i] || { x: targetPt.x, y: targetPt.y };
           currPt.x += (targetPt.x - currPt.x) * lerpFactor;
           currPt.y += (targetPt.y - currPt.y) * lerpFactor;
           pState.body[i] = currPt;
         }
 
-        // Calculate smooth head angle
-        if (pState.body.length > 1) {
-          const headPt = pState.body[0];
-          const nextPt = pState.body[1];
-          const targetAngle = Math.atan2(headPt.y - nextPt.y, headPt.x - nextPt.x);
-          let angleDiff = targetAngle - pState.angle;
-          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-          pState.angle += angleDiff * Math.min(1, 12 * dt);
-        }
+        // Rotate Head towards authoritative p.direction
+        const targetAngle = DIR_ANGLES[p.direction] ?? 0;
+        let angleDiff = targetAngle - pState.angle;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        pState.angle += angleDiff * Math.min(1, 16 * dt);
       }
 
       const myRenderState = renderMap.get(me.seat);
       const head = (myRenderState && myRenderState.body[0]) || meHeadTarget;
 
-      // Smooth camera interpolation in 2000x2000 arena
+      // Smooth Camera Follow
       const targetCamX = Math.max(0, Math.min(MAP_WIDTH - CANVAS_WIDTH, head.x - CANVAS_WIDTH / 2));
       const targetCamY = Math.max(0, Math.min(MAP_HEIGHT - CANVAS_HEIGHT, head.y - CANVAS_HEIGHT / 2));
-
       const cam = gameStateRef.current.camera;
-      cam.x += (targetCamX - cam.x) * 6 * dt;
-      cam.y += (targetCamY - cam.y) * 6 * dt;
-      cam.x = Math.max(0, Math.min(MAP_WIDTH - CANVAS_WIDTH, cam.x));
-      cam.y = Math.max(0, Math.min(MAP_HEIGHT - CANVAS_HEIGHT, cam.y));
+      cam.x += (targetCamX - cam.x) * 6.5 * dt;
+      cam.y += (targetCamY - cam.y) * 6.5 * dt;
 
       ctx.save();
       ctx.translate(-cam.x, -cam.y);
 
-      // Draw Grid Background
-      ctx.strokeStyle = 'rgba(30, 41, 59, 0.5)';
-      ctx.lineWidth = 1;
-      const gridSize = 80;
-      for (let x = 0; x <= MAP_WIDTH; x += gridSize) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_HEIGHT); ctx.stroke();
-      }
-      for (let y = 0; y <= MAP_HEIGHT; y += gridSize) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_WIDTH, y); ctx.stroke();
-      }
+      // Draw 3D Arena
+      SnakeVsWorms3DRenderer.drawArena(ctx, cam.x, cam.y, animTime);
 
-      // Draw Outer World Boundary with Pulsing Glow
-      const borderGlow = 0.5 + Math.sin(animTime * 4) * 0.3;
-      ctx.strokeStyle = `rgba(239, 68, 68, ${borderGlow})`;
-      ctx.lineWidth = 8;
-      ctx.strokeRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
-
-      // Draw Animated Shared Food (Pulsing glowing orbs)
+      // Draw 3D Food
       for (const food of mpState.food) {
-        const color = food.type === 'golden' ? '#f59e0b' : (food.type === 'boost' ? '#06b6d4' : '#10b981');
-        const baseRadius = food.type === 'golden' ? 10 : 7;
-        const pulse = Math.sin(animTime * 5 + food.x * 0.05 + food.y * 0.05) * 1.5;
-        const radius = Math.max(3, baseRadius + pulse);
-
-        ctx.fillStyle = color;
-        ctx.shadowBlur = food.type === 'golden' ? 14 : 8;
-        ctx.shadowColor = color;
-        ctx.beginPath();
-        ctx.arc(food.x, food.y, radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Inner shine highlight
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(food.x - radius * 0.3, food.y - radius * 0.3, radius * 0.3, 0, Math.PI * 2);
-        ctx.fill();
+        SnakeVsWorms3DRenderer.drawFood(ctx, food.x, food.y, food.type, animTime);
       }
-      ctx.shadowBlur = 0;
 
-      // Draw Shared Players (P1 Emerald Snake, P2 Blue Worm)
+      // Draw 3D Players
       for (const p of mpState.players) {
         const isMe = p.seat === mySeat;
-        const color = p.seat === 0 ? '#10b981' : '#3b82f6';
+        const skinKey = p.seat === 0 ? 'player' : 'p2';
         const renderState = renderMap.get(p.seat);
         const pBody = renderState ? renderState.body : p.body;
+        const pAngle = renderState ? renderState.angle : DIR_ANGLES[p.direction] ?? 0;
 
-        if (p.status === 'eliminated') {
-          if (pBody && pBody[0]) {
-            const pHead = pBody[0];
-            ctx.fillStyle = 'rgba(239, 68, 68, 0.6)';
-            ctx.beginPath();
-            ctx.arc(pHead.x, pHead.y, 16, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Animated death loot particle burst rings
-            const particleCount = 8;
-            for (let k = 0; k < particleCount; k++) {
-              const pAngle = (k / particleCount) * Math.PI * 2 + animTime * 3;
-              const pDist = 20 + Math.sin(animTime * 6 + k) * 6;
-              const px = pHead.x + Math.cos(pAngle) * pDist;
-              const py = pHead.y + Math.sin(pAngle) * pDist;
-              ctx.fillStyle = color;
-              ctx.beginPath();
-              ctx.arc(px, py, 4, 0, Math.PI * 2);
-              ctx.fill();
-            }
-
-            ctx.fillStyle = '#ef4444';
-            ctx.font = 'bold 12px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`${p.name} (ELIMINATED)`, pHead.x, pHead.y - 24);
-          }
-          continue;
-        }
-
-        // 1. Draw smooth curved body stroke connecting segments
-        if (pBody && pBody.length > 1) {
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 26;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-
-          if (p.isBoosting) {
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = color;
-          }
-
-          ctx.beginPath();
-          ctx.moveTo(pBody[0].x, pBody[0].y);
-
-          for (let i = 1; i < pBody.length - 1; i++) {
-            const xc = (pBody[i].x + pBody[i + 1].x) / 2;
-            const yc = (pBody[i].y + pBody[i + 1].y) / 2;
-            ctx.quadraticCurveTo(pBody[i].x, pBody[i].y, xc, yc);
-          }
-          ctx.lineTo(pBody[pBody.length - 1].x, pBody[pBody.length - 1].y);
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-
-          // 2. Draw decorative inner scale spots along body
-          for (let i = 1; i < pBody.length; i += 2) {
-            const seg = pBody[i];
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.beginPath();
-            ctx.arc(seg.x, seg.y, 5, 0, Math.PI * 2);
-            ctx.fill();
-          }
-
-          // 3. Boosting Speed Trail Particles
-          if (p.isBoosting) {
-            const tail = pBody[pBody.length - 1];
-            ctx.fillStyle = color;
-            ctx.shadowBlur = 12;
-            ctx.shadowColor = '#06b6d4';
-            for (let b = 0; b < 3; b++) {
-              const bOffsetAngle = Math.random() * Math.PI * 2;
-              const bDist = Math.random() * 15;
-              ctx.beginPath();
-              ctx.arc(tail.x + Math.cos(bOffsetAngle) * bDist, tail.y + Math.sin(bOffsetAngle) * bDist, 4 + Math.random() * 4, 0, Math.PI * 2);
-              ctx.fill();
-            }
-            ctx.shadowBlur = 0;
-          }
-        } else if (pBody && pBody[0]) {
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.arc(pBody[0].x, pBody[0].y, 14, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // 4. Draw Animated Head, Eyes & Tongue
-        const pHead = pBody[0];
-        if (pHead) {
-          const headAngle = renderState ? renderState.angle : 0;
-
-          ctx.save();
-          ctx.translate(pHead.x, pHead.y);
-          ctx.rotate(headAngle);
-
-          // Head Circle
-          ctx.fillStyle = isMe ? '#34d399' : color;
-          if (p.isBoosting) {
-            ctx.shadowBlur = 16;
-            ctx.shadowColor = '#06b6d4';
-          }
-          ctx.beginPath();
-          ctx.arc(0, 0, 16, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 2.5;
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-
-          // Animated Flicking Snake Tongue
-          if (Math.sin(animTime * 12 + p.seat) > 0.3) {
-            ctx.strokeStyle = '#f43f5e';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(16, 0);
-            ctx.lineTo(24, 0);
-            ctx.lineTo(27, -3);
-            ctx.moveTo(24, 0);
-            ctx.lineTo(27, 3);
-            ctx.stroke();
-          }
-
-          // Animated Eye Sockets & Pupils (Excited narrowing when boosting)
-          const eyeYOffset = p.isBoosting ? 5 : 6;
-          const pupilRadius = p.isBoosting ? 1.8 : 2.5;
-
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath(); ctx.arc(6, -eyeYOffset, 5, 0, Math.PI * 2); ctx.fill();
-          ctx.beginPath(); ctx.arc(6, eyeYOffset, 5, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = '#0f172a';
-          ctx.beginPath(); ctx.arc(8, -eyeYOffset, pupilRadius, 0, Math.PI * 2); ctx.fill();
-          ctx.beginPath(); ctx.arc(8, eyeYOffset, pupilRadius, 0, Math.PI * 2); ctx.fill();
-
-          ctx.restore();
-
-          // Name Tag
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 12px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText(p.name, pHead.x, pHead.y - 24);
-        }
+        SnakeVsWorms3DRenderer.drawCreature(
+          ctx,
+          pBody,
+          pAngle,
+          skinKey,
+          isMe,
+          p.isBoosting,
+          p.name,
+          animTime,
+          p.status === 'eliminated'
+        );
       }
 
       ctx.restore();
 
-      // ----------------------------------------------------
-      // SCREEN-SPACE CANVAS OVERLAYS (HUD, RADAR MINIMAP, TIMER)
-      // ----------------------------------------------------
-      const p1 = mpState.players.find(p => p.seat === 0);
-      const p2 = mpState.players.find(p => p.seat === 1);
-      const timerObj = mpState.timer as { remainingMs?: number } | undefined;
-      const remainingSecs = Math.max(0, Math.ceil(((timerObj?.remainingMs) ?? 180000) / 1000));
-      const mins = Math.floor(remainingSecs / 60);
-      const secs = remainingSecs % 60;
-      const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
-
-      // A. Top Live Scoreboard Glass Header
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.roundRect(CANVAS_WIDTH / 2 - 260, 14, 520, 48, 16);
-      ctx.fill();
-      ctx.stroke();
-
-      // P1 Badge (Emerald)
-      ctx.fillStyle = '#10b981';
-      ctx.font = 'bold 13px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(`🐍 ${p1?.name || 'P1'}: ${p1?.score || 0}`, CANVAS_WIDTH / 2 - 240, 42);
-
-      // Timer Center Badge
-      ctx.fillStyle = '#f59e0b';
-      ctx.font = 'bold 16px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(`⏱️ ${timeStr}`, CANVAS_WIDTH / 2, 43);
-
-      // P2 Badge (Blue)
-      ctx.fillStyle = '#3b82f6';
-      ctx.font = 'bold 13px sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(`🐛 ${p2?.name || 'P2'}: ${p2?.score || 0}`, CANVAS_WIDTH / 2 + 240, 42);
-
-      // B. Bottom-Right Radar Minimap
-      const miniSize = 110;
-      const miniX = CANVAS_WIDTH - miniSize - 20;
-      const miniY = CANVAS_HEIGHT - miniSize - 20;
-      const scaleRatio = miniSize / MAP_WIDTH;
-
-      // Minimap Box
-      ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(miniX, miniY, miniSize, miniSize, 12);
-      ctx.fill();
-      ctx.stroke();
-
-      // Minimap Header
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = 'bold 9px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText('ARENA RADAR', miniX + 8, miniY + 12);
-
-      // Camera Viewport Indicator Box
-      const camRectX = miniX + cam.x * scaleRatio;
-      const camRectY = miniY + cam.y * scaleRatio;
-      const camRectW = CANVAS_WIDTH * scaleRatio;
-      const camRectH = CANVAS_HEIGHT * scaleRatio;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(camRectX, camRectY, camRectW, camRectH);
-
-      // Players on Minimap
-      if (p1 && p1.body && p1.body[0] && p1.status === 'active') {
-        const mx = miniX + p1.body[0].x * scaleRatio;
-        const my = miniY + p1.body[0].y * scaleRatio;
-        ctx.fillStyle = '#10b981';
-        ctx.beginPath(); ctx.arc(mx, my, 4, 0, Math.PI * 2); ctx.fill();
-      }
-      if (p2 && p2.body && p2.body[0] && p2.status === 'active') {
-        const mx = miniX + p2.body[0].x * scaleRatio;
-        const my = miniY + p2.body[0].y * scaleRatio;
-        ctx.fillStyle = '#3b82f6';
-        ctx.beginPath(); ctx.arc(mx, my, 4, 0, Math.PI * 2); ctx.fill();
-      }
-
-      // C. Boost Meter Bar
-      const boostEnergy = me.boostEnergy ?? 100;
-      const boostBarWidth = 160;
-      const boostBarX = 20;
-      const boostBarY = CANVAS_HEIGHT - 35;
-
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(boostBarX, boostBarY, boostBarWidth, 16, 8);
-      ctx.fill();
-      ctx.stroke();
-
-      const fillW = (Math.max(0, Math.min(100, boostEnergy)) / 100) * boostBarWidth;
-      ctx.fillStyle = me.isBoosting ? '#06b6d4' : '#10b981';
-      ctx.beginPath();
-      ctx.roundRect(boostBarX, boostBarY, fillW, 16, 8);
-      ctx.fill();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 10px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(me.isBoosting ? '⚡ BOOSTING!' : 'BOOST READY (SPACE)', boostBarX + boostBarWidth / 2, boostBarY + 12);
-
+      // Draw Radar Minimap
+      const radarPlayers = mpState.players.map((p) => ({
+        x: p.body[0]?.x || 0,
+        y: p.body[0]?.y || 0,
+        isMe: p.seat === mySeat,
+        color: p.seat === 0 ? '#10b981' : '#3b82f6',
+        dead: p.status === 'eliminated',
+      }));
+      SnakeVsWorms3DRenderer.drawRadar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, radarPlayers);
       return;
     }
 
-    // ----------------------------------------------------
-    // SINGLE PLAYER / PRACTICE MODE LOOP
-    // ----------------------------------------------------
-    if (!gameOver) {
-      const state = gameStateRef.current;
-      const player = state.snakes.find(s => s.isPlayer);
+    // ──────────────────────────────────────────────────────────────────────────
+    // 2. SINGLE PLAYER AI ARENA MODE
+    // ──────────────────────────────────────────────────────────────────────────
+    const state = gameStateRef.current;
+    const player = state.snakes.find((s) => s.isPlayer);
 
-      if (player && !player.dead) {
-        const targetCamX = player.head.x - CANVAS_WIDTH / 2;
-        const targetCamY = player.head.y - CANVAS_HEIGHT / 2;
-        state.camera.x += (targetCamX - state.camera.x) * 5 * dt;
-        state.camera.y += (targetCamY - state.camera.y) * 5 * dt;
-        
-        state.camera.x = Math.max(0, Math.min(MAP_WIDTH - CANVAS_WIDTH, state.camera.x));
-        state.camera.y = Math.max(0, Math.min(MAP_HEIGHT - CANVAS_HEIGHT, state.camera.y));
+    // 1. Player Steering
+    if (player && !player.dead && !gameOver) {
+      if (inputRef.current.hasPointer) {
+        const screenHeadX = player.head.x - state.camera.x;
+        const screenHeadY = player.head.y - state.camera.y;
+        const dx = inputRef.current.mouseX - screenHeadX;
+        const dy = inputRef.current.mouseY - screenHeadY;
 
-        const worldMouseX = inputRef.current.mouseX + state.camera.x;
-        const worldMouseY = inputRef.current.mouseY + state.camera.y;
-        
-        const dx = worldMouseX - player.head.x;
-        const dy = worldMouseY - player.head.y;
-        player.targetAngle = Math.atan2(dy, dx);
-        
-        player.isBoosting = inputRef.current.isBoosting && player.segments.length > 5;
+        if (Math.hypot(dx, dy) > 16) {
+          player.targetAngle = Math.atan2(dy, dx);
+        }
       }
 
-      for (const snake of state.snakes) {
-        if (snake.dead) continue;
+      // Smooth Angle Interpolation
+      let angleDiff = player.targetAngle - player.angle;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      player.angle += angleDiff * Math.min(1, 10 * dt);
 
-        if (!snake.isPlayer) {
-          if (Math.random() < 0.02) {
-            snake.targetAngle += (Math.random() - 0.5) * Math.PI;
-          }
+      // Boost mechanics
+      player.isBoosting = inputRef.current.isBoosting && boostEnergy > 5;
+      if (player.isBoosting) {
+        setBoostEnergy((e) => Math.max(0, e - dt * 25));
+        player.speed = BASE_SPEED * 1.75;
+      } else {
+        setBoostEnergy((e) => Math.min(100, e + dt * 10));
+        player.speed = BASE_SPEED;
+      }
+    }
+
+    // 2. Dead AI Respawn Handler
+    const skinKeys = ['ruby', 'amethyst', 'p2', 'gold', 'cyan'];
+    state.snakes.forEach((snake, idx) => {
+      if (snake.dead && !snake.isPlayer) {
+        if (!snake.respawnTime) snake.respawnTime = Date.now() + 2500;
+        if (Date.now() >= snake.respawnTime) {
+          // Respawn AI bot
+          const rx = 180 + Math.random() * (MAP_WIDTH - 360);
+          const ry = 180 + Math.random() * (MAP_HEIGHT - 360);
+          const segCount = 12 + Math.floor(Math.random() * 16);
+          const angle = Math.random() * Math.PI * 2;
+
+          snake.head = { x: rx, y: ry };
+          snake.segments = Array.from({ length: segCount }, (_, sIdx) => ({
+            x: rx - Math.cos(angle) * sIdx * SEG_DISTANCE,
+            y: ry - Math.sin(angle) * sIdx * SEG_DISTANCE,
+          }));
+          snake.angle = angle;
+          snake.targetAngle = angle;
+          snake.skinKey = skinKeys[idx % skinKeys.length]!;
+          snake.speed = BASE_SPEED;
+          snake.dead = false;
+          snake.lengthFloat = segCount;
+          snake.respawnTime = undefined;
         }
+      }
+    });
 
+    // 3. Move All Snakes & Segment IK Following
+    state.snakes.forEach((snake) => {
+      if (snake.dead) return;
+
+      if (!snake.isPlayer) {
+        // AI wandering & turning
+        if (Math.random() < 0.035) {
+          snake.targetAngle += (Math.random() - 0.5) * 1.4;
+        }
         let diff = snake.targetAngle - snake.angle;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
-        snake.angle += diff * Math.min(1, 8 * dt);
+        snake.angle += diff * Math.min(1, 4.5 * dt);
+      }
 
-        const currentSpeed = snake.isBoosting ? 400 : BASE_SPEED;
-        snake.head.x += Math.cos(snake.angle) * currentSpeed * dt;
-        snake.head.y += Math.sin(snake.angle) * currentSpeed * dt;
+      // Move Head
+      snake.head.x += Math.cos(snake.angle) * snake.speed * dt;
+      snake.head.y += Math.sin(snake.angle) * snake.speed * dt;
 
-        // Wall boundary collision elimination
-        if (snake.head.x <= 10 || snake.head.x >= MAP_WIDTH - 10 || snake.head.y <= 10 || snake.head.y >= MAP_HEIGHT - 10) {
-          snake.dead = true;
-          for (const seg of snake.segments) {
+      // Arena Wall Collisions
+      if (snake.head.x < 18 || snake.head.x > MAP_WIDTH - 18 || snake.head.y < 18 || snake.head.y > MAP_HEIGHT - 18) {
+        snake.dead = true;
+        // Drop loot on death
+        snake.segments.forEach((seg, sIdx) => {
+          if (sIdx % 2 === 0) {
             state.orbs.push({
               id: state.orbIdCounter++,
               x: seg.x + (Math.random() - 0.5) * 10,
               y: seg.y + (Math.random() - 0.5) * 10,
-              color: snake.color,
-              value: 2,
+              type: 'golden',
+              value: 3,
               isLoot: true,
             });
           }
+        });
+        if (snake.isPlayer) setGameOver(true);
+      }
+
+      // Inverse Kinematics Body Following
+      snake.segments[0] = { x: snake.head.x, y: snake.head.y };
+      for (let i = 1; i < snake.segments.length; i++) {
+        const prev = snake.segments[i - 1]!;
+        const curr = snake.segments[i]!;
+        const angle = Math.atan2(prev.y - curr.y, prev.x - curr.x);
+        curr.x = prev.x - Math.cos(angle) * SEG_DISTANCE;
+        curr.y = prev.y - Math.sin(angle) * SEG_DISTANCE;
+      }
+
+      // Food Collection
+      state.orbs = state.orbs.filter((orb) => {
+        const dist = Math.hypot(snake.head.x - orb.x, snake.head.y - orb.y);
+        if (dist < 22) {
+          snake.lengthFloat += orb.value * 0.35;
           if (snake.isPlayer) {
-            setGameOver(true);
+            setScore((s) => s + orb.value * 10);
+            setLength(Math.floor(snake.lengthFloat));
           }
-          continue;
+          if (Math.floor(snake.lengthFloat) > snake.segments.length) {
+            const last = snake.segments[snake.segments.length - 1]!;
+            snake.segments.push({ x: last.x, y: last.y });
+          }
+          return false;
         }
+        return true;
+      });
 
-        // Head-to-Opponent Body & Head-to-Head collision check
-        for (const other of state.snakes) {
-          if (other === snake || other.dead) continue;
-
-          // Head-to-Head collision
-          const headDist = Math.hypot(other.head.x - snake.head.x, other.head.y - snake.head.y);
-          if (headDist < 22) {
-            if (snake.segments.length < other.segments.length) {
-              snake.dead = true;
-            } else if (snake.segments.length > other.segments.length) {
-              other.dead = true;
-              if (snake.isPlayer) setKills(k => k + 1);
-            } else {
-              snake.dead = true;
-              other.dead = true;
-            }
-            if (snake.isPlayer && snake.dead) setGameOver(true);
-            if (other.isPlayer && other.dead) setGameOver(true);
-            break;
-          }
-
-          // Head-to-Body collision
-          const hitsBody = other.segments.some(seg => Math.hypot(seg.x - snake.head.x, seg.y - snake.head.y) < 16);
-          if (hitsBody) {
+      // Body-to-body Collisions
+      state.snakes.forEach((other) => {
+        if (other.id === snake.id || other.dead) return;
+        for (let i = 2; i < other.segments.length; i++) {
+          const seg = other.segments[i]!;
+          if (Math.hypot(snake.head.x - seg.x, snake.head.y - seg.y) < 14) {
             snake.dead = true;
-            for (const seg of snake.segments) {
-              state.orbs.push({
-                id: state.orbIdCounter++,
-                x: seg.x + (Math.random() - 0.5) * 10,
-                y: seg.y + (Math.random() - 0.5) * 10,
-                color: snake.color,
-                value: 2,
-                isLoot: true,
-              });
-            }
-            if (other.isPlayer) setKills(k => k + 1);
+            // Spawn loot orbs along snake corpse
+            snake.segments.forEach((sSeg, sIdx) => {
+              if (sIdx % 2 === 0) {
+                state.orbs.push({
+                  id: state.orbIdCounter++,
+                  x: sSeg.x + (Math.random() - 0.5) * 8,
+                  y: sSeg.y + (Math.random() - 0.5) * 8,
+                  type: 'golden',
+                  value: 3,
+                  isLoot: true,
+                });
+              }
+            });
+
+            if (other.isPlayer) setKills((k) => k + 1);
             if (snake.isPlayer) setGameOver(true);
             break;
           }
         }
+      });
+    });
 
-        if (snake.dead) continue;
-
-        let prev = snake.head;
-        for (let i = 0; i < snake.segments.length; i++) {
-          const seg = snake.segments[i];
-          const sdx = prev.x - seg.x;
-          const sdy = prev.y - seg.y;
-          const dist = Math.hypot(sdx, sdy);
-          if (dist > 10) {
-            const angle = Math.atan2(sdy, sdx);
-            seg.x = prev.x - Math.cos(angle) * 10;
-            seg.y = prev.y - Math.sin(angle) * 10;
-          }
-          prev = seg;
-        }
-
-        // Orb collection & Physical Growth
-        for (let i = state.orbs.length - 1; i >= 0; i--) {
-          const orb = state.orbs[i];
-          const odx = orb.x - snake.head.x;
-          const ody = orb.y - snake.head.y;
-          if (Math.hypot(odx, ody) < 22) {
-            state.orbs.splice(i, 1);
-
-            // Add segment to tail for physical growth
-            const lastSeg = snake.segments[snake.segments.length - 1] || snake.head;
-            snake.segments.push({ x: lastSeg.x, y: lastSeg.y });
-
-            if (snake.isPlayer) {
-              setLength(l => l + orb.value);
-            }
-
-            // Spawn replacement orb so food map remains populated
-            state.orbs.push({
-              id: state.orbIdCounter++,
-              x: Math.random() * MAP_WIDTH,
-              y: Math.random() * MAP_HEIGHT,
-              color: Math.random() > 0.5 ? '#38bdf8' : '#f43f5e',
-              value: 1,
-              isLoot: false,
-            });
-          }
-        }
-      }
-
-      // Respawn AI snakes that died so arena stays filled
-      for (const snake of state.snakes) {
-        if (!snake.isPlayer && snake.dead) {
-          const rx = Math.random() * (MAP_WIDTH - 100) + 50;
-          const ry = Math.random() * (MAP_HEIGHT - 100) + 50;
-          snake.head = { x: rx, y: ry };
-          snake.segments = Array(10 + Math.floor(Math.random() * 15)).fill({ x: rx, y: ry });
-          snake.dead = false;
-        }
-      }
+    // 4. Replenish Food Orbs
+    while (state.orbs.length < 320) {
+      const rand = Math.random();
+      const type: 'normal' | 'golden' | 'boost' = rand < 0.12 ? 'golden' : rand < 0.22 ? 'boost' : 'normal';
+      state.orbs.push({
+        id: state.orbIdCounter++,
+        x: 50 + Math.random() * (MAP_WIDTH - 100),
+        y: 50 + Math.random() * (MAP_HEIGHT - 100),
+        type,
+        value: type === 'golden' ? 5 : type === 'boost' ? 2 : 1,
+        isLoot: false,
+      });
     }
 
-    // Render Canvas
+    // 5. Camera Following Player
+    if (player) {
+      const targetCamX = Math.max(0, Math.min(MAP_WIDTH - CANVAS_WIDTH, player.head.x - CANVAS_WIDTH / 2));
+      const targetCamY = Math.max(0, Math.min(MAP_HEIGHT - CANVAS_HEIGHT, player.head.y - CANVAS_HEIGHT / 2));
+      state.camera.x += (targetCamX - state.camera.x) * 7.5 * dt;
+      state.camera.y += (targetCamY - state.camera.y) * 7.5 * dt;
+    }
+
     ctx.save();
-    ctx.translate(-gameStateRef.current.camera.x, -gameStateRef.current.camera.y);
+    ctx.translate(-state.camera.x, -state.camera.y);
 
-    ctx.strokeStyle = 'rgba(30, 41, 59, 0.5)';
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= MAP_WIDTH; x += 100) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_HEIGHT); ctx.stroke();
-    }
-    for (let y = 0; y <= MAP_HEIGHT; y += 100) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_WIDTH, y); ctx.stroke();
-    }
+    // Draw 3D Arena
+    SnakeVsWorms3DRenderer.drawArena(ctx, state.camera.x, state.camera.y, animTime);
 
-    ctx.strokeStyle = '#ef4444';
-    ctx.lineWidth = 10;
-    ctx.strokeRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+    // Draw 3D Food Orbs
+    state.orbs.forEach((orb) => {
+      SnakeVsWorms3DRenderer.drawFood(ctx, orb.x, orb.y, orb.type, animTime);
+    });
 
-    for (const orb of gameStateRef.current.orbs) {
-      ctx.fillStyle = orb.color;
-      ctx.beginPath();
-      ctx.arc(orb.x, orb.y, orb.isLoot ? 6 : 4, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    for (const snake of gameStateRef.current.snakes) {
-      if (snake.dead) continue;
-
-      if (snake.segments && snake.segments.length > 1) {
-        ctx.strokeStyle = snake.color;
-        ctx.lineWidth = 22;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        ctx.beginPath();
-        ctx.moveTo(snake.segments[0].x, snake.segments[0].y);
-
-        for (let i = 1; i < snake.segments.length - 1; i++) {
-          const xc = (snake.segments[i].x + snake.segments[i + 1].x) / 2;
-          const yc = (snake.segments[i].y + snake.segments[i + 1].y) / 2;
-          ctx.quadraticCurveTo(snake.segments[i].x, snake.segments[i].y, xc, yc);
-        }
-        ctx.lineTo(snake.segments[snake.segments.length - 1].x, snake.segments[snake.segments.length - 1].y);
-        ctx.stroke();
-      }
-
-      // Head & Eyes
-      const head = snake.head;
-      const nextSeg = snake.segments[0] || head;
-      const headAngle = Math.atan2(head.y - nextSeg.y, head.x - nextSeg.x);
-
-      ctx.save();
-      ctx.translate(head.x, head.y);
-      ctx.rotate(headAngle);
-
-      ctx.fillStyle = snake.color;
-      ctx.beginPath();
-      ctx.arc(0, 0, 14, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.arc(5, -5, 4, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(5, 5, 4, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath(); ctx.arc(6.5, -5, 2, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(6.5, 5, 2, 0, Math.PI * 2); ctx.fill();
-
-      ctx.restore();
-    }
+    // Draw 3D Creatures
+    state.snakes.forEach((snake) => {
+      SnakeVsWorms3DRenderer.drawCreature(
+        ctx,
+        snake.segments,
+        snake.angle,
+        snake.skinKey,
+        snake.isPlayer,
+        snake.isBoosting,
+        snake.name,
+        animTime,
+        snake.dead
+      );
+    });
 
     ctx.restore();
-  }, mode === 'multiplayer' || !gameOver);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = CANVAS_WIDTH / rect.width;
-    const scaleY = CANVAS_HEIGHT / rect.height;
-    const mouseX = (e.clientX - rect.left) * scaleX;
-    const mouseY = (e.clientY - rect.top) * scaleY;
-    inputRef.current.mouseX = mouseX;
-    inputRef.current.mouseY = mouseY;
-
-    if (mode === 'multiplayer' && driverRef.current && multiplayerState) {
-      const me = multiplayerState.players.find(p => p.seat === mySeat);
-      if (me && me.body && me.body[0]) {
-        const head = me.body[0];
-        const camX = Math.max(0, Math.min(MAP_WIDTH - CANVAS_WIDTH, head.x - CANVAS_WIDTH / 2));
-        const camY = Math.max(0, Math.min(MAP_HEIGHT - CANVAS_HEIGHT, head.y - CANVAS_HEIGHT / 2));
-        const worldMouseX = mouseX + camX;
-        const worldMouseY = mouseY + camY;
-
-        const dx = worldMouseX - head.x;
-        const dy = worldMouseY - head.y;
-        if (Math.hypot(dx, dy) > 25) {
-          let dir: SnakeWormDirection | null = null;
-          if (Math.abs(dx) > Math.abs(dy)) {
-            dir = dx > 0 ? 'right' : 'left';
-          } else {
-            dir = dy > 0 ? 'down' : 'up';
-          }
-          if (dir) {
-            driverRef.current.sendDirection(dir);
-          }
-        }
-      }
-    }
-  };
-
-  const handleMouseDown = () => {
-    inputRef.current.isBoosting = true;
-    if (mode === 'multiplayer' && driverRef.current) {
-      driverRef.current.sendBoostStart();
-    }
-  };
-
-  const handleMouseUp = () => {
-    inputRef.current.isBoosting = false;
-    if (mode === 'multiplayer' && driverRef.current) {
-      driverRef.current.sendBoostStop();
-    }
-  };
-
-  const handleRestart = () => {
-    if (mode === 'multiplayer') {
-      useMultiplayerStore.getState().requestRematch();
-      setGameOver(false);
-    } else {
-      initGame();
-    }
-  };
+    // Draw Radar Minimap
+    const radarSnakes = state.snakes.map((s) => ({
+      x: s.head.x,
+      y: s.head.y,
+      isMe: s.isPlayer,
+      color: s.isPlayer ? '#10b981' : '#ef4444',
+      dead: s.dead,
+    }));
+    SnakeVsWorms3DRenderer.drawRadar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, radarSnakes);
+  }, true);
 
   return (
-    <GameWrapper title="Snake vs Worms Slither Arena" gameId="snake-vs-worms" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="flex flex-col lg:flex-row items-center justify-center gap-8 w-full max-w-6xl relative">
+    <GameWrapper title="Snake vs Worms 3D" gameId="snake-vs-worms" mode={mode} stake={stake} onBack={onBack} isFullscreen>
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-6 w-full max-w-6xl relative mx-auto h-full p-2 lg:p-4 select-none">
         
-        {gameOver && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in rounded-3xl">
-            <div className="bg-[#0f172a] border border-rose-500/30 p-8 rounded-3xl shadow-2xl flex flex-col items-center max-w-sm w-full mx-4">
-              <div className="text-6xl mb-4">🏆</div>
-              <h2 className={`text-4xl font-black uppercase tracking-widest text-center mb-2 ${mpWinner === null ? 'text-amber-400' : (mpWinner === mySeat ? 'text-emerald-400' : 'text-rose-500')}`}>
-                {mode === 'multiplayer' ? (mpWinner === null ? 'DRAW MATCH!' : (mpWinner === mySeat ? 'YOU WIN!' : 'OPPONENT WINS!')) : 'GAME OVER'}
-              </h2>
-
-              {mode === 'multiplayer' ? (
-                <div className="flex gap-4 mt-4 w-full">
-                  <button
-                    onClick={handleRestart}
-                    className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl uppercase tracking-wider"
-                  >
-                    Rematch
-                  </button>
-                  <button
-                    onClick={onBack}
-                    className="flex-1 py-3 bg-slate-600 hover:bg-slate-500 text-white font-bold rounded-xl uppercase tracking-wider"
-                  >
-                    Leave
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleRestart}
-                  className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-lg uppercase rounded-xl transition-all shadow-lg shadow-emerald-500/25"
-                >
-                  Slither Again
-                </button>
-              )}
+        {/* CENTER 3D ARENA CONTAINER */}
+        <div className="relative flex flex-col items-center justify-center w-full max-w-[920px] shrink-0">
+          
+          {/* TOP MODERN ARCADE HUD */}
+          <div className="w-full flex items-center justify-between gap-3 mb-3 px-1">
+            
+            {/* Score & Length Pill */}
+            <div className="flex-1 p-2.5 bg-slate-900/90 border border-emerald-500/40 rounded-2xl flex items-center justify-between shadow-lg">
+              <div className="flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-emerald-400" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Mass</span>
+              </div>
+              <span className="text-base font-black font-mono text-white">{score.toLocaleString()}</span>
             </div>
-          </div>
-        )}
 
-        <div className="relative group w-full max-w-full lg:max-w-[900px]">
-           <canvas
-             ref={canvasRef}
-             width={CANVAS_WIDTH}
-             height={CANVAS_HEIGHT}
-             onMouseMove={handleMouseMove}
-             onMouseDown={handleMouseDown}
-             onMouseUp={handleMouseUp}
-             onMouseLeave={handleMouseUp}
-             className="rounded-3xl border-4 border-emerald-900 shadow-[0_0_40px_rgba(16,185,129,0.15)] bg-[#020617] w-full h-auto max-h-[85vh] object-contain cursor-crosshair"
-           />
-        </div>
-
-        <div className="flex flex-col items-center gap-6 glass-panel p-6 rounded-3xl border border-slate-800 w-full max-w-xs shrink-0 shadow-2xl">
-          {mode === 'multiplayer' && multiplayerState ? (
-            <div className="w-full flex flex-col gap-4">
-              <div className="text-center font-black uppercase text-xs tracking-widest text-slate-400">Match Standings</div>
-              {multiplayerState.players.map((p) => {
-                const isMe = p.seat === mySeat;
-                const isP1 = p.seat === 0;
-                return (
-                  <div
-                    key={p.seat}
-                    className={`p-4 rounded-2xl border transition-all ${
-                      isMe ? 'bg-slate-800/90 border-amber-500/50 shadow-lg' : 'bg-slate-900/60 border-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={`font-bold text-sm ${isP1 ? 'text-emerald-400' : 'text-blue-400'}`}>
-                        {isP1 ? '🐍 P1 (Snake)' : '🐛 P2 (Worm)'} {isMe && '(YOU)'}
-                      </span>
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
-                        p.status === 'active' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-400'
-                      }`}>
-                        {p.status}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-end">
-                      <div>
-                        <div className="text-2xl font-black text-white">{p.score}</div>
-                        <div className="text-[10px] text-slate-400 uppercase tracking-wider">Score</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-amber-400">{p.kills || 0}</div>
-                        <div className="text-[10px] text-slate-400 uppercase tracking-wider">Kills</div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center w-full bg-slate-900/80 p-6 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent"></div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                SCORE
-              </span>
-              <p className="text-5xl font-black text-emerald-400 mt-2 filter drop-shadow-md">
-                {length}
-              </p>
-              <div className="mt-3 flex justify-around text-xs text-slate-400 border-t border-slate-800/80 pt-3">
-                <div><span className="font-bold text-amber-400">{kills}</span> Kills</div>
-                <div><span className="font-bold text-emerald-400">{length}</span> Length</div>
+            {/* Length Pill */}
+            <div className="py-2.5 px-4 bg-slate-900/90 border border-indigo-500/40 rounded-2xl flex items-center gap-2 shadow-lg">
+              <Zap className="w-4 h-4 text-indigo-400" />
+              <div className="text-center">
+                <span className="text-[9px] font-bold text-slate-400 uppercase block">Length</span>
+                <span className="text-xs font-black text-indigo-400">{length} Segs</span>
               </div>
             </div>
-          )}
 
-          <div className="w-full space-y-3 bg-slate-900/40 p-4 rounded-2xl border border-slate-800/50 text-sm text-slate-300">
-             <div className="font-bold text-white uppercase text-xs tracking-wider">Controls</div>
-             <div><strong className="text-emerald-400">Move:</strong> Mouse Steering, WASD, or Arrows</div>
-             <div><strong className="text-cyan-400">Boost:</strong> Hold Spacebar or Mouse Click</div>
-             <div><strong className="text-rose-400">Goal:</strong> Eat food & eliminate opponent!</div>
+            {/* Kills Pill */}
+            <div className="py-2.5 px-4 bg-slate-900/90 border border-rose-500/40 rounded-2xl flex items-center gap-2 shadow-lg">
+              <Swords className="w-4 h-4 text-rose-400" />
+              <div className="text-center">
+                <span className="text-[9px] font-bold text-slate-400 uppercase block">Kills</span>
+                <span className="text-xs font-black text-rose-400">{kills} Slain</span>
+              </div>
+            </div>
+
+            {/* Boost Energy Bar */}
+            <div className="flex-1 p-2.5 bg-slate-900/90 border border-amber-500/40 rounded-2xl flex flex-col justify-center shadow-lg">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1.5">
+                  <Flame className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-[9px] font-bold text-slate-400 uppercase">Boost (SPACE)</span>
+                </div>
+                <span className="text-[10px] font-black font-mono text-amber-400">{Math.round(boostEnergy)}%</span>
+              </div>
+              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all duration-75 rounded-full"
+                  style={{ width: `${boostEnergy}%` }}
+                />
+              </div>
+            </div>
+
+          </div>
+
+          {/* MAIN 3D CANVAS ARENA */}
+          <div className="relative w-full aspect-[900/600] max-h-[78vh] bg-[#070b14] rounded-3xl overflow-hidden border-2 border-indigo-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center">
+            <canvas
+              ref={canvasRef}
+              width={CANVAS_WIDTH}
+              height={CANVAS_HEIGHT}
+              onMouseMove={handleMouseMove}
+              onTouchMove={handleTouchMove}
+              className="w-full h-full object-contain cursor-crosshair"
+            />
+
+            {/* Glassmorphic Overlays */}
+            <SnakeVsWormsOverlays
+              isGameOver={gameOver}
+              isWin={isWin}
+              score={score}
+              length={length}
+              kills={kills}
+              isMultiplayer={mode === 'multiplayer'}
+              winnerName={mpWinner !== null ? `Player ${mpWinner + 1}` : null}
+              onReplay={initGame}
+              onExit={onBack}
+            />
           </div>
         </div>
 
+        {/* MULTIPLAYER PANEL */}
         {mode === 'multiplayer' && (
           <div className="hidden xl:block flex-shrink-0 self-start">
             <MultiplayerMatchPanel compact />
           </div>
         )}
-
       </div>
     </GameWrapper>
   );
 };
+
+export default SnakeVsWormsGame;

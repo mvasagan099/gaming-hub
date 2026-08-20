@@ -3,6 +3,7 @@ import type { FruitType, FruitDef } from "../types/fruit.types";
 import { FRUIT_DEFS } from "../types/fruit.types";
 import { FruitEvents } from "../events/FruitEvents";
 import type ParticleManager from "./ParticleManager";
+import { FRUIT_NINJA_VISUAL_CONFIG } from "../constants/fruitNinjaVisualConfig";
 
 export interface ActiveFruit {
   id: string;
@@ -11,7 +12,6 @@ export interface ActiveFruit {
   def: FruitDef;
   sliced: boolean;
   spawnTime: number;
-  frozen?: boolean;
 }
 
 export class FruitManager {
@@ -35,7 +35,7 @@ export class FruitManager {
   }
 
   /**
-   * Spawns a random fruit or bomb and launches it upward.
+   * Spawns a random fruit or bomb and launches it upward in a natural parabolic arc.
    */
   spawnFruit(velocityMultiplier = 1): void {
     const w = this.scene.scale.width;
@@ -43,32 +43,35 @@ export class FruitManager {
 
     const types: FruitType[] = ["watermelon", "apple", "orange", "banana", "coconut", "kiwi"];
     let type: FruitType = types[Math.floor(Math.random() * types.length)]!;
-    
-    // Spawn probabilities
+
+    // Spawn bomb probability in classic mode
     const rand = Math.random();
-    if (this.mode === "classic" && rand < 0.15) {
+    if (this.mode === "classic" && rand < 0.16) {
       type = "bomb";
     }
 
     const def = FRUIT_DEFS[type];
-    const x   = Phaser.Math.Between(100, w - 100);
-    const y   = h + 40;
+    const x = Phaser.Math.Between(80, w - 80);
+    const y = h + 45;
 
     // Create interactive physics sprite
     const sprite = this.fruitsGroup.create(x, y, `fn-${type}`) as Phaser.Physics.Arcade.Sprite;
-    sprite.setCircle(def.radius, (120 - def.radius * 2) / 2, (120 - def.radius * 2) / 2);
+    sprite.setCircle(def.radius, (140 - def.radius * 2) / 2, (140 - def.radius * 2) / 2);
     sprite.setDepth(20);
 
-    // Apply launch velocities
-    const targetX   = w / 2 + Phaser.Math.Between(-150, 150);
-    const gravity   = 350; // pixels per second squared
-    const flightTime = 1.6 / velocityMultiplier;  // time decreases as diff goes up
-    
+    // Parabolic trajectory calculations
+    const targetX = w / 2 + Phaser.Math.Between(-180, 180);
+    const gravity = FRUIT_NINJA_VISUAL_CONFIG.gravity;
+    const flightTime = FRUIT_NINJA_VISUAL_CONFIG.baseFlightTime / velocityMultiplier;
+
     const vx = (targetX - x) / flightTime;
-    const vy = (-gravity * (flightTime * 0.5) - Phaser.Math.Between(20, 80)) * velocityMultiplier;
+    const vy = (-gravity * (flightTime * 0.5) - Phaser.Math.Between(30, 90)) * velocityMultiplier;
 
     sprite.setVelocity(vx, vy);
-    sprite.setAngularVelocity(Phaser.Math.Between(-160, 160)); // spin
+    sprite.setAngularVelocity(Phaser.Math.Between(
+      FRUIT_NINJA_VISUAL_CONFIG.minAngularVelocity,
+      FRUIT_NINJA_VISUAL_CONFIG.maxAngularVelocity
+    ));
 
     const id = `fruit-${this.idCounter++}`;
     sprite.setData("id", id);
@@ -85,18 +88,22 @@ export class FruitManager {
 
   // ─── Slicing split physics ──────────────────────────────────────────────────
 
-  /** Splits a fruit in two separate falling halves */
-  splitFruit(id: string): void {
+  /**
+   * Splits a fruit in two separate falling halves with physical outward impulses
+   * perpendicular to the slice cut line.
+   */
+  splitFruit(id: string, sliceAngle = 0): void {
     const item = this.activeFruits.get(id);
     if (!item || item.sliced) return;
 
     const { x, y } = item.sprite;
     const type = item.type;
+    const currentAngle = item.sprite.angle;
 
     item.sliced = true;
     const velocity = item.sprite.body?.velocity || { x: 0, y: 0 };
 
-    // Stop and hide original
+    // Disable and hide original whole fruit
     item.sprite.disableBody(true, true);
     this.activeFruits.delete(id);
 
@@ -108,27 +115,36 @@ export class FruitManager {
 
     this.scene.events.emit(FruitEvents.FRUIT_SLICED, item.def);
 
-    // Spawn juice burst particles
-    this.particles.fruitJuice(x, y, item.def.color);
+    // Spawn multi-layer juice and mist particles
+    this.particles.fruitJuice(x, y, item.def.color, item.def.mistColor);
 
-    // Spawn left half
+    // Compute outward perpendicular impulse vector
+    const perpAngle = sliceAngle + Math.PI / 2;
+    const impulse = FRUIT_NINJA_VISUAL_CONFIG.splitImpulseX;
+    const impX = Math.cos(perpAngle) * impulse;
+    const impY = Math.sin(perpAngle) * impulse * 0.5;
+
+    // Spawn left half with rotation and impulse
     const leftHalf = this.halvesGroup.create(x, y, `fn-${type}-left`) as Phaser.Physics.Arcade.Sprite;
-    leftHalf.setVelocity(velocity.x - 120, velocity.y + 40);
-    leftHalf.setAngularVelocity(-220);
-    leftHalf.setDepth(10);
+    leftHalf.setAngle(currentAngle);
+    leftHalf.setVelocity(velocity.x - Math.abs(impX) - 40, velocity.y + impY + 20);
+    leftHalf.setAngularVelocity(-FRUIT_NINJA_VISUAL_CONFIG.splitAngularSpeed);
+    leftHalf.setDepth(15);
 
-    // Spawn right half
+    // Spawn right half with rotation and impulse
     const rightHalf = this.halvesGroup.create(x, y, `fn-${type}-right`) as Phaser.Physics.Arcade.Sprite;
-    rightHalf.setVelocity(velocity.x + 120, velocity.y + 40);
-    rightHalf.setAngularVelocity(220);
-    rightHalf.setDepth(10);
+    rightHalf.setAngle(currentAngle);
+    rightHalf.setVelocity(velocity.x + Math.abs(impX) + 40, velocity.y - impY + 20);
+    rightHalf.setAngularVelocity(FRUIT_NINJA_VISUAL_CONFIG.splitAngularSpeed);
+    rightHalf.setDepth(15);
 
-    // Fade out and destroy halves
+    // Fade out and destroy halves smoothly
     this.scene.tweens.add({
-      targets:    [leftHalf, rightHalf],
-      alpha:      0,
-      delay:      600,
-      duration:   400,
+      targets: [leftHalf, rightHalf],
+      alpha: 0,
+      delay: 550,
+      duration: 350,
+      ease: "Sine.In",
       onComplete: () => {
         leftHalf.destroy();
         rightHalf.destroy();
@@ -145,12 +161,12 @@ export class FruitManager {
     for (const [id, item] of this.activeFruits.entries()) {
       const y = item.sprite.y;
 
-      // Clean up fallen fruits
+      // Clean up fallen fruits past screen bottom
       if (y > h + 100) {
         item.sprite.destroy();
         this.activeFruits.delete(id);
 
-        // If missed normal fruit, lose life
+        // Missed normal fruit in classic mode incurs life lost
         if (item.type !== "bomb" && this.mode === "classic") {
           this.scene.events.emit(FruitEvents.LIFE_LOST);
         }

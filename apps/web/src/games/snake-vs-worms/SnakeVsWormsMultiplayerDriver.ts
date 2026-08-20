@@ -21,12 +21,21 @@ export class SnakeVsWormsMultiplayerDriver {
     this.unsubscribeStore = useMultiplayerStore.subscribe((state) => {
       if (state.gameState) {
         const engineState = state.gameState as unknown as SnakeVsWormsState;
+        
+        // Synchronize lastDirectionSent with actual authoritative player direction
+        if (this.mySeat != null && engineState.players) {
+          const me = engineState.players.find((p) => p.seat === this.mySeat);
+          if (me) {
+            this.lastDirectionSent = me.direction;
+          }
+        }
+
         if (this.onStateUpdateCb) {
           this.onStateUpdateCb(engineState);
         }
 
         if (engineState.finished && engineState.gameStatus === 'finished' && this.onMatchCompleteCb) {
-          const winnerSeat = engineState.winnerSeats && engineState.winnerSeats.length > 0 ? engineState.winnerSeats[0] : null;
+          const winnerSeat = engineState.winnerSeats && engineState.winnerSeats.length > 0 ? engineState.winnerSeats[0]! : null;
           this.onMatchCompleteCb(winnerSeat);
         }
       }
