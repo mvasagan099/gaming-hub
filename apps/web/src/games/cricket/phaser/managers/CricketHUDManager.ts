@@ -187,71 +187,81 @@ export class CricketHUDManager {
 
 
   private createPowerBar() {
-    const barWidth = 340;
-    const barHeight = 24;
-    const barX = CENTER_X - barWidth / 2;
-    const barY = GAME_H - 170; // Adjusted for new design
+    const barWidth = 22;
+    const barHeight = 260;
+    const barX = GAME_W - 55;
+    const barY = 275;
     const depth = 20;
+
+    // Power Label above bar
+    const label = this.scene.add.text(barX + barWidth / 2, barY - 14, "POWER", {
+      fontSize: "11px", color: "#38bdf8", fontStyle: "900", fontFamily: "Outfit, sans-serif"
+    }).setOrigin(0.5).setDepth(depth + 1);
 
     // Bar background with glowing border
     const bg = this.scene.add.graphics();
-    bg.fillStyle(0x0f172a, 0.9);
-    bg.fillRoundedRect(barX - 4, barY - 4, barWidth + 8, barHeight + 8, 14);
-    bg.lineStyle(2, 0x38bdf8, 0.5); // Sky blue border
-    bg.strokeRoundedRect(barX - 4, barY - 4, barWidth + 8, barHeight + 8, 14);
+    bg.fillStyle(0x0f172a, 0.92);
+    bg.fillRoundedRect(barX - 5, barY - 5, barWidth + 10, barHeight + 10, 12);
+    bg.lineStyle(2, 0x38bdf8, 0.55); // Sky blue glow border
+    bg.strokeRoundedRect(barX - 5, barY - 5, barWidth + 10, barHeight + 10, 12);
     bg.setDepth(depth);
 
-    // Gradient Power Sections
-    bg.fillGradientStyle(0xf43f5e, 0xf43f5e, 0x9f1239, 0x9f1239, 1); // Red edges
-    bg.fillRoundedRect(barX, barY, 40, barHeight, 8);
-    bg.fillRoundedRect(barX + barWidth - 40, barY, 40, barHeight, 8);
-    
-    bg.fillGradientStyle(0xeab308, 0xeab308, 0x854d0e, 0x854d0e, 1); // Yellow transition
-    bg.fillRoundedRect(barX + 35, barY, 50, barHeight, 4);
-    bg.fillRoundedRect(barX + barWidth - 85, barY, 50, barHeight, 4);
-    
-    bg.fillGradientStyle(0x22c55e, 0x22c55e, 0x166534, 0x166534, 1); // Green sweet spot
-    bg.fillRoundedRect(barX + 80, barY, barWidth - 160, barHeight, 4);
+    // Gradient Power Sections (Vertical: Red top/bottom, Yellow transitions, Green sweet spot center)
+    // 1. Top Red (Too strong / overhit)
+    bg.fillGradientStyle(0xf43f5e, 0xf43f5e, 0x9f1239, 0x9f1239, 1);
+    bg.fillRoundedRect(barX, barY, barWidth, 38, 4);
 
-    // Glowing Indicator
+    // 2. Bottom Red (Too weak)
+    bg.fillRoundedRect(barX, barY + barHeight - 38, barWidth, 38, 4);
+
+    // 3. Yellow transition zones
+    bg.fillGradientStyle(0xeab308, 0xeab308, 0x854d0e, 0x854d0e, 1);
+    bg.fillRoundedRect(barX, barY + 34, barWidth, 46, 3);
+    bg.fillRoundedRect(barX, barY + barHeight - 80, barWidth, 46, 3);
+
+    // 4. Center Green Sweet Spot (Perfect timing / accuracy)
+    bg.fillGradientStyle(0x22c55e, 0x22c55e, 0x166534, 0x166534, 1);
+    bg.fillRoundedRect(barX, barY + 76, barWidth, barHeight - 152, 3);
+
+    // Glowing Indicator Needle (Horizontal bar sliding up and down)
     this.powerBarIndicator = this.scene.add.graphics();
     this.powerBarIndicator.fillStyle(0xffffff, 1);
-    this.powerBarIndicator.fillRoundedRect(barX, barY - 6, 8, barHeight + 12, 4);
-    this.powerBarIndicator.setDepth(depth + 1);
+    this.powerBarIndicator.fillRoundedRect(barX - 6, barY, barWidth + 12, 6, 3);
+    this.powerBarIndicator.setDepth(depth + 2);
 
-    // Add a glowing halo to the indicator
+    // Glowing halo behind indicator
     const glow = this.scene.add.graphics();
     glow.fillStyle(0xffffff, 0.4);
-    glow.fillCircle(barX + 4, barY + barHeight/2, 12);
-    glow.setDepth(depth);
+    glow.fillCircle(barX + barWidth / 2, barY + 3, 14);
+    glow.setDepth(depth + 1);
 
-    // Tween to move indicator back and forth
+    // Tween to move indicator up and down vertically
     const dummy = { val: 0 };
     this.powerBarTween = this.scene.tweens.add({
       targets: dummy,
       val: 1,
-      duration: 700, // Slightly faster for excitement
+      duration: 700,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
       onUpdate: () => {
         this.currentPower = dummy.val;
         if (this.powerBarIndicator) {
-          const xPos = barX + (barWidth - 8) * this.currentPower;
-          
+          const yPos = barY + (barHeight - 6) * (1 - this.currentPower);
+
           this.powerBarIndicator.clear();
           this.powerBarIndicator.fillStyle(0xffffff, 1);
-          this.powerBarIndicator.fillRoundedRect(xPos, barY - 6, 8, barHeight + 12, 4);
-          
+          this.powerBarIndicator.fillRoundedRect(barX - 6, yPos, barWidth + 12, 6, 3);
+
           glow.clear();
-          glow.fillStyle(0xffffff, 0.4);
-          glow.fillCircle(xPos + 4, barY + barHeight/2, 12);
+          glow.fillStyle(0xffffff, 0.45);
+          glow.fillCircle(barX + barWidth / 2, yPos + 3, 14);
         }
       }
     });
 
-    this.controlElements.push(bg, this.powerBarIndicator, glow);
-    this.powerBarElements.push(bg, glow);
+    this.controlElements.push(bg, label, this.powerBarIndicator, glow);
+    this.powerBarElements.push(bg, label, glow);
   }
 
   private createControls() {

@@ -28,27 +28,38 @@ export function createInitialCoins(): CarromCoin[] {
   const coins: CarromCoin[] = [];
   const centerX = CARROM_BOARD_WIDTH / 2;
   const centerY = CARROM_BOARD_HEIGHT / 2;
-  const radius = COIN_RADIUS * 2.5;
+  const d = COIN_RADIUS * 2; // 30 (center-to-center distance for touching coins)
 
   const positions: { x: number; y: number }[] = [
-    { x: centerX, y: centerY },
+    { x: centerX, y: centerY }, // Queen (center)
   ];
 
-  const ring1Radius = radius;
+  // Ring 1: 6 coins around Queen touching Queen and touching adjacent neighbors
   for (let i = 0; i < 6; i++) {
     const angle = (i * Math.PI * 2) / 6;
     positions.push({
-      x: centerX + Math.cos(angle) * ring1Radius,
-      y: centerY + Math.sin(angle) * ring1Radius,
+      x: centerX + Math.cos(angle) * d,
+      y: centerY + Math.sin(angle) * d,
     });
   }
 
-  const ring2Radius = radius * 2;
-  for (let i = 0; i < 12; i++) {
-    const angle = (i * Math.PI * 2) / 12;
+  // Ring 2: 12 coins in authentic hexagonal close packing (6 corner coins at 2*d and 6 edge coins at d*sqrt(3))
+  const cornerDist = d * 2; // 60
+  const edgeDist = d * Math.sqrt(3); // ~51.9615
+  for (let i = 0; i < 6; i++) {
+    const cornerAngle = (i * Math.PI * 2) / 6;
+    const edgeAngle = cornerAngle + Math.PI / 6;
+
+    // Corner coin
     positions.push({
-      x: centerX + Math.cos(angle) * ring2Radius,
-      y: centerY + Math.sin(angle) * ring2Radius,
+      x: centerX + Math.cos(cornerAngle) * cornerDist,
+      y: centerY + Math.sin(cornerAngle) * cornerDist,
+    });
+
+    // Edge coin
+    positions.push({
+      x: centerX + Math.cos(edgeAngle) * edgeDist,
+      y: centerY + Math.sin(edgeAngle) * edgeDist,
     });
   }
 

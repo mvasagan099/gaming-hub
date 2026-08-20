@@ -9,6 +9,9 @@ import { useMultiplayerStore } from '../../store/multiplayerStore';
 import CarromMultiplayerDriver, { type CarromRemoteState } from './CarromMultiplayerDriver';
 import type { CarromCoin, CarromStriker, CarromPlayer } from '@gaming-hub/game-engine';
 import CarromMultiplayer from './CarromMultiplayer';
+import { CarromBoardRenderer } from './rendering/CarromBoardRenderer';
+import { CarromPieceRenderer } from './rendering/CarromPieceRenderer';
+import { CarromEffectsRenderer } from './rendering/CarromEffectsRenderer';
 
 interface CarromGameProps {
   mode: 'ai' | 'multiplayer';
@@ -92,12 +95,9 @@ const SHOT_MAX_SPEED = 18;
 // Trail history: stores last N positions per coin for motion-blur effect
 const TRAIL_LENGTH = 6;
 
-// Striker placement range — maps exactly onto the server's valid placement zone.
-// Server accepts x ∈ [152, 448] (BASE_LINE ± (STRIKER_RADIUS+5)); local = server * 2/3,
-// so local x ∈ [101.33, 298.67] and offset from center (striker.x = 200 + val) ∈ [-98, 98].
-const STRIKER_POS_MIN = -98;
-const STRIKER_POS_MAX = 98;
-// Server placement clearance (STRIKER_RADIUS + coin radius + 2 = 35) scaled to local (2/3) ≈ 23.33
+// Striker placement range — allows full movement across the entire baseline track between the red end circles (86px to 314px, offset ±114px).
+const STRIKER_POS_MIN = -114;
+const STRIKER_POS_MAX = 114;
 const PLACEMENT_CLEARANCE = 23.33;
 
 function mapServerToLocal(
@@ -128,9 +128,56 @@ function createInitialCoins(): LocalCoin[] {
   const coins: LocalCoin[] = [];
   const cx = BOARD_WIDTH / 2;
   const cy = BOARD_HEIGHT / 2;
-  const radius = 20;
+  const coinR = 10;
+  const d = coinR * 2; // 20 (center-to-center distance for touching coins)
 
-  coins.push({ id: 'striker', type: 'striker', x: STRIKER_START_X, y: STRIKER_START_Y, vx: 0, vy: 0, radius: 11, mass: 2.5, color: '#0284c7', active: true, angle: 0, trail: [] });
+  coins.push({
+    id: 'striker',
+    type: 'striker',
+    x: STRIKER_START_X,
+    y: STRIKER_START_Y,
+    vx: 0,
+    vy: 0,
+    radius: 12,
+    mass: 2.5,
+    color: '#0284c7',
+    active: true,
+    angle: 0,
+    trail: []
+  });
+
+  const positions: { x: number; y: number }[] = [
+    { x: cx, y: cy } // Queen
+  ];
+
+  // Ring 1: 6 coins around Queen
+  for (let i = 0; i < 6; i++) {
+    const angle = (i * Math.PI * 2) / 6;
+    positions.push({
+      x: cx + Math.cos(angle) * d,
+      y: cy + Math.sin(angle) * d,
+    });
+  }
+
+  // Ring 2: 12 coins in authentic hexagonal close packing (6 corner coins at 2*d and 6 edge coins at d*sqrt(3))
+  const cornerDist = d * 2; // 40
+  const edgeDist = d * Math.sqrt(3); // ~34.64
+  for (let i = 0; i < 6; i++) {
+    const cornerAngle = (i * Math.PI * 2) / 6;
+    const edgeAngle = cornerAngle + Math.PI / 6;
+
+    // Corner coin
+    positions.push({
+      x: cx + Math.cos(cornerAngle) * cornerDist,
+      y: cy + Math.sin(cornerAngle) * cornerDist,
+    });
+
+    // Edge coin
+    positions.push({
+      x: cx + Math.cos(edgeAngle) * edgeDist,
+      y: cy + Math.sin(edgeAngle) * edgeDist,
+    });
+  }
 
   const types: CoinType[] = [
     "queen",
@@ -139,18 +186,6 @@ function createInitialCoins(): LocalCoin[] {
     // Ring 2 (12 coins alternating)
     "black", "white", "black", "white", "black", "white", "black", "white", "black", "white", "black", "white",
   ];
-
-  const positions: { x: number; y: number }[] = [{ x: cx, y: cy }];
-  
-  for (let i = 0; i < 6; i++) {
-    const angle = (i * Math.PI * 2) / 6;
-    positions.push({ x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius });
-  }
-  
-  for (let i = 0; i < 12; i++) {
-    const angle = (i * Math.PI * 2) / 12;
-    positions.push({ x: cx + Math.cos(angle) * radius * 2, y: cy + Math.sin(angle) * radius * 2 });
-  }
 
   for (let i = 0; i < positions.length && i < types.length; i++) {
     const type = types[i];
@@ -161,7 +196,7 @@ function createInitialCoins(): LocalCoin[] {
       y: positions[i].y,
       vx: 0,
       vy: 0,
-      radius: type === 'queen' ? 10 : 9,
+      radius: type === 'queen' ? 10 : 9.5,
       mass: 1,
       color: type === 'queen' ? '#dc2626' : type === 'white' ? '#ffffff' : '#09090b',
       active: true
@@ -1064,193 +1099,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
     mySeatParam: number | null
   ) => {
     ctx.clearRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
-
-    const width = BOARD_WIDTH;
-    const height = BOARD_HEIGHT;
-    const cx = width / 2;
-    const cy = height / 2;
-    const dark = '#1a1008';
-    const redColor = '#cc1a1a';
-    const bgColor = '#f5dba0';
-
-    const frameRadius = 24;
-    const frameColor = '#2e1806';
-
-    ctx.fillStyle = frameColor;
-    ctx.beginPath();
-    ctx.moveTo(frameRadius, 0);
-    ctx.lineTo(width - frameRadius, 0);
-    ctx.quadraticCurveTo(width, 0, width, frameRadius);
-    ctx.lineTo(width, height - frameRadius);
-    ctx.quadraticCurveTo(width, height, width - frameRadius, height);
-    ctx.lineTo(frameRadius, height);
-    ctx.quadraticCurveTo(0, height, 0, height - frameRadius);
-    ctx.lineTo(0, frameRadius);
-    ctx.quadraticCurveTo(0, 0, frameRadius, 0);
-    ctx.closePath();
-    ctx.fill();
-
-    const sm = 18;
-
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(sm, sm, width - sm * 2, height - sm * 2);
-
-    ctx.save();
-    ctx.rect(sm, sm, width - sm * 2, height - sm * 2);
-    ctx.clip();
-    ctx.strokeStyle = 'rgba(180, 120, 40, 0.07)';
-    ctx.lineWidth = 1.5;
-    for (let gy = sm + 6; gy < height - sm; gy += 8) {
-      ctx.beginPath();
-      ctx.moveTo(sm, gy);
-      ctx.lineTo(width - sm, gy);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    ctx.strokeStyle = dark;
-    ctx.lineWidth = 1.8;
-    ctx.strokeRect(sm + 1, sm + 1, width - sm * 2 - 2, height - sm * 2 - 2);
-
-    const pocketR = 13;
-    const pocketHole = 16;
-    const pc = sm + 14;
-    const pocketPos = [
-      { x: pc, y: pc },
-      { x: width - pc, y: pc },
-      { x: pc, y: height - pc },
-      { x: width - pc, y: height - pc },
-    ];
-    pocketPos.forEach((p) => {
-      ctx.fillStyle = '#0d0804';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, pocketHole, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = '#e0d8c8';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, pocketR, 0, Math.PI * 2);
-      ctx.stroke();
-    });
-
-    const capsuleOffset = 62;
-    const capsuleHalf = 8;
-    const capStart = 86;
-    const capEnd = 314;
-    const capRedR = 9;
-
-    const drawCapsule = (ax: number, ay: number, bx: number, by: number, isVert: boolean) => {
-      ctx.strokeStyle = dark;
-      ctx.fillStyle = bgColor;
-
-      ctx.beginPath();
-      if (!isVert) {
-        ctx.rect(ax, ay - capsuleHalf, bx - ax, capsuleHalf * 2);
-      } else {
-        ctx.rect(ax - capsuleHalf, ay, capsuleHalf * 2, by - ay);
-      }
-      ctx.fill();
-
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      if (!isVert) {
-        ctx.moveTo(ax, ay - capsuleHalf);
-        ctx.lineTo(bx, ay - capsuleHalf);
-      } else {
-        ctx.moveTo(ax - capsuleHalf, ay);
-        ctx.lineTo(ax - capsuleHalf, by);
-      }
-      ctx.stroke();
-
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      if (!isVert) {
-        ctx.moveTo(ax, ay + capsuleHalf);
-        ctx.lineTo(bx, ay + capsuleHalf);
-      } else {
-        ctx.moveTo(ax + capsuleHalf, ay);
-        ctx.lineTo(ax + capsuleHalf, by);
-      }
-      ctx.stroke();
-
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      if (!isVert) {
-        ctx.arc(ax, ay, capsuleHalf, -Math.PI / 2, Math.PI / 2, true);
-        ctx.arc(bx, ay, capsuleHalf, Math.PI / 2, -Math.PI / 2, true);
-      } else {
-        ctx.arc(ax, ay, capsuleHalf, -Math.PI, 0, true);
-        ctx.arc(ax, by, capsuleHalf, 0, Math.PI, true);
-      }
-      ctx.stroke();
-
-      [[ax, ay], [bx, by]].forEach(([rcx, rcy]) => {
-        ctx.fillStyle = redColor;
-        ctx.strokeStyle = dark;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(rcx, rcy, capRedR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      });
-    };
-
-    drawCapsule(capStart, sm + capsuleOffset - sm, capEnd, sm + capsuleOffset - sm, false);
-    drawCapsule(capStart, height - (sm + capsuleOffset - sm), capEnd, height - (sm + capsuleOffset - sm), false);
-    drawCapsule(sm + capsuleOffset - sm, capStart, sm + capsuleOffset - sm, capEnd, true);
-    drawCapsule(width - (sm + capsuleOffset - sm), capStart, width - (sm + capsuleOffset - sm), capEnd, true);
-
-    ctx.strokeStyle = dark;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 56, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = '#c41a1a';
-    ctx.beginPath();
-    ctx.arc(cx, cy, 55, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = bgColor;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 44, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = dark;
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 44, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = '#1a0808';
-    ctx.beginPath();
-    ctx.arc(cx, cy, 34, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = bgColor;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 28, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = dark;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 28, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = '#cc1a1a';
-    ctx.beginPath();
-    ctx.arc(cx, cy, 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = dark;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    ctx.fillStyle = dark;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
-    ctx.fill();
+    CarromBoardRenderer.drawBoard(ctx, BOARD_WIDTH, BOARD_HEIGHT);
 
     // --- Render Expanding Pocket Energy Ripples ---
     for (let i = pocketRipplesRef.current.length - 1; i >= 0; i--) {
@@ -1274,10 +1123,10 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
     // --- Motion trail pass (drawn before coins so trails are behind) ---
     for (const c of coins) {
       if (!c.active || !c.trail || c.trail.length < 2) continue;
-      const trailColor = c.type === 'striker' ? '30,132,255' : c.type === 'queen' ? '220,38,38' : c.type === 'white' ? '200,170,120' : '60,30,10';
+      const trailColor = c.type === 'striker' ? '56,189,248' : c.type === 'queen' ? '244,63,94' : c.type === 'white' ? '250,204,21' : '148,163,184';
       for (let ti = 0; ti < c.trail.length; ti++) {
         const tp = c.trail[ti];
-        const alpha = ((ti + 1) / c.trail.length) * 0.22;
+        const alpha = ((ti + 1) / c.trail.length) * 0.25;
         const trailRadius = c.radius * (0.45 + 0.35 * (ti / c.trail.length));
         ctx.beginPath();
         ctx.arc(tp.x, tp.y, trailRadius, 0, Math.PI * 2);
@@ -1286,214 +1135,48 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
       }
     }
 
+    const shooterIsWhite =
+      mySeatParam === null
+        ? currentPlayer === 'player'
+        : currentPlayer === 'player'
+          ? mySeatParam === 0
+          : mySeatParam === 1;
+
     for (const c of coins) {
-      if (!c.active) continue;
-      
+      if (!c.active && !c.pocketing) continue;
+
       if (c.type === 'striker' && !isTurnActive && !gameOver) {
-        if (mode === 'multiplayer') {
-          if (currentPlayer === 'player') {
-            if (strikerPhase === 'positioning') {
-              c.x = BOARD_WIDTH / 2 + strikerPos;
-            }
-            c.y = STRIKER_START_Y;
-          } else {
-            c.y = 62;
-          }
-        } else {
-          if (currentPlayer === 'player') {
+        if (currentPlayer === 'player') {
+          if (strikerPhase === 'positioning') {
             c.x = BOARD_WIDTH / 2 + strikerPos;
-            c.y = STRIKER_START_Y;
-          } else {
-            c.y = 62;
           }
-        }
-      }
-
-      ctx.save();
-      if (c.pocketing) {
-        ctx.globalAlpha = Math.max(0, c.pocketing.opacity);
-        ctx.translate(c.x, c.y);
-        ctx.scale(c.pocketing.scale, c.pocketing.scale);
-      }
-
-      const drawX = c.pocketing ? 0 : c.x;
-      const drawY = c.pocketing ? 0 : c.y;
-
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.beginPath();
-      ctx.arc(drawX + 2, drawY + 3, c.radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      let isOverlapping = false;
-      if (c.type === 'striker' && strikerPhase === 'positioning' && isMyTurn && !isTurnActive && !gameOver) {
-         for (const other of coins) {
-            if (other.type === 'striker' || !other.active) continue;
-            if (Math.hypot(c.x - other.x, c.y - other.y) < c.radius + other.radius) {
-               isOverlapping = true; break;
-            }
-         }
-      }
-
-      // Fixed per-player striker color (matches the shooter's coin color) so it never
-      // changes mid-turn. Both players derive the same color from the turn holder's seat.
-      const shooterIsWhite =
-        mySeatParam === null
-          ? currentPlayer === 'player'
-          : currentPlayer === 'player'
-            ? mySeatParam === 0
-            : mySeatParam === 1;
-
-      ctx.save();
-      ctx.translate(drawX, drawY);
-      ctx.rotate(c.angle || 0);
-
-      if (c.type === 'striker') {
-          const grad = ctx.createRadialGradient(-c.radius * 0.35, -c.radius * 0.35, c.radius * 0.05, 0, 0, c.radius);
-          if (shooterIsWhite) {
-            grad.addColorStop(0, '#ffffff'); grad.addColorStop(0.3, '#f1f5f9');
-            grad.addColorStop(0.7, '#cbd5e1'); grad.addColorStop(1, '#64748b');
-          } else {
-            grad.addColorStop(0, '#94a3b8'); grad.addColorStop(0.3, '#475569');
-            grad.addColorStop(0.7, '#1e293b'); grad.addColorStop(1, '#090d16');
-          }
-          ctx.fillStyle = grad;
-          ctx.beginPath();
-          ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.strokeStyle = shooterIsWhite ? 'rgba(15,23,42,0.9)' : 'rgba(248,250,252,0.85)';
-          ctx.lineWidth = 2.2;
-          ctx.stroke();
-
-          ctx.strokeStyle = shooterIsWhite ? 'rgba(71,85,105,0.45)' : 'rgba(226,232,240,0.45)';
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.arc(0, 0, c.radius * 0.72, 0, Math.PI * 2);
-          ctx.stroke();
-
-          // 8 Precision Radial Crosshairs (Rotate when spinning!)
-          ctx.strokeStyle = shooterIsWhite ? 'rgba(30,41,59,0.5)' : 'rgba(255,255,255,0.5)';
-          ctx.lineWidth = 1.0;
-          for (let k = 0; k < 8; k++) {
-            const a = (k * Math.PI * 2) / 8;
-            ctx.beginPath();
-            ctx.moveTo(Math.cos(a) * (c.radius * 0.45), Math.sin(a) * (c.radius * 0.45));
-            ctx.lineTo(Math.cos(a) * (c.radius * 0.68), Math.sin(a) * (c.radius * 0.68));
-            ctx.stroke();
-          }
-
-          // Glowing Azure Gem Core
-          const gemGrad = ctx.createRadialGradient(-1, -1, 1, 0, 0, c.radius * 0.28);
-          gemGrad.addColorStop(0, '#7dd3fc'); gemGrad.addColorStop(0.5, '#0284c7'); gemGrad.addColorStop(1, '#0369a1');
-          ctx.fillStyle = gemGrad;
-          ctx.beginPath();
-          ctx.arc(0, 0, c.radius * 0.26, 0, Math.PI * 2);
-          ctx.fill();
-
-          if (isOverlapping) {
-            ctx.strokeStyle = '#ef4444';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(0, 0, c.radius + 3, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 6px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('MOVE', 0, 0);
-          }
-        } else if (c.type === 'queen') {
-          const qg = ctx.createRadialGradient(-c.radius * 0.35, -c.radius * 0.35, c.radius * 0.05, 0, 0, c.radius);
-          qg.addColorStop(0, '#fca5a5'); qg.addColorStop(0.35, '#ef4444');
-          qg.addColorStop(0.7, '#b91c1c'); qg.addColorStop(1, '#450a0a');
-          ctx.fillStyle = qg;
-          ctx.beginPath();
-          ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.strokeStyle = '#350505';
-          ctx.lineWidth = 1.4;
-          ctx.stroke();
-
-          ctx.strokeStyle = '#fde047';
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.arc(0, 0, c.radius * 0.65, 0, Math.PI * 2);
-          ctx.stroke();
-
-          // 6 Royal Gold Spokes
-          ctx.strokeStyle = 'rgba(254,240,138,0.75)';
-          ctx.lineWidth = 1.0;
-          for (let k = 0; k < 6; k++) {
-            const a = (k * Math.PI * 2) / 6;
-            ctx.beginPath();
-            ctx.moveTo(Math.cos(a) * (c.radius * 0.3), Math.sin(a) * (c.radius * 0.3));
-            ctx.lineTo(Math.cos(a) * (c.radius * 0.62), Math.sin(a) * (c.radius * 0.62));
-            ctx.stroke();
-          }
-
-          ctx.fillStyle = '#fef08a';
-          ctx.beginPath();
-          ctx.arc(0, 0, c.radius * 0.28, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.fillStyle = '#fff1f2';
-          ctx.beginPath();
-          ctx.arc(0, 0, c.radius * 0.14, 0, Math.PI * 2);
-          ctx.fill();
+          c.y = STRIKER_START_Y;
         } else {
-          const isWhite = c.type === 'white';
-          const outerGrad = ctx.createRadialGradient(-c.radius * 0.35, -c.radius * 0.35, c.radius * 0.05, 0, 0, c.radius);
-          if (isWhite) {
-            outerGrad.addColorStop(0, '#fffef0'); outerGrad.addColorStop(0.4, '#fef3c7');
-            outerGrad.addColorStop(0.8, '#f59e0b'); outerGrad.addColorStop(1, '#b45309');
-          } else {
-            outerGrad.addColorStop(0, '#334155'); outerGrad.addColorStop(0.35, '#1e293b');
-            outerGrad.addColorStop(0.75, '#0f172a'); outerGrad.addColorStop(1, '#020617');
-          }
-          ctx.fillStyle = outerGrad;
-          ctx.beginPath();
-          ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.strokeStyle = isWhite ? '#78350f' : '#020617';
-          ctx.lineWidth = 1.3;
-          ctx.stroke();
-
-          const grooveCol = isWhite ? 'rgba(146,64,14,0.6)' : 'rgba(203,213,225,0.3)';
-          ctx.strokeStyle = grooveCol;
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.arc(0, 0, c.radius * 0.65, 0, Math.PI * 2);
-          ctx.stroke();
-
-          // 6 Radial Notches
-          for (let k = 0; k < 6; k++) {
-            const a = (k * Math.PI * 2) / 6;
-            ctx.beginPath();
-            ctx.moveTo(Math.cos(a) * (c.radius * 0.32), Math.sin(a) * (c.radius * 0.32));
-            ctx.lineTo(Math.cos(a) * (c.radius * 0.62), Math.sin(a) * (c.radius * 0.62));
-            ctx.stroke();
-          }
-
-          const innerGrad = ctx.createRadialGradient(-c.radius * 0.2, -c.radius * 0.2, 1, 0, 0, c.radius * 0.45);
-          if (isWhite) {
-            innerGrad.addColorStop(0, '#ffffff'); innerGrad.addColorStop(1, '#fde68a');
-          } else {
-            innerGrad.addColorStop(0, '#475569'); innerGrad.addColorStop(1, '#0f172a');
-          }
-          ctx.fillStyle = innerGrad;
-          ctx.beginPath();
-          ctx.arc(0, 0, c.radius * 0.48, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.fillStyle = isWhite ? '#92400e' : '#e2e8f0';
-          ctx.beginPath();
-          ctx.arc(0, 0, c.radius * 0.16, 0, Math.PI * 2);
-          ctx.fill();
+          c.y = 62;
         }
+      }
 
-      ctx.restore();
+      CarromPieceRenderer.drawCoin(
+        ctx,
+        {
+          id: c.id,
+          type: c.type,
+          x: c.x,
+          y: c.y,
+          radius: c.radius,
+          active: c.active,
+          spin: c.angle,
+          pocketing: c.pocketing ? {
+            scale: c.pocketing.scale,
+            alpha: c.pocketing.opacity,
+            px: c.pocketing.pocketX,
+            py: c.pocketing.pocketY,
+          } : undefined,
+        },
+        shooterIsWhite,
+        isMyTurn,
+        isTurnActive
+      );
     }
 
     // --- Render Animated Floating Score Text Pops ---
@@ -1966,9 +1649,9 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
                     width: '36px',
                     height: '36px',
                     left: `calc(${((strikerPos - STRIKER_POS_MIN) / (STRIKER_POS_MAX - STRIKER_POS_MIN)) * 100}% - ${((strikerPos - STRIKER_POS_MIN) / (STRIKER_POS_MAX - STRIKER_POS_MIN)) * 36}px + 0px)`,
-                    background: 'radial-gradient(circle at 35% 35%, #7dd3fc, #0284c7)',
-                    border: '2.5px solid rgba(255,255,255,0.6)',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                    background: 'radial-gradient(circle at 35% 35%, #ffffff, #f1f5f9 50%, #cbd5e1 100%)',
+                    border: '2.5px solid rgba(255,255,255,0.95)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.45)',
                   }}
                 />
               </div>

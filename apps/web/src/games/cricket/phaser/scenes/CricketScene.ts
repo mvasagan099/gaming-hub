@@ -48,8 +48,8 @@ export class CricketScene extends Phaser.Scene {
   private spinDirection: number = 1;
   private isBowling = false;
   private isHit = false;
-  private initialBallScale = 0.4;
-  private finalBallScale = 1.2;
+  private initialBallScale = 0.28;
+  private finalBallScale = 0.28;
   private aiHasSwung = false;
   private playerHasSwung = false;
   private hasSteppedOut = false;
@@ -1147,36 +1147,52 @@ export class CricketScene extends Phaser.Scene {
   }
 
   private createPlayers() {
-    // Fielders
-    for (let i = 0; i < 7; i++) {
-      const px = 100 + Math.random() * (GAME_W - 200);
-      const py = HORIZON_Y + 20 + Math.random() * 250;
-      if (px > CENTER_X - 100 && px < CENTER_X + 100) continue;
-      const scale = 0.45 + ((py - HORIZON_Y) / (GAME_H - HORIZON_Y)) * 0.75;
-      const fielder = this.add.sprite(px, py, 'tex_fielder').setScale(scale);
-      fielder.setData('startX', px);
-      fielder.setData('startY', py);
+    // ── Fielders in Authentic Balanced Cricket Positions ───────────────────
+    const fieldingPositions = [
+      { x: CENTER_X + 130, y: HORIZON_Y + 75 },  // Mid-Off (close off-side)
+      { x: CENTER_X - 130, y: HORIZON_Y + 75 },  // Mid-On (close leg-side)
+      { x: CENTER_X + 250, y: HORIZON_Y + 140 }, // Extra Cover (30-yard off-side)
+      { x: CENTER_X - 250, y: HORIZON_Y + 140 }, // Mid-Wicket (30-yard leg-side)
+      { x: CENTER_X + 340, y: HORIZON_Y + 235 }, // Cover Point (square off-side)
+      { x: CENTER_X - 340, y: HORIZON_Y + 235 }, // Square Leg (square leg-side)
+      { x: CENTER_X + 300, y: HORIZON_Y + 35 },  // Deep Long-Off (boundary)
+      { x: CENTER_X - 300, y: HORIZON_Y + 35 },  // Deep Long-On (boundary)
+    ];
+
+    this.fielders = [];
+    for (const pos of fieldingPositions) {
+      const progress = Phaser.Math.Clamp((pos.y - HORIZON_Y) / (GAME_H - HORIZON_Y), 0, 1);
+      const scale = 0.28 + progress * 0.22;
+      const depth = 8 + Math.floor(progress * 4);
+
+      const fielder = this.add.sprite(pos.x, pos.y, 'tex_fielder')
+        .setScale(scale)
+        .setDepth(depth);
+      fielder.setData('startX', pos.x);
+      fielder.setData('startY', pos.y);
+      fielder.setData('startScale', scale);
       this.fielders.push(fielder);
     }
 
     if (this.role === 'batting') {
-      this.bowlerRestX = CENTER_X;
-      this.bowlerRestY = PITCH_TOP_Y - 52;
-      this.bowler = this.add.sprite(this.bowlerRestX, this.bowlerRestY, 'tex_bowler').setScale(0.35).setDepth(10);
-      this.nonStriker = this.add.sprite(CENTER_X + 28, PITCH_TOP_Y - 20, 'tex_batsman').setScale(0.16).setDepth(10);
-      this.keeper = this.add.sprite(CENTER_X, PITCH_BOT_Y + 18, 'tex_fielder').setScale(0.5).setDepth(11).setVisible(false);
-      this.batsman = this.add.sprite(CENTER_X - 30, PITCH_BOT_Y - 55, 'tex_batsman').setScale(0.42).setDepth(11);
-      this.bat = this.add.sprite(CENTER_X - 3, PITCH_BOT_Y - 42, 'tex_bat')
-        .setOrigin(0.5, 0).setScale(0.42).setAngle(-30).setDepth(12).setVisible(false);
+      this.bowlerRestX = CENTER_X - 45;
+      this.bowlerRestY = PITCH_TOP_Y - 48;
+      this.bowler = this.add.sprite(this.bowlerRestX, this.bowlerRestY, 'tex_bowler').setScale(0.38).setDepth(10);
+      this.nonStriker = this.add.sprite(CENTER_X + 45, PITCH_TOP_Y - 18, 'tex_batsman').setScale(0.18).setDepth(10);
+      this.keeper = this.add.sprite(CENTER_X, PITCH_BOT_Y + 18, 'tex_fielder').setScale(0.40).setDepth(11).setVisible(false);
+      this.batsman = this.add.sprite(CENTER_X - 35, PITCH_BOT_Y - 42, 'tex_batsman').setScale(0.34).setDepth(11);
+      this.bat = this.add.sprite(CENTER_X - 8, PITCH_BOT_Y - 30, 'tex_bat')
+        .setOrigin(0.5, 0).setScale(0.34).setAngle(-30).setDepth(12).setVisible(false);
     } else {
-      this.bowlerRestX = CENTER_X;
-      this.bowlerRestY = PITCH_BOT_Y - 50;
-      this.bowler = this.add.sprite(this.bowlerRestX, this.bowlerRestY, 'tex_bowler').setScale(0.88).setDepth(11);
-      this.nonStriker = this.add.sprite(CENTER_X + 32, PITCH_BOT_Y - 55, 'tex_batsman').setScale(0.42).setDepth(11);
-      this.keeper = this.add.sprite(CENTER_X, PITCH_TOP_Y - 36, 'tex_fielder').setScale(0.22).setDepth(9);
-      this.batsman = this.add.sprite(CENTER_X - 10, PITCH_TOP_Y - 20, 'tex_batsman').setScale(0.16).setDepth(10);
-      this.bat = this.add.sprite(CENTER_X - 2, PITCH_TOP_Y - 13, 'tex_bat')
-        .setOrigin(0.5, 0).setScale(0.16).setAngle(-30).setDepth(11).setVisible(false);
+      // Bowling view: Decreased foreground player sizes with clear space for middle stumps
+      this.bowlerRestX = CENTER_X - 80;
+      this.bowlerRestY = PITCH_BOT_Y - 35;
+      this.bowler = this.add.sprite(this.bowlerRestX, this.bowlerRestY, 'tex_bowler').setScale(0.62).setDepth(11);
+      this.nonStriker = this.add.sprite(CENTER_X + 85, PITCH_BOT_Y - 40, 'tex_batsman').setScale(0.34).setDepth(11);
+      this.keeper = this.add.sprite(CENTER_X, PITCH_TOP_Y - 32, 'tex_fielder').setScale(0.24).setDepth(9);
+      this.batsman = this.add.sprite(CENTER_X - 14, PITCH_TOP_Y - 18, 'tex_batsman').setScale(0.18).setDepth(10);
+      this.bat = this.add.sprite(CENTER_X - 3, PITCH_TOP_Y - 11, 'tex_bat')
+        .setOrigin(0.5, 0).setScale(0.18).setAngle(-30).setDepth(11).setVisible(false);
     }
 
     // ── Stumps: 3 cylindrical with bails ─────────────────────────────────────
@@ -1309,29 +1325,40 @@ export class CricketScene extends Phaser.Scene {
 
   private repositionForRole() {
     if (this.role === "batting") {
-      this.bowlerRestX = CENTER_X;
-      this.bowlerRestY = PITCH_TOP_Y - 52;
-      this.bowler.setPosition(CENTER_X, this.bowlerRestY).setScale(0.35).setDepth(10);
-      this.nonStriker.setPosition(CENTER_X + 28, PITCH_TOP_Y - 20).setScale(0.16).setDepth(10);
-      this.keeper.setPosition(CENTER_X, PITCH_BOT_Y + 18).setScale(0.5).setDepth(11).setVisible(false);
-      this.batsman.setPosition(CENTER_X - 30, PITCH_BOT_Y - 55).setScale(0.42).setDepth(11);
-      this.bat.setPosition(CENTER_X - 3, PITCH_BOT_Y - 42).setScale(0.42).setDepth(12).setVisible(false).setAngle(-30);
+      this.bowlerRestX = CENTER_X - 45;
+      this.bowlerRestY = PITCH_TOP_Y - 48;
+      this.bowler.setPosition(this.bowlerRestX, this.bowlerRestY).setScale(0.38).setDepth(10);
+      this.nonStriker.setPosition(CENTER_X + 45, PITCH_TOP_Y - 18).setScale(0.18).setDepth(10);
+      this.keeper.setPosition(CENTER_X, PITCH_BOT_Y + 18).setScale(0.40).setDepth(11).setVisible(false);
+      this.batsman.setPosition(CENTER_X - 35, PITCH_BOT_Y - 42).setScale(0.34).setDepth(11);
+      this.bat.setPosition(CENTER_X - 8, PITCH_BOT_Y - 30).setScale(0.34).setDepth(12).setVisible(false).setAngle(-30);
       this.batsmanStumps.setPosition(CENTER_X, PITCH_BOT_Y).setScale(1).setAngle(0).setDepth(5);
       this.bowlerStumps.setPosition(CENTER_X, PITCH_TOP_Y).setScale(1).setAngle(0).setDepth(5);
       this.bail1.setPosition(CENTER_X, PITCH_BOT_Y - 52).setScale(1).setAngle(0);
       this.bail2.setPosition(CENTER_X, PITCH_BOT_Y - 52).setScale(1).setAngle(0);
     } else {
-      this.bowlerRestX = CENTER_X;
-      this.bowlerRestY = PITCH_BOT_Y - 50;
-      this.bowler.setPosition(CENTER_X, this.bowlerRestY).setScale(0.88).setDepth(11);
-      this.nonStriker.setPosition(CENTER_X + 32, PITCH_BOT_Y - 55).setScale(0.42).setDepth(11);
-      this.keeper.setPosition(CENTER_X, PITCH_TOP_Y - 36).setScale(0.22).setDepth(9);
-      this.batsman.setPosition(CENTER_X - 10, PITCH_TOP_Y - 20).setScale(0.16).setDepth(10);
-      this.bat.setPosition(CENTER_X - 2, PITCH_TOP_Y - 13).setScale(0.16).setDepth(11).setVisible(false).setAngle(-30);
+      // Bowling view: Decreased foreground player sizes with clear space for middle stumps
+      this.bowlerRestX = CENTER_X - 80;
+      this.bowlerRestY = PITCH_BOT_Y - 35;
+      this.bowler.setPosition(this.bowlerRestX, this.bowlerRestY).setScale(0.62).setDepth(11);
+      this.nonStriker.setPosition(CENTER_X + 85, PITCH_BOT_Y - 40).setScale(0.34).setDepth(11);
+      this.keeper.setPosition(CENTER_X, PITCH_TOP_Y - 32).setScale(0.24).setDepth(9);
+      this.batsman.setPosition(CENTER_X - 14, PITCH_TOP_Y - 18).setScale(0.18).setDepth(10);
+      this.bat.setPosition(CENTER_X - 3, PITCH_TOP_Y - 11).setScale(0.18).setDepth(11).setVisible(false).setAngle(-30);
       this.batsmanStumps.setPosition(CENTER_X, PITCH_TOP_Y).setScale(1).setAngle(0).setDepth(5);
       this.bowlerStumps.setPosition(CENTER_X, PITCH_BOT_Y).setScale(1).setAngle(0).setDepth(5);
       this.bail1.setPosition(CENTER_X, PITCH_TOP_Y - 20).setScale(0.6).setAngle(0);
       this.bail2.setPosition(CENTER_X, PITCH_TOP_Y - 20).setScale(0.6).setAngle(0);
+    }
+
+    for (const fielder of this.fielders) {
+      const startX = fielder.getData('startX');
+      const startY = fielder.getData('startY');
+      const startScale = fielder.getData('startScale');
+      if (startX !== undefined && startY !== undefined) {
+        fielder.setPosition(startX, startY);
+        if (startScale !== undefined) fielder.setScale(startScale);
+      }
     }
   }
 
@@ -1779,7 +1806,7 @@ export class CricketScene extends Phaser.Scene {
                            type === 'yorker' ? -150 * mult : 100 * mult;
 
       this.ball.setPosition(this.bowler.x, this.ballDepth - this.ballHeight);
-      const startScale = this.role === 'bowling' ? this.finalBallScale : this.initialBallScale;
+      const startScale = this.initialBallScale;
       this.ball.setScale(startScale);
       this.ball.setVisible(true);
 
@@ -1834,7 +1861,7 @@ export class CricketScene extends Phaser.Scene {
               targets: this.bowler,
               y: this.bowlerRestY,
               x: this.bowlerRestX,
-              scaleY: (this.role === 'batting' ? 0.35 : 0.88),
+              scaleY: (this.role === 'batting' ? 0.38 : 0.62),
               duration: 240,
               ease: 'Sine.easeOut',
               onComplete: () => {
@@ -2305,8 +2332,8 @@ export class CricketScene extends Phaser.Scene {
     const batsmanTargetY = this.batsman.y < CENTER_Y ? PITCH_BOT_Y - 60 : PITCH_TOP_Y - 20;
     const nonStrikerTargetY = this.nonStriker.y < CENTER_Y ? PITCH_BOT_Y - 60 : PITCH_TOP_Y - 20;
 
-    const batsmanTargetScale = batsmanTargetY < CENTER_Y ? 0.16 : 0.42;
-    const nonStrikerTargetScale = nonStrikerTargetY < CENTER_Y ? 0.16 : 0.42;
+    const batsmanTargetScale = batsmanTargetY < CENTER_Y ? 0.18 : 0.34;
+    const nonStrikerTargetScale = nonStrikerTargetY < CENTER_Y ? 0.18 : 0.34;
 
     this.tweens.add({
       targets: this.batsman,
@@ -2334,21 +2361,21 @@ export class CricketScene extends Phaser.Scene {
 
   private resetBatsmenPositions() {
     if (this.role === 'batting') {
-      this.batsman.setPosition(CENTER_X - 30, PITCH_BOT_Y - 55);
-      this.batsman.setScale(0.42);
-      this.bat.setPosition(CENTER_X - 3, PITCH_BOT_Y - 42);
-      this.bat.setScale(0.42);
+      this.batsman.setPosition(CENTER_X - 35, PITCH_BOT_Y - 42);
+      this.batsman.setScale(0.34);
+      this.bat.setPosition(CENTER_X - 8, PITCH_BOT_Y - 30);
+      this.bat.setScale(0.34);
 
-      this.nonStriker.setPosition(CENTER_X + 28, PITCH_TOP_Y - 20);
-      this.nonStriker.setScale(0.16);
+      this.nonStriker.setPosition(CENTER_X + 45, PITCH_TOP_Y - 18);
+      this.nonStriker.setScale(0.18);
     } else {
-      this.batsman.setPosition(CENTER_X - 10, PITCH_TOP_Y - 20);
-      this.batsman.setScale(0.16);
-      this.bat.setPosition(CENTER_X - 2, PITCH_TOP_Y - 13);
-      this.bat.setScale(0.16);
+      this.batsman.setPosition(CENTER_X - 14, PITCH_TOP_Y - 18);
+      this.batsman.setScale(0.18);
+      this.bat.setPosition(CENTER_X - 3, PITCH_TOP_Y - 11);
+      this.bat.setScale(0.18);
 
-      this.nonStriker.setPosition(CENTER_X + 32, PITCH_BOT_Y - 55);
-      this.nonStriker.setScale(0.42);
+      this.nonStriker.setPosition(CENTER_X + 85, PITCH_BOT_Y - 40);
+      this.nonStriker.setScale(0.34);
     }
   }
 
@@ -2734,15 +2761,9 @@ export class CricketScene extends Phaser.Scene {
         }
       }
 
-      // Perspective scaling
-      const progress = Phaser.Math.Clamp((this.ballDepth - PITCH_TOP_Y) / (PITCH_BOT_Y - PITCH_TOP_Y), 0, 1);
-      const newScale = Phaser.Math.Linear(
-        this.role === 'bowling' ? this.initialBallScale : this.finalBallScale,
-        this.role === 'bowling' ? this.finalBallScale : this.initialBallScale,
-        1 - progress
-      );
-      this.ball.setScale(newScale);
-      this.ballShadow.setScale(newScale);
+      // Standard Small Cricket Ball Scale
+      this.ball.setScale(this.initialBallScale);
+      this.ballShadow.setScale(this.initialBallScale);
 
       // Missed?
       const isMissed = this.role === 'bowling' ? this.ballDepth < PITCH_TOP_Y - 10 : this.ballDepth > PITCH_BOT_Y + 20;
@@ -2795,18 +2816,9 @@ export class CricketScene extends Phaser.Scene {
       this.trailEmitter.particleX = this.ball.x;
       this.trailEmitter.particleY = this.ball.y;
 
-      const progress = Phaser.Math.Clamp((this.ballDepth - HORIZON_Y) / (PITCH_BOT_Y - HORIZON_Y), 0, 1);
-
-      let newScale = 1;
-      if (this.role === 'batting') {
-        newScale = Math.max(0.2, Phaser.Math.Linear(0.2, this.finalBallScale, progress));
-      } else {
-        newScale = Math.max(0.2, Phaser.Math.Linear(0.2, this.finalBallScale, progress));
-      }
-
       if (!this.tweens.isTweening(this.ball)) {
-        this.ball.setScale(newScale);
-        this.ballShadow.setScale(newScale);
+        this.ball.setScale(this.initialBallScale);
+        this.ballShadow.setScale(this.initialBallScale);
       }
 
       this.ballVelocity.x *= 0.985;
