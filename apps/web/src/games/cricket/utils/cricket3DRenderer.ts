@@ -496,79 +496,110 @@ export class Cricket3DRenderer {
       torsoOffset = -Math.sin(swingProgress * Math.PI) * 8;
     }
 
-    // ── 1. Batting Pads & Legs (White with blue straps) ──
+    // ── 1. Batting Pads & Athletic Legs ──
+    // Left & Right Molded Batting Pads
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(-24, -28, 16, 36);
-    ctx.fillRect(8, -28, 16, 36);
+    ctx.beginPath();
+    ctx.roundRect(-26, -32, 18, 40, 5);
+    ctx.roundRect(8, -32, 18, 40, 5);
+    ctx.fill();
 
-    // Pad Straps
+    // Pad vertical ribs
+    ctx.fillStyle = '#e2e8f0';
+    for (let r = 0; r < 3; r++) {
+      ctx.fillRect(-24 + r * 5, -28, 2, 34);
+      ctx.fillRect(10 + r * 5, -28, 2, 34);
+    }
+
+    // Molded Knee Rolls
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(-26, -30, 18, 6);
+    ctx.fillRect(8, -30, 18, 6);
+
+    // Pad Straps (Navy with buckles)
     ctx.fillStyle = '#1e3a8a';
-    ctx.fillRect(-24, -20, 16, 4);
-    ctx.fillRect(-24, -8, 16, 4);
-    ctx.fillRect(8, -20, 16, 4);
-    ctx.fillRect(8, -8, 16, 4);
+    ctx.fillRect(-26, -20, 18, 3.5);
+    ctx.fillRect(-26, -8, 18, 3.5);
+    ctx.fillRect(8, -20, 18, 3.5);
+    ctx.fillRect(8, -8, 18, 3.5);
 
-    // Shoes
+    // Cricket Spikes
     ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(-26, 6, 20, 8);
-    ctx.fillRect(6, 6, 20, 8);
+    ctx.beginPath();
+    ctx.roundRect(-28, 6, 22, 10, 3);
+    ctx.roundRect(6, 6, 22, 10, 3);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-28, 12, 22, 4);
+    ctx.fillRect(6, 12, 22, 4);
 
-    // ── 2. Torso & Team Jersey ──
+    // ── 2. Torso & Athletic Jersey ──
     ctx.save();
     ctx.translate(torsoOffset, 0);
 
-    const jerseyGrad = ctx.createLinearGradient(-26, -75, 26, -75);
-    jerseyGrad.addColorStop(0, '#1d4ed8');
-    jerseyGrad.addColorStop(0.5, '#3b82f6');
-    jerseyGrad.addColorStop(1, '#1e40af');
+    const jerseyGrad = ctx.createLinearGradient(-26, -78, 26, -78);
+    jerseyGrad.addColorStop(0, '#0f4c9e');
+    jerseyGrad.addColorStop(0.3, '#1d4ed8');
+    jerseyGrad.addColorStop(0.7, '#2563eb');
+    jerseyGrad.addColorStop(1, '#08336d');
 
     ctx.fillStyle = jerseyGrad;
     ctx.beginPath();
-    ctx.roundRect(-26, -75, 52, 48, 8);
+    ctx.roundRect(-26, -78, 52, 50, 8);
     ctx.fill();
 
-    // Jersey Gold Trim & Collar
-    ctx.strokeStyle = '#fbbf24';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(-12, -75);
-    ctx.lineTo(0, -60);
-    ctx.lineTo(12, -75);
-    ctx.stroke();
+    // Athletic Side Panels
+    ctx.fillStyle = '#08336d';
+    ctx.fillRect(-26, -74, 6, 44);
+    ctx.fillRect(20, -74, 6, 44);
 
-    // ── 3. Head & Helmet ──
+    // Jersey V-Neck Placket & Gold Trim
+    ctx.fillStyle = '#08336d';
+    ctx.fillRect(-12, -78, 24, 8);
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(-3, -76, 6, 12);
+    ctx.beginPath();
+    ctx.arc(0, -56, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ── 3. Head & 3D Helmet ──
     // Neck
     ctx.fillStyle = '#fca5a5';
-    ctx.fillRect(-8, -84, 16, 12);
+    ctx.fillRect(-7, -86, 14, 12);
 
-    // Helmet Shell (Navy Blue 3D Sphere)
+    // Helmet Shell
     const helmetGrad = ctx.createRadialGradient(-6, -100, 4, 0, -96, 24);
-    helmetGrad.addColorStop(0, '#3b82f6');
-    helmetGrad.addColorStop(0.6, '#1e3a8a');
-    helmetGrad.addColorStop(1, '#0f172a');
+    helmetGrad.addColorStop(0, '#1d4ed8');
+    helmetGrad.addColorStop(0.6, '#0f2b5c');
+    helmetGrad.addColorStop(1, '#0a162e');
 
     ctx.fillStyle = helmetGrad;
     ctx.beginPath();
     ctx.arc(0, -96, 22, 0, Math.PI * 2);
     ctx.fill();
 
-    // Helmet Visor / Peak
-    ctx.fillStyle = '#1e3a8a';
+    // Visor Peak
+    ctx.fillStyle = '#0a162e';
     ctx.fillRect(-22, -96, 22, 6);
 
-    // Metallic Face Grill
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 1.8;
+    // Titanium Face Grill
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 2.0;
     ctx.beginPath();
     ctx.moveTo(-18, -90); ctx.lineTo(0, -78);
     ctx.moveTo(-12, -90); ctx.lineTo(0, -74);
     ctx.moveTo(-6, -90);  ctx.lineTo(0, -70);
     ctx.stroke();
 
-    // Face skin beneath grill
+    // Face skin & eyes beneath grill
     ctx.fillStyle = '#fca5a5';
     ctx.beginPath();
     ctx.ellipse(0, -88, 12, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(-4, -88, 2, 0, Math.PI * 2);
+    ctx.arc(4, -88, 2, 0, Math.PI * 2);
     ctx.fill();
 
     // ── 4. 3D Cricket Bat & Batting Gloves ──
@@ -577,10 +608,10 @@ export class Cricket3DRenderer {
     ctx.rotate(batAngle);
 
     // Cane Handle Grip
-    ctx.fillStyle = '#334155';
+    ctx.fillStyle = '#18181b';
     ctx.fillRect(-4, -28, 8, 30);
 
-    // Wooden Blade with 3D Bevel
+    // Wooden Blade with 3D Bevel & Wood Grain
     const batGrad = ctx.createLinearGradient(-7, 0, 7, 0);
     batGrad.addColorStop(0, '#ca8a04');
     batGrad.addColorStop(0.3, '#fef08a');
@@ -596,13 +627,13 @@ export class Cricket3DRenderer {
     ctx.fillStyle = '#dc2626';
     ctx.fillRect(-6, 8, 12, 20);
 
-    // Batting Gloves (White with green grip)
+    // Segmented Batting Gloves
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.arc(0, -18, 9, 0, Math.PI * 2);
     ctx.arc(0, -6, 9, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#22c55e';
+    ctx.fillStyle = '#1e3a8a';
     ctx.fillRect(-4, -19, 8, 3);
     ctx.fillRect(-4, -7, 8, 3);
 
@@ -627,45 +658,115 @@ export class Cricket3DRenderer {
     ctx.translate(x, y);
 
     // Contact shadow
-    ctx.fillStyle = 'rgba(2, 6, 23, 0.55)';
+    const shadowGrad = ctx.createRadialGradient(0, 4, 2, 0, 4, 22);
+    shadowGrad.addColorStop(0, 'rgba(2, 6, 23, 0.6)');
+    shadowGrad.addColorStop(1, 'rgba(2, 6, 23, 0)');
+    ctx.fillStyle = shadowGrad;
     ctx.beginPath();
-    ctx.ellipse(0, 4, 16, 6, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 4, 22, 8, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Trousers
+    // Spikes / Boots
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(-8, -20, 6, 22);
-    ctx.fillRect(2, -20, 6, 22);
-
-    // Jersey
-    ctx.fillStyle = teamColor || '#2563eb';
-    ctx.fillRect(-10, -42, 20, 24);
-
-    // Head & Cap
-    ctx.fillStyle = '#fca5a5';
     ctx.beginPath();
-    ctx.arc(0, -48, 8, 0, Math.PI * 2);
+    ctx.roundRect(-12, -2, 10, 6, 2);
+    ctx.roundRect(2, -2, 10, 6, 2);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-12, 2, 10, 2);
+    ctx.fillRect(2, 2, 10, 2);
+
+    // Athletic Trousers (Legs in Stride)
+    const legGrad = ctx.createLinearGradient(-10, -26, 12, -26);
+    legGrad.addColorStop(0, '#cbd5e1');
+    legGrad.addColorStop(0.3, '#ffffff');
+    legGrad.addColorStop(0.8, '#e2e8f0');
+    legGrad.addColorStop(1, '#94a3b8');
+
+    ctx.fillStyle = legGrad;
+    ctx.beginPath();
+    ctx.roundRect(-11, -26, 10, 26, 3);
+    ctx.roundRect(1, -26, 10, 26, 3);
     ctx.fill();
 
+    // Athletic Crimson Jersey with V-Taper
+    const jColor = teamColor || '#dc2626';
+    const jerseyGrad = ctx.createLinearGradient(-14, -50, 14, -50);
+    jerseyGrad.addColorStop(0, '#991b1b');
+    jerseyGrad.addColorStop(0.3, jColor);
+    jerseyGrad.addColorStop(0.7, '#ef4444');
+    jerseyGrad.addColorStop(1, '#7f1d1d');
+
+    ctx.fillStyle = jerseyGrad;
+    ctx.beginPath();
+    ctx.roundRect(-14, -50, 28, 26, 5);
+    ctx.fill();
+
+    // Gold Collar Trim & Crest
+    ctx.fillStyle = '#7f1d1d';
+    ctx.fillRect(-6, -50, 12, 6);
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(-2, -49, 4, 8);
+    ctx.beginPath();
+    ctx.arc(0, -38, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Head, Face & Cap
+    const skinGrad = ctx.createLinearGradient(-6, -62, 6, -62);
+    skinGrad.addColorStop(0, '#f6c49f');
+    skinGrad.addColorStop(1, '#c27848');
+
+    ctx.fillStyle = skinGrad;
+    ctx.fillRect(-4, -54, 8, 6);
+    ctx.beginPath();
+    ctx.arc(0, -58, 9, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Focused Eyes
     ctx.fillStyle = '#0f172a';
     ctx.beginPath();
-    ctx.arc(0, -50, 8, Math.PI, 0);
+    ctx.arc(-3, -58, 1.5, 0, Math.PI * 2);
+    ctx.arc(3, -58, 1.5, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillRect(-8, -50, 8, 2);
 
-    // Rotating Bowling Arm
+    // Cap with Visor
+    ctx.fillStyle = '#7f1d1d';
+    ctx.beginPath();
+    ctx.arc(0, -60, 9.5, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = '#450a0a';
+    ctx.fillRect(-11, -60, 11, 3.5);
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.arc(0, -64, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Rotating Bowling Arm with Leather Ball
     ctx.save();
-    ctx.translate(6, -36);
+    ctx.translate(8, -44);
     ctx.rotate(armAngle);
-    ctx.fillStyle = '#fca5a5';
-    ctx.fillRect(-3, -22, 6, 22);
+    ctx.fillStyle = skinGrad;
+    ctx.beginPath();
+    ctx.roundRect(-3.5, -28, 7, 28, 3);
+    ctx.fill();
+
+    // Wristband
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-3.5, -28, 7, 4);
 
     // Ball held in hand during delivery
     if (phase === 'runup' || phase === 'delivery') {
-      ctx.fillStyle = '#dc2626';
+      const ballGrad = ctx.createRadialGradient(-1, -31, 1, 0, -30, 6);
+      ballGrad.addColorStop(0, '#f87171');
+      ballGrad.addColorStop(0.6, '#dc2626');
+      ballGrad.addColorStop(1, '#7f1d1d');
+      ctx.fillStyle = ballGrad;
       ctx.beginPath();
-      ctx.arc(0, -24, 4, 0, Math.PI * 2);
+      ctx.arc(0, -30, 6, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
     }
     ctx.restore();
 

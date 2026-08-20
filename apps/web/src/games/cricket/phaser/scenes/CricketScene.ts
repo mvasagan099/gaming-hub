@@ -4,6 +4,7 @@ import { CricketHUDManager } from "../managers/CricketHUDManager";
 import { CricketAudioManager } from "../managers/CricketAudioManager";
 import { useMultiplayerStore } from "../../../../store/multiplayerStore";
 import CricketMultiplayerDriver from "../managers/CricketMultiplayerDriver";
+import { CricketPlayerRenderer } from "../renderers/cricketPlayerRenderer";
 
 const GAME_W = 924;
 const GAME_H = 680;
@@ -90,6 +91,8 @@ export class CricketScene extends Phaser.Scene {
   private crowdSprites: Phaser.GameObjects.Sprite[] = [];
   private bowlerRestX = CENTER_X;
   private bowlerRestY = PITCH_TOP_Y - 50;
+  private swingAccel = 0;
+  private spinTurned = false;
 
   constructor() {
     super("CricketScene");
@@ -730,286 +733,40 @@ export class CricketScene extends Phaser.Scene {
     g.fillCircle(3, 3, 3);
     g.generateTexture('tex_dust', 6, 6);
 
-    // ── 4. Fielder Sprite (80×130) ────────────────────────────────────────────
-    g.clear();
-    // Shadow
-    g.fillStyle(0x000000, 0.18);
-    g.fillEllipse(40, 127, 50, 10);
-    // Shoes
-    g.fillStyle(0xfafafa, 1);
-    g.fillRoundedRect(25, 112, 20, 12, 3);
-    g.fillRoundedRect(48, 112, 20, 12, 3);
-    g.fillStyle(0x1a1a1a, 1);
-    g.fillRect(25, 118, 20, 6);
-    g.fillRect(48, 118, 20, 6);
-    // Trousers
-    g.fillStyle(0xf1f5f9, 1);
-    g.fillRect(28, 85, 20, 30);
-    g.fillRect(52, 85, 20, 30);
-    g.fillRoundedRect(25, 75, 50, 15, 3);
-    // Jersey
-    g.fillStyle(0x1d4ed8, 1);
-    g.fillRoundedRect(22, 40, 36, 38, 5);
-    // Collar
-    g.fillStyle(0x1e3a8a, 1);
-    g.fillRoundedRect(33, 37, 14, 8, 3);
-    // Arms
-    g.fillStyle(0x1d4ed8, 1);
-    g.fillRoundedRect(6, 42, 18, 26, 4);
-    g.fillRoundedRect(56, 42, 18, 26, 4);
-    // Head
-    g.fillStyle(0xfbbf87, 1);
-    g.fillCircle(40, 22, 16);
-    // Cap
-    g.fillStyle(0x1e3a8a, 1);
-    g.beginPath();
-    g.arc(40, 20, 16, Math.PI, 0);
-    g.fill();
-    g.fillRect(24, 20, 8, 5);
-    g.generateTexture('tex_fielder', 80, 130);
+    // ── 4. High-Definition Realistic Fielder Sprite (120×180) ──
+    const fielderCanvas = document.createElement('canvas');
+    CricketPlayerRenderer.renderFielder(fielderCanvas);
+    if (this.textures.exists('tex_fielder')) {
+      this.textures.remove('tex_fielder');
+    }
+    this.textures.addCanvas('tex_fielder', fielderCanvas);
 
-    // ── 5. Bowler Sprite (110×180) ────────────────────────────────────────────
-    g.clear();
-    // Shadow
-    g.fillStyle(0x000000, 0.18);
-    g.fillEllipse(55, 177, 70, 12);
-    // Shoes
-    g.fillStyle(0xfafafa, 1);
-    g.fillRoundedRect(22, 160, 28, 14, 3);
-    g.fillRoundedRect(62, 160, 28, 14, 3);
-    g.fillStyle(0x151515, 1);
-    g.fillRect(22, 168, 28, 6);
-    g.fillRect(62, 168, 28, 6);
-    // Trousers
-    g.fillStyle(0xfafafa, 1);
-    g.fillRect(26, 120, 26, 44);
-    g.fillRect(60, 120, 26, 44);
-    g.fillRoundedRect(22, 108, 66, 16, 4);
-    // Jersey (bowling team — red)
-    g.fillStyle(0xb91c1c, 1);
-    g.fillRoundedRect(18, 60, 74, 52, 7);
-    g.fillStyle(0x991b1b, 1);
-    g.fillRect(18, 62, 10, 48);
-    g.fillRect(82, 62, 10, 48);
-    // Collar
-    g.fillStyle(0x7f1d1d, 1);
-    g.fillRoundedRect(42, 57, 26, 10, 4);
-    // Arms (bowling action — left arm up, right arm follow-through)
-    g.fillStyle(0xb91c1c, 1);
-    g.fillRoundedRect(0, 65, 20, 45, 5);   // Left arm (front, lower)
-    g.fillRoundedRect(90, 55, 20, 40, 5);  // Right arm (back, higher — delivery arm)
-    // Delivery hand/ball indicator
-    g.fillStyle(0xdc2626, 0.8);
-    g.fillCircle(96, 52, 8);
-    // Head & cap
-    g.fillStyle(0xfbbf87, 1);
-    g.fillCircle(55, 32, 22);
-    g.fillStyle(0x7f1d1d, 1);
-    g.beginPath();
-    g.arc(55, 30, 22, Math.PI, 0);
-    g.fill();
-    g.fillRect(28, 30, 10, 7);
-    // Face detail
-    g.fillStyle(0xe0a070, 1);
-    g.fillRect(44, 34, 22, 14);
-    g.generateTexture('tex_bowler', 110, 180);
+    // ── 5. High-Definition Realistic Fast Bowler Animation Frames (160×260) ──
+    const bowlerFrames: { key: string; render: (canvas: HTMLCanvasElement) => void }[] = [
+      { key: 'tex_bowler', render: CricketPlayerRenderer.renderBowlerIdle.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_idle', render: CricketPlayerRenderer.renderBowlerIdle.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_stride', render: CricketPlayerRenderer.renderBowlerStride.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_gather', render: CricketPlayerRenderer.renderBowlerGather.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_release', render: CricketPlayerRenderer.renderBowlerRelease.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_followthrough', render: CricketPlayerRenderer.renderBowlerFollowthrough.bind(CricketPlayerRenderer) },
+    ];
 
-    // ── 6. Batsman Sprite (180×290) ───────────────────────────────────────────
-    g.clear();
-    // Ground shadow
-    g.fillStyle(0x000000, 0.15);
-    g.fillEllipse(90, 286, 100, 14);
-    // SHOES — cricket spikes
-    g.fillStyle(0xfafafa, 1);
-    g.fillRoundedRect(50, 265, 36, 18, 4);  // Left boot
-    g.fillRoundedRect(96, 265, 40, 18, 4);  // Right boot (front foot, wider stance)
-    g.fillStyle(0x0f172a, 1);
-    g.fillRect(50, 276, 36, 7);
-    g.fillRect(96, 276, 40, 7);
-    // Spike dots
-    g.fillStyle(0x334155, 1);
-    for (let sp = 0; sp < 4; sp++) {
-      g.fillCircle(54 + sp * 9, 282, 2);
-      g.fillCircle(100 + sp * 9, 282, 2);
+    for (const frame of bowlerFrames) {
+      const bCanvas = document.createElement('canvas');
+      frame.render(bCanvas);
+      if (this.textures.exists(frame.key)) {
+        this.textures.remove(frame.key);
+      }
+      this.textures.addCanvas(frame.key, bCanvas);
     }
 
-    // PADS (white, left and right leg)
-    g.fillStyle(0xf5f7fa, 1);
-    g.fillRoundedRect(47, 180, 38, 90, 6);  // Left pad
-    g.fillRoundedRect(93, 185, 40, 85, 6);  // Right pad (front leg, more visible)
-    // Pad highlights (3D curved surface)
-    g.fillStyle(0xffffff, 0.55);
-    g.fillRect(50, 182, 9, 88);
-    g.fillRect(96, 187, 10, 83);
-    // Pad straps (3 per pad, horizontal bands)
-    g.fillStyle(0x1e40af, 1);
-    for (let strap = 0; strap < 3; strap++) {
-      const sy = 195 + strap * 24;
-      g.fillRoundedRect(47, sy, 38, 5, 2);
-      g.fillRoundedRect(93, sy + 2, 40, 5, 2);
+    // ── 6. High-Definition Realistic Batsman Sprite (200×320) ──
+    const batsmanCanvas = document.createElement('canvas');
+    CricketPlayerRenderer.renderBatsman(batsmanCanvas);
+    if (this.textures.exists('tex_batsman')) {
+      this.textures.remove('tex_batsman');
     }
-    // Pad knee roll (3D bump at top)
-    g.fillStyle(0xe8eaed, 1);
-    g.fillEllipse(66, 183, 42, 14);
-    g.fillEllipse(113, 188, 44, 14);
-
-    // THIGH PAD
-    g.fillStyle(0xd1d5db, 0.75);
-    g.fillEllipse(82, 178, 50, 16);
-
-    // BATTING TROUSERS
-    g.fillStyle(0xedf0f3, 1);
-    g.fillRoundedRect(44, 150, 92, 38, 5);
-
-    // ABDOMEN GUARD hint
-    g.fillStyle(0xc8ccd2, 0.5);
-    g.fillEllipse(90, 163, 28, 14);
-
-    // JERSEY — India Blue (customizable)
-    const jColor = 0x0f4c9e;  // Deep India blue
-    g.fillStyle(jColor, 1);
-    g.fillRoundedRect(38, 88, 104, 68, 9);
-    // Jersey side panels
-    g.fillStyle(0x083d8a, 0.6);
-    g.fillRect(38, 90, 16, 64);
-    g.fillRect(126, 90, 16, 64);
-    // Jersey collar (V-neck)
-    g.fillStyle(0x083d8a, 1);
-    g.fillRoundedRect(76, 85, 28, 12, 4);
-    // BCCI/sponsor crest area
-    g.fillStyle(0xfbbf24, 0.95);
-    g.fillRoundedRect(68, 106, 44, 30, 5);
-    g.fillStyle(0xffd700, 1);
-    g.fillCircle(90, 118, 8);  // Circular logo
-    g.fillStyle(0x0f4c9e, 1);
-    g.fillCircle(90, 118, 5);
-
-    // LEFT ARM (top hand — holding bat, foreground)
-    g.fillStyle(jColor, 1);
-    g.fillRoundedRect(14, 92, 26, 65, 6);   // Upper arm
-    g.fillRoundedRect(8, 148, 24, 38, 5);   // Lower arm/wrist
-
-    // RIGHT ARM (bottom hand — further arm)
-    g.fillStyle(jColor, 1);
-    g.fillRoundedRect(140, 94, 26, 55, 6);  // Upper arm
-    g.fillRoundedRect(144, 140, 22, 32, 5); // Lower arm
-
-    // BATTING GLOVES
-    g.fillStyle(0xe8eaed, 1);
-    g.fillRoundedRect(5, 182, 34, 28, 6);  // Left glove (top hand)
-    g.fillRoundedRect(144, 168, 30, 24, 5);// Right glove (bottom hand)
-    // Glove knuckle protection
-    g.fillStyle(0x374151, 1);
-    for (let fi = 0; fi < 4; fi++) {
-      g.fillRoundedRect(8 + fi * 7, 185, 5, 10, 2);
-    }
-    // Glove wrist strap
-    g.fillStyle(0x1e40af, 1);
-    g.fillRect(5, 203, 34, 5);
-    g.fillRect(144, 186, 30, 5);
-
-    // BAT (in guard position, resting beside left leg)
-    // Handle grip (dark rubber)
-    g.fillStyle(0x1c1917, 1);
-    g.fillRoundedRect(0, 160, 16, 60, 3);
-    // Grip tape texture
-    g.lineStyle(1.5, 0x44403c, 0.7);
-    for (let t = 0; t < 7; t++) {
-      g.beginPath();
-      g.moveTo(0, 165 + t * 8);
-      g.lineTo(16, 165 + t * 7);
-      g.strokePath();
-    }
-    // Handle throat
-    g.fillStyle(0x92400e, 1);
-    g.fillRoundedRect(0, 218, 16, 10, 3);
-    // Blade — willow (light wood)
-    g.fillStyle(0xfef3c7, 1);
-    g.fillRect(0, 228, 22, 56);
-    // Wood grain
-    g.lineStyle(0.8, 0xe5c97a, 0.4);
-    for (let wg = 0; wg < 7; wg++) {
-      g.beginPath();
-      g.moveTo(0, 234 + wg * 7);
-      g.lineTo(22, 234 + wg * 7);
-      g.strokePath();
-    }
-    // Bevel edge (3D effect)
-    g.fillStyle(0xca8a04, 0.55);
-    g.fillRect(17, 228, 5, 56);
-    // Sponsor sticker
-    g.fillStyle(0xef4444, 1);
-    g.fillRect(2, 238, 15, 26);
-    g.fillStyle(0xffffff, 0.9);
-    g.fillRect(4, 244, 11, 3);
-    g.fillRect(4, 252, 11, 3);
-    // Toe guard
-    g.fillStyle(0x0f172a, 1);
-    g.fillRect(0, 280, 22, 5);
-    // Blade edge highlight
-    g.fillStyle(0xfef9c3, 0.65);
-    g.fillRect(0, 228, 4, 56);
-
-    // NECK skin
-    g.fillStyle(0xfbbf87, 1);
-    g.fillRect(80, 72, 22, 20);
-
-    // HELMET ─ gloss navy ABS plastic
-    // Helmet dome
-    g.fillStyle(0x0a172e, 1);
-    g.fillCircle(90, 46, 32);
-    // Dome highlight (glossy)
-    g.fillStyle(0x1e3a6a, 0.45);
-    g.fillCircle(78, 32, 16);
-    g.fillStyle(0x2d5296, 0.25);
-    g.fillCircle(72, 27, 10);
-    // Helmet peak
-    g.fillStyle(0x0a172e, 1);
-    g.fillRect(56, 46, 32, 12);
-    // Peak underside shadow
-    g.fillStyle(0x000000, 0.4);
-    g.fillRect(56, 52, 32, 6);
-
-    // FACE GRILL (titanium/steel bars)
-    // 4 horizontal bars
-    g.lineStyle(2.8, 0x9ca3af, 0.92);
-    for (let bar = 0; bar < 4; bar++) {
-      const by = 52 + bar * 7;
-      g.beginPath();
-      g.moveTo(58, by);
-      g.lineTo(90, by);
-      g.strokePath();
-    }
-    // 3 vertical bars
-    g.lineStyle(2, 0x9ca3af, 0.75);
-    for (let vb = 0; vb < 4; vb++) {
-      g.beginPath();
-      g.moveTo(62 + vb * 7, 50);
-      g.lineTo(62 + vb * 7, 76);
-      g.strokePath();
-    }
-    // Face skin visible through grill
-    g.fillStyle(0xfbbf87, 0.82);
-    g.fillRoundedRect(60, 52, 28, 22, 3);
-    // Eyes
-    g.fillStyle(0x1e293b, 1);
-    g.fillCircle(67, 59, 3.5);
-    g.fillCircle(78, 59, 3.5);
-    g.fillStyle(0xffffff, 0.8);
-    g.fillCircle(69, 58, 1.5);
-    g.fillCircle(80, 58, 1.5);
-
-    // Neck guard (dangling chin protector)
-    g.fillStyle(0x0a172e, 0.85);
-    g.fillRoundedRect(74, 74, 30, 14, 4);
-    // Padding detail
-    g.lineStyle(1, 0x1e3a6a, 0.6);
-    g.beginPath();
-    g.moveTo(78, 79);
-    g.lineTo(100, 79);
-    g.strokePath();
-
-    g.generateTexture('tex_batsman', 180, 290);
+    this.textures.addCanvas('tex_batsman', batsmanCanvas);
 
     // ── 7. Cricket Bat Sprite (20×110) ───────────────────────────────────────
     g.clear();
@@ -1162,7 +919,7 @@ export class CricketScene extends Phaser.Scene {
     this.fielders = [];
     for (const pos of fieldingPositions) {
       const progress = Phaser.Math.Clamp((pos.y - HORIZON_Y) / (GAME_H - HORIZON_Y), 0, 1);
-      const scale = 0.28 + progress * 0.22;
+      const scale = 0.38 + progress * 0.34;
       const depth = 8 + Math.floor(progress * 4);
 
       const fielder = this.add.sprite(pos.x, pos.y, 'tex_fielder')
@@ -1175,24 +932,24 @@ export class CricketScene extends Phaser.Scene {
     }
 
     if (this.role === 'batting') {
-      this.bowlerRestX = CENTER_X - 45;
-      this.bowlerRestY = PITCH_TOP_Y - 48;
-      this.bowler = this.add.sprite(this.bowlerRestX, this.bowlerRestY, 'tex_bowler').setScale(0.38).setDepth(10);
-      this.nonStriker = this.add.sprite(CENTER_X + 45, PITCH_TOP_Y - 18, 'tex_batsman').setScale(0.18).setDepth(10);
-      this.keeper = this.add.sprite(CENTER_X, PITCH_BOT_Y + 18, 'tex_fielder').setScale(0.40).setDepth(11).setVisible(false);
-      this.batsman = this.add.sprite(CENTER_X - 35, PITCH_BOT_Y - 42, 'tex_batsman').setScale(0.34).setDepth(11);
-      this.bat = this.add.sprite(CENTER_X - 8, PITCH_BOT_Y - 30, 'tex_bat')
-        .setOrigin(0.5, 0).setScale(0.34).setAngle(-30).setDepth(12).setVisible(false);
+      this.bowlerRestX = CENTER_X - 42;
+      this.bowlerRestY = PITCH_TOP_Y - 52;
+      this.bowler = this.add.sprite(this.bowlerRestX, this.bowlerRestY, 'tex_bowler_idle').setScale(0.40).setDepth(10);
+      this.nonStriker = this.add.sprite(CENTER_X + 50, PITCH_TOP_Y - 26, 'tex_batsman').setScale(0.34).setDepth(10);
+      this.keeper = this.add.sprite(CENTER_X, PITCH_BOT_Y + 22, 'tex_fielder').setScale(0.45).setDepth(11).setVisible(false);
+      this.batsman = this.add.sprite(CENTER_X - 35, PITCH_BOT_Y - 48, 'tex_batsman').setScale(0.48).setDepth(11);
+      this.bat = this.add.sprite(CENTER_X - 8, PITCH_BOT_Y - 34, 'tex_bat')
+        .setOrigin(0.5, 0).setScale(0.48).setAngle(-30).setDepth(12).setVisible(false);
     } else {
-      // Bowling view: Decreased foreground player sizes with clear space for middle stumps
-      this.bowlerRestX = CENTER_X - 80;
-      this.bowlerRestY = PITCH_BOT_Y - 35;
-      this.bowler = this.add.sprite(this.bowlerRestX, this.bowlerRestY, 'tex_bowler').setScale(0.62).setDepth(11);
-      this.nonStriker = this.add.sprite(CENTER_X + 85, PITCH_BOT_Y - 40, 'tex_batsman').setScale(0.34).setDepth(11);
-      this.keeper = this.add.sprite(CENTER_X, PITCH_TOP_Y - 32, 'tex_fielder').setScale(0.24).setDepth(9);
-      this.batsman = this.add.sprite(CENTER_X - 14, PITCH_TOP_Y - 18, 'tex_batsman').setScale(0.18).setDepth(10);
-      this.bat = this.add.sprite(CENTER_X - 3, PITCH_TOP_Y - 11, 'tex_bat')
-        .setOrigin(0.5, 0).setScale(0.18).setAngle(-30).setDepth(11).setVisible(false);
+      // Bowling view: Prominent foreground players and clearly visible far batsman & keeper
+      this.bowlerRestX = CENTER_X - 65;
+      this.bowlerRestY = PITCH_BOT_Y - 40;
+      this.bowler = this.add.sprite(this.bowlerRestX, this.bowlerRestY, 'tex_bowler_idle').setScale(0.58).setDepth(11);
+      this.nonStriker = this.add.sprite(CENTER_X + 90, PITCH_BOT_Y - 48, 'tex_batsman').setScale(0.46).setDepth(11);
+      this.keeper = this.add.sprite(CENTER_X, PITCH_TOP_Y - 44, 'tex_fielder').setScale(0.36).setDepth(9);
+      this.batsman = this.add.sprite(CENTER_X - 18, PITCH_TOP_Y - 26, 'tex_batsman').setScale(0.36).setDepth(10);
+      this.bat = this.add.sprite(CENTER_X - 4, PITCH_TOP_Y - 16, 'tex_bat')
+        .setOrigin(0.5, 0).setScale(0.36).setAngle(-30).setDepth(11).setVisible(false);
     }
 
     // ── Stumps: 3 cylindrical with bails ─────────────────────────────────────
@@ -1325,26 +1082,26 @@ export class CricketScene extends Phaser.Scene {
 
   private repositionForRole() {
     if (this.role === "batting") {
-      this.bowlerRestX = CENTER_X - 45;
-      this.bowlerRestY = PITCH_TOP_Y - 48;
-      this.bowler.setPosition(this.bowlerRestX, this.bowlerRestY).setScale(0.38).setDepth(10);
-      this.nonStriker.setPosition(CENTER_X + 45, PITCH_TOP_Y - 18).setScale(0.18).setDepth(10);
-      this.keeper.setPosition(CENTER_X, PITCH_BOT_Y + 18).setScale(0.40).setDepth(11).setVisible(false);
-      this.batsman.setPosition(CENTER_X - 35, PITCH_BOT_Y - 42).setScale(0.34).setDepth(11);
-      this.bat.setPosition(CENTER_X - 8, PITCH_BOT_Y - 30).setScale(0.34).setDepth(12).setVisible(false).setAngle(-30);
+      this.bowlerRestX = CENTER_X - 42;
+      this.bowlerRestY = PITCH_TOP_Y - 52;
+      this.bowler.setPosition(this.bowlerRestX, this.bowlerRestY).setTexture('tex_bowler_idle').setScale(0.40).setDepth(10);
+      this.nonStriker.setPosition(CENTER_X + 50, PITCH_TOP_Y - 26).setScale(0.34).setDepth(10);
+      this.keeper.setPosition(CENTER_X, PITCH_BOT_Y + 22).setScale(0.45).setDepth(11).setVisible(false);
+      this.batsman.setPosition(CENTER_X - 35, PITCH_BOT_Y - 48).setScale(0.48).setDepth(11);
+      this.bat.setPosition(CENTER_X - 8, PITCH_BOT_Y - 34).setScale(0.48).setDepth(12).setVisible(false).setAngle(-30);
       this.batsmanStumps.setPosition(CENTER_X, PITCH_BOT_Y).setScale(1).setAngle(0).setDepth(5);
       this.bowlerStumps.setPosition(CENTER_X, PITCH_TOP_Y).setScale(1).setAngle(0).setDepth(5);
       this.bail1.setPosition(CENTER_X, PITCH_BOT_Y - 52).setScale(1).setAngle(0);
       this.bail2.setPosition(CENTER_X, PITCH_BOT_Y - 52).setScale(1).setAngle(0);
     } else {
-      // Bowling view: Decreased foreground player sizes with clear space for middle stumps
-      this.bowlerRestX = CENTER_X - 80;
-      this.bowlerRestY = PITCH_BOT_Y - 35;
-      this.bowler.setPosition(this.bowlerRestX, this.bowlerRestY).setScale(0.62).setDepth(11);
-      this.nonStriker.setPosition(CENTER_X + 85, PITCH_BOT_Y - 40).setScale(0.34).setDepth(11);
-      this.keeper.setPosition(CENTER_X, PITCH_TOP_Y - 32).setScale(0.24).setDepth(9);
-      this.batsman.setPosition(CENTER_X - 14, PITCH_TOP_Y - 18).setScale(0.18).setDepth(10);
-      this.bat.setPosition(CENTER_X - 3, PITCH_TOP_Y - 11).setScale(0.18).setDepth(11).setVisible(false).setAngle(-30);
+      // Bowling view: Prominent foreground players and clearly visible far batsman & keeper
+      this.bowlerRestX = CENTER_X - 65;
+      this.bowlerRestY = PITCH_BOT_Y - 40;
+      this.bowler.setPosition(this.bowlerRestX, this.bowlerRestY).setTexture('tex_bowler_idle').setScale(0.58).setDepth(11);
+      this.nonStriker.setPosition(CENTER_X + 90, PITCH_BOT_Y - 48).setScale(0.46).setDepth(11);
+      this.keeper.setPosition(CENTER_X, PITCH_TOP_Y - 44).setScale(0.36).setDepth(9);
+      this.batsman.setPosition(CENTER_X - 18, PITCH_TOP_Y - 26).setScale(0.36).setDepth(10);
+      this.bat.setPosition(CENTER_X - 4, PITCH_TOP_Y - 16).setScale(0.36).setDepth(11).setVisible(false).setAngle(-30);
       this.batsmanStumps.setPosition(CENTER_X, PITCH_TOP_Y).setScale(1).setAngle(0).setDepth(5);
       this.bowlerStumps.setPosition(CENTER_X, PITCH_BOT_Y).setScale(1).setAngle(0).setDepth(5);
       this.bail1.setPosition(CENTER_X, PITCH_TOP_Y - 20).setScale(0.6).setAngle(0);
@@ -1758,59 +1515,80 @@ export class CricketScene extends Phaser.Scene {
     this.deliveryType = type;
     const mult = 0.5 + powerMultiplier;
 
+    // Delivery release point (bowler's bowling hand at crease)
+    const releaseX = this.role === 'bowling' ? this.bowlerRestX + 30 : this.bowlerRestX + 20;
+    const releaseY = this.role === 'bowling' ? PITCH_BOT_Y - 40 : PITCH_TOP_Y - 52;
+    const targetStumpY = this.role === 'bowling' ? PITCH_TOP_Y : PITCH_BOT_Y;
+    const targetStumpX = CENTER_X + (Math.random() - 0.5) * 6; // Target directly onto the stumps
+
+    let speed = 700;
+    if (type === 'fast') speed = 700 + Math.random() * 120;
+    else if (type === 'slow') speed = 280 + Math.random() * 60;
+    else if (type === 'yorker') speed = 640 + Math.random() * 80;
+    else if (type === 'bouncer') speed = 560 + Math.random() * 100;
+    else if (type === 'swing') speed = 480 + Math.random() * 80;
+    else speed = 420 + Math.random() * 70; // spin
+
+    const finalSpeed = speed * mult;
+    const distY = Math.abs(targetStumpY - releaseY);
+    const timeToStumps = distY / finalSpeed;
+    const baseVx = (targetStumpX - releaseX) / timeToStumps;
+
+    const velY = this.role === 'bowling' ? -finalSpeed : finalSpeed;
+
+    this.swingAccel = 0;
+    this.spinTurned = false;
+
     // Calculate physics values based on delivery type
     if (type === 'fast') {
-      const speed = (700 + Math.random() * 150) * mult;
-      this.ballVelocity = { x: 0, y: this.role === 'bowling' ? -speed : speed };
+      this.ballVelocity = { x: baseVx, y: velY };
       this.ballVelocityZ = -100 * mult;
-      this.hud.updateStatus("Fast pace! Get ready!", "#fca5a5");
+      this.hud.updateStatus("Fast pace! Straight at the stumps!", "#fca5a5");
       this.audioManager.playWhoosh();
     } else if (type === 'slow') {
-      const speed = (250 + Math.random() * 100) * mult;
-      this.ballVelocity = { x: 0, y: this.role === 'bowling' ? -speed : speed };
-      this.ballVelocityZ = 300 * mult;
+      this.ballVelocity = { x: baseVx, y: velY };
+      this.ballVelocityZ = 280 * mult;
       this.hud.updateStatus("Slower ball... hold your swing.", "#93c5fd");
     } else if (type === 'yorker') {
-      const speed = (600 + Math.random() * 100) * mult;
-      this.ballVelocity = { x: 0, y: this.role === 'bowling' ? -speed : speed };
-      this.ballVelocityZ = -150 * mult;
-      this.hud.updateStatus("Yorker! Keep it low!", "#fbbf24");
+      this.ballVelocity = { x: baseVx, y: velY };
+      this.ballVelocityZ = -220 * mult;
+      this.hud.updateStatus("Yorker! Direct at the stump base!", "#fbbf24");
     } else if (type === 'bouncer') {
-      const speed = (550 + Math.random() * 150) * mult;
-      this.ballVelocity = { x: 0, y: this.role === 'bowling' ? -speed : speed };
-      this.ballVelocityZ = 400 * mult;
-      this.hud.updateStatus("Bouncer! Watch the short ball!", "#ef4444");
+      this.ballVelocity = { x: baseVx, y: velY };
+      this.ballVelocityZ = 450 * mult;
+      this.hud.updateStatus("Bouncer! Watch the rising ball!", "#ef4444");
     } else if (type === 'swing') {
-      const speed = (450 + Math.random() * 100) * mult;
       this.spinDirection = Math.random() > 0.5 ? 1 : -1;
-      this.ballVelocity = { x: this.spinDirection * 80, y: this.role === 'bowling' ? -speed : speed };
+      this.swingAccel = this.spinDirection * 90;
+      this.ballVelocity = { x: baseVx - (this.swingAccel * timeToStumps * 0.5), y: velY };
       this.ballVelocityZ = 50 * mult;
-      this.hud.updateStatus("Swing bowling! Watch the movement!", "#a855f7");
+      this.hud.updateStatus("Swing bowling! Moving into the stumps!", "#a855f7");
     } else {
       // spin
-      const speed = (400 + Math.random() * 100) * mult;
       this.spinDirection = Math.random() > 0.5 ? 1 : -1;
-      this.ballVelocity = { x: this.spinDirection * 150, y: this.role === 'bowling' ? -speed : speed };
+      const prePitchTargetX = targetStumpX - this.spinDirection * 18;
+      const prePitchVx = (prePitchTargetX - releaseX) / timeToStumps;
+      this.ballVelocity = { x: prePitchVx, y: velY };
       this.ballVelocityZ = 100 * mult;
-      this.hud.updateStatus("Spin! Watch the curve!", "#fde047");
+      this.hud.updateStatus("Spin! Turning towards the stumps!", "#fde047");
     }
 
     // Animate the run-up, then start ball physics
     this.animateBowlerRunup(() => {
-      // Set ball start position at bowler's hand
-      this.ballDepth = this.bowler.y;
+      // Set ball start position at bowler's release hand
+      this.ballDepth = releaseY;
       this.ballHeight = 60;
       this.ballVelocityZ = type === 'fast' ? -100 * mult :
-                           type === 'bouncer' ? 400 * mult :
-                           type === 'slow' ? 300 * mult :
-                           type === 'yorker' ? -150 * mult : 100 * mult;
+                           type === 'bouncer' ? 450 * mult :
+                           type === 'slow' ? 280 * mult :
+                           type === 'yorker' ? -220 * mult : 100 * mult;
 
-      this.ball.setPosition(this.bowler.x, this.ballDepth - this.ballHeight);
+      this.ball.setPosition(releaseX, this.ballDepth - this.ballHeight);
       const startScale = this.initialBallScale;
       this.ball.setScale(startScale);
       this.ball.setVisible(true);
 
-      this.ballShadow.setPosition(this.bowler.x, this.ballDepth);
+      this.ballShadow.setPosition(releaseX, this.ballDepth);
       this.ballShadow.setScale(startScale);
       this.ballShadow.setVisible(true);
 
@@ -1833,40 +1611,65 @@ export class CricketScene extends Phaser.Scene {
     });
   }
 
-  private animateBowlerRunup(onComplete: () => void) {
+  private animateBowlerRunup(onRelease: () => void) {
     const isBatting = this.role === 'batting';
-    // Bowling toward the near crease
     const runupDir = isBatting ? 1 : -1; // +1 = down (toward batsman), -1 = up
-    const approachDist = isBatting ? 28 : 20;
-    const jumpDist = isBatting ? 10 : 8;
+    const approachDist = isBatting ? 24 : 18;
+    const jumpDist = isBatting ? 12 : 9;
+    const baseScale = isBatting ? 0.40 : 0.58;
 
-    // Phase 1: Run-up approach
+    // ── Phase 1: Fast Approach / Stride ──
+    this.bowler.setTexture('tex_bowler_stride');
     this.tweens.add({
       targets: this.bowler,
       y: this.bowlerRestY + runupDir * approachDist,
-      x: this.bowlerRestX + (Math.random() - 0.5) * 8,
-      duration: 280,
+      x: this.bowlerRestX + (Math.random() - 0.5) * 4,
+      duration: 220,
       ease: 'Quad.easeIn',
       onComplete: () => {
-        // Phase 2: Leap / gather stride
+        // ── Phase 2: High Airborne Gather Leap & Coil ──
+        this.bowler.setTexture('tex_bowler_gather');
         this.tweens.add({
           targets: this.bowler,
           y: this.bowlerRestY + runupDir * (approachDist + jumpDist),
-          scaleY: (this.bowler.scaleY ?? 1) * 0.88,
-          duration: 120,
+          scaleY: baseScale * 1.05,
+          scaleX: baseScale * 1.02,
+          duration: 160,
           ease: 'Quad.easeOut',
           onComplete: () => {
-            // Phase 3: Follow-through — bowler moves back to rest
-            this.tweens.add({
-              targets: this.bowler,
-              y: this.bowlerRestY,
-              x: this.bowlerRestX,
-              scaleY: (this.role === 'batting' ? 0.38 : 0.62),
-              duration: 240,
-              ease: 'Sine.easeOut',
-              onComplete: () => {
-                onComplete();
-              }
+            // ── Phase 3: 12 O'Clock High Delivery Release ──
+            this.bowler.setTexture('tex_bowler_release');
+            this.bowler.setScale(baseScale);
+
+            // Release ball at apex of bowling arc!
+            onRelease();
+
+            // ── Phase 4: Follow-Through & Deceleration ──
+            this.time.delayedCall(80, () => {
+              if (!this.bowler.active) return;
+              this.bowler.setTexture('tex_bowler_followthrough');
+              this.tweens.add({
+                targets: this.bowler,
+                y: this.bowlerRestY + runupDir * (approachDist + jumpDist + 4),
+                x: this.bowlerRestX + (isBatting ? 4 : 8),
+                duration: 280,
+                ease: 'Sine.easeOut',
+                onComplete: () => {
+                  // Settle smoothly back to idle stance
+                  this.tweens.add({
+                    targets: this.bowler,
+                    y: this.bowlerRestY,
+                    x: this.bowlerRestX,
+                    duration: 320,
+                    ease: 'Sine.easeOut',
+                    onComplete: () => {
+                      if (this.bowler.active) {
+                        this.bowler.setTexture('tex_bowler_idle');
+                      }
+                    }
+                  });
+                }
+              });
             });
           }
         });
@@ -2329,11 +2132,11 @@ export class CricketScene extends Phaser.Scene {
   private autoRunBatsmen(runs: number, currentRun: number = 1) {
     if (runs <= 0) return;
 
-    const batsmanTargetY = this.batsman.y < CENTER_Y ? PITCH_BOT_Y - 60 : PITCH_TOP_Y - 20;
-    const nonStrikerTargetY = this.nonStriker.y < CENTER_Y ? PITCH_BOT_Y - 60 : PITCH_TOP_Y - 20;
+    const batsmanTargetY = this.batsman.y < CENTER_Y ? PITCH_BOT_Y - 60 : PITCH_TOP_Y - 26;
+    const nonStrikerTargetY = this.nonStriker.y < CENTER_Y ? PITCH_BOT_Y - 60 : PITCH_TOP_Y - 26;
 
-    const batsmanTargetScale = batsmanTargetY < CENTER_Y ? 0.18 : 0.34;
-    const nonStrikerTargetScale = nonStrikerTargetY < CENTER_Y ? 0.18 : 0.34;
+    const batsmanTargetScale = batsmanTargetY < CENTER_Y ? 0.36 : 0.48;
+    const nonStrikerTargetScale = nonStrikerTargetY < CENTER_Y ? 0.34 : 0.46;
 
     this.tweens.add({
       targets: this.batsman,
@@ -2361,21 +2164,21 @@ export class CricketScene extends Phaser.Scene {
 
   private resetBatsmenPositions() {
     if (this.role === 'batting') {
-      this.batsman.setPosition(CENTER_X - 35, PITCH_BOT_Y - 42);
-      this.batsman.setScale(0.34);
-      this.bat.setPosition(CENTER_X - 8, PITCH_BOT_Y - 30);
-      this.bat.setScale(0.34);
+      this.batsman.setPosition(CENTER_X - 35, PITCH_BOT_Y - 48);
+      this.batsman.setScale(0.48);
+      this.bat.setPosition(CENTER_X - 8, PITCH_BOT_Y - 34);
+      this.bat.setScale(0.48);
 
-      this.nonStriker.setPosition(CENTER_X + 45, PITCH_TOP_Y - 18);
-      this.nonStriker.setScale(0.18);
-    } else {
-      this.batsman.setPosition(CENTER_X - 14, PITCH_TOP_Y - 18);
-      this.batsman.setScale(0.18);
-      this.bat.setPosition(CENTER_X - 3, PITCH_TOP_Y - 11);
-      this.bat.setScale(0.18);
-
-      this.nonStriker.setPosition(CENTER_X + 85, PITCH_BOT_Y - 40);
+      this.nonStriker.setPosition(CENTER_X + 50, PITCH_TOP_Y - 26);
       this.nonStriker.setScale(0.34);
+    } else {
+      this.batsman.setPosition(CENTER_X - 18, PITCH_TOP_Y - 26);
+      this.batsman.setScale(0.36);
+      this.bat.setPosition(CENTER_X - 4, PITCH_TOP_Y - 16);
+      this.bat.setScale(0.36);
+
+      this.nonStriker.setPosition(CENTER_X + 90, PITCH_BOT_Y - 48);
+      this.nonStriker.setScale(0.46);
     }
   }
 
@@ -2725,8 +2528,8 @@ export class CricketScene extends Phaser.Scene {
 
     // ── Ball physics ──
     if (this.isBowling && !this.isHit) {
-      if (this.deliveryType === 'spin') {
-        this.ballVelocity.x -= this.spinDirection * 350 * dt;
+      if (this.deliveryType === 'swing') {
+        this.ballVelocity.x += this.swingAccel * dt;
       }
 
       this.ball.x += this.ballVelocity.x * dt;
@@ -2739,6 +2542,10 @@ export class CricketScene extends Phaser.Scene {
       if (this.ballHeight < 0) {
         this.ballHeight = 0;
         this.ballVelocityZ = Math.abs(this.ballVelocityZ) * 0.6;
+        if (this.deliveryType === 'spin' && !this.spinTurned) {
+          this.spinTurned = true;
+          this.ballVelocity.x += this.spinDirection * 120;
+        }
         // Bounce dust + flash
         this.dustEmitter.emitParticleAt(this.ball.x, this.ballDepth, 5);
       }
