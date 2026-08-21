@@ -170,9 +170,10 @@ export class TournamentNotificationService {
     entryFee: number;
     playerCount: number;
     maxPlayers: number;
-    startTime: Date;
+    startTime: Date | string;
   }): Promise<void> {
-    const startTimeStr = params.startTime.toLocaleTimeString([], {
+    const startDate = typeof params.startTime === "string" ? new Date(params.startTime) : params.startTime;
+    const startTimeStr = startDate.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     });

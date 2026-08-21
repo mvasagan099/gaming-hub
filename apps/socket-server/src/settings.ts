@@ -160,12 +160,14 @@ export async function assertGameEnabled(gameId: GameId, entryFee?: number): Prom
   }
 
   if (entryFee !== undefined && entryFee > 0) {
-    const allowed = config.entryFees.includes(entryFee);
-    const withinMinMax =
+    const isExplicitlyAllowed = config.entryFees.includes(entryFee);
+    const hasCustomRange = config.minEntryFee !== undefined || config.maxEntryFee !== undefined;
+    const withinCustomRange =
+      hasCustomRange &&
       (config.minEntryFee === undefined || entryFee >= config.minEntryFee) &&
       (config.maxEntryFee === undefined || entryFee <= config.maxEntryFee);
 
-    if (!allowed && !withinMinMax) {
+    if (!isExplicitlyAllowed && !withinCustomRange) {
       throw new AppError(
         "INVALID_ENTRY_FEE",
         `Entry fee of ${entryFee} coins is not allowed for ${config.name}. Allowed: [${config.entryFees.join(", ")}]`,

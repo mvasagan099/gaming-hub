@@ -23,7 +23,7 @@ import type { RoomPlayerRuntime, RoomRuntime } from "./types";
 import { generateRoomCode } from "../roomCode";
 import { secureRandomSource } from "../games/rng";
 import { GameSession } from "../games/GameSession";
-import { holdWagers, settleMatch, cancelMatch, reportTournamentMatchResult } from "../apiClient";
+import { holdWagers, settleMatch, cancelMatch, reportTournamentMatchResult, createAndFundMatch } from "../apiClient";
 import { assertGameEnabled, createMatchConfigSnapshot } from "../settings";
 import { GameEventBus } from "../events/GameEventBus";
 import { GameStateSyncManager } from "../sync/GameStateSyncManager";
@@ -45,10 +45,38 @@ export class RoomManager {
   private readonly clockTimers = new Map<string, NodeJS.Timeout>();
   private readonly activeTurnTimerKeys = new Map<string, string>();
   private readonly processedForfeits = new Set<string>();
+  private readonly roomLocks = new Map<string, Promise<void>>();
   private readonly io: Server;
 
   constructor(io: Server) {
     this.io = io;
+  }
+
+  /**
+   * Executes an async task exclusively under a per-room lock.
+   * Eliminates race conditions on concurrent joins, leaves, and match launches.
+   */
+  async withRoomLock<T>(roomId: string, task: () => Promise<T>): Promise<T> {
+    while (this.roomLocks.has(roomId)) {
+      try {
+        await this.roomLocks.get(roomId);
+      } catch {
+        // Ignore previous task rejection
+      }
+    }
+
+    let resolveLock!: () => void;
+    const lockPromise = new Promise<void>((resolve) => {
+      resolveLock = resolve;
+    });
+    this.roomLocks.set(roomId, lockPromise);
+
+    try {
+      return await task();
+    } finally {
+      this.roomLocks.delete(roomId);
+      resolveLock();
+    }
   }
 
   // ------------------------------------------------------------------ lookups
@@ -285,58 +313,67 @@ export class RoomManager {
   async joinRoom(user: AuthenticatedUser, input: { roomId?: string; code?: string; asSpectator: boolean }, socket: Socket): Promise<RoomFull> {
     const room = input.roomId ? this.getRoomOrThrow(input.roomId) : input.code ? this.getRoomByCode(input.code) : undefined;
     if (!room) throw new AppError("ROOM_NOT_FOUND", "Room not found", 404);
-    if (room.status !== "waiting") {
-      throw new AppError("ROOM_CLOSED", "This room has already started");
-    }
 
-    await this.ejectFromAllRooms(user, socket);
-
-    const existing = room.players.get(user.userId);
-    if (existing) {
-      existing.socketIds.add(socket.id);
-      socket.join(room.ioName);
-      return this.toRoomFull(room);
-    }
-
-    const participants = [...room.players.values()].filter((p) => !p.isSpectator).length;
-    if (!input.asSpectator && participants >= room.maxPlayers) {
-      throw new AppError("ROOM_FULL", "The room is full", 409);
-    }
-    if (room.isPrivate && !input.asSpectator) {
-      throw new AppError("FORBIDDEN", "This room is private");
-    }
-    if (!input.asSpectator) {
-      await assertGameEnabled(room.gameId, room.stake);
-    }
-
-    if (!input.asSpectator && room.stake > 0) {
-      const wallet = await prisma.wallet.findUnique({ where: { userId: user.userId } });
-      if (!wallet || wallet.balance < room.stake) {
-        throw new AppError("INSUFFICIENT_BALANCE", `You need at least ${room.stake} coins to join this room`);
+    return this.withRoomLock(room.id, async () => {
+      if (room.status !== "waiting") {
+        throw new AppError("ROOM_CLOSED", "This room has already started");
       }
-    }
 
-    const seat = input.asSpectator ? null : this.nextFreeSeat(room);
-    const player = this.makePlayer(user, seat, false, false, input.asSpectator);
-    player.socketIds.add(socket.id);
-    room.players.set(user.userId, player);
-    socket.join(room.ioName);
+      await this.ejectFromAllRooms(user, socket);
 
-    await prisma.roomPlayer.create({
-      data: {
-        roomId: room.id,
-        userId: user.userId,
-        seat,
-        isHost: false,
-        isReady: false,
-        isSpectator: input.asSpectator,
-        connectionStatus: "CONNECTED",
-      },
+      const existing = room.players.get(user.userId);
+      if (existing) {
+        existing.socketIds.add(socket.id);
+        socket.join(room.ioName);
+        return this.toRoomFull(room);
+      }
+
+      const participants = [...room.players.values()].filter((p) => !p.isSpectator).length;
+      if (!input.asSpectator && participants >= room.maxPlayers) {
+        throw new AppError("ROOM_FULL", "The room is full", 409);
+      }
+      if (room.isPrivate && !input.asSpectator) {
+        throw new AppError("FORBIDDEN", "This room is private");
+      }
+      if (!input.asSpectator) {
+        await assertGameEnabled(room.gameId, room.stake);
+      }
+
+      if (!input.asSpectator && room.stake > 0) {
+        const wallet = await prisma.wallet.findUnique({ where: { userId: user.userId } });
+        if (!wallet || wallet.balance < room.stake) {
+          throw new AppError("INSUFFICIENT_BALANCE", `You need at least ${room.stake} coins to join this room`);
+        }
+      }
+
+      const seat = input.asSpectator ? null : this.nextFreeSeat(room);
+      const player = this.makePlayer(user, seat, false, false, input.asSpectator);
+      player.socketIds.add(socket.id);
+      room.players.set(user.userId, player);
+      socket.join(room.ioName);
+
+      await prisma.roomPlayer.upsert({
+        where: { roomId_userId: { roomId: room.id, userId: user.userId } },
+        create: {
+          roomId: room.id,
+          userId: user.userId,
+          seat,
+          isHost: false,
+          isReady: false,
+          isSpectator: input.asSpectator,
+          connectionStatus: "CONNECTED",
+        },
+        update: {
+          seat,
+          isSpectator: input.asSpectator,
+          connectionStatus: "CONNECTED",
+        },
+      });
+
+      this.emitToRoom(room, "player:joined", { roomId: room.id, player: this.toRoomPlayer(player) });
+      this.broadcastRoomUpdate(room);
+      return this.toRoomFull(room);
     });
-
-    this.emitToRoom(room, "player:joined", { roomId: room.id, player: this.toRoomPlayer(player) });
-    this.broadcastRoomUpdate(room);
-    return this.toRoomFull(room);
   }
 
   private nextFreeSeat(room: RoomRuntime): number {
@@ -577,26 +614,29 @@ export class RoomManager {
   async startGame(user: AuthenticatedUser, roomId: string, socket: Socket): Promise<RoomFull> {
     const room = this.getRoomOrThrow(roomId);
     this.assertHost(room, user.userId);
-    if (room.status !== "waiting") {
-      throw new AppError("CANNOT_START", "Game already started");
-    }
 
-    const participants = [...room.players.values()].filter((p) => !p.isSpectator);
-    if (participants.length < room.minPlayers) {
-      throw new AppError("CANNOT_START", `Need at least ${room.minPlayers} players`);
-    }
-    const notReady = participants.filter((p) => !p.isReady);
-    if (notReady.length > 0) {
-      throw new AppError("CANNOT_START", `${notReady[0].displayName} is not ready`);
-    }
-    for (const p of participants) {
-      if (p.connectionStatus !== "connected") {
-        throw new AppError("CANNOT_START", `${p.displayName} is disconnected`);
+    return this.withRoomLock(roomId, async () => {
+      if (room.status !== "waiting") {
+        throw new AppError("CANNOT_START", "Game already started");
       }
-    }
 
-    this.maybeStartCountdown(room, socket);
-    return this.toRoomFull(room);
+      const participants = [...room.players.values()].filter((p) => !p.isSpectator);
+      if (participants.length < room.minPlayers) {
+        throw new AppError("CANNOT_START", `Need at least ${room.minPlayers} players`);
+      }
+      const notReady = participants.filter((p) => !p.isReady);
+      if (notReady.length > 0) {
+        throw new AppError("CANNOT_START", `${notReady[0].displayName} is not ready`);
+      }
+      for (const p of participants) {
+        if (p.connectionStatus !== "connected") {
+          throw new AppError("CANNOT_START", `${p.displayName} is disconnected`);
+        }
+      }
+
+      this.maybeStartCountdown(room, socket);
+      return this.toRoomFull(room);
+    });
   }
 
   /**
@@ -784,9 +824,14 @@ export class RoomManager {
    * matchmaking auto-start.
    */
   private async launchMatch(room: RoomRuntime, starter: Pick<AuthenticatedUser, "userId">, socket: Socket): Promise<RoomFull> {
-    const participants = [...room.players.values()]
-      .filter((p) => !p.isSpectator)
-      .sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0));
+    return this.withRoomLock(room.id, async () => {
+      if (room.status === "playing" && room.match) {
+        return this.toRoomFull(room);
+      }
+
+      const participants = [...room.players.values()]
+        .filter((p) => !p.isSpectator)
+        .sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0));
 
     // Assign missing seats deterministically.
     participants.forEach((p, index) => {
@@ -805,25 +850,6 @@ export class RoomManager {
 
     const existingMatch = await prisma.match.findUnique({ where: { id: matchId } });
     if (!existingMatch) {
-      await prisma.match.create({
-        data: {
-          id: matchId,
-          roomId: room.id,
-          gameId: room.gameId,
-          status: "CREATED",
-          winnerIds: [],
-          stake: room.stake,
-        },
-      });
-      await prisma.matchPlayer.createMany({
-        data: participants.map((p) => ({
-          matchId,
-          userId: p.userId,
-          seat: p.seat!,
-          result: "PENDING",
-        })),
-      });
-
       console.log("[MATCHMAKING] MATCH_FOUND", {
         matchId,
         gameId: room.gameId,
@@ -836,16 +862,24 @@ export class RoomManager {
       });
 
       try {
-        await holdWagers(matchId);
+        await createAndFundMatch({
+          matchId,
+          roomId: room.id,
+          gameId: room.gameId,
+          stake: room.stake,
+          players: participants.map((p) => ({ userId: p.userId, seat: p.seat! })),
+        });
         console.log("[MATCHMAKING] RESERVATION_SUCCESS", {
           matchId,
           entryFee: room.stake,
         });
         console.log("[MATCHMAKING] MATCH_READY", { matchId });
       } catch (error: any) {
-        console.error("[holdWagers error]", error);
-        await prisma.match.delete({ where: { id: matchId } }).catch(() => undefined);
+        console.error("[createAndFundMatch error]", error);
+        room.status = "waiting";
+        this.broadcastRoomUpdate(room);
         const message = error?.message || "One or more players do not have enough coins for this stake";
+        this.emitToRoom(room, "error", { code: "INSUFFICIENT_BALANCE", message });
         throw new AppError("INSUFFICIENT_BALANCE", message);
       }
     }
@@ -923,6 +957,7 @@ export class RoomManager {
     this.emitGameState(room, []);
     this.scheduleClockCheck(room);
     return this.toRoomFull(room);
+    });
   }
 
   private engineOptions(room: RoomRuntime): { timeControl?: ChessTimeControlConfig } | undefined {

@@ -10,7 +10,7 @@ const PERMISSION_GROUPS: Record<string, { label: string; permissions: Permission
   },
   wallet: {
     label: 'Wallet & Finances',
-    permissions: ['admin:wallet:adjust', 'admin:wallet:requests:view', 'admin:wallet:requests:manage'],
+    permissions: ['admin:wallet:view', 'admin:wallet:adjust', 'admin:wallet:requests:view', 'admin:wallet:requests:manage'],
   },
   gameplay: {
     label: 'Matches & Gaming',

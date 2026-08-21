@@ -31,6 +31,21 @@ async function internalRequest<T>(
   return body.data as T;
 }
 
+/** Atomically creates the match record, player entries, and debits entry stakes. */
+export function createAndFundMatch(params: {
+  matchId: string;
+  roomId?: string | null;
+  gameId: string;
+  stake: number;
+  players: { userId: string; seat: number }[];
+}) {
+  return internalRequest<{ ok: true; status: string; matchId: string }>(
+    "POST",
+    "/internal/matches/create-and-fund",
+    params as Record<string, unknown>,
+  );
+}
+
 /** Debits every participant's entry stake and marks the match ACTIVE. */
 export function holdWagers(matchId: string) {
   return internalRequest<{ ok: true; status: string }>(

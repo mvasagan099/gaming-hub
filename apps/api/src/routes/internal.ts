@@ -20,6 +20,23 @@ export async function internalRoutes(app: FastifyInstance) {
 
   const RATE_LIMIT = { max: 60, timeWindow: "1 minute" };
 
+  app.post("/internal/matches/create-and-fund", { config: { rateLimit: RATE_LIMIT } }, async (request) => {
+    try {
+      const body = (request.body ?? {}) as {
+        matchId: string;
+        roomId?: string | null;
+        gameId: import("@gaming-hub/shared").GameId;
+        stake: number;
+        players: { userId: string; seat: number }[];
+      };
+      const match = await GameCoinService.createAndFundMatch(body);
+      return { ok: true, status: match.status, matchId: match.id };
+    } catch (error) {
+      request.log.error({ error }, "create-and-fund failed");
+      throw error;
+    }
+  });
+
   app.post("/internal/matches/:id/hold-wagers", { config: { rateLimit: RATE_LIMIT } }, async (request) => {
     try {
       const { id } = routeParams(request);
@@ -40,11 +57,15 @@ export async function internalRoutes(app: FastifyInstance) {
       resultType?: "WIN" | "LOSS" | "DRAW" | "FORFEIT";
       reason?: string;
     };
-    const result = await GameCoinService.settleMatch(id, body.winnerIds ?? [], {
-      rated: body.rated,
+    const { GameResultSecurityService } = await import("../services/gameResultSecurityService");
+    const result = await GameResultSecurityService.validateAndSettleAuthoritativeResult({
+      matchId: id,
+      caller: "INTERNAL_SOCKET",
+      internalKey: request.headers["x-internal-key"] as string,
+      winnerIds: body.winnerIds,
       scores: body.scores,
-      resultType: body.resultType,
       reason: body.reason,
+      rated: body.rated,
     });
     return { ok: true, result };
   });
@@ -81,13 +102,16 @@ export async function internalRoutes(app: FastifyInstance) {
       throw new AppError("VALIDATION_ERROR", "matchId, tournamentId, roundId and winnerId are required", 422);
     }
 
-    await processMatchResult({
+    const { GameResultSecurityService } = await import("../services/gameResultSecurityService");
+    await GameResultSecurityService.validateTournamentMatchResult({
       matchId: body.matchId,
       tournamentId: body.tournamentId,
       roundId: body.roundId,
       winnerId: body.winnerId,
       loserId: body.loserId,
       scores: body.scores,
+      caller: "INTERNAL_SOCKET",
+      internalKey: request.headers["x-internal-key"] as string,
     });
 
     return { ok: true };

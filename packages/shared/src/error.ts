@@ -64,6 +64,8 @@ export const ERROR_CODES = [
   "GAME_DISABLED",
   "ONLINE_DISABLED",
   "INVALID_ENTRY_FEE",
+  "DUPLICATE_REQUEST",
+  "CONCURRENT_OPERATION",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

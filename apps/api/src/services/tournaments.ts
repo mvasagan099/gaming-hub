@@ -4,6 +4,8 @@ import { AppError, isGameId } from "@gaming-hub/shared";
 import type { TournamentStatus, TournamentFormat } from "@gaming-hub/shared";
 import { canTransitionTournamentStatus } from "@gaming-hub/shared";
 import { applyTransaction } from "./wallet";
+import { WalletTransactionService } from "./walletTransactionService";
+import { IdempotencyService } from "./idempotencyService";
 import { getCategorySettings } from "./settings";
 import { isFeatureEnabled } from "./featureFlags";
 import { audit } from "./audit";
@@ -124,101 +126,120 @@ export async function getTournamentDetail(id: string, userId: string | null) {
 }
 
 export async function registerForTournament(userId: string, tournamentId: string) {
-  await assertTournamentsEnabled();
-  const tournamentSettings = await getCategorySettings("tournament");
-  const wallet = await prisma.wallet.findUnique({ where: { userId }, select: { balance: true } });
-  if (!wallet) throw new AppError("NOT_FOUND", "Wallet not found", 404);
-
-  const tournament = await prisma.tournament.findUnique({
-    where: { id: tournamentId },
-    include: { _count: { select: { players: true } } },
-  });
-  if (!tournament) throw new AppError("NOT_FOUND", "Tournament not found", 404);
-  // Accept registrations when status is UPCOMING (legacy) or REGISTRATION_OPEN
-  if (tournament.status !== "UPCOMING" && tournament.status !== "REGISTRATION_OPEN") {
-    throw new AppError("TOURNAMENT_STARTED", "Tournament is not accepting registrations", 400);
-  }
-  if (tournament._count.players >= tournament.maxPlayers) throw new AppError("TOURNAMENT_FULL", "Tournament is full", 400);
-
-  // Check registration window
-  const now = new Date();
-  if (tournament.registrationStartsAt && now < tournament.registrationStartsAt) {
-    throw new AppError("TOURNAMENT_REGISTRATION_NOT_OPEN", "Registration has not started yet", 400);
-  }
-  if (tournament.registrationEndsAt && now > tournament.registrationEndsAt) {
-    throw new AppError("TOURNAMENT_REGISTRATION_CLOSED", "Registration has closed", 400);
-  }
-
   const existing = await prisma.tournamentPlayer.findUnique({
     where: { tournamentId_userId: { tournamentId, userId } },
   });
   if (existing) throw new AppError("TOURNAMENT_ALREADY_REGISTERED", "You are already registered", 400);
 
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
-  const registrationsToday = await prisma.tournamentPlayer.count({
-    where: { userId, registeredAt: { gte: todayStart } },
-  });
-  if (registrationsToday >= tournamentSettings.maxPerUserPerDay) {
-    throw new AppError("TOURNAMENT_LOCKED", "You have reached your daily tournament registration limit", 400);
-  }
+  await assertTournamentsEnabled();
+  const tournamentSettings = await getCategorySettings("tournament");
 
-  await prisma.$transaction(async (tx) => {
-    // 1. Validate live tournament capacity inside transaction to eliminate race conditions
-    const currentCount = await tx.tournamentPlayer.count({ where: { tournamentId } });
-    if (currentCount >= tournament.maxPlayers) {
-      throw new AppError("TOURNAMENT_FULL", "Tournament is full", 400);
-    }
+  const idempotencyKey = IdempotencyService.tournamentEntryKey(tournamentId, userId);
 
-    // 2. Validate user registration inside transaction
-    const existingInTx = await tx.tournamentPlayer.findUnique({
-      where: { tournamentId_userId: { tournamentId, userId } },
-    });
-    if (existingInTx) {
-      throw new AppError("TOURNAMENT_ALREADY_REGISTERED", "You are already registered", 400);
-    }
-
-    // 3. Atomically debit entry fee with balance guard
-    if (tournament.entryFee > 0) {
-      const transactionId = `tournament-entry-${tournament.id}-${userId}`;
-      await applyTransaction(tx, userId, -tournament.entryFee, "TOURNAMENT_ENTRY", tournament.id, {
-        transactionId,
-        tournamentTitle: tournament.title,
-        entryFee: tournament.entryFee,
-        status: "COMPLETED",
+  return IdempotencyService.executeOnce({
+    key: idempotencyKey,
+    operation: "TOURNAMENT_REGISTRATION",
+    userId,
+    referenceId: tournamentId,
+    handler: async (tx) => {
+      // 1. Acquire row-level lock on tournament to eliminate race conditions on capacity
+      const lockedTournament = await tx.tournament.update({
+        where: { id: tournamentId },
+        data: { stateVersion: { increment: 1 } },
+        select: {
+          maxPlayers: true,
+          entryFee: true,
+          title: true,
+          status: true,
+          id: true,
+          startTime: true,
+          registrationStartsAt: true,
+          registrationEndsAt: true,
+        },
       });
+
+      if (lockedTournament.status !== "UPCOMING" && lockedTournament.status !== "REGISTRATION_OPEN") {
+        throw new AppError("TOURNAMENT_STARTED", "Tournament is not accepting registrations", 400);
+      }
+
+      // Check registration window
+      const now = new Date();
+      if (lockedTournament.registrationStartsAt && now < lockedTournament.registrationStartsAt) {
+        throw new AppError("TOURNAMENT_REGISTRATION_NOT_OPEN", "Registration has not started yet", 400);
+      }
+      if (lockedTournament.registrationEndsAt && now > lockedTournament.registrationEndsAt) {
+        throw new AppError("TOURNAMENT_REGISTRATION_CLOSED", "Registration has closed", 400);
+      }
+
+      // 2. Validate live tournament capacity inside transaction
+      const currentCount = await tx.tournamentPlayer.count({ where: { tournamentId } });
+      if (currentCount >= lockedTournament.maxPlayers) {
+        throw new AppError("TOURNAMENT_FULL", "Tournament is full", 400);
+      }
+
+      // 3. Validate user registration inside transaction
+      const existingInTx = await tx.tournamentPlayer.findUnique({
+        where: { tournamentId_userId: { tournamentId, userId } },
+      });
+      if (existingInTx) {
+        throw new AppError("TOURNAMENT_ALREADY_REGISTERED", "You are already registered", 400);
+      }
+
+      // 4. Daily limits check
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      const registrationsToday = await tx.tournamentPlayer.count({
+        where: { userId, registeredAt: { gte: todayStart } },
+      });
+      if (registrationsToday >= tournamentSettings.maxPerUserPerDay) {
+        throw new AppError("TOURNAMENT_LOCKED", "You have reached your daily tournament registration limit", 400);
+      }
+
+      // 5. Atomically debit entry fee with balance guard
+      if (lockedTournament.entryFee > 0) {
+        await WalletTransactionService.createTournamentEntry(tx, {
+          userId,
+          tournamentId,
+          tournamentTitle: lockedTournament.title,
+          entryFee: lockedTournament.entryFee,
+        });
+      }
+
+      // 6. Create registration record
+      await tx.tournamentPlayer.create({ data: { tournamentId, userId } });
+
+      return { ok: true, tournament: lockedTournament };
+    },
+  }).then(async (res) => {
+    if (res && res.tournament) {
+      audit({
+        actorType: "user",
+        actorId: userId,
+        action: "tournament.registered",
+        category: "game",
+        targetType: "tournament",
+        targetId: res.tournament.id,
+        meta: { title: res.tournament.title, entryFee: res.tournament.entryFee },
+      });
+
+      const updatedCount = await prisma.tournamentPlayer.count({ where: { tournamentId } });
+
+      await TournamentNotificationService.notifyRegistration({
+        tournamentId,
+        playerId: userId,
+        tournamentTitle: res.tournament.title,
+        entryFee: res.tournament.entryFee,
+        playerCount: updatedCount,
+        maxPlayers: res.tournament.maxPlayers,
+        startTime: new Date(res.tournament.startTime),
+      });
+
+      // Emit registration-updated to all tournament subscribers
+      await notifyUserSocket(userId, "tournament:player-registered", { tournamentId, seed: null });
     }
 
-    // 4. Create registration record
-    await tx.tournamentPlayer.create({ data: { tournamentId, userId } });
+    return { ok: true };
   });
-
-  audit({
-    actorType: "user",
-    actorId: userId,
-    action: "tournament.registered",
-    category: "game",
-    targetType: "tournament",
-    targetId: tournament.id,
-    meta: { title: tournament.title, entryFee: tournament.entryFee },
-  });
-
-  const updatedCount = await prisma.tournamentPlayer.count({ where: { tournamentId } });
-
-  await TournamentNotificationService.notifyRegistration({
-    tournamentId,
-    playerId: userId,
-    tournamentTitle: tournament.title,
-    entryFee: tournament.entryFee,
-    playerCount: updatedCount,
-    maxPlayers: tournament.maxPlayers,
-    startTime: tournament.startTime,
-  });
-
-  // Emit registration-updated to all tournament subscribers
-  await notifyUserSocket(userId, "tournament:player-registered", { tournamentId, seed: null });
-
-  return { ok: true };
 }
 
 export async function cancelRegistration(userId: string, tournamentId: string) {
@@ -234,27 +255,34 @@ export async function cancelRegistration(userId: string, tournamentId: string) {
   });
   if (!entry) throw new AppError("NOT_FOUND", "Registration not found", 404);
 
-  await prisma.$transaction(async (tx) => {
-    await tx.tournamentPlayer.delete({ where: { id: entry.id } });
-    if (tournament.entryFee > 0) {
-      const tournamentSettings = await getCategorySettings("tournament");
-      if (tournamentSettings.refundOnCancel) {
-        const transactionId = `tournament-cancel-refund-${tournament.id}-${userId}`;
-        await applyTransaction(tx, userId, tournament.entryFee, "TOURNAMENT_ENTRY", tournament.id, {
-          transactionId,
-          refund: true,
-          reason: "player_cancelled_registration",
-          status: "REFUNDED",
-        });
+  const idempotencyKey = IdempotencyService.tournamentRefundKey(tournamentId, userId);
+
+  return IdempotencyService.executeOnce({
+    key: idempotencyKey,
+    operation: "TOURNAMENT_CANCEL_REGISTRATION",
+    userId,
+    referenceId: tournamentId,
+    handler: async (tx) => {
+      await tx.tournamentPlayer.delete({ where: { id: entry.id } });
+      if (tournament.entryFee > 0) {
+        const tournamentSettings = await getCategorySettings("tournament");
+        if (tournamentSettings.refundOnCancel) {
+          await WalletTransactionService.createTournamentRefund(tx, {
+            userId,
+            tournamentId: tournament.id,
+            tournamentTitle: tournament.title,
+            refundAmount: tournament.entryFee,
+            reason: "player_cancelled_registration",
+          });
+        }
       }
-    }
+      return { ok: true };
+    },
+  }).then(async (res) => {
+    // Emit registration-updated
+    await notifyUserSocket(userId, "tournament:player-unregistered", { tournamentId });
+    return res;
   });
-
-  // Emit registration-updated
-  const updatedCount = await prisma.tournamentPlayer.count({ where: { tournamentId } });
-  await notifyUserSocket(userId, "tournament:player-unregistered", { tournamentId });
-
-  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -351,6 +379,14 @@ export async function setTournamentStatus(id: string, status: TournamentStatus, 
     targetId: id,
     meta: { status },
   });
+
+  if (status === "CANCELLED") {
+    const { RefundService } = await import("./refundService");
+    await RefundService.refundCancelledTournament({
+      tournamentId: id,
+      adminId: updatedBy ?? undefined,
+    });
+  }
 
   if (status === "ENDED") {
     // Evaluate tournament-wins achievements for players who won the final round.

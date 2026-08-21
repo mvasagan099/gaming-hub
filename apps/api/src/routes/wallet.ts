@@ -46,7 +46,9 @@ export async function walletRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/wallet/summary", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
-    return getWalletSummary(requireUser(request).id);
+    const user = requireUser(request);
+    const { WalletHistoryService } = await import("../services/walletHistoryService");
+    return WalletHistoryService.getUserWalletSummary(user.id);
   });
 
   app.post("/api/wallet/transfer", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
@@ -59,32 +61,29 @@ export async function walletRoutes(app: FastifyInstance) {
     const user = requireUser(request);
     const query = request.query as Record<string, unknown>;
     const { page, pageSize } = clampPagination(query.page, query.pageSize);
-    const walletType = (typeof query.walletType === "string" ? query.walletType : undefined) as
-      | "MAIN"
-      | "BONUS"
-      | "LOCKED"
-      | "REWARD"
-      | "CASHBACK"
-      | undefined;
-    const referenceType = (typeof query.referenceType === "string" ? query.referenceType : undefined) as
-      | "MATCH_WAGER"
-      | "MATCH_PAYOUT"
-      | "ADMIN"
-      | "BONUS"
-      | "PRACTICE"
-      | "DEPOSIT"
-      | "WITHDRAWAL"
-      | "REFERRAL"
-      | "COUPON"
-      | "TOURNAMENT_ENTRY"
-      | "TOURNAMENT_PRIZE"
-      | "LOCKED_CREDIT"
-      | "REWARD_CREDIT"
-      | "CASHBACK_CREDIT"
-      | "WAGER_REFUND"
-      | "REVERSAL"
-      | undefined;
-    return listTransactions(user.id, page, pageSize, walletType, referenceType);
+    const { WalletHistoryService } = await import("../services/walletHistoryService");
+
+    return WalletHistoryService.listUserWalletHistory({
+      userId: user.id,
+      category: typeof query.category === "string" ? query.category : undefined,
+      direction: query.direction === "CREDIT" || query.direction === "DEBIT" ? query.direction : undefined,
+      dateFrom: typeof query.dateFrom === "string" ? query.dateFrom : undefined,
+      dateTo: typeof query.dateTo === "string" ? query.dateTo : undefined,
+      referenceType: typeof query.referenceType === "string" ? (query.referenceType as any) : undefined,
+      referenceId: typeof query.referenceId === "string" ? query.referenceId : undefined,
+      walletType: typeof query.walletType === "string" ? query.walletType : undefined,
+      sortBy: query.sortBy === "amount" || query.sortBy === "createdAt" ? query.sortBy : undefined,
+      sortOrder: query.sortOrder === "asc" || query.sortOrder === "desc" ? query.sortOrder : undefined,
+      page,
+      pageSize,
+    });
+  });
+
+  app.get("/api/wallet/transactions/:id", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
+    const user = requireUser(request);
+    const { id } = routeParams(request);
+    const { WalletHistoryService } = await import("../services/walletHistoryService");
+    return WalletHistoryService.getTransactionDetails(user.id, id);
   });
 
   app.post("/api/wallet/practice-reward", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {

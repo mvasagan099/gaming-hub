@@ -55,9 +55,36 @@ export class RoomManager {
   private readonly roomsByCode = new Map<string, RoomRuntime>();
   private readonly playerRoomMap = new Map<PlayerId, RoomId>();
   private readonly roomExpirationTimers = new Map<RoomId, NodeJS.Timeout>();
+  private readonly roomLocks = new Map<string, Promise<void>>();
   
   constructor(framework: MultiplayerFramework) {
     this.framework = framework;
+  }
+  
+  /**
+   * Executes an async task exclusively under a per-room lock.
+   */
+  async withRoomLock<T>(roomId: string, task: () => Promise<T>): Promise<T> {
+    while (this.roomLocks.has(roomId)) {
+      try {
+        await this.roomLocks.get(roomId);
+      } catch {
+        // Ignore previous task rejection
+      }
+    }
+
+    let resolveLock!: () => void;
+    const lockPromise = new Promise<void>((resolve) => {
+      resolveLock = resolve;
+    });
+    this.roomLocks.set(roomId, lockPromise);
+
+    try {
+      return await task();
+    } finally {
+      this.roomLocks.delete(roomId);
+      resolveLock();
+    }
   }
   
   async initialize(): Promise<void> {
@@ -183,97 +210,99 @@ export class RoomManager {
     if (!room) {
       throw new Error("Room not found");
     }
-    
-    // Check if room is locked
-    if (room.locked) {
-      throw new Error("Room is locked");
-    }
-    
-    // Check password if required
-    if (room.config.password && room.config.password !== password) {
-      throw new Error("Invalid password");
-    }
-    
-    // Check if already in room
-    if (room.players.has(playerId) || room.spectators.has(playerId)) {
-      // Reconnect existing player
-      return this.handleRejoin(room, playerId, socket);
-    }
-    
-    // Eject from any existing room
-    await this.ejectPlayerFromAllRooms(playerId, socket);
-    
-    if (asSpectator) {
-      // Join as spectator
-      if (room.spectators.size >= room.config.maxSpectators) {
-        throw new Error("Spectator slots are full");
+
+    return this.withRoomLock(room.id, async () => {
+      // Check if room is locked
+      if (room.locked) {
+        throw new Error("Room is locked");
       }
       
-      const player = this.framework.playerManager.createPlayer({
-        id: playerId,
-        userId: playerId,
-        username: (socket.data as { user?: { username?: string } }).user?.username ?? "Spectator",
-        displayName: (socket.data as { user?: { displayName?: string } }).user?.displayName ?? "Spectator",
-        avatarUrl: (socket.data as { user?: { avatarUrl?: string | null } }).user?.avatarUrl ?? null,
-        seat: null,
-        isReady: false,
-        isHost: false,
-        isSpectator: true,
-      }, socket.id);
-      
-      room.spectators.set(playerId, player);
-      this.playerRoomMap.set(playerId, room.id);
-      socket.join(room.ioName);
-      
-      this.framework.log(`Player ${playerId} joined room ${room.id} as spectator`);
-    } else {
-      // Join as player
-      if (room.status !== "waiting") {
-        throw new Error("Game has already started");
+      // Check password if required
+      if (room.config.password && room.config.password !== password) {
+        throw new Error("Invalid password");
       }
       
-      if (room.players.size >= room.config.maxPlayers) {
-        throw new Error("Room is full");
+      // Check if already in room
+      if (room.players.has(playerId) || room.spectators.has(playerId)) {
+        // Reconnect existing player
+        return this.handleRejoin(room, playerId, socket);
       }
       
-      // Find next available seat
-      const takenSeats = new Set([...room.players.values()].map(p => p.seat).filter((s): s is number => s !== null));
-      let seat = 0;
-      while (takenSeats.has(seat) && seat < room.config.maxPlayers) {
-        seat++;
+      // Eject from any existing room
+      await this.ejectPlayerFromAllRooms(playerId, socket);
+      
+      if (asSpectator) {
+        // Join as spectator
+        if (room.spectators.size >= room.config.maxSpectators) {
+          throw new Error("Spectator slots are full");
+        }
+        
+        const player = this.framework.playerManager.createPlayer({
+          id: playerId,
+          userId: playerId,
+          username: (socket.data as { user?: { username?: string } }).user?.username ?? "Spectator",
+          displayName: (socket.data as { user?: { displayName?: string } }).user?.displayName ?? "Spectator",
+          avatarUrl: (socket.data as { user?: { avatarUrl?: string | null } }).user?.avatarUrl ?? null,
+          seat: null,
+          isReady: false,
+          isHost: false,
+          isSpectator: true,
+        }, socket.id);
+        
+        room.spectators.set(playerId, player);
+        this.playerRoomMap.set(playerId, room.id);
+        socket.join(room.ioName);
+        
+        this.framework.log(`Player ${playerId} joined room ${room.id} as spectator`);
+      } else {
+        // Join as player
+        if (room.status !== "waiting") {
+          throw new Error("Game has already started");
+        }
+        
+        if (room.players.size >= room.config.maxPlayers) {
+          throw new Error("Room is full");
+        }
+        
+        // Find next available seat
+        const takenSeats = new Set([...room.players.values()].map(p => p.seat).filter((s): s is number => s !== null));
+        let seat = 0;
+        while (takenSeats.has(seat) && seat < room.config.maxPlayers) {
+          seat++;
+        }
+        
+        const player = this.framework.playerManager.createPlayer({
+          id: playerId,
+          userId: playerId,
+          username: (socket.data as { user?: { username?: string } }).user?.username ?? "Player",
+          displayName: (socket.data as { user?: { displayName?: string } }).user?.displayName ?? "Player",
+          avatarUrl: (socket.data as { user?: { avatarUrl?: string | null } }).user?.avatarUrl ?? null,
+          seat,
+          isReady: false,
+          isHost: false,
+          isSpectator: false,
+        }, socket.id);
+        
+        room.players.set(playerId, player);
+        this.playerRoomMap.set(playerId, room.id);
+        socket.join(room.ioName);
+        
+        this.framework.log(`Player ${playerId} joined room ${room.id} as player (seat ${seat})`);
       }
       
-      const player = this.framework.playerManager.createPlayer({
-        id: playerId,
-        userId: playerId,
-        username: (socket.data as { user?: { username?: string } }).user?.username ?? "Player",
-        displayName: (socket.data as { user?: { displayName?: string } }).user?.displayName ?? "Player",
-        avatarUrl: (socket.data as { user?: { avatarUrl?: string | null } }).user?.avatarUrl ?? null,
-        seat,
-        isReady: false,
-        isHost: false,
-        isSpectator: false,
-      }, socket.id);
+      // Reset expiration timer
+      this.scheduleRoomExpiration(room.id);
       
-      room.players.set(playerId, player);
-      this.playerRoomMap.set(playerId, room.id);
-      socket.join(room.ioName);
+      // Broadcast update
+      await this.framework.syncManager.broadcastRoomUpdate(room);
       
-      this.framework.log(`Player ${playerId} joined room ${room.id} as player (seat ${seat})`);
-    }
-    
-    // Reset expiration timer
-    this.scheduleRoomExpiration(room.id);
-    
-    // Broadcast update
-    await this.framework.syncManager.broadcastRoomUpdate(room);
-    
-    // If there's an active match, sync state to new participant
-    if (room.match) {
-      this.framework.syncManager.syncMatchStateToPlayer(room, playerId, socket);
-    }
-    
-    return room;
+      // If there's an active match, sync state to new participant
+      if (room.match) {
+        this.framework.syncManager.syncMatchStateToPlayer(room, playerId, socket);
+      }
+      
+      return room;
+    });
   }
   
   /**

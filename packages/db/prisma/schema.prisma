@@ -307,6 +307,7 @@ model User {
   loginSessions      LoginSession[]
   errorEvents        ErrorEvent[]
   announcementsRead  AnnouncementRead[]
+  idempotencyRecords IdempotencyRecord[]
   
   // KYC Relations
   kycRequest         KycRequest?
@@ -1113,6 +1114,31 @@ model TournamentResultIdempotency {
   processedAt  DateTime @default(now())
 
   @@index([tournamentId])
+}
+
+enum IdempotencyStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model IdempotencyRecord {
+  id           String            @id @default(uuid())
+  key          String            @unique
+  operation    String
+  userId       String?
+  status       IdempotencyStatus @default(PROCESSING)
+  response     Json?
+  referenceId  String?
+  errorMessage String?
+  createdAt    DateTime          @default(now())
+  completedAt  DateTime?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([operation, createdAt])
+  @@index([referenceId])
 }
 
 model Referral {

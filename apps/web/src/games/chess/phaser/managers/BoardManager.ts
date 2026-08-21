@@ -272,9 +272,8 @@ export class BoardManager {
           fontFamily: "Outfit, Georgia, serif",
           fontStyle:  "bold",
           color:      lColor,
-          alpha:      0.75,
         },
-      ).setDepth(2);
+      ).setDepth(2).setAlpha(0.75);
       this.coordTexts.push(t);
     }
 
@@ -293,9 +292,8 @@ export class BoardManager {
           fontFamily: "Outfit, Georgia, serif",
           fontStyle:  "bold",
           color:      lColor,
-          alpha:      0.75,
         },
-      ).setDepth(2);
+      ).setDepth(2).setAlpha(0.75);
       this.coordTexts.push(t);
     }
   }

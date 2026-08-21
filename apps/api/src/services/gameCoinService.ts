@@ -1,6 +1,8 @@
 import { prisma } from "@gaming-hub/db";
-import { AppError, getGameDefinition } from "@gaming-hub/shared";
+import { AppError, getGameDefinition, isGameId } from "@gaming-hub/shared";
 import type { GameId } from "@gaming-hub/shared";
+import { WalletTransactionService } from "./walletTransactionService";
+import { IdempotencyService } from "./idempotencyService";
 import { applyTransaction } from "./wallet";
 import { recordMatchResult } from "./stats";
 import { checkAndUnlock } from "./achievements";
@@ -51,7 +53,7 @@ export class GameCoinService {
 
   /**
    * 1. Server-authoritative check on player balance before joining or queueing.
-   * Throws INSUFFICIENT_COINS if balance is less than entry fee.
+   * Throws INSUFFICIENT_BALANCE if balance is less than entry fee.
    */
   static async checkPlayerBalance(
     playerId: string,
@@ -74,7 +76,7 @@ export class GameCoinService {
     }
     if (wallet.balance < entryFee) {
       throw new AppError(
-        "INSUFFICIENT_COINS",
+        "INSUFFICIENT_BALANCE",
         `Insufficient coins: You need ${entryFee} coins to join this match (Current balance: ${wallet.balance})`,
         400,
       );
@@ -84,7 +86,108 @@ export class GameCoinService {
   }
 
   /**
-   * 2 & 3. Atomic Entry Reservation & Deduction at match start.
+   * 2. Completely Atomic Match Creation and Entry Fee Deduction.
+   * Creates the Match, MatchPlayer records, and debits all participants atomically.
+   * If any participant lacks sufficient balance or if match creation fails,
+   * the entire transaction rolls back cleanly with 0 coins deducted.
+   */
+  static async createAndFundMatch(params: {
+    matchId: string;
+    roomId?: string | null;
+    gameId: GameId;
+    stake: number;
+    players: { userId: string; seat: number }[];
+  }) {
+    if (!isGameId(params.gameId)) {
+      throw new AppError("VALIDATION_ERROR", `Invalid game ID: ${params.gameId}`, 400);
+    }
+    if (params.stake < 0) {
+      throw new AppError("VALIDATION_ERROR", "Stake cannot be negative", 400);
+    }
+
+    // Authoritative check on game & entry fee
+    const { GameConfigService } = await import("./gameConfigService");
+    const gameConfig = await GameConfigService.getGameConfig(params.gameId);
+    if (!gameConfig.enabled) {
+      throw new AppError("GAME_DISABLED", `${gameConfig.name} is currently disabled`, 403);
+    }
+    if (!gameConfig.onlineEnabled) {
+      throw new AppError("ONLINE_DISABLED", `Online multiplayer for ${gameConfig.name} is disabled`, 403);
+    }
+    if (params.stake > 0) {
+      const isExplicitlyAllowed = gameConfig.entryFees.includes(params.stake);
+      const hasCustomRange = gameConfig.minEntryFee !== undefined || gameConfig.maxEntryFee !== undefined;
+      const withinCustomRange =
+        hasCustomRange &&
+        (gameConfig.minEntryFee === undefined || params.stake >= gameConfig.minEntryFee) &&
+        (gameConfig.maxEntryFee === undefined || params.stake <= gameConfig.maxEntryFee);
+
+      if (!isExplicitlyAllowed && !withinCustomRange) {
+        throw new AppError(
+          "INVALID_ENTRY_FEE",
+          `Entry fee of ${params.stake} is not allowed for ${gameConfig.name}. Allowed: [${gameConfig.entryFees.join(", ")}]`,
+          400,
+        );
+      }
+    }
+
+    const idempotencyKey = `MATCH_FUND:${params.matchId}`;
+    return IdempotencyService.executeOnce({
+      key: idempotencyKey,
+      operation: "CREATE_AND_FUND_MATCH",
+      referenceId: params.matchId,
+      handler: async (tx) => {
+        // Idempotency: return existing match if already created
+        const existing = await tx.match.findUnique({
+          where: { id: params.matchId },
+          include: { players: true },
+        });
+        if (existing) {
+          return existing;
+        }
+
+        // Create Match record with status ACTIVE
+        const match = await tx.match.create({
+          data: {
+            id: params.matchId,
+            roomId: params.roomId ?? null,
+            gameId: params.gameId,
+            status: "ACTIVE",
+            winnerIds: [],
+            stake: params.stake,
+            startedAt: new Date(),
+          },
+        });
+
+        // Create MatchPlayer entries
+        await tx.matchPlayer.createMany({
+          data: params.players.map((p) => ({
+            matchId: params.matchId,
+            userId: p.userId,
+            seat: p.seat,
+            result: "PENDING",
+          })),
+        });
+
+        // Atomic Coin Deduction via Central Wallet Transaction Ledger
+        if (params.stake > 0) {
+          for (const p of params.players) {
+            await WalletTransactionService.createGameEntry(tx, {
+              userId: p.userId,
+              matchId: params.matchId,
+              gameId: params.gameId,
+              entryFee: params.stake,
+            });
+          }
+        }
+
+        return match;
+      },
+    });
+  }
+
+  /**
+   * 3. Atomic Entry Reservation & Deduction on existing match.
    * Debits entry fee from ALL players atomically.
    * If any player lacks funds, the entire transaction rolls back and 0 coins are deducted.
    * Idempotent: If match is already ACTIVE or FINISHED, returns without double deduction.
@@ -106,12 +209,11 @@ export class GameCoinService {
 
       if (match.stake > 0) {
         for (const player of match.players) {
-          const transactionId = `entry-${match.id}-${player.userId}`;
-          await applyTransaction(tx, player.userId, -match.stake, "MATCH_WAGER", match.id, {
-            transactionId,
+          await WalletTransactionService.createGameEntry(tx, {
+            userId: player.userId,
+            matchId: match.id,
             gameId: match.gameId,
             entryFee: match.stake,
-            status: "COMPLETED",
           });
         }
       }
@@ -126,7 +228,7 @@ export class GameCoinService {
   /**
    * 6, 7, 8, 9. Settle a finished match:
    * - Calculates pot and winner payouts on the server.
-   * - Never pays twice (idempotent, checks status !== ACTIVE).
+   * - Never pays twice (idempotent via IdempotencyService & status checks).
    * - Credits winner(s) with configured prize.
    * - If draw, refunds entry fee to both players.
    */
@@ -140,185 +242,21 @@ export class GameCoinService {
       resultType?: "WIN" | "LOSS" | "DRAW" | "FORFEIT";
     } = {},
   ): Promise<SettlementResult> {
-    const match = await prisma.match.findUnique({
-      where: { id: matchId },
-      include: { players: true, room: true },
-    });
-
-    if (!match) {
-      throw new AppError("NOT_FOUND", "Match not found", 404);
-    }
-    if (match.status === "FINISHED") {
-      // Idempotency: never pay twice!
-      const pot = match.stake * match.players.length;
-      return {
-        matchId,
-        winners: (match.winnerIds as string[]) || winnerIds,
-        pot,
-        payouts: [],
-        newlyUnlocked: [],
-      };
-    }
-    if (match.status !== "ACTIVE") {
-      throw new AppError("INVALID_ACTION", "Match is not active for settlement", 409);
-    }
-
-    // Retrieve or generate match config snapshot
-    const roomSettings = (match.room?.settings ?? {}) as Record<string, unknown>;
-    let snapshot = roomSettings.configSnapshot as import("@gaming-hub/shared").MatchConfigSnapshot | undefined;
-    if (!snapshot) {
-      const { GameConfigService } = await import("./gameConfigService");
-      snapshot = await GameConfigService.createSnapshot(match.gameId as import("@gaming-hub/shared").GameId, match.stake);
-    }
-
-    const { GameConfigService } = await import("./gameConfigService");
-    const settlement = GameConfigService.calculatePrizeSettlement(snapshot, match.players.length, winnerIds);
-
-    const rated = options.rated !== false;
-    const winnerSet = new Set(winnerIds);
-    const isDraw = winnerSet.size === 0;
-    const totalPot = settlement.totalPot;
-    const prizePool = settlement.prizePool;
-    const winnerPayout = settlement.winnerPayout;
-    const refundPerPlayer = settlement.refundPerPlayer;
-    const resultType = options.resultType ?? (isDraw ? "DRAW" : "WIN");
-
-    console.log("[MATCH] RESULT_CREATED", {
+    const { SettlementService } = await import("./settlementService");
+    const summary = await SettlementService.settleMatch({
       matchId,
-      gameId: match.gameId,
-      resultType,
-      winnerIds: Array.from(winnerSet),
-      scores: options.scores,
-      configVersion: snapshot.configVersion,
-      prizeMode: snapshot.prizeMode,
+      winnerIds,
+      options,
     });
-    console.log("[MATCH] SETTLEMENT_STARTED", { matchId, totalPot, prizePool });
-
-    let payouts: { userId: string; amount: number }[] = [];
-
-    await prisma.$transaction(async (tx) => {
-      for (const player of match.players) {
-        let result: "win" | "loss" | "draw";
-
-        if (isDraw) {
-          result = "draw";
-          if (refundPerPlayer > 0) {
-            const transactionId = `draw-refund-${match.id}-${player.userId}`;
-            payouts.push({ userId: player.userId, amount: refundPerPlayer });
-            await applyTransaction(tx, player.userId, refundPerPlayer, "WAGER_REFUND", match.id, {
-              transactionId,
-              gameId: match.gameId,
-              reason: "draw_refund",
-              status: "REFUNDED",
-            });
-          }
-        } else if (winnerSet.has(player.userId)) {
-          result = "win";
-          if (winnerPayout > 0) {
-            const transactionId = `payout-${match.id}-${player.userId}`;
-            payouts.push({ userId: player.userId, amount: winnerPayout });
-            await applyTransaction(tx, player.userId, winnerPayout, "MATCH_PAYOUT", match.id, {
-              transactionId,
-              gameId: match.gameId,
-              reason: options.reason || "winner_payout",
-              status: "COMPLETED",
-            });
-          }
-        } else {
-          result = "loss";
-        }
-
-        const playerScore = options.scores?.[player.userId] ?? player.score ?? 0;
-
-        await tx.matchPlayer.update({
-          where: { id: player.id },
-          data: {
-            result: result.toUpperCase() as "WIN" | "LOSS" | "DRAW",
-            score: playerScore,
-          },
-        });
-
-        await recordMatchResult(tx, {
-          userId: player.userId,
-          gameId: match.gameId,
-          result,
-          score: playerScore,
-          rated,
-        });
-      }
-
-      const durationSeconds = match.startedAt
-        ? Math.max(0, Math.round((Date.now() - match.startedAt.getTime()) / 1000))
-        : 0;
-
-      await tx.matchStatistics.upsert({
-        where: { matchId },
-        create: {
-          matchId,
-          durationSeconds,
-          startedAt: match.startedAt ?? new Date(),
-          endedAt: new Date(),
-          coinsAwarded: { totalPot, prizePool, winnerPayout },
-        },
-        update: {
-          durationSeconds,
-          endedAt: new Date(),
-          coinsAwarded: { totalPot, prizePool, winnerPayout },
-        },
-      }).catch(() => undefined);
-
-      await tx.match.update({
-        where: { id: matchId },
-        data: {
-          status: "FINISHED",
-          winnerIds: Array.from(winnerSet),
-          endedAt: new Date(),
-        },
-      });
-    });
-
-    console.log("[MATCH] SETTLEMENT_COMPLETED", {
-      matchId,
-      pot: totalPot,
-      payouts,
-    });
-
-    const newlyUnlocked: { code: string; title: string; icon: string }[] = [];
-
-    for (const player of match.players) {
-      const won = winnerSet.has(player.userId);
-      const unlocked = await checkAndUnlock(player.userId, {
-        userId: player.userId,
-        matchResult: { won, gameId: match.gameId },
-      });
-
-      for (const achievement of unlocked) {
-        newlyUnlocked.push({
-          code: achievement.code,
-          title: achievement.title,
-          icon: achievement.icon,
-        });
-      }
-
-      await createNotification(
-        player.userId,
-        "MATCH_RESULT",
-        won ? "Victory!" : isDraw ? "Match drawn" : "Defeat",
-        won
-          ? `You won your ${match.gameId} match and earned ${winnerPayout} coins!`
-          : isDraw
-            ? `Your ${match.gameId} match ended in a draw. Entry fee refunded.`
-            : `Your ${match.gameId} match has ended. Better luck next time!`,
-        { matchId, gameId: match.gameId },
-      );
-    }
 
     return {
-      matchId,
-      winners: Array.from(winnerSet),
-      pot: totalPot,
-      payouts,
-      newlyUnlocked,
+      matchId: summary.matchId,
+      winners: summary.winners,
+      pot: summary.totalPot,
+      payouts: summary.payouts
+        .filter((p) => p.amount > 0)
+        .map((p) => ({ userId: p.userId, amount: p.amount })),
+      newlyUnlocked: summary.newlyUnlocked,
     };
   }
 
@@ -335,33 +273,60 @@ export class GameCoinService {
     if (!match) {
       throw new AppError("NOT_FOUND", "Match not found", 404);
     }
-    if (match.status === "FINISHED") {
+    if (match.status === "FINISHED" || match.status === "ABORTED") {
       return { ok: true, matchId, status: "ALREADY_FINISHED" };
     }
 
-    await prisma.$transaction(async (tx) => {
-      if (match.status === "ACTIVE" && match.stake > 0) {
-        for (const player of match.players) {
-          const transactionId = `cancel-refund-${match.id}-${player.userId}`;
-          await applyTransaction(tx, player.userId, match.stake, "WAGER_REFUND", match.id, {
-            transactionId,
-            gameId: match.gameId,
-            reason,
-            status: "REFUNDED",
-          });
+    const idempotencyKey = `MATCH_CANCEL:${matchId}`;
+
+    return IdempotencyService.executeOnce({
+      key: idempotencyKey,
+      operation: "MATCH_CANCEL",
+      referenceId: matchId,
+      handler: async (tx) => {
+        const currentMatch = await tx.match.findUnique({
+          where: { id: matchId },
+          include: { players: true },
+        });
+
+        if (!currentMatch) {
+          throw new AppError("NOT_FOUND", "Match not found", 404);
         }
-      }
+        if (currentMatch.status === "FINISHED" || currentMatch.status === "ABORTED") {
+          return { ok: true, matchId, status: "ALREADY_FINISHED" };
+        }
 
-      await tx.match.update({
-        where: { id: matchId },
-        data: {
-          status: "FINISHED",
-          winnerIds: [],
-          endedAt: new Date(),
-        },
-      });
+        if ((currentMatch.status === "ACTIVE" || currentMatch.status === "CREATED") && currentMatch.stake > 0) {
+          // Check if wagers were actually debited for this match
+          const wagers = await tx.transaction.findMany({
+            where: { referenceId: matchId, referenceType: "MATCH_WAGER" },
+          });
+          const debitedUserIds = new Set(wagers.map((w) => w.userId));
+
+          for (const player of currentMatch.players) {
+            if (debitedUserIds.has(player.userId)) {
+              await WalletTransactionService.createGameRefund(tx, {
+                userId: player.userId,
+                matchId: currentMatch.id,
+                gameId: currentMatch.gameId,
+                refundAmount: currentMatch.stake,
+                reason,
+              });
+            }
+          }
+        }
+
+        await tx.match.update({
+          where: { id: matchId },
+          data: {
+            status: "ABORTED",
+            winnerIds: [],
+            endedAt: new Date(),
+          },
+        });
+
+        return { ok: true, matchId, status: "CANCELLED" };
+      },
     });
-
-    return { ok: true, matchId, status: "CANCELLED" };
   }
 }

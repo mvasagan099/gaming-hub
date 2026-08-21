@@ -11,10 +11,10 @@ export class Bubble3DRenderer {
     y: number,
     color: string,
     type: 'normal' | 'bomb' | 'rainbow',
-    radius = BUBBLE_SHOOTER_VISUAL_CONFIG.radius,
-    alpha = 1.0,
-    scale = 1.0,
-    rotation = 0
+    radius: number = BUBBLE_SHOOTER_VISUAL_CONFIG.radius,
+    alpha: number = 1.0,
+    scale: number = 1.0,
+    rotation: number = 0
   ): void {
     ctx.save();
     ctx.globalAlpha = alpha;

@@ -199,4 +199,222 @@ export async function adminGamesRoutes(app: FastifyInstance) {
       pageSize,
     };
   });
+
+  /**
+   * GET /api/admin/entries
+   * Filterable and paginated list of all game entries across the platform.
+   */
+  app.get("/api/admin/entries", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:games:view", prisma);
+    const q = queryParams(request);
+    const { GameEntryLifecycleService } = await import("../services/gameEntryLifecycleService");
+    const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
+
+    return GameEntryLifecycleService.listAdminEntries({
+      gameId: queryString(q.gameId),
+      userId: queryString(q.userId),
+      matchId: queryString(q.matchId),
+      status: queryString(q.status),
+      page,
+      pageSize,
+    });
+  });
+
+  /**
+   * GET /api/admin/matches/:id/trace
+   * Full lifecycle traceability of a match and its player entries.
+   */
+  app.get("/api/admin/matches/:id/trace", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:games:view", prisma);
+    const { id } = routeParams(request);
+    const { GameEntryLifecycleService } = await import("../services/gameEntryLifecycleService");
+    const trace = await GameEntryLifecycleService.getEntryTrace(id);
+    return { ok: true, matchId: id, trace };
+  });
+
+  /**
+   * POST /api/admin/refunds/match
+   * Admin-authorized refund for a match entry.
+   */
+  app.post("/api/admin/refunds/match", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
+    const body = parseSchema(
+      z.object({
+        matchId: z.string().min(1),
+        userId: z.string().min(1),
+        reason: z.string().min(1).max(255),
+      }),
+      request.body,
+    );
+
+    const { RefundService } = await import("../services/refundService");
+    const result = await RefundService.processAdminRefund({
+      referenceType: "MATCH",
+      referenceId: body.matchId,
+      userId: body.userId,
+      reason: body.reason,
+      adminId: admin.id,
+    });
+
+    return { ok: true, result };
+  });
+
+  /**
+   * POST /api/admin/refunds/tournament
+   * Admin-authorized refund for a tournament registration.
+   */
+  app.post("/api/admin/refunds/tournament", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
+    const body = parseSchema(
+      z.object({
+        tournamentId: z.string().min(1),
+        userId: z.string().min(1),
+        reason: z.string().min(1).max(255),
+      }),
+      request.body,
+    );
+
+    const { RefundService } = await import("../services/refundService");
+    const result = await RefundService.processAdminRefund({
+      referenceType: "TOURNAMENT",
+      referenceId: body.tournamentId,
+      userId: body.userId,
+      reason: body.reason,
+      adminId: admin.id,
+    });
+
+    return { ok: true, result };
+  });
+
+  /**
+   * POST /api/admin/settlement/match
+   * Admin-authorized settlement for a match.
+   */
+  app.post("/api/admin/settlement/match", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
+    const body = parseSchema(
+      z.object({
+        matchId: z.string().min(1),
+        winnerIds: z.array(z.string()).default([]),
+        reason: z.string().min(1).max(255),
+      }),
+      request.body,
+    );
+
+    const { SettlementService } = await import("../services/settlementService");
+    const result = await SettlementService.processAdminSettlement({
+      referenceType: "MATCH",
+      referenceId: body.matchId,
+      winnerIds: body.winnerIds,
+      reason: body.reason,
+      adminId: admin.id,
+    });
+
+    return { ok: true, result };
+  });
+
+  /**
+   * POST /api/admin/settlement/tournament
+   * Admin-authorized settlement for a tournament.
+   */
+  app.post("/api/admin/settlement/tournament", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
+    const body = parseSchema(
+      z.object({
+        tournamentId: z.string().min(1),
+        reason: z.string().min(1).max(255),
+      }),
+      request.body,
+    );
+
+    const { SettlementService } = await import("../services/settlementService");
+    const result = await SettlementService.processAdminSettlement({
+      referenceType: "TOURNAMENT",
+      referenceId: body.tournamentId,
+      reason: body.reason,
+      adminId: admin.id,
+    });
+
+    return { ok: true, result };
+  });
+
+  /**
+   * GET /api/admin/matches/:id/timeout-status
+   * Provides administrative visibility into match timeout status and timers.
+   */
+  app.get("/api/admin/matches/:id/timeout-status", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:games:manage", prisma);
+    const { id } = routeParams(request);
+    const { MatchTimeoutService } = await import("../services/matchTimeoutService");
+    const status = await MatchTimeoutService.getAdminTimeoutStatus(id);
+    return { ok: true, status };
+  });
+
+  /**
+   * POST /api/admin/matches/:id/force-timeout
+   * Manually triggers turn or match timeout from admin dashboard.
+   */
+  app.post("/api/admin/matches/:id/force-timeout", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:games:manage", prisma);
+    const { id } = routeParams(request);
+    const body = (request.body ?? {}) as { currentTurnSeat?: number };
+
+    const { MatchTimeoutService } = await import("../services/matchTimeoutService");
+    const result = await MatchTimeoutService.checkTurnTimeout({
+      matchId: id,
+      currentTurnSeat: body.currentTurnSeat ?? 0,
+      turnStartedAt: new Date(0), // Forces immediate expiration
+    });
+
+    return { ok: true, result, triggeredBy: admin.id };
+  });
+
+  /**
+   * POST /api/admin/matches/:id/abandon
+   * Admin-authorized force-abandon / forfeit of a player with audit trail.
+   */
+  app.post("/api/admin/matches/:id/abandon", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:games:manage", prisma);
+    const { id } = routeParams(request);
+    const body = parseSchema(
+      z.object({
+        userId: z.string().min(1),
+        reason: z.string().min(1).max(255),
+      }),
+      request.body,
+    );
+
+    const { MatchAbandonmentService } = await import("../services/matchAbandonmentService");
+    const result = await MatchAbandonmentService.processAdminForceForfeit({
+      matchId: id,
+      userId: body.userId,
+      adminId: admin.id,
+      reason: body.reason,
+    });
+
+    return { ok: true, result };
+  });
+
+  /**
+   * GET /api/admin/matches/recovery-overview
+   * Provides administrative visibility into active match recovery metrics.
+   */
+  app.get("/api/admin/matches/recovery-overview", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:games:manage", prisma);
+    const { PersistentMatchStateService } = await import("../services/persistentMatchStateService");
+    const overview = await PersistentMatchStateService.getAdminRecoveryOverview();
+    return { ok: true, overview };
+  });
+
+  /**
+   * POST /api/admin/matches/:id/recover
+   * Manually loads and revalidates persistent match state snapshot.
+   */
+  app.post("/api/admin/matches/:id/recover", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:games:manage", prisma);
+    const { id } = routeParams(request);
+    const { PersistentMatchStateService } = await import("../services/persistentMatchStateService");
+    const result = await PersistentMatchStateService.loadAuthoritativeState(id);
+    return result;
+  });
 }

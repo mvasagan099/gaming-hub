@@ -184,4 +184,30 @@ export async function matchesRoutes(app: FastifyInstance) {
       finalState: match.gameState?.state,
     };
   });
+
+  /**
+   * GET /api/matches/active
+   * Returns active match state snapshot for authenticated reconnecting player.
+   */
+  app.get("/api/matches/active", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { MatchRecoveryService } = await import("../services/matchRecoveryService");
+    const activeMatch = await MatchRecoveryService.getActiveMatchForUser(user.id);
+    return { ok: true, activeMatch };
+  });
+
+  /**
+   * POST /api/matches/:id/reconnect
+   * Reconnects player to specific match and retrieves state.
+   */
+  app.post("/api/matches/:id/reconnect", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { id } = routeParams(request);
+    const { MatchRecoveryService } = await import("../services/matchRecoveryService");
+    const result = await MatchRecoveryService.reconnectMatch({
+      matchId: id,
+      userId: user.id,
+    });
+    return result;
+  });
 }
