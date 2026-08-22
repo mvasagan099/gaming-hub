@@ -112,7 +112,50 @@ export const CRICKET_VISUAL_CONFIG = {
     boundaryCelebrateDuration: 2.2,
     overSummaryDuration: 1.5,
   },
+  // Graphics Quality Presets
+  quality: {
+    LOW: {
+      particles: false,
+      shadows: false,
+      stadiumLighting: false,
+      animatedCrowd: false,
+      cameraShake: false,
+      trailBlur: false,
+    },
+    MEDIUM: {
+      particles: true,
+      shadows: true,
+      stadiumLighting: true,
+      animatedCrowd: false,
+      cameraShake: true,
+      trailBlur: false,
+    },
+    HIGH: {
+      particles: true,
+      shadows: true,
+      stadiumLighting: true,
+      animatedCrowd: true,
+      cameraShake: true,
+      trailBlur: true,
+    },
+  },
 } as const;
+
+export type GraphicsQuality = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export function getStoredGraphicsQuality(): GraphicsQuality {
+  try {
+    const q = localStorage.getItem('cricket_graphics_quality');
+    if (q === 'LOW' || q === 'MEDIUM' || q === 'HIGH') return q;
+  } catch {}
+  return 'HIGH';
+}
+
+export function setStoredGraphicsQuality(q: GraphicsQuality): void {
+  try {
+    localStorage.setItem('cricket_graphics_quality', q);
+  } catch {}
+}
 
 export function prefersReducedMotion(): boolean {
   try {

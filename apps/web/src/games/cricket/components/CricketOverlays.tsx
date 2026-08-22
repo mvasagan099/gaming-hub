@@ -1,5 +1,38 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Trophy, XCircle, RotateCcw, Sparkles, Award, Zap, LogOut, Flame, Shield, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Trophy, XCircle, RotateCcw, Sparkles, Award, Zap, LogOut, Flame, ArrowRight, Monitor, Coins } from 'lucide-react';
+import type { GraphicsQuality } from '../constants/cricketVisualConfig';
+import { getStoredGraphicsQuality, setStoredGraphicsQuality } from '../constants/cricketVisualConfig';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GRAPHICS QUALITY SELECTOR BAR
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface GraphicsQualityBarProps {
+  quality: GraphicsQuality;
+  onQualityChange: (q: GraphicsQuality) => void;
+}
+
+export const GraphicsQualityBar: React.FC<GraphicsQualityBarProps> = ({ quality, onQualityChange }) => {
+  return (
+    <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 shadow-lg">
+      <Monitor className="w-3.5 h-3.5 text-slate-400" />
+      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Quality:</span>
+      {(['LOW', 'MEDIUM', 'HIGH'] as GraphicsQuality[]).map((q) => (
+        <button
+          key={q}
+          onClick={() => onQualityChange(q)}
+          className={`px-2 py-0.5 rounded-lg text-[9px] font-black transition-all ${
+            quality === q
+              ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/50'
+              : 'text-slate-400 hover:text-slate-200 bg-slate-900/60'
+          }`}
+        >
+          {q}
+        </button>
+      ))}
+    </div>
+  );
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EVENT BANNER (FOUR / SIX / WICKET)
@@ -183,7 +216,7 @@ export const OverTracker: React.FC<OverTrackerProps> = ({ overHistory }) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN CRICKET OVERLAYS — GAME OVER / INNINGS BREAK (preserved + enhanced)
+// MAIN CRICKET OVERLAYS — GAME OVER / INNINGS BREAK
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface CricketOverlaysProps {
@@ -196,9 +229,14 @@ interface CricketOverlaysProps {
   overs: string;
   target?: number | null;
   wonBy?: string;
+  stake?: number;
   isMultiplayer: boolean;
   onReplay: () => void;
   onExit: () => void;
+
+  // Quality settings
+  quality?: GraphicsQuality;
+  onQualityChange?: (q: GraphicsQuality) => void;
 
   // Broadcast HUD props
   liveScore?: number;
@@ -224,9 +262,12 @@ export const CricketOverlays: React.FC<CricketOverlaysProps> = ({
   overs,
   target,
   wonBy,
+  stake = 0,
   isMultiplayer,
   onReplay,
   onExit,
+  quality = 'HIGH',
+  onQualityChange,
   liveScore,
   liveWickets,
   liveOvers,
@@ -239,8 +280,25 @@ export const CricketOverlays: React.FC<CricketOverlaysProps> = ({
   inning = 1,
   teamName,
 }) => {
+  const [currentQuality, setCurrentQuality] = useState<GraphicsQuality>(() => quality || getStoredGraphicsQuality());
+
+  const handleQualityChange = (q: GraphicsQuality) => {
+    setCurrentQuality(q);
+    setStoredGraphicsQuality(q);
+    onQualityChange?.(q);
+  };
+
+  const rewardCoins = isWin
+    ? (isMultiplayer && stake > 0 ? Math.floor(stake * 1.8) : 50)
+    : 0;
+
   return (
     <>
+      {/* ── Graphics Quality Toggle in Top Right ── */}
+      {showBroadcastHUD && !isGameOver && !isInningsBreak && (
+        <GraphicsQualityBar quality={currentQuality} onQualityChange={handleQualityChange} />
+      )}
+
       {/* ── Broadcast HUD (always visible during play) ─────────────────────── */}
       {showBroadcastHUD && !isGameOver && !isInningsBreak && (
         <>
@@ -360,11 +418,11 @@ export const CricketOverlays: React.FC<CricketOverlaysProps> = ({
               </div>
             </div>
 
-            {/* Practice Reward Badge */}
-            {isWin && !isMultiplayer && (
-              <div className="w-full py-2.5 px-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl font-bold text-xs text-emerald-400 mb-4 flex items-center justify-center gap-2 shadow-sm">
-                <Sparkles className="w-4 h-4 animate-pulse" />
-                <span>+50 Coins Practice Reward Claimed!</span>
+            {/* Authoritative Settlement Coins Badge */}
+            {isWin && rewardCoins > 0 && (
+              <div className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-amber-500/20 border border-amber-500/40 rounded-xl font-black text-xs text-amber-400 mb-4 flex items-center justify-center gap-2 shadow-sm animate-pulse">
+                <Coins className="w-4 h-4 text-amber-400" />
+                <span>+{rewardCoins} Coins Earned!</span>
               </div>
             )}
 

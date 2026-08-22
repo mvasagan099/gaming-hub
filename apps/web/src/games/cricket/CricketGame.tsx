@@ -388,6 +388,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
         overs={isMultiplayer ? (remoteState ? `${remoteState.currentOver}.${remoteState.currentBall}` : '0.0') : `${matchOvers}.0`}
         target={isMultiplayer ? (remoteState?.target ?? null) : null}
         wonBy={isMultiplayer && winnerName ? `Winner: ${winnerName}` : undefined}
+        stake={stake}
         isMultiplayer={isMultiplayer}
         onReplay={handleReplay}
         onExit={onBack}
