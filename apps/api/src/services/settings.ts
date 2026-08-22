@@ -114,18 +114,18 @@ export async function setSetting(
 }
 
 /** Replace an entire category in one transaction. */
-export async function setCategorySettings(
-  category: SettingsCategoryName,
+export async function setCategorySettings<K extends SettingsCategoryName>(
+  category: K,
   partial: Record<string, unknown>,
   updatedBy: string | null,
-): Promise<SettingsShape[typeof category]> {
+): Promise<SettingsShape[K]> {
   const categorySchema = SETTINGS_CATEGORIES[category];
   const parsed = categorySchema.safeParse({ ...SITE_SETTINGS_DEFAULTS[category], ...partial });
   if (!parsed.success) {
     throw new AppError("VALIDATION_ERROR", `Invalid ${category} settings`, 422, parsed.error.flatten());
   }
 
-  const rows = flattenCategory(parsed.data).map(([field, value]) => ({
+  const rows = flattenCategory(parsed.data as Record<string, unknown>).map(([field, value]) => ({
     key: `${category}.${field}`,
     category,
     value: value as Prisma.InputJsonValue,
@@ -139,11 +139,19 @@ export async function setCategorySettings(
   ]);
 
   cache = null;
-  return parsed.data;
+  return parsed.data as SettingsShape[K];
 }
 
 export function resetSettingsCache(): void {
   cache = null;
+}
+
+export async function updateCategorySettings<K extends SettingsCategoryName>(
+  category: K,
+  partial: Record<string, unknown>,
+  updatedBy: string | null = null,
+): Promise<SettingsShape[K]> {
+  return setCategorySettings(category, partial, updatedBy);
 }
 
 function splitKey(key: string): [string | undefined, string | undefined] {

@@ -2,11 +2,7 @@ import type { GameId } from "./games";
 import type { UserAchievement } from "./notification";
 import type { TournamentStatus, TournamentFormat } from "./tournament";
 
-// ---------------------------------------------------------------------------
-// Referrals
-// ---------------------------------------------------------------------------
-
-export type ReferralStatus = "PENDING" | "COMPLETED" | "REWARDED";
+export type ReferralStatus = "PENDING" | "QUALIFIED" | "REWARDED" | "REVERSED" | "CANCELLED" | "COMPLETED";
 
 export interface Referral {
   id: string;
@@ -15,16 +11,24 @@ export interface Referral {
   referredUserId: string;
   status: ReferralStatus;
   commission: number;
+  referredReward?: number;
+  qualifiedAt?: string | null;
+  rewardedAt?: string | null;
+  reversedAt?: string | null;
+  reversalReason?: string | null;
   createdAt: string;
-  referredUser: PublicUserSummary;
+  referredUser?: PublicUserSummary;
 }
 
 export interface ReferralSummary {
   code: string;
   totalReferrals: number;
+  qualifiedReferrals: number;
   completedReferrals: number;
   pendingReferrals: number;
   totalCommission: number;
+  totalEarned?: number;
+  shareUrl: string;
 }
 
 export interface ReferralLeaderboardEntry {
@@ -35,6 +39,18 @@ export interface ReferralLeaderboardEntry {
   avatarUrl: string | null;
   referralCount: number;
   commission: number;
+}
+
+export interface AdminReferralStats {
+  totalReferrals: number;
+  qualifiedReferrals: number;
+  rewardedReferrals: number;
+  pendingReferrals: number;
+  reversedReferrals: number;
+  totalRewardsDistributed: number;
+  conversionRate: number;
+  suspiciousReferralsCount: number;
+  topReferrers: ReferralLeaderboardEntry[];
 }
 
 // ---------------------------------------------------------------------------
@@ -187,15 +203,54 @@ export interface LoginSession {
 // Search
 // ---------------------------------------------------------------------------
 
-export type SearchType = "GLOBAL" | "USERS" | "GAMES" | "TOURNAMENTS" | "TICKETS" | "COUPONS";
+export type SearchType =
+  | "GLOBAL"
+  | "ALL"
+  | "USERS"
+  | "PLAYERS"
+  | "GAMES"
+  | "TOURNAMENTS"
+  | "EVENTS"
+  | "ACHIEVEMENTS"
+  | "TICKETS"
+  | "COUPONS";
+
+export interface EventSearchResult {
+  id: string;
+  title: string;
+  description: string;
+  type: string;
+  status: "UPCOMING" | "ACTIVE" | "ENDED";
+  startsAt: string | null;
+  expiresAt: string | null;
+  imageUrl?: string | null;
+}
+
+export interface AchievementSearchResult {
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  category: string;
+  rarity: string;
+  icon: string;
+  xpReward: number;
+  unlocked?: boolean;
+}
 
 export interface SearchResults {
   users: PublicUserSummary[];
+  players?: PublicUserSummary[];
   games: GameSearchResult[];
   tournaments: TournamentSummary[];
+  events: EventSearchResult[];
+  achievements: AchievementSearchResult[];
   tickets: SupportTicketSearchResult[];
   coupons: CouponSearchResult[];
   total: number;
+  page?: number;
+  pageSize?: number;
+  hasMore?: boolean;
 }
 
 export interface SupportTicketSearchResult {
@@ -533,4 +588,11 @@ export interface PublicUserSummary {
   displayName: string;
   avatarUrl: string | null;
   isOnline: boolean;
+  level?: number;
+  xp?: number;
+  wins?: number;
+  losses?: number;
+  draws?: number;
+  globalRating?: number;
+  createdAt?: string;
 }

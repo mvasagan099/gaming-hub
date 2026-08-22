@@ -9,9 +9,9 @@ import {
 import type { GameId, TournamentStatus, TournamentFormat, PrizeDistributionEntry } from "@gaming-hub/shared";
 import { WalletTransactionService } from "./walletTransactionService";
 import { IdempotencyService } from "./idempotencyService";
-import { GameConfigService } from "./gameConfigService";
 import { recordMatchResult } from "./stats";
-import { checkAndUnlock } from "./achievements";
+import { AchievementService } from "./achievementService";
+import { ReferralService } from "./referrals";
 import { createNotification } from "./notifications";
 import { audit } from "./audit";
 
@@ -222,28 +222,44 @@ export class SettlementService {
         const newlyUnlocked: { code: string; title: string; icon: string }[] = [];
         for (const player of match.players) {
           const won = winnerSet.has(player.userId);
-          const unlocked = await checkAndUnlock(player.userId, {
-            userId: player.userId,
-            matchResult: { won, gameId: match.gameId },
-          });
-          for (const achievement of unlocked) {
-            newlyUnlocked.push({
-              code: achievement.code,
-              title: achievement.title,
-              icon: achievement.icon,
+          try {
+            const unlocked = await AchievementService.evaluateAchievements(player.userId, {
+              userId: player.userId,
+              matchResult: { won, gameId: match.gameId, isDraw },
             });
+            for (const achievement of unlocked) {
+              newlyUnlocked.push({
+                code: achievement.code,
+                title: achievement.title,
+                icon: achievement.icon,
+              });
+            }
+          } catch {
+            // Achievement unlock is a non-critical side effect
           }
-          await createNotification(
+
+          // Evaluate referral qualification (FIRST_WIN / FIRST_GAME)
+          try {
+            await ReferralService.evaluateQualification(
+              player.userId,
+              won ? "FIRST_WIN" : "FIRST_GAME",
+              { matchId: match.id, gameId: match.gameId }
+            );
+          } catch {
+            // Referral qualification is a non-critical side effect
+          }
+
+          createNotification(
             player.userId,
             "MATCH_RESULT",
             won ? "Victory!" : isDraw ? "Match drawn" : "Defeat",
             won
-              ? `You won your ${match.gameId} match and earned ${winnerPayout} coins!`
+              ? `You won ${winnerPayout} coins!`
               : isDraw
-                ? `Your ${match.gameId} match ended in a draw. Entry fee refunded.`
-                : `Your ${match.gameId} match has ended. Better luck next time!`,
-            { matchId: match.id, gameId: match.gameId },
-          );
+                ? "Match was a draw. Wagers refunded."
+                : "Better luck next time!",
+            { matchId: match.id, gameId: match.gameId, payout: won ? winnerPayout : 0 },
+          ).catch(() => undefined);
         }
 
         return {

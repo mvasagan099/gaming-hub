@@ -38,6 +38,38 @@ const updateGameConfigSchema = z.object({
 
 export async function adminGamesRoutes(app: FastifyInstance) {
   /**
+   * GET /api/admin/games/statistics
+   * Returns complete overview statistics across all platform games.
+   */
+  app.get("/api/admin/games/statistics", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:games:view", prisma);
+    const q = queryParams(request);
+    const { AdminGameStatsService } = await import("../services/adminGameStatsService");
+
+    return AdminGameStatsService.getGamesOverviewStatistics({
+      dateFrom: queryString(q.dateFrom),
+      dateTo: queryString(q.dateTo),
+      sortBy: queryString(q.sortBy),
+    });
+  });
+
+  /**
+   * GET /api/admin/games/statistics/:gameId
+   * Returns deep analytical metrics for a single game.
+   */
+  app.get("/api/admin/games/statistics/:gameId", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:games:view", prisma);
+    const { gameId } = routeParams(request);
+    const q = queryParams(request);
+    const { AdminGameStatsService } = await import("../services/adminGameStatsService");
+
+    return AdminGameStatsService.getGameDetailStatistics(gameId, {
+      dateFrom: queryString(q.dateFrom),
+      dateTo: queryString(q.dateTo),
+    });
+  });
+
+  /**
    * GET /api/admin/games
    * Returns list of all games with configuration, version, active match counts.
    */

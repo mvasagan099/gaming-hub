@@ -21,8 +21,9 @@ export type EntryLifecycleStatus =
 
 export interface InitiateEntryParams {
   userId: string;
-  gameId: GameId;
+  gameId: string;
   stake: number;
+  expectedFee?: number;
   matchId: string;
   roomId?: string | null;
   seat?: number;
@@ -79,6 +80,13 @@ export class GameEntryLifecycleService {
     }
     if (params.stake < 0) {
       throw new AppError("VALIDATION_ERROR", "Stake cannot be negative", 400);
+    }
+    if (params.expectedFee !== undefined && params.expectedFee !== params.stake) {
+      throw new AppError(
+        "ENTRY_FEE_CHANGED",
+        `Entry fee has changed from ${params.expectedFee} to ${params.stake} coins. Please confirm.`,
+        409,
+      );
     }
 
     const gameConfig = await GameConfigService.getGameConfig(params.gameId);

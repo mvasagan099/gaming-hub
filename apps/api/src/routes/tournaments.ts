@@ -15,6 +15,32 @@ import {
 import { TournamentMatchService } from "../services/tournamentMatchService";
 
 export async function tournamentsRoutes(app: FastifyInstance) {
+  /** User Tournament History */
+  app.get("/api/tournaments/history", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const q = queryParams(request);
+    const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
+    const { TournamentHistoryService } = await import("../services/tournamentHistoryService");
+
+    return TournamentHistoryService.listUserTournamentHistory({
+      userId: user.id,
+      status: queryString(q.status),
+      result: queryString(q.result) as any,
+      dateFrom: queryString(q.dateFrom),
+      dateTo: queryString(q.dateTo),
+      page,
+      pageSize,
+    });
+  });
+
+  /** User Specific Tournament History Details */
+  app.get("/api/tournaments/history/:id", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { id } = routeParams(request);
+    const { TournamentHistoryService } = await import("../services/tournamentHistoryService");
+    return TournamentHistoryService.getTournamentHistoryDetails(user.id, id);
+  });
+
   /** List tournaments (filterable by status/gameId) */
   app.get("/api/tournaments", { preHandler: authenticate }, async (request) => {
     const q = queryParams(request);

@@ -12,113 +12,39 @@ export async function matchesRoutes(app: FastifyInstance) {
     const clampedLimit = Math.max(1, Math.min(100, requestedLimit));
     const { page, pageSize } = clampPagination(queryString(q.page), String(clampedLimit));
 
-    const gameIdFilter = queryString(q.gameId);
-    const resultFilter = queryString(q.result)?.toUpperCase();
+    const { GameHistoryService } = await import("../services/gameHistoryService");
 
-    const where: any = {
-      players: {
-        some: {
-          userId: user.id,
-          ...(resultFilter && ["WIN", "LOSS", "DRAW", "FORFEIT"].includes(resultFilter)
-            ? { result: resultFilter === "FORFEIT" ? "LOSS" : resultFilter }
-            : {}),
-        },
-      },
-      ...(gameIdFilter ? { gameId: gameIdFilter } : {}),
-    };
-
-    const [items, total] = await Promise.all([
-      prisma.match.findMany({
-        where,
-        orderBy: [{ endedAt: "desc" }, { createdAt: "desc" }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        include: {
-          players: { include: { user: true } },
-          stats: true,
-        },
-      }),
-      prisma.match.count({ where }),
-    ]);
-
-    const historyItems = items.map((m) => {
-      const myPlayer = m.players.find((p) => p.userId === user.id);
-      const opponentPlayer = m.players.find((p) => p.userId !== user.id);
-      const winnerIds = (m.winnerIds as string[]) || [];
-      const isWinner = winnerIds.includes(user.id);
-      const isDraw = winnerIds.length === 0 && m.status === "FINISHED";
-      const totalPot = m.stake * m.players.length;
-      const prizePool = Math.round(totalPot * 0.9);
-      const winnerPayout = winnerIds.length > 0 ? Math.round(prizePool / winnerIds.length) : 0;
-
-      let resultType = "DRAW";
-      let coinsWon = 0;
-      let coinsLost = 0;
-
-      if (isDraw) {
-        resultType = "DRAW";
-        coinsWon = m.stake;
-        coinsLost = 0;
-      } else if (isWinner) {
-        resultType = "WIN";
-        coinsWon = winnerPayout;
-        coinsLost = 0;
-      } else {
-        resultType = "LOSS";
-        coinsWon = 0;
-        coinsLost = m.stake;
-      }
-
-      const netCoins = isWinner ? winnerPayout - m.stake : isDraw ? 0 : -m.stake;
-      const duration = m.stats?.durationSeconds ?? (m.startedAt && m.endedAt ? Math.max(0, Math.round((m.endedAt.getTime() - m.startedAt.getTime()) / 1000)) : 0);
-
-      return {
-        id: m.id,
-        matchId: m.id,
-        roomId: m.roomId,
-        gameId: m.gameId,
-        status: m.status,
-        resultType,
-        result: myPlayer?.result ?? (isWinner ? "WIN" : isDraw ? "DRAW" : "LOSS"),
-        playerId: user.id,
-        opponentId: opponentPlayer?.userId ?? null,
-        opponentName: opponentPlayer?.user.displayName || opponentPlayer?.user.username || "Opponent",
-        opponentAvatar: opponentPlayer?.user.avatarUrl ?? null,
-        score: myPlayer?.score ?? 0,
-        opponentScore: opponentPlayer?.score ?? 0,
-        entryFee: m.stake,
-        coinsWon,
-        coinsLost,
-        netCoins,
-        duration,
-        winnerIds,
-        startedAt: m.startedAt?.toISOString() ?? null,
-        finishedAt: m.endedAt?.toISOString() ?? null,
-        createdAt: m.createdAt.toISOString(),
-        players: m.players.map((p) => ({
-          seat: p.seat,
-          userId: p.userId,
-          username: p.user.username,
-          displayName: p.user.displayName,
-          avatarUrl: p.user.avatarUrl,
-          result: p.result,
-          score: p.score,
-        })),
-      };
-    });
-
-    return {
-      items: historyItems,
-      total,
+    return GameHistoryService.listUserGameHistory({
+      userId: user.id,
+      gameId: queryString(q.gameId),
+      result: queryString(q.result),
+      status: queryString(q.status),
+      opponentId: queryString(q.opponentId),
+      dateFrom: queryString(q.dateFrom),
+      dateTo: queryString(q.dateTo),
       page,
-      limit: pageSize,
       pageSize,
-    };
+    });
   };
 
+  app.get("/api/games/history", { preHandler: authenticate }, handleMatchHistory);
   app.get("/api/matches", { preHandler: authenticate }, handleMatchHistory);
   app.get("/api/matches/history", { preHandler: authenticate }, handleMatchHistory);
   app.get("/matches/history", { preHandler: authenticate }, handleMatchHistory);
+
+  app.get("/api/games/history/stats", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const q = queryParams(request);
+    const { GameHistoryService } = await import("../services/gameHistoryService");
+    return GameHistoryService.getUserGameStats(user.id, queryString(q.gameId));
+  });
+
+  app.get("/api/games/history/:id", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { id } = routeParams(request);
+    const { GameHistoryService } = await import("../services/gameHistoryService");
+    return GameHistoryService.getMatchDetails(user.id, id);
+  });
 
   app.get("/api/matches/:id", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);

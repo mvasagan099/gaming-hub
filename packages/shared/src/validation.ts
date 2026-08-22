@@ -86,6 +86,7 @@ export const updateProfileSchema = z.object({
   city: z.string().trim().max(100).optional(),
   state: z.string().trim().max(100).optional(),
   postcode: z.string().trim().max(20).optional(),
+  isPrivate: z.boolean().optional(),
 });
 
 export const changePasswordSchema = z.object({

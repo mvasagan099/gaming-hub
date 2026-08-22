@@ -13,7 +13,7 @@ import {
 } from "@gaming-hub/shared";
 import { authenticate } from "../plugins/authenticate";
 import { requireUser, parseSchema, routeParams, queryParams, queryString } from "../lib/http";
-import { getLeaderboard, getRankedLeaderboard } from "../services/stats";
+import { LeaderboardService } from "../services/leaderboardService";
 import { isFeatureEnabled } from "../services/featureFlags";
 import { getCategorySettings } from "../services/settings";
 
@@ -24,6 +24,13 @@ const leaderboardQuerySchema = z.object({
   gameId: z.string().trim().optional(),
   country: z.string().trim().optional(),
   region: z.string().trim().optional(),
+});
+
+const matchCorrectionSchema = z.object({
+  matchId: z.string().min(1, "matchId is required"),
+  correctedWinnerIds: z.array(z.string()).default([]),
+  isDraw: z.boolean().optional(),
+  reason: z.string().min(3, "Reason for correction is required"),
 });
 
 const COUNTRY_CODES = new Set(COUNTRIES.map((c) => c.code));
@@ -45,6 +52,9 @@ function validateScopeInputs(scope: LeaderboardScope, gameId?: string, country?:
 }
 
 export async function leaderboardRoutes(app: FastifyInstance) {
+  /**
+   * Main unified ranked leaderboard endpoint.
+   */
   app.get("/api/leaderboard", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
 
@@ -91,7 +101,7 @@ export async function leaderboardRoutes(app: FastifyInstance) {
     const period = leaderboardSettings.periodsEnabled ? parsed.period : "all";
     const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
 
-    return getRankedLeaderboard(
+    return LeaderboardService.getLeaderboard(
       {
         scope: parsed.scope,
         gameId: parsed.gameId,
@@ -106,15 +116,115 @@ export async function leaderboardRoutes(app: FastifyInstance) {
     );
   });
 
+  /**
+   * Dedicated global leaderboard endpoint.
+   */
+  app.get("/api/leaderboard/global", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const q = queryParams(request);
+    const period = queryString(q.period) || "all";
+    const metric = queryString(q.metric) || "rating";
+    const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
+
+    return LeaderboardService.getGlobalLeaderboard(
+      {
+        period: (LEADERBOARD_PERIODS.includes(period as any) ? period : "all") as any,
+        metric: (LEADERBOARD_METRICS.includes(metric as any) ? metric : "rating") as any,
+        page,
+        pageSize,
+      },
+      user.id,
+    );
+  });
+
+  /**
+   * Dedicated tournament leaderboard endpoint.
+   */
+  app.get("/api/leaderboard/tournament", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const q = queryParams(request);
+    const period = queryString(q.period) || "all";
+    const metric = queryString(q.metric) || "wins";
+    const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
+
+    return LeaderboardService.getTournamentLeaderboard(
+      {
+        period: (LEADERBOARD_PERIODS.includes(period as any) ? period : "all") as any,
+        metric: (LEADERBOARD_METRICS.includes(metric as any) ? metric : "wins") as any,
+        page,
+        pageSize,
+      },
+      user.id,
+    );
+  });
+
+  /**
+   * Dedicated user ranking summary across all game disciplines and global board.
+   */
+  app.get("/api/leaderboard/user/:userId/rank", { preHandler: authenticate }, async (request) => {
+    const { userId } = routeParams(request);
+    return LeaderboardService.getUserRankSummary(userId);
+  });
+
+  /**
+   * Admin-authoritative result correction endpoint.
+   * Modifies the match result and safely updates rankings with an audit trail.
+   */
+  app.post("/api/leaderboard/match-correction", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    if (user.role !== "ADMIN") {
+      throw new AppError("FORBIDDEN", "Only administrators can correct match results", 403);
+    }
+
+    const payload = parseSchema(matchCorrectionSchema, request.body);
+
+    return LeaderboardService.correctMatchResult({
+      matchId: payload.matchId,
+      correctedWinnerIds: payload.correctedWinnerIds,
+      isDraw: payload.isDraw,
+      adminId: user.id,
+      reason: payload.reason,
+    });
+  });
+
+  /**
+   * Legacy and game-specific leaderboard endpoint.
+   */
   app.get("/api/leaderboard/:gameId", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
     const { gameId: raw } = routeParams(request);
     const gameId = raw;
+
     if (gameId !== "overall" && !isGameId(gameId)) {
       return { items: [], total: 0, page: 1, pageSize: 20 };
     }
 
     const q = queryParams(request);
+    const period = queryString(q.period) || "all";
+    const metric = queryString(q.metric) || (gameId === "overall" ? "rating" : "wins");
     const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
-    return getLeaderboard(gameId, page, pageSize);
+
+    if (gameId === "overall") {
+      return LeaderboardService.getGlobalLeaderboard(
+        {
+          period: (LEADERBOARD_PERIODS.includes(period as any) ? period : "all") as any,
+          metric: (LEADERBOARD_METRICS.includes(metric as any) ? metric : "rating") as any,
+          page,
+          pageSize,
+        },
+        user.id,
+      );
+    }
+
+    return LeaderboardService.getGameLeaderboard(
+      gameId,
+      {
+        period: (LEADERBOARD_PERIODS.includes(period as any) ? period : "all") as any,
+        metric: (LEADERBOARD_METRICS.includes(metric as any) ? metric : "wins") as any,
+        page,
+        pageSize,
+      },
+      user.id,
+    );
   });
 }

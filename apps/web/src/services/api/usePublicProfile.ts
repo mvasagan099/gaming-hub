@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef } from "react";
 import { apiClient } from "./client";
-import type { PublicProfile } from "@gaming-hub/shared";
+import type { DetailedPublicProfile } from "@gaming-hub/shared";
 
-const cache = new Map<string, PublicProfile | null>();
+const cache = new Map<string, DetailedPublicProfile | null>();
 
 interface UsePublicProfileResult {
-  profile: PublicProfile | null;
+  profile: DetailedPublicProfile | null;
   loading: boolean;
+  refetch: () => void;
 }
 
 /**
@@ -15,11 +16,20 @@ interface UsePublicProfileResult {
  * re-fetching the same opponent every render.
  */
 export function usePublicProfile(userId: string | null | undefined): UsePublicProfileResult {
-  const [profile, setProfile] = useState<PublicProfile | null>(
+  const [profile, setProfile] = useState<DetailedPublicProfile | null>(
     userId ? (cache.get(userId) ?? null) : null
   );
   const [loading, setLoading] = useState(false);
+  const [fetchIndex, setFetchIndex] = useState(0);
   const lastFetched = useRef<string | null>(null);
+
+  const refetch = () => {
+    if (userId) {
+      cache.delete(userId);
+      lastFetched.current = null;
+      setFetchIndex((i) => i + 1);
+    }
+  };
 
   useEffect(() => {
     if (!userId) {
@@ -27,21 +37,20 @@ export function usePublicProfile(userId: string | null | undefined): UsePublicPr
       return;
     }
 
-    // Already cached
-    if (cache.has(userId)) {
+    // Already cached and not forced
+    if (cache.has(userId) && fetchIndex === 0) {
       setProfile(cache.get(userId) ?? null);
       return;
     }
 
-    // Already fetching same id
-    if (lastFetched.current === userId) return;
+    if (lastFetched.current === userId && fetchIndex === 0) return;
     lastFetched.current = userId;
 
     let cancelled = false;
     setLoading(true);
 
     apiClient
-      .get<PublicProfile>(`/users/${userId}`)
+      .get<DetailedPublicProfile>(`/users/${userId}/public-profile`)
       .then((data) => {
         if (cancelled) return;
         cache.set(userId, data);
@@ -59,12 +68,7 @@ export function usePublicProfile(userId: string | null | undefined): UsePublicPr
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, fetchIndex]);
 
-  return { profile, loading };
-}
-
-/** Clear the profile cache (e.g. on logout) */
-export function clearProfileCache() {
-  cache.clear();
+  return { profile, loading, refetch };
 }

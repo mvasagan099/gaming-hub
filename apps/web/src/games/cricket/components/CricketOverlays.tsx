@@ -34,26 +34,22 @@ export const CricketEventBanner: React.FC<EventBannerProps> = ({ event }) => {
   if (!cfg) return null;
 
   return (
-    <div className={`
-      pointer-events-none absolute inset-x-0 flex justify-center
-      ${currentEvent.type === 'wicket' ? 'top-[28%]' : 'top-[22%]'}
-      z-40
-    `}>
+    <div className="pointer-events-none absolute left-6 top-[20%] z-40">
       <div className={`
-        flex flex-col items-center gap-1
-        animate-in zoom-in-75 fade-in duration-200
-        px-8 py-3 rounded-2xl border border-white/20
+        flex flex-col items-start gap-1
+        animate-in slide-in-from-left-8 fade-in zoom-in-90 duration-300
+        px-6 py-2.5 rounded-2xl border border-white/20
         bg-gradient-to-r ${cfg.bg}
         shadow-2xl ${cfg.glow}
         select-none
       `}>
-        <div className="flex items-center gap-3">
-          <span className="text-3xl leading-none">{cfg.icon}</span>
-          <span className={`text-3xl font-black tracking-widest uppercase ${cfg.text} drop-shadow-lg`}>
+        <div className="flex items-center gap-2.5">
+          <span className="text-2xl leading-none">{cfg.icon}</span>
+          <span className={`text-2xl font-black tracking-widest uppercase ${cfg.text} drop-shadow-lg`}>
             {cfg.label}
           </span>
           {currentEvent.runs && currentEvent.type !== 'wicket' && (
-            <span className="text-3xl font-black text-white/80">{currentEvent.runs}</span>
+            <span className="text-2xl font-black text-white/90">{currentEvent.runs}</span>
           )}
         </div>
       </div>

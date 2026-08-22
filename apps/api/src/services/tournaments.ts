@@ -7,9 +7,9 @@ import { applyTransaction } from "./wallet";
 import { WalletTransactionService } from "./walletTransactionService";
 import { IdempotencyService } from "./idempotencyService";
 import { getCategorySettings } from "./settings";
-import { isFeatureEnabled } from "./featureFlags";
 import { audit } from "./audit";
-import { checkAndUnlock } from "./achievements";
+import { AchievementService } from "./achievementService";
+import { ReferralService } from "./referrals";
 import { notifyUserSocket } from "./socketBridge";
 import { TournamentNotificationService } from "./tournamentNotificationService";
 
@@ -125,7 +125,7 @@ export async function getTournamentDetail(id: string, userId: string | null) {
   };
 }
 
-export async function registerForTournament(userId: string, tournamentId: string) {
+export async function registerForTournament(userId: string, tournamentId: string, expectedFee?: number) {
   const existing = await prisma.tournamentPlayer.findUnique({
     where: { tournamentId_userId: { tournamentId, userId } },
   });
@@ -157,6 +157,14 @@ export async function registerForTournament(userId: string, tournamentId: string
           registrationEndsAt: true,
         },
       });
+
+      if (expectedFee !== undefined && expectedFee !== lockedTournament.entryFee) {
+        throw new AppError(
+          "ENTRY_FEE_CHANGED",
+          `Tournament entry fee has changed from ${expectedFee} to ${lockedTournament.entryFee} coins. Please confirm.`,
+          409,
+        );
+      }
 
       if (lockedTournament.status !== "UPCOMING" && lockedTournament.status !== "REGISTRATION_OPEN") {
         throw new AppError("TOURNAMENT_STARTED", "Tournament is not accepting registrations", 400);
@@ -236,6 +244,13 @@ export async function registerForTournament(userId: string, tournamentId: string
 
       // Emit registration-updated to all tournament subscribers
       await notifyUserSocket(userId, "tournament:player-registered", { tournamentId, seed: null });
+
+      // Evaluate referral qualification (TOURNAMENT_JOIN)
+      try {
+        await ReferralService.evaluateQualification(userId, "TOURNAMENT_JOIN", { tournamentId });
+      } catch {
+        // Non-blocking side effect
+      }
     }
 
     return { ok: true };
@@ -407,7 +422,7 @@ export async function setTournamentStatus(id: string, status: TournamentStatus, 
         await Promise.all(
           winners.map(async (userId) => {
             const wins = await countTournamentWins(userId);
-            await checkAndUnlock(userId, { userId, tournamentWins: wins });
+            await AchievementService.evaluateAchievements(userId, { userId, tournamentWins: wins });
           }),
         );
       }

@@ -337,14 +337,16 @@ export const messagesApi = {
 // ---------------------------------------------------------------------------
 
 export const searchApi = {
-  search: (query: string, type?: string) => {
+  search: (query: string, type?: string, page?: number, limit?: number) => {
     const qs = new URLSearchParams({ q: query });
     if (type) qs.set('type', type);
+    if (page) qs.set('page', String(page));
+    if (limit) qs.set('limit', String(limit));
     return apiClient.get<SearchResults>(`/search?${qs.toString()}`);
   },
   suggestions: (query: string) =>
     apiClient.get<Array<{ query: string; type: string }>>(`/search/suggestions?q=${encodeURIComponent(query)}`),
-  clearHistory: () => apiClient.delete('/search/history'),
+  clearHistory: () => apiClient.delete<{ ok: boolean }>('/search/history'),
 };
 
 // ---------------------------------------------------------------------------

@@ -115,34 +115,231 @@ export async function adminRoutes(app: FastifyInstance) {
     return { items, total, page, pageSize };
   });
 
+  app.get("/api/admin/users/:id/wallet", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const { id } = routeParams(request);
+    const { AdminWalletService } = await import("../services/adminWalletService");
+    return AdminWalletService.getUserWalletDetails(id);
+  });
+
+  app.post("/api/admin/users/:id/wallet/adjust", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
+    const { id } = routeParams(request);
+    const { amount, reason } = parseSchema(walletAdjustSchema, request.body);
+    const { AdminWalletService } = await import("../services/adminWalletService");
+
+    return AdminWalletService.adjustWallet({
+      adminId: admin.id,
+      targetUserId: id,
+      amount,
+      reason,
+    });
+  });
+
   app.post("/api/admin/users/:id/wallet", { preHandler: authenticate }, async (request) => {
     const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
     const { id } = routeParams(request);
     const { amount, reason } = parseSchema(walletAdjustSchema, request.body);
+    const { AdminWalletService } = await import("../services/adminWalletService");
 
-    const wallet = await prisma.$transaction(async (tx) => {
-      const updated = await applyTransaction(
-        tx,
-        id,
-        amount,
-        "ADMIN",
-        null,
-        { reason, adjustedBy: admin.id },
-      );
-      return updated;
+    return AdminWalletService.adjustWallet({
+      adminId: admin.id,
+      targetUserId: id,
+      amount,
+      reason,
+    });
+  });
+
+  // ---- Admin Financial Dashboard -------------------------------------------
+  app.get("/api/admin/finance/summary", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const q = queryParams(request);
+    const { AdminFinanceService } = await import("../services/adminFinanceService");
+
+    return AdminFinanceService.getFinancialSummary({
+      range: queryString(q.range),
+      dateFrom: queryString(q.dateFrom),
+      dateTo: queryString(q.dateTo),
+    });
+  });
+
+  app.get("/api/admin/finance/export", { preHandler: authenticate }, async (request, reply) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const q = queryParams(request);
+    const { AdminFinanceService } = await import("../services/adminFinanceService");
+
+    const csv = await AdminFinanceService.exportFinancialCsv({
+      range: queryString(q.range),
+      dateFrom: queryString(q.dateFrom),
+      dateTo: queryString(q.dateTo),
     });
 
-    auditFromRequest(request, {
-      actorType: "user",
-      actorId: admin.id,
-      action: "admin.wallet.adjust",
-      category: "admin",
-      targetType: "user",
-      targetId: id,
-      meta: { amount, reason },
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="financial_report_${Date.now()}.csv"`);
+    return reply.send(csv);
+  });
+
+  // ---- Security / Suspicious Activity Alerts ------------------------------
+  app.get("/api/admin/security/alerts", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const q = queryParams(request);
+    const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
+    const { SuspiciousActivityService } = await import("../services/suspiciousActivityService");
+
+    return SuspiciousActivityService.listAlerts(
+      {
+        userId: queryString(q.userId),
+        type: queryString(q.type) as any,
+        severity: queryString(q.severity) as any,
+        status: queryString(q.status) as any,
+      },
+      page,
+      pageSize,
+    );
+  });
+
+  app.get("/api/admin/security/alerts/:id", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const { id } = routeParams(request);
+    const { SuspiciousActivityService } = await import("../services/suspiciousActivityService");
+
+    return SuspiciousActivityService.getAlertDetails(id);
+  });
+
+  app.patch("/api/admin/security/alerts/:id", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:wallet:view", prisma);
+    const { id } = routeParams(request);
+    const body = (request.body ?? {}) as { status?: any; adminNotes?: string };
+    const { SuspiciousActivityService } = await import("../services/suspiciousActivityService");
+
+    return SuspiciousActivityService.updateAlert(id, {
+      status: body.status,
+      adminNotes: body.adminNotes,
+      reviewedBy: admin.id,
+    });
+  });
+
+  // ---- Audit Logs ---------------------------------------------------------
+  app.get("/api/admin/audit/logs", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const q = queryParams(request);
+    const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
+    const { AuditLogService } = await import("../services/auditLogService");
+
+    return AuditLogService.queryAuditLogs(
+      {
+        actorId: queryString(q.actorId),
+        actorType: queryString(q.actorType),
+        action: queryString(q.action),
+        category: queryString(q.category) as any,
+        targetType: queryString(q.targetType),
+        targetId: queryString(q.targetId),
+        search: queryString(q.search),
+        dateFrom: queryString(q.dateFrom),
+        dateTo: queryString(q.dateTo),
+      },
+      page,
+      pageSize,
+    );
+  });
+
+  app.get("/api/admin/audit/logs/:id", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const { id } = routeParams(request);
+    const { AuditLogService } = await import("../services/auditLogService");
+
+    return AuditLogService.getAuditLogDetails(id);
+  });
+
+  app.get("/api/admin/audit/export", { preHandler: authenticate }, async (request, reply) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const q = queryParams(request);
+    const { AuditLogService } = await import("../services/auditLogService");
+
+    const csv = await AuditLogService.exportAuditLogsCsv({
+      actorId: queryString(q.actorId),
+      actorType: queryString(q.actorType),
+      action: queryString(q.action),
+      category: queryString(q.category) as any,
+      targetType: queryString(q.targetType),
+      targetId: queryString(q.targetId),
+      search: queryString(q.search),
+      dateFrom: queryString(q.dateFrom),
+      dateTo: queryString(q.dateTo),
     });
 
-    return { ok: true, balance: wallet.balance };
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="audit_logs_${Date.now()}.csv"`);
+    return reply.send(csv);
+  });
+
+  // ---- Automated Financial Reconciliation ----------------------------------
+  app.post("/api/admin/reconciliation/run", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const body = (request.body ?? {}) as { userId?: string; matchId?: string; tournamentId?: string };
+    const { ReconciliationService } = await import("../services/reconciliationService");
+
+    return ReconciliationService.runFullReconciliation(body);
+  });
+
+  app.get("/api/admin/reconciliation/summary", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const { ReconciliationService } = await import("../services/reconciliationService");
+
+    return ReconciliationService.runFullReconciliation();
+  });
+
+  app.get("/api/admin/reconciliation/issues", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const q = queryParams(request);
+    const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
+    const { ReconciliationService } = await import("../services/reconciliationService");
+
+    return ReconciliationService.listIssues(
+      {
+        status: queryString(q.status) as any,
+        severity: queryString(q.severity) as any,
+        type: queryString(q.type) as any,
+      },
+      page,
+      pageSize,
+    );
+  });
+
+  app.get("/api/admin/reconciliation/issues/:id", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const { id } = routeParams(request);
+    const { ReconciliationService } = await import("../services/reconciliationService");
+
+    return ReconciliationService.getIssueDetails(id);
+  });
+
+  app.patch("/api/admin/reconciliation/issues/:id", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:wallet:view", prisma);
+    const { id } = routeParams(request);
+    const body = (request.body ?? {}) as { status?: any; notes?: string };
+    const { ReconciliationService } = await import("../services/reconciliationService");
+
+    return ReconciliationService.updateIssue(id, {
+      status: body.status,
+      notes: body.notes,
+      resolvedBy: admin.id,
+    });
+  });
+
+  // ---- Security / Rate Limiting Metrics ------------------------------------
+  app.get("/api/admin/security/rate-limits", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:wallet:view", prisma);
+    const { RateLimitService } = await import("../services/rateLimitService");
+
+    return RateLimitService.getRateLimitMetrics();
+  });
+
+  app.get("/api/admin/security/overview", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:users:view", prisma);
+    const { AdminSecurityService } = await import("../services/adminSecurityService");
+
+    return AdminSecurityService.getAdminSecurityOverview();
   });
 
   // ---- Wallet transactions ledger -------------------------------------------

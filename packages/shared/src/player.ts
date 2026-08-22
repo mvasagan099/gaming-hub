@@ -23,6 +23,7 @@ export interface Profile {
   wins: number;
   losses: number;
   draws: number;
+  isPrivate?: boolean;
 }
 
 export interface PublicProfile extends Profile {
@@ -64,4 +65,100 @@ export interface FriendRequest {
   addressee: PublicProfile;
   status: "PENDING" | "ACCEPTED" | "BLOCKED";
   createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Detailed Public Profile & Game Statistics (Feature 29)
+// ---------------------------------------------------------------------------
+
+export interface PublicGameStatistic {
+  gameId: string;
+  gameName: string;
+  icon: string;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  winRate: number;
+  rating: number;
+  bestScore: number;
+  rank: number | null;
+}
+
+export interface PublicTournamentStatistic {
+  tournamentsJoined: number;
+  tournamentsCompleted: number;
+  wins: number;
+  podiums: number;
+  bestRank: number | null;
+  totalMatches: number;
+}
+
+export interface RecentMatchItem {
+  matchId: string;
+  gameId: string;
+  gameName: string;
+  icon: string;
+  result: "WIN" | "LOSS" | "DRAW";
+  score: number;
+  opponent: {
+    userId: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+  } | null;
+  endedAt: string;
+}
+
+export interface RecentTournamentItem {
+  tournamentId: string;
+  title: string;
+  gameId: string;
+  gameName: string;
+  icon: string;
+  rank: number | null;
+  eliminated: boolean;
+  endedAt: string | null;
+}
+
+export interface DetailedPublicProfile {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  country: string | null;
+  level: number;
+  xp: number;
+  joinedAt: string;
+  isOnline: boolean;
+  lastSeenAt: string | null;
+  isPrivate: boolean;
+
+  // Overall performance stats
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  winRate: number;
+  globalRating: number;
+
+  // Detailed breakdowns
+  gameStats: PublicGameStatistic[];
+  tournamentStats: PublicTournamentStatistic;
+  recentMatches: RecentMatchItem[];
+  recentTournaments: RecentTournamentItem[];
+
+  // Achievements
+  achievements: {
+    unlockedCount: number;
+    totalCount: number;
+    recent: {
+      code: string;
+      title: string;
+      description: string;
+      icon: string;
+      unlockedAt: string;
+    }[];
+  };
 }

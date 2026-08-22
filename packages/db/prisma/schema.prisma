@@ -1142,18 +1142,26 @@ model IdempotencyRecord {
 }
 
 model Referral {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   code           String
   referrerId     String
-  referredUserId String   @unique
-  status         String   @default("PENDING")
-  commission     Int      @default(0)
-  createdAt      DateTime @default(now())
+  referredUserId String    @unique
+  status         String    @default("PENDING")
+  commission     Int       @default(0)
+  referredReward Int       @default(0)
+  qualifiedAt    DateTime?
+  rewardedAt     DateTime?
+  reversedAt     DateTime?
+  reversalReason String?
+  metadata       Json?
+  createdAt      DateTime  @default(now())
 
   referrer     User @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
   referredUser User @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
 
   @@index([referrerId, createdAt])
+  @@index([status, createdAt])
+  @@index([code])
 }
 
 model Coupon {

@@ -83,7 +83,7 @@ export class WalletTransactionService {
     if (params.amount <= 0) {
       throw new AppError("VALIDATION_ERROR", "Debit amount must be positive", 400);
     }
-    return applyTransaction(
+    const updatedWallet = await applyTransaction(
       tx,
       params.userId,
       -params.amount,
@@ -92,6 +92,21 @@ export class WalletTransactionService {
       params.meta ?? {},
       params.walletType ?? "MAIN",
     );
+
+    const { WalletSyncService } = await import("./walletSyncService");
+    WalletSyncService.emitWalletUpdate({
+      userId: params.userId,
+      balance: updatedWallet.balance,
+      bonusBalance: updatedWallet.bonusBalance,
+      lockedBalance: updatedWallet.lockedBalance,
+      rewardBalance: updatedWallet.rewardBalance,
+      cashbackBalance: updatedWallet.cashbackBalance,
+      transactionId: (params.meta?.transactionId as string) ?? undefined,
+      type: "DEBIT",
+      amount: params.amount,
+    });
+
+    return updatedWallet;
   }
 
   /**
@@ -111,7 +126,7 @@ export class WalletTransactionService {
     if (params.amount <= 0) {
       throw new AppError("VALIDATION_ERROR", "Credit amount must be positive", 400);
     }
-    return applyTransaction(
+    const updatedWallet = await applyTransaction(
       tx,
       params.userId,
       params.amount,
@@ -120,6 +135,21 @@ export class WalletTransactionService {
       params.meta ?? {},
       params.walletType ?? "MAIN",
     );
+
+    const { WalletSyncService } = await import("./walletSyncService");
+    WalletSyncService.emitWalletUpdate({
+      userId: params.userId,
+      balance: updatedWallet.balance,
+      bonusBalance: updatedWallet.bonusBalance,
+      lockedBalance: updatedWallet.lockedBalance,
+      rewardBalance: updatedWallet.rewardBalance,
+      cashbackBalance: updatedWallet.cashbackBalance,
+      transactionId: (params.meta?.transactionId as string) ?? undefined,
+      type: "CREDIT",
+      amount: params.amount,
+    });
+
+    return updatedWallet;
   }
 
   /**
@@ -323,8 +353,7 @@ export class WalletTransactionService {
     const isDebit = params.amount < 0;
     const absAmount = Math.abs(params.amount);
     const transactionId = `admin-adjust-${Date.now()}-${params.userId}`;
-
-    return applyTransaction(
+    const updatedWallet = await applyTransaction(
       tx,
       params.userId,
       params.amount,
@@ -340,6 +369,21 @@ export class WalletTransactionService {
       },
       "MAIN",
     );
+
+    const { WalletSyncService } = await import("./walletSyncService");
+    WalletSyncService.emitWalletUpdate({
+      userId: params.userId,
+      balance: updatedWallet.balance,
+      bonusBalance: updatedWallet.bonusBalance,
+      lockedBalance: updatedWallet.lockedBalance,
+      rewardBalance: updatedWallet.rewardBalance,
+      cashbackBalance: updatedWallet.cashbackBalance,
+      transactionId,
+      type: isDebit ? "DEBIT" : "CREDIT",
+      amount: absAmount,
+    });
+
+    return updatedWallet;
   }
 
   /**

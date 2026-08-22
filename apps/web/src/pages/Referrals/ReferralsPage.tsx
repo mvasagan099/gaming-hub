@@ -156,7 +156,7 @@ export const ReferralsPage: React.FC = () => {
                     <li key={r.id} className="flex items-center gap-3 px-6 py-3">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                          {r.referredUser.displayName}
+                          {r.referredUser?.displayName ?? 'Player'}
                         </p>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400">
                           Joined {new Date(r.createdAt).toLocaleDateString()}

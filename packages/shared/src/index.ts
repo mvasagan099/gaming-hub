@@ -21,3 +21,4 @@ export * from "./gameConfig";
 export * from "./gameEvents";
 export * from "./gameStateSync";
 export * from "./tournament";
+export * from "./achievement";

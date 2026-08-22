@@ -223,6 +223,12 @@ export const referralSettingsSchema = z.object({
   referredReward: z.number().int().min(0).max(100_000).default(250),
   commissionPercent: z.number().min(0).max(100).default(5),
   minDepositToReward: z.number().int().min(0).max(100_000).default(0),
+  qualificationRule: z
+    .enum(["REGISTRATION", "FIRST_GAME", "FIRST_WIN", "FIRST_DEPOSIT", "TOURNAMENT_JOIN"])
+    .default("FIRST_GAME"),
+  maxRewardsPerUser: z.number().int().min(0).max(100_000).default(0),
+  campaignStartDate: z.string().nullable().default(null),
+  campaignEndDate: z.string().nullable().default(null),
   leaderboardEnabled: z.boolean().default(true),
   codeAutoGenerate: z.boolean().default(true),
 });
@@ -275,6 +281,8 @@ export const searchSettingsSchema = z.object({
   maxResults: z.number().int().min(1).max(200).default(50),
   userSearchEnabled: z.boolean().default(true),
   tournamentSearchEnabled: z.boolean().default(true),
+  eventSearchEnabled: z.boolean().default(true),
+  achievementSearchEnabled: z.boolean().default(true),
   ticketSearchEnabled: z.boolean().default(true),
   couponSearchEnabled: z.boolean().default(true),
 });
