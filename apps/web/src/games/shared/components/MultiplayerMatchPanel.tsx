@@ -455,7 +455,7 @@ function PlayerProfileCardFetcher({
   return (
     <ProfileCard
       roomPlayer={roomPlayer}
-      publicProfile={profile}
+      publicProfile={profile as any}
       isMe={isMe}
       seatColor={seatColor}
       compact={compact}

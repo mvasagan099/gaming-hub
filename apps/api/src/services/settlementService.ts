@@ -14,6 +14,7 @@ import { AchievementService } from "./achievementService";
 import { ReferralService } from "./referrals";
 import { createNotification } from "./notifications";
 import { audit } from "./audit";
+import { GameConfigService } from "./gameConfigService";
 
 export interface SettlementSummary {
   matchId: string;

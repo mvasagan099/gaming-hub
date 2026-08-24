@@ -8,6 +8,7 @@ import { BubbleShooterGame } from "../games/bubble-shooter/BubbleShooterGame";
 import { TableTennisGame } from "../games/table-tennis/TableTennisGame";
 import { SnakeVsWormsGame } from "../games/snake-vs-worms/SnakeVsWormsGame";
 import { CricketGame } from "../games/cricket/CricketGame";
+import { SnookerGame } from "../games/snooker/SnookerGame";
 
 export default function GamePage() {
   const { slug } = useParams();
@@ -35,6 +36,8 @@ export default function GamePage() {
       return <SnakeVsWormsGame mode="ai" stake={100} onBack={handleBack} />;
     case "cricket":
       return <CricketGame mode="ai" stake={100} onBack={handleBack} />;
+    case "snooker":
+      return <SnookerGame mode="ai" stake={100} onBack={handleBack} />;
     default:
       return (
         <div className="p-10 text-center">

@@ -9,6 +9,7 @@ import { BubbleShooterGame } from '../../games/bubble-shooter/BubbleShooterGame'
 import { TableTennisGame } from '../../games/table-tennis/TableTennisGame';
 import { SnakeVsWormsGame } from '../../games/snake-vs-worms/SnakeVsWormsGame';
 import { CricketGame } from '../../games/cricket/CricketGame';
+import { SnookerGame } from '../../games/snooker/SnookerGame';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 
 export const GamePage: React.FC = () => {
@@ -50,6 +51,7 @@ export const GamePage: React.FC = () => {
     case 'table-tennis': return <TableTennisGame mode={mode} stake={stake} onBack={onBack} />;
     case 'snake-vs-worms': return <SnakeVsWormsGame mode={mode} stake={stake} onBack={onBack} />;
     case 'cricket': return <CricketGame mode={mode} stake={stake} onBack={onBack} />;
+    case 'snooker': return <SnookerGame mode={mode} stake={stake} onBack={onBack} />;
     default: return <div className="text-center py-12">Game not found</div>;
   }
 };

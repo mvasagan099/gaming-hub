@@ -80,6 +80,20 @@ const banners = [
     tagStyle: "bg-rose-500/20 text-rose-300 border-rose-500/30",
     btnStyle: "bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/25",
     images: ['/assets/fruit-ninja.png']
+  },
+  {
+    id: 4,
+    tagText: "CHAMPIONSHIP SNOOKER",
+    tagIcon: Sparkles,
+    title: "Master the Green \n in Pro Snooker",
+    desc: "Experience official 22-ball Snooker rules, realistic physics, century breaks, and competitive multi-frame matches.",
+    btnText: "PLAY SNOOKER NOW",
+    targetGame: "snooker",
+    gradient: "from-emerald-900 via-teal-900 to-slate-900",
+    border: "border-emerald-500/20",
+    tagStyle: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+    btnStyle: "bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/25",
+    images: ['/images/snooker.png']
   }
 ];
 

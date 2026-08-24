@@ -639,6 +639,51 @@ async function main(): Promise<void> {
       }
     });
 
+    // ── Snooker Live Aim & Power Sync ──
+    let lastSnookerAimSeq = -1;
+
+    socket.on("snooker:aim-position", (payload) => {
+      try {
+        const roomId =
+          payload.roomId ||
+          (payload.matchId ? framework.roomManager.getPlayerRoom(user.userId)?.id : undefined);
+        if (!roomId) return;
+        const room = framework.roomManager.getRoom(roomId);
+        if (!room || room.status !== "playing" || !room.match) return;
+
+        const player = room.players.get(user.userId);
+        if (!player || player.isSpectator || player.seat === null) return;
+
+        const engine = room.match.engine as any;
+        const state = engine?.state;
+        if (!state) return;
+
+        if (state.currentSeat !== player.seat) return;
+
+        if (typeof payload.sequence === "number" && payload.sequence <= lastSnookerAimSeq) {
+          return;
+        }
+        if (typeof payload.sequence === "number") {
+          lastSnookerAimSeq = payload.sequence;
+        }
+
+        const broadcastPayload = {
+          roomId: room.id,
+          matchId: room.match.matchId,
+          playerId: user.userId,
+          seat: player.seat,
+          angle: Number(payload.angle) || 0,
+          power: Math.max(0, Math.min(1, Number(payload.power) || 0)),
+          sequence: payload.sequence,
+          timestamp: payload.timestamp ?? Date.now(),
+        };
+
+        io.to(room.ioName).emit("snooker:aim-position", broadcastPayload);
+      } catch (err) {
+        logger.error({ err }, "[snooker:aim-position] error");
+      }
+    });
+
     // Rematch
     socket.on("game:rematch", (payload, ack) =>
       void guard(ack, async () => {

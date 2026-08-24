@@ -9,6 +9,7 @@ import { CricketEngine } from "./cricket/engine";
 import { TableTennisEngine } from "./table-tennis/engine";
 import { SnakeVsWormsEngine } from "./snake-vs-worms/engine";
 import { FruitNinjaEngine } from "./fruit-ninja/engine";
+import { SnookerEngine } from "./snooker/engine";
 
 /**
  * Game engines that have been migrated to the server-authoritative engine
@@ -34,6 +35,7 @@ const ENGINES: Record<string, EngineConstructor> = {
   "table-tennis": TableTennisEngine,
   "snake-vs-worms": SnakeVsWormsEngine,
   "fruit-ninja": FruitNinjaEngine,
+  snooker: SnookerEngine,
 };
 
 export function isGameEngineAvailable(gameId: GameId): boolean {

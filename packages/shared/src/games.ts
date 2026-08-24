@@ -13,6 +13,7 @@ export const GAME_IDS = [
   "table-tennis",
   "snake-vs-worms",
   "cricket",
+  "snooker",
 ] as const;
 
 export type GameId = (typeof GAME_IDS)[number];
@@ -173,6 +174,21 @@ export const GAME_DEFINITIONS: readonly GameDefinition[] = [
     online: true,
     featured: true,
     description: "Quick cricket matches",
+  },
+  {
+    id: "snooker",
+    name: "Snooker",
+    slug: "snooker",
+    icon: "🎱",
+    category: "Sports",
+    mode: "turn-based",
+    minPlayers: 2,
+    maxPlayers: 2,
+    defaultStake: 100,
+    serverAuthoritative: true,
+    online: true,
+    featured: true,
+    description: "Professional 22-Ball Snooker with Realistic Physics & Rules",
   },
 ] as const;
 

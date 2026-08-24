@@ -96,6 +96,16 @@ export interface ClientToServerEvents {
     timestamp?: number;
   }) => void;
 
+  "snooker:aim-position": (payload: {
+    roomId?: string;
+    matchId?: string;
+    playerId?: string;
+    angle: number;
+    power: number;
+    sequence: number;
+    timestamp?: number;
+  }) => void;
+
   "ping": (payload: { timestamp: number }, callback: () => void) => void;
 
   "tournament:subscribe": (payload: { tournamentId: string }, ack?: Ack<{ subscribed: boolean }>) => void;
@@ -155,6 +165,17 @@ export interface ServerToClientEvents {
     playerId: string;
     seat: number;
     x: number;
+    sequence: number;
+    timestamp: number;
+  }) => void;
+
+  "snooker:aim-position": (payload: {
+    roomId: string;
+    matchId: string;
+    playerId: string;
+    seat: number;
+    angle: number;
+    power: number;
     sequence: number;
     timestamp: number;
   }) => void;

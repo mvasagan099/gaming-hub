@@ -19,7 +19,8 @@ export type GameId =
   | 'bubble-shooter' 
   | 'table-tennis' 
   | 'snake-vs-worms' 
-  | 'cricket';
+  | 'cricket'
+  | 'snooker';
 
 export interface GameMetadata {
   id: GameId;

@@ -2077,7 +2077,7 @@ export class CricketScene extends Phaser.Scene {
     } else if (direction === 'up') {
       // Lofted Slog / Six: Deep Power Base -> Uppercut Impact -> Skyward Follow-Through
       this.batsman.setTexture('tex_batsman_loft_prep');
-      const currentBatsmanScaleY = this.getPlayerScale('batsman', this.batsman.y);
+      const currentBatsmanScaleY = this.getPlayerScale('batsman', this.batsman.y).y;
       this.tweens.add({ targets: this.batsman, scaleY: currentBatsmanScaleY * 0.94, duration: 110, yoyo: true, ease: 'Sine.easeInOut' });
       this.time.delayedCall(100, () => {
         if (!this.batsman.active) return;

@@ -12,6 +12,7 @@ import { AchievementService } from "./achievementService";
 import { ReferralService } from "./referrals";
 import { notifyUserSocket } from "./socketBridge";
 import { TournamentNotificationService } from "./tournamentNotificationService";
+import { isFeatureEnabled } from "./featureFlags";
 
 export interface CreateTournamentInput {
   gameId: string;

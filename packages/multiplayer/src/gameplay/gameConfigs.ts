@@ -64,6 +64,10 @@ export const GAME_PLAY_CONFIGS: Record<GameId, GamePlayConfig> = {
     defaultMatchTimerMs: 180_000,
     pauseOnDisconnect: false,
   }),
+  snooker: baseConfig("snooker", {
+    defaultTurnTimerMs: 20_000,
+    actionCooldownMs: 0,
+  }),
 };
 
 /** Returns the gameplay config for a game id. */

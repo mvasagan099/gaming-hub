@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { prisma, TournamentStatus, AnnouncementType, AchievementRarity } from "@gaming-hub/db";
+import { prisma, TournamentStatus, AnnouncementType } from "@gaming-hub/db";
 import { SearchService } from "../search";
 import { PlayerProfileService } from "../playerProfileService";
 import { RateLimitService } from "../rateLimitService";

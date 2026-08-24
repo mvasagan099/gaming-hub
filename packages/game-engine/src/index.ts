@@ -11,4 +11,5 @@ export * from "./cricket";
 export * from "./table-tennis";
 export * from "./snake-vs-worms";
 export * from "./fruit-ninja";
+export * from "./snooker";
 export * from "./registry";

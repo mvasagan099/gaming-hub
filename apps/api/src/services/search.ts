@@ -95,7 +95,7 @@ export class SearchService {
         wins: isPrivate ? 0 : u.profile?.wins ?? 0,
         losses: isPrivate ? 0 : u.profile?.losses ?? 0,
         draws: isPrivate ? 0 : u.profile?.draws ?? 0,
-        globalRating: u.profile?.globalRating ?? 1200,
+        globalRating: (u.profile as any)?.globalRating ?? 1200,
         createdAt: u.createdAt.toISOString(),
       };
     });
@@ -153,10 +153,15 @@ export class SearchService {
       format: t.format,
       prizePool: t.prizePool,
       entryFee: t.entryFee,
+      minPlayers: t.minPlayers ?? 2,
       maxPlayers: t.maxPlayers,
       registeredCount: t._count.players,
+      grossPool: t.grossPool ?? 0,
       startTime: t.startTime.toISOString(),
+      registrationStartsAt: t.registrationStartsAt ? t.registrationStartsAt.toISOString() : null,
+      registrationEndsAt: t.registrationEndsAt ? t.registrationEndsAt.toISOString() : null,
       status: t.status,
+      autoStartWhenFull: t.autoStartWhenFull ?? false,
     }));
   }
 
@@ -311,7 +316,7 @@ export class SearchService {
     const rateLimit = RateLimitService.checkRateLimit(rateLimitKey, "SEARCH");
     if (!rateLimit.allowed) {
       throw new AppError(
-        "RATE_LIMIT_EXCEEDED",
+        "RATE_LIMITED",
         `Too many search requests. Please wait ${rateLimit.retryAfterSeconds}s before searching again.`,
         429,
         { retryAfter: rateLimit.retryAfterSeconds }

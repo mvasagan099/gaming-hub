@@ -215,7 +215,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
   const [currentAim, setCurrentAim] = useState({ x: 0, y: 0 });
   const [strikerPos, setStrikerPos] = useState(0);
   const [strikerPhase, setStrikerPhase] = useState<'positioning' | 'aiming'>('positioning');
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(20);
   
   const [gameOver, setGameOver] = useState(false);
   const [showRules, setShowRules] = useState(true);
@@ -664,7 +664,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
               striker.vy = 0;
             }
           }
-          return 60;
+          return 20;
         }
         return prev - 1;
       });
@@ -1015,7 +1015,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
           striker.vy = 0;
         }
         setStrikerPhase('positioning');
-        setTimeLeft(60);
+        setTimeLeft(20);
       }
     } else if (mode === 'multiplayer') {
       if (isTurnActive) {
@@ -1429,7 +1429,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
              setIsTurnActive(true);
              setStrikerPhase('positioning');
              setStrikerPos(0);
-             setTimeLeft(60);
+             setTimeLeft(20);
              driverRef.current.sendStrike(angle, power).then(res => {
                if (!res.ok) {
                  toast.error(res.error ? `Shot rejected: ${res.error}` : 'Shot rejected by server', { id: 'strike-rejected' });
@@ -1441,7 +1441,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
              setIsTurnActive(true);
              setStrikerPhase('positioning');
              setStrikerPos(0);
-             setTimeLeft(60);
+             setTimeLeft(20);
            }
          }
       }
@@ -1492,7 +1492,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
     setStrikerPos(0);
     setStrikerPhase('positioning');
     setDragState('idle');
-    setTimeLeft(60);
+    setTimeLeft(20);
     setCurrentPlayer('player');
     rulesRef.current = { queenStatus: 'unpocketed', queenPocketedBy: null, dueOwed: { white: 0, black: 0 } };
     turnScoreRef.current = { white: 0, black: 0, queen: false, foul: false };
