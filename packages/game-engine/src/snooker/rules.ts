@@ -182,15 +182,42 @@ export class SnookerRulesEngine {
     pointsEarned: number;
   } {
     const balls = simResult.balls.map((b) => ({ ...b }));
-    const players = state.players.map((p) => ({
-      ...p,
-      score: p.seat === 0 ? state.player1Score : state.player2Score,
-      framesWon: p.seat === 0 ? state.player1FramesWon : state.player2FramesWon,
-      highestBreak: p.seat === 0 ? state.player1HighestBreak : state.player2HighestBreak,
-    }));
+    const player0 = (state.players || []).find((p) => p.seat === 0) || {
+      seat: 0,
+      userId: "player-1",
+      score: state.player1Score || 0,
+      framesWon: state.player1FramesWon || 0,
+      currentBreak: 0,
+      highestBreak: state.player1HighestBreak || 0,
+      fouls: 0,
+    };
+    const player1 = (state.players || []).find((p) => p.seat === 1) || {
+      seat: 1,
+      userId: "player-2",
+      score: state.player2Score || 0,
+      framesWon: state.player2FramesWon || 0,
+      currentBreak: 0,
+      highestBreak: state.player2HighestBreak || 0,
+      fouls: 0,
+    };
 
-    const shooter = players.find((p) => p.seat === shooterSeat) || players[0];
-    const opponent = players.find((p) => p.seat !== shooterSeat) || players[1];
+    const players: SnookerPlayer[] = [
+      {
+        ...player0,
+        score: state.player1Score ?? player0.score ?? 0,
+        framesWon: state.player1FramesWon ?? player0.framesWon ?? 0,
+        highestBreak: state.player1HighestBreak ?? player0.highestBreak ?? 0,
+      },
+      {
+        ...player1,
+        score: state.player2Score ?? player1.score ?? 0,
+        framesWon: state.player2FramesWon ?? player1.framesWon ?? 0,
+        highestBreak: state.player2HighestBreak ?? player1.highestBreak ?? 0,
+      },
+    ];
+
+    const shooter = shooterSeat === 0 ? players[0] : players[1];
+    const opponent = shooterSeat === 0 ? players[1] : players[0];
 
     shooter.currentBreak = (shooterSeat === 0 ? state.player1Break : state.player2Break) || 0;
 
@@ -261,17 +288,6 @@ export class SnookerRulesEngine {
         }
       }
 
-      // Always place cue ball in hand inside the D on foul
-      const cue = balls.find((b) => b.type === "cue");
-      if (cue) {
-        cue.pocketed = false;
-        cue.pocketIndex = null;
-        cue.x = SNOOKER_SPOTS.brown.x - 30;
-        cue.y = SNOOKER_SPOTS.brown.y;
-        cue.vx = 0;
-        cue.vy = 0;
-      }
-
       const redsCount = balls.filter((b) => b.type === "red" && !b.pocketed).length;
       const nextTarget = redsCount > 0 ? "RED" : this.getNextClearanceTarget(balls);
 
@@ -285,6 +301,19 @@ export class SnookerRulesEngine {
           triggerRespottedBlackOnFoul = true;
         } else {
           isFrameOverOnFoul = true;
+        }
+      }
+
+      // Only place cue ball in hand inside the D if it was pocketed (In-off foul) or on respotted black
+      if (cueBallPocketed || triggerRespottedBlackOnFoul) {
+        const cue = balls.find((b) => b.type === "cue");
+        if (cue) {
+          cue.pocketed = false;
+          cue.pocketIndex = null;
+          cue.x = SNOOKER_SPOTS.brown.x - 30;
+          cue.y = SNOOKER_SPOTS.brown.y;
+          cue.vx = 0;
+          cue.vy = 0;
         }
       }
 

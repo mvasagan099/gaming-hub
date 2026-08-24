@@ -36,7 +36,7 @@ export class DisconnectHandler {
 
     // Auto-pause turn-based matches so the disconnected player's turn clock
     // does not run out while they are trying to reconnect.
-    if (config.turnBased && config.pauseOnDisconnect && !room.match.pausedAt) {
+    if (config?.turnBased && config?.pauseOnDisconnect && !room.match.pausedAt) {
       room.match.pausedAt = Date.now();
       room.match.pausedBy = player.id;
 

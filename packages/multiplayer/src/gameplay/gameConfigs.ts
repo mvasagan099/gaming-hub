@@ -72,7 +72,26 @@ export const GAME_PLAY_CONFIGS: Record<GameId, GamePlayConfig> = {
 
 /** Returns the gameplay config for a game id. */
 export function getGamePlayConfig(gameId: GameId): GamePlayConfig {
-  return GAME_PLAY_CONFIGS[gameId];
+  const config = GAME_PLAY_CONFIGS[gameId];
+  if (config) return config;
+
+  try {
+    return baseConfig(gameId, {});
+  } catch {
+    return {
+      gameId,
+      mode: "turn-based",
+      turnBased: true,
+      minPlayers: 2,
+      maxPlayers: 2,
+      minPlayersToStart: 2,
+      actionCooldownMs: 0,
+      pauseOnDisconnect: true,
+      forfeitOnDisconnect: true,
+      defaultTurnTimerMs: 30_000,
+      defaultMatchTimerMs: 0,
+    };
+  }
 }
 
 /** True when every registered game has a gameplay config. */

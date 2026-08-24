@@ -41,7 +41,7 @@ export class TurnManager {
   }
 
   isTurnBased(room: RoomRuntime): boolean {
-    return getGamePlayConfig(room.config.gameId).turnBased;
+    return Boolean(getGamePlayConfig(room.config.gameId)?.turnBased);
   }
 
   /** The engine-authoritative seat that may act next, or null if finished. */

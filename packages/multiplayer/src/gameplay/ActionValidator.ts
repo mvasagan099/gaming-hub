@@ -50,9 +50,10 @@ export class ActionValidator {
     }
 
     const config = getGamePlayConfig(room.config.gameId);
+    const cooldownMs = config?.actionCooldownMs ?? 0;
     const now = Date.now();
     const last = this.lastActionTimes.get(player.id) ?? 0;
-    if (now - last < config.actionCooldownMs) {
+    if (cooldownMs > 0 && now - last < cooldownMs) {
       return { ok: false, error: "Action too frequent" };
     }
 

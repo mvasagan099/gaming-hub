@@ -32,7 +32,8 @@ function toErrorPayload(error: unknown): SocketErrorPayload {
   if (error instanceof AppError) {
     return { code: error.code, message: error.message };
   }
-  return { code: "INTERNAL_ERROR", message: "An unexpected error occurred" };
+  const message = error instanceof Error ? error.message : "An unexpected error occurred";
+  return { code: "INTERNAL_ERROR", message };
 }
 
 let io!: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents>;
@@ -426,6 +427,7 @@ async function main(): Promise<void> {
       try {
         await fn();
       } catch (error) {
+        logger.error({ err: error }, "[SOCKET GUARD ERROR]");
         const payload = toErrorPayload(error);
         if (ack) ack({ ok: false, error: payload });
         else socket.emit("error", payload);

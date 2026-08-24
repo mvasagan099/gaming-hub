@@ -203,18 +203,24 @@ export class SnookerEngine implements EngineInstance {
           };
         }
 
+        const angle = Number(a.angle) || 0;
+        const power = Math.max(0.05, Math.min(1.0, Number(a.power) || 0.5));
+        const spinX = Number(a.spinX) || 0;
+        const spinY = Number(a.spinY) || 0;
+        const shotId = typeof a.shotId === "string" ? a.shotId : `shot-${Date.now()}`;
+
         const simResult = simulateSnookerShot(this.state.balls, {
-          angle: a.angle,
-          power: a.power,
-          spinX: a.spinX,
-          spinY: a.spinY,
+          angle,
+          power,
+          spinX,
+          spinY,
         });
 
         const { nextState, foulReason, foulPenalty, pointsEarned } = SnookerRulesEngine.evaluateShot(
           this.state,
           simResult,
           seat,
-          a.shotId
+          shotId
         );
 
         this.state = nextState;
@@ -222,7 +228,7 @@ export class SnookerEngine implements EngineInstance {
         events.push({
           type: "SNOOKER_SHOT_RESOLVED",
           seat,
-          shotId: a.shotId,
+          shotId,
           pointsEarned,
           foulReason,
           foulPenalty,

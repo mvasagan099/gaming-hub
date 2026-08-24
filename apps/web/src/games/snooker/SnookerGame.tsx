@@ -589,6 +589,8 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     }
   };
 
+  const isMyTurn = (mode === "ai" && currentSeat === 0) || (mode === "multiplayer" && currentSeat === mySeat);
+
   // Live State Ref for High-Performance 60 FPS Canvas Render Loop (Zero Micro-Stutter)
   const renderStateRef = useRef({
     balls,
@@ -601,6 +603,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     freeBallAvailable,
     nominatedBall,
     cameraMode,
+    isMyTurn,
   });
 
   // Sync live render refs continuously without restarting the animation loop
@@ -616,6 +619,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
       freeBallAvailable,
       nominatedBall,
       cameraMode,
+      isMyTurn,
     };
   });
 
@@ -639,6 +643,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
         freeBallAvailable: curFreeBallAvailable,
         nominatedBall: curNominatedBall,
         cameraMode: curCameraMode,
+        isMyTurn: curIsMyTurn,
       } = renderStateRef.current;
 
       const w = canvas.width;
@@ -659,8 +664,15 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
         SnookerBallRenderer.drawBall(ctx, b, w, isTargetOn, is3D, h);
       }
 
-      // 3. Draw 3D Cue Stick and Laser Aim Guide
-      if (cueBall && !cueBall.pocketed && !curCueBallInHand && (!curIsSimulating || curStrikeProgress > 0)) {
+      // 3. Draw 3D Cue Stick and Laser Aim Guide (Only when it's your turn and not simulating)
+      const shouldDrawCue =
+        curIsMyTurn &&
+        cueBall &&
+        !cueBall.pocketed &&
+        !curCueBallInHand &&
+        (!curIsSimulating || curStrikeProgress > 0);
+
+      if (shouldDrawCue) {
         SnookerCueRenderer.drawAimGuide(ctx, cueBall, curBalls, curAimAngle, w, is3D, h);
         SnookerCueRenderer.drawCue(ctx, cueBall, curAimAngle, curCuePower, w, curStrikeProgress, is3D, h);
       }
@@ -671,8 +683,6 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     render();
     return () => cancelAnimationFrame(animId);
   }, []); // Run ONCE on mount! Zero re-subscriptions or animation loop cancellations on mouse move!
-
-  const isMyTurn = (mode === "ai" && currentSeat === 0) || (mode === "multiplayer" && currentSeat === mySeat);
   const showColorPicker = isMyTurn && !isSimulating && (frameStatus === "COLOR_PHASE" || frameStatus === "FREE_BALL");
 
   return (
