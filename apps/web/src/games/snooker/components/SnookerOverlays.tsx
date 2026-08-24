@@ -3,6 +3,8 @@ import { Trophy, RefreshCw, ArrowLeft, Clock, AlertTriangle, Sparkles, Volume2, 
 import type { SnookerPlayer, SnookerBall, SnookerTarget, SnookerFrameStatus, SnookerBallType, SnookerFrameHistoryItem } from "@gaming-hub/game-engine";
 
 interface SnookerHUDProps {
+  player1Name?: string;
+  player2Name?: string;
   players: SnookerPlayer[];
   currentSeat: number;
   mySeat: number;
@@ -33,6 +35,8 @@ interface SnookerHUDProps {
 }
 
 export const SnookerHUD: React.FC<SnookerHUDProps> = ({
+  player1Name,
+  player2Name,
   players,
   currentSeat,
   mySeat,
@@ -106,7 +110,7 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold text-slate-200">
-                  {mySeat === 0 ? "You" : "Player 1"}
+                  {mySeat === 0 ? (player1Name ? `${player1Name} (You)` : "You") : (player1Name || "Player 1")}
                 </span>
                 {currentSeat === 0 && (
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
@@ -169,7 +173,7 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
                   <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
                 )}
                 <span className="text-xs font-bold text-slate-200">
-                  {mySeat === 1 ? "You" : mode === "ai" ? "AI Bot" : "Player 2"}
+                  {mySeat === 1 ? (player2Name ? `${player2Name} (You)` : "You") : mode === "ai" ? "AI Bot" : (player2Name || "Player 2")}
                 </span>
               </div>
               <div className="text-[11px] text-blue-400 font-semibold">

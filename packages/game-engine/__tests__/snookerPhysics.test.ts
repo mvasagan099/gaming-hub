@@ -74,7 +74,7 @@ describe("Snooker Physics Simulation", () => {
       color: "#ffffff",
       points: 0,
       homeSpot: null,
-      x: 480,
+      x: 350,
       y: 100,
       vx: 0,
       vy: 0,

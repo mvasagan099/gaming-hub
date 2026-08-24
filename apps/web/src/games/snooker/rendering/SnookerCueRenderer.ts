@@ -8,6 +8,7 @@ import {
   type SnookerBall,
 } from "@gaming-hub/game-engine";
 import { SNOOKER_VISUAL_CONFIG } from "../constants/SnookerVisualConfig";
+import { Snooker3DCamera } from "./Snooker3DCamera";
 
 export class SnookerCueRenderer {
   public static drawAimGuide(
@@ -15,15 +16,17 @@ export class SnookerCueRenderer {
     cueBall: SnookerBall,
     balls: SnookerBall[],
     angle: number,
-    tableWidth: number
+    tableWidth: number,
+    is3D = true,
+    tableHeight = tableWidth / 2
   ): void {
     const scale = tableWidth / SNOOKER_TABLE_WIDTH;
-    const cx = cueBall.x * scale;
-    const cy = cueBall.y * scale;
+    const rawCx = cueBall.x * scale;
+    const rawCy = cueBall.y * scale;
     const r = SNOOKER_BALL_RADIUS * scale;
     const { aimGuide } = SNOOKER_VISUAL_CONFIG;
 
-    // Raycast forward along angle to find first obstacle (ball or cushion)
+    // Raycast forward along angle in 2D space to find exact impact point
     const dirX = Math.cos(angle);
     const dirY = Math.sin(angle);
 
@@ -37,8 +40,8 @@ export class SnookerCueRenderer {
       const bx = b.x * scale;
       const by = b.y * scale;
 
-      const toBallX = bx - cx;
-      const toBallY = by - cy;
+      const toBallX = bx - rawCx;
+      const toBallY = by - rawCy;
 
       const proj = toBallX * dirX + toBallY * dirY;
       if (proj <= 0) continue; // Behind cue ball
@@ -69,57 +72,100 @@ export class SnookerCueRenderer {
       let dX = 9999;
       let dY = 9999;
 
-      if (dirX > 0) dX = (right - cx) / dirX;
-      else if (dirX < 0) dX = (left - cx) / dirX;
+      if (dirX > 0) dX = (right - rawCx) / dirX;
+      else if (dirX < 0) dX = (left - rawCx) / dirX;
 
-      if (dirY > 0) dY = (bottom - cy) / dirY;
-      else if (dirY < 0) dY = (top - cy) / dirY;
+      if (dirY > 0) dY = (bottom - rawCy) / dirY;
+      else if (dirY < 0) dY = (top - rawCy) / dirY;
 
       closestDist = Math.min(dX, dY);
     }
 
-    const impactX = cx + dirX * closestDist;
-    const impactY = cy + dirY * closestDist;
+    const rawImpactX = rawCx + dirX * closestDist;
+    const rawImpactY = rawCy + dirY * closestDist;
+
+    // Project cue ball and impact point to 3D space
+    const projCue = Snooker3DCamera.project(rawCx, rawCy, tableWidth, tableHeight, is3D);
+    const projImpact = Snooker3DCamera.project(rawImpactX, rawImpactY, tableWidth, tableHeight, is3D);
 
     ctx.save();
 
-    // Draw Laser Aim Line
+    // ── 1. Laser Aim Line (Primary Cue Ball Trajectory) ────────────────────
     ctx.strokeStyle = aimGuide.primaryColor;
-    ctx.lineWidth = 1.5 * scale;
+    ctx.lineWidth = 1.6 * scale * projCue.scale;
     ctx.setLineDash([6 * scale, 4 * scale]);
     ctx.beginPath();
-    ctx.moveTo(cx + dirX * r, cy + dirY * r);
-    ctx.lineTo(impactX, impactY);
+    ctx.moveTo(projCue.x + dirX * r * projCue.scale, projCue.y + dirY * r * projCue.scale);
+    ctx.lineTo(projImpact.x, projImpact.y);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Draw Ghost Ball at Impact Point
+    // ── 2. Ghost Ball at Point of Impact ──────────────────────────────────
     ctx.strokeStyle = aimGuide.ghostBallBorder;
     ctx.fillStyle = aimGuide.ghostBallColor;
-    ctx.lineWidth = 1.5 * scale;
+    ctx.lineWidth = 1.5 * scale * projImpact.scale;
     ctx.beginPath();
-    ctx.arc(impactX, impactY, r, 0, Math.PI * 2);
+    ctx.arc(projImpact.x, projImpact.y, r * projImpact.scale, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // If hitting an object ball, draw the predicted target ball deflection path
+    // ── 3. Realistic Collision Trajectories (Object Ball & Cue Deflection) ──
     if (hitBall) {
-      const bx = hitBall.x * scale;
-      const by = hitBall.y * scale;
-      const normalX = bx - impactX;
-      const normalY = by - impactY;
-      const normalDist = Math.hypot(normalX, normalY);
+      const hx = hitBall.x * scale;
+      const hy = hitBall.y * scale;
 
-      if (normalDist > 0.01) {
-        const nx = normalX / normalDist;
-        const ny = normalY / normalDist;
+      // Normal vector from Cue Ball impact center to Object Ball center
+      let nX = hx - rawImpactX;
+      let nY = hy - rawImpactY;
+      const nLen = Math.hypot(nX, nY);
 
-        ctx.strokeStyle = aimGuide.targetBallLine;
-        ctx.lineWidth = 2 * scale;
+      if (nLen > 0) {
+        nX /= nLen;
+        nY /= nLen;
+
+        // A. Object Ball Target Path (Gold Dashed Line extending from Object Ball)
+        const targetLineLen = 60 * scale;
+        const rawObjTargetX = hx + nX * targetLineLen;
+        const rawObjTargetY = hy + nY * targetLineLen;
+
+        const projObjStart = Snooker3DCamera.project(hx, hy, tableWidth, tableHeight, is3D);
+        const projObjEnd = Snooker3DCamera.project(rawObjTargetX, rawObjTargetY, tableWidth, tableHeight, is3D);
+
+        ctx.strokeStyle = aimGuide.targetBallLine; // Gold dashed target line
+        ctx.lineWidth = 1.5 * scale * projImpact.scale;
+        ctx.setLineDash([5 * scale, 3 * scale]);
         ctx.beginPath();
-        ctx.moveTo(bx, by);
-        ctx.lineTo(bx + nx * 60 * scale, by + ny * 60 * scale);
+        ctx.moveTo(projObjStart.x, projObjStart.y);
+        ctx.lineTo(projObjEnd.x, projObjEnd.y);
         ctx.stroke();
+        ctx.setLineDash([]);
+
+        // B. Cue Ball 90-Degree Tangent Deflection Line (White Dashed Line for Cut Shots)
+        const dot = dirX * nX + dirY * nY; // Cut angle projection
+        let tanX = dirX - nX * dot;
+        let tanY = dirY - nY * dot;
+        const tanLen = Math.hypot(tanX, tanY);
+
+        // Only render tangent line if cut shot is off-center (> 4% cut)
+        if (tanLen > 0.04) {
+          tanX /= tanLen;
+          tanY /= tanLen;
+
+          const cueDeflectLen = 45 * scale * Math.min(1.0, tanLen * 2.0);
+          const rawCueDeflectX = rawImpactX + tanX * cueDeflectLen;
+          const rawCueDeflectY = rawImpactY + tanY * cueDeflectLen;
+
+          const projCueDeflect = Snooker3DCamera.project(rawCueDeflectX, rawCueDeflectY, tableWidth, tableHeight, is3D);
+
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.65)";
+          ctx.lineWidth = 1.2 * scale * projImpact.scale;
+          ctx.setLineDash([3 * scale, 3 * scale]);
+          ctx.beginPath();
+          ctx.moveTo(projImpact.x, projImpact.y);
+          ctx.lineTo(projCueDeflect.x, projCueDeflect.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
       }
     }
 
@@ -131,79 +177,87 @@ export class SnookerCueRenderer {
     cueBall: SnookerBall,
     angle: number,
     power: number,
-    tableWidth: number
+    tableWidth: number,
+    strikeProgress = 0,
+    is3D = true,
+    tableHeight = tableWidth / 2
   ): void {
     const scale = tableWidth / SNOOKER_TABLE_WIDTH;
-    const cx = cueBall.x * scale;
-    const cy = cueBall.y * scale;
+    const rawCx = cueBall.x * scale;
+    const rawCy = cueBall.y * scale;
     const r = SNOOKER_BALL_RADIUS * scale;
     const { cueStick } = SNOOKER_VISUAL_CONFIG;
 
-    // Pullback offset based on normalized power (0 to 1)
-    const pullback = (14 + power * 55) * scale;
-    const cueLength = 260 * scale;
-    const tipWidth = 4.0 * scale;
-    const buttWidth = 9.5 * scale;
+    // Backward unit vector along reverse aim line
+    const backX = -Math.cos(angle);
+    const backY = -Math.sin(angle);
+
+    // Carrom pull distance calculation
+    const baseOffset = r + 6 * scale;
+    const maxPull = 70 * scale;
+    const pullDistance = baseOffset + power * maxPull * (1 - strikeProgress);
+
+    const cueLength = 320 * scale;
+    const tipRadius = 2.5 * scale;
+    const buttRadius = 5.5 * scale;
+
+    const rawTipX = rawCx + backX * pullDistance;
+    const rawTipY = rawCy + backY * pullDistance;
+    const rawButtX = rawCx + backX * (pullDistance + cueLength);
+    const rawButtY = rawCy + backY * (pullDistance + cueLength);
+
+    const projTip = Snooker3DCamera.project(rawTipX, rawTipY, tableWidth, tableHeight, is3D);
+    const projButt = Snooker3DCamera.project(rawButtX, rawButtY, tableWidth, tableHeight, is3D);
+
+    const perpX = -Math.sin(angle);
+    const perpY = Math.cos(angle);
 
     ctx.save();
-    ctx.translate(cx, cy);
-    // Rotate opposite to shot angle
-    ctx.rotate(angle + Math.PI);
 
-    // ── 1. Cue Stick Drop Shadow ─────────────────────────────────────────────
-    ctx.save();
-    ctx.shadowColor = cueStick.shadowColor;
-    ctx.shadowBlur = 10 * scale;
-    ctx.shadowOffsetY = 6 * scale;
-
-    ctx.fillStyle = cueStick.woodBase;
+    // ── 1. 3D Cue Drop Shadow on Cloth Bed ──────────────────────────────────
+    const shadowOffset = 6 * scale * projTip.scale;
+    ctx.fillStyle = cueStick.shadowColor;
     ctx.beginPath();
-    ctx.moveTo(r + pullback, -tipWidth / 2);
-    ctx.lineTo(r + pullback + cueLength, -buttWidth / 2);
-    ctx.lineTo(r + pullback + cueLength, buttWidth / 2);
-    ctx.lineTo(r + pullback, tipWidth / 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-
-    // ── 2. Ash Wood Shaft Gradient ───────────────────────────────────────────
-    const shaftGrad = ctx.createLinearGradient(0, -buttWidth / 2, 0, buttWidth / 2);
-    shaftGrad.addColorStop(0, "#fef3c7");
-    shaftGrad.addColorStop(0.35, cueStick.woodBase);
-    shaftGrad.addColorStop(0.85, cueStick.woodGrain);
-    shaftGrad.addColorStop(1, "#78350f");
-
-    ctx.fillStyle = shaftGrad;
-    ctx.beginPath();
-    ctx.moveTo(r + pullback, -tipWidth / 2);
-    ctx.lineTo(r + pullback + cueLength, -buttWidth / 2);
-    ctx.lineTo(r + pullback + cueLength, buttWidth / 2);
-    ctx.lineTo(r + pullback, tipWidth / 2);
+    ctx.moveTo(
+      projTip.x + perpX * tipRadius * projTip.scale + shadowOffset,
+      projTip.y + perpY * tipRadius * projTip.scale + shadowOffset
+    );
+    ctx.lineTo(
+      projTip.x - perpX * tipRadius * projTip.scale + shadowOffset,
+      projTip.y - perpY * tipRadius * projTip.scale + shadowOffset
+    );
+    ctx.lineTo(
+      projButt.x - perpX * buttRadius * projButt.scale + shadowOffset,
+      projButt.y - perpY * buttRadius * projButt.scale + shadowOffset
+    );
+    ctx.lineTo(
+      projButt.x + perpX * buttRadius * projButt.scale + shadowOffset,
+      projButt.y + perpY * buttRadius * projButt.scale + shadowOffset
+    );
     ctx.closePath();
     ctx.fill();
 
-    // ── 3. Ebony Butt Section ────────────────────────────────────────────────
-    const wrapStart = r + pullback + cueLength * 0.6;
-    const wrapEnd = r + pullback + cueLength * 0.98;
-    ctx.fillStyle = cueStick.ebonyButt;
+    // ── 2. Polished Ash Wood Cue Stick ──────────────────────────────────────
+    const cueGrad = ctx.createLinearGradient(projTip.x, projTip.y, projButt.x, projButt.y);
+    cueGrad.addColorStop(0, cueStick.tipColor);
+    cueGrad.addColorStop(0.04, cueStick.ferruleColor); // Brass Ferrule
+    cueGrad.addColorStop(0.08, cueStick.woodBase); // Ash Shaft
+    cueGrad.addColorStop(0.65, cueStick.woodGrain); // Wood grain transition
+    cueGrad.addColorStop(1.0, cueStick.ebonyButt); // Ebony Butt
+
+    ctx.fillStyle = cueGrad;
     ctx.beginPath();
-    ctx.moveTo(wrapStart, -buttWidth * 0.4);
-    ctx.lineTo(wrapEnd, -buttWidth * 0.49);
-    ctx.lineTo(wrapEnd, buttWidth * 0.49);
-    ctx.lineTo(wrapStart, buttWidth * 0.4);
+    ctx.moveTo(projTip.x + perpX * tipRadius * projTip.scale, projTip.y + perpY * tipRadius * projTip.scale);
+    ctx.lineTo(projTip.x - perpX * tipRadius * projTip.scale, projTip.y - perpY * tipRadius * projTip.scale);
+    ctx.lineTo(projButt.x - perpX * buttRadius * projButt.scale, projButt.y - perpY * buttRadius * projButt.scale);
+    ctx.lineTo(projButt.x + perpX * buttRadius * projButt.scale, projButt.y + perpY * buttRadius * projButt.scale);
     ctx.closePath();
     ctx.fill();
 
-    // ── 4. Brass Ferrule & Blue Chalked Tip ───────────────────────────────────
-    // Brass Ferrule
-    ctx.fillStyle = cueStick.ferruleColor;
-    ctx.fillRect(r + pullback, -tipWidth / 2, 5 * scale, tipWidth);
-
-    // Chalked Tip
-    ctx.fillStyle = cueStick.tipColor;
-    ctx.beginPath();
-    ctx.arc(r + pullback, 0, tipWidth / 2, Math.PI / 2, (3 * Math.PI) / 2);
-    ctx.fill();
+    // Outer subtle outline & specular highlight edge
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.lineWidth = 0.8 * scale;
+    ctx.stroke();
 
     ctx.restore();
   }

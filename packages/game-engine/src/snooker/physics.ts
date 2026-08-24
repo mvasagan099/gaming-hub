@@ -187,19 +187,23 @@ export function simulateSnookerShot(
 
         for (let pIdx = 0; pIdx < SNOOKER_POCKETS.length; pIdx++) {
           const pocket = SNOOKER_POCKETS[pIdx];
-          const dist = Math.hypot(b.x - pocket.x, b.y - pocket.y);
+          const dx = pocket.x - b.x;
+          const dy = pocket.y - b.y;
+          const dist = Math.hypot(dx, dy);
 
-          // Gravitational suction toward pocket throat
-          if (dist < pocket.radius + 6) {
-            const pull = 0.35 / SNOOKER_SUB_STEPS;
-            b.vx += ((pocket.x - b.x) / dist) * pull;
-            b.vy += ((pocket.y - b.y) / dist) * pull;
+          // Gravitational suction toward pocket center
+          if (dist < pocket.radius + 10) {
+            const pull = 1.2 / SNOOKER_SUB_STEPS;
+            b.vx += (dx / dist) * pull;
+            b.vy += (dy / dist) * pull;
           }
 
-          // Full pocket drop
-          if (dist < pocket.radius - 2) {
+          // Full pocket capture (if ball center enters pocket mouth)
+          if (dist < pocket.radius + 5) {
             b.pocketed = true;
             b.pocketIndex = pIdx;
+            b.x = pocket.x;
+            b.y = pocket.y;
             b.vx = 0;
             b.vy = 0;
             if (!pocketedBallIds.includes(b.id)) {
@@ -263,10 +267,10 @@ export function simulateSnookerShot(
       for (const b of balls) {
         if (b.pocketed) continue;
 
-        // Skip cushion check if ball is entering pocket throat
+        // Skip cushion check if ball is near any pocket throat
         let nearPocket = false;
         for (const pocket of SNOOKER_POCKETS) {
-          if (Math.hypot(b.x - pocket.x, b.y - pocket.y) < pocket.radius + 8) {
+          if (Math.hypot(b.x - pocket.x, b.y - pocket.y) < pocket.radius + 14) {
             nearPocket = true;
             break;
           }
@@ -306,6 +310,26 @@ export function simulateSnookerShot(
     if (!isMoving) {
       recordKeyframe();
       break;
+    }
+  }
+
+  // Safety Sweep: Pot any ball left resting in a pocket mouth at simulation end
+  for (const b of balls) {
+    if (b.pocketed) continue;
+    for (let pIdx = 0; pIdx < SNOOKER_POCKETS.length; pIdx++) {
+      const pocket = SNOOKER_POCKETS[pIdx];
+      if (Math.hypot(b.x - pocket.x, b.y - pocket.y) < pocket.radius + 6) {
+        b.pocketed = true;
+        b.pocketIndex = pIdx;
+        b.x = pocket.x;
+        b.y = pocket.y;
+        b.vx = 0;
+        b.vy = 0;
+        if (!pocketedBallIds.includes(b.id)) {
+          pocketedBallIds.push(b.id);
+        }
+        break;
+      }
     }
   }
 

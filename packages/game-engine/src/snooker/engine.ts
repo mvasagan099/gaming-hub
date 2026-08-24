@@ -8,6 +8,7 @@ import type {
   RandomSource,
 } from "../types";
 import {
+  SNOOKER_SPOTS,
   SNOOKER_BAULK_X,
   SNOOKER_D_RADIUS,
   SNOOKER_TABLE_CENTER_Y,
@@ -84,6 +85,9 @@ export class SnookerEngine implements EngineInstance {
       redsRemaining: 15,
       targetBall: "RED",
       freeBallAvailable: false,
+      freeBallTarget: null,
+      isRespottedBlack: false,
+      isColorAfterFinalRed: false,
       nominatedBall: null,
       balls: createInitialSnookerSetup(),
       players: snookerPlayers,
@@ -364,6 +368,17 @@ export class SnookerEngine implements EngineInstance {
       }
 
       case "concede": {
+        if (this.state.frameStatus === "FRAME_END" || this.state.frameStatus === "MATCH_END" || this.state.finished) {
+          return {
+            ok: false,
+            error: "Frame has already concluded",
+            state: this.state as unknown as JsonObject,
+            events,
+            finished: this.state.finished,
+            winnerSeats: this.state.winnerSeats,
+          };
+        }
+
         const opponentSeat = 1 - seat;
         const opponent = this.state.players.find((p) => p.seat === opponentSeat) || this.state.players[0];
 
@@ -449,7 +464,17 @@ export class SnookerEngine implements EngineInstance {
     this.state.lastFoul = "Turn timeout (4 points awarded to opponent)";
     this.state.foulPoints = 4;
     this.state.cueBallInHand = true;
-    this.state.inBaulkOnly = false;
+    this.state.inBaulkOnly = true;
+
+    const cue = this.state.balls.find((b) => b.type === "cue");
+    if (cue) {
+      cue.pocketed = false;
+      cue.pocketIndex = null;
+      cue.x = SNOOKER_SPOTS.brown.x - 30;
+      cue.y = SNOOKER_SPOTS.brown.y;
+      cue.vx = 0;
+      cue.vy = 0;
+    }
     this.state.turnNumber += 1;
     this.state.stateVersion += 1;
     this.state.lastActionAtMs = Date.now();

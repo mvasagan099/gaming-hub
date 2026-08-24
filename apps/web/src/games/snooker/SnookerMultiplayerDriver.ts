@@ -3,15 +3,21 @@ import type {
   SnookerTrajectoryKeyframe,
   SnookerBallType,
 } from "@gaming-hub/game-engine";
-import { useMultiplayerStore } from "../../store/multiplayerStore";
+import { useMultiplayerStore, type WinnerInfo } from "../../store/multiplayerStore";
 
 export class SnookerMultiplayerDriver {
-  private mySeat: number;
+  public readonly mySeat: number;
   private onStateUpdate: (state: SnookerState) => void;
   private onKeyframeAnimation: (keyframes: SnookerTrajectoryKeyframe[], targetState: SnookerState) => void;
   private onRemoteAim: (angle: number, power: number) => void;
+
+  private destroyed = false;
+  private unsubscribe: (() => void) | null = null;
+  private lastAnimatedActionMs: number | null = null;
+  private lastAnimatedShotId: string | null = null;
   private lastAimSentAt = 0;
   private aimSeq = 0;
+  private lastReceivedAimSeq = -1;
 
   constructor(
     mySeat: number,
@@ -23,58 +29,82 @@ export class SnookerMultiplayerDriver {
     this.onStateUpdate = onStateUpdate;
     this.onKeyframeAnimation = onKeyframeAnimation;
     this.onRemoteAim = onRemoteAim;
-
-    this.attachSocketListeners();
   }
 
-  private get socket() {
-    return useMultiplayerStore.getState().socket;
+  private handleRemoteAim = (payload: {
+    seat: number;
+    angle: number;
+    power: number;
+    sequence?: number;
+  }) => {
+    if (this.destroyed) return;
+    if (payload.seat === this.mySeat) return;
+    if (typeof payload.sequence === "number" && payload.sequence <= this.lastReceivedAimSeq) {
+      return;
+    }
+    if (typeof payload.sequence === "number") {
+      this.lastReceivedAimSeq = payload.sequence;
+    }
+    this.onRemoteAim(payload.angle, payload.power);
+  };
+
+  public start(): void {
+    const store = useMultiplayerStore.getState();
+
+    // 1. Initial State Hydration on Mount
+    if (store.gameState) {
+      this.applyState(store.gameState as unknown as SnookerState);
+    }
+
+    // 2. Attach Live Aim Socket Listener
+    const socket = store.socket;
+    if (socket) {
+      socket.on("snooker:aim-position" as any, this.handleRemoteAim as any);
+    }
+
+    // 3. Subscribe to Authoritative State Updates from Multiplayer Store
+    this.unsubscribe = useMultiplayerStore.subscribe((state, prev) => {
+      if (this.destroyed) return;
+      if (state.renderKey !== prev.renderKey || state.gameState !== prev.gameState || state.winner !== prev.winner) {
+        if (state.gameState) {
+          this.applyState(state.gameState as unknown as SnookerState);
+        }
+      }
+    });
   }
 
-  private attachSocketListeners(): void {
-    const socket = this.socket;
-    if (!socket) return;
+  private applyState(state: SnookerState): void {
+    if (!state || this.destroyed) return;
 
-    // 1. Authoritative Game State Sync
-    socket.on("game:state:authoritative", (payload: any) => {
-      const state = payload?.gameState as SnookerState;
-      if (!state) return;
+    const shotId = state.lastProcessedShotId || (state.lastShot?.shotId ?? null);
+    const actionMs = state.lastActionAtMs ?? 0;
 
-      if (state.keyframes && state.keyframes.length > 0) {
-        this.onKeyframeAnimation(state.keyframes, state);
-      } else {
-        this.onStateUpdate(state);
-      }
-    });
+    const hasKeyframes = Array.isArray(state.keyframes) && state.keyframes.length > 0;
+    const isNewAnimation =
+      (shotId && shotId !== this.lastAnimatedShotId) ||
+      (actionMs > 0 && actionMs !== this.lastAnimatedActionMs);
 
-    socket.on("game:state", (payload: any) => {
-      const state = payload?.state as SnookerState;
-      if (!state) return;
-
-      if (state.keyframes && state.keyframes.length > 0) {
-        this.onKeyframeAnimation(state.keyframes, state);
-      } else {
-        this.onStateUpdate(state);
-      }
-    });
-
-    // 2. Opponent Live Aim Sync
-    socket.on("snooker:aim-position" as any, (payload: any) => {
-      if (payload.seat !== this.mySeat) {
-        this.onRemoteAim(payload.angle, payload.power);
-      }
-    });
+    if (hasKeyframes && isNewAnimation) {
+      if (shotId) this.lastAnimatedShotId = shotId;
+      if (actionMs) this.lastAnimatedActionMs = actionMs;
+      this.onKeyframeAnimation(state.keyframes, state);
+    } else {
+      this.onStateUpdate(state);
+    }
   }
 
   public sendAim(angle: number, power: number): void {
     const now = Date.now();
-    if (now - this.lastAimSentAt < 60) return; // Throttle to ~16Hz
+    if (now - this.lastAimSentAt < 40) return; // Throttle to 25Hz
     this.lastAimSentAt = now;
 
-    const socket = this.socket;
-    if (!socket) return;
+    const socket = useMultiplayerStore.getState().socket;
+    const room = useMultiplayerStore.getState().room;
+    if (!socket || !room) return;
 
     socket.emit("snooker:aim-position" as any, {
+      roomId: room.id,
+      matchId: room.matchId,
       angle,
       power,
       sequence: ++this.aimSeq,
@@ -90,30 +120,18 @@ export class SnookerMultiplayerDriver {
     shotId?: string,
     expectedStateVersion?: number
   ): Promise<{ ok: boolean; error?: string }> {
-    const socket = this.socket;
-    if (!socket) return { ok: false, error: "Socket not connected" };
-
-    return new Promise((resolve) => {
-      socket.emit(
-        "game:action" as any,
-        {
-          type: "strike",
-          shotId: shotId || `shot-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          expectedStateVersion,
-          angle,
-          power,
-          spinX,
-          spinY,
-        },
-        (response: any) => {
-          if (response?.ok) {
-            resolve({ ok: true });
-          } else {
-            resolve({ ok: false, error: response?.error || "Action failed" });
-          }
-        }
-      );
-    });
+    const actionPayload: any = {
+      type: "strike",
+      shotId: shotId || `shot-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      angle,
+      power,
+      spinX,
+      spinY,
+    };
+    if (expectedStateVersion !== undefined) {
+      actionPayload.expectedStateVersion = expectedStateVersion;
+    }
+    return useMultiplayerStore.getState().sendGameAction(actionPayload);
   }
 
   public async sendPlaceCueBall(
@@ -121,81 +139,51 @@ export class SnookerMultiplayerDriver {
     y: number,
     expectedStateVersion?: number
   ): Promise<{ ok: boolean; error?: string }> {
-    const socket = this.socket;
-    if (!socket) return { ok: false, error: "Socket not connected" };
-
-    return new Promise((resolve) => {
-      socket.emit(
-        "game:action" as any,
-        {
-          type: "place-cue-ball",
-          x,
-          y,
-          expectedStateVersion,
-        },
-        (response: any) => {
-          if (response?.ok) {
-            resolve({ ok: true });
-          } else {
-            resolve({ ok: false, error: response?.error || "Placement failed" });
-          }
-        }
-      );
-    });
+    const actionPayload: any = {
+      type: "place-cue-ball",
+      x,
+      y,
+    };
+    if (expectedStateVersion !== undefined) {
+      actionPayload.expectedStateVersion = expectedStateVersion;
+    }
+    return useMultiplayerStore.getState().sendGameAction(actionPayload);
   }
 
   public async sendNominateColor(
     color: SnookerBallType,
     expectedStateVersion?: number
   ): Promise<{ ok: boolean; error?: string }> {
-    const socket = this.socket;
-    if (!socket) return { ok: false, error: "Socket not connected" };
-
-    return new Promise((resolve) => {
-      socket.emit(
-        "game:action" as any,
-        {
-          type: "nominate-color",
-          color,
-          expectedStateVersion,
-        },
-        (response: any) => {
-          if (response?.ok) {
-            resolve({ ok: true });
-          } else {
-            resolve({ ok: false, error: response?.error || "Nomination failed" });
-          }
-        }
-      );
-    });
+    const actionPayload: any = {
+      type: "nominate-color",
+      color,
+    };
+    if (expectedStateVersion !== undefined) {
+      actionPayload.expectedStateVersion = expectedStateVersion;
+    }
+    return useMultiplayerStore.getState().sendGameAction(actionPayload);
   }
 
   public async sendNextFrame(): Promise<{ ok: boolean; error?: string }> {
-    const socket = this.socket;
-    if (!socket) return { ok: false, error: "Socket not connected" };
-
-    return new Promise((resolve) => {
-      socket.emit(
-        "game:action" as any,
-        {
-          type: "next-frame",
-        },
-        (response: any) => {
-          if (response?.ok) {
-            resolve({ ok: true });
-          } else {
-            resolve({ ok: false, error: response?.error || "Next frame failed" });
-          }
-        }
-      );
+    return useMultiplayerStore.getState().sendGameAction({
+      type: "next-frame",
     });
   }
 
+  public stop(): void {
+    this.destroyed = true;
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.unsubscribe = null;
+    }
+    const socket = useMultiplayerStore.getState().socket;
+    if (socket) {
+      socket.off("snooker:aim-position" as any, this.handleRemoteAim as any);
+    }
+  }
+
   public destroy(): void {
-    const socket = this.socket;
-    if (!socket) return;
-    socket.off("game:state:authoritative");
-    socket.off("game:state");
-    socket.off("snooker:aim-position" as any);
+    this.stop();
   }
 }
+export default SnookerMultiplayerDriver;

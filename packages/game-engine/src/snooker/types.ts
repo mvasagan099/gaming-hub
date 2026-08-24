@@ -193,6 +193,9 @@ export interface SnookerState extends JsonObject {
   redsRemaining: number;
   targetBall: SnookerTarget;
   freeBallAvailable: boolean;
+  freeBallTarget: SnookerTarget | null;
+  isRespottedBlack: boolean;
+  isColorAfterFinalRed: boolean;
   nominatedBall: SnookerBallType | null;
 
   balls: SnookerBall[];
