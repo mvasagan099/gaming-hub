@@ -88,29 +88,39 @@ async function runCleanupErrorEvents(): Promise<JobResult> {
 
 async function runTournamentSchedulerJob(): Promise<JobResult> {
   const { runTournamentScheduler } = await import("./tournamentScheduler");
-  const result = await runTournamentScheduler();
+  const { TournamentRecoveryService } = await import("./tournamentRecoveryService");
+
+  const [schedResult, recoveryResult] = await Promise.all([
+    runTournamentScheduler(),
+    TournamentRecoveryService.recoverAllTournamentStates(),
+  ]);
+
   const processed =
-    result.registrationsClosed +
-    result.tournamentsStarted +
-    result.matchesRecovered +
-    result.resultsRecovered +
-    result.byesRecovered +
-    result.nextRoundMatchesRecovered +
-    result.settlementsRetried;
+    schedResult.registrationsClosed +
+    schedResult.tournamentsStarted +
+    schedResult.matchesRecovered +
+    schedResult.resultsRecovered +
+    schedResult.byesRecovered +
+    schedResult.nextRoundMatchesRecovered +
+    schedResult.settlementsRetried +
+    recoveryResult.expiredMatchesFinalized +
+    recoveryResult.nextRoundsSpawned;
+
   return {
     processed,
     details: {
-      registrationsClosed: result.registrationsClosed,
-      tournamentsStarted: result.tournamentsStarted,
-      matchesRecovered: result.matchesRecovered,
-      resultsRecovered: result.resultsRecovered,
-      byesRecovered: result.byesRecovered,
-      nextRoundMatchesRecovered: result.nextRoundMatchesRecovered,
-      staleMatchesDetected: result.staleMatchesDetected,
-      settlementsRetried: result.settlementsRetried,
-      referencesCleaned: result.referencesChecked.cleaned,
-      inconsistencies: result.referencesChecked.inconsistencies,
-      errors: result.errors,
+      registrationsClosed: schedResult.registrationsClosed + recoveryResult.registrationsClosed,
+      tournamentsStarted: schedResult.tournamentsStarted + recoveryResult.tournamentsStarted,
+      matchesRecovered: schedResult.matchesRecovered + recoveryResult.matchesRecovered,
+      expiredMatchesFinalized: recoveryResult.expiredMatchesFinalized,
+      resultsRecovered: schedResult.resultsRecovered + recoveryResult.resultsProcessed,
+      byesRecovered: schedResult.byesRecovered + recoveryResult.byesAdvanced,
+      nextRoundMatchesRecovered: schedResult.nextRoundMatchesRecovered + recoveryResult.nextRoundsSpawned,
+      staleMatchesDetected: schedResult.staleMatchesDetected,
+      settlementsRetried: schedResult.settlementsRetried + recoveryResult.settlementsRetried,
+      referencesCleaned: schedResult.referencesChecked.cleaned,
+      inconsistencies: schedResult.referencesChecked.inconsistencies,
+      errors: schedResult.errors,
     },
   };
 }

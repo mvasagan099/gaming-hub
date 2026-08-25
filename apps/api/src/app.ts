@@ -36,6 +36,8 @@ import { adminRolesRoutes } from "./routes/adminRoles";
 import { featureFlagsRoutes } from "./routes/featureFlags";
 import { gamesRoutes } from "./routes/games";
 import { adminGamesRoutes } from "./routes/adminGames";
+import { adminAntiCheatRoutes } from "./routes/adminAntiCheat";
+import { matchmakingRoutes } from "./routes/matchmaking";
 import { isFeatureEnabled } from "./services/featureFlags";
 import { instrument } from "./services/metrics";
 
@@ -148,6 +150,8 @@ export function buildApp() {
   void app.register(featureFlagsRoutes);
   void app.register(gamesRoutes);
   void app.register(adminGamesRoutes);
+  void app.register(adminAntiCheatRoutes);
+  void app.register(matchmakingRoutes);
 
   return app;
 }

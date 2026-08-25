@@ -251,6 +251,49 @@ html[data-contrast="high"] *:focus-visible {
   outline-offset: 1px;
 }
 
+/* Safe Area Inset Support & Responsive Layout Helpers */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+.safe-top {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+.safe-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+.safe-left {
+  padding-left: max(0.5rem, env(safe-area-inset-left));
+}
+.safe-right {
+  padding-right: max(0.5rem, env(safe-area-inset-right));
+}
+
+/* Touch-friendly Minimum Target */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Fluid Typography Utilities */
+.text-fluid-title {
+  font-size: clamp(1.25rem, 4vw, 2.5rem);
+  line-height: 1.15;
+}
+
+.text-fluid-hero {
+  font-size: clamp(1.5rem, 5vw, 3.25rem);
+  line-height: 1.1;
+}
+
+.text-fluid-score {
+  font-size: clamp(1.5rem, 3.5vw, 2.75rem);
+  line-height: 1;
+}
+
 /* Respect reduced motion preferences */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -262,3 +305,4 @@ html[data-contrast="high"] *:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+

@@ -101,7 +101,7 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
 
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: CricketEngineOptions) {
     const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 5000 };
-    const matchTimer = options?.matchTimer ?? { matchDurationMs: 1200000, warningThresholdMs: 60000 };
+    const matchTimer = options?.matchTimer ?? { matchDurationMs: 600000, warningThresholdMs: 30000 };
     super(players, rng, {
       turnTimer,
       matchTimer,
@@ -748,6 +748,27 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
     if (runs === 4) return "FOUR! Beautiful timing!";
     if (runs > 0) return `${runs} runs scored!`;
     return "Dot ball.";
+  }
+
+  /**
+   * Deterministic timeout winner resolution for Cricket:
+   * 1. Team with higher total runs scored.
+   * 2. If tied on runs, team with fewest wickets lost.
+   * 3. If tied, draw across teams.
+   */
+  protected override resolveTimeoutWinner(state: CricketState): number[] {
+    const s0 = state.team1Score;
+    const s1 = state.team2Score;
+    if (s0 > s1) return [0];
+    if (s1 > s0) return [1];
+
+    // Tied on runs: compare wickets lost (fewer is better)
+    const w0 = state.team1Wickets;
+    const w1 = state.team2Wickets;
+    if (w0 < w1) return [0];
+    if (w1 < w0) return [1];
+
+    return [0, 1];
   }
 }
 

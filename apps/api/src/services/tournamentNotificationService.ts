@@ -1,6 +1,7 @@
 import { prisma, Prisma } from "@gaming-hub/db";
 import type { TournamentNotificationEvent } from "@gaming-hub/shared";
 import { notifyUserSocket } from "./socketBridge";
+import { TournamentEmailService } from "./tournamentEmailService";
 
 // ---------------------------------------------------------------------------
 // Round name helper
@@ -192,6 +193,14 @@ export class TournamentNotificationService {
       },
       referenceId: `reg_${params.playerId}`,
     });
+
+    // Transactional Email notification (informational backup)
+    await TournamentEmailService.sendRegistrationEmail({
+      userId: params.playerId,
+      tournamentId: params.tournamentId,
+      tournamentTitle: params.tournamentTitle,
+      gameId: (params as any).gameId ?? "chess",
+    }).catch(() => undefined);
   }
 
   /**
@@ -299,6 +308,13 @@ export class TournamentNotificationService {
         data: {},
         referenceId: `started`,
       });
+
+      // Email backup
+      await TournamentEmailService.sendTournamentStartedEmail({
+        userId: player.userId,
+        tournamentId: params.tournamentId,
+        tournamentTitle: params.tournamentTitle,
+      }).catch(() => undefined);
     }
   }
 
@@ -346,6 +362,16 @@ export class TournamentNotificationService {
       referenceId: params.matchId,
     });
 
+    await TournamentEmailService.sendMatchAssignedEmail({
+      userId: params.playerAId,
+      tournamentId: params.tournamentId,
+      tournamentTitle: params.tournamentTitle,
+      matchId: params.matchId,
+      roundNumber: roundName,
+      gameId: params.gameId,
+      opponentDisplayName: playerB?.displayName ?? "Opponent",
+    }).catch(() => undefined);
+
     // Notify player B
     await sendTournamentNotification({
       tournamentId: params.tournamentId,
@@ -356,6 +382,16 @@ export class TournamentNotificationService {
       data: { ...data, opponentId: params.playerAId },
       referenceId: params.matchId,
     });
+
+    await TournamentEmailService.sendMatchAssignedEmail({
+      userId: params.playerBId,
+      tournamentId: params.tournamentId,
+      tournamentTitle: params.tournamentTitle,
+      matchId: params.matchId,
+      roundNumber: roundName,
+      gameId: params.gameId,
+      opponentDisplayName: playerA?.displayName ?? "Opponent",
+    }).catch(() => undefined);
   }
 
   /**
@@ -385,6 +421,13 @@ export class TournamentNotificationService {
       },
       referenceId: `bye_r${params.roundNumber}_${params.playerId}`,
     });
+
+    await TournamentEmailService.sendNextRoundEmail({
+      userId: params.playerId,
+      tournamentId: params.tournamentId,
+      tournamentTitle: params.tournamentTitle,
+      nextRoundName,
+    }).catch(() => undefined);
   }
 
   /**
@@ -419,9 +462,13 @@ export class TournamentNotificationService {
         },
         referenceId: params.matchId,
       });
-    } else {
-      // This was the final round — handled by notifyWinner instead
-      // But if somehow called with null next round, just skip
+
+      await TournamentEmailService.sendNextRoundEmail({
+        userId: params.winnerId,
+        tournamentId: params.tournamentId,
+        tournamentTitle: params.tournamentTitle,
+        nextRoundName,
+      }).catch(() => undefined);
     }
   }
 
@@ -456,6 +503,13 @@ export class TournamentNotificationService {
       },
       referenceId: params.matchId,
     });
+
+    await TournamentEmailService.sendEliminationEmail({
+      userId: params.loserId,
+      tournamentId: params.tournamentId,
+      tournamentTitle: params.tournamentTitle,
+      roundNumber: roundName,
+    }).catch(() => undefined);
   }
 
   /**
@@ -522,6 +576,14 @@ export class TournamentNotificationService {
       referenceId: `won_${params.winnerId}`,
       bypassPreferences: true,
     });
+
+    await TournamentEmailService.sendTournamentWinEmail({
+      userId: params.winnerId,
+      tournamentId: params.tournamentId,
+      tournamentTitle: params.tournamentTitle,
+      finalResult: "1st Place Champion",
+      prizeAmount: params.prizeAmount,
+    }).catch(() => undefined);
   }
 
   /**
@@ -729,6 +791,96 @@ export class TournamentNotificationService {
       },
       referenceId: params.matchId,
     });
+
+    void TournamentEmailService.sendEliminationEmail({
+      userId: params.loserId,
+      tournamentId: params.tournamentId,
+      tournamentTitle: params.tournamentTitle,
+      roundNumber: "Final (Runner-Up)",
+    }).catch(() => undefined);
+  }
+
+  /**
+   * Notify player when their opponent is ready.
+   */
+  static async notifyOpponentReady(params: {
+    tournamentId: string;
+    tournamentTitle: string;
+    playerId: string;
+    matchId: string;
+    roundNumber: number | string;
+    opponentDisplayName: string;
+  }): Promise<void> {
+    void TournamentEmailService.sendOpponentReadyEmail({
+      userId: params.playerId,
+      tournamentId: params.tournamentId,
+      tournamentTitle: params.tournamentTitle,
+      matchId: params.matchId,
+      roundNumber: params.roundNumber,
+      opponentDisplayName: params.opponentDisplayName,
+    }).catch(() => undefined);
+  }
+
+  /**
+   * Notify player about completed match result.
+   */
+  static async notifyMatchResult(params: {
+    userId: string;
+    tournamentId: string;
+    tournamentTitle: string;
+    gameId: string;
+    roundNumber: number | string;
+    opponentDisplayName: string;
+    result: "WON" | "LOST" | "DRAW";
+    finalScore?: string | Record<string, number>;
+  }): Promise<void> {
+    await TournamentEmailService.sendMatchResultEmail(params).catch(() => undefined);
+  }
+
+  /**
+   * Send match starting reminder if player has not joined yet.
+   */
+  static async notifyMatchStartingReminder(params: {
+    userId: string;
+    tournamentId: string;
+    tournamentTitle: string;
+    matchId: string;
+    roundNumber: number | string;
+    gameId: string;
+    opponentDisplayName: string;
+  }): Promise<void> {
+    await TournamentEmailService.sendMatchStartingReminder(params).catch(() => undefined);
+  }
+
+  /**
+   * Send match forfeited notification if player did not join within allowed time.
+   */
+  static async notifyMatchForfeited(params: {
+    userId: string;
+    tournamentId: string;
+    tournamentTitle: string;
+    gameId: string;
+    roundNumber: number | string;
+    opponentDisplayName: string;
+    matchId?: string;
+  }): Promise<void> {
+    await sendTournamentNotification({
+      tournamentId: params.tournamentId,
+      playerId: params.userId,
+      eventType: "TOURNAMENT_ELIMINATED",
+      title: "Match Forfeited",
+      body: `Your match in ${params.tournamentTitle} was forfeited because you did not join in time.`,
+      referenceId: params.matchId ?? `forfeit_${params.userId}`,
+    });
+
+    await TournamentEmailService.sendMatchForfeitedEmail(params).catch(() => undefined);
+  }
+
+  /**
+   * Records that player has entered the match room, canceling reminders.
+   */
+  static recordPlayerJoinedMatch(params: { matchId: string; userId: string }): void {
+    TournamentEmailService.recordPlayerJoined(params);
   }
 }
 

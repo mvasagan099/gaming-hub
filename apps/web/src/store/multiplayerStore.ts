@@ -78,6 +78,7 @@ interface MultiplayerState {
   /** Rematch consent ledger for the current ended room. */
   rematchState: { requestedBy: string[]; active: boolean } | null;
   matchmaking: MatchmakingInfo;
+  matchFound: import("@gaming-hub/shared").MatchFoundNotificationPayload | null;
   /** Queue intent preserved across transient reconnects so it can be re-joined. */
   pendingRequeue: { gameId: GameId; stake: number; settings: MatchSettings } | null;
   gameState: JsonObject | null;
@@ -93,6 +94,9 @@ interface MultiplayerState {
   stateHash: string | null;
   notifications: InGameNotification[];
   activeNotification: InGameNotification | null;
+  matchDeadline: number | null;
+  matchTimerWarning: { remainingSeconds: number; remainingMs: number } | null;
+  matchTimeExpired: boolean;
   // Force re-render counter for deep state changes
   renderKey: number;
 
@@ -110,6 +114,7 @@ interface MultiplayerState {
   /** @deprecated use requestRematch */
   rematch: () => Promise<void>;
   clearError: () => void;
+  dismissMatchFound: () => void;
   dismissNotification: (id: string) => void;
   syncGameState: () => Promise<void>;
   requestFullStateSync: (matchId?: string) => Promise<void>;
@@ -162,6 +167,9 @@ function clearRoom(set: (partial: Partial<MultiplayerState>) => void) {
     stateHash: null,
     rematchState: null,
     typing: [],
+    matchDeadline: null,
+    matchTimerWarning: null,
+    matchTimeExpired: false,
   });
 }
 
@@ -177,6 +185,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   typing: [],
   rematchState: null,
   matchmaking: { ...IDLE_MATCHMAKING },
+  matchFound: null,
   pendingRequeue: null,
   gameState: null,
   authoritativeState: null,
@@ -191,6 +200,9 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   stateHash: null,
   notifications: [],
   activeNotification: null,
+  matchDeadline: null,
+  matchTimerWarning: null,
+  matchTimeExpired: false,
   renderKey: 0,
 
   connect: () => {
@@ -375,6 +387,35 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         set({ disconnectGrace: null });
       });
 
+      socket.on("game:match-started" as any, (payload: { matchId: string; startedAt: number; matchDeadline?: number; matchDurationSeconds?: number }) => {
+        console.log("[MultiplayerStore] game:match-started received", payload);
+        set({
+          matchId: payload.matchId,
+          matchDeadline: payload.matchDeadline ?? null,
+          matchTimeExpired: false,
+          matchTimerWarning: null,
+          winner: null,
+        });
+      });
+
+      socket.on("match:timer-warning" as any, (payload: { matchId: string; remainingSeconds: number; remainingMs: number }) => {
+        console.log("[MultiplayerStore] match:timer-warning received", payload);
+        set({
+          matchTimerWarning: {
+            remainingSeconds: payload.remainingSeconds,
+            remainingMs: payload.remainingMs,
+          },
+        });
+      });
+
+      socket.on("match:time-expired" as any, (payload: { matchId: string; expiredAt: number }) => {
+        console.log("[MultiplayerStore] match:time-expired received", payload);
+        set({
+          matchTimeExpired: true,
+          matchTimerWarning: null,
+        });
+      });
+
       // ── Centralized Real-Time Event System ──
       const seenEventIds = new Set<string>();
 
@@ -432,6 +473,26 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           if (current && current.playerId === envelope.payload.playerId) {
             set({ disconnectGrace: null });
           }
+        } else if (envelope.eventType === "MATCH_STARTED" && envelope.payload) {
+          set({
+            matchId: envelope.matchId,
+            matchDeadline: envelope.payload.matchDeadline ?? null,
+            matchTimeExpired: false,
+            matchTimerWarning: null,
+            winner: null,
+          });
+        } else if (envelope.eventType === "MATCH_TIMER_WARNING" && envelope.payload) {
+          set({
+            matchTimerWarning: {
+              remainingSeconds: envelope.payload.remainingSeconds,
+              remainingMs: envelope.payload.remainingMs,
+            },
+          });
+        } else if (envelope.eventType === "MATCH_TIME_EXPIRED") {
+          set({
+            matchTimeExpired: true,
+            matchTimerWarning: null,
+          });
         } else if (envelope.eventType === "GAME_FINISHED" && envelope.payload) {
           set({
             winner: {
@@ -440,6 +501,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
             },
             matchId: envelope.matchId,
             disconnectGrace: null,
+            matchTimerWarning: null,
           });
         }
 
@@ -517,8 +579,48 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         }));
       });
 
+      socket.on("game:queue-joined" as any, (payload: { position: number; gameId: GameId; entryFee: number }) => {
+        set((s) => ({
+          matchmaking: {
+            queued: true,
+            position: payload.position,
+            gameId: payload.gameId ?? s.matchmaking.gameId,
+            stake: payload.entryFee ?? s.matchmaking.stake,
+            settings: s.matchmaking.settings,
+          },
+        }));
+      });
+
       socket.on("matchmaking:found", () => {
         set({ matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
+      });
+
+      socket.on("game:match-found" as any, (payload: import("@gaming-hub/shared").MatchFoundNotificationPayload) => {
+        set({
+          matchmaking: { ...IDLE_MATCHMAKING },
+          pendingRequeue: null,
+          matchFound: payload,
+        });
+      });
+
+      socket.on("game:queue-cancelled" as any, () => {
+        set({ matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
+      });
+
+      socket.on("game:queue-expired" as any, (payload: { message?: string }) => {
+        set({
+          matchmaking: { ...IDLE_MATCHMAKING },
+          pendingRequeue: null,
+          error: payload?.message || "No opponent found — please try searching again.",
+        });
+      });
+
+      socket.on("matchmaking:timeout" as any, (payload: { message?: string }) => {
+        set({
+          matchmaking: { ...IDLE_MATCHMAKING },
+          pendingRequeue: null,
+          error: payload?.message || "No opponent found — please try searching again.",
+        });
       });
 
       socket.on("game:countdown" as any, (payload: { countdown: number }) => {
@@ -783,5 +885,6 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     return get().requestFullStateSync();
   },
 
+  dismissMatchFound: () => set({ matchFound: null }),
   clearError: () => set({ error: null }),
 }));

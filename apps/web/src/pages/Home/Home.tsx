@@ -258,7 +258,7 @@ export const Home: React.FC = () => {
             <Clock className="w-5 h-5 text-indigo-400" />
             <h3 className="text-xl font-black">Continue Playing</h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {recentlyPlayed.map((game) => (
               <div
                 key={game.id}
@@ -266,15 +266,15 @@ export const Home: React.FC = () => {
                 className="p-4 rounded-2xl glass-panel bg-white dark:bg-transparent border border-slate-200 dark:border-slate-800 hover:border-indigo-500/50 cursor-pointer flex items-center justify-between group transition-all shadow-sm dark:shadow-none"
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${game.bgGradient} flex items-center justify-center text-xl font-black text-white shadow-md`}>
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${game.bgGradient} flex items-center justify-center text-xl font-black text-white shadow-md shrink-0`}>
                     {game.title[0]}
                   </div>
-                  <div>
-                    <h4 className="font-extrabold text-slate-900 dark:text-white text-sm group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{game.title}</h4>
-                    <p className="text-[10px] text-slate-400">{game.category} • {game.players}</p>
+                  <div className="overflow-hidden">
+                    <h4 className="font-extrabold text-slate-900 dark:text-white text-sm group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">{game.title}</h4>
+                    <p className="text-[10px] text-slate-400 truncate">{game.category} • {game.players}</p>
                   </div>
                 </div>
-                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 group-hover:bg-indigo-600 text-slate-500 dark:text-slate-400 group-hover:text-white flex items-center justify-center transition-all">
+                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 group-hover:bg-indigo-600 text-slate-500 dark:text-slate-400 group-hover:text-white flex items-center justify-center transition-all shrink-0">
                   <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
                 </div>
               </div>
@@ -288,24 +288,24 @@ export const Home: React.FC = () => {
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-slate-900 dark:text-white transition-colors duration-300">
             <Flame className="w-5 h-5 text-rose-500" />
-            <h3 className="text-xl font-black">Popular Games</h3>
+            <h3 className="text-lg sm:text-xl font-black">Popular Games</h3>
           </div>
           
           <div className="relative group">
             <button 
               onClick={scrollLeft} 
-              className="absolute -left-5 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xl border border-slate-200 dark:border-slate-700 opacity-0 group-hover:opacity-100 transition-all hover:bg-indigo-600 dark:hover:bg-indigo-600 hover:text-white hover:scale-110"
+              className="hidden sm:flex absolute -left-4 top-1/2 -translate-y-1/2 z-10 p-2.5 rounded-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xl border border-slate-200 dark:border-slate-700 opacity-0 group-hover:opacity-100 transition-all hover:bg-indigo-600 dark:hover:bg-indigo-600 hover:text-white hover:scale-110"
             >
-              <ChevronLeft className="w-6 h-6" />
+              <ChevronLeft className="w-5 h-5" />
             </button>
 
             <div 
               ref={sliderRef}
-              className="flex overflow-x-auto gap-4 md:gap-6 snap-x snap-mandatory pb-2 [&::-webkit-scrollbar]:hidden px-2"
+              className="flex overflow-x-auto gap-4 md:gap-6 snap-x snap-mandatory pb-2 [&::-webkit-scrollbar]:hidden px-1"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {popularGames.map((game) => (
-                <div key={game.id} className="w-[85%] sm:w-[45%] md:w-[31%] shrink-0 snap-center">
+                <div key={game.id} className="w-[82%] sm:w-[46%] md:w-[32%] lg:w-[28%] shrink-0 snap-center">
                   <GameCard game={game} onPlay={() => setModalGame(game)} />
                 </div>
               ))}
@@ -313,9 +313,9 @@ export const Home: React.FC = () => {
 
             <button 
               onClick={scrollRight} 
-              className="absolute -right-5 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xl border border-slate-200 dark:border-slate-700 opacity-0 group-hover:opacity-100 transition-all hover:bg-indigo-600 dark:hover:bg-indigo-600 hover:text-white hover:scale-110"
+              className="hidden sm:flex absolute -right-4 top-1/2 -translate-y-1/2 z-10 p-2.5 rounded-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xl border border-slate-200 dark:border-slate-700 opacity-0 group-hover:opacity-100 transition-all hover:bg-indigo-600 dark:hover:bg-indigo-600 hover:text-white hover:scale-110"
             >
-              <ChevronRight className="w-6 h-6" />
+              <ChevronRight className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -326,10 +326,10 @@ export const Home: React.FC = () => {
         <div className="flex items-center justify-between text-slate-900 dark:text-white transition-colors duration-300">
           <div className="flex items-center gap-2">
             <Trophy className="w-5 h-5 text-amber-400" />
-            <h3 className="text-xl font-black">All Games ({filteredGames.length})</h3>
+            <h3 className="text-lg sm:text-xl font-black">All Games ({filteredGames.length})</h3>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
           {filteredGames.map((game) => (
             <GameCard key={game.id} game={game} onPlay={() => setModalGame(game)} />
           ))}

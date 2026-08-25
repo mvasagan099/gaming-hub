@@ -27,8 +27,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
 
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: CarromEngineOptions) {
     const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 10000 };
-    // Carrom matches are score/board based, so matchTimer is optional and not forced to 10 mins
-    const matchTimer = options?.matchTimer;
+    const matchTimer = options?.matchTimer ?? { matchDurationMs: 600000, warningThresholdMs: 30000 };
     super(players, rng, {
       turnTimer,
       matchTimer,
@@ -40,18 +39,31 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     });
   }
 
-  override get currentMatchDeadline(): number | null {
-    return null;
-  }
+  /**
+   * Deterministic timeout winner resolution for Carrom:
+   * 1. Player with highest authoritative score.
+   * 2. If tied on score, player with more assigned coins pocketed.
+   * 3. If tied, draw across leaders.
+   */
+  protected override resolveTimeoutWinner(state: CarromState): number[] {
+    if (!state.players || state.players.length === 0) return [state.currentSeat];
 
-  protected override onMatchTimerExpired(state: CarromState): EngineActionResult<CarromState> {
-    return {
-      ok: true,
-      state,
-      events: [{ type: "match-timer-tick" }],
-      finished: false,
-      winnerSeats: [],
-    };
+    type PlayerScore = { seat: number; score: number; pocketedCoins: number };
+    const ranks: PlayerScore[] = state.players.map((p) => {
+      const myColor = p.color;
+      const pocketedCoins = (state.coins || []).filter((c) => c.type === myColor && c.pocketed).length;
+      return { seat: p.seat, score: p.score, pocketedCoins };
+    });
+
+    ranks.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return b.pocketedCoins - a.pocketedCoins;
+    });
+
+    const best = ranks[0];
+    if (!best) return [0];
+    const topTied = ranks.filter((r) => r.score === best.score && r.pocketedCoins === best.pocketedCoins);
+    return topTied.map((r) => r.seat);
   }
 
   protected onTurnTimerExpired(seat: number, state: CarromState): EngineActionResult<CarromState> {

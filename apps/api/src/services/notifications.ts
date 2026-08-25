@@ -7,14 +7,53 @@ export async function createNotification(
   title: string,
   body: string,
   data?: Record<string, unknown>,
+  options?: {
+    eventId?: string;
+    referenceId?: string;
+    tournamentEventType?: string;
+  },
 ) {
+  // Deduplication check: prevent duplicate notifications for same eventId or referenceId
+  if (options?.eventId) {
+    const existing = await prisma.appNotification.findFirst({
+      where: {
+        userId,
+        data: {
+          path: ["eventId"],
+          equals: options.eventId,
+        },
+      },
+    });
+    if (existing) {
+      return existing;
+    }
+  } else if (options?.referenceId) {
+    const existing = await prisma.appNotification.findFirst({
+      where: {
+        userId,
+        type,
+        referenceId: options.referenceId,
+      },
+    });
+    if (existing) {
+      return existing;
+    }
+  }
+
+  const mergedData = {
+    ...(data ?? {}),
+    ...(options?.eventId ? { eventId: options.eventId } : {}),
+  };
+
   return prisma.appNotification.create({
     data: {
       userId,
       type,
       title,
       body,
-      data: (data ?? undefined) as Prisma.InputJsonValue | undefined,
+      data: Object.keys(mergedData).length > 0 ? (mergedData as Prisma.InputJsonValue) : undefined,
+      referenceId: options?.referenceId,
+      tournamentEventType: options?.tournamentEventType,
     },
   });
 }

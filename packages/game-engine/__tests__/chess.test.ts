@@ -120,15 +120,18 @@ describe("ChessEngine", () => {
     expect(result.state.winnerSeats).toEqual([1]);
   });
 
-  it("rejects stale or wrong-kind timeouts", () => {
+  it("handles match timeout with material evaluation and rejects wrong-turn turn timeout", () => {
     const engine = new ChessEngine(players, undefined, {
       timeControl: { baseSeconds: 600, incrementSeconds: 0, delaySeconds: 0 },
     });
 
-    // Not the flagging seat's turn.
+    // Not the flagging seat's turn (seat 0's turn, not seat 1).
     expect(engine.handleTimeout("turn", 1).ok).toBe(false);
-    // Chess has no match-level timer.
-    expect(engine.handleTimeout("match").ok).toBe(false);
+
+    // Global 10-minute match timeout evaluates material balance
+    const matchTimeout = engine.handleTimeout("match");
+    expect(matchTimeout.ok).toBe(true);
+    expect(matchTimeout.finished).toBe(true);
   });
 
   it("handles checkmate (Fool's Mate)", () => {

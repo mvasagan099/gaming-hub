@@ -154,6 +154,7 @@ describe("walletRequests", () => {
         createWithdrawalRequest(user.id, 101, second.debugCode!),
         "DAILY_WITHDRAWAL_LIMIT_EXCEEDED",
       );
+      await setSetting("wallet.dailyWithdrawalLimit", 0, null);
     });
 
     it("caps concurrent pending withdrawal requests", async () => {
@@ -170,6 +171,7 @@ describe("walletRequests", () => {
         createWithdrawalRequest(user.id, 100, third.debugCode!),
         "WALLET_LIMIT_EXCEEDED",
       );
+      await setSetting("wallet.maxPendingWithdrawalRequests", 5, null);
     });
 
     it("computes a withdrawal fee when configured", async () => {
@@ -179,6 +181,7 @@ describe("walletRequests", () => {
       const { debugCode } = await requestWithdrawalOtp(user.id);
       const request = await createWithdrawalRequest(user.id, 1000, debugCode!);
       expect(request.fee).toBe(50);
+      await setSetting("wallet.withdrawalFeePercent", 0, null);
     });
   });
 
@@ -233,6 +236,7 @@ describe("walletRequests", () => {
       });
       expect(txs).toHaveLength(2);
       expect(txs.reduce((sum, t) => sum + t.amount, 0)).toBe(1050);
+      await setSetting("wallet.withdrawalFeePercent", 0, null);
     });
 
     it("rejects when the balance no longer covers the withdrawal", async () => {

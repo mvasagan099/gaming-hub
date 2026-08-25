@@ -404,18 +404,8 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     return { ok: true, state: next, events: [{ type: "point-scored", winnerSeat, reason: "timeout" }], finished: next.finished, winnerSeats: next.winnerSeats };
   }
 
-  protected onMatchTimerExpired(state: InternalState): EngineActionResult<InternalState> {
-    const p1Score = state.players[0].score;
-    const p2Score = state.players[1].score;
-    let winnerSeats: number[] = [];
-    if (p1Score > p2Score) {
-      winnerSeats = [0];
-    } else if (p2Score > p1Score) {
-      winnerSeats = [1];
-    } else {
-      winnerSeats = [];
-    }
-    
+  protected override onMatchTimerExpired(state: InternalState): EngineActionResult<InternalState> {
+    const winnerSeats = this.resolveTimeoutWinner(state);
     const next = this.cloneState(state);
     next.finished = true;
     next.gameOver = true;
@@ -423,7 +413,7 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     next.winnerSeats = winnerSeats;
     next.phase = "finished";
     next.ball = null;
-    
+
     return { ok: true, state: next, events: [{ type: "match-complete", reason: "TIME_EXPIRED", winnerSeats }], finished: true, winnerSeats };
   }
 
@@ -451,6 +441,34 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
   canPlayerServe(seat: number): boolean {
     const state = this.state as InternalState;
     return state.waitingForServe && state.servingSeat === seat && !state.finished;
+  }
+
+  /**
+   * Deterministic timeout winner resolution for Table Tennis:
+   * 1. Player with most sets won.
+   * 2. If tied, player with most points in the current set.
+   * 3. If tied, draw across leaders.
+   */
+  protected override resolveTimeoutWinner(state: InternalState): number[] {
+    if (!state.players || state.players.length === 0) return [state.currentSeat];
+
+    type PlayerRank = { seat: number; sets: number; score: number };
+    const ranks: PlayerRank[] = state.players.map((p) => ({
+      seat: p.seat,
+      sets: Number((p as any).sets ?? 0),
+      score: Number((p as any).score ?? 0),
+    }));
+
+    ranks.sort((a, b) => {
+      if (b.sets !== a.sets) return b.sets - a.sets;
+      return b.score - a.score;
+    });
+
+    const best = ranks[0];
+    if (!best) return [0];
+    const topTied = ranks.filter((r) => r.sets === best.sets && r.score === best.score);
+    if (topTied.length > 1) return [];
+    return [best.seat];
   }
 }
 

@@ -112,6 +112,38 @@ export async function matchesRoutes(app: FastifyInstance) {
   });
 
   /**
+   * GET /api/matches/:id/summary
+   * Returns formatted match summary view (Game, Result, Opponent, Final Score, Duration, Result Reason)
+   */
+  app.get("/api/matches/:id/summary", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { id } = routeParams(request);
+    const { GameHistoryService } = await import("../services/gameHistoryService");
+    return GameHistoryService.getMatchSummary(user.id, id);
+  });
+
+  /**
+   * GET /api/matches/:id/replay
+   * Returns authoritative replay package for match (accessible to participants, admins, tournament spectators)
+   */
+  app.get("/api/matches/:id/replay", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { id } = routeParams(request);
+    const { GameHistoryService } = await import("../services/gameHistoryService");
+    return GameHistoryService.getMatchReplay(user.id, id);
+  });
+
+  /**
+   * GET /api/players/:userId/statistics
+   * Returns global player statistics and game-specific metrics across all 10 games
+   */
+  app.get("/api/players/:userId/statistics", { preHandler: authenticate }, async (request) => {
+    const { userId } = routeParams(request);
+    const { GameHistoryService } = await import("../services/gameHistoryService");
+    return GameHistoryService.getPlayerStatistics(userId);
+  });
+
+  /**
    * GET /api/matches/active
    * Returns active match state snapshot for authenticated reconnecting player.
    */

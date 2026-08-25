@@ -145,20 +145,29 @@ export abstract class MultiplayerGameEngine<
     };
   }
 
-  /** Default resolution when the whole-match deadline expires: current seat wins. */
+  /**
+   * Deterministically resolves winner seats from the current authoritative game state
+   * when the global match timer expires. Subclasses override this with their game-specific
+   * existing progress / score / position rules.
+   */
+  protected resolveTimeoutWinner(state: S): number[] {
+    return [state.currentSeat];
+  }
+
+  /** Resolution when the whole-match deadline expires: invokes game-specific resolveTimeoutWinner. */
   protected onMatchTimerExpired(state: S): EngineActionResult<S> {
     const next = this.cloneState(state);
+    const winnerSeats = this.resolveTimeoutWinner(next);
     next.finished = true;
     next.gameOver = true;
     next.endReason = "match-timeout";
     next.turnStartedAtMs = null;
     next.matchStartedAtMs = null;
-    const winnerSeats = [next.currentSeat];
     next.winnerSeats = winnerSeats;
     return {
       ok: true,
       state: next,
-      events: [{ type: "match-timeout", seat: next.currentSeat }],
+      events: [{ type: "match-timeout", winnerSeats }],
       finished: true,
       winnerSeats,
     };

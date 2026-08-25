@@ -14,6 +14,9 @@ import type {
   MatchSettings,
   RoomFull,
   RoomPlayer,
+  UniversalMatchRoomState,
+  UniversalMatchState,
+  UniversalMatchPlayer,
 } from "@gaming-hub/shared";
 import type { GameActionResult, RematchUpdate } from "@gaming-hub/socket";
 import { createEngine, isGameEngineAvailable } from "@gaming-hub/game-engine";
@@ -27,8 +30,10 @@ import { holdWagers, settleMatch, cancelMatch, reportTournamentMatchResult, crea
 import { assertGameEnabled, createMatchConfigSnapshot } from "../settings";
 import { GameEventBus } from "../events/GameEventBus";
 import { GameStateSyncManager } from "../sync/GameStateSyncManager";
+import { MatchTimeoutMonitoringService } from "./MatchTimeoutMonitoringService";
 
 const DISCONNECT_GRACE_MS = 30_000;
+const MATCH_READY_TIMEOUT_MS = 30_000;
 
 export interface CreateMatchInput {
   gameId: GameId;
@@ -42,14 +47,105 @@ export class RoomManager {
   private readonly rooms = new Map<string, RoomRuntime>();
   private readonly roomsByCode = new Map<string, RoomRuntime>();
   private readonly disconnectTimers = new Map<string, NodeJS.Timeout>();
+  private readonly readyTimers = new Map<string, NodeJS.Timeout>();
   private readonly clockTimers = new Map<string, NodeJS.Timeout>();
+  private readonly warningTimers = new Map<string, NodeJS.Timeout>();
+  private readonly scheduledWarnings = new Set<string>();
   private readonly activeTurnTimerKeys = new Map<string, string>();
   private readonly processedForfeits = new Set<string>();
+  private readonly finalizingMatches = new Set<string>();
   private readonly roomLocks = new Map<string, Promise<void>>();
   private readonly io: Server;
+  private backgroundTimeoutInterval?: NodeJS.Timeout;
 
   constructor(io: Server) {
     this.io = io;
+    this.startBackgroundWorker();
+  }
+
+  public startBackgroundWorker(): void {
+    if (this.backgroundTimeoutInterval) return;
+    this.backgroundTimeoutInterval = setInterval(() => {
+      void this.checkAllMatchesTimeout();
+    }, 2000);
+    this.backgroundTimeoutInterval.unref?.();
+  }
+
+  public stopBackgroundWorker(): void {
+    if (this.backgroundTimeoutInterval) {
+      clearInterval(this.backgroundTimeoutInterval);
+      this.backgroundTimeoutInterval = undefined;
+    }
+  }
+
+  /**
+   * Background Timeout Worker:
+   * Periodically checks all playing rooms for 10-minute deadline expiration.
+   * Ensures disconnected/abandoned matches are authoritatively finalized on time.
+   */
+  public async checkAllMatchesTimeout(): Promise<void> {
+    const now = Date.now();
+    for (const room of this.rooms.values()) {
+      if (room.status === "playing" && room.match && room.match.matchDeadline) {
+        // Operational alert for stuck matches past grace window (> 15s past deadline)
+        if (
+          room.match.matchStatus === "ACTIVE" &&
+          now > room.match.matchDeadline + 15_000
+        ) {
+          console.error(`[OPERATIONAL ALERT] TIMEOUT_PROCESSING_ERROR: Stuck match detected in Room ${room.id} (${room.gameId}), Match ${room.match.matchId}, overdue by ${now - room.match.matchDeadline}ms`);
+        }
+
+        if (
+          room.match.matchStatus === "ACTIVE" &&
+          !this.finalizingMatches.has(room.match.matchId) &&
+          now >= room.match.matchDeadline
+        ) {
+          console.log(`[BACKGROUND TIMEOUT WORKER] Expiring match ${room.match.matchId} in room ${room.id}`);
+          void this.handleClockDeadline(room.id, "match");
+        }
+      }
+    }
+  }
+
+  public auditMatches() {
+    return MatchTimeoutMonitoringService.auditActiveMatches(this.rooms);
+  }
+
+  public getMetrics() {
+    return MatchTimeoutMonitoringService.getMetricsSummary(this.rooms);
+  }
+
+  public getLiveMatches() {
+    return MatchTimeoutMonitoringService.getAdminLiveMatches(this.rooms);
+  }
+
+  /**
+   * Server Startup Recovery:
+   * Finds any active matches in the database that exceeded their deadline during server downtime,
+   * and finalizes their settlement with TIME_LIMIT.
+   */
+  public async recoverActiveMatches(): Promise<void> {
+    try {
+      const activeMatches = await prisma.match.findMany({
+        where: { status: "ACTIVE" },
+      });
+      const now = Date.now();
+      for (const m of activeMatches) {
+        if (m.matchDeadline && m.matchDeadline.getTime() <= now) {
+          console.log(`[STARTUP RECOVERY] Finalizing expired orphan match ${m.id}`);
+          try {
+            await settleMatch(m.id, {
+              winnerIds: (m.winnerIds as string[]) || [],
+              reason: "TIME_LIMIT",
+            });
+          } catch (err) {
+            console.error(`[STARTUP RECOVERY] Failed to settle orphan match ${m.id}:`, err);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[STARTUP RECOVERY] Error during active match recovery:", err);
+    }
   }
 
   /**
@@ -200,12 +296,101 @@ export class RoomManager {
     }
   }
 
+  private startReadyTimeout(room: RoomRuntime): void {
+    if (room.status !== "waiting") return;
+    this.clearReadyTimeout(room.id);
+    const expiresAt = Date.now() + MATCH_READY_TIMEOUT_MS;
+    room.readyExpiresAt = expiresAt;
+    const timer = setTimeout(() => {
+      void this.handleReadyTimeout(room.id);
+    }, MATCH_READY_TIMEOUT_MS);
+    this.readyTimers.set(room.id, timer);
+    room.readyTimer = timer;
+  }
+
+  private clearReadyTimeout(roomId: string): void {
+    const timer = this.readyTimers.get(roomId);
+    if (timer) {
+      clearTimeout(timer);
+      this.readyTimers.delete(roomId);
+    }
+    const room = this.rooms.get(roomId);
+    if (room) {
+      room.readyTimer = null;
+      room.readyExpiresAt = null;
+    }
+  }
+
+  private async handleReadyTimeout(roomId: string): Promise<void> {
+    const room = this.rooms.get(roomId);
+    if (!room || room.status === "playing" || room.status === "ended") return;
+
+    const participants = [...room.players.values()].filter((p) => !p.isSpectator);
+    const unready = participants.filter((p) => !p.isReady || p.connectionStatus !== "connected");
+    if (unready.length > 0 || participants.length < room.minPlayers) {
+      console.log("[MATCHMAKING] READY_TIMEOUT", { roomId: room.id, pendingMatchId: room.pendingMatchId });
+      await this.cancelRoomDueToUnready(room, "READY_TIMEOUT");
+    }
+  }
+
+  private async cancelRoomDueToUnready(room: RoomRuntime, reason: string): Promise<void> {
+    const matchId = room.pendingMatchId ?? room.match?.matchId ?? room.id;
+    this.clearReadyTimeout(room.id);
+    if (room.countdownTimer) {
+      clearTimeout(room.countdownTimer);
+      room.countdownTimer = null;
+    }
+    room.countdownStarted = false;
+
+    // Refund entry wagers if match was funded/created
+    if (room.pendingMatchId || room.match) {
+      try {
+        await cancelMatch(matchId, reason);
+      } catch (err) {
+        console.error("[cancelMatch error on ready timeout]", err);
+      }
+    }
+
+    this.emitToRoom(room, "game:match-cancelled", {
+      matchId,
+      roomId: room.id,
+      reason: "MATCH_READY_TIMEOUT",
+      message: "Match cancelled: required players did not ready up within 30 seconds",
+    });
+    GameEventBus.broadcastEvent(
+      this.io,
+      room,
+      GameEventBus.createEnvelope("MATCH_CANCELLED", matchId, room.gameId, {
+        reason: "MATCH_READY_TIMEOUT",
+        message: "Match cancelled: required players did not ready up within 30 seconds",
+      }),
+    );
+
+    this.closeRoom(room, "MATCH_READY_TIMEOUT");
+  }
+
+  /** Validates that the player is not currently in another active playing match. */
+  assertNotInActiveMatch(userId: string): void {
+    for (const room of this.rooms.values()) {
+      if ((room.status === "playing" || room.status === "starting") && room.players.has(userId)) {
+        const player = room.players.get(userId);
+        if (player && !player.isSpectator) {
+          throw new AppError(
+            "ALREADY_IN_ACTIVE_MATCH",
+            "You are already active in another match. Please finish or leave that match first.",
+          );
+        }
+      }
+    }
+  }
+
   private closeRoom(room: RoomRuntime, reason: string) {
     this.emitToRoom(room, "room:closed", { roomId: room.id, reason });
     this.io.in(room.ioName).socketsLeave(room.ioName);
     this.rooms.delete(room.id);
     this.roomsByCode.delete(room.code);
     this.clearClockTimer(room.id);
+    this.clearReadyTimeout(room.id);
     for (const player of room.players.values()) {
       this.clearDisconnectTimer(room.id, player.userId);
     }
@@ -241,6 +426,8 @@ export class RoomManager {
     if (input.stake < 0) {
       throw new AppError("VALIDATION_ERROR", "Stake cannot be negative");
     }
+
+    this.assertNotInActiveMatch(user.userId);
 
     if (input.stake > 0) {
       const wallet = await prisma.wallet.findUnique({ where: { userId: user.userId } });
@@ -306,6 +493,7 @@ export class RoomManager {
       },
     });
 
+    this.startReadyTimeout(room);
     this.broadcastRoomUpdate(room);
     return this.toRoomFull(room);
   }
@@ -317,6 +505,10 @@ export class RoomManager {
     return this.withRoomLock(room.id, async () => {
       if (room.status !== "waiting") {
         throw new AppError("ROOM_CLOSED", "This room has already started");
+      }
+
+      if (!input.asSpectator) {
+        this.assertNotInActiveMatch(user.userId);
       }
 
       await this.ejectFromAllRooms(user, socket);
@@ -370,6 +562,7 @@ export class RoomManager {
         },
       });
 
+      this.startReadyTimeout(room);
       this.emitToRoom(room, "player:joined", { roomId: room.id, player: this.toRoomPlayer(player) });
       this.broadcastRoomUpdate(room);
       return this.toRoomFull(room);
@@ -887,18 +1080,45 @@ export class RoomManager {
     const snapshot = await createMatchConfigSnapshot(room.gameId, room.stake);
     room.settings = { ...room.settings, configSnapshot: snapshot };
 
-    room.match = { matchId, engine, turnNumber: 0 };
+    const startedAt = Date.now();
+    const matchDurationSeconds = Math.min(snapshot.matchDurationSeconds || 600, 600);
+    const matchDeadline = startedAt + (matchDurationSeconds * 1000);
+
+    room.match = {
+      matchId,
+      engine,
+      turnNumber: 0,
+      startedAt,
+      matchStartedAt: startedAt,
+      matchDeadline,
+      matchStatus: "ACTIVE",
+      endedAt: null,
+      resultReason: null,
+      timeExpired: false,
+    };
     room.status = "playing";
     await prisma.room.update({
       where: { id: room.id },
       data: { status: "PLAYING", settings: room.settings as object },
+    });
+    await prisma.match.update({
+      where: { id: matchId },
+      data: {
+        startedAt: new Date(startedAt),
+        matchDeadline: new Date(matchDeadline),
+        status: "ACTIVE",
+      },
+    }).catch((err) => {
+      console.error(`[MATCH] Failed to set ACTIVE status on match ${matchId}:`, err);
     });
 
     console.log("[MATCHMAKING] MATCH_STARTED", {
       matchId,
       gameId: room.gameId,
       configVersion: snapshot.configVersion,
-      startedAt: Date.now(),
+      startedAt,
+      matchDeadline,
+      matchDurationSeconds,
     });
 
     const matchStartedPayload = {
@@ -911,7 +1131,9 @@ export class RoomManager {
         seat: p.seat!,
         displayName: p.displayName,
       })),
-      startedAt: Date.now(),
+      startedAt,
+      matchDeadline,
+      matchDurationSeconds,
     };
 
     this.emitToRoom(room, "game:match-started", matchStartedPayload);
@@ -933,6 +1155,7 @@ export class RoomManager {
       engine.serialize(),
       turnExpiresAtMs,
       initialPlayer?.userId ?? null,
+      participants.map((p) => ({ id: p.userId, username: p.username, seat: p.seat ?? 0 })),
     );
     this.io.to(room.ioName).emit("game:state:authoritative", authoritativeState as any);
 
@@ -1039,8 +1262,49 @@ export class RoomManager {
     const deadlines: { at: number; kind: "turn" | "match"; seat?: number }[] = [];
     const turn = engine.currentClockDeadline;
     if (turn != null) deadlines.push({ at: turn, kind: "turn", seat: engine.currentSeat });
-    const matchDeadline = engine.currentMatchDeadline;
-    if (matchDeadline != null) deadlines.push({ at: matchDeadline, kind: "match" });
+    const matchDeadline = room.match.matchDeadline ?? engine.currentMatchDeadline;
+    if (matchDeadline != null) {
+      deadlines.push({ at: matchDeadline, kind: "match" });
+
+      // Schedule warning thresholds: 5m (300s), 2m (120s), 1m (60s), 30s, 10s
+      const warningThresholds = [300_000, 120_000, 60_000, 30_000, 10_000];
+      const now = Date.now();
+      const remainingMs = matchDeadline - now;
+      const matchId = room.match.matchId;
+
+      for (const threshold of warningThresholds) {
+        if (remainingMs > threshold) {
+          const warningDelay = remainingMs - threshold;
+          const warningKey = `${matchId}:warn:${threshold}`;
+          if (!this.scheduledWarnings.has(warningKey)) {
+            this.scheduledWarnings.add(warningKey);
+            const wTimer = setTimeout(() => {
+              this.scheduledWarnings.delete(warningKey);
+              if (room.status !== "playing" || !room.match || room.match.timeExpired) return;
+              const curRemaining = Math.max(0, (room.match.matchDeadline ?? matchDeadline) - Date.now());
+              const remainingSec = Math.round(curRemaining / 1000);
+              console.log(`[MATCH TIMER WARNING] Room ${room.id} (${room.gameId}): ${remainingSec}s remaining`);
+              this.emitToRoom(room, "match:timer-warning", {
+                matchId,
+                remainingSeconds: remainingSec,
+                remainingMs: curRemaining,
+              });
+              GameEventBus.broadcastEvent(
+                this.io,
+                room,
+                GameEventBus.createEnvelope("MATCH_TIMER_WARNING", matchId, room.gameId, {
+                  matchId,
+                  remainingSeconds: remainingSec,
+                  remainingMs: curRemaining,
+                }),
+              );
+            }, warningDelay);
+            wTimer.unref?.();
+            this.warningTimers.set(warningKey, wTimer);
+          }
+        }
+      }
+    }
 
     if (deadlines.length === 0) return;
     const next = deadlines.reduce((a, b) => (b.at < a.at ? b : a));
@@ -1050,13 +1314,14 @@ export class RoomManager {
     const matchId = room.match.matchId;
     const turnNumber = rawState?.turnNumber ?? 0;
     const currentSeat = rawState?.currentSeat ?? engine.currentSeat;
-    const timerKey = `${matchId}:${turnNumber}:${currentSeat}`;
+    const timerKey = `${matchId}:${turnNumber}:${currentSeat}:${next.kind}`;
 
     this.activeTurnTimerKeys.set(room.id, timerKey);
     console.log("[CARROM TIMER] TIMER_CREATED", {
       timerKey,
       turnNumber,
       seat: currentSeat,
+      kind: next.kind,
       expiresAt: next.at,
     });
 
@@ -1077,8 +1342,7 @@ export class RoomManager {
 
       if (
         activeKey !== timerKey ||
-        currentTurn !== turnNumber ||
-        currentSeatNow !== currentSeat ||
+        (next.kind === "turn" && (currentTurn !== turnNumber || currentSeatNow !== currentSeat)) ||
         currentRawState?.finished
       ) {
         console.log("[CARROM TIMER] STALE_TIMEOUT_IGNORED", {
@@ -1109,12 +1373,44 @@ export class RoomManager {
       console.log("[CARROM TIMER] TIMER_CANCELLED", { previousKey });
       this.activeTurnTimerKeys.delete(roomId);
     }
+    const room = this.rooms.get(roomId);
+    const matchId = room?.match?.matchId;
+    if (matchId) {
+      for (const [key, wTimer] of this.warningTimers.entries()) {
+        if (key.startsWith(matchId)) {
+          clearTimeout(wTimer);
+          this.warningTimers.delete(key);
+          this.scheduledWarnings.delete(key);
+        }
+      }
+    }
   }
 
   private async handleClockDeadline(roomId: string, kind: "turn" | "match" = "turn", seat?: number) {
     const room = this.rooms.get(roomId);
     if (!room || room.status !== "playing" || !room.match) return;
+    if (this.finalizingMatches.has(room.match.matchId) || room.match.matchStatus === "FINALIZING" || room.match.matchStatus === "COMPLETED") {
+      return;
+    }
     const engine = room.match.engine;
+
+    if (kind === "match") {
+      room.match.timeExpired = true;
+      room.match.matchStatus = "TIME_EXPIRED";
+      console.log(`[MATCH TIME EXPIRED] Room ${room.id} (${room.gameId}), Match ${room.match.matchId}`);
+      this.emitToRoom(room, "match:time-expired", {
+        matchId: room.match.matchId,
+        expiredAt: Date.now(),
+      });
+      GameEventBus.broadcastEvent(
+        this.io,
+        room,
+        GameEventBus.createEnvelope("MATCH_TIME_EXPIRED", room.match.matchId, room.gameId, {
+          matchId: room.match.matchId,
+          expiredAt: Date.now(),
+        }),
+      );
+    }
 
     let result;
     if (engine.handleTimeout) {
@@ -1131,7 +1427,7 @@ export class RoomManager {
     if (result.ok) {
       this.emitGameState(room, result.events);
       if (result.finished) {
-        await this.finishMatch(room, result.winnerSeats);
+        await this.finishMatch(room, result.winnerSeats, kind === "match" ? "TIME_LIMIT" : "TIMEOUT");
       } else {
         this.scheduleClockCheck(room);
       }
@@ -1158,16 +1454,160 @@ export class RoomManager {
       throw new AppError("FORBIDDEN", "Spectators cannot play");
     }
 
-    if (GameStateSyncManager.isMatchFinished(room.match.matchId)) {
+    if (
+      GameStateSyncManager.isMatchFinished(room.match.matchId) ||
+      room.match.matchStatus === "FINALIZING" ||
+      room.match.matchStatus === "COMPLETED"
+    ) {
       console.log(`[RoomManager] applyGameAction rejected: Match is already finished`);
       throw new AppError("MATCH_FINISHED", "Match is already finished; late action rejected");
+    }
+
+    if (
+      room.match.timeExpired ||
+      room.match.matchStatus === "TIME_EXPIRED" ||
+      (room.match.matchDeadline && Date.now() >= room.match.matchDeadline)
+    ) {
+      console.log(`[RoomManager] applyGameAction rejected: Match time limit expired`);
+      throw new AppError("MATCH_TIME_EXPIRED", "Match time limit expired; action rejected");
+    }
+
+    // 1. Anti-Cheat: Reject or sanitize forged client score/winner/state payloads
+    const forgedKeys = ["score", "winner", "winnerId", "winnerSeats", "coins", "reward", "pocketedCoins", "runs", "points", "kills"];
+    let detectedForgery = false;
+    for (const key of forgedKeys) {
+      if (key in action) {
+        detectedForgery = true;
+        delete (action as any)[key];
+      }
+    }
+    if (detectedForgery) {
+      GameStateSyncManager.logSecurityEvent({
+        userId: user.userId,
+        matchId: room.match.matchId,
+        roomId: room.id,
+        gameId: room.gameId,
+        eventType: "SCORE_TAMPERING_ATTEMPT",
+        severity: "HIGH",
+        details: { actionType: action.type },
+        actionTaken: "REJECT_ACTION",
+      });
+    }
+
+    // 2. Anti-Cheat: Validate numeric sanity (no NaN, Infinity, or impossible negative values)
+    for (const [k, v] of Object.entries(action)) {
+      if (typeof v === "number") {
+        if (!isFinite(v) || isNaN(v)) {
+          GameStateSyncManager.logSecurityEvent({
+            userId: user.userId,
+            matchId: room.match.matchId,
+            roomId: room.id,
+            gameId: room.gameId,
+            eventType: "IMPOSSIBLE_ACTION",
+            severity: "HIGH",
+            details: { field: k, value: v, actionType: action.type },
+            actionTaken: "REJECT_ACTION",
+          });
+          return {
+            ok: false,
+            error: `Invalid numeric value for ${k}`,
+            events: [],
+            state: (room.match.engine.serialize?.() ?? {}) as JsonObject,
+            finished: false,
+            winnerSeats: [],
+          };
+        }
+      }
+    }
+    if ("power" in action && typeof (action as any).power === "number") {
+      const power = (action as any).power;
+      if (power < 0 || power > 100) {
+        GameStateSyncManager.logSecurityEvent({
+          userId: user.userId,
+          matchId: room.match.matchId,
+          roomId: room.id,
+          gameId: room.gameId,
+          eventType: "IMPOSSIBLE_ACTION",
+          severity: "HIGH",
+          details: { power, actionType: action.type },
+          actionTaken: "REJECT_ACTION",
+        });
+        return {
+          ok: false,
+          error: "Power is out of allowed bounds",
+          events: [],
+          state: (room.match.engine.serialize?.() ?? {}) as JsonObject,
+          finished: false,
+          winnerSeats: [],
+        };
+      }
+    }
+
+    // 3. Action Idempotency: Return cached result for duplicated action IDs
+    const actionId = (action as any).actionId ?? GameEventBus.generateEventId();
+    const cachedResult = GameStateSyncManager.getCachedActionResult(room.match.matchId, actionId);
+    if (cachedResult) {
+      console.log(`[RoomManager] Duplicate actionId ${actionId} received - returning cached result`);
+      return cachedResult;
+    }
+
+    // 4. Anti-Cheat: State version check (reject stale actions and prompt client resync)
+    const clientStateVersion = (action as any).stateVersion ?? (action as any).clientStateVersion;
+    const versionCheck = GameStateSyncManager.validateStateVersion(room.match.matchId, clientStateVersion);
+    if (!versionCheck.valid) {
+      GameStateSyncManager.logSecurityEvent({
+        userId: user.userId,
+        matchId: room.match.matchId,
+        roomId: room.id,
+        gameId: room.gameId,
+        eventType: "STALE_ACTION_SPAM",
+        severity: "LOW",
+        details: { clientStateVersion, serverStateVersion: versionCheck.currentStateVersion },
+        actionTaken: "REJECT_ACTION",
+      });
+      return {
+        ok: false,
+        error: "STALE_GAME_STATE",
+        events: [],
+        state: (GameStateSyncManager.getMatchState(room.match.matchId)?.gameState ?? room.match.engine.serialize?.() ?? {}) as JsonObject,
+        finished: false,
+        winnerSeats: [],
+      };
+    }
+
+    // 5. Anti-Cheat: Turn order check for turn-based games
+    const engine = room.match.engine as any;
+    if (engine && typeof engine.currentSeat === "number" && action.type !== "resign" && action.type !== "chat") {
+      if (player.seat !== engine.currentSeat) {
+        GameStateSyncManager.logSecurityEvent({
+          userId: user.userId,
+          matchId: room.match.matchId,
+          roomId: room.id,
+          gameId: room.gameId,
+          eventType: "WRONG_TURN",
+          severity: "MEDIUM",
+          details: { playerSeat: player.seat, currentSeat: engine.currentSeat, actionType: action.type },
+          actionTaken: "REJECT_ACTION",
+        });
+        return {
+          ok: false,
+          error: "It is not your turn",
+          events: [],
+          state: (room.match.engine.serialize?.() ?? {}) as JsonObject,
+          finished: false,
+          winnerSeats: [],
+        };
+      }
     }
 
     const session = new GameSession(room.match);
     console.log(`[RoomManager] Applying action via GameSession for user ${user.userId}, seat ${player.seat}`);
     const result = await session.apply(user.userId, player.seat, action);
 
-    const actionId = (action as any).actionId ?? GameEventBus.generateEventId();
+    // Cache result for idempotency
+    if (result.ok) {
+      GameStateSyncManager.setCachedActionResult(room.match.matchId, actionId, result);
+    }
     if (!result.ok) {
       console.log(`[RoomManager] Action rejected:`, result.error);
       GameEventBus.broadcastEvent(
@@ -1223,6 +1663,16 @@ export class RoomManager {
 
     this.emitGameState(room, result.events);
 
+    // Record authoritative replay event
+    GameStateSyncManager.recordReplayEvent(
+      room.match.matchId,
+      user.userId,
+      action.type,
+      action,
+      result.state,
+      room.match.turnNumber,
+    );
+
     // Update and broadcast authoritative match state
     const currentSeat = room.match.engine.currentSeat;
     const activePlayer = [...room.players.values()].find((p) => p.seat === currentSeat && !p.isSpectator);
@@ -1260,7 +1710,7 @@ export class RoomManager {
     }
 
     if (result.finished) {
-      await this.finishMatch(room, result.winnerSeats);
+      await this.finishMatch(room, result.winnerSeats, "NORMAL");
     } else {
       this.scheduleClockCheck(room);
     }
@@ -1274,10 +1724,27 @@ export class RoomManager {
     };
   }
 
-  private async finishMatch(room: RoomRuntime, winnerSeats: number[]) {
+  private async finishMatch(
+    room: RoomRuntime,
+    winnerSeats: number[],
+    resultReason: "NORMAL" | "TIME_LIMIT" | "TIMEOUT" | "ABANDONED" = "NORMAL",
+  ) {
     if (!room.match) return;
-    this.clearClockTimer(room.id);
     const matchId = room.match.matchId;
+
+    // Atomic Mutex Check: Exactly-once match finalization
+    if (
+      this.finalizingMatches.has(matchId) ||
+      room.match.matchStatus === "FINALIZING" ||
+      room.match.matchStatus === "COMPLETED"
+    ) {
+      console.log(`[MATCH] Finalization already active or completed for match ${matchId}`);
+      return;
+    }
+    this.finalizingMatches.add(matchId);
+    room.match.matchStatus = "FINALIZING";
+
+    this.clearClockTimer(room.id);
     const participants = [...room.players.values()].filter((p) => !p.isSpectator && p.seat !== null);
 
     const winnerIds = winnerSeats
@@ -1313,36 +1780,70 @@ export class RoomManager {
       }
     }
 
+    console.log("[MATCH] TIMEOUT_FINALIZATION_STARTED", {
+      matchId,
+      gameId: room.gameId,
+      resultReason,
+    });
+
+    console.log("[MATCH] TIMEOUT_WINNER_RESOLVED", {
+      matchId,
+      gameId: room.gameId,
+      winnerId,
+      loserId,
+      resultReason,
+      winnerSeats,
+    });
+
+    const endedAt = new Date();
     await prisma.match.update({
       where: { id: matchId },
-      data: { winnerIds },
+      data: {
+        winnerIds,
+        status: "FINISHED",
+        endedAt,
+        resultReason,
+      },
+    }).catch((err) => {
+      console.error(`[MATCH] Database update failed for match ${matchId}:`, err);
     });
 
-    console.log("[MATCH] MATCH_FINISHED", {
+    console.log("[MATCH] MATCH_COMPLETED", {
       matchId,
       gameId: room.gameId,
       resultType,
+      resultReason,
       winnerId,
       loserId,
       scores,
     });
 
-    const finishPayload = {
+    // Authoritative Result Object (Requirement 8)
+    const authoritativeResult = {
       matchId,
-      gameId: room.gameId,
-      resultType,
+      gameType: room.gameId,
       winnerId,
       loserId,
-      winnerSeats,
-      scores,
+      resultReason,
+      finalScore: scores,
       finalScores: scores,
+      finalState: room.match.engine.serialize(),
+      endedAt: endedAt.getTime(),
+      winnerSeats,
+      resultType,
     };
 
-    this.emitToRoom(room, "game:finished", finishPayload);
+    this.emitToRoom(room, "game:finished", authoritativeResult);
     GameEventBus.broadcastEvent(
       this.io,
       room,
-      GameEventBus.createEnvelope("GAME_FINISHED", matchId, room.gameId, finishPayload)
+      GameEventBus.createEnvelope("GAME_FINISHED", matchId, room.gameId, authoritativeResult)
+    );
+
+    GameEventBus.broadcastEvent(
+      this.io,
+      room,
+      GameEventBus.createEnvelope("MATCH_COMPLETED", matchId, room.gameId, authoritativeResult)
     );
 
     GameEventBus.broadcastEvent(
@@ -1370,6 +1871,7 @@ export class RoomManager {
         scores,
         resultType,
         rated: room.settings.rated !== false,
+        reason: resultReason,
       });
 
       const winnerPayout = settlement?.result?.payouts?.find((p) => p.userId === winnerId)?.amount ?? 0;
@@ -1378,6 +1880,13 @@ export class RoomManager {
         matchId,
         resultType,
         coinsWon: winnerPayout,
+      });
+
+      console.log("[MATCH] SETTLEMENT_COMPLETED", {
+        matchId,
+        gameId: room.gameId,
+        winnerPayout,
+        isDraw,
       });
 
       GameEventBus.broadcastEvent(
@@ -1394,13 +1903,33 @@ export class RoomManager {
       );
     } catch (error) {
       console.error(`Settlement failed for match ${matchId}`, error);
+      MatchTimeoutMonitoringService.recordSettlementFailure();
     }
+
+    const durationSec = Math.max(0, Math.round((endedAt.getTime() - (room.match.startedAt ?? endedAt.getTime())) / 1000));
+    MatchTimeoutMonitoringService.recordCompletion({
+      gameId: room.gameId,
+      resultReason,
+      durationSec,
+      success: true,
+    });
+
+    room.match.matchStatus = "COMPLETED";
+    room.match.endedAt = endedAt.getTime();
+    room.match.resultReason = resultReason;
+    this.finalizingMatches.delete(matchId);
 
     // Tournament bracket advancement (fire-and-forget)
     const roomSettings = room.settings as Record<string, unknown>;
     const tournamentId = typeof roomSettings.tournamentId === "string" ? roomSettings.tournamentId : null;
     const tournamentRoundId = typeof roomSettings.tournamentRoundId === "string" ? roomSettings.tournamentRoundId : null;
     if (tournamentId && tournamentRoundId && winnerId && !isDraw) {
+      console.log("[MATCH] TOURNAMENT_ADVANCED", {
+        matchId,
+        tournamentId,
+        roundId: tournamentRoundId,
+        winnerId,
+      });
       reportTournamentMatchResult({
         matchId,
         tournamentId,
@@ -1414,7 +1943,14 @@ export class RoomManager {
     }
 
     const finalState = room.match.engine.serialize();
-    GameStateSyncManager.finalizeMatch(matchId, finalState);
+    const configSnapshot = (room.settings as Record<string, unknown>)?.configSnapshot as any;
+    GameStateSyncManager.finalizeMatch(matchId, finalState, {
+      winnerIds,
+      resultReason,
+      finalScores: scores,
+      entryFee: room.stake,
+      configurationVersion: configSnapshot?.configVersion ?? 1,
+    });
 
     room.match = null;
     room.rematch = null;
@@ -1601,6 +2137,9 @@ export class RoomManager {
             roomId: room.id,
             matchId: room.match.matchId,
             state: room.match.engine.serialize(),
+            matchDeadline: room.match.matchDeadline,
+            matchStartedAt: room.match.matchStartedAt ?? room.match.startedAt,
+            matchStatus: room.match.matchStatus ?? (room.match.timeExpired ? "TIME_EXPIRED" : "ACTIVE"),
             events: [{ type: "reconnected" }],
           };
           userSocket.emit("game:state", payload);
@@ -1790,6 +2329,11 @@ export class RoomManager {
       throw new AppError("INVALID_ACTION", "Matchmaking players are not connected");
     }
 
+    // Verify none of the users are in an active match
+    for (const user of users) {
+      this.assertNotInActiveMatch(user.userId);
+    }
+
     // Leave any lobby room a player may still be in before locking them in.
     await Promise.all(users.map((user, index) => this.ejectFromAllRooms(user, sockets[index])));
 
@@ -1956,6 +2500,11 @@ export class RoomManager {
       throw new AppError("INVALID_ACTION", "Tournament match players are not connected");
     }
 
+    // Verify none of the tournament players are already in an active match
+    for (const user of users) {
+      this.assertNotInActiveMatch(user.userId);
+    }
+
     // Leave any existing rooms
     await Promise.all(users.map((user, index) => this.ejectFromAllRooms(user, sockets[index])));
 
@@ -2089,5 +2638,207 @@ export class RoomManager {
       }
       throw error;
     }
+  }
+
+  /**
+   * Universal Match Room: Joins an authenticated user to a match room.
+   * Works identically for Tournament matches and Casual/Ranked matchmaking matches.
+   * - Authorizes user as a registered participant in the match
+   * - Prevents 3rd-party users (ROOM_FULL)
+   * - Handles multi-tab duplicate joins cleanly without creating duplicate player slots
+   * - Sets online presence and emits PLAYER_CONNECTED
+   * - Returns RoomFull and authoritative UniversalMatchRoomState
+   */
+  async joinMatch(
+    user: AuthenticatedUser,
+    matchId: string,
+    socket: Socket,
+  ): Promise<{ room: RoomFull; matchRoomState: UniversalMatchRoomState }> {
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: {
+        players: {
+          include: { user: { include: { profile: true } } },
+          orderBy: { seat: "asc" },
+        },
+        room: {
+          include: {
+            players: {
+              include: { user: { include: { profile: true } } },
+              orderBy: { seat: "asc" },
+            },
+          },
+        },
+      },
+    });
+
+    if (!match) {
+      throw new AppError("NOT_FOUND", "Match not found", 404);
+    }
+
+    if (match.status === "FINISHED" || match.status === "ABORTED") {
+      throw new AppError("MATCH_FINISHED", "Match has already concluded", 400);
+    }
+
+    const assignedPlayer = match.players.find((p) => p.userId === user.userId);
+    if (!assignedPlayer) {
+      throw new AppError("ROOM_FULL", "You are not an authorized player for this match", 403);
+    }
+
+    // Locate existing room in memory or restore from DB
+    const roomId = match.roomId || match.id;
+    let room = this.rooms.get(roomId);
+
+    if (!room) {
+      const def = getGameDefinition(match.gameId as GameId);
+      const code = match.room?.code || this.uniqueCode();
+      const settings = (match.room?.settings as Record<string, unknown>) || {};
+
+      room = {
+        id: roomId,
+        code,
+        ioName: `room:${roomId}`,
+        gameId: match.gameId as GameId,
+        hostId: match.players[0]?.userId || user.userId,
+        status: match.status === "ACTIVE" ? "playing" : "waiting",
+        isPrivate: true,
+        stake: match.stake,
+        minPlayers: def.minPlayers,
+        maxPlayers: def.maxPlayers,
+        players: new Map(),
+        match: null,
+        createdAt: match.createdAt.getTime(),
+        settings,
+        rematch: null,
+        pendingMatchId: match.id,
+        stateVersion: 1,
+      };
+
+      // Populate players from DB match
+      for (const p of match.players) {
+        const authUser: AuthenticatedUser = {
+          userId: p.userId,
+          username: p.user.username,
+          displayName: p.user.displayName,
+          avatarUrl: p.user.avatarUrl,
+        };
+        const rPlayer = this.makePlayer(authUser, p.seat, p.seat === 0, false, false);
+        rPlayer.connectionStatus = "disconnected";
+        room.players.set(p.userId, rPlayer);
+      }
+
+      this.rooms.set(roomId, room);
+      this.roomsByCode.set(code, room);
+    }
+
+    // Attach current player
+    let player = room.players.get(user.userId);
+    if (!player) {
+      player = this.makePlayer(user, assignedPlayer.seat, assignedPlayer.seat === 0, false, false);
+      room.players.set(user.userId, player);
+    }
+
+    player.socketIds.add(socket.id);
+    player.connectionStatus = "connected";
+    socket.join(room.ioName);
+    this.clearDisconnectTimer(room.id, user.userId);
+
+    // Broadcast presence update
+    const matchRoomState = this.toUniversalMatchRoomState(room, match);
+
+    this.emitToRoom(room, "PLAYER_CONNECTED", {
+      roomId: room.id,
+      matchId: match.id,
+      playerId: user.userId,
+      presence: "ONLINE",
+    });
+
+    GameEventBus.broadcastEvent(
+      this.io,
+      room,
+      GameEventBus.createEnvelope("PLAYER_CONNECTED", match.id, room.gameId, {
+        playerId: user.userId,
+        presence: "ONLINE",
+      })
+    );
+
+    this.emitToRoom(room, "MATCH_STATE_SYNC", matchRoomState);
+    this.broadcastRoomUpdate(room);
+    this.emitLobbyState(room);
+
+    return {
+      room: this.toRoomFull(room),
+      matchRoomState,
+    };
+  }
+
+  /**
+   * Constructs the universal authoritative match room state.
+   */
+  public toUniversalMatchRoomState(room: RoomRuntime, matchRecord?: any): UniversalMatchRoomState {
+    const matchId = room.match?.matchId ?? room.pendingMatchId ?? matchRecord?.id ?? room.id;
+    const isTournament = Boolean((room.settings as any)?.tournamentId);
+    const mode = isTournament ? "tournament" : (room.settings as any)?.rated === false ? "casual" : "ranked";
+
+    let status: UniversalMatchState = "CREATED";
+    if (room.status === "waiting") {
+      const participants = [...room.players.values()].filter((p) => !p.isSpectator);
+      if (participants.length < room.minPlayers) {
+        status = "WAITING_FOR_PLAYERS";
+      } else {
+        status = "READY_CHECK";
+      }
+    } else if (room.status === "starting") {
+      status = "COUNTDOWN";
+    } else if (room.status === "playing") {
+      status = "LIVE";
+    } else if (room.status === "ended") {
+      status = room.match?.resultReason === "TIME_LIMIT" ? "TIME_EXPIRED" : "COMPLETED";
+    }
+
+    const players: UniversalMatchPlayer[] = [...room.players.values()]
+      .filter((p) => !p.isSpectator)
+      .map((p) => ({
+        userId: p.userId,
+        displayName: p.displayName,
+        avatarUrl: p.avatarUrl,
+        seat: p.seat ?? 0,
+        isReady: p.isReady,
+        isHost: p.isHost,
+        isOnline: p.connectionStatus === "connected" && p.socketIds.size > 0,
+        connectionQuality:
+          p.connectionStatus === "connected" && p.socketIds.size > 0
+            ? "excellent"
+            : p.connectionStatus === "reconnecting"
+            ? "unstable"
+            : "disconnected",
+        rating: 1000,
+      }));
+
+    const prizePool = isTournament ? 0 : Math.round(room.stake * 2 * 0.9);
+
+    return {
+      matchId,
+      roomId: room.id,
+      gameId: room.gameId,
+      mode,
+      tournamentInfo: isTournament
+        ? {
+            tournamentId: (room.settings as any).tournamentId,
+            roundId: (room.settings as any).tournamentRoundId,
+            roundNumber: (room.settings as any).tournamentRoundNumber ?? 1,
+            matchNumber: (room.settings as any).tournamentMatchNumber ?? 1,
+          }
+        : null,
+      status,
+      entryFee: room.stake,
+      prizePool,
+      players,
+      countdown: room.countdownStarted ? 3 : null,
+      startedAt: room.match?.startedAt ? new Date(room.match.startedAt).toISOString() : null,
+      matchDeadline: room.match?.matchDeadline ? new Date(room.match.matchDeadline).toISOString() : null,
+      stateVersion: room.stateVersion || 1,
+      configurationSnapshot: room.settings,
+    };
   }
 }

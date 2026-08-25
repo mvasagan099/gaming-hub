@@ -132,14 +132,32 @@ export class TournamentMatchService {
 
       const result = await response.json() as { ok: boolean; matchId?: string; error?: string };
 
-      if (!result.ok) {
-        console.error(`[TOURNAMENT] Socket server match creation failed:`, result.error);
-        return null;
+      if (result.ok && result.matchId) {
+        return result.matchId;
       }
-
-      return result.matchId ?? null;
+      console.warn(`[TOURNAMENT] Socket server match creation returned not ok, using DB fallback:`, result.error);
     } catch (error) {
-      console.error(`[TOURNAMENT] Socket server match creation error:`, error);
+      console.warn(`[TOURNAMENT] Socket server unavailable, using direct DB match creation:`, (error as Error).message);
+    }
+
+    // Direct DB match creation fallback
+    try {
+      const dbMatch = await prisma.match.create({
+        data: {
+          gameId: slot.tournament.gameId,
+          status: "CREATED",
+          stake: 0,
+          players: {
+            create: [
+              { userId: slot.playerAId, seat: 0 },
+              { userId: slot.playerBId, seat: 1 },
+            ],
+          },
+        },
+      });
+      return dbMatch.id;
+    } catch (dbErr) {
+      console.error(`[TOURNAMENT] Direct DB match creation error:`, dbErr);
       return null;
     }
   }

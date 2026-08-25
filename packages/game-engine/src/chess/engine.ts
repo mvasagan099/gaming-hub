@@ -443,20 +443,74 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
     };
   }
 
+  private evaluateMaterial(fen: string): { white: number; black: number } {
+    const pieceValues: Record<string, number> = {
+      p: 1, n: 3, b: 3, r: 5, q: 9,
+      P: 1, N: 3, B: 3, R: 5, Q: 9,
+    };
+    let white = 0;
+    let black = 0;
+    const boardPart = fen.split(" ")[0] || "";
+    for (const char of boardPart) {
+      if (char >= "a" && char <= "z") {
+        black += pieceValues[char] || 0;
+      } else if (char >= "A" && char <= "Z") {
+        white += pieceValues[char] || 0;
+      }
+    }
+    return { white, black };
+  }
+
   /**
-   * Resolves a wall-clock deadline expiry. Chess only has a per-turn flag
-   * deadline, so "match" timeouts are always rejected.
+   * Resolves a wall-clock deadline expiry (per-turn flag or global match deadline).
    */
   handleTimeout(kind: "turn" | "match", seat?: number): EngineActionResult<ChessState> {
     const state = this.state as ChessState;
     if (kind === "match") {
+      const next = structuredClone(state);
+      const now = this.now();
+      if (next.clocks && next.currentSeat != null) {
+        this.finalizeClock(next, next.currentSeat, now);
+      }
+      const mat = this.evaluateMaterial(next.fen);
+      const whiteSeat = next.players.find((p) => p.color === "w")?.seat ?? 0;
+      const blackSeat = next.players.find((p) => p.color === "b")?.seat ?? 1;
+      
+      let winnerSeats: number[] = [];
+      let resultStr: "1-0" | "0-1" | "1/2-1/2" = "1/2-1/2";
+      if (mat.white > mat.black) {
+        winnerSeats = [whiteSeat];
+        resultStr = "1-0";
+      } else if (mat.black > mat.white) {
+        winnerSeats = [blackSeat];
+        resultStr = "0-1";
+      } else {
+        // Material is tied: evaluate clock times
+        const wClock = next.clocks?.[whiteSeat]?.remainingMs ?? 0;
+        const bClock = next.clocks?.[blackSeat]?.remainingMs ?? 0;
+        if (wClock > bClock) {
+          winnerSeats = [whiteSeat];
+          resultStr = "1-0";
+        } else if (bClock > wClock) {
+          winnerSeats = [blackSeat];
+          resultStr = "0-1";
+        } else {
+          winnerSeats = [whiteSeat, blackSeat];
+          resultStr = "1/2-1/2";
+        }
+      }
+      next.finished = true;
+      next.gameOver = true;
+      next.winnerSeats = winnerSeats;
+      next.result = resultStr;
+      next.endReason = "flag";
+      this.updateState(next);
       return {
-        ok: false,
-        error: "This game has no match-level timer",
-        state,
-        events: [],
-        finished: state.finished,
-        winnerSeats: state.winnerSeats,
+        ok: true,
+        state: next,
+        events: [{ type: "match-timeout", winnerSeats }],
+        finished: true,
+        winnerSeats,
       };
     }
     if (seat == null || seat !== state.currentSeat) {

@@ -96,6 +96,8 @@ export class GameConfigService {
         turnTimerSeconds: config.turnTimerSeconds,
         reconnectWindowSeconds: config.reconnectWindowSeconds,
         matchDurationSeconds: config.matchDurationSeconds,
+        timeoutResolution: config.timeoutResolution,
+        allowDraw: config.allowDraw,
         prizeMode: config.prizeMode,
         winnerPercentage: config.winnerPercentage,
       };
@@ -174,6 +176,8 @@ export class GameConfigService {
       turnTimerSeconds: config.turnTimerSeconds,
       reconnectWindowSeconds: config.reconnectWindowSeconds,
       matchDurationSeconds: config.matchDurationSeconds,
+      timeoutResolution: config.timeoutResolution ?? "GAME_SPECIFIC",
+      allowDraw: config.allowDraw ?? true,
       prizeMode: config.prizeMode,
       winnerPercentage: config.winnerPercentage,
       fixedPrizeAmount: config.fixedPrizeAmount,
@@ -182,6 +186,96 @@ export class GameConfigService {
       gameSpecificSettings: config.gameSpecificSettings ?? {},
       snapshotAt: Date.now(),
     };
+  }
+
+  /**
+   * Global Match Settings (Platform limit: 600s max match duration and warning times).
+   */
+  static async getMatchSettings() {
+    const row = await prisma.siteSetting.findUnique({
+      where: { key: "system_match_settings" },
+    });
+    if (!row) {
+      return {
+        maxMatchDurationSeconds: 600,
+        warningTimesSeconds: [300, 120, 60, 30, 10],
+        defaultTurnTimeoutSeconds: 30,
+        version: 1,
+      };
+    }
+    return row.value as {
+      maxMatchDurationSeconds: number;
+      warningTimesSeconds: number[];
+      defaultTurnTimeoutSeconds: number;
+      version: number;
+    };
+  }
+
+  static async updateMatchSettings(
+    updates: {
+      maxMatchDurationSeconds?: number;
+      warningTimesSeconds?: number[];
+      defaultTurnTimeoutSeconds?: number;
+    },
+    adminId: string,
+  ) {
+    const current = await this.getMatchSettings();
+    const maxMatchDurationSeconds = updates.maxMatchDurationSeconds ?? current.maxMatchDurationSeconds;
+    if (maxMatchDurationSeconds > 600) {
+      throw new AppError("VALIDATION_ERROR", "maxMatchDurationSeconds cannot exceed platform maximum of 600 seconds (10 minutes)", 422);
+    }
+    if (maxMatchDurationSeconds <= 0) {
+      throw new AppError("VALIDATION_ERROR", "maxMatchDurationSeconds must be greater than 0", 422);
+    }
+
+    const warningTimesSeconds = updates.warningTimesSeconds ?? current.warningTimesSeconds;
+    for (const w of warningTimesSeconds) {
+      if (w >= maxMatchDurationSeconds) {
+        throw new AppError("VALIDATION_ERROR", `Warning time ${w}s must be less than max match duration ${maxMatchDurationSeconds}s`, 422);
+      }
+    }
+
+    const nextVersion = (current.version ?? 1) + 1;
+    const validated = {
+      maxMatchDurationSeconds,
+      warningTimesSeconds,
+      defaultTurnTimeoutSeconds: updates.defaultTurnTimeoutSeconds ?? current.defaultTurnTimeoutSeconds,
+      version: nextVersion,
+      updatedAt: new Date().toISOString(),
+      updatedBy: adminId,
+    };
+
+    await prisma.siteSetting.upsert({
+      where: { key: "system_match_settings" },
+      create: {
+        key: "system_match_settings",
+        category: "system",
+        value: validated as object,
+        secret: false,
+        updatedBy: adminId,
+      },
+      update: {
+        value: validated as object,
+        updatedBy: adminId,
+      },
+    });
+
+    audit({
+      actorType: "user",
+      actorId: adminId,
+      action: "MATCH_SETTINGS_UPDATED",
+      category: "system",
+      targetType: "site_setting",
+      targetId: "system_match_settings",
+      meta: {
+        oldSettings: current,
+        newSettings: validated,
+        version: nextVersion,
+      },
+    });
+
+    this.invalidateCache();
+    return validated;
   }
 
   /**

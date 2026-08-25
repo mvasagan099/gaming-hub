@@ -1,12 +1,12 @@
 import { randomBytes } from "node:crypto";
 import type { Server } from "socket.io";
-import type {
-  GameId,
-  GameEventEnvelope,
-  InGameNotification,
-  AnyGameEventType,
-  NotificationPriority,
-  JsonObject,
+import {
+  type GameId,
+  type GameEventEnvelope,
+  type InGameNotification,
+  type AnyGameEventType,
+  type EventPriority,
+  getEventPriority,
 } from "@gaming-hub/shared";
 import type { RoomRuntime } from "../rooms/types";
 import type { ClientToServerEvents, ServerToClientEvents, InterServerEvents } from "@gaming-hub/socket";
@@ -15,6 +15,7 @@ export type TypedIoServer = Server<ClientToServerEvents, ServerToClientEvents, I
 
 export class GameEventBus {
   private static matchStateVersions = new Map<string, number>();
+  private static matchEventSequences = new Map<string, number>();
 
   /**
    * Generates a unique event ID with timestamp prefix
@@ -41,14 +42,25 @@ export class GameEventBus {
   }
 
   /**
-   * Resets match version tracking upon match completion
+   * Increments and returns the next authoritative monotonic sequence for a match
    */
-  public static cleanupMatch(matchId: string): void {
-    this.matchStateVersions.delete(matchId);
+  public static nextSequence(matchId: string): number {
+    const current = this.matchEventSequences.get(matchId) ?? 0;
+    const next = current + 1;
+    this.matchEventSequences.set(matchId, next);
+    return next;
   }
 
   /**
-   * Creates a standard GameEventEnvelope with unique eventId and bumped stateVersion
+   * Resets match version & sequence tracking upon match completion
+   */
+  public static cleanupMatch(matchId: string): void {
+    this.matchStateVersions.delete(matchId);
+    this.matchEventSequences.delete(matchId);
+  }
+
+  /**
+   * Creates a standard GameEventEnvelope with unique eventId, monotonic sequence, and priority
    */
   public static createEnvelope<TPayload = unknown>(
     eventType: AnyGameEventType,
@@ -58,12 +70,17 @@ export class GameEventBus {
     customStateVersion?: number,
   ): GameEventEnvelope<TPayload> {
     const stateVersion = customStateVersion ?? this.nextStateVersion(matchId);
+    const sequence = this.nextSequence(matchId);
+    const priority: EventPriority = getEventPriority(eventType);
+
     return {
       eventId: this.generateEventId(),
       eventType,
       matchId,
       gameId,
+      sequence,
       stateVersion,
+      priority,
       timestamp: Date.now(),
       payload,
     };
@@ -101,7 +118,9 @@ export class GameEventBus {
       eventType: envelope.eventType,
       matchId: envelope.matchId,
       gameId: envelope.gameId,
+      sequence: envelope.sequence,
       stateVersion: envelope.stateVersion,
+      priority: envelope.priority,
     });
 
     // 1. Emit standard envelope to the room
@@ -114,14 +133,14 @@ export class GameEventBus {
   }
 
   /**
-   * Dispatches user-friendly in-game notifications with priority levels (HIGH, MEDIUM, LOW)
+   * Dispatches user-friendly in-game notifications with priority levels (CRITICAL, HIGH, NORMAL, LOW)
    */
   private static dispatchNotificationsFromEvent(
     io: TypedIoServer,
     room: RoomRuntime,
     envelope: GameEventEnvelope<any>,
   ): void {
-    const { eventType, payload, matchId, gameId } = envelope;
+    const { eventType, payload, matchId, gameId, priority } = envelope;
 
     switch (eventType) {
       case "MATCH_FOUND": {
@@ -141,7 +160,7 @@ export class GameEventBus {
         const player = room.players.get(payload.playerId);
         if (player) {
           this.emitNotification(io, room, {
-            priority: "MEDIUM",
+            priority: "NORMAL",
             title: "Player Ready",
             message: `${player.displayName} is ready to play!`,
             eventType,
@@ -150,6 +169,19 @@ export class GameEventBus {
             ephemeralMs: 3000,
           });
         }
+        break;
+      }
+
+      case "COUNTDOWN_STARTED": {
+        this.emitNotification(io, room, {
+          priority: "HIGH",
+          title: "Get Ready!",
+          message: `Match starting in ${payload.seconds ?? 3} seconds...`,
+          eventType,
+          matchId,
+          gameId,
+          ephemeralMs: 3000,
+        });
         break;
       }
 
@@ -167,7 +199,8 @@ export class GameEventBus {
       }
 
       case "TURN_CHANGED": {
-        const nextPlayer = room.players.get(payload.nextPlayerId);
+        const nextPlayerId = payload.currentPlayerId || payload.nextPlayerId;
+        const nextPlayer = room.players.get(nextPlayerId);
         if (nextPlayer) {
           // Send specific "Your turn" notification to the active player
           for (const socketId of nextPlayer.socketIds) {
@@ -185,33 +218,23 @@ export class GameEventBus {
                 targetUserId: nextPlayer.userId,
                 ephemeralMs: 3000,
               };
-              socket.emit("game:notification", notification);
+              socket.emit("game:notification", notification as any);
             }
           }
         }
         break;
       }
 
-      case "PLAYER_DISCONNECTED": {
+      case "FOUL_OCCURRED":
+      case "FOUL":
+      case "CARROM_FOUL":
+      case "SNOOKER_FOUL": {
         const player = room.players.get(payload.playerId);
+        const name = player?.displayName || "Player";
         this.emitNotification(io, room, {
-          priority: "HIGH",
-          title: "Opponent Disconnected",
-          message: `${player?.displayName ?? "Opponent"} disconnected. Waiting for reconnection...`,
-          eventType,
-          matchId,
-          gameId,
-          ephemeralMs: 5000,
-        });
-        break;
-      }
-
-      case "PLAYER_RECONNECTED": {
-        const player = room.players.get(payload.playerId);
-        this.emitNotification(io, room, {
-          priority: "MEDIUM",
-          title: "Opponent Reconnected",
-          message: `${player?.displayName ?? "Opponent"} has rejoined the match!`,
+          priority: "NORMAL",
+          title: "Foul!",
+          message: `${name}: ${payload.reason || "Foul committed"}`,
           eventType,
           matchId,
           gameId,
@@ -220,40 +243,31 @@ export class GameEventBus {
         break;
       }
 
-      case "PLAYER_FORFEITED": {
+      case "TIME_WARNING":
+      case "MATCH_TIMER_WARNING": {
+        const remaining = payload.remainingSeconds ?? 60;
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        const timeStr = mins > 0 ? `${mins}m ${secs > 0 ? `${secs}s` : ""}` : `${secs}s`;
+
         this.emitNotification(io, room, {
-          priority: "HIGH",
-          title: "Match Forfeited",
-          message: "Player did not reconnect in time. Match forfeited.",
+          priority: "NORMAL",
+          title: "Time Warning",
+          message: `Only ${timeStr} remaining in this match!`,
           eventType,
           matchId,
           gameId,
-          ephemeralMs: 6000,
+          ephemeralMs: 4000,
         });
         break;
       }
 
-      case "SETTLEMENT_COMPLETED": {
+      case "TIME_EXPIRED":
+      case "MATCH_TIME_EXPIRED": {
         this.emitNotification(io, room, {
-          priority: "HIGH",
-          title: "Match Settled",
-          message: payload.isDraw
-            ? "Match resulted in a draw. Stakes refunded."
-            : `Winner awarded ${payload.winnerPayout} coins!`,
-          eventType,
-          matchId,
-          gameId,
-          ephemeralMs: 6000,
-        });
-        break;
-      }
-
-      case "REMATCH_REQUESTED": {
-        const requester = room.players.get(payload.playerId);
-        this.emitNotification(io, room, {
-          priority: "MEDIUM",
-          title: "Rematch Requested",
-          message: `${requester?.displayName ?? "Opponent"} wants a rematch!`,
+          priority: "CRITICAL",
+          title: "Time Expired!",
+          message: "Match deadline reached. Finalizing results...",
           eventType,
           matchId,
           gameId,
@@ -261,22 +275,86 @@ export class GameEventBus {
         });
         break;
       }
+
+      case "PLAYER_DISCONNECTED": {
+        const player = room.players.get(payload.playerId);
+        const name = player?.displayName || "Opponent";
+        this.emitNotification(io, room, {
+          priority: "HIGH",
+          title: "Player Disconnected",
+          message: `${name} lost connection. Grace period active...`,
+          eventType,
+          matchId,
+          gameId,
+          ephemeralMs: 6000,
+        });
+        break;
+      }
+
+      case "PLAYER_RECONNECTED": {
+        const player = room.players.get(payload.playerId);
+        const name = player?.displayName || "Player";
+        this.emitNotification(io, room, {
+          priority: "HIGH",
+          title: "Player Reconnected",
+          message: `${name} has rejoined the match.`,
+          eventType,
+          matchId,
+          gameId,
+          ephemeralMs: 3000,
+        });
+        break;
+      }
+
+      case "MATCH_COMPLETED":
+      case "GAME_FINISHED": {
+        this.emitNotification(io, room, {
+          priority: "CRITICAL",
+          title: "Match Finished",
+          message: `Match finished (${payload.resultReason ?? "NORMAL"}).`,
+          eventType,
+          matchId,
+          gameId,
+          ephemeralMs: 6000,
+        });
+        break;
+      }
+
+      default:
+        break;
     }
   }
 
   /**
-   * Helper to broadcast InGameNotification to all sockets in a room
+   * Emits in-game notification packet to the room
    */
-  public static emitNotification(
+  private static emitNotification(
     io: TypedIoServer,
     room: RoomRuntime,
-    data: Omit<InGameNotification, "id" | "timestamp">,
+    params: {
+      priority: EventPriority;
+      title: string;
+      message: string;
+      eventType: AnyGameEventType;
+      matchId: string;
+      gameId: GameId;
+      targetUserId?: string;
+      ephemeralMs?: number;
+    },
   ): void {
     const notification: InGameNotification = {
-      ...data,
       id: this.generateEventId(),
+      priority: params.priority,
+      title: params.title,
+      message: params.message,
+      eventType: params.eventType,
+      matchId: params.matchId,
+      gameId: params.gameId,
       timestamp: Date.now(),
+      targetUserId: params.targetUserId,
+      ephemeralMs: params.ephemeralMs ?? 3500,
     };
-    io.to(room.ioName).emit("game:notification", notification);
+
+    io.to(room.ioName).emit("game:notification", notification as any);
   }
 }

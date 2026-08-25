@@ -1,4 +1,4 @@
-import { Search, Bell, UserCircle2, Sun, Moon, LogOut, Gamepad2, Loader2, Image, ShieldCheck } from "lucide-react";
+import { Search, Bell, UserCircle2, Sun, Moon, LogOut, Gamepad2, Loader2, ShieldCheck, Menu } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "../../contexts/ThemeProvider";
 import { useAuthStore } from "../../store/authStore";
@@ -9,9 +9,10 @@ import { Skeleton } from "../Skeleton";
 
 interface NavbarProps {
   onLogoClick?: () => void;
+  onMenuClick?: () => void;
 }
 
-export default function Navbar({ onLogoClick }: NavbarProps) {
+export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
   const navigate = useNavigate();
   const { theme, setTheme, effectiveTheme } = useTheme();
   const setPaletteOpen = useUIStore((s) => s.setPaletteOpen);
@@ -30,30 +31,44 @@ export default function Navbar({ onLogoClick }: NavbarProps) {
 
   return (
     <header className="sticky top-0 z-50 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 transition-colors duration-300">
-      <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
-        <button
-          onClick={() => {
-            if (onLogoClick) onLogoClick();
-            else navigate('/');
-          }}
-          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-          aria-label={`${siteName} home`}
-        >
-          {logoUrl ? (
-            <img src={logoUrl} alt={siteName} className="w-7 h-7 object-cover" />
-          ) : (
-            <Gamepad2 className="w-7 h-7 text-accent-500" />
+      <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-2 px-3 sm:px-6">
+        {/* Left Brand + Hamburger */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {onMenuClick && (
+            <button
+              onClick={onMenuClick}
+              className="md:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Open Navigation Menu"
+            >
+              <Menu size={22} />
+            </button>
           )}
-          <h1 className="hidden sm:block text-xl font-bold text-slate-900 dark:text-white transition-colors duration-300">
-            {siteName}
-          </h1>
-        </button>
 
-        <div className="hidden md:flex items-center w-72 lg:w-96 rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 border border-slate-200 dark:border-slate-700/50 transition-colors duration-300">
-          <Search size={18} className="text-slate-400" />
+          <button
+            onClick={() => {
+              if (onLogoClick) onLogoClick();
+              else navigate('/');
+            }}
+            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+            aria-label={`${siteName} home`}
+          >
+            {logoUrl ? (
+              <img src={logoUrl} alt={siteName} className="w-7 h-7 object-cover rounded-lg" />
+            ) : (
+              <Gamepad2 className="w-7 h-7 text-accent-500 shrink-0" />
+            )}
+            <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight truncate max-w-[130px] sm:max-w-none">
+              {siteName}
+            </h1>
+          </button>
+        </div>
+
+        {/* Center Search bar (desktop only) */}
+        <div className="hidden lg:flex items-center w-64 xl:w-80 rounded-xl bg-slate-100 dark:bg-slate-800 px-3.5 py-1.5 border border-slate-200 dark:border-slate-700/50 transition-colors duration-300">
+          <Search size={16} className="text-slate-400 shrink-0" />
           <input
             placeholder="Search games, players..."
-            className="ml-3 w-full bg-transparent outline-none text-xs text-slate-900 dark:text-white placeholder-slate-400"
+            className="ml-2.5 w-full bg-transparent outline-none text-xs text-slate-900 dark:text-white placeholder-slate-400"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
                 navigate(`/search?q=${encodeURIComponent((e.target as HTMLInputElement).value.trim())}`);

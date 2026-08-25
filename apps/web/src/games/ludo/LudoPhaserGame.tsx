@@ -55,7 +55,7 @@ export const LudoPhaserGame: React.FC<LudoPhaserGameProps> = ({
   }, [mode, players, online, seat, names]);
 
   return (
-    <div className="relative mx-auto w-full max-w-[1024px] aspect-[1024/800] h-auto max-h-[88vh] bg-[#070b14] rounded-3xl border border-slate-800/80 shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden flex justify-center items-center backdrop-blur-md">
+    <div className="relative mx-auto w-full max-w-[min(94vw,70dvh,860px)] aspect-[1024/800] h-auto bg-[#070b14] rounded-3xl border border-slate-800/80 shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden flex justify-center items-center backdrop-blur-md">
       {/* Subtle ambient lighting flares behind the board */}
       <div className="absolute -top-32 -left-32 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-32 -right-32 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />

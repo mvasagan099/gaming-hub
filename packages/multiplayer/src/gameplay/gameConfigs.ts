@@ -24,7 +24,7 @@ function baseConfig(gameId: GameId, overrides: Partial<GamePlayConfig>): GamePla
     pauseOnDisconnect: turnBased,
     forfeitOnDisconnect: true,
     defaultTurnTimerMs: turnBased ? 30_000 : 0,
-    defaultMatchTimerMs: 0,
+    defaultMatchTimerMs: 600_000,
     ...overrides,
   };
 }

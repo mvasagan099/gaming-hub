@@ -22,3 +22,7 @@ export * from "./gameEvents";
 export * from "./gameStateSync";
 export * from "./tournament";
 export * from "./achievement";
+export * from "./security";
+export * from "./history";
+export * from "./matchmaking";
+

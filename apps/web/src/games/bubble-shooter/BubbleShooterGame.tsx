@@ -931,25 +931,25 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
 
   return (
     <GameWrapper title="Bubble Shooter 3D" gameId="bubble-shooter" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="flex flex-col lg:flex-row items-center justify-center gap-6 w-full max-w-6xl relative mx-auto h-full p-2 lg:p-4 select-none">
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-6 w-full max-w-6xl relative mx-auto h-full p-2 lg:p-4 select-none overflow-y-auto">
         
         {/* CENTER PLAYFIELD CONTAINER */}
-        <div className="relative flex flex-col items-center justify-center w-full max-w-[440px] shrink-0">
+        <div className="relative flex flex-col items-center justify-center w-full max-w-[min(94vw,72dvh,400px)] shrink-0">
           
           {/* TOP MODERN HUD PILLS */}
-          <div className="w-full flex items-center justify-between gap-2.5 mb-2.5 px-1">
+          <div className="w-full flex items-center justify-between gap-2 mb-2 px-1">
             {/* Score Pill */}
-            <div className="flex-1 py-2 px-3.5 bg-slate-900/90 border border-amber-500/40 rounded-2xl flex items-center justify-between shadow-lg">
+            <div className="flex-1 py-1.5 px-3 bg-slate-900/90 border border-amber-500/40 rounded-2xl flex items-center justify-between shadow-lg">
               <div className="flex items-center gap-1.5">
-                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Score</span>
               </div>
-              <span className="text-base font-black font-mono text-white">{score.toLocaleString()}</span>
+              <span className="text-sm font-black font-mono text-white">{score.toLocaleString()}</span>
             </div>
 
             {/* Shots Until Drop Pill */}
-            <div className="py-2 px-3.5 bg-slate-900/90 border border-rose-500/40 rounded-2xl flex items-center gap-2 shadow-lg">
-              <Flame className="w-3.5 h-3.5 text-rose-400" />
+            <div className="py-1.5 px-3 bg-slate-900/90 border border-rose-500/40 rounded-2xl flex items-center gap-2 shadow-lg">
+              <Flame className="w-3.5 h-3.5 text-rose-400 shrink-0" />
               <div className="text-center">
                 <span className="text-[9px] font-bold text-slate-400 uppercase block">Drop in</span>
                 <span className="text-xs font-black text-rose-400">{shotsUntilDrop} Shots</span>
@@ -959,7 +959,7 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
             {/* Rules Button */}
             <button
               onClick={() => setShowRules(true)}
-              className="p-2.5 bg-slate-900/90 border border-indigo-500/40 hover:border-indigo-400 rounded-2xl text-indigo-400 transition-colors shadow-lg"
+              className="p-2 bg-slate-900/90 border border-indigo-500/40 hover:border-indigo-400 rounded-2xl text-indigo-400 transition-colors shadow-lg shrink-0"
               title="View Rules"
             >
               <HelpCircle className="w-4 h-4" />
@@ -967,7 +967,7 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
           </div>
 
           {/* MAIN 3D CANVAS PLAYFIELD */}
-          <div className="relative w-full aspect-[384/580] max-h-[82vh] bg-[#070b14] rounded-3xl overflow-hidden border-2 border-indigo-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center">
+          <div className="relative w-full aspect-[384/580] bg-[#070b14] rounded-3xl overflow-hidden border-2 border-indigo-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center">
             {/* Ambient Background Glow Flares */}
             <div className="pointer-events-none absolute -top-24 -left-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl" />
             <div className="pointer-events-none absolute -bottom-24 -right-24 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl" />

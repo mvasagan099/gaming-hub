@@ -102,18 +102,13 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
     return copy as unknown as import("@gaming-hub/shared").JsonObject;
   }
 
-  /** Resolve the match when the 60s clock expires: higher score wins, tie = draw. */
-  protected onMatchTimerExpired(state: FruitNinjaState): EngineActionResult<FruitNinjaState> {
+  /** Resolve the match when the clock expires: higher score wins, tie = draw. */
+  protected override onMatchTimerExpired(state: FruitNinjaState): EngineActionResult<FruitNinjaState> {
     return this.resolveByTimer(this.cloneState(state));
   }
 
   private resolveByTimer(state: FruitNinjaState): EngineActionResult<FruitNinjaState> {
-    const p0 = state.scores[0] ?? 0;
-    const p1 = state.scores[1] ?? 0;
-
-    let winnerSeats: number[] = [];
-    if (p0 > p1) winnerSeats = [0];
-    else if (p1 > p0) winnerSeats = [1];
+    const winnerSeats = this.resolveTimeoutWinner(state);
 
     state.finished = true;
     state.gameOver = true;
@@ -601,5 +596,18 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
       case "life":
         return 30;
     }
+  }
+
+  /**
+   * Deterministic timeout winner resolution for Fruit Ninja:
+   * 1. Player with highest authoritative score.
+   * 2. If tied, draw ([]).
+   */
+  protected override resolveTimeoutWinner(state: FruitNinjaState): number[] {
+    const s0 = state.scores?.[0] ?? state.players?.[0]?.score ?? 0;
+    const s1 = state.scores?.[1] ?? state.players?.[1]?.score ?? 0;
+    if (s0 > s1) return [0];
+    if (s1 > s0) return [1];
+    return [];
   }
 }

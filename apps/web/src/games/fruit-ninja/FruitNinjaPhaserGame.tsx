@@ -55,7 +55,7 @@ export const FruitNinjaPhaserGame: React.FC<FruitNinjaPhaserProps> = ({
   }, [mode, isMultiplayer]);
 
   return (
-    <div className="relative mx-auto w-full max-w-5xl aspect-[8/5] max-h-[82vh] bg-gradient-to-b from-[#070b14] via-[#090f1d] to-[#070b14] rounded-3xl overflow-hidden border border-amber-500/20 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center select-none">
+    <div className="relative mx-auto w-full max-w-[min(94vw,70dvh,960px)] aspect-[8/5] h-auto bg-gradient-to-b from-[#070b14] via-[#090f1d] to-[#070b14] rounded-3xl overflow-hidden border border-amber-500/20 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center select-none">
       {/* Ambient background glow flares */}
       <div className="pointer-events-none absolute -top-32 -left-32 w-80 h-80 bg-rose-500/10 rounded-full blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 -right-32 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl" />

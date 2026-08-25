@@ -24,4 +24,26 @@ export async function gamesRoutes(app: FastifyInstance) {
     }
     return GameConfigService.getGameConfig(gameId as GameId);
   });
+
+  /**
+   * GET /api/games/match-settings
+   * Public endpoint returning platform-wide match duration limit and warning checkpoints.
+   */
+  app.get("/api/games/match-settings", async () => {
+    const settings = await GameConfigService.getMatchSettings();
+    return {
+      maxMatchDurationSeconds: settings.maxMatchDurationSeconds,
+      warningTimesSeconds: settings.warningTimesSeconds,
+      defaultTurnTimeoutSeconds: settings.defaultTurnTimeoutSeconds,
+      version: settings.version,
+    };
+  });
+
+  /**
+   * GET /api/games/config
+   * Public list of all available games with their configuration for the client.
+   */
+  app.get("/api/games/config", async () => {
+    return GameConfigService.getAvailableGamesForUser();
+  });
 }

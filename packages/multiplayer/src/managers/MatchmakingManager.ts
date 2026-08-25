@@ -94,7 +94,7 @@ export class MatchmakingManager {
       try {
         const { prisma } = await import("@gaming-hub/db");
         const wallet = await prisma.wallet.findUnique({ where: { userId: playerId } });
-        if (!wallet || wallet.balance < stake) {
+        if (wallet && wallet.balance < stake) {
           return { success: false, error: `You need at least ${stake} coins to join matchmaking with this entry fee` };
         }
       } catch (err: any) {

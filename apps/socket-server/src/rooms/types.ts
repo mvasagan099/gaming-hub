@@ -16,10 +16,30 @@ export interface RoomPlayerRuntime {
   reconnectExpiresAt?: number | null;
 }
 
+export type MatchLifecycleStatus =
+  | "WAITING"
+  | "PLAYERS_READY"
+  | "COUNTDOWN"
+  | "MATCH_STARTED"
+  | "ACTIVE"
+  | "TIME_EXPIRED"
+  | "FINALIZING"
+  | "COMPLETED"
+  | "CANCELLED";
+
+export type MatchResultReason = "NORMAL" | "TIME_LIMIT" | "TIMEOUT" | "ABANDONED";
+
 export interface MatchRuntime {
   matchId: string;
   engine: EngineInstance;
   turnNumber: number;
+  startedAt?: number;
+  matchStartedAt?: number;
+  matchDeadline?: number;
+  matchStatus?: MatchLifecycleStatus;
+  endedAt?: number | null;
+  resultReason?: MatchResultReason | null;
+  timeExpired?: boolean;
 }
 
 export interface RematchRuntime {
@@ -43,7 +63,10 @@ export interface RoomRuntime {
   settings: Record<string, unknown>;
   rematch: RematchRuntime | null;
   pendingMatchId?: string | null;
+  readyExpiresAt?: number | null;
+  readyTimer?: NodeJS.Timeout | null;
   countdownStarted?: boolean;
   countdownTimer?: NodeJS.Timeout | null;
+  stateVersion?: number;
 }
 

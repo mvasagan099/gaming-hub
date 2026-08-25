@@ -567,79 +567,79 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
   return (
     <GameWrapper title="Table Tennis 3D Pro" gameId="table-tennis" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="flex flex-col lg:flex-row items-center justify-center gap-4 w-full max-w-6xl relative mx-auto h-full p-2 lg:p-3 select-none">
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-4 w-full max-w-6xl relative mx-auto h-full p-2 lg:p-3 select-none overflow-y-auto">
         
         {/* CENTER 3D COURT CONTAINER */}
-        <div className="relative flex flex-col items-center justify-center w-full max-w-[840px] shrink-0">
+        <div className="relative flex flex-col items-center justify-center w-full max-w-[min(94vw,75dvh,840px)] shrink-0">
           
           {/* TOP BROADCAST TOURNAMENT SCOREBOARD HUD */}
-          <div className="w-full bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-2.5 mb-2.5 flex items-center justify-between shadow-2xl">
+          <div className="w-full bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-2 sm:p-2.5 mb-2.5 flex items-center justify-between shadow-2xl gap-2">
             
             {/* Player 1 Card (Red / Foreground) */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500/20 to-rose-600/30 border border-rose-500/50 flex items-center justify-center font-black text-xs text-rose-400 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-rose-500/20 to-rose-600/30 border border-rose-500/50 flex items-center justify-center font-black text-xs text-rose-400 shrink-0">
                 P1
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-black text-slate-100 uppercase tracking-wide truncate max-w-[110px] sm:max-w-[150px]">
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <span className="text-xs sm:text-sm font-black text-slate-100 uppercase tracking-wide truncate max-w-[75px] sm:max-w-[150px]">
                     {p1Name}
                   </span>
                   {p1Sets > 0 && (
-                    <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-[10px] font-black text-rose-400 border border-rose-500/30">
-                      {p1Sets} SET{p1Sets > 1 ? 'S' : ''}
+                    <span className="px-1 py-0.5 rounded bg-rose-500/20 text-[9px] sm:text-[10px] font-black text-rose-400 border border-rose-500/30">
+                      {p1Sets}S
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className={`w-1.5 h-1.5 rounded-full ${currentServer === 1 ? 'bg-rose-400 animate-pulse' : 'bg-slate-600'}`} />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400/90">
-                    {currentServer === 1 ? '● Serving' : 'Ready'}
+                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-rose-400/90">
+                    {currentServer === 1 ? '● Serve' : 'Ready'}
                   </span>
                 </div>
               </div>
             </div>
 
             {/* Large Center Score Board & Match Timer */}
-            <div className="flex items-center gap-4 bg-slate-900/90 px-4 sm:px-6 py-1.5 rounded-xl border border-slate-800 shadow-inner">
-              <span className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-rose-400">
+            <div className="flex items-center gap-2 sm:gap-4 bg-slate-900/90 px-3 sm:px-6 py-1 rounded-xl border border-slate-800 shadow-inner shrink-0">
+              <span className="text-xl sm:text-3xl font-black font-mono tracking-tight text-rose-400">
                 {String(p1Score).padStart(2, '0')}
               </span>
-              <div className="flex flex-col items-center px-1">
+              <div className="flex flex-col items-center px-0.5 sm:px-1">
                 <div className="flex items-center gap-1 text-slate-400">
                   <Timer className={`w-3 h-3 ${remainingTime <= 30 ? 'text-rose-400 animate-pulse' : 'text-slate-400'}`} />
-                  <span className={`text-[10px] font-black font-mono ${remainingTime <= 30 ? 'text-rose-400 animate-pulse' : 'text-slate-400'}`}>
+                  <span className={`text-[9px] sm:text-[10px] font-black font-mono ${remainingTime <= 30 ? 'text-rose-400 animate-pulse' : 'text-slate-400'}`}>
                     {Math.floor(remainingTime / 60).toString().padStart(2, '0')}:{(remainingTime % 60).toString().padStart(2, '0')}
                   </span>
                 </div>
                 <span className="text-xs font-black text-slate-600">:</span>
               </div>
-              <span className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-sky-400">
+              <span className="text-xl sm:text-3xl font-black font-mono tracking-tight text-sky-400">
                 {String(p2Score).padStart(2, '0')}
               </span>
             </div>
 
             {/* Player 2 Card (Blue / Background) */}
-            <div className="flex items-center gap-3 text-right">
+            <div className="flex items-center gap-2 sm:gap-3 text-right">
               <div>
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-end gap-1 sm:gap-2">
                   {p2Sets > 0 && (
-                    <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-[10px] font-black text-sky-400 border border-sky-500/30">
-                      {p2Sets} SET{p2Sets > 1 ? 'S' : ''}
+                    <span className="px-1 py-0.5 rounded bg-sky-500/20 text-[9px] sm:text-[10px] font-black text-sky-400 border border-sky-500/30">
+                      {p2Sets}S
                     </span>
                   )}
-                  <span className="text-sm font-black text-slate-100 uppercase tracking-wide truncate max-w-[110px] sm:max-w-[150px]">
+                  <span className="text-xs sm:text-sm font-black text-slate-100 uppercase tracking-wide truncate max-w-[75px] sm:max-w-[150px]">
                     {p2Name}
                   </span>
                 </div>
                 <div className="flex items-center justify-end gap-1.5 mt-0.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400/90">
-                    {currentServer === 2 ? '● Serving' : 'Ready'}
+                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-sky-400/90">
+                    {currentServer === 2 ? '● Serve' : 'Ready'}
                   </span>
                   <span className={`w-1.5 h-1.5 rounded-full ${currentServer === 2 ? 'bg-sky-400 animate-pulse' : 'bg-slate-600'}`} />
                 </div>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500/20 to-sky-600/30 border border-sky-500/50 flex items-center justify-center font-black text-xs text-sky-400 shrink-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-sky-500/20 to-sky-600/30 border border-sky-500/50 flex items-center justify-center font-black text-xs text-sky-400 shrink-0">
                 P2
               </div>
             </div>
@@ -647,7 +647,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
           </div>
 
           {/* MAIN 3D TABLE TENNIS CANVAS */}
-          <div className="relative w-full aspect-[800/520] max-h-[78vh] bg-[#070b14] rounded-3xl overflow-hidden border-2 border-indigo-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center">
+          <div className="relative w-full aspect-[800/520] bg-[#070b14] rounded-3xl overflow-hidden border-2 border-indigo-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center">
             <canvas
               ref={canvasRef}
               width={CANVAS_WIDTH}

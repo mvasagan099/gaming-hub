@@ -51,7 +51,7 @@ export default function PhaserGame({
   }, [mode, players, seat, names]);
 
   return (
-    <div className="relative mx-auto w-full max-w-5xl aspect-[1024/800] h-auto max-h-[calc(100vh-140px)] rounded-2xl overflow-hidden border border-slate-700/50 shadow-2xl flex justify-center items-center">
+    <div className="relative mx-auto w-full max-w-[min(94vw,70dvh,920px)] aspect-[1024/800] h-auto rounded-2xl overflow-hidden border border-slate-700/50 shadow-2xl flex justify-center items-center">
       <div
         ref={containerRef}
         className="w-full h-full flex items-center justify-center overflow-hidden"

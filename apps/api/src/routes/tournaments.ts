@@ -7,10 +7,12 @@ import {
   getTournamentDetail,
   listTournaments,
   registerForTournament,
+  getRegistrationInfo,
 } from "../services/tournaments";
 import {
   getTournamentBracket,
   getPlayerTournamentStatus,
+  getPlayerMatchView,
 } from "../services/tournamentEngine";
 import { TournamentMatchService } from "../services/tournamentMatchService";
 
@@ -58,6 +60,13 @@ export async function tournamentsRoutes(app: FastifyInstance) {
     const user = requireUser(request);
     const { id } = routeParams(request);
     return getTournamentDetail(id, user.id);
+  });
+
+  /** Get registration and eligibility status */
+  app.get("/api/tournaments/:id/registration", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { id } = routeParams(request);
+    return getRegistrationInfo(id, user.id);
   });
 
   /** Register for a tournament */
@@ -116,4 +125,121 @@ export async function tournamentsRoutes(app: FastifyInstance) {
     }
     return match;
   });
+
+  /** Detailed player match view ("MY MATCH") */
+  app.get("/api/tournaments/:id/my-match", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { id } = routeParams(request);
+    return getPlayerMatchView(id, user.id);
+  });
+
+  /** Player's complete tournament dashboard */
+  app.get("/api/tournaments/:id/dashboard", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { id } = routeParams(request);
+    const { getPlayerTournamentDashboard } = await import("../services/tournamentPlayerDashboard");
+    return getPlayerTournamentDashboard(id, user.id);
+  });
+
+  /** List all tournaments the player participates in */
+  app.get("/api/tournaments/my-tournaments", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { getPlayerTournamentsList } = await import("../services/tournamentPlayerDashboard");
+    return getPlayerTournamentsList(user.id);
+  });
+
+  /** Submit a match dispute / report result */
+  app.post("/api/tournaments/disputes", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const body = request.body as any;
+    const { createTournamentDispute } = await import("../services/tournamentDisputeService");
+    return createTournamentDispute(user.id, body);
+  });
+
+  /** List user's submitted disputes */
+  app.get("/api/tournaments/disputes", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { listPlayerDisputes } = await import("../services/tournamentDisputeService");
+    return listPlayerDisputes(user.id);
+  });
+
+  /** Get specific dispute detail (player view) */
+  app.get("/api/tournaments/disputes/:id", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { id } = routeParams(request);
+    const { getDisputeDetail } = await import("../services/tournamentDisputeService");
+    return getDisputeDetail(id, user.id, false);
+  });
+
+  /** Get match result snapshot */
+  app.get("/api/tournaments/matches/:matchId/snapshot", { preHandler: authenticate }, async (request) => {
+    const { matchId } = routeParams(request);
+    const { getTournamentResultSnapshot } = await import("../services/tournamentResultVerification");
+    const snapshot = await getTournamentResultSnapshot(matchId);
+    if (!snapshot) throw new AppError("NOT_FOUND", "Snapshot not found", 404);
+    return snapshot;
+  });
+
+  /** Get player's prize and settlement status for a tournament */
+  app.get("/api/tournaments/:id/settlement", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { id } = routeParams(request);
+    const { TournamentSettlementService } = await import("../services/tournamentSettlementService");
+    const settlement = await TournamentSettlementService.getPlayerSettlement(id, user.id);
+    return settlement ?? { status: "NONE", prizeAmount: 0, rank: null };
+  });
+
+  /** Get tournament prize distribution & snapshot */
+  app.get("/api/tournaments/:id/prizes", { preHandler: authenticate }, async (request) => {
+    const { id } = routeParams(request);
+    const { TournamentSettlementService } = await import("../services/tournamentSettlementService");
+    return TournamentSettlementService.getAuthoritativePrizeSnapshot(id);
+  });
+
+  /** Get tournament leaderboard & standings */
+  app.get("/api/tournaments/:id/leaderboard", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { id } = routeParams(request);
+    const q = queryParams(request);
+    const page = q.page ? parseInt(queryString(q.page), 10) : 1;
+    const pageSize = q.pageSize ? parseInt(queryString(q.pageSize), 10) : 50;
+    const search = queryString(q.search);
+    const status = queryString(q.status);
+    const roundNumber = q.round ? parseInt(queryString(q.round), 10) : undefined;
+
+    const { TournamentLeaderboardService } = await import("../services/tournamentLeaderboardService");
+    return TournamentLeaderboardService.getTournamentLeaderboard(id, {
+      page,
+      pageSize,
+      search,
+      status,
+      roundNumber,
+      viewerId: user.id,
+    });
+  });
+
+  /** Get player's tournament career statistics profile */
+  app.get("/api/tournaments/players/:userId/career", { preHandler: authenticate }, async (request) => {
+    const { userId } = routeParams(request);
+    const { TournamentLeaderboardService } = await import("../services/tournamentLeaderboardService");
+    return TournamentLeaderboardService.getPlayerCareerStats(userId);
+  });
+
+  /** Get game-specific tournament rankings */
+  app.get("/api/tournaments/games/:gameId/rankings", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const { gameId } = routeParams(request);
+    const q = queryParams(request);
+    const page = q.page ? parseInt(queryString(q.page), 10) : 1;
+    const pageSize = q.pageSize ? parseInt(queryString(q.pageSize), 10) : 20;
+
+    const { TournamentLeaderboardService } = await import("../services/tournamentLeaderboardService");
+    return TournamentLeaderboardService.getGameTournamentRankings(gameId, {
+      page,
+      pageSize,
+      viewerId: user.id,
+    });
+  });
 }
+
+

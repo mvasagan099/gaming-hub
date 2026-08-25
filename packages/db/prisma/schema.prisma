@@ -183,6 +183,8 @@ enum SeedMethod {
 
 enum TournamentSettlementStatus {
   PENDING
+  PROCESSING
+  COMPLETED
   PAID
   FAILED
 }
@@ -292,6 +294,8 @@ model User {
   chatMessages       ChatMessage[]
   userAchievements   UserAchievement[]
   tournamentPlayers  TournamentPlayer[]
+  tournamentDisputes TournamentDispute[]
+  matchmakingQueues  MatchmakingQueue[]
   referralsMade      Referral[]           @relation("Referrer")
   referralsReceived  Referral[]           @relation("ReferredUser")
   couponRedemptions  CouponRedemption[]
@@ -469,15 +473,17 @@ model RoomPlayer {
 }
 
 model Match {
-  id        String      @id @default(uuid())
-  roomId    String?     @unique
-  gameId    String
-  status    MatchStatus @default(CREATED)
-  winnerIds Json        @default("[]")
-  stake     Int         @default(0)
-  startedAt DateTime?
-  endedAt   DateTime?
-  createdAt DateTime    @default(now())
+  id            String      @id @default(uuid())
+  roomId        String?     @unique
+  gameId        String
+  status        MatchStatus @default(CREATED)
+  winnerIds     Json        @default("[]")
+  stake         Int         @default(0)
+  startedAt     DateTime?
+  matchDeadline DateTime?
+  endedAt       DateTime?
+  resultReason  String?
+  createdAt     DateTime    @default(now())
   
   room      Room?         @relation(fields: [roomId], references: [id], onDelete: SetNull)
   players   MatchPlayer[]
@@ -487,6 +493,8 @@ model Match {
   stats     MatchStatistics?
   
   @@index([gameId, status])
+  @@index([status, matchDeadline])
+  @@index([status, startedAt])
 }
 
 model MatchStatistics {
@@ -581,6 +589,37 @@ model Leaderboard {
 
   @@unique([gameId, userId])
   @@index([gameId, score(sort: Desc)])
+}
+
+enum MatchmakingStatus {
+  WAITING
+  MATCHED
+  CANCELLED
+  EXPIRED
+}
+
+model MatchmakingQueue {
+  id          String            @id @default(uuid())
+  userId      String
+  gameId      String
+  entryFee    Int               @default(0)
+  gameMode    String            @default("casual")
+  rating      Int?              @default(1000)
+  status      MatchmakingStatus @default(WAITING)
+  socketId    String?
+  matchedWith String?
+  matchedAt   DateTime?
+  roomId      String?
+  matchId     String?
+  expiresAt   DateTime
+  joinedAt    DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([gameId, entryFee, gameMode, status, joinedAt])
+  @@index([userId, status])
+  @@index([status, expiresAt])
 }
 
 model Wallet {
@@ -1039,27 +1078,41 @@ model Tournament {
   players TournamentPlayer[]
   rounds  TournamentRound[]
   prizes  TournamentPrize[]
+  disputes TournamentDispute[]
+  snapshots TournamentResultSnapshot[]
 
   @@index([status, startTime])
 }
 
 model TournamentPlayer {
-  id               String   @id @default(uuid())
-  tournamentId     String
-  userId           String
-  nickname         String?
-  registeredAt     DateTime @default(now())
-  seed             Int?
-  result           Int?
-  finalRank        Int?
-  eliminated       Boolean  @default(false)
+  id                String   @id @default(uuid())
+  tournamentId      String
+  userId            String
+  nickname          String?
+  registeredAt      DateTime @default(now())
+  seed              Int?
+  result            Int?
+  finalRank         Int?
+  eliminated        Boolean  @default(false)
   eliminatedInRound Int?
 
-  tournament Tournament      @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  prizes     TournamentPrize[]
+  matchesPlayed     Int      @default(0)
+  wins              Int      @default(0)
+  losses            Int      @default(0)
+  points            Int      @default(0)
+  scoreFor          Int      @default(0)
+  scoreAgainst      Int      @default(0)
+  liveStatus        String   @default("REGISTERED")
+  currentRound      Int      @default(1)
+
+  tournament        Tournament       @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prizes            TournamentPrize[]
 
   @@unique([tournamentId, userId])
+  @@index([tournamentId, points(sort: Desc)])
+  @@index([tournamentId, finalRank])
+  @@index([userId])
 }
 
 model TournamentRound {
@@ -1087,22 +1140,85 @@ model TournamentRound {
 }
 
 model TournamentPrize {
-  id           String                    @id @default(uuid())
-  tournamentId String
-  userId       String
-  playerId     String
-  rank         Int
-  amount       Int
-  status       TournamentSettlementStatus @default(PENDING)
+  id            String                     @id @default(uuid())
+  tournamentId  String
+  userId        String
+  playerId      String
+  rank          Int
+  amount        Int
+  status        TournamentSettlementStatus @default(PENDING)
   transactionId String?
-  paidAt       DateTime?
-  createdAt    DateTime                  @default(now())
+  failureReason String?
+  retryCount    Int                        @default(0)
+  lastAttemptAt DateTime?
+  paidAt        DateTime?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @default(now()) @updatedAt
 
-  tournament   Tournament       @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  player       TournamentPlayer @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  tournament    Tournament       @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  player        TournamentPlayer @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@unique([tournamentId, userId])
   @@index([tournamentId, status])
+  @@index([status])
+}
+
+model TournamentResultSnapshot {
+  id              String    @id @default(uuid())
+  matchId         String    @unique
+  tournamentId    String
+  roundNumber     Int
+  matchNumber     Int
+  playerAId       String
+  playerBId       String
+  winnerId        String?
+  loserId         String?
+  playerAScore    Int       @default(0)
+  playerBScore    Int       @default(0)
+  resultReason    String
+  integrityHash   String
+  eventsCount     Int       @default(0)
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationSeconds Int       @default(0)
+  stateVersion    Int       @default(0)
+  isVerified      Boolean   @default(true)
+  reviewStatus    String    @default("VERIFIED") // VERIFIED, RESULT_REVIEW_REQUIRED, OVERRIDDEN
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+
+  tournament      Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@index([tournamentId, roundNumber])
+  @@index([reviewStatus])
+}
+
+model TournamentDispute {
+  id               String    @id @default(uuid())
+  disputeId        String    @unique
+  tournamentId     String
+  matchId          String
+  userId           String
+  roundNumber      Int       @default(1)
+  reason           String    // WRONG_RESULT, INCORRECT_SCORE, CONNECTION_ISSUE, GAME_STATE_ISSUE, SUSPECTED_CHEATING, OTHER
+  description      String
+  evidenceUrls     Json      @default("[]")
+  priority         String    @default("NORMAL") // LOW, NORMAL, HIGH, CRITICAL
+  status           String    @default("OPEN") // OPEN, UNDER_REVIEW, RESOLVED, REJECTED, CLOSED
+  resolutionAction String?   // CONFIRM_RESULT, REJECT_DISPUTE, OVERRIDE_RESULT, FINANCIAL_CORRECTION
+  adminNotes       String?
+  resolvedBy       String?
+  resolvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  tournament       Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, userId])
+  @@index([tournamentId, status])
+  @@index([status, priority])
+  @@index([userId])
 }
 
 model TournamentResultIdempotency {

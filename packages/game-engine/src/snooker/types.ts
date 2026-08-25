@@ -219,5 +219,6 @@ export interface SnookerState extends JsonObject {
   turnNumber: number;
   shotNumber: number;
   lastActionAtMs: number;
+  turnStartedAtMs: number;
   keyframes?: any;
 }

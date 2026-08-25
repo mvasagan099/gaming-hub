@@ -183,9 +183,9 @@ describe("Feature 14: Complete User Game History", () => {
     });
 
     const history = await GameHistoryService.listUserGameHistory({ userId: userA });
-    expect(history.items[0].tournamentInfo.isTournament).toBe(true);
-    expect(history.items[0].tournamentInfo.tournamentId).toBe(tournamentId);
-    expect(history.items[0].tournamentInfo.roundId).toBe(roundId);
+    expect(history.items[0]?.tournamentInfo?.isTournament).toBe(true);
+    expect(history.items[0]?.tournamentInfo?.tournamentId).toBe(tournamentId);
+    expect(history.items[0]?.tournamentInfo?.roundId).toBe(roundId);
   });
 
   // ---------------------------------------------------------------------------

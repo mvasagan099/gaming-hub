@@ -164,6 +164,7 @@ export function generateFullBracketStructure(seededPlayerIds: string[]): Bracket
 export interface PrizeDistributionEntry {
   rank: number;
   percentage: number;
+  amount?: number;
 }
 
 export function defaultPrizeDistribution(format: TournamentFormat): PrizeDistributionEntry[] {
@@ -177,14 +178,130 @@ export function defaultPrizeDistribution(format: TournamentFormat): PrizeDistrib
   return [{ rank: 1, percentage: 100 }];
 }
 
+export function validatePrizeConfiguration(
+  prizePool: number,
+  distribution: PrizeDistributionEntry[],
+): { valid: boolean; totalPercentage: number; totalAmount: number; error?: string } {
+  if (prizePool < 0) {
+    return { valid: false, totalPercentage: 0, totalAmount: 0, error: "Prize pool cannot be negative" };
+  }
+  if (!Array.isArray(distribution) || distribution.length === 0) {
+    return { valid: true, totalPercentage: 100, totalAmount: prizePool };
+  }
+
+  let totalPercentage = 0;
+  let totalFixedAmount = 0;
+
+  for (const entry of distribution) {
+    if (entry.rank < 1) {
+      return { valid: false, totalPercentage, totalAmount: 0, error: `Invalid rank: ${entry.rank}` };
+    }
+    if (entry.percentage != null) {
+      if (entry.percentage < 0 || entry.percentage > 100) {
+        return { valid: false, totalPercentage, totalAmount: 0, error: `Percentage must be between 0 and 100 for rank ${entry.rank}` };
+      }
+      totalPercentage += entry.percentage;
+    }
+    if (entry.amount != null) {
+      if (entry.amount < 0) {
+        return { valid: false, totalPercentage, totalAmount: 0, error: `Amount cannot be negative for rank ${entry.rank}` };
+      }
+      totalFixedAmount += entry.amount;
+    }
+  }
+
+  if (totalPercentage > 100) {
+    return {
+      valid: false,
+      totalPercentage,
+      totalAmount: Math.floor((prizePool * totalPercentage) / 100),
+      error: `Sum of prize percentages (${totalPercentage}%) exceeds 100%`,
+    };
+  }
+
+  if (totalFixedAmount > prizePool) {
+    return {
+      valid: false,
+      totalPercentage,
+      totalAmount: totalFixedAmount,
+      error: `Sum of fixed prizes (${totalFixedAmount}) exceeds authoritative prize pool (${prizePool})`,
+    };
+  }
+
+  const calculatedTotal = totalFixedAmount > 0 ? totalFixedAmount : Math.floor((prizePool * totalPercentage) / 100);
+  return { valid: true, totalPercentage, totalAmount: calculatedTotal };
+}
+
 export function calculatePrizes(
   grossPool: number,
   distribution: PrizeDistributionEntry[],
 ): { rank: number; amount: number }[] {
+  if (!distribution || distribution.length === 0) {
+    return [{ rank: 1, amount: grossPool }];
+  }
   return distribution.map((d) => ({
     rank: d.rank,
-    amount: Math.floor((grossPool * d.percentage) / 100),
+    amount: d.amount != null && d.amount > 0 ? d.amount : Math.floor((grossPool * (d.percentage ?? 0)) / 100),
   }));
+}
+
+export interface TournamentPrizeConfigSnapshot {
+  prizePool: number;
+  grossPool: number;
+  prizeDistribution: PrizeDistributionEntry[];
+  calculatedPrizes: { rank: number; amount: number }[];
+  currency: string;
+  format: TournamentFormat;
+  gameId: string;
+  stateVersion: number;
+  snapshottedAt: string;
+}
+
+export type TournamentSettlementStatusType =
+  | "PENDING"
+  | "PROCESSING"
+  | "COMPLETED"
+  | "PAID"
+  | "FAILED";
+
+export interface TournamentSettlementRecord {
+  id: string;
+  settlementId: string;
+  tournamentId: string;
+  tournamentTitle?: string;
+  userId: string;
+  playerId?: string;
+  username?: string;
+  displayName?: string;
+  avatarUrl?: string | null;
+  position: number;
+  rank: number;
+  prizeAmount: number;
+  status: TournamentSettlementStatusType;
+  transactionId?: string | null;
+  failureReason?: string | null;
+  retryCount: number;
+  lastAttemptAt?: string | null;
+  paidAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TournamentSettlementSummary {
+  tournamentId: string;
+  tournamentTitle: string;
+  status: TournamentStatus;
+  prizePool: number;
+  grossPool: number;
+  totalPrizesCount: number;
+  completedCount: number;
+  pendingCount: number;
+  failedCount: number;
+  totalPaidAmount: number;
+  totalUnpaidAmount: number;
+  settledAt?: string | null;
+  settlements: TournamentSettlementRecord[];
 }
 
 export function isSupportedTournamentFormat(format: TournamentFormat): boolean {
@@ -298,3 +415,240 @@ export interface TournamentLeaderboardEntry {
   tournamentsPlayed: number;
   totalPrizeWon: number;
 }
+
+// ---------------------------------------------------------------------------
+// Tournament Standings & Live Leaderboard Types
+// ---------------------------------------------------------------------------
+
+export type TournamentPlayerLiveStatus =
+  | "REGISTERED"
+  | "WAITING"
+  | "LIVE"
+  | "ADVANCED"
+  | "ELIMINATED"
+  | "CHAMPION";
+
+export interface TournamentStandingsEntry {
+  rank: number;
+  userId: string;
+  playerId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  matchesPlayed: number;
+  wins: number;
+  losses: number;
+  points: number;
+  scoreFor: number;
+  scoreAgainst: number;
+  scoreDiff: number;
+  status: TournamentPlayerLiveStatus;
+  currentRound: number;
+  eliminatedInRound: number | null;
+  finalRank: number | null;
+  prizeAmount?: number;
+  prizeStatus?: string;
+  seed?: number | null;
+}
+
+export interface TournamentRoundProgressItem {
+  roundNumber: number;
+  name: string;
+  playerCount: number;
+  status: "COMPLETED" | "IN_PROGRESS" | "UPCOMING";
+}
+
+export interface TournamentLeaderboardResponse {
+  tournamentId: string;
+  tournamentTitle: string;
+  gameId: string;
+  status: TournamentStatus;
+  totalPlayers: number;
+  currentRound: number;
+  totalRounds: number;
+  roundProgress: TournamentRoundProgressItem[];
+  myRank: {
+    rank: number;
+    wins: number;
+    losses: number;
+    points: number;
+    status: TournamentPlayerLiveStatus;
+    currentRound: number;
+  } | null;
+  page: number;
+  pageSize: number;
+  total: number;
+  standings: TournamentStandingsEntry[];
+}
+
+export interface GameTournamentRankingEntry {
+  rank: number;
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  gameId: string;
+  tournamentsWon: number;
+  tournamentsPlayed: number;
+  winRate: number;
+  totalPrizesWon: number;
+  totalMatchesWon: number;
+  totalMatchesPlayed: number;
+}
+
+export interface PlayerTournamentCareerStats {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  tournamentWins: number;
+  tournamentAppearances: number;
+  finalsReached: number;
+  topThreeFinishes: number;
+  winRate: number;
+  totalMatchesPlayed: number;
+  totalMatchesWon: number;
+  totalPrizesWon: number;
+  bestRank: number | null;
+  gameBreakdown: {
+    gameId: string;
+    tournamentWins: number;
+    tournamentAppearances: number;
+    winRate: number;
+    totalPrizesWon: number;
+  }[];
+}
+
+// ---------------------------------------------------------------------------
+// Tournament Result Verification & Dispute Management
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_DISPUTE_WINDOW_MINUTES = 10;
+export const DEFAULT_DISPUTE_WINDOW_MS = DEFAULT_DISPUTE_WINDOW_MINUTES * 60 * 1000;
+
+export type TournamentDisputeReason =
+  | "WRONG_RESULT"
+  | "INCORRECT_SCORE"
+  | "CONNECTION_ISSUE"
+  | "GAME_STATE_ISSUE"
+  | "SUSPECTED_CHEATING"
+  | "OTHER";
+
+export type TournamentDisputeStatus =
+  | "OPEN"
+  | "UNDER_REVIEW"
+  | "RESOLVED"
+  | "REJECTED"
+  | "CLOSED";
+
+export type TournamentDisputePriority =
+  | "LOW"
+  | "NORMAL"
+  | "HIGH"
+  | "CRITICAL";
+
+export type TournamentDisputeResolutionAction =
+  | "CONFIRM_RESULT"
+  | "REJECT_DISPUTE"
+  | "REQUEST_REVIEW"
+  | "ESCALATE"
+  | "OVERRIDE_RESULT"
+  | "FINANCIAL_CORRECTION";
+
+export interface TournamentDisputeSummary {
+  id: string;
+  disputeId: string;
+  tournamentId: string;
+  tournamentTitle?: string;
+  gameId?: string;
+  matchId: string;
+  userId: string;
+  userName?: string;
+  userDisplayName?: string;
+  roundNumber: number;
+  reason: TournamentDisputeReason;
+  description: string;
+  evidenceUrls: string[];
+  priority: TournamentDisputePriority;
+  status: TournamentDisputeStatus;
+  resolutionAction: TournamentDisputeResolutionAction | null;
+  adminNotes: string | null;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TournamentResultSnapshotData {
+  id: string;
+  matchId: string;
+  tournamentId: string;
+  roundNumber: number;
+  matchNumber: number;
+  playerAId: string;
+  playerBId: string;
+  playerAName?: string;
+  playerBName?: string;
+  winnerId: string | null;
+  loserId: string | null;
+  playerAScore: number;
+  playerBScore: number;
+  resultReason: string;
+  integrityHash: string;
+  eventsCount: number;
+  startedAt: string | null;
+  endedAt: string | null;
+  durationSeconds: number;
+  stateVersion: number;
+  isVerified: boolean;
+  reviewStatus: "VERIFIED" | "RESULT_REVIEW_REQUIRED" | "OVERRIDDEN";
+  createdAt: string;
+}
+
+export interface TournamentDisputeDetail extends TournamentDisputeSummary {
+  tournament: {
+    id: string;
+    title: string;
+    gameId: string;
+    status: TournamentStatus;
+    prizePool: number;
+    currentRound: number;
+  };
+  match: {
+    id: string;
+    gameId: string;
+    status: string;
+    startedAt: string | null;
+    endedAt: string | null;
+    winnerIds: string[];
+    resultReason: string;
+    playerA: { id: string; username: string; displayName: string; avatarUrl: string | null; score: number };
+    playerB: { id: string; username: string; displayName: string; avatarUrl: string | null; score: number };
+    replayAvailable: boolean;
+    replayId?: string;
+  };
+  snapshot?: TournamentResultSnapshotData | null;
+  authoritativeEventsSummary?: {
+    totalEvents: number;
+    movesCount: number;
+    disconnectsCount: number;
+    timeoutsCount: number;
+  };
+}
+
+export interface CreateDisputePayload {
+  matchId: string;
+  reason: TournamentDisputeReason;
+  description: string;
+  evidenceUrls?: string[];
+}
+
+export interface ResolveDisputePayload {
+  action: TournamentDisputeResolutionAction;
+  adminNotes?: string;
+  newWinnerId?: string;
+  newScoreA?: number;
+  newScoreB?: number;
+  justificationReason?: string;
+}
+

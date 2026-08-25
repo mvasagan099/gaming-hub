@@ -86,7 +86,7 @@ export const Modal: React.FC<ModalProps> = ({
             aria-labelledby={title ? titleId : undefined}
             tabIndex={-1}
             className={cn(
-              'relative w-full rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl outline-none',
+              'relative w-full max-h-[90dvh] overflow-y-auto rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl outline-none',
               sizeClasses[size]
             )}
             initial={reduceMotion ? false : { opacity: 0, scale: 0.96, y: 10 }}

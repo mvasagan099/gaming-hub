@@ -94,6 +94,8 @@ class MockGameConfigService {
       turnTimerSeconds: config.turnTimerSeconds,
       reconnectWindowSeconds: config.reconnectWindowSeconds,
       matchDurationSeconds: config.matchDurationSeconds,
+      timeoutResolution: config.timeoutResolution,
+      allowDraw: config.allowDraw,
       prizeMode: config.prizeMode,
       winnerPercentage: config.winnerPercentage,
       fixedPrizeAmount: config.fixedPrizeAmount,
@@ -218,9 +220,9 @@ describe("Centralized Game Configuration + Admin Control System (All 18 Acceptan
 
   // Test 8, 9, 10, 11: Match snapshotting & immutability across config version changes
   it("8-11. Start match, change timer config, verify existing match keeps old timer, new match uses new timer", () => {
-    // 8. Match 1 starts with initial snapshot (turn timer = 30s, version = 1)
+    // 8. Match 1 starts with initial snapshot (turn timer = 25s, version = 1)
     const match1Snapshot = service.createSnapshot("carrom", 100);
-    expect(match1Snapshot.turnTimerSeconds).toBe(30);
+    expect(match1Snapshot.turnTimerSeconds).toBe(25);
     expect(match1Snapshot.configVersion).toBe(1);
 
     // 9. Admin changes turn timer to 60s (version increments to 2)
@@ -228,8 +230,8 @@ describe("Centralized Game Configuration + Admin Control System (All 18 Acceptan
     expect(service.getGameConfig("carrom").turnTimerSeconds).toBe(60);
     expect(service.getGameConfig("carrom").configVersion).toBe(2);
 
-    // 10. Existing match 1 continues using its immutable snapshot (30s, v1)
-    expect(match1Snapshot.turnTimerSeconds).toBe(30);
+    // 10. Existing match 1 continues using its immutable snapshot (25s, v1)
+    expect(match1Snapshot.turnTimerSeconds).toBe(25);
     expect(match1Snapshot.configVersion).toBe(1);
 
     // 11. New match 2 created after update gets the new configuration (60s, v2)

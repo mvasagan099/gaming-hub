@@ -9,7 +9,7 @@ import {
   type TournamentCurrentMatchResponse,
 } from '@gaming-hub/shared';
 import { useAuthStore } from './authStore';
-import { tournamentsApi } from '../services/api/enterprise';
+import { tournamentsApi, type PlayerMyTournamentsItem, type PlayerTournamentDashboardData } from '../services/api/enterprise';
 import { walletApi } from '../services/api/enterprise';
 
 function getSocketUrl(): string {
@@ -37,6 +37,8 @@ interface PlayerTournamentState {
   bracket: TournamentBracket | null;
   myStatus: TournamentPlayerStatus | null;
   currentMatch: TournamentCurrentMatchResponse | null;
+  dashboardData: PlayerTournamentDashboardData | null;
+  myTournaments: PlayerMyTournamentsItem[];
   walletBalance: number | null;
   events: PlayerTournamentEvent[];
   isLoading: boolean;
@@ -45,6 +47,8 @@ interface PlayerTournamentState {
   subscribe: (tournamentId: string) => void;
   unsubscribe: () => void;
   fetchAll: (tournamentId: string) => Promise<void>;
+  fetchDashboard: (tournamentId: string) => Promise<void>;
+  fetchMyTournaments: () => Promise<void>;
   refreshDetail: (tournamentId: string) => Promise<void>;
   refreshBracket: (tournamentId: string) => Promise<void>;
   refreshMyStatus: (tournamentId: string) => Promise<void>;
@@ -68,6 +72,8 @@ export const usePlayerTournamentStore = create<PlayerTournamentState>((set, get)
   bracket: null,
   myStatus: null,
   currentMatch: null,
+  dashboardData: null,
+  myTournaments: [],
   walletBalance: null,
   events: [],
   isLoading: false,
@@ -85,6 +91,7 @@ export const usePlayerTournamentStore = create<PlayerTournamentState>((set, get)
     socket.on('connect', () => {
       set({ connected: true });
       socket.emit('tournament:subscribe', { tournamentId });
+      get().fetchDashboard(tournamentId).catch(() => undefined);
     });
 
     socket.on('disconnect', () => set({ connected: false }));
@@ -100,6 +107,8 @@ export const usePlayerTournamentStore = create<PlayerTournamentState>((set, get)
         timestamp: new Date().toISOString(),
         meta: data,
       });
+      // Refresh dashboard on all tournament events
+      get().fetchDashboard(tournamentId).catch(() => undefined);
     };
 
     socket.on('tournament:updated', (data: Record<string, unknown>) => {
@@ -176,9 +185,10 @@ export const usePlayerTournamentStore = create<PlayerTournamentState>((set, get)
   fetchAll: async (tournamentId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const [state, currentMatch, wallet] = await Promise.allSettled([
+      const [state, currentMatch, dashboard, wallet] = await Promise.allSettled([
         tournamentsApi.state(tournamentId),
         tournamentsApi.currentMatch(tournamentId).catch(() => null),
+        tournamentsApi.playerDashboard(tournamentId).catch(() => null),
         walletApi.summary(),
       ]);
 
@@ -192,6 +202,10 @@ export const usePlayerTournamentStore = create<PlayerTournamentState>((set, get)
         });
       }
 
+      if (dashboard.status === 'fulfilled' && dashboard.value) {
+        set({ dashboardData: dashboard.value });
+      }
+
       if (currentMatch.status === 'fulfilled' && currentMatch.value) {
         set({ currentMatch: currentMatch.value });
       }
@@ -201,6 +215,27 @@ export const usePlayerTournamentStore = create<PlayerTournamentState>((set, get)
       }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Failed to load tournament' });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  fetchDashboard: async (tournamentId: string) => {
+    try {
+      const dashboard = await tournamentsApi.playerDashboard(tournamentId);
+      set({ dashboardData: dashboard, stateVersion: dashboard.tournament.stateVersion });
+    } catch {
+      /* swallow non-registered or error */
+    }
+  },
+
+  fetchMyTournaments: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const list = await tournamentsApi.myTournaments();
+      set({ myTournaments: list });
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : 'Failed to load your tournaments' });
     } finally {
       set({ isLoading: false });
     }
@@ -271,6 +306,8 @@ export const usePlayerTournamentStore = create<PlayerTournamentState>((set, get)
       bracket: null,
       myStatus: null,
       currentMatch: null,
+      dashboardData: null,
+      myTournaments: [],
       walletBalance: null,
       events: [],
       stateVersion: 0,

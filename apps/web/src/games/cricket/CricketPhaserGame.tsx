@@ -67,7 +67,7 @@ export function CricketPhaserGame({ mode, role, overs, onGameOver, onGameEvent }
   }, [mode, role, overs]);
 
   return (
-    <div className="relative mx-auto w-full max-w-[924px] aspect-[924/680] h-auto max-h-[85vh] bg-[#090d16] rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex justify-center items-center">
+    <div className="relative mx-auto w-full max-w-[min(94vw,65dvh,924px)] aspect-[924/680] h-auto bg-[#090d16] rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex justify-center items-center">
       <div ref={containerRef} className="w-full h-full" />
     </div>
   );

@@ -323,7 +323,8 @@ export function WalletPage() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Desktop Table View (md+) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-black uppercase tracking-wider text-slate-400 bg-slate-50/50 dark:bg-slate-800/30">
@@ -397,6 +398,50 @@ export function WalletPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile Cards View (<md) */}
+            <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800/60 p-2">
+              {txs?.items.map((t) => {
+                const isCredit = t.type === "CREDIT";
+                const meta = (t.meta && typeof t.meta === "object" ? t.meta : {}) as Record<string, unknown>;
+                const status = typeof meta.status === "string" ? meta.status : "COMPLETED";
+
+                return (
+                  <div key={t.id} className="p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <span className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                          isCredit ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                        }`}>
+                          {isCredit ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
+                        </span>
+                        <div>
+                          <div className="font-bold text-xs text-slate-900 dark:text-white">
+                            {REFERENCE_LABELS[t.referenceType] ?? t.referenceType}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {new Date(t.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className={`font-black text-sm ${isCredit ? "text-emerald-500" : "text-rose-500"}`}>
+                          {isCredit ? "+" : "-"}{t.amount.toLocaleString()} 🪙
+                        </div>
+                        <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold uppercase border ${
+                          status === "REFUNDED"
+                            ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                            : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                        }`}>
+                          {status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Pagination Controls */}

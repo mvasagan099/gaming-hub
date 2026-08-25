@@ -520,4 +520,57 @@ export class LudoEngine extends MultiplayerGameEngine<
   private log(state: LudoServerState, message: string): string[] {
     return [message, ...state.logs].slice(0, MAX_LOGS);
   }
+
+  /**
+   * Deterministic timeout winner resolution for Ludo:
+   * 1. Most finished tokens (tokens in Home triangle).
+   * 2. Total cumulative forward steps / progress across all 4 tokens.
+   * 3. Closest leading token to Home.
+   */
+  protected override resolveTimeoutWinner(state: LudoServerState): number[] {
+    if (!state.players || state.players.length === 0) return [state.currentSeat];
+
+    type PlayerRank = { seat: number; finishedCount: number; totalProgress: number; maxProgress: number };
+    const ranks: PlayerRank[] = state.players.map((p) => {
+      let finishedCount = 0;
+      let totalProgress = 0;
+      let maxProgress = 0;
+      for (const t of p.tokens) {
+        if (t.isFinished) {
+          finishedCount++;
+          totalProgress += 57;
+          maxProgress = Math.max(maxProgress, 57);
+        } else if (t.isHome) {
+          // Token is in home column
+          const base = HOME_COL_BASE[p.color] ?? 100;
+          const prog = 51 + (t.position - base);
+          totalProgress += prog;
+          maxProgress = Math.max(maxProgress, prog);
+        } else if (t.position >= 0) {
+          // Token is on main track
+          const startPos = START_POSITION[p.color];
+          const dist = (t.position - startPos + 52) % 52;
+          totalProgress += dist;
+          maxProgress = Math.max(maxProgress, dist);
+        }
+      }
+      return { seat: p.seat, finishedCount, totalProgress, maxProgress };
+    });
+
+    ranks.sort((a, b) => {
+      if (b.finishedCount !== a.finishedCount) return b.finishedCount - a.finishedCount;
+      if (b.totalProgress !== a.totalProgress) return b.totalProgress - a.totalProgress;
+      return b.maxProgress - a.maxProgress;
+    });
+
+    const best = ranks[0];
+    if (!best) return [0];
+    const topTied = ranks.filter(
+      (r) =>
+        r.finishedCount === best.finishedCount &&
+        r.totalProgress === best.totalProgress &&
+        r.maxProgress === best.maxProgress,
+    );
+    return topTied.map((r) => r.seat);
+  }
 }

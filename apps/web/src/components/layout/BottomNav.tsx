@@ -1,4 +1,4 @@
-import { Home, Trophy, Wallet, User } from 'lucide-react';
+import { Home, Trophy, Wallet, User, Menu } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useFeatureFlagsStore } from '../../store/featureFlagsStore';
 
@@ -9,19 +9,25 @@ const items = [
   { name: 'Profile', icon: User, path: '/profile', flag: null },
 ];
 
-export default function BottomNav() {
+interface BottomNavProps {
+  onMoreClick?: () => void;
+}
+
+export default function BottomNav({ onMoreClick }: BottomNavProps) {
   const flags = useFeatureFlagsStore((s) => s.flags);
   const visibleItems = items.filter((item) =>
     item.flag ? (flags ? flags[item.flag] !== false : true) : true,
   );
+  const totalCols = visibleItems.length + (onMoreClick ? 1 : 0);
+
   return (
     <nav
       aria-label="Primary"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md pb-[env(safe-area-inset-bottom)]"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]"
     >
       <div
         className="grid"
-        style={{ gridTemplateColumns: `repeat(${visibleItems.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${totalCols}, minmax(0, 1fr))` }}
       >
         {visibleItems.map((item) => (
           <NavLink
@@ -29,7 +35,7 @@ export default function BottomNav() {
             to={item.path}
             end={item.path === '/'}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 py-2.5 text-[10px] font-semibold transition-colors ${
+              `flex flex-col items-center gap-1 py-2 text-[10px] font-bold transition-colors ${
                 isActive
                   ? 'text-accent-500'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -41,7 +47,19 @@ export default function BottomNav() {
             <span>{item.name}</span>
           </NavLink>
         ))}
+
+        {onMoreClick && (
+          <button
+            onClick={onMoreClick}
+            className="flex flex-col items-center gap-1 py-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+            aria-label="More options"
+          >
+            <Menu className="w-5 h-5" />
+            <span>More</span>
+          </button>
+        )}
       </div>
     </nav>
   );
 }
+

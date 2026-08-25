@@ -35,8 +35,10 @@ import { apiClient } from "../../services/api/client";
 import { messagesApi, sessionsApi, securityApi } from "../../services/api/enterprise";
 import type { BlockedUser, LoginSession } from "@gaming-hub/shared";
 import { Skeleton, SkeletonCircle, SkeletonText } from "../../components/Skeleton";
+import { MatchHistoryView } from "../../components/MatchHistory/MatchHistoryView";
+import { MyTournamentsView } from "../../components/tournaments/MyTournamentsView";
 
-type ProfileTab = "profile" | "security" | "activity";
+type ProfileTab = "profile" | "tournaments" | "security" | "activity" | "history" | "stats";
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
@@ -298,16 +300,26 @@ export const ProfilePage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
-            {activeTab === "security" ? "Security Settings" : "My Profile"}
+            {activeTab === "security"
+              ? "Security Settings"
+              : activeTab === "history"
+              ? "Match History"
+              : activeTab === "stats"
+              ? "Player Statistics"
+              : "My Profile"}
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {activeTab === "security"
               ? "Manage password, two-factor authentication and active sessions."
+              : activeTab === "history"
+              ? "View past matches, summaries, and authoritative game replays."
+              : activeTab === "stats"
+              ? "Detailed game-specific statistics, win rates, and duration analytics."
               : "Manage your personal information"}
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl shrink-0">
+        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl shrink-0 flex-wrap">
           <button
             onClick={() => setActiveTab("profile")}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
@@ -317,6 +329,36 @@ export const ProfilePage: React.FC = () => {
             }`}
           >
             Personal Details
+          </button>
+          <button
+            onClick={() => setActiveTab("tournaments")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "tournaments"
+                ? "bg-amber-500 text-slate-950 shadow-sm font-black"
+                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            🏆 My Tournaments
+          </button>
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "history"
+                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            Match History
+          </button>
+          <button
+            onClick={() => setActiveTab("stats")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "stats"
+                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            Statistics
           </button>
           <button
             onClick={() => setActiveTab("security")}
@@ -336,10 +378,40 @@ export const ProfilePage: React.FC = () => {
                 : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
-            Stats & Stuff
+            Shortcuts
           </button>
         </div>
       </div>
+
+      {/* ======================================================================== */}
+      {/* TAB: MY TOURNAMENTS */}
+      {/* ======================================================================== */}
+      {activeTab === "tournaments" && (
+        <div className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-6 sm:p-8 space-y-6 shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-4">
+            <div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white">My Tournament Hub</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Track your active tournament matches, seeds, round progress, and results.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/tournaments')}
+              className="text-xs font-bold text-amber-500 hover:text-amber-400"
+            >
+              Browse All Tournaments →
+            </button>
+          </div>
+          <MyTournamentsView />
+        </div>
+      )}
+
+      {/* ======================================================================== */}
+      {/* TAB: MATCH HISTORY & REPLAYS (Requirement 3 & 23) */}
+      {/* ======================================================================== */}
+      {(activeTab === "history" || activeTab === "stats") && (
+        <MatchHistoryView userId={me?.user?.id} />
+      )}
 
       {/* ======================================================================== */}
       {/* TAB 1: PERSONAL DETAILS (Matches Screenshot 1) */}

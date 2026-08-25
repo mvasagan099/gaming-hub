@@ -1,7 +1,7 @@
 import React from "react";
 import { useMultiplayerStore } from "../../../store/multiplayerStore";
-import { Bell, Trophy, AlertTriangle, UserCheck, Flame, X } from "lucide-react";
-import type { NotificationPriority } from "@gaming-hub/shared";
+import { Bell, Trophy, AlertTriangle, UserCheck, Flame, X, AlertCircle } from "lucide-react";
+import type { EventPriority } from "@gaming-hub/shared";
 
 export const InGameNotificationBanner: React.FC = () => {
   const activeNotification = useMultiplayerStore((s) => s.activeNotification);
@@ -9,17 +9,23 @@ export const InGameNotificationBanner: React.FC = () => {
 
   if (!activeNotification) return null;
 
-  const getPriorityStyles = (priority: NotificationPriority) => {
+  const getPriorityStyles = (priority: EventPriority) => {
     switch (priority) {
+      case "CRITICAL":
+        return {
+          container: "bg-red-500/15 dark:bg-red-500/25 border-red-500/60 text-red-900 dark:text-red-200 shadow-xl shadow-red-500/20 ring-1 ring-red-500/30",
+          iconBg: "bg-red-600 text-white animate-pulse",
+          icon: <AlertCircle className="w-5 h-5" />,
+        };
       case "HIGH":
         return {
-          container: "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/50 text-amber-900 dark:text-amber-200 shadow-lg shadow-amber-500/10",
+          container: "bg-amber-500/15 dark:bg-amber-500/25 border-amber-500/50 text-amber-900 dark:text-amber-200 shadow-lg shadow-amber-500/15",
           iconBg: "bg-amber-500 text-white",
-          icon: <Flame className="w-5 h-5 animate-pulse" />,
+          icon: <Flame className="w-5 h-5 animate-bounce" />,
         };
-      case "MEDIUM":
+      case "NORMAL":
         return {
-          container: "bg-cyan-500/10 dark:bg-cyan-500/20 border-cyan-500/50 text-cyan-900 dark:text-cyan-200 shadow-lg shadow-cyan-500/10",
+          container: "bg-cyan-500/15 dark:bg-cyan-500/25 border-cyan-500/50 text-cyan-900 dark:text-cyan-200 shadow-lg shadow-cyan-500/10",
           iconBg: "bg-cyan-500 text-white",
           icon: <Bell className="w-5 h-5" />,
         };
@@ -33,11 +39,11 @@ export const InGameNotificationBanner: React.FC = () => {
     }
   };
 
-  const getEventIcon = (eventType: string, priority: NotificationPriority) => {
-    if (eventType.includes("WIN") || eventType.includes("SETTLEMENT") || eventType.includes("FINISHED")) {
+  const getEventIcon = (eventType: string, priority: EventPriority) => {
+    if (eventType.includes("WIN") || eventType.includes("SETTLEMENT") || eventType.includes("FINISHED") || eventType.includes("COMPLETED")) {
       return <Trophy className="w-5 h-5" />;
     }
-    if (eventType.includes("FORFEIT") || eventType.includes("DISCONNECTED")) {
+    if (eventType.includes("FORFEIT") || eventType.includes("DISCONNECTED") || eventType.includes("EXPIRED")) {
       return <AlertTriangle className="w-5 h-5" />;
     }
     if (eventType.includes("READY") || eventType.includes("RECONNECTED")) {

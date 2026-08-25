@@ -147,12 +147,21 @@ export function AdminTournamentsPage() {
               <p className="text-sm text-indigo-200">{total} total tournaments</p>
             </div>
           </div>
-          <Button variant="primary" onClick={() => {
-            setForm({ ...EMPTY_FORM, startTime: new Date(Date.now() + 86400000).toISOString().slice(0, 16) });
-            setShowCreateModal(true);
-          }}>
-            <Plus className="size-4" /> Create Tournament
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => navigate('/admin/tournaments/disputes')}
+              className="border-indigo-400/40 bg-indigo-500/20 text-indigo-200 hover:bg-indigo-500/30 font-bold"
+            >
+              🚩 Disputes Queue
+            </Button>
+            <Button variant="primary" onClick={() => {
+              setForm({ ...EMPTY_FORM, startTime: new Date(Date.now() + 86400000).toISOString().slice(0, 16) });
+              setShowCreateModal(true);
+            }}>
+              <Plus className="size-4" /> Create Tournament
+            </Button>
+          </div>
         </div>
       </div>
 

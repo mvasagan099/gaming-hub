@@ -1,4 +1,4 @@
-﻿import type { FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@gaming-hub/db";
 import { AppError, clampPagination, isGameId } from "@gaming-hub/shared";
@@ -344,5 +344,95 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
       meta: { repaired: result.repaired.length, warnings: result.warnings.length, errors: result.errors.length },
     });
     return result;
+  });
+
+  // ------------------------------------------------------------------
+  // Tournament Disputes Queue (Admin)
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/disputes", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "tournaments.disputes.view", prisma);
+    const q = queryParams(request);
+    const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
+    const { listAdminDisputes } = await import("../services/tournamentDisputeService");
+    return listAdminDisputes({
+      status: queryString(q.status),
+      priority: queryString(q.priority),
+      tournamentId: queryString(q.tournamentId),
+      gameId: queryString(q.gameId),
+      page,
+      pageSize,
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // Tournament Dispute Detail (Admin)
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/disputes/:id", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "tournaments.disputes.view", prisma);
+    const { id } = routeParams(request);
+    const { getDisputeDetail } = await import("../services/tournamentDisputeService");
+    return getDisputeDetail(id, admin.id, true);
+  });
+
+  // ------------------------------------------------------------------
+  // Resolve Tournament Dispute (Admin)
+  // ------------------------------------------------------------------
+  app.post("/api/admin/tournaments/disputes/:id/resolve", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "tournaments.disputes.review", prisma);
+    const { id } = routeParams(request);
+    const body = request.body as any;
+    const { resolveTournamentDispute } = await import("../services/tournamentDisputeService");
+    return resolveTournamentDispute(admin.id, id, body);
+  });
+
+  // ------------------------------------------------------------------
+  // Tournament Settlements Queue & KPIs (Admin)
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/:id/settlements", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const { id } = routeParams(request);
+    const q = queryParams(request);
+    const status = queryString(q.status) as any;
+    const { TournamentSettlementService } = await import("../services/tournamentSettlementService");
+    return TournamentSettlementService.listTournamentSettlements(id, { status });
+  });
+
+  // ------------------------------------------------------------------
+  // Retry Tournament Settlements (Admin Recovery Action)
+  // ------------------------------------------------------------------
+  app.post("/api/admin/tournaments/:id/settlements/retry", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
+    const { id } = routeParams(request);
+    const body = (request.body as any) || {};
+    const { TournamentSettlementService } = await import("../services/tournamentSettlementService");
+    return TournamentSettlementService.retryFailedSettlements(
+      id,
+      admin.id,
+      body.reason || "Admin settlement retry",
+      body.prizeId,
+    );
+  });
+
+  // ------------------------------------------------------------------
+  // Admin Tournament Leaderboard & Standings
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/:id/leaderboard", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const { id } = routeParams(request);
+    const q = queryParams(request);
+    const page = q.page ? parseInt(queryString(q.page), 10) : 1;
+    const pageSize = q.pageSize ? parseInt(queryString(q.pageSize), 10) : 50;
+    const search = queryString(q.search);
+    const status = queryString(q.status);
+    const roundNumber = q.round ? parseInt(queryString(q.round), 10) : undefined;
+
+    const { TournamentLeaderboardService } = await import("../services/tournamentLeaderboardService");
+    return TournamentLeaderboardService.getTournamentLeaderboard(id, {
+      page,
+      pageSize,
+      search,
+      status,
+      roundNumber,
+    });
   });
 }

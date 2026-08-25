@@ -192,12 +192,22 @@ export class SettlementService {
           },
         }).catch(() => undefined);
 
+        const rawReason = params.options?.reason ?? "NORMAL";
+        const resultReason = rawReason.toUpperCase().includes("TIME")
+          ? "TIME_LIMIT"
+          : rawReason.toUpperCase().includes("FORFEIT")
+            ? "TIMEOUT"
+            : rawReason.toUpperCase().includes("ABANDON")
+              ? "ABANDONED"
+              : rawReason;
+
         await tx.match.update({
           where: { id: params.matchId },
           data: {
             status: "FINISHED",
             winnerIds: Array.from(winnerSet),
             endedAt: new Date(),
+            resultReason,
           },
         });
 
@@ -310,122 +320,17 @@ export class SettlementService {
     tournamentId: string;
     prizesPaid: { userId: string; rank: number; amount: number }[];
   }> {
-    const tournament = await prisma.tournament.findUnique({
-      where: { id: tournamentId },
-      include: { players: true, prizes: true },
-    });
-    if (!tournament) throw new AppError("NOT_FOUND", "Tournament not found", 404);
-
-    if (tournament.settledAt) {
-      return { ok: true, tournamentId, prizesPaid: [] };
-    }
-
-    const idempotencyKey = `SETTLEMENT:TOURNAMENT:${tournamentId}`;
-
-    return IdempotencyService.executeOnce({
-      key: idempotencyKey,
-      operation: "UNIVERSAL_TOURNAMENT_SETTLEMENT",
-      referenceId: tournamentId,
-      handler: async (tx) => {
-        const current = await tx.tournament.findUnique({
-          where: { id: tournamentId },
-          include: { players: true, prizes: true },
-        });
-        if (!current || current.settledAt) {
-          return { ok: true, tournamentId, prizesPaid: [] };
-        }
-
-        const currentStatus = current.status as TournamentStatus;
-        if (canTransitionTournamentStatus(currentStatus, "SETTLING")) {
-          await tx.tournament.update({
-            where: { id: tournamentId },
-            data: { status: "SETTLING", stateVersion: { increment: 1 } },
-          });
-        }
-
-        const distribution =
-          (current.prizeDistribution as unknown as PrizeDistributionEntry[]).length > 0
-            ? (current.prizeDistribution as unknown as PrizeDistributionEntry[])
-            : defaultPrizeDistribution(current.format as TournamentFormat);
-
-        const grossPool = current.grossPool > 0 ? current.grossPool : current.prizePool;
-        const prizes = calculatePrizes(grossPool, distribution);
-
-        // Get ranked players
-        const rankedPlayers = current.players
-          .filter((p) => p.finalRank !== null)
-          .sort((a, b) => (a.finalRank ?? 999) - (b.finalRank ?? 999));
-
-        const prizesPaid: { userId: string; rank: number; amount: number }[] = [];
-
-        for (const prize of prizes) {
-          const player = rankedPlayers.find((p) => p.finalRank === prize.rank);
-          if (!player || prize.amount <= 0) continue;
-
-          // Check if already paid
-          const alreadyPaid = current.prizes.find(
-            (pr) => pr.userId === player.userId && pr.status === "PAID",
-          );
-          if (alreadyPaid) continue;
-
-          await WalletTransactionService.createTournamentPrize(tx, {
-            userId: player.userId,
-            tournamentId,
-            tournamentTitle: current.title,
-            rank: prize.rank,
-            prizeAmount: prize.amount,
-          });
-
-          await tx.tournamentPrize.upsert({
-            where: { tournamentId_userId: { tournamentId, userId: player.userId } },
-            create: {
-              tournamentId,
-              userId: player.userId,
-              playerId: player.id,
-              rank: prize.rank,
-              amount: prize.amount,
-              status: "PAID",
-              paidAt: new Date(),
-            },
-            update: {
-              rank: prize.rank,
-              amount: prize.amount,
-              status: "PAID",
-              paidAt: new Date(),
-            },
-          });
-
-          prizesPaid.push({
-            userId: player.userId,
-            rank: prize.rank,
-            amount: prize.amount,
-          });
-        }
-
-        await tx.tournament.update({
-          where: { id: tournamentId },
-          data: {
-            status: "SETTLED",
-            settledAt: new Date(),
-            stateVersion: { increment: 1 },
-          },
-        });
-
-        if (adminId) {
-          audit({
-            actorType: "user",
-            actorId: adminId,
-            action: "admin.settle.tournament",
-            category: "admin",
-            targetType: "tournament",
-            targetId: tournamentId,
-            meta: { prizesPaid },
-          });
-        }
-
-        return { ok: true, tournamentId, prizesPaid };
-      },
-    });
+    const { TournamentSettlementService } = await import("./tournamentSettlementService");
+    const result = await TournamentSettlementService.settleTournamentPrizes(tournamentId, { adminId });
+    return {
+      ok: true,
+      tournamentId,
+      prizesPaid: result.prizesPaid.map((p) => ({
+        userId: p.userId,
+        rank: p.rank,
+        amount: p.amount,
+      })),
+    };
   }
 
   /**

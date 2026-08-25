@@ -9,6 +9,8 @@ import {
   type GameConfig,
   PRIZE_MODES,
   DRAW_POLICIES,
+  TIMEOUT_RESOLUTIONS,
+  type TimeoutResolution,
 } from "@gaming-hub/shared";
 import { authenticate } from "../plugins/authenticate";
 import { parseSchema, routeParams, queryParams, queryString } from "../lib/http";
@@ -27,7 +29,11 @@ const updateGameConfigSchema = z.object({
   maxEntryFee: z.number().int().min(0).max(1_000_000).optional(),
   reconnectWindowSeconds: z.number().int().min(5).max(300).optional(),
   turnTimerSeconds: z.number().int().min(0).max(600).optional(),
-  matchDurationSeconds: z.number().int().min(0).max(3600).optional(),
+  turnTimeout: z.number().int().min(0).max(600).optional(),
+  matchDurationSeconds: z.number().int().min(30).max(600).optional(),
+  maxMatchDuration: z.number().int().min(30).max(600).optional(),
+  timeoutResolution: z.enum(TIMEOUT_RESOLUTIONS).optional(),
+  allowDraw: z.boolean().optional(),
   prizeMode: z.enum(PRIZE_MODES).optional(),
   winnerPercentage: z.number().min(0).max(100).optional(),
   fixedPrizeAmount: z.number().int().min(0).optional(),
@@ -448,5 +454,179 @@ export async function adminGamesRoutes(app: FastifyInstance) {
     const { PersistentMatchStateService } = await import("../services/persistentMatchStateService");
     const result = await PersistentMatchStateService.loadAuthoritativeState(id);
     return result;
+  });
+
+  /**
+   * GET /api/admin/game-settings
+   * Returns centralized game configuration including max duration and timeout strategies for all 10 games.
+   */
+  app.get("/api/admin/game-settings", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:games:view", prisma);
+    const configs = await GameConfigService.getAllConfigs();
+    return Object.values(configs).map((c) => ({
+      gameId: c.gameId,
+      gameType: c.gameId,
+      name: c.name,
+      enabled: c.enabled,
+      maxMatchDuration: c.matchDurationSeconds ?? 600,
+      matchDurationSeconds: c.matchDurationSeconds ?? 600,
+      turnTimeout: c.turnTimerSeconds ?? 0,
+      turnTimerSeconds: c.turnTimerSeconds ?? 0,
+      timeoutResolution: c.timeoutResolution ?? "GAME_SPECIFIC",
+      allowDraw: c.allowDraw !== false,
+      configurationVersion: c.configVersion ?? 1,
+      configVersion: c.configVersion ?? 1,
+      updatedAt: c.updatedAt,
+      updatedBy: c.updatedBy,
+    }));
+  });
+
+  /**
+   * PATCH /api/admin/game-settings/:gameId
+   * Updates a game's timeout, duration, or enabled status.
+   */
+  app.patch("/api/admin/game-settings/:gameId", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:games:manage", prisma);
+    const { gameId } = routeParams(request);
+    const body = parseSchema(updateGameConfigSchema, request.body);
+
+    if (!isGameId(gameId as GameId)) {
+      throw new AppError("NOT_FOUND", `Game '${gameId}' not found`, 404);
+    }
+
+    const updates: Partial<GameConfig> = { ...body };
+    if (body.maxMatchDuration !== undefined && updates.matchDurationSeconds === undefined) {
+      updates.matchDurationSeconds = body.maxMatchDuration;
+    }
+    if (body.turnTimeout !== undefined && updates.turnTimerSeconds === undefined) {
+      updates.turnTimerSeconds = body.turnTimeout;
+    }
+
+    const updated = await GameConfigService.updateGameConfig(gameId as GameId, updates, admin.id);
+    return {
+      ok: true,
+      gameId: updated.gameId,
+      gameType: updated.gameId,
+      name: updated.name,
+      enabled: updated.enabled,
+      maxMatchDuration: updated.matchDurationSeconds,
+      matchDurationSeconds: updated.matchDurationSeconds,
+      turnTimeout: updated.turnTimerSeconds,
+      turnTimerSeconds: updated.turnTimerSeconds,
+      timeoutResolution: updated.timeoutResolution,
+      allowDraw: updated.allowDraw,
+      configurationVersion: updated.configVersion,
+      configVersion: updated.configVersion,
+      updatedAt: updated.updatedAt,
+      updatedBy: updated.updatedBy,
+    };
+  });
+
+  /**
+   * GET /api/admin/match-settings
+   * Returns platform-wide match limit and warning configuration.
+   */
+  app.get("/api/admin/match-settings", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:games:view", prisma);
+    const settings = await GameConfigService.getMatchSettings();
+    return { ok: true, settings };
+  });
+
+  /**
+   * PATCH /api/admin/match-settings
+   * Updates platform-wide match limit and warning times.
+   */
+  app.patch("/api/admin/match-settings", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:settings:edit", prisma);
+    const body = parseSchema(
+      z.object({
+        maxMatchDurationSeconds: z.number().int().min(30).max(600).optional(),
+        warningTimesSeconds: z.array(z.number().int().min(1).max(600)).optional(),
+        defaultTurnTimeoutSeconds: z.number().int().min(5).max(120).optional(),
+      }),
+      request.body,
+    );
+
+    const updated = await GameConfigService.updateMatchSettings(body, admin.id);
+    return { ok: true, settings: updated };
+  });
+
+  /**
+   * GET /api/admin/game-settings/audit
+   * Returns recent audit logs for game/match configuration changes.
+   */
+  app.get("/api/admin/game-settings/audit", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:games:view", prisma);
+    const q = queryParams(request);
+    const { page, pageSize } = clampPagination(q.page, q.pageSize ?? 30);
+    const skip = (page - 1) * pageSize;
+    const limit = pageSize;
+
+    const [total, rows] = await Promise.all([
+      prisma.auditLog.count({
+        where: {
+          category: { in: ["game", "system"] },
+          action: { in: ["GAME_CONFIG_UPDATED", "MATCH_SETTINGS_UPDATED", "GAME_ENABLED", "GAME_DISABLED", "TURN_TIMER_CHANGED"] },
+        },
+      }),
+      prisma.auditLog.findMany({
+        where: {
+          category: { in: ["game", "system"] },
+          action: { in: ["GAME_CONFIG_UPDATED", "MATCH_SETTINGS_UPDATED", "GAME_ENABLED", "GAME_DISABLED", "TURN_TIMER_CHANGED"] },
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        adminId: r.actorId,
+        action: r.action,
+        gameType: r.targetId,
+        setting: r.action,
+        meta: r.meta,
+        createdAt: r.createdAt.toISOString(),
+      })),
+      total,
+      page,
+      limit,
+    };
+  });
+
+  /**
+   * GET /api/admin/analytics/time-limits
+   * Returns time-limit completion statistics, normal completion %, timeout % per game
+   */
+  app.get("/api/admin/analytics/time-limits", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:games:view", prisma);
+    const { GameHistoryService } = await import("../services/gameHistoryService");
+    const analytics = await GameHistoryService.getTimeLimitAnalytics();
+    return { ok: true, data: analytics };
+  });
+
+  /**
+   * GET /api/admin/matches/search
+   * Admin indexed search across matches by matchId, user, game, date, result, tournament
+   */
+  app.get("/api/admin/matches/search", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:games:view", prisma);
+    const q = queryParams(request);
+    const { page, pageSize } = clampPagination(q.page, q.pageSize ?? 20);
+    const { GameHistoryService } = await import("../services/gameHistoryService");
+
+    return GameHistoryService.adminSearchMatches({
+      matchId: queryString(q.matchId),
+      userId: queryString(q.userId),
+      gameId: queryString(q.gameId),
+      dateFrom: queryString(q.dateFrom),
+      dateTo: queryString(q.dateTo),
+      resultReason: queryString(q.resultReason),
+      tournamentId: queryString(q.tournamentId),
+      page,
+      pageSize,
+    });
   });
 }

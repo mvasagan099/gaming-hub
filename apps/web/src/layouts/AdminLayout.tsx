@@ -30,7 +30,7 @@ import { cn } from '../utils/cn';
 import { useTheme } from '../contexts/ThemeProvider';
 import { useMe } from '../services/api/useMe';
 import { useFeatureFlagsStore } from '../store/featureFlagsStore';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const NAV_GROUPS = [
   {
@@ -80,10 +80,16 @@ export function AdminLayout() {
   const { effectiveTheme, setTheme } = useTheme();
   const { me } = useMe();
   const loadFlags = useFeatureFlagsStore((s) => s.loadFlags);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   useEffect(() => {
     void loadFlags();
   }, [loadFlags]);
+
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [location.pathname]);
 
   const allItems = NAV_GROUPS.flatMap((g) => g.items);
   const currentItem = allItems.find((n) =>
@@ -91,9 +97,9 @@ export function AdminLayout() {
   );
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
-      {/* Sidebar */}
-      <aside className="w-64 flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90 backdrop-blur-md shrink-0">
+    <div className="flex h-[100dvh] w-full overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
+      {/* Desktop Sidebar (lg+) */}
+      <aside className="hidden lg:flex w-64 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90 backdrop-blur-md shrink-0">
         {/* Brand Header */}
         <div className="h-16 flex items-center justify-between px-5 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -172,7 +178,7 @@ export function AdminLayout() {
             </div>
             <div className="overflow-hidden">
               <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                {me?.user.displayName || me?.user.username || 'mvasagan099'}
+                {me?.user.displayName || me?.user.username || 'Admin'}
               </div>
               <div className="text-[10px] font-extrabold text-emerald-500 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -183,21 +189,89 @@ export function AdminLayout() {
         </div>
       </aside>
 
+      {/* Mobile Slide-Over Drawer (lg:hidden) */}
+      {isMobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm"
+            onClick={() => setIsMobileOpen(false)}
+          />
+          <div className="relative w-[280px] max-w-[85vw] h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-300">
+            <div className="h-16 flex items-center justify-between px-5 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <span className="text-sm font-black text-slate-900 dark:text-white">Admin Suite</span>
+              </div>
+              <button
+                onClick={() => setIsMobileOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                ✕
+              </button>
+            </div>
+            <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-4">
+              {NAV_GROUPS.map((group) => (
+                <div key={group.title} className="space-y-1">
+                  <div className="px-3 text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                    {group.title}
+                  </div>
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = item.exact
+                      ? location.pathname === item.path
+                      : location.pathname.startsWith(item.path);
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        onClick={() => setIsMobileOpen(false)}
+                        className={cn(
+                          'flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all',
+                          isActive
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800',
+                        )}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span>{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+            </nav>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Navbar */}
-        <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-6 flex items-center justify-between shrink-0">
-          {/* Breadcrumbs */}
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-            <Link to="/admin" className="hover:text-indigo-500 transition-colors">Admin</Link>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-900 dark:text-white">{currentItem?.label || 'Dashboard'}</span>
+        <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between shrink-0">
+          {/* Breadcrumbs & Mobile Menu Trigger */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileOpen(true)}
+              className="lg:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Open Admin Menu"
+            >
+              ☰
+            </button>
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+              <Link to="/admin" className="hover:text-indigo-500 transition-colors">Admin</Link>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-slate-900 dark:text-white truncate max-w-[120px] sm:max-w-none">
+                {currentItem?.label || 'Dashboard'}
+              </span>
+            </div>
           </div>
 
           {/* Controls Right */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* Quick Search Input */}
-            <div className="hidden md:flex items-center w-64 rounded-xl bg-slate-100 dark:bg-slate-800/80 px-3.5 py-1.5 border border-slate-200 dark:border-slate-700/60">
+            <div className="hidden md:flex items-center w-56 lg:w-64 rounded-xl bg-slate-100 dark:bg-slate-800/80 px-3.5 py-1.5 border border-slate-200 dark:border-slate-700/60">
               <Search className="w-4 h-4 text-slate-400 shrink-0" />
               <input
                 placeholder="Quick search admin..."
@@ -208,7 +282,7 @@ export function AdminLayout() {
             {/* Health status pill */}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              <span>System Healthy</span>
+              <span>Healthy</span>
             </div>
 
             {/* Theme Toggle */}
@@ -223,7 +297,7 @@ export function AdminLayout() {
         </header>
 
         {/* Body View */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-50 dark:bg-slate-950">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-slate-50 dark:bg-slate-950">
           <div className="max-w-7xl mx-auto">
             <Outlet />
           </div>

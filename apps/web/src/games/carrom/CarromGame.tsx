@@ -1600,8 +1600,8 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
           </div>
         )}
 
-        <div className="flex flex-col items-center gap-3 w-full" style={{ maxWidth: '440px' }}>
-          <div className="relative w-full" style={{ aspectRatio: '1' }}>
+        <div className="flex flex-col items-center gap-3 w-full max-w-[min(94vw,65dvh,440px)]">
+          <div className="relative w-full aspect-square">
             <canvas
               ref={canvasRef}
               width={400}

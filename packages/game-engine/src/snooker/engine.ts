@@ -30,13 +30,29 @@ export class SnookerEngine implements EngineInstance {
   readonly gameId: GameId = "snooker";
   public state: SnookerState;
   private rng: RandomSource = Math.random;
+  private turnDurationMs: number = 20_000;
+  private matchDurationMs: number = 600_000;
+  private matchStartedAtMs: number = Date.now();
 
   constructor(
     players: EnginePlayer[],
     rng?: RandomSource,
-    options?: { bestOf?: number; totalFrames?: number; matchId?: string }
+    options?: {
+      bestOf?: number;
+      totalFrames?: number;
+      matchId?: string;
+      turnDurationMs?: number;
+      turnTimer?: { turnDurationMs: number };
+      matchDurationMs?: number;
+      matchTimer?: { matchDurationMs: number };
+    }
   ) {
     if (rng) this.rng = rng;
+    if (options?.turnDurationMs) this.turnDurationMs = options.turnDurationMs;
+    else if (options?.turnTimer?.turnDurationMs) this.turnDurationMs = options.turnTimer.turnDurationMs;
+
+    if (options?.matchDurationMs) this.matchDurationMs = options.matchDurationMs;
+    else if (options?.matchTimer?.matchDurationMs) this.matchDurationMs = options.matchTimer.matchDurationMs;
 
     const p1 = players.find((p) => p.seat === 0) || { userId: "player-1", seat: 0 };
     const p2 = players.find((p) => p.seat === 1) || { userId: "player-2", seat: 1 };
@@ -63,10 +79,11 @@ export class SnookerEngine implements EngineInstance {
     ];
 
     const totalFrames = options?.totalFrames || options?.bestOf || 1;
+    const now = Date.now();
 
     this.state = {
       gameId: "snooker",
-      matchId: options?.matchId || `snooker-match-${Date.now()}`,
+      matchId: options?.matchId || `snooker-match-${now}`,
       frameNumber: 1,
       totalFrames,
       currentPlayer: 0,
@@ -105,7 +122,8 @@ export class SnookerEngine implements EngineInstance {
       winnerIds: [],
       turnNumber: 0,
       shotNumber: 0,
-      lastActionAtMs: Date.now(),
+      lastActionAtMs: now,
+      turnStartedAtMs: now,
       keyframes: [],
     };
   }
@@ -120,6 +138,18 @@ export class SnookerEngine implements EngineInstance {
 
   get winnerSeats(): number[] {
     return this.state.winnerSeats;
+  }
+
+  get currentClockDeadline(): number | null {
+    if (this.state.finished) return null;
+    if (this.state.frameStatus === "FRAME_END" || this.state.frameStatus === "MATCH_END") return null;
+    const started = this.state.turnStartedAtMs || this.state.lastActionAtMs || Date.now();
+    return started + this.turnDurationMs;
+  }
+
+  get currentMatchDeadline(): number | null {
+    if (this.state.finished) return null;
+    return this.matchStartedAtMs + this.matchDurationMs;
   }
 
   public seatOf(userId: string): number | null {
@@ -435,6 +465,9 @@ export class SnookerEngine implements EngineInstance {
         };
       }
 
+      case "timeout":
+        return this.handleTimeout("turn", seat);
+
       default:
         return {
           ok: false,
@@ -447,11 +480,71 @@ export class SnookerEngine implements EngineInstance {
     }
   }
 
-  public handleTimeout(_reason?: string): EngineActionResult<JsonObject> {
-    const timedOutSeat = this.state.currentPlayer;
+  public handleTimeout(kind: "turn" | "match" = "turn", seat?: number): EngineActionResult<JsonObject> {
+    if (this.state.finished) {
+      return {
+        ok: false,
+        error: "Match already finished",
+        state: this.state as unknown as JsonObject,
+        events: [],
+        finished: true,
+        winnerSeats: this.state.winnerSeats,
+      };
+    }
+
+    if (kind === "match") {
+      const p1Score = this.state.player1Score;
+      const p2Score = this.state.player2Score;
+      let winnerSeats: number[] = [];
+      if (p1Score > p2Score) {
+        winnerSeats = [0];
+      } else if (p2Score > p1Score) {
+        winnerSeats = [1];
+      } else {
+        // Frame score is tied: tiebreaker by highest break
+        if (this.state.player1HighestBreak > this.state.player2HighestBreak) {
+          winnerSeats = [0];
+        } else if (this.state.player2HighestBreak > this.state.player1HighestBreak) {
+          winnerSeats = [1];
+        } else {
+          winnerSeats = [0, 1];
+        }
+      }
+
+      this.state.finished = true;
+      this.state.matchStatus = "FINISHED";
+      this.state.frameStatus = "FRAME_END";
+      this.state.winnerSeats = winnerSeats;
+      this.state.winnerIds = winnerSeats.map((s) => this.state.players[s]?.userId).filter(Boolean) as string[];
+
+      const events: EngineEvent[] = [
+        {
+          type: "match-timeout",
+          winnerSeats,
+          player1Score: p1Score,
+          player2Score: p2Score,
+        },
+        {
+          type: "SNOOKER_MATCH_ENDED",
+          winnerSeats,
+          winnerIds: this.state.winnerIds,
+          scores: { 0: p1Score, 1: p2Score },
+        },
+      ];
+
+      return {
+        ok: true,
+        state: this.state as unknown as JsonObject,
+        events,
+        finished: true,
+        winnerSeats,
+      };
+    }
+
+    const timedOutSeat = seat !== undefined ? seat : this.state.currentPlayer;
     const opponentSeat = 1 - timedOutSeat;
-    const opponent = this.state.players.find((p) => p.seat === opponentSeat) || this.state.players[0];
-    const timedOutPlayer = this.state.players.find((p) => p.seat === timedOutSeat) || this.state.players[1];
+    const opponent = this.state.players.find((p) => p.seat === opponentSeat) || this.state.players[opponentSeat] || { userId: `player-${opponentSeat + 1}`, seat: opponentSeat, score: 0, framesWon: 0, currentBreak: 0, highestBreak: 0, fouls: 0 };
+    const timedOutPlayer = this.state.players.find((p) => p.seat === timedOutSeat) || this.state.players[timedOutSeat] || { userId: `player-${timedOutSeat + 1}`, seat: timedOutSeat, score: 0, framesWon: 0, currentBreak: 0, highestBreak: 0, fouls: 0 };
 
     // Standard 4-point penalty on turn timeout
     opponent.score += 4;
@@ -461,6 +554,7 @@ export class SnookerEngine implements EngineInstance {
     timedOutPlayer.fouls += 1;
     timedOutPlayer.currentBreak = 0;
 
+    const now = Date.now();
     this.state.currentPlayer = opponentSeat;
     this.state.currentSeat = opponentSeat;
     this.state.currentTurnPlayerId = opponent.userId;
@@ -471,21 +565,19 @@ export class SnookerEngine implements EngineInstance {
     this.state.foulPoints = 4;
     this.state.cueBallInHand = true;
     this.state.inBaulkOnly = true;
-
-    const cue = this.state.balls.find((b) => b.type === "cue");
-    if (cue) {
-      cue.pocketed = false;
-      cue.pocketIndex = null;
-      cue.x = SNOOKER_SPOTS.brown.x - 30;
-      cue.y = SNOOKER_SPOTS.brown.y;
-      cue.vx = 0;
-      cue.vy = 0;
-    }
     this.state.turnNumber += 1;
     this.state.stateVersion += 1;
-    this.state.lastActionAtMs = Date.now();
+    this.state.lastActionAtMs = now;
+    this.state.turnStartedAtMs = now;
 
     const events: EngineEvent[] = [
+      {
+        type: "turn-timeout",
+        seat: timedOutSeat,
+        nextSeat: opponentSeat,
+        foulPenalty: 4,
+        timestamp: now,
+      },
       {
         type: "SNOOKER_FOUL",
         seat: timedOutSeat,
@@ -514,7 +606,10 @@ export class SnookerEngine implements EngineInstance {
         winnerSeats: this.state.winnerSeats,
       };
     }
+    const now = Date.now();
     this.state = SnookerRulesEngine.startNextFrame(this.state);
+    this.state.turnStartedAtMs = now;
+    this.state.lastActionAtMs = now;
     return {
       ok: true,
       state: this.state as unknown as JsonObject,

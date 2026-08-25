@@ -16,6 +16,24 @@ export const DRAW_POLICIES = [
 ] as const;
 export type DrawPolicy = (typeof DRAW_POLICIES)[number];
 
+export const MAX_MATCH_DURATION_SECONDS = 600; // 10 minutes maximum global safety limit
+export const MIN_MATCH_DURATION_SECONDS = 30;
+
+export const TIMEOUT_RESOLUTIONS = [
+  "CURRENT_POSITION",
+  "CURRENT_PROGRESS",
+  "CONFIGURED_CHESS_RESOLUTION",
+  "CURRENT_SCORE",
+  "CURRENT_SCORE_PROGRESS",
+  "CURRENT_MATCH_SCORE",
+  "CURRENT_RUNS",
+  "CURRENT_POINTS",
+  "CURRENT_FRAME_SCORE",
+  "GAME_SPECIFIC",
+  "DRAW",
+] as const;
+export type TimeoutResolution = (typeof TIMEOUT_RESOLUTIONS)[number];
+
 export const gameConfigSchema = z.object({
   gameId: z.string().min(1),
   name: z.string().trim().min(1).max(80),
@@ -29,7 +47,9 @@ export const gameConfigSchema = z.object({
   maxEntryFee: z.number().int().min(0).max(1_000_000).optional(),
   reconnectWindowSeconds: z.number().int().min(5).max(300).default(30),
   turnTimerSeconds: z.number().int().min(0).max(600).default(30),
-  matchDurationSeconds: z.number().int().min(0).max(3600).default(300),
+  matchDurationSeconds: z.number().int().min(30).max(MAX_MATCH_DURATION_SECONDS).default(MAX_MATCH_DURATION_SECONDS),
+  timeoutResolution: z.enum(TIMEOUT_RESOLUTIONS).default("GAME_SPECIFIC"),
+  allowDraw: z.boolean().default(true),
   prizeMode: z.enum(PRIZE_MODES).default("WINNER_PERCENTAGE"),
   winnerPercentage: z.number().min(0).max(100).default(90),
   fixedPrizeAmount: z.number().int().min(0).optional(),
@@ -49,6 +69,23 @@ export const gameConfigSchema = z.object({
 
 export type GameConfig = z.infer<typeof gameConfigSchema>;
 
+export const globalMatchSettingsSchema = z.object({
+  maxMatchDurationSeconds: z.number().int().min(30).max(MAX_MATCH_DURATION_SECONDS).default(MAX_MATCH_DURATION_SECONDS),
+  warningTimesSeconds: z.array(z.number().int().min(1).max(MAX_MATCH_DURATION_SECONDS)).default([300, 120, 60, 30, 10]),
+  defaultTurnTimeoutSeconds: z.number().int().min(5).max(120).default(30),
+  version: z.number().int().min(1).default(1),
+  updatedAt: z.string().optional(),
+  updatedBy: z.string().optional(),
+});
+export type GlobalMatchSettingsConfig = z.infer<typeof globalMatchSettingsSchema>;
+
+export const DEFAULT_GLOBAL_MATCH_SETTINGS: GlobalMatchSettingsConfig = {
+  maxMatchDurationSeconds: 600,
+  warningTimesSeconds: [300, 120, 60, 30, 10],
+  defaultTurnTimeoutSeconds: 30,
+  version: 1,
+};
+
 export interface MatchConfigSnapshot {
   gameId: GameId;
   name: string;
@@ -58,6 +95,8 @@ export interface MatchConfigSnapshot {
   turnTimerSeconds: number;
   reconnectWindowSeconds: number;
   matchDurationSeconds: number;
+  timeoutResolution: TimeoutResolution;
+  allowDraw: boolean;
   prizeMode: PrizeMode;
   winnerPercentage: number;
   fixedPrizeAmount?: number;
@@ -83,6 +122,8 @@ export interface PublicGameInfo {
   matchDurationSeconds: number;
   prizeMode: PrizeMode;
   winnerPercentage: number;
+  timeoutResolution?: TimeoutResolution;
+  allowDraw?: boolean;
 }
 
 export const DEFAULT_GAME_CONFIGS: Record<GameId, GameConfig> = {
@@ -98,6 +139,8 @@ export const DEFAULT_GAME_CONFIGS: Record<GameId, GameConfig> = {
     reconnectWindowSeconds: 30,
     turnTimerSeconds: 60,
     matchDurationSeconds: 600,
+    timeoutResolution: "CONFIGURED_CHESS_RESOLUTION",
+    allowDraw: true,
     prizeMode: "WINNER_PERCENTAGE",
     winnerPercentage: 90,
     drawPolicy: "REFUND_ENTRY",
@@ -120,8 +163,10 @@ export const DEFAULT_GAME_CONFIGS: Record<GameId, GameConfig> = {
     entryFees: [50, 100, 500, 1000],
     defaultEntryFee: 100,
     reconnectWindowSeconds: 30,
-    turnTimerSeconds: 20,
-    matchDurationSeconds: 300,
+    turnTimerSeconds: 25,
+    matchDurationSeconds: 600,
+    timeoutResolution: "CURRENT_POINTS",
+    allowDraw: true,
     prizeMode: "WINNER_PERCENTAGE",
     winnerPercentage: 90,
     drawPolicy: "REFUND_ENTRY",
@@ -145,6 +190,8 @@ export const DEFAULT_GAME_CONFIGS: Record<GameId, GameConfig> = {
     reconnectWindowSeconds: 30,
     turnTimerSeconds: 30,
     matchDurationSeconds: 600,
+    timeoutResolution: "CURRENT_PROGRESS",
+    allowDraw: true,
     prizeMode: "WINNER_PERCENTAGE",
     winnerPercentage: 90,
     drawPolicy: "REFUND_ENTRY",
@@ -167,7 +214,9 @@ export const DEFAULT_GAME_CONFIGS: Record<GameId, GameConfig> = {
     defaultEntryFee: 100,
     reconnectWindowSeconds: 30,
     turnTimerSeconds: 25,
-    matchDurationSeconds: 300,
+    matchDurationSeconds: 600,
+    timeoutResolution: "CURRENT_POSITION",
+    allowDraw: true,
     prizeMode: "WINNER_PERCENTAGE",
     winnerPercentage: 90,
     drawPolicy: "REFUND_ENTRY",
@@ -189,7 +238,9 @@ export const DEFAULT_GAME_CONFIGS: Record<GameId, GameConfig> = {
     defaultEntryFee: 100,
     reconnectWindowSeconds: 30,
     turnTimerSeconds: 0,
-    matchDurationSeconds: 180,
+    matchDurationSeconds: 600,
+    timeoutResolution: "CURRENT_MATCH_SCORE",
+    allowDraw: true,
     prizeMode: "WINNER_PERCENTAGE",
     winnerPercentage: 90,
     drawPolicy: "REFUND_ENTRY",
@@ -212,7 +263,9 @@ export const DEFAULT_GAME_CONFIGS: Record<GameId, GameConfig> = {
     defaultEntryFee: 100,
     reconnectWindowSeconds: 30,
     turnTimerSeconds: 20,
-    matchDurationSeconds: 300,
+    matchDurationSeconds: 600,
+    timeoutResolution: "CURRENT_RUNS",
+    allowDraw: true,
     prizeMode: "WINNER_PERCENTAGE",
     winnerPercentage: 90,
     drawPolicy: "REFUND_ENTRY",
@@ -235,7 +288,9 @@ export const DEFAULT_GAME_CONFIGS: Record<GameId, GameConfig> = {
     defaultEntryFee: 100,
     reconnectWindowSeconds: 30,
     turnTimerSeconds: 0,
-    matchDurationSeconds: 60,
+    matchDurationSeconds: 600,
+    timeoutResolution: "CURRENT_SCORE",
+    allowDraw: true,
     prizeMode: "WINNER_PERCENTAGE",
     winnerPercentage: 90,
     drawPolicy: "REFUND_ENTRY",
@@ -258,7 +313,9 @@ export const DEFAULT_GAME_CONFIGS: Record<GameId, GameConfig> = {
     defaultEntryFee: 100,
     reconnectWindowSeconds: 30,
     turnTimerSeconds: 0,
-    matchDurationSeconds: 180,
+    matchDurationSeconds: 600,
+    timeoutResolution: "CURRENT_SCORE",
+    allowDraw: true,
     prizeMode: "WINNER_PERCENTAGE",
     winnerPercentage: 90,
     drawPolicy: "REFUND_ENTRY",
@@ -280,7 +337,9 @@ export const DEFAULT_GAME_CONFIGS: Record<GameId, GameConfig> = {
     defaultEntryFee: 100,
     reconnectWindowSeconds: 30,
     turnTimerSeconds: 15,
-    matchDurationSeconds: 180,
+    matchDurationSeconds: 600,
+    timeoutResolution: "CURRENT_SCORE_PROGRESS",
+    allowDraw: true,
     prizeMode: "WINNER_PERCENTAGE",
     winnerPercentage: 90,
     drawPolicy: "REFUND_ENTRY",
@@ -301,8 +360,10 @@ export const DEFAULT_GAME_CONFIGS: Record<GameId, GameConfig> = {
     entryFees: [50, 100, 500, 1000],
     defaultEntryFee: 100,
     reconnectWindowSeconds: 30,
-    turnTimerSeconds: 20,
-    matchDurationSeconds: 900,
+    turnTimerSeconds: 30,
+    matchDurationSeconds: 600,
+    timeoutResolution: "CURRENT_FRAME_SCORE",
+    allowDraw: true,
     prizeMode: "WINNER_PERCENTAGE",
     winnerPercentage: 90,
     drawPolicy: "REFUND_ENTRY",

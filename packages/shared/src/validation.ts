@@ -71,7 +71,8 @@ export const chatEmojiSchema = z.object({
 
 export const matchmakingJoinSchema = z.object({
   gameId: z.enum(GAME_IDS),
-  stake: z.number().int().min(1).max(1_000_000).default(100),
+  stake: z.number().int().min(0).max(1_000_000).default(100),
+  gameMode: z.enum(["casual", "ranked"]).optional().default("casual"),
   settings: matchSettingsSchema.optional(),
 });
 

@@ -39,7 +39,19 @@ import type {
   TournamentParticipationStat,
   TournamentPlayerStats,
   TournamentPlayerStatus,
+  TournamentStatus,
   TournamentSummary,
+  TournamentDisputeSummary,
+  TournamentDisputeDetail,
+  TournamentResultSnapshotData,
+  TournamentSettlementRecord,
+  TournamentSettlementSummary,
+  TournamentPrizeConfigSnapshot,
+  TournamentLeaderboardResponse,
+  PlayerTournamentCareerStats,
+  GameTournamentRankingEntry,
+  CreateDisputePayload,
+  ResolveDisputePayload,
   TransactionPage,
   UserAchievement,
   WalletBalanceType,
@@ -86,6 +98,279 @@ interface ErrorStats {
 interface AutomationJob {
   name: string;
   label: string;
+}
+
+export interface ControlCenterMatch {
+  slotId: string;
+  roundNumber: number;
+  matchNumber: number;
+  status: string;
+  isBye: boolean;
+  playerA: {
+    id: string;
+    username: string;
+    displayName: string;
+    seed: number | null;
+    score: number;
+  } | null;
+  playerB: {
+    id: string;
+    username: string;
+    displayName: string;
+    seed: number | null;
+    score: number;
+  } | null;
+  winnerId: string | null;
+  matchId: string | null;
+  startedAt: string | null;
+  matchDeadline: string | null;
+  remainingMs: number | null;
+  isExpired: boolean;
+  isStuck: boolean;
+  resultReason: string | null;
+  stateVersion: number;
+}
+
+export interface ControlCenterPlayer {
+  registrationSequence: number;
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  registeredAt: string;
+  seed: number | null;
+  rating: number;
+  eliminated: boolean;
+  eliminatedInRound: number | null;
+  finalRank: number | null;
+  currentRound: number;
+  status: 'ACTIVE' | 'ELIMINATED' | 'CHAMPION' | 'WAITING';
+}
+
+export interface TournamentControlCenterData {
+  tournament: {
+    id: string;
+    gameId: string;
+    title: string;
+    description: string;
+    status: TournamentStatus;
+    format: string;
+    seedMethod: string;
+    entryFee: number;
+    prizePool: number;
+    grossPool: number;
+    minPlayers: number;
+    maxPlayers: number;
+    startTime: string;
+    registrationStartsAt: string | null;
+    registrationEndsAt: string | null;
+    endTime: string | null;
+    settledAt: string | null;
+    stateVersion: number;
+    rules: unknown;
+  };
+  summary: {
+    maxPlayers: number;
+    registeredPlayers: number;
+    availableSlots: number;
+    minPlayers: number;
+    currentRound: number;
+    totalRounds: number;
+    remainingPlayers: number;
+    eliminatedPlayers: number;
+    activeMatches: number;
+    completedMatches: number;
+    waitingMatches: number;
+    expiredMatches: number;
+    stuckMatches: number;
+    byeMatches: number;
+    timeLimitMatches: number;
+    healthStatus: 'HEALTHY' | 'RECOVERY_NEEDED' | 'CRITICAL';
+  };
+  matches: ControlCenterMatch[];
+  players: ControlCenterPlayer[];
+  notifications: {
+    totalSent: number;
+    totalPending: number;
+    totalFailed: number;
+    recent: {
+      eventType: string;
+      playerId: string;
+      referenceId: string | null;
+      sentAt: string;
+    }[];
+  };
+  timeLimitMetrics: {
+    gameId: string;
+    normalCompletionCount: number;
+    timeLimitCount: number;
+    timeLimitPercentage: number;
+  };
+  auditLogs: {
+    id: string;
+    action: string;
+    actorType: string;
+    actorId: string | null;
+    meta: unknown;
+    createdAt: string;
+  }[];
+}
+
+export interface PlayerMyTournamentsItem {
+  tournamentId: string;
+  title: string;
+  gameId: string;
+  status: TournamentStatus;
+  format: string;
+  entryFee: number;
+  prizePool: number;
+  grossPool: number;
+  registeredPlayers: number;
+  maxPlayers: number;
+  minPlayers: number;
+  currentRound: number;
+  totalRounds: number;
+  remainingPlayers: number;
+  startTime: string;
+  mySeed: number | null;
+  myRegistrationSequence: number;
+  myStatus:
+    | 'REGISTERED'
+    | 'WAITING'
+    | 'MATCH_READY'
+    | 'LIVE'
+    | 'ADVANCED'
+    | 'ELIMINATED'
+    | 'WINNER'
+    | 'COMPLETED';
+  eliminated: boolean;
+  eliminatedInRound: number | null;
+  finalRank: number | null;
+  prizeWon: number | null;
+  myCurrentMatch: {
+    matchId: string | null;
+    slotId: string;
+    roundNumber: number;
+    matchNumber: number;
+    status: string;
+    opponent: {
+      userId: string;
+      username: string;
+      displayName: string;
+      avatarUrl: string | null;
+      seed: number | null;
+    } | null;
+    remainingMs: number | null;
+    matchDeadline: string | null;
+    startedAt: string | null;
+    myScore: number;
+    opponentScore: number;
+    resultReason: string | null;
+  } | null;
+  myResultSummary: string;
+}
+
+export interface PlayerTournamentDashboardData {
+  tournament: {
+    id: string;
+    title: string;
+    gameId: string;
+    description: string;
+    status: TournamentStatus;
+    format: string;
+    seedMethod: string;
+    entryFee: number;
+    prizePool: number;
+    grossPool: number;
+    minPlayers: number;
+    maxPlayers: number;
+    registeredPlayers: number;
+    availableSlots: number;
+    currentRound: number;
+    totalRounds: number;
+    remainingPlayers: number;
+    startTime: string;
+    stateVersion: number;
+    rules: any;
+    prizeDistribution: any;
+  };
+  player: {
+    userId: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+    registeredAt: string;
+    seed: number | null;
+    registrationSequence: number;
+    rating: number;
+    status:
+      | 'REGISTERED'
+      | 'WAITING'
+      | 'MATCH_READY'
+      | 'LIVE'
+      | 'ADVANCED'
+      | 'ELIMINATED'
+      | 'WINNER'
+      | 'COMPLETED';
+    eliminated: boolean;
+    eliminatedInRound: number | null;
+    finalRank: number | null;
+    prizeWon: number | null;
+  };
+  myCurrentMatch: {
+    slotId: string;
+    matchId: string | null;
+    roundNumber: number;
+    matchNumber: number;
+    status: 'WAITING' | 'READY' | 'IN_PROGRESS' | 'COMPLETED';
+    opponent: {
+      userId: string;
+      username: string;
+      displayName: string;
+      avatarUrl: string | null;
+      seed: number | null;
+    } | null;
+    myScore: number;
+    opponentScore: number;
+    startedAt: string | null;
+    matchDeadline: string | null;
+    remainingMs: number | null;
+    isExpired: boolean;
+    resultReason: string | null;
+  } | null;
+  myMatchHistory: {
+    roundNumber: number;
+    matchNumber: number;
+    matchId: string | null;
+    opponent: {
+      userId: string;
+      username: string;
+      displayName: string;
+      avatarUrl: string | null;
+      seed: number | null;
+    } | null;
+    result: 'WIN' | 'LOSS' | 'DRAW';
+    myScore: number;
+    opponentScore: number;
+    durationSeconds: number;
+    resultReason: string;
+    replayAvailable: boolean;
+  }[];
+  stats: {
+    matchesPlayed: number;
+    wins: number;
+    losses: number;
+    currentRound: number;
+    highestRound: number;
+    timeLimitMatches: number;
+    winRate: number;
+  };
+  roundProgress: {
+    roundNumber: number;
+    name: string;
+    status: 'COMPLETED' | 'CURRENT' | 'UPCOMING';
+  }[];
+  myPathSlotIds: string[];
 }
 
 interface PopularGameEntry {
@@ -287,6 +572,10 @@ export const tournamentsApi = {
   cancel: (id: string) => apiClient.post<{ ok: boolean }>(`/tournaments/${id}/cancel`),
   bracket: (id: string) => apiClient.get<TournamentBracket>(`/tournaments/${id}/bracket`),
   myStatus: (id: string) => apiClient.get<TournamentPlayerStatus>(`/tournaments/${id}/my-status`),
+  settlement: (id: string) =>
+    apiClient.get<TournamentSettlementRecord | { status: string; prizeAmount: number; rank: null }>(`/tournaments/${id}/settlement`),
+  prizes: (id: string) =>
+    apiClient.get<TournamentPrizeConfigSnapshot>(`/tournaments/${id}/prizes`),
   state: (id: string) =>
     apiClient.get<{ detail: TournamentDetail; bracket: TournamentBracket; myStatus: TournamentPlayerStatus }>(`/tournaments/${id}/state`),
   currentMatch: (id: string) => apiClient.get<TournamentCurrentMatchResponse>(`/tournaments/${id}/current-match`),
@@ -299,6 +588,54 @@ export const tournamentsApi = {
     qs.set('pageSize', String(params.pageSize ?? 20));
     if (params.period) qs.set('period', params.period);
     return apiClient.get<Page<TournamentLeaderboardEntry>>(`/tournaments/leaderboard?${qs.toString()}`);
+  },
+  myTournaments: () => apiClient.get<PlayerMyTournamentsItem[]>('/tournaments/my-tournaments'),
+  playerDashboard: (tournamentId: string) => apiClient.get<PlayerTournamentDashboardData>(`/tournaments/${tournamentId}/dashboard`),
+  submitDispute: (payload: CreateDisputePayload) => apiClient.post<TournamentDisputeSummary>('/tournaments/disputes', payload),
+  listDisputes: () => apiClient.get<TournamentDisputeSummary[]>('/tournaments/disputes'),
+  getDispute: (id: string) => apiClient.get<TournamentDisputeDetail>(`/tournaments/disputes/${id}`),
+  getMatchSnapshot: (matchId: string) => apiClient.get<TournamentResultSnapshotData>(`/tournaments/matches/${matchId}/snapshot`),
+  leaderboardStandings: (tournamentId: string, params: { page?: number; pageSize?: number; search?: string; status?: string; round?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.page) qs.set('page', String(params.page));
+    if (params.pageSize) qs.set('pageSize', String(params.pageSize));
+    if (params.search) qs.set('search', params.search);
+    if (params.status) qs.set('status', params.status);
+    if (params.round) qs.set('round', String(params.round));
+    return apiClient.get<TournamentLeaderboardResponse>(`/tournaments/${tournamentId}/leaderboard?${qs.toString()}`);
+  },
+  playerCareerStats: (userId: string) => apiClient.get<PlayerTournamentCareerStats>(`/tournaments/players/${userId}/career`),
+  gameTournamentRankings: (gameId: string, params: { page?: number; pageSize?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.page) qs.set('page', String(params.page));
+    if (params.pageSize) qs.set('pageSize', String(params.pageSize));
+    return apiClient.get<{ page: number; pageSize: number; total: number; items: GameTournamentRankingEntry[] }>(`/tournaments/games/${gameId}/rankings?${qs.toString()}`);
+  },
+};
+
+export const adminTournamentsApi = {
+  listDisputes: (params: { page?: number; pageSize?: number; status?: string; priority?: string; tournamentId?: string; gameId?: string } = {}) => {
+    const qs = new URLSearchParams();
+    qs.set('page', String(params.page ?? 1));
+    qs.set('pageSize', String(params.pageSize ?? 20));
+    if (params.status) qs.set('status', params.status);
+    if (params.priority) qs.set('priority', params.priority);
+    if (params.tournamentId) qs.set('tournamentId', params.tournamentId);
+    if (params.gameId) qs.set('gameId', params.gameId);
+    return apiClient.get<Page<TournamentDisputeSummary>>(`/admin/tournaments/disputes?${qs.toString()}`);
+  },
+  getDispute: (id: string) => apiClient.get<TournamentDisputeDetail>(`/admin/tournaments/disputes/${id}`),
+  resolveDispute: (id: string, payload: ResolveDisputePayload) =>
+    apiClient.post<TournamentDisputeSummary>(`/admin/tournaments/disputes/${id}/resolve`, payload),
+  getMatchSnapshot: (matchId: string) => apiClient.get<TournamentResultSnapshotData>(`/admin/tournaments/matches/${matchId}/snapshot`),
+  leaderboard: (tournamentId: string, params: { page?: number; pageSize?: number; search?: string; status?: string; round?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.page) qs.set('page', String(params.page));
+    if (params.pageSize) qs.set('pageSize', String(params.pageSize));
+    if (params.search) qs.set('search', params.search);
+    if (params.status) qs.set('status', params.status);
+    if (params.round) qs.set('round', String(params.round));
+    return apiClient.get<TournamentLeaderboardResponse>(`/admin/tournaments/${tournamentId}/leaderboard?${qs.toString()}`);
   },
 };
 
@@ -520,6 +857,13 @@ export const adminApi = {
     apiClient.get<TournamentHealthReport>(`/admin/tournaments/${id}/health`),
   tournamentReconcile: (id: string) =>
     apiClient.post<TournamentReconcileResult>(`/admin/tournaments/${id}/reconcile`),
+  tournamentControlCenter: (id: string) =>
+    apiClient.get<TournamentControlCenterData>(`/admin/tournaments/${id}/control-center`),
+  overrideTournamentResult: (id: string, slotId: string, winnerId: string, reason: string) =>
+    apiClient.post(`/admin/tournaments/${id}/override-result`, { slotId, winnerId, reason }),
+  recoverTournaments: () => apiClient.post<{ ok: boolean; timestamp: string }>('/admin/tournaments/recover'),
+  tournamentRecoveryStatus: (tournamentId?: string) =>
+    apiClient.get(`/admin/tournaments/recovery-status${tournamentId ? `?tournamentId=${tournamentId}` : ''}`),
   createTournament: (input: Record<string, unknown>) => apiClient.post('/admin/tournaments', input),
   updateTournament: (id: string, input: Record<string, unknown>) => apiClient.patch(`/admin/tournaments/${id}`, input),
   deleteTournament: (id: string) => apiClient.delete(`/admin/tournaments/${id}`),
@@ -531,6 +875,12 @@ export const adminApi = {
   cancelTournament: (id: string, reason?: string) =>
     apiClient.post(`/admin/tournaments/${id}/cancel`, { reason }),
   settleTournament: (id: string) => apiClient.post(`/admin/tournaments/${id}/settle`),
+  tournamentSettlements: (id: string, status?: string) => {
+    const qs = status && status !== 'ALL' ? `?status=${status}` : '';
+    return apiClient.get<TournamentSettlementSummary>(`/admin/tournaments/${id}/settlements${qs}`);
+  },
+  retryTournamentSettlements: (id: string, reason: string, prizeId?: string) =>
+    apiClient.post<{ ok: boolean; retriedCount?: number }>(`/admin/tournaments/${id}/settlements/retry`, { reason, prizeId }),
 
   coupons: (page = 1, pageSize = 50, status?: string) => {
     const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });

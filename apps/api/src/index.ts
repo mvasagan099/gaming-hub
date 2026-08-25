@@ -11,6 +11,12 @@ async function main() {
   try {
     await prisma.$connect();
     app.log.info("Database connected");
+
+    // Perform crash-safe tournament state recovery & resume immediately on startup
+    void import("./services/tournamentRecoveryService")
+      .then(({ TournamentRecoveryService }) => TournamentRecoveryService.recoverAllTournamentStates())
+      .then((summary) => app.log.info({ summary }, "Tournament crash recovery completed on startup"))
+      .catch((err) => app.log.error({ err }, "Tournament crash recovery failed on startup"));
   } catch (error) {
     app.log.error({ error }, "Failed to connect to database");
     process.exit(1);

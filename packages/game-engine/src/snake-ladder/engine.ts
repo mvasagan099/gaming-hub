@@ -247,8 +247,29 @@ export class SnakeLadderEngine extends MultiplayerGameEngine<SnakeLadderState, R
     if (via === "rollback") return `${name} rolled ${dice} but couldn't move past cell ${from}.`;
     if (via === "ladder") return `🪜 ${name} rolled ${dice} and climbed a ladder to cell ${to}!`;
     if (via === "snake") return `🐍 ${name} rolled ${dice} and got bitten down to cell ${to}.`;
-    if (previousStreak >= 1 && dice === 6) return `${name} rolled a ${dice} (six #${streak})!`;
-    return `${name} rolled ${dice} and moved to cell ${to}.`;
+    if (previousStreak === 2 && streak === 0) return `${name} rolled three consecutive sixes — streak reset!`;
+    if (streak > 0) return `🎲 ${name} rolled a ${dice}! (Roll again!)`;
+    return `🎲 ${name} rolled a ${dice} and moved to cell ${to}.`;
+  }
+
+  /**
+   * Deterministic timeout winner resolution for Snake & Ladder:
+   * 1. Player with highest current board cell position (closest to 100).
+   * 2. If tied, draw across top leaders.
+   */
+  protected override resolveTimeoutWinner(state: SnakeLadderState): number[] {
+    if (!state.players || state.players.length === 0) return [state.currentSeat];
+    let maxPos = -1;
+    let leaders: number[] = [];
+    for (const p of state.players) {
+      if (p.position > maxPos) {
+        maxPos = p.position;
+        leaders = [p.seat];
+      } else if (p.position === maxPos) {
+        leaders.push(p.seat);
+      }
+    }
+    return leaders.length > 0 ? leaders : [0];
   }
 }
 

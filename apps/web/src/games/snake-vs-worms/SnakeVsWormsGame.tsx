@@ -646,49 +646,49 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
   return (
     <GameWrapper title="Snake vs Worms 3D" gameId="snake-vs-worms" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="flex flex-col lg:flex-row items-center justify-center gap-6 w-full max-w-6xl relative mx-auto h-full p-2 lg:p-4 select-none">
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-6 w-full max-w-6xl relative mx-auto h-full p-2 lg:p-4 select-none overflow-y-auto">
         
         {/* CENTER 3D ARENA CONTAINER */}
-        <div className="relative flex flex-col items-center justify-center w-full max-w-[920px] shrink-0">
+        <div className="relative flex flex-col items-center justify-center w-full max-w-[min(94vw,72dvh,900px)] shrink-0">
           
           {/* TOP MODERN ARCADE HUD */}
-          <div className="w-full flex items-center justify-between gap-3 mb-3 px-1">
+          <div className="w-full grid grid-cols-2 sm:flex items-center justify-between gap-2 sm:gap-3 mb-2.5 px-1">
             
             {/* Score & Length Pill */}
-            <div className="flex-1 p-2.5 bg-slate-900/90 border border-emerald-500/40 rounded-2xl flex items-center justify-between shadow-lg">
-              <div className="flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-emerald-400" />
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Mass</span>
+            <div className="p-2 sm:p-2.5 bg-slate-900/90 border border-emerald-500/40 rounded-2xl flex items-center justify-between shadow-lg">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
+                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase">Mass</span>
               </div>
-              <span className="text-base font-black font-mono text-white">{score.toLocaleString()}</span>
+              <span className="text-xs sm:text-base font-black font-mono text-white">{score.toLocaleString()}</span>
             </div>
 
             {/* Length Pill */}
-            <div className="py-2.5 px-4 bg-slate-900/90 border border-indigo-500/40 rounded-2xl flex items-center gap-2 shadow-lg">
-              <Zap className="w-4 h-4 text-indigo-400" />
-              <div className="text-center">
-                <span className="text-[9px] font-bold text-slate-400 uppercase block">Length</span>
-                <span className="text-xs font-black text-indigo-400">{length} Segs</span>
+            <div className="p-2 sm:p-2.5 px-3 bg-slate-900/90 border border-indigo-500/40 rounded-2xl flex items-center justify-between sm:justify-center gap-2 shadow-lg">
+              <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400 shrink-0" />
+              <div className="text-right sm:text-center">
+                <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase block">Length</span>
+                <span className="text-[10px] sm:text-xs font-black text-indigo-400">{length} Segs</span>
               </div>
             </div>
 
             {/* Kills Pill */}
-            <div className="py-2.5 px-4 bg-slate-900/90 border border-rose-500/40 rounded-2xl flex items-center gap-2 shadow-lg">
-              <Swords className="w-4 h-4 text-rose-400" />
-              <div className="text-center">
-                <span className="text-[9px] font-bold text-slate-400 uppercase block">Kills</span>
-                <span className="text-xs font-black text-rose-400">{kills} Slain</span>
+            <div className="p-2 sm:p-2.5 px-3 bg-slate-900/90 border border-rose-500/40 rounded-2xl flex items-center justify-between sm:justify-center gap-2 shadow-lg">
+              <Swords className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400 shrink-0" />
+              <div className="text-right sm:text-center">
+                <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase block">Kills</span>
+                <span className="text-[10px] sm:text-xs font-black text-rose-400">{kills} Slain</span>
               </div>
             </div>
 
             {/* Boost Energy Bar */}
-            <div className="flex-1 p-2.5 bg-slate-900/90 border border-amber-500/40 rounded-2xl flex flex-col justify-center shadow-lg">
+            <div className="p-2 sm:p-2.5 bg-slate-900/90 border border-amber-500/40 rounded-2xl flex flex-col justify-center shadow-lg">
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-1.5">
-                  <Flame className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-[9px] font-bold text-slate-400 uppercase">Boost (SPACE)</span>
+                  <Flame className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 shrink-0" />
+                  <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase">Boost</span>
                 </div>
-                <span className="text-[10px] font-black font-mono text-amber-400">{Math.round(boostEnergy)}%</span>
+                <span className="text-[9px] sm:text-[10px] font-black font-mono text-amber-400">{Math.round(boostEnergy)}%</span>
               </div>
               <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                 <div
@@ -701,7 +701,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
           </div>
 
           {/* MAIN 3D CANVAS ARENA */}
-          <div className="relative w-full aspect-[900/600] max-h-[78vh] bg-[#070b14] rounded-3xl overflow-hidden border-2 border-indigo-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center">
+          <div className="relative w-full aspect-[900/600] bg-[#070b14] rounded-3xl overflow-hidden border-2 border-indigo-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center">
             <canvas
               ref={canvasRef}
               width={CANVAS_WIDTH}

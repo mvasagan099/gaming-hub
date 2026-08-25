@@ -437,26 +437,27 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
     return { ok: true, state, events: [], finished: false, winnerSeats: [] };
   }
 
-  protected onMatchTimerExpired(state: InternalState): EngineActionResult<InternalState> {
+  /**
+   * Deterministic timeout winner resolution for Snake vs Worms:
+   * 1. Player with highest mass / score.
+   * 2. If tied, player with longest body length.
+   * 3. If tied, draw across leaders.
+   */
+  protected override resolveTimeoutWinner(state: InternalState): number[] {
+    if (!state.players || state.players.length === 0) return [state.currentSeat];
     const p0 = state.players[0];
     const p1 = state.players[1];
+    if (!p1) return p0 ? [p0.seat] : [0];
 
-    let winnerSeats: number[] = [];
-    if (p0.score > p1.score) {
-      winnerSeats = [0];
-    } else if (p1.score > p0.score) {
-      winnerSeats = [1];
-    } else {
-      // Secondary tiebreaker: body length
-      if (p0.body.length > p1.body.length) {
-        winnerSeats = [0];
-      } else if (p1.body.length > p0.body.length) {
-        winnerSeats = [1];
-      } else {
-        winnerSeats = []; // Draw
-      }
-    }
+    if (p0.score > p1.score) return [p0.seat];
+    if (p1.score > p0.score) return [p1.seat];
+    if (p0.body.length > p1.body.length) return [p0.seat];
+    if (p1.body.length > p0.body.length) return [p1.seat];
+    return [p0.seat, p1.seat];
+  }
 
+  protected override onMatchTimerExpired(state: InternalState): EngineActionResult<InternalState> {
+    const winnerSeats = this.resolveTimeoutWinner(state);
     const next = this.cloneState(state);
     next.finished = true;
     next.gameOver = true;
@@ -464,7 +465,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
     next.endReason = "TIME_EXPIRED";
     next.winnerSeats = winnerSeats;
 
-    return { ok: true, state: next, events: [{ type: "match-complete", reason: "TIME_EXPIRED", winnerSeats }], finished: true, winnerSeats };
+    return { ok: true, state: next, events: [{ type: "match-timeout", winnerSeats }], finished: true, winnerSeats };
   }
 
   getStateSnapshot(): InternalState {

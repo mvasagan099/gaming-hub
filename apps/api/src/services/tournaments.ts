@@ -127,6 +127,25 @@ export async function getTournamentDetail(id: string, userId: string | null) {
 }
 
 export async function registerForTournament(userId: string, tournamentId: string, expectedFee?: number) {
+  // 0. Pre-checks: user restrictions
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      deletedAt: true,
+      penalties: {
+        where: {
+          status: "ACTIVE",
+          type: { in: ["CHEATING", "ABUSE", "UNSPORTSMANLIKE_CONDUCT"] },
+        },
+      },
+    },
+  });
+  if (!user) throw new AppError("NOT_FOUND", "User not found", 404);
+  if (user.deletedAt || user.penalties.length > 0) {
+    throw new AppError("ACCOUNT_RESTRICTED", "Your account is restricted from tournament registration", 403);
+  }
+
   const existing = await prisma.tournamentPlayer.findUnique({
     where: { tournamentId_userId: { tournamentId, userId } },
   });
@@ -148,14 +167,16 @@ export async function registerForTournament(userId: string, tournamentId: string
         where: { id: tournamentId },
         data: { stateVersion: { increment: 1 } },
         select: {
-          maxPlayers: true,
-          entryFee: true,
-          title: true,
-          status: true,
           id: true,
+          title: true,
+          gameId: true,
+          status: true,
+          entryFee: true,
+          maxPlayers: true,
           startTime: true,
           registrationStartsAt: true,
           registrationEndsAt: true,
+          autoStartWhenFull: true,
         },
       });
 
@@ -180,10 +201,10 @@ export async function registerForTournament(userId: string, tournamentId: string
         throw new AppError("TOURNAMENT_REGISTRATION_CLOSED", "Registration has closed", 400);
       }
 
-      // 2. Validate live tournament capacity inside transaction
+      // 2. Validate live tournament capacity inside transaction (race condition safe)
       const currentCount = await tx.tournamentPlayer.count({ where: { tournamentId } });
       if (currentCount >= lockedTournament.maxPlayers) {
-        throw new AppError("TOURNAMENT_FULL", "Tournament is full", 400);
+        throw new AppError("TOURNAMENT_FULL", "Tournament is full", 409);
       }
 
       // 3. Validate user registration inside transaction
@@ -215,9 +236,36 @@ export async function registerForTournament(userId: string, tournamentId: string
       }
 
       // 6. Create registration record
-      await tx.tournamentPlayer.create({ data: { tournamentId, userId } });
+      const createdPlayer = await tx.tournamentPlayer.create({
+        data: {
+          tournamentId,
+          userId,
+          registeredAt: new Date(),
+        },
+      });
 
-      return { ok: true, tournament: lockedTournament };
+      const newCount = currentCount + 1;
+      // If capacity is reached, automatically close registration
+      if (newCount >= lockedTournament.maxPlayers) {
+        await tx.tournament.update({
+          where: { id: tournamentId },
+          data: { status: "REGISTRATION_CLOSED" },
+        });
+      }
+
+      return {
+        ok: true,
+        registrationId: createdPlayer.id,
+        tournamentId: lockedTournament.id,
+        gameId: lockedTournament.gameId,
+        status: "WAITING_FOR_TOURNAMENT_START",
+        registeredPlayers: newCount,
+        maximumPlayers: lockedTournament.maxPlayers,
+        registrationEndTime: lockedTournament.registrationEndsAt?.toISOString() ?? null,
+        tournamentStartTime: lockedTournament.startTime.toISOString(),
+        entryFee: lockedTournament.entryFee,
+        tournament: lockedTournament,
+      };
     },
   }).then(async (res) => {
     if (res && res.tournament) {
@@ -243,8 +291,15 @@ export async function registerForTournament(userId: string, tournamentId: string
         startTime: new Date(res.tournament.startTime),
       });
 
-      // Emit registration-updated to all tournament subscribers
-      await notifyUserSocket(userId, "tournament:player-registered", { tournamentId, seed: null });
+      // Emit registration-updated and real-time count to all tournament subscribers
+      await Promise.all([
+        notifyUserSocket(userId, "tournament:player-registered", { tournamentId, seed: null }),
+        notifyUserSocket(userId, "tournament:player-count-updated", {
+          tournamentId,
+          registeredPlayers: updatedCount,
+          maxPlayers: res.tournament.maxPlayers,
+        }),
+      ]);
 
       // Evaluate referral qualification (TOURNAMENT_JOIN)
       try {
@@ -254,7 +309,7 @@ export async function registerForTournament(userId: string, tournamentId: string
       }
     }
 
-    return { ok: true };
+    return res;
   });
 }
 
@@ -280,6 +335,7 @@ export async function cancelRegistration(userId: string, tournamentId: string) {
     referenceId: tournamentId,
     handler: async (tx) => {
       await tx.tournamentPlayer.delete({ where: { id: entry.id } });
+
       if (tournament.entryFee > 0) {
         const tournamentSettings = await getCategorySettings("tournament");
         if (tournamentSettings.refundOnCancel) {
@@ -292,13 +348,191 @@ export async function cancelRegistration(userId: string, tournamentId: string) {
           });
         }
       }
-      return { ok: true };
+
+      // If tournament was full and closed due to capacity, reopen registration
+      const remainingCount = await tx.tournamentPlayer.count({ where: { tournamentId } });
+      const now = new Date();
+      const isWithinWindow = (!tournament.registrationStartsAt || now >= tournament.registrationStartsAt) &&
+                            (!tournament.registrationEndsAt || now <= tournament.registrationEndsAt);
+
+      if (tournament.status === "REGISTRATION_CLOSED" && remainingCount < tournament.maxPlayers && isWithinWindow) {
+        await tx.tournament.update({
+          where: { id: tournamentId },
+          data: { status: "REGISTRATION_OPEN" },
+        });
+      }
+
+      return { ok: true, remainingCount };
     },
   }).then(async (res) => {
-    // Emit registration-updated
-    await notifyUserSocket(userId, "tournament:player-unregistered", { tournamentId });
+    const updatedCount = await prisma.tournamentPlayer.count({ where: { tournamentId } });
+    await Promise.all([
+      notifyUserSocket(userId, "tournament:player-unregistered", { tournamentId }),
+      notifyUserSocket(userId, "tournament:player-count-updated", {
+        tournamentId,
+        registeredPlayers: updatedCount,
+        maxPlayers: tournament.maxPlayers,
+      }),
+    ]);
     return res;
   });
+}
+
+// ---------------------------------------------------------------------------
+// Registration status & eligibility query
+// ---------------------------------------------------------------------------
+
+export async function getRegistrationInfo(tournamentId: string, userId: string | null) {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    include: {
+      _count: { select: { players: true } },
+    },
+  });
+  if (!tournament) throw new AppError("NOT_FOUND", "Tournament not found", 404);
+
+  const registeredCount = tournament._count.players;
+  const availableSlots = Math.max(0, tournament.maxPlayers - registeredCount);
+  const now = new Date();
+
+  let registrationState: "REGISTRATION_NOT_STARTED" | "REGISTRATION_OPEN" | "REGISTRATION_CLOSED" | "TOURNAMENT_FULL" | "TOURNAMENT_STARTED" | "COMPLETED" | "CANCELLED" = "REGISTRATION_OPEN";
+
+  if (tournament.status === "CANCELLED") {
+    registrationState = "CANCELLED";
+  } else if (tournament.status === "COMPLETED" || tournament.status === "SETTLED") {
+    registrationState = "COMPLETED";
+  } else if (tournament.status === "IN_PROGRESS" || tournament.status === "STARTING") {
+    registrationState = "TOURNAMENT_STARTED";
+  } else if (tournament.registrationStartsAt && now < tournament.registrationStartsAt) {
+    registrationState = "REGISTRATION_NOT_STARTED";
+  } else if (tournament.registrationEndsAt && now > tournament.registrationEndsAt) {
+    registrationState = "REGISTRATION_CLOSED";
+  } else if (registeredCount >= tournament.maxPlayers) {
+    registrationState = "TOURNAMENT_FULL";
+  } else if (tournament.status === "REGISTRATION_CLOSED") {
+    registrationState = "REGISTRATION_CLOSED";
+  }
+
+  let isRegistered = false;
+  let userBalance = 0;
+  let canRegister = false;
+  let ineligibilityReason: string | undefined = undefined;
+
+  if (userId) {
+    const [entry, userWallet, userRecord] = await Promise.all([
+      prisma.tournamentPlayer.findUnique({
+        where: { tournamentId_userId: { tournamentId, userId } },
+      }),
+      prisma.wallet.findUnique({
+        where: { userId },
+        select: { balance: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          deletedAt: true,
+          penalties: {
+            where: {
+              status: "ACTIVE",
+              type: { in: ["CHEATING", "ABUSE", "UNSPORTSMANLIKE_CONDUCT"] },
+            },
+          },
+        },
+      }),
+    ]);
+
+    isRegistered = Boolean(entry);
+    userBalance = userWallet?.balance ?? 0;
+
+    if (isRegistered) {
+      canRegister = false;
+      ineligibilityReason = "Already registered";
+    } else if (userRecord?.deletedAt || (userRecord?.penalties && userRecord.penalties.length > 0)) {
+      canRegister = false;
+      ineligibilityReason = "Account restricted";
+    } else if (registrationState !== "REGISTRATION_OPEN") {
+      canRegister = false;
+      ineligibilityReason = registrationState;
+    } else if (tournament.entryFee > 0 && userBalance < tournament.entryFee) {
+      canRegister = false;
+      ineligibilityReason = "Insufficient balance";
+    } else {
+      canRegister = true;
+    }
+  }
+
+  return {
+    tournamentId: tournament.id,
+    title: tournament.title,
+    gameId: tournament.gameId,
+    entryFee: tournament.entryFee,
+    maxPlayers: tournament.maxPlayers,
+    registeredPlayers: registeredCount,
+    availableSlots,
+    registrationStartsAt: tournament.registrationStartsAt?.toISOString() ?? null,
+    registrationEndsAt: tournament.registrationEndsAt?.toISOString() ?? null,
+    startTime: tournament.startTime.toISOString(),
+    status: tournament.status,
+    registrationState,
+    isRegistered,
+    userBalance,
+    balanceAfterRegistration: Math.max(0, userBalance - tournament.entryFee),
+    canRegister,
+    ineligibilityReason,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Admin registration summary
+// ---------------------------------------------------------------------------
+
+export async function getAdminTournamentRegistrationSummary(tournamentId: string) {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    include: {
+      players: {
+        orderBy: { registeredAt: "asc" },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!tournament) throw new AppError("NOT_FOUND", "Tournament not found", 404);
+
+  const registeredCount = tournament.players.length;
+  const availableSlots = Math.max(0, tournament.maxPlayers - registeredCount);
+
+  return {
+    tournamentId: tournament.id,
+    title: tournament.title,
+    gameId: tournament.gameId,
+    maxPlayers: tournament.maxPlayers,
+    registeredPlayers: registeredCount,
+    availableSlots,
+    registrationStatus: tournament.status,
+    registrationStartsAt: tournament.registrationStartsAt?.toISOString() ?? null,
+    registrationEndsAt: tournament.registrationEndsAt?.toISOString() ?? null,
+    startTime: tournament.startTime.toISOString(),
+    players: tournament.players.map((p, idx) => ({
+      sequence: idx + 1,
+      userId: p.userId,
+      username: p.user.username,
+      displayName: p.user.displayName,
+      avatarUrl: p.user.avatarUrl,
+      registeredAt: p.registeredAt.toISOString(),
+      seed: p.seed,
+      eliminated: p.eliminated,
+      finalRank: p.finalRank,
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------

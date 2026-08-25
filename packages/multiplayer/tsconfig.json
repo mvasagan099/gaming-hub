@@ -6,8 +6,7 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "noEmit": false,
-    "ignoreDeprecations": "6.0"
+    "noEmit": false
   },
   "include": [
     "src/**/*"

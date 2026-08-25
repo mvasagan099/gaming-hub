@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { clampPagination } from "@gaming-hub/shared";
+import { clampPagination, AppError } from "@gaming-hub/shared";
 import { authenticate } from "../plugins/authenticate";
 import { parseSchema, routeParams, queryParams, queryString } from "../lib/http";
 import { requirePermission } from "../lib/permissions";
@@ -35,6 +35,8 @@ import {
   settleTournament,
   transitionTournamentStatus,
   getTournamentBracket,
+  getAdminTournamentBracketDetails,
+  assignManualSeeds,
 } from "../services/tournamentEngine";
 import {
   assignTicket,
@@ -397,7 +399,18 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
   app.get("/api/admin/tournaments/:id/bracket", { preHandler: authenticate }, async (request) => {
     await requirePermission(request, "admin:tournaments:view");
     const { id } = routeParams(request);
-    return getTournamentBracket(id);
+    return getAdminTournamentBracketDetails(id);
+  });
+
+  app.post("/api/admin/tournaments/:id/seeds", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage");
+    const { id } = routeParams(request);
+    const body = request.body as { assignments: { userId: string; seed: number }[] };
+    if (!body?.assignments || !Array.isArray(body.assignments)) {
+      throw new AppError("VALIDATION_ERROR", "Invalid assignments array", 400);
+    }
+    await assignManualSeeds(id, body.assignments, admin.id);
+    return { ok: true };
   });
 
   app.post("/api/admin/tournaments/:id/open-registration", { preHandler: authenticate }, async (request) => {
@@ -448,6 +461,50 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     const { id } = routeParams(request);
     await settleTournament(id);
     return { ok: true };
+  });
+
+  /** Get comprehensive Tournament Admin Control Center data */
+  app.get("/api/admin/tournaments/:id/control-center", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view");
+    const { id } = routeParams(request);
+    const { getTournamentControlCenterData } = await import("../services/tournamentAdminControlCenter");
+    return getTournamentControlCenterData(id);
+  });
+
+  /** Emergency administrative match result override (audited & RBAC protected) */
+  app.post("/api/admin/tournaments/:id/override-result", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage");
+    const { id } = routeParams(request);
+    const body = request.body as { slotId: string; winnerId: string; reason: string };
+    if (!body?.slotId || !body?.winnerId || !body?.reason) {
+      throw new AppError("VALIDATION_ERROR", "slotId, winnerId, and reason are required", 400);
+    }
+    const { overrideTournamentMatchResult } = await import("../services/tournamentAdminControlCenter");
+    await overrideTournamentMatchResult({
+      tournamentId: id,
+      slotId: body.slotId,
+      winnerId: body.winnerId,
+      reason: body.reason,
+      adminId: admin.id,
+    });
+    return { ok: true };
+  });
+
+  /** Trigger crash-safe tournament state recovery & resume */
+  app.post("/api/admin/tournaments/recover", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:manage");
+    const { TournamentRecoveryService } = await import("../services/tournamentRecoveryService");
+    const summary = await TournamentRecoveryService.recoverAllTournamentStates();
+    return summary;
+  });
+
+  /** Get crash recovery & tournament health status */
+  app.get("/api/admin/tournaments/recovery-status", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view");
+    const { TournamentRecoveryService } = await import("../services/tournamentRecoveryService");
+    const q = queryParams(request);
+    const tournamentId = q.tournamentId ? String(q.tournamentId) : undefined;
+    return TournamentRecoveryService.getRecoveryStatusReport(tournamentId);
   });
 
 

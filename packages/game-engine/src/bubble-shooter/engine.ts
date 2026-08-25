@@ -534,4 +534,31 @@ export class BubbleShooterEngine extends MultiplayerGameEngine<
     }
     return { color: COLORS[Math.floor(this.random() * COLORS.length)], type: "normal" };
   }
+
+  /**
+   * Deterministic timeout winner resolution for Bubble Shooter:
+   * 1. Player with highest authoritative score.
+   * 2. If tied, player with fewest bubbles remaining on grid.
+   * 3. If tied, draw across leaders.
+   */
+  protected override resolveTimeoutWinner(state: BubbleShooterServerState): number[] {
+    if (!state.players || state.players.length === 0) return [state.currentSeat];
+
+    type PlayerScore = { seat: number; score: number; bubbleCount: number };
+    const ranks: PlayerScore[] = state.players.map((p) => ({
+      seat: p.seat,
+      score: p.score,
+      bubbleCount: p.grid.length,
+    }));
+
+    ranks.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.bubbleCount - b.bubbleCount;
+    });
+
+    const best = ranks[0];
+    if (!best) return [0];
+    const topTied = ranks.filter((r) => r.score === best.score && r.bubbleCount === best.bubbleCount);
+    return topTied.map((r) => r.seat);
+  }
 }

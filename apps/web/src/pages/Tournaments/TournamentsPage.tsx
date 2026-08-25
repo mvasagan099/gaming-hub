@@ -9,6 +9,7 @@ import { Skeleton } from '../../components/Skeleton';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/EmptyState';
+import { MyTournamentsView } from '../../components/tournaments/MyTournamentsView';
 
 const gameById = new Map(GAME_DEFINITIONS.map((g) => [g.id, g]));
 
@@ -60,6 +61,7 @@ function formatRelativeTime(dateStr: string): string {
 
 export function TournamentsPage() {
   const navigate = useNavigate();
+  const [mainTab, setMainTab] = useState<'explore' | 'my-tournaments'>('explore');
   const [items, setItems] = useState<TournamentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,12 +108,43 @@ export function TournamentsPage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-black text-slate-900 dark:text-white">Tournaments</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Compete for prize pools across your favorite games.
-        </p>
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white">Tournaments Hub</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Compete for prize pools across all 10 multiplayer games.
+          </p>
+        </div>
+
+        {/* Tab switcher */}
+        <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-800 dark:bg-slate-900/80">
+          <button
+            onClick={() => setMainTab('explore')}
+            className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              mainTab === 'explore'
+                ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white'
+                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+            }`}
+          >
+            Explore Tournaments
+          </button>
+          <button
+            onClick={() => setMainTab('my-tournaments')}
+            className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              mainTab === 'my-tournaments'
+                ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
+                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+            }`}
+          >
+            🏆 My Tournaments
+          </button>
+        </div>
       </div>
+
+      {mainTab === 'my-tournaments' ? (
+        <MyTournamentsView />
+      ) : (
+        <>
 
       {error && (
         <div className="mb-4 rounded-2xl border border-rose-500/50 bg-rose-500/10 p-4 text-sm text-rose-600">
@@ -218,8 +251,10 @@ export function TournamentsPage() {
           )}
         </>
       )}
-    </div>
-  );
+      </>
+    )}
+  </div>
+);
 }
 
 function TournamentCard({

@@ -521,6 +521,36 @@ async function main(): Promise<void> {
       }),
     );
 
+    // Universal Match Room Handlers
+    socket.on("match:join" as any, (payload: { matchId: string; roomId?: string }, ack: any) =>
+      void guard(ack, async () => {
+        const matchId = String(payload?.matchId || "").trim();
+        const roomId = String(payload?.roomId || matchId).trim();
+        if (!roomId && !matchId) throw new AppError("VALIDATION_ERROR", "matchId or roomId is required");
+        
+        let room = framework.roomManager.getRoom(roomId) || framework.roomManager.getPlayerRoom(user.userId);
+        if (room) {
+          const joinedRoom = await framework.roomManager.joinRoom({ roomId: room.id, playerId: user.userId, socket });
+          ack?.({ ok: true, data: { room: joinedRoom, status: joinedRoom.status } });
+        } else {
+          ack?.({ ok: true, data: { matchId, roomId, status: "waiting" } });
+        }
+      }),
+    );
+
+    socket.on("match:ready" as any, (payload: { roomId: string; ready?: boolean }, ack: any) =>
+      void guard(ack, async () => {
+        const ready = payload.ready !== false;
+        await framework.roomManager.setPlayerReady(payload.roomId, user.userId, ready);
+        const room = framework.roomManager.getRoom(payload.roomId);
+        ack?.({ ok: true, data: room });
+      }),
+    );
+
+    socket.on("match:ping" as any, (payload: { timestamp?: number }, ack: any) => {
+      ack?.({ ok: true, data: { clientTimestamp: payload?.timestamp, serverTimestamp: Date.now() } });
+    });
+
     // Game Actions
     socket.on("game:action", (payload, ack) =>
       void guard(ack, async () => {
@@ -867,19 +897,60 @@ async function main(): Promise<void> {
           await assertFeatureEnabled("games.practice", "Practice mode");
         }
 
+        const mode = parsed.data.gameMode || (parsed.data.gameId.includes("ranked") ? "ranked" : "casual");
         const result = await framework.matchmakingManager.joinQueue({
           playerId: user.userId,
           gameId: parsed.data.gameId,
           stake: parsed.data.stake,
           socket,
           settings: parsed.data.settings,
-          mode: parsed.data.gameId.includes("ranked") ? "ranked" : "casual",
+          mode,
         });
         
         if (!result.success) {
           throw new AppError("MATCHMAKING_ERROR", result.error || "Failed to join matchmaking");
         }
         
+        (socket as any).emit("game:queue-joined", {
+          position: result.position ?? 1,
+          gameId: parsed.data.gameId,
+          entryFee: parsed.data.stake,
+          mode,
+        });
+
+        ack?.({ ok: true, data: { position: result.position ?? 0 } });
+      }),
+    );
+
+    socket.on("game:join-queue" as any, (payload: unknown, ack: any) =>
+      void guard(ack, async () => {
+        const parsed = matchmakingJoinSchema.safeParse(payload);
+        if (!parsed.success) {
+          throw new AppError("VALIDATION_ERROR", "Invalid matchmaking request");
+        }
+
+        await assertFeatureEnabled("games.matchmaking", "Matchmaking");
+        const mode = parsed.data.gameMode || "casual";
+        const result = await framework.matchmakingManager.joinQueue({
+          playerId: user.userId,
+          gameId: parsed.data.gameId,
+          stake: parsed.data.stake,
+          socket,
+          settings: parsed.data.settings,
+          mode,
+        });
+
+        if (!result.success) {
+          throw new AppError("MATCHMAKING_ERROR", result.error || "Failed to join matchmaking");
+        }
+
+        (socket as any).emit("game:queue-joined", {
+          position: result.position ?? 1,
+          gameId: parsed.data.gameId,
+          entryFee: parsed.data.stake,
+          mode,
+        });
+
         ack?.({ ok: true, data: { position: result.position ?? 0 } });
       }),
     );
@@ -887,6 +958,15 @@ async function main(): Promise<void> {
     socket.on("matchmaking:leave", (_payload, ack) =>
       void guard(ack, async () => {
         const left = framework.matchmakingManager.removeFromQueue(user.userId);
+        (socket as any).emit("game:queue-cancelled", { playerId: user.userId });
+        ack?.({ ok: true, data: { left } });
+      }),
+    );
+
+    socket.on("game:cancel-queue" as any, (_payload: unknown, ack: any) =>
+      void guard(ack, async () => {
+        const left = framework.matchmakingManager.removeFromQueue(user.userId);
+        (socket as any).emit("game:queue-cancelled", { playerId: user.userId });
         ack?.({ ok: true, data: { left } });
       }),
     );

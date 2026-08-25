@@ -6,6 +6,8 @@ import BottomNav from "../components/layout/BottomNav";
 import PageHeader from "../components/layout/PageHeader";
 import AnimatedOutlet from "../components/layout/AnimatedOutlet";
 import { SupportAssistant } from "../components/SupportAssistant";
+import { MatchmakingSearchModal } from "../components/Matchmaking/MatchmakingSearchModal";
+import { MatchFoundModal } from "../components/Matchmaking/MatchFoundModal";
 import { useFeatureFlagsStore } from "../store/featureFlagsStore";
 import { useMe } from "../services/api/useMe";
 
@@ -32,6 +34,7 @@ export default function MainLayout() {
   const isLobbyPage = location.pathname.startsWith("/lobby/");
   const hideChrome = isGamePage || isLobbyPage;
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
   const flags = useFeatureFlagsStore((s) => s.flags);
   const loadFlags = useFeatureFlagsStore((s) => s.loadFlags);
@@ -41,9 +44,10 @@ export default function MainLayout() {
     void loadFlags();
   }, [loadFlags]);
 
-  // Auto-collapse sidebar on navigation
+  // Auto-collapse sidebar & mobile drawer on navigation
   useEffect(() => {
     setIsSidebarExpanded(false);
+    setIsMobileDrawerOpen(false);
   }, [location.pathname]);
 
   const isAdmin = me?.user.role === "ADMIN";
@@ -53,22 +57,33 @@ export default function MainLayout() {
   }
 
   return (
-    <div className="h-screen w-full overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white flex flex-col transition-colors duration-300">
-      <Navbar onLogoClick={() => setIsSidebarExpanded(prev => !prev)} />
+    <div className="h-[100dvh] w-full overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white flex flex-col transition-colors duration-300">
+      <Navbar
+        onLogoClick={() => setIsSidebarExpanded((prev) => !prev)}
+        onMenuClick={() => setIsMobileDrawerOpen(true)}
+      />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar isExpanded={isSidebarExpanded} />
+        <Sidebar
+          isExpanded={isSidebarExpanded}
+          isMobileOpen={isMobileDrawerOpen}
+          onCloseMobile={() => setIsMobileDrawerOpen(false)}
+        />
 
-        <main className={`flex-1 p-4 flex flex-col ${isGamePage ? "overflow-hidden" : "overflow-y-scroll"} pb-20 md:pb-4`}>
+        <main className={`flex-1 p-3 sm:p-4 flex flex-col ${isGamePage ? "overflow-hidden" : "overflow-y-auto"} pb-20 md:pb-4`}>
           {!hideChrome && <PageHeader />}
           <AnimatedOutlet />
         </main>
       </div>
 
-      <BottomNav />
+      <BottomNav onMoreClick={() => setIsMobileDrawerOpen(true)} />
       
       {/* Support Assistant - Available on all pages */}
       <SupportAssistant />
+
+      {/* Global Multiplayer Matchmaking Modals */}
+      <MatchmakingSearchModal />
+      <MatchFoundModal />
     </div>
   );
 }

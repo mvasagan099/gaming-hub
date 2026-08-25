@@ -9,6 +9,8 @@ import {
   Shield,
   Activity,
   Eye,
+  Timer,
+  AlertTriangle,
 } from "lucide-react";
 import type { RoomPlayer, PublicProfile } from "@gaming-hub/shared";
 import { useMultiplayerStore } from "../../../store/multiplayerStore";
@@ -304,9 +306,13 @@ export function MultiplayerMatchPanel({
   const isSpectator = useMultiplayerStore((s) => s.isSpectator);
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const disconnectGrace = useMultiplayerStore((s) => s.disconnectGrace);
+  const matchDeadline = useMultiplayerStore((s) => s.matchDeadline);
+  const matchTimerWarning = useMultiplayerStore((s) => s.matchTimerWarning);
+  const matchTimeExpired = useMultiplayerStore((s) => s.matchTimeExpired);
   const { me } = useMe();
 
   const [reconnectRemaining, setReconnectRemaining] = useState<number | null>(null);
+  const [matchRemainingSec, setMatchRemainingSec] = useState<number | null>(null);
 
   useEffect(() => {
     if (!disconnectGrace) {
@@ -322,13 +328,89 @@ export function MultiplayerMatchPanel({
     return () => clearInterval(interval);
   }, [disconnectGrace]);
 
+  useEffect(() => {
+    if (!matchDeadline || room?.status !== "playing") {
+      setMatchRemainingSec(null);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((matchDeadline - Date.now()) / 1000));
+      setMatchRemainingSec(remaining);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [matchDeadline, room?.status]);
+
   if (!room) return null;
 
   const participants = room.players.slice().sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0));
 
   return (
-    <div className={`${compact ? "w-[220px]" : "w-72"} flex flex-col gap-2.5 text-xs select-none`}>
+    <div className={`${compact ? "w-full max-w-[240px]" : "w-full max-w-xs"} flex flex-col gap-2.5 text-xs select-none`}>
       <InGameNotificationBanner />
+
+      {/* ── Match 10-Minute Safety Limit Timer ─────────────────── */}
+      {room.status === "playing" && matchRemainingSec !== null && (
+        <div
+          className={`p-2.5 rounded-2xl border flex items-center justify-between shadow-lg transition-all ${
+            matchTimeExpired
+              ? "bg-rose-950/95 border-rose-500 text-rose-300 animate-pulse shadow-rose-500/30"
+              : matchRemainingSec <= 60
+              ? "bg-rose-950/70 border-rose-500/60 text-rose-300 shadow-rose-500/20 animate-pulse"
+              : matchRemainingSec <= 180
+              ? "bg-amber-950/60 border-amber-500/50 text-amber-300 shadow-amber-500/10"
+              : "bg-slate-900/90 border-slate-800 text-slate-300 shadow-black/40"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Timer
+              className={`w-4 h-4 ${
+                matchTimeExpired
+                  ? "text-rose-400"
+                  : matchRemainingSec <= 60
+                  ? "text-rose-400 animate-spin"
+                  : matchRemainingSec <= 180
+                  ? "text-amber-400"
+                  : "text-indigo-400"
+              }`}
+            />
+            <div>
+              <span className="text-[9px] font-black uppercase tracking-wider block opacity-75 leading-none mb-0.5">
+                {matchTimeExpired ? "TIME UP" : "MATCH TIMER"}
+              </span>
+              {matchTimeExpired ? (
+                <span className="text-xs font-black text-rose-400 uppercase tracking-tight">Calculating result...</span>
+              ) : (
+                <span className="text-xs font-black font-mono tracking-tight">
+                  {Math.floor(matchRemainingSec / 60)
+                    .toString()
+                    .padStart(2, "0")}
+                  :{(matchRemainingSec % 60).toString().padStart(2, "0")}
+                </span>
+              )}
+            </div>
+          </div>
+          {matchTimerWarning && !matchTimeExpired && (
+            <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-black animate-pulse">
+              <AlertTriangle className="w-2.5 h-2.5 text-amber-400" />
+              <span>
+                {matchTimerWarning.remainingSeconds <= 10
+                  ? `${matchTimerWarning.remainingSeconds}s`
+                  : matchTimerWarning.remainingSeconds <= 30
+                  ? "30 SEC"
+                  : matchTimerWarning.remainingSeconds <= 60
+                  ? "1 MIN LEFT"
+                  : matchTimerWarning.remainingSeconds <= 120
+                  ? "2 MIN LEFT"
+                  : matchTimerWarning.remainingSeconds <= 300
+                  ? "5 MIN LEFT"
+                  : `${matchTimerWarning.remainingSeconds}s left`}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Disconnect Grace Countdown Overlay ─────────────────── */}
       {disconnectGrace && reconnectRemaining !== null && (

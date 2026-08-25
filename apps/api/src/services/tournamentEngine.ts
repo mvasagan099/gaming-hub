@@ -16,12 +16,14 @@ import {
   defaultPrizeDistribution,
   isSupportedTournamentFormat,
 } from "@gaming-hub/shared";
+export { generateFullBracketStructure };
 import { applyTransaction } from "./wallet";
 import { WalletTransactionService } from "./walletTransactionService";
 import { IdempotencyService } from "./idempotencyService";
 import { audit } from "./audit";
 import { TournamentMatchService } from "./tournamentMatchService";
 import { TournamentNotificationService } from "./tournamentNotificationService";
+import { verifyAndSnapshotTournamentMatchResult } from "./tournamentResultVerification";
 
 // ---------------------------------------------------------------------------
 // State machine transition (with DB update)
@@ -70,14 +72,14 @@ export async function transitionTournamentStatus(
 // Seeding
 // ---------------------------------------------------------------------------
 
-async function seedPlayers(tournamentId: string): Promise<string[]> {
+export async function seedPlayers(tournamentId: string): Promise<string[]> {
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
     select: { seedMethod: true },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }) as any;
 
-  const seedMethod = tournament?.seedMethod ?? "RANDOM";
+  const seedMethod = (tournament?.seedMethod ?? "RANDOM").toUpperCase();
 
   const players = await prisma.tournamentPlayer.findMany({
     where: { tournamentId },
@@ -95,12 +97,26 @@ async function seedPlayers(tournamentId: string): Promise<string[]> {
 
   let seeded: typeof players;
 
-  if (seedMethod === "RATING") {
+  if (seedMethod === "RATING" || seedMethod === "RATING_BASED") {
     seeded = players.sort((a, b) => {
       const ratingA = a.user.competitiveRanks[0]?.rating ?? 1000;
       const ratingB = b.user.competitiveRanks[0]?.rating ?? 1000;
-      return ratingB - ratingA; // descending
+      if (ratingB !== ratingA) return ratingB - ratingA; // descending
+      return a.registeredAt.getTime() - b.registeredAt.getTime(); // tiebreak by registration time
     });
+  } else if (seedMethod === "ADMIN_DEFINED" || seedMethod === "MANUAL" || seedMethod === "REGISTRATION_ORDER") {
+    // If manual seeds exist use them, otherwise default to deterministic registration order
+    const hasManualSeeds = players.some((p) => p.seed !== null);
+    if (hasManualSeeds) {
+      seeded = players.sort((a, b) => {
+        const seedA = a.seed ?? Number.MAX_SAFE_INTEGER;
+        const seedB = b.seed ?? Number.MAX_SAFE_INTEGER;
+        if (seedA !== seedB) return seedA - seedB;
+        return a.registeredAt.getTime() - b.registeredAt.getTime();
+      });
+    } else {
+      seeded = players.sort((a, b) => a.registeredAt.getTime() - b.registeredAt.getTime());
+    }
   } else {
     // RANDOM — Fisher-Yates shuffle
     seeded = [...players];
@@ -110,7 +126,7 @@ async function seedPlayers(tournamentId: string): Promise<string[]> {
     }
   }
 
-  // Assign seeds
+  // Assign seeds atomically
   await prisma.$transaction(async (tx) => {
     for (let i = 0; i < seeded.length; i++) {
       await tx.tournamentPlayer.update({
@@ -121,6 +137,62 @@ async function seedPlayers(tournamentId: string): Promise<string[]> {
   });
 
   return seeded.map((p) => p.userId);
+}
+
+export async function assignManualSeeds(
+  tournamentId: string,
+  assignments: { userId: string; seed: number }[],
+  adminId: string | null = null,
+): Promise<void> {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    include: { players: true },
+  });
+  if (!tournament) throw new AppError("NOT_FOUND", "Tournament not found", 404);
+
+  const acceptableStatuses = ["DRAFT", "REGISTRATION_OPEN", "REGISTRATION_CLOSED"];
+  if (!acceptableStatuses.includes(tournament.status)) {
+    throw new AppError("INVALID_ACTION", "Cannot modify seeds after tournament starts", 400);
+  }
+
+  const playerUserIds = new Set(tournament.players.map((p) => p.userId));
+  const seenSeeds = new Set<number>();
+
+  for (const a of assignments) {
+    if (!playerUserIds.has(a.userId)) {
+      throw new AppError("INVALID_ACTION", `User ${a.userId} is not registered in this tournament`, 400);
+    }
+    if (a.seed < 1 || a.seed > tournament.players.length) {
+      throw new AppError("INVALID_ACTION", `Invalid seed ${a.seed}. Must be between 1 and ${tournament.players.length}`, 400);
+    }
+    if (seenSeeds.has(a.seed)) {
+      throw new AppError("INVALID_ACTION", `Duplicate seed ${a.seed} assigned`, 400);
+    }
+    seenSeeds.add(a.seed);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const a of assignments) {
+      await tx.tournamentPlayer.update({
+        where: { tournamentId_userId: { tournamentId, userId: a.userId } },
+        data: { seed: a.seed },
+      });
+    }
+    await tx.tournament.update({
+      where: { id: tournamentId },
+      data: { seedMethod: "ADMIN_DEFINED" as any },
+    });
+  });
+
+  audit({
+    actorType: "user",
+    actorId: adminId,
+    action: "tournament.manual_seeds_assigned",
+    category: "game",
+    targetType: "tournament",
+    targetId: tournamentId,
+    meta: { assignmentsCount: assignments.length },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -202,7 +274,7 @@ export async function buildSingleEliminationBracket(tournamentId: string): Promi
 // BYE slot auto-advancement
 // ---------------------------------------------------------------------------
 
-async function processAllByeSlots(tournamentId: string): Promise<void> {
+export async function processAllByeSlots(tournamentId: string): Promise<void> {
   const byeSlots = await prisma.tournamentRound.findMany({
     where: { tournamentId, isBye: true, status: "BYE" },
   });
@@ -308,6 +380,16 @@ export async function processMatchResult(params: ProcessMatchResultParams): Prom
 
   const loserId = params.loserId ?? (slot.playerAId === winnerId ? slot.playerBId : slot.playerAId);
 
+  // Authoritative Result Verification & Immutable Snapshot
+  await verifyAndSnapshotTournamentMatchResult({
+    tournamentId,
+    roundId,
+    matchId,
+    winnerId,
+    loserId: loserId ?? undefined,
+    scores,
+  });
+
   const winnerScore = scores?.[winnerId] ?? 0;
   const loserScore = scores?.[loserId ?? ""] ?? 0;
   const playerAScore = slot.playerAId === winnerId ? winnerScore : loserScore;
@@ -344,6 +426,21 @@ export async function processMatchResult(params: ProcessMatchResultParams): Prom
       where: { id: tournamentId },
       data: { stateVersion: { increment: 1 } },
     });
+  });
+
+  // Update tournament player live statistics & dynamic leaderboard standings
+  const { TournamentLeaderboardService } = await import("./tournamentLeaderboardService");
+  await TournamentLeaderboardService.updateOnMatchComplete({
+    tournamentId,
+    matchId,
+    roundId,
+    roundNumber: slot.roundNumber,
+    winnerId,
+    loserId,
+    winnerScore,
+    loserScore,
+  }).catch((err) => {
+    console.error(`[LEADERBOARD_UPDATE_FAILED] Tournament ${tournamentId} match ${matchId}:`, err);
   });
 
   // Fetch tournament info for notifications
@@ -398,7 +495,7 @@ export async function processMatchResult(params: ProcessMatchResultParams): Prom
 // Advance winner to the next bracket slot
 // ---------------------------------------------------------------------------
 
-async function advanceToNextSlot(
+export async function advanceToNextSlot(
   tournamentId: string,
   completedRoundId: string,
   winnerId: string,
@@ -418,7 +515,7 @@ async function advanceToNextSlot(
   const fillA = nextSlot.playerAId === null;
   const fillB = !fillA && nextSlot.playerBId === null;
 
-if (!fillA && !fillB) return; // Both already filled
+  if (!fillA && !fillB) return; // Both already filled
 
   const newStatus =
     (fillA && nextSlot.playerBId !== null) || (fillB && nextSlot.playerAId !== null)
@@ -443,7 +540,7 @@ if (!fillA && !fillB) return; // Both already filled
 // Check if round is complete, advance tournament
 // ---------------------------------------------------------------------------
 
-async function checkRoundAndAdvance(tournamentId: string, roundNumber: number): Promise<void> {
+export async function checkRoundAndAdvance(tournamentId: string, roundNumber: number): Promise<void> {
   const slots = await prisma.tournamentRound.findMany({
     where: { tournamentId, roundNumber },
   });
@@ -469,7 +566,7 @@ async function checkRoundAndAdvance(tournamentId: string, roundNumber: number): 
 // Finalize tournament after last round completes
 // ---------------------------------------------------------------------------
 
-async function finalizeTournament(tournamentId: string): Promise<void> {
+export async function finalizeTournament(tournamentId: string): Promise<void> {
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
     include: { players: true },
@@ -488,6 +585,32 @@ async function finalizeTournament(tournamentId: string): Promise<void> {
   const finalSlots = await prisma.tournamentRound.findMany({
     where: { tournamentId, roundNumber: finalRound },
   });
+
+  // Final Match Protection: If any final round match is under active dispute or review, halt finalization
+  const finalMatchIds = finalSlots.map((s) => s.matchId).filter(Boolean) as string[];
+  if (finalMatchIds.length > 0) {
+    const activeDispute = await prisma.tournamentDispute.findFirst({
+      where: {
+        matchId: { in: finalMatchIds },
+        status: { in: ["OPEN", "UNDER_REVIEW"] },
+      },
+    });
+    if (activeDispute) {
+      console.warn(`[FINALIZE_TOURNAMENT_PAUSED] Tournament ${tournamentId} final match is under active dispute review (${activeDispute.disputeId}).`);
+      return;
+    }
+
+    const underReviewSnapshot = await prisma.tournamentResultSnapshot.findFirst({
+      where: {
+        matchId: { in: finalMatchIds },
+        reviewStatus: "RESULT_REVIEW_REQUIRED",
+      },
+    });
+    if (underReviewSnapshot) {
+      console.warn(`[FINALIZE_TOURNAMENT_PAUSED] Tournament ${tournamentId} final match result snapshot requires review.`);
+      return;
+    }
+  }
 
   // Get final winner
   const champion = finalSlots.find((s) => s.winnerId !== null)?.winnerId ?? null;
@@ -531,6 +654,12 @@ async function finalizeTournament(tournamentId: string): Promise<void> {
     tournamentTitle: tournament.title,
   });
 
+  // Freeze authoritative tournament leaderboard standings
+  const { TournamentLeaderboardService } = await import("./tournamentLeaderboardService");
+  await TournamentLeaderboardService.freezeFinalStandings(tournamentId).catch((err) => {
+    console.error(`[FREEZE_LEADERBOARD_FAILED] Tournament ${tournamentId}:`, err);
+  });
+
   // Transition to COMPLETED
   if (canTransitionTournamentStatus(currentStatus, "COMPLETED")) {
     await transitionTournamentStatus(tournamentId, "COMPLETED", null);
@@ -544,9 +673,9 @@ async function finalizeTournament(tournamentId: string): Promise<void> {
 // Prize settlement
 // ---------------------------------------------------------------------------
 
-export async function settleTournament(tournamentId: string): Promise<void> {
-  const { SettlementService } = await import("./settlementService");
-  await SettlementService.settleTournament(tournamentId);
+export async function settleTournament(tournamentId: string, adminId?: string): Promise<void> {
+  const { TournamentSettlementService } = await import("./tournamentSettlementService");
+  await TournamentSettlementService.settleTournamentPrizes(tournamentId, { adminId });
 }
 
 // ---------------------------------------------------------------------------
@@ -669,8 +798,28 @@ export async function startTournament(
   }
   await transitionTournamentStatus(tournamentId, "STARTING", startedBy);
 
-// Build bracket
+  // Authoritative Prize Configuration Validation & Snapshotting
+  const { TournamentSettlementService } = await import("./tournamentSettlementService");
+  await TournamentSettlementService.validateAndSnapshotPrizeConfig(tournamentId);
+
+  // Build bracket
   await buildSingleEliminationBracket(tournamentId);
+
+  // Initialize all registered players for live tournament tracking
+  await prisma.tournamentPlayer.updateMany({
+    where: { tournamentId },
+    data: {
+      liveStatus: "WAITING",
+      currentRound: 1,
+      matchesPlayed: 0,
+      wins: 0,
+      losses: 0,
+      points: 0,
+    },
+  });
+
+  const { TournamentLeaderboardService } = await import("./tournamentLeaderboardService");
+  await TournamentLeaderboardService.recalculateTournamentStandings(tournamentId).catch(() => undefined);
 
   // Create all immediately playable matches (Round 1)
   await TournamentMatchService.createReadyMatchesForTournament(tournamentId);
@@ -788,5 +937,258 @@ export async function getPlayerTournamentStatus(tournamentId: string, userId: st
     finalRank: player.finalRank,
     currentRoundId: activeSlot?.id ?? null,
     currentMatchId: activeSlot?.matchId ?? null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Admin tournament overview & monitoring
+// ---------------------------------------------------------------------------
+
+export async function getAdminTournamentOverview(tournamentId: string) {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    include: {
+      players: { select: { id: true, userId: true, eliminated: true, finalRank: true } },
+      rounds: {
+        select: {
+          id: true,
+          roundNumber: true,
+          matchNumber: true,
+          status: true,
+          isBye: true,
+          matchId: true,
+          winnerId: true,
+        },
+      },
+    },
+  });
+  if (!tournament) throw new AppError("NOT_FOUND", "Tournament not found", 404);
+
+  const totalPlayers = tournament.players.length;
+  const remainingPlayers = tournament.players.filter((p) => !p.eliminated).length;
+
+  const totalRounds = tournament.rounds.length > 0
+    ? Math.max(...tournament.rounds.map((r) => r.roundNumber))
+    : 0;
+
+  // Active round is the lowest round number with non-completed/non-bye matches
+  const activeRound = tournament.rounds.find(
+    (r) => r.status === "IN_PROGRESS" || r.status === "READY"
+  )?.roundNumber ?? (tournament.status === "COMPLETED" ? totalRounds : 1);
+
+  const completedMatches = tournament.rounds.filter(
+    (r) => r.status === "COMPLETED" || r.status === "BYE"
+  ).length;
+  const activeMatches = tournament.rounds.filter(
+    (r) => r.status === "IN_PROGRESS" || r.status === "READY"
+  ).length;
+  const waitingMatches = tournament.rounds.filter(
+    (r) => r.status === "PENDING"
+  ).length;
+
+  return {
+    tournamentId: tournament.id,
+    title: tournament.title,
+    gameId: tournament.gameId,
+    status: tournament.status,
+    currentRound: activeRound,
+    totalRounds,
+    totalPlayers,
+    remainingPlayers,
+    completedMatches,
+    activeMatches,
+    waitingMatches,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Stuck round recovery
+// ---------------------------------------------------------------------------
+
+export async function recoverStuckRounds(tournamentId?: string): Promise<number> {
+  const whereTourn = tournamentId
+    ? { id: tournamentId, status: { in: ["IN_PROGRESS", "STARTING"] as TournamentStatus[] } }
+    : { status: { in: ["IN_PROGRESS", "STARTING"] as TournamentStatus[] } };
+
+  const tournaments = await prisma.tournament.findMany({
+    where: whereTourn,
+    include: {
+      rounds: {
+        orderBy: { roundNumber: "asc" },
+      },
+    },
+  });
+
+  let recoveredCount = 0;
+
+  for (const tourn of tournaments) {
+    const roundNumbers = Array.from(new Set(tourn.rounds.map((r) => r.roundNumber))).sort((a, b) => a - b);
+    const maxRound = roundNumbers.length > 0 ? Math.max(...roundNumbers) : 1;
+
+    for (const rNum of roundNumbers) {
+      const slotsInRound = tourn.rounds.filter((r) => r.roundNumber === rNum);
+      const allDone = slotsInRound.every(
+        (s) => s.status === "COMPLETED" || s.status === "BYE" || s.status === "CANCELLED"
+      );
+
+      if (allDone) {
+        if (rNum >= maxRound) {
+          if (tourn.status !== "COMPLETED") {
+            await finalizeTournament(tourn.id);
+            recoveredCount++;
+          }
+        } else {
+          // Check if next round has ready slots that need matches created
+          const nextSlots = tourn.rounds.filter((r) => r.roundNumber === rNum + 1 && r.status === "READY" && !r.matchId);
+          for (const ns of nextSlots) {
+            try {
+              const mId = await TournamentMatchService.ensureTournamentRoundMatch(ns.id);
+              if (mId) recoveredCount++;
+            } catch (err) {
+              console.error(`[STUCK ROUND RECOVERY] Failed to create match for slot ${ns.id}:`, err);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return recoveredCount;
+}
+
+// ---------------------------------------------------------------------------
+// Admin bracket details & match overview
+// ---------------------------------------------------------------------------
+
+export async function getAdminTournamentBracketDetails(tournamentId: string) {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    include: {
+      players: {
+        orderBy: { seed: "asc" },
+        include: {
+          user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+        },
+      },
+      rounds: {
+        orderBy: [{ roundNumber: "asc" }, { matchNumber: "asc" }],
+      },
+    },
+  });
+  if (!tournament) throw new AppError("NOT_FOUND", "Tournament not found", 404);
+
+  const playerMap = new Map(tournament.players.map((p) => [p.userId, p]));
+
+  return {
+    tournamentId: tournament.id,
+    title: tournament.title,
+    gameId: tournament.gameId,
+    status: tournament.status,
+    seedMethod: tournament.seedMethod,
+    totalPlayers: tournament.players.length,
+    totalRounds: tournament.rounds.length > 0 ? Math.max(...tournament.rounds.map((r) => r.roundNumber)) : 0,
+    rounds: Array.from(new Set(tournament.rounds.map((r) => r.roundNumber))).map((roundNumber) => {
+      const slots = tournament.rounds.filter((r) => r.roundNumber === roundNumber);
+      return {
+        roundNumber,
+        matches: slots.map((slot) => {
+          const playerA = slot.playerAId ? playerMap.get(slot.playerAId) : null;
+          const playerB = slot.playerBId ? playerMap.get(slot.playerBId) : null;
+          return {
+            id: slot.id,
+            matchNumber: slot.matchNumber,
+            status: slot.status,
+            isBye: slot.isBye,
+            matchId: slot.matchId,
+            winnerId: slot.winnerId,
+            playerA: playerA
+              ? {
+                  userId: playerA.userId,
+                  username: playerA.user.username,
+                  displayName: playerA.user.displayName,
+                  seed: playerA.seed,
+                  score: slot.playerAScore,
+                }
+              : null,
+            playerB: playerB
+              ? {
+                  userId: playerB.userId,
+                  username: playerB.user.username,
+                  displayName: playerB.user.displayName,
+                  seed: playerB.seed,
+                  score: slot.playerBScore,
+                }
+              : null,
+          };
+        }),
+      };
+    }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Player match view
+// ---------------------------------------------------------------------------
+
+export async function getPlayerMatchView(tournamentId: string, userId: string) {
+  const [player, activeSlot] = await Promise.all([
+    prisma.tournamentPlayer.findUnique({
+      where: { tournamentId_userId: { tournamentId, userId } },
+      include: {
+        tournament: { select: { title: true, gameId: true, status: true } },
+      },
+    }),
+    prisma.tournamentRound.findFirst({
+      where: {
+        tournamentId,
+        status: { in: ["READY", "IN_PROGRESS"] },
+        OR: [{ playerAId: userId }, { playerBId: userId }],
+      },
+      orderBy: { roundNumber: "asc" },
+    }),
+  ]);
+
+  if (!player) {
+    throw new AppError("NOT_FOUND", "Player not registered in this tournament", 404);
+  }
+
+  let opponent = null;
+  if (activeSlot) {
+    const oppId = activeSlot.playerAId === userId ? activeSlot.playerBId : activeSlot.playerAId;
+    if (oppId) {
+      const [oppUser, oppPlayer] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: oppId },
+          select: { id: true, username: true, displayName: true, avatarUrl: true },
+        }),
+        prisma.tournamentPlayer.findUnique({
+          where: { tournamentId_userId: { tournamentId, userId: oppId } },
+          select: { seed: true },
+        }),
+      ]);
+      if (oppUser) {
+        opponent = {
+          userId: oppUser.id,
+          username: oppUser.username,
+          displayName: oppUser.displayName,
+          avatarUrl: oppUser.avatarUrl,
+          seed: oppPlayer?.seed ?? null,
+        };
+      }
+    }
+  }
+
+  return {
+    tournamentId,
+    tournamentTitle: player.tournament.title,
+    gameId: player.tournament.gameId,
+    mySeed: player.seed,
+    isEliminated: player.eliminated,
+    finalRank: player.finalRank,
+    currentRound: activeSlot?.roundNumber ?? null,
+    matchNumber: activeSlot?.matchNumber ?? null,
+    matchId: activeSlot?.matchId ?? null,
+    matchStatus: activeSlot ? activeSlot.status : player.eliminated ? "ELIMINATED" : "WAITING",
+    opponent,
   };
 }

@@ -178,6 +178,8 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     setTimeLeft(20);
   }, []);
 
+  const isMyTurn = (mode === "ai" && currentSeat === 0) || (mode === "multiplayer" && currentSeat === mySeat);
+
   // Keyframe Animation Replay Function
   const playKeyframes = useCallback((keyframes: SnookerTrajectoryKeyframe[], finalState: SnookerState) => {
     if (!keyframes || keyframes.length === 0) {
@@ -266,6 +268,8 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
               syncAuthoritativeState(st);
               toast.error("Turn timed out! 4-point penalty awarded to opponent.", { id: "snooker-timeout" });
             }
+          } else if (mode === "multiplayer" && driverRef.current && isMyTurn) {
+            driverRef.current.sendTimeout();
           }
           return 20;
         }
@@ -274,7 +278,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [frameStatus, isSimulating, mode, syncAuthoritativeState]);
+  }, [frameStatus, isSimulating, mode, isMyTurn, syncAuthoritativeState]);
 
   // AI Turn Automated Move Handler
   useEffect(() => {
@@ -589,8 +593,6 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     }
   };
 
-  const isMyTurn = (mode === "ai" && currentSeat === 0) || (mode === "multiplayer" && currentSeat === mySeat);
-
   // Live State Ref for High-Performance 60 FPS Canvas Render Loop (Zero Micro-Stutter)
   const renderStateRef = useRef({
     balls,
@@ -687,8 +689,8 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 
   return (
     <GameWrapper title="Snooker 3D" gameId="snooker" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="relative min-h-[calc(100vh-64px)] w-full bg-slate-950 flex flex-col items-center justify-between p-4 select-none overflow-hidden">
-        {/* Top Snooker Broadcast HUD */}
+      <div className="relative min-h-[calc(100vh-64px)] w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-between p-3 md:p-4 select-none overflow-hidden">
+        {/* Top Snooker Championship Broadcast HUD */}
         <SnookerHUD
           player1Name={player1Name}
           player2Name={player2Name}
@@ -716,17 +718,12 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
           lastFoul={lastFoul}
           foulPoints={foulPoints}
           mode={mode}
+          cameraMode={cameraMode}
+          setCameraMode={setCameraMode}
           onBack={onBack}
           soundEnabled={soundEnabled}
           setSoundEnabled={setSoundEnabled}
         />
-
-        {/* Multiplayer Status Panel */}
-        {mode === "multiplayer" && (
-          <div className="absolute top-20 right-6 z-30 pointer-events-auto">
-            <MultiplayerMatchPanel compact />
-          </div>
-        )}
 
         {/* Color Nomination Overlay */}
         {showColorPicker && (
@@ -737,89 +734,95 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
           />
         )}
 
-        {/* Center 12ft Snooker Table Area */}
-        <div className="relative flex items-center justify-center my-auto w-full max-w-5xl">
-          <canvas
-            ref={canvasRef}
-            width={960}
-            height={480}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            onContextMenu={(e) => e.preventDefault()}
-            className="w-full max-w-4xl h-auto aspect-[2/1] rounded-3xl shadow-2xl cursor-crosshair touch-none border border-slate-800"
-          />
+        {/* Main Snooker Arena & Tactical Control Dock */}
+        <div className="w-full flex-1 flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-5 max-w-7xl px-2 my-auto overflow-y-auto lg:overflow-visible">
+          {/* Snooker Table Main Canvas Container */}
+          <div className="relative flex-1 flex items-center justify-center w-full max-w-5xl">
+            <div className="relative w-full aspect-[2/1] rounded-3xl p-1 bg-gradient-to-b from-amber-700/30 via-slate-900/60 to-slate-950/80 shadow-[0_25px_60px_rgba(0,0,0,0.9)] border border-slate-700/60">
+              <canvas
+                ref={canvasRef}
+                width={960}
+                height={480}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+                onContextMenu={(e) => e.preventDefault()}
+                className="w-full h-full rounded-[22px] cursor-crosshair touch-none select-none block"
+              />
 
-          {/* Camera Perspective Toggle Button (3D vs 2D) */}
-          <button
-            onClick={() => setCameraMode((prev) => (prev === "3d" ? "2d" : "3d"))}
-            className="absolute top-4 left-6 bg-slate-900/90 hover:bg-slate-800 backdrop-blur-md border border-slate-700/80 px-3.5 py-1.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-bold text-slate-200 transition-all cursor-pointer hover:scale-105 active:scale-95"
-          >
-            <span>{cameraMode === "3d" ? "🎥 3D Camera" : "📐 2D Overhead"}</span>
-          </button>
-
-          {/* Floating Carrom-Style Pull-Back Power Meter Overlay */}
-          {isAiming && isMyTurn && !isSimulating && dragRef.current.isPulling && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md border border-slate-800 px-6 py-2.5 rounded-2xl shadow-2xl flex flex-col items-center gap-1.5 animate-in fade-in zoom-in-95 pointer-events-none">
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
-                  POWER
-                </span>
-                <div className="w-40 h-3 bg-slate-950 rounded-full p-0.5 border border-slate-800 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-75 ${
-                      cuePower < 0.05
-                        ? "bg-slate-600"
-                        : cuePower < 0.4
-                        ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
-                        : cuePower < 0.75
-                        ? "bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]"
-                        : "bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.5)]"
-                    }`}
-                    style={{ width: `${Math.max(5, cuePower * 100)}%` }}
-                  />
+              {/* Floating Pull-Back Power Meter Overlay inside Table */}
+              {isAiming && isMyTurn && !isSimulating && dragRef.current.isPulling && (
+                <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 px-4 sm:px-6 py-2 sm:py-2.5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] flex flex-col items-center gap-1.5 animate-in fade-in zoom-in-95 pointer-events-none z-30">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <span className="text-[9px] sm:text-[10px] font-black tracking-widest text-slate-400 uppercase">
+                      POWER
+                    </span>
+                    <div className="w-28 sm:w-40 h-2.5 sm:h-3 bg-slate-950 rounded-full p-0.5 border border-slate-800 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-75 ${
+                          cuePower < 0.05
+                            ? "bg-slate-600"
+                            : cuePower < 0.4
+                            ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                            : cuePower < 0.75
+                            ? "bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]"
+                            : "bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.5)]"
+                        }`}
+                        style={{ width: `${Math.max(5, cuePower * 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] sm:text-xs font-mono font-black text-white">
+                      {Math.round(cuePower * 100)}%
+                    </span>
+                  </div>
+                  <div className="text-[9px] sm:text-[10px] font-bold text-amber-400">
+                    {cuePower < 0.05 ? "Pull back further to shoot" : "Release to Strike"}
+                  </div>
                 </div>
-                <span className="text-xs font-mono font-black text-white">
-                  {Math.round(cuePower * 100)}%
-                </span>
-              </div>
-              <div className="text-[10px] font-bold text-amber-400">
-                {cuePower < 0.05 ? "Pull back further to shoot" : "Release to Shoot"}
-              </div>
+              )}
             </div>
-          )}
+          </div>
 
-          {/* Right Floating Control Sidebar (Power Slider + Spin + Shoot) */}
-          <div className="absolute right-[-70px] top-1/2 -translate-y-1/2 flex flex-col gap-4 items-center">
-            <SnookerPowerControl
-              power={cuePower}
-              setPower={setCuePower}
-              disabled={isSimulating}
-            />
-            <SnookerSpinControl
-              spinX={spinX}
-              spinY={spinY}
-              setSpin={(x, y) => {
-                setSpinX(x);
-                setSpinY(y);
-              }}
-            />
-            <button
-              onClick={handleDirectShoot}
-              disabled={isSimulating || cueBallInHand || !isMyTurn}
-              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 disabled:opacity-40 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 transition-all uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed"
-            >
-              SHOOT
-            </button>
+          {/* Right Tactical Dock (Controls + Multiplayer Match Status) */}
+          <div className="flex flex-col sm:flex-row lg:flex-col gap-3 w-full lg:w-56 shrink-0 z-20 justify-center items-stretch sm:items-center lg:items-stretch">
+            {mode === "multiplayer" && (
+              <div className="w-full">
+                <MultiplayerMatchPanel compact />
+              </div>
+            )}
+
+            {/* Tactical Control Deck */}
+            <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 rounded-3xl p-3 sm:p-3.5 shadow-2xl flex flex-row lg:flex-col gap-3 sm:gap-3.5 items-center justify-around w-full">
+              <SnookerPowerControl
+                power={cuePower}
+                setPower={setCuePower}
+                disabled={isSimulating}
+              />
+              <SnookerSpinControl
+                spinX={spinX}
+                spinY={spinY}
+                setSpin={(x, y) => {
+                  setSpinX(x);
+                  setSpinY(y);
+                }}
+              />
+              <button
+                onClick={handleDirectShoot}
+                disabled={isSimulating || cueBallInHand || !isMyTurn}
+                className="py-2.5 sm:py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 hover:brightness-110 disabled:opacity-40 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/25 transition-all uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] shrink-0"
+              >
+                STRIKE
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Bottom Info Bar */}
-        <div className="text-xs text-slate-500 font-medium flex items-center gap-4">
-          <span>● Drag to Aim</span>
-          <span>● Pull back or use Slider to Charge Power</span>
-          <span>● Release or tap Shoot</span>
+        {/* Bottom Control Helpers */}
+        <div className="hidden sm:flex text-[11px] text-slate-500 font-medium items-center gap-4 sm:gap-6 pb-1">
+          <span>● Drag cloth to Aim</span>
+          <span>● Pull back cue or use Power Slider</span>
+          <span>● Release pointer or tap Strike</span>
         </div>
 
         {/* Frame / Match Over Modal */}

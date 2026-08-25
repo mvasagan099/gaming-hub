@@ -170,6 +170,12 @@ export class SnookerMultiplayerDriver {
     });
   }
 
+  public async sendTimeout(): Promise<{ ok: boolean; error?: string }> {
+    return useMultiplayerStore.getState().sendGameAction({
+      type: "timeout",
+    });
+  }
+
   public stop(): void {
     this.destroyed = true;
     if (this.unsubscribe) {

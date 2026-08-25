@@ -1,5 +1,5 @@
-import React from "react";
-import { Trophy, RefreshCw, ArrowLeft, Clock, AlertTriangle, Sparkles, Volume2, VolumeX, Flame, Check } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Trophy, RefreshCw, ArrowLeft, Clock, AlertTriangle, Sparkles, Volume2, VolumeX, Flame, Check, Video, Eye } from "lucide-react";
 import type { SnookerPlayer, SnookerBall, SnookerTarget, SnookerFrameStatus, SnookerBallType, SnookerFrameHistoryItem } from "@gaming-hub/game-engine";
 
 interface SnookerHUDProps {
@@ -29,6 +29,8 @@ interface SnookerHUDProps {
   lastFoul: string | null;
   foulPoints: number;
   mode: "ai" | "multiplayer";
+  cameraMode: "3d" | "2d";
+  setCameraMode: React.Dispatch<React.SetStateAction<"3d" | "2d">>;
   onBack: () => void;
   soundEnabled: boolean;
   setSoundEnabled: (v: boolean) => void;
@@ -61,6 +63,8 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
   lastFoul,
   foulPoints,
   mode,
+  cameraMode,
+  setCameraMode,
   onBack,
   soundEnabled,
   setSoundEnabled,
@@ -68,87 +72,119 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
   const isMyTurn = currentSeat === mySeat;
   const timeRatio = Math.max(0, Math.min(1, timeLeft / maxTime));
 
-  const targetColorMap: Record<string, { bg: string; text: string }> = {
-    RED: { bg: "bg-red-600/90 text-white", text: "RED (1 pt)" },
-    COLOR: { bg: "bg-amber-500/90 text-slate-950", text: nominatedBall ? `${nominatedBall.toUpperCase()} ON` : "ANY COLOR (2-7 pts)" },
-    YELLOW: { bg: "bg-yellow-500/90 text-slate-950", text: "YELLOW (2 pts)" },
-    GREEN: { bg: "bg-emerald-600/90 text-white", text: "GREEN (3 pts)" },
-    BROWN: { bg: "bg-amber-800/90 text-white", text: "BROWN (4 pts)" },
-    BLUE: { bg: "bg-blue-600/90 text-white", text: "BLUE (5 pts)" },
-    PINK: { bg: "bg-pink-500/90 text-white", text: "PINK (6 pts)" },
-    BLACK: { bg: "bg-zinc-900 border border-zinc-700 text-white", text: "BLACK (7 pts)" },
-    FREE_BALL: { bg: "bg-purple-600/90 text-white", text: nominatedBall ? `FREE BALL (${nominatedBall.toUpperCase()})` : "FREE BALL (Pick Any)" },
+  const [dismissedFoul, setDismissedFoul] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (lastFoul) {
+      setDismissedFoul(null);
+      const t = setTimeout(() => setDismissedFoul(lastFoul), 6000);
+      return () => clearTimeout(t);
+    }
+  }, [lastFoul]);
+
+  const targetConfigMap: Record<string, { bg: string; border: string; dot: string; label: string; pts: string }> = {
+    RED: { bg: "from-red-600/30 to-red-950/40", border: "border-red-500/50 text-red-300", dot: "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]", label: "RED", pts: "1 PT" },
+    COLOR: { bg: "from-amber-600/30 to-amber-950/40", border: "border-amber-500/50 text-amber-300", dot: "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]", label: nominatedBall ? nominatedBall.toUpperCase() : "ANY COLOR", pts: "2-7 PTS" },
+    YELLOW: { bg: "from-yellow-500/30 to-yellow-950/40", border: "border-yellow-400/50 text-yellow-300", dot: "bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.8)]", label: "YELLOW", pts: "2 PTS" },
+    GREEN: { bg: "from-emerald-600/30 to-emerald-950/40", border: "border-emerald-500/50 text-emerald-300", dot: "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]", label: "GREEN", pts: "3 PTS" },
+    BROWN: { bg: "from-amber-800/30 to-amber-950/40", border: "border-amber-700/50 text-amber-300", dot: "bg-amber-700 shadow-[0_0_8px_rgba(180,83,9,0.8)]", label: "BROWN", pts: "4 PTS" },
+    BLUE: { bg: "from-blue-600/30 to-blue-950/40", border: "border-blue-500/50 text-blue-300", dot: "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]", label: "BLUE", pts: "5 PTS" },
+    PINK: { bg: "from-pink-600/30 to-pink-950/40", border: "border-pink-500/50 text-pink-300", dot: "bg-pink-400 shadow-[0_0_8px_rgba(244,114,182,0.8)]", label: "PINK", pts: "6 PTS" },
+    BLACK: { bg: "from-zinc-800/50 to-zinc-950/60", border: "border-zinc-500/50 text-zinc-200", dot: "bg-zinc-200 shadow-[0_0_8px_rgba(255,255,255,0.6)]", label: "BLACK", pts: "7 PTS" },
+    FREE_BALL: { bg: "from-purple-600/30 to-purple-950/40", border: "border-purple-500/50 text-purple-300", dot: "bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]", label: nominatedBall ? `FREE (${nominatedBall.toUpperCase()})` : "FREE BALL", pts: "CHOICE" },
   };
 
-  const targetBadge = targetColorMap[targetBall] || targetColorMap.RED;
+  const targetCfg = targetConfigMap[targetBall] || targetConfigMap.RED;
 
   return (
     <div className="w-full flex flex-col gap-2 pointer-events-none select-none">
-      {/* Top Broadcast Scoreboard Header */}
-      <div className="flex items-center justify-between gap-4 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-2xl px-5 py-3 shadow-2xl pointer-events-auto">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Exit
-        </button>
+      {/* ── 1. Top Broadcast TV Scoreboard ───────────────────────────────── */}
+      <div className="flex items-center justify-between gap-4 bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 rounded-2xl px-5 py-2.5 shadow-[0_10px_30px_rgba(0,0,0,0.5)] pointer-events-auto">
+        {/* Left Toolbar: Exit & Camera */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 hover:scale-105 active:scale-95"
+            title="Leave Match"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Exit</span>
+          </button>
 
-        {/* Center Snooker Match Scoreboard */}
-        <div className="flex items-center gap-6">
+          <button
+            onClick={() => setCameraMode((prev) => (prev === "3d" ? "2d" : "3d"))}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 hover:scale-105 active:scale-95"
+            title="Toggle 2D / 3D Perspective"
+          >
+            {cameraMode === "3d" ? <Video className="w-3.5 h-3.5 text-amber-400" /> : <Eye className="w-3.5 h-3.5 text-sky-400" />}
+            <span>{cameraMode === "3d" ? "3D View" : "2D Top"}</span>
+          </button>
+        </div>
+
+        {/* Center Arena Broadcast Scoreboard */}
+        <div className="flex items-center gap-4 md:gap-8">
           {/* Player 1 Card */}
           <div
-            className={`flex items-center gap-3 px-4 py-2 rounded-xl transition-all ${
+            className={`flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-300 ${
               currentSeat === 0
-                ? "bg-amber-500/20 border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.3)]"
-                : "bg-slate-800/60 border border-slate-700/60"
+                ? "bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-slate-900/40 border-2 border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.25)]"
+                : "bg-slate-800/40 border border-slate-700/50 opacity-85"
             }`}
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-white shadow-md text-xs">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-black text-white shadow-md text-xs border border-amber-300/40">
               P1
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-200">
+                <span className="text-xs font-bold text-slate-100 max-w-[110px] truncate">
                   {mySeat === 0 ? (player1Name ? `${player1Name} (You)` : "You") : (player1Name || "Player 1")}
                 </span>
                 {currentSeat === 0 && (
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+                  </span>
                 )}
               </div>
-              <div className="text-[11px] text-amber-400 font-semibold">
-                Frames: {player1FramesWon}
+              <div className="flex items-center gap-2 text-[10px] mt-0.5 font-semibold">
+                <span className="text-amber-400">Frames: {player1FramesWon}</span>
+                {player1HighestBreak > 0 && (
+                  <span className="text-slate-400 font-normal">High: {player1HighestBreak}</span>
+                )}
               </div>
-              {player1HighestBreak > 0 && (
-                <div className="text-[9px] text-slate-400">High: {player1HighestBreak}</div>
-              )}
             </div>
-            <div className="text-2xl font-black text-white pl-2">{player1Score}</div>
+            <div className="text-3xl font-black text-white pl-2 tracking-tight font-mono">
+              {player1Score}
+            </div>
           </div>
 
-          {/* Center Frame & Turn Status */}
-          <div className="flex flex-col items-center justify-center min-w-[140px]">
+          {/* Center Match Frame & Countdown Hub */}
+          <div className="flex flex-col items-center justify-center min-w-[130px]">
             <div className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
-              FRAME {frameNumber} {totalFrames > 1 ? `(Best of ${totalFrames})` : ""}
+              FRAME {frameNumber} {totalFrames > 1 ? `OF ${totalFrames}` : ""}
             </div>
 
             <div className="flex items-center gap-1 text-xs font-bold mt-0.5">
               {isMyTurn ? (
-                <span className="text-emerald-400 flex items-center gap-1 animate-pulse">
-                  <Sparkles className="w-3.5 h-3.5" /> YOUR TURN
+                <span className="text-emerald-400 flex items-center gap-1 animate-pulse font-extrabold tracking-wide">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" /> YOUR TURN
                 </span>
               ) : (
-                <span className="text-rose-400 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" /> OPPONENT
+                <span className="text-rose-400 flex items-center gap-1 font-bold">
+                  <Clock className="w-3.5 h-3.5 text-rose-400" /> OPPONENT
                 </span>
               )}
             </div>
 
-            {/* 20s Turn Countdown Progress Bar */}
-            <div className="w-28 h-1.5 bg-slate-800 rounded-full mt-1.5 overflow-hidden border border-slate-700/80">
+            {/* Countdown Progress Bar */}
+            <div className="w-28 h-1.5 bg-slate-950 rounded-full mt-1.5 overflow-hidden border border-slate-700/80">
               <div
                 className={`h-full transition-all duration-300 rounded-full ${
-                  timeLeft <= 5 ? "bg-rose-500 animate-pulse" : timeLeft <= 10 ? "bg-amber-500" : "bg-emerald-500"
+                  timeLeft <= 5
+                    ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)] animate-pulse"
+                    : timeLeft <= 10
+                    ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]"
+                    : "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"
                 }`}
                 style={{ width: `${timeRatio * 100}%` }}
               />
@@ -160,30 +196,35 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
 
           {/* Player 2 Card */}
           <div
-            className={`flex items-center gap-3 px-4 py-2 rounded-xl transition-all ${
+            className={`flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-300 ${
               currentSeat === 1
-                ? "bg-blue-500/20 border-2 border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.3)]"
-                : "bg-slate-800/60 border border-slate-700/60"
+                ? "bg-gradient-to-l from-blue-500/20 via-blue-500/10 to-slate-900/40 border-2 border-blue-400 shadow-[0_0_25px_rgba(59,130,246,0.25)]"
+                : "bg-slate-800/40 border border-slate-700/50 opacity-85"
             }`}
           >
-            <div className="text-2xl font-black text-white pr-2">{player2Score}</div>
+            <div className="text-3xl font-black text-white pr-2 tracking-tight font-mono">
+              {player2Score}
+            </div>
             <div className="text-right">
               <div className="flex items-center justify-end gap-1.5">
                 {currentSeat === 1 && (
-                  <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-400"></span>
+                  </span>
                 )}
-                <span className="text-xs font-bold text-slate-200">
+                <span className="text-xs font-bold text-slate-100 max-w-[110px] truncate">
                   {mySeat === 1 ? (player2Name ? `${player2Name} (You)` : "You") : mode === "ai" ? "AI Bot" : (player2Name || "Player 2")}
                 </span>
               </div>
-              <div className="text-[11px] text-blue-400 font-semibold">
-                Frames: {player2FramesWon}
+              <div className="flex items-center justify-end gap-2 text-[10px] mt-0.5 font-semibold">
+                {player2HighestBreak > 0 && (
+                  <span className="text-slate-400 font-normal">High: {player2HighestBreak}</span>
+                )}
+                <span className="text-blue-400">Frames: {player2FramesWon}</span>
               </div>
-              {player2HighestBreak > 0 && (
-                <div className="text-[9px] text-slate-400">High: {player2HighestBreak}</div>
-              )}
             </div>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-blue-400 flex items-center justify-center font-bold text-white shadow-md text-xs">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-blue-400 flex items-center justify-center font-black text-white shadow-md text-xs border border-blue-300/40">
               {mode === "ai" ? "AI" : "P2"}
             </div>
           </div>
@@ -192,47 +233,58 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
         {/* Audio Toggle */}
         <button
           onClick={() => setSoundEnabled(!soundEnabled)}
-          className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all text-xs"
+          className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs border border-slate-700/60 hover:scale-105 active:scale-95"
+          title={soundEnabled ? "Mute Audio" : "Unmute Audio"}
         >
           {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
         </button>
       </div>
 
-      {/* Target, Break and Foul Banners */}
-      <div className="flex items-center justify-center gap-3">
-        {/* Authoritative Target Ball Indicator */}
-        <div className={`px-4 py-1.5 rounded-full font-black text-xs shadow-lg uppercase tracking-wider flex items-center gap-1.5 ${targetBadge.bg}`}>
-          <span>🎯 TARGET:</span>
-          <span>{targetBadge.text}</span>
+      {/* ── 2. Compact Centered Target & Break Strip ──────────────────────── */}
+      <div className="flex items-center justify-center gap-2 flex-wrap">
+        {/* Authoritative Target Ball Badge */}
+        <div className={`px-3.5 py-1.5 rounded-full bg-gradient-to-r ${targetCfg.bg} border ${targetCfg.border} backdrop-blur-md shadow-md flex items-center gap-2 text-xs font-black tracking-wide uppercase`}>
+          <span className={`w-2.5 h-2.5 rounded-full ${targetCfg.dot}`} />
+          <span>TARGET: {targetCfg.label}</span>
+          <span className="text-[10px] opacity-80 font-normal">({targetCfg.pts})</span>
         </div>
 
         {/* Current Break Counter */}
         {currentBreak > 0 && (
-          <div className="px-4 py-1.5 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 font-black text-xs shadow-lg uppercase tracking-wider flex items-center gap-1 animate-pulse">
-            <Flame className="w-3.5 h-3.5 fill-current" />
+          <div className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-slate-950 font-black text-xs shadow-lg uppercase tracking-wider flex items-center gap-1.5 animate-pulse">
+            <Flame className="w-3.5 h-3.5 fill-current text-slate-950" />
             <span>BREAK: {currentBreak}</span>
           </div>
         )}
 
         {/* Reds Remaining Pill */}
-        <div className="px-3 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-slate-300 font-bold text-xs shadow-md">
-          🔴 {redsRemaining} Reds Left
+        <div className="px-3 py-1.5 rounded-full bg-slate-900/80 backdrop-blur-md border border-slate-800 text-slate-300 font-bold text-xs shadow-md flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-red-500" />
+          <span>{redsRemaining > 0 ? `${redsRemaining} Reds Left` : "Clearance Phase"}</span>
         </div>
 
-        {/* In-hand / Free Ball Alerts */}
+        {/* Ball in Hand Notification */}
         {cueBallInHand && (
-          <div className="px-4 py-1.5 rounded-full bg-sky-500/90 text-white font-black text-xs shadow-lg uppercase tracking-wider flex items-center gap-1.5 animate-bounce">
-            <Sparkles className="w-3.5 h-3.5" /> BALL IN HAND (IN THE 'D')
+          <div className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black text-xs shadow-lg uppercase tracking-wider flex items-center gap-1.5 animate-bounce">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Ball in Hand (Tap inside 'D')</span>
           </div>
         )}
+
+        {/* Free Ball Notification */}
         {freeBallAvailable && (
-          <div className="px-4 py-1.5 rounded-full bg-purple-500/90 text-white font-black text-xs shadow-lg uppercase tracking-wider">
-            FREE BALL AVAILABLE
+          <div className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-black text-xs shadow-lg uppercase tracking-wider flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Free Ball Nominated</span>
           </div>
         )}
-        {lastFoul && (
-          <div className="px-4 py-1.5 rounded-full bg-rose-500/90 text-white font-bold text-xs shadow-lg flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5" /> FOUL: {lastFoul} (+{foulPoints} PTS)
+
+        {/* Foul Compact Banner (Auto-Dismissable) */}
+        {lastFoul && dismissedFoul !== lastFoul && (
+          <div className="px-3.5 py-1.5 rounded-full bg-rose-900/90 border border-rose-500/80 text-rose-200 font-bold text-xs shadow-lg flex items-center gap-1.5 animate-in fade-in slide-in-from-top-2">
+            <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+            <span className="max-w-[220px] truncate">{lastFoul}</span>
+            <span className="text-amber-300 font-mono font-black">(+{foulPoints})</span>
           </div>
         )}
       </div>
@@ -251,33 +303,39 @@ export const ColorPickerModal: React.FC<ColorPickerModalProps> = ({
   nominatedColor,
   isFreeBall = false,
 }) => {
-  const colors: { type: SnookerBallType; label: string; bg: string; pts: number }[] = [
-    { type: "yellow", label: "Yellow", bg: "bg-yellow-500 text-slate-950", pts: 2 },
-    { type: "green", label: "Green", bg: "bg-emerald-600 text-white", pts: 3 },
-    { type: "brown", label: "Brown", bg: "bg-amber-800 text-white", pts: 4 },
-    { type: "blue", label: "Blue", bg: "bg-blue-600 text-white", pts: 5 },
-    { type: "pink", label: "Pink", bg: "bg-pink-500 text-white", pts: 6 },
-    { type: "black", label: "Black", bg: "bg-zinc-950 border border-zinc-700 text-white", pts: 7 },
+  const colors: { type: SnookerBallType; label: string; bg: string; border: string; pts: number; key: string }[] = [
+    { type: "yellow", label: "Yellow", bg: "bg-yellow-400 text-slate-950", border: "border-yellow-300", pts: 2, key: "1" },
+    { type: "green", label: "Green", bg: "bg-emerald-600 text-white", border: "border-emerald-400", pts: 3, key: "2" },
+    { type: "brown", label: "Brown", bg: "bg-amber-800 text-white", border: "border-amber-600", pts: 4, key: "3" },
+    { type: "blue", label: "Blue", bg: "bg-blue-600 text-white", border: "border-blue-400", pts: 5, key: "4" },
+    { type: "pink", label: "Pink", bg: "bg-pink-500 text-white", border: "border-pink-300", pts: 6, key: "5" },
+    { type: "black", label: "Black", bg: "bg-zinc-950 text-white", border: "border-zinc-600", pts: 7, key: "6" },
   ];
 
   return (
-    <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-2xl p-4 shadow-2xl flex flex-col items-center gap-3 animate-in fade-in zoom-in-95">
-      <div className="text-xs font-black tracking-wider uppercase text-slate-300 flex items-center gap-1.5">
+    <div className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-3xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col items-center gap-3 animate-in fade-in zoom-in-95 pointer-events-auto">
+      <div className="text-xs font-black tracking-wider uppercase text-slate-200 flex items-center gap-1.5">
         <Sparkles className="w-4 h-4 text-amber-400" />
-        {isFreeBall ? "Nominate Free Ball" : "Nominate Target Color"}
+        <span>{isFreeBall ? "Nominate Free Ball" : "Nominate Target Color"}</span>
       </div>
       <div className="flex gap-2">
         {colors.map((c) => (
           <button
             key={c.type}
             onClick={() => onSelectColor(c.type)}
-            className={`px-3 py-2 rounded-xl font-black text-xs shadow-md transition-all transform hover:scale-105 flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3.5 py-2.5 rounded-2xl font-black text-xs shadow-lg transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center gap-1 cursor-pointer border ${
               c.bg
-            } ${nominatedColor === c.type ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900" : "opacity-90 hover:opacity-100"}`}
+            } ${c.border} ${
+              nominatedColor === c.type
+                ? "ring-4 ring-white ring-offset-2 ring-offset-slate-900 scale-105"
+                : "opacity-90 hover:opacity-100"
+            }`}
           >
-            <span>{c.label}</span>
-            <span className="text-[10px] opacity-80">({c.pts})</span>
-            {nominatedColor === c.type && <Check className="w-3.5 h-3.5" />}
+            <div className="flex items-center gap-1">
+              <span>{c.label}</span>
+              {nominatedColor === c.type && <Check className="w-3.5 h-3.5" />}
+            </div>
+            <span className="text-[10px] opacity-85 font-mono">+{c.pts} PTS</span>
           </button>
         ))}
       </div>
@@ -297,11 +355,17 @@ export const SnookerPowerControl: React.FC<SnookerPowerControlProps> = ({
   disabled = false,
 }) => {
   return (
-    <div className="flex flex-col items-center bg-slate-900/90 backdrop-blur-md border border-slate-800 p-3 rounded-2xl shadow-xl select-none">
-      <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">
-        POWER
-      </span>
-      <div className="relative h-44 w-6 bg-slate-950 rounded-full p-1 border border-slate-800 flex flex-col justify-end overflow-hidden">
+    <div className="flex flex-col items-center bg-slate-900/90 backdrop-blur-md border border-slate-800 p-3 rounded-2xl shadow-xl select-none w-full">
+      <div className="flex items-center justify-between w-full mb-2">
+        <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
+          POWER
+        </span>
+        <span className="text-xs font-mono font-black text-amber-400">
+          {Math.round(power * 100)}%
+        </span>
+      </div>
+
+      <div className="relative h-32 w-7 bg-slate-950 rounded-full p-1 border border-slate-800 flex flex-col justify-end overflow-hidden">
         <div
           className="w-full rounded-full transition-all duration-75 bg-gradient-to-t from-emerald-500 via-amber-400 to-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.5)]"
           style={{ height: `${power * 100}%` }}
@@ -317,9 +381,24 @@ export const SnookerPowerControl: React.FC<SnookerPowerControlProps> = ({
           className="absolute inset-0 opacity-0 cursor-pointer h-full w-full"
         />
       </div>
-      <span className="text-[11px] font-mono font-bold text-slate-200 mt-2">
-        {Math.round(power * 100)}%
-      </span>
+
+      {/* Preset Quick Power Buttons */}
+      <div className="grid grid-cols-4 gap-1 w-full mt-2.5">
+        {[0.25, 0.5, 0.75, 1.0].map((pVal) => (
+          <button
+            key={pVal}
+            onClick={() => setPower(pVal)}
+            disabled={disabled}
+            className={`py-1 rounded-lg text-[9px] font-bold font-mono transition-all border ${
+              Math.abs(power - pVal) < 0.05
+                ? "bg-amber-400 text-slate-950 border-amber-300 font-black shadow-sm"
+                : "bg-slate-800 text-slate-400 border-slate-700 hover:text-white"
+            }`}
+          >
+            {pVal * 100}%
+          </button>
+        ))}
+      </div>
     </div>
   );
 };
@@ -345,31 +424,46 @@ export const SnookerSpinControl: React.FC<SnookerSpinControlProps> = ({
     }
   };
 
+  const getSpinLabel = () => {
+    if (spinY < -0.3) return "Top Spin (Follow)";
+    if (spinY > 0.3) return "Back Spin (Screw)";
+    if (spinX < -0.3) return "Left English";
+    if (spinX > 0.3) return "Right English";
+    return "Center Cue Ball";
+  };
+
   return (
-    <div className="flex flex-col items-center bg-slate-900/90 backdrop-blur-md border border-slate-800 p-3 rounded-2xl shadow-xl select-none">
-      <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">
-        SPIN / ENGLISH
-      </span>
+    <div className="flex flex-col items-center bg-slate-900/90 backdrop-blur-md border border-slate-800 p-3 rounded-2xl shadow-xl select-none w-full">
+      <div className="flex items-center justify-between w-full mb-2">
+        <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
+          SPIN / ENGLISH
+        </span>
+        <button
+          onClick={() => setSpin(0, 0)}
+          className="text-[9px] text-slate-400 hover:text-white transition-colors bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700"
+        >
+          Center
+        </button>
+      </div>
+
       <div
         onClick={handleBallClick}
-        className="relative w-16 h-16 rounded-full bg-gradient-to-tr from-slate-200 to-white shadow-inner border border-slate-300 cursor-crosshair flex items-center justify-center overflow-hidden"
+        className="relative w-16 h-16 rounded-full bg-gradient-to-tr from-slate-200 via-slate-100 to-white shadow-[inset_0_2px_6px_rgba(0,0,0,0.3)] border-2 border-slate-300 cursor-crosshair flex items-center justify-center overflow-hidden"
       >
         <div className="absolute inset-x-0 top-1/2 h-px bg-slate-400/40" />
         <div className="absolute inset-y-0 left-1/2 w-px bg-slate-400/40" />
         <div
-          className="absolute w-3.5 h-3.5 rounded-full bg-sky-500 border border-white shadow-md transform -translate-x-1/2 -translate-y-1/2 transition-all"
+          className="absolute w-3.5 h-3.5 rounded-full bg-sky-500 border border-white shadow-md transform -translate-x-1/2 -translate-y-1/2 transition-all duration-75"
           style={{
             left: `${((spinX + 1) / 2) * 100}%`,
             top: `${((spinY + 1) / 2) * 100}%`,
           }}
         />
       </div>
-      <button
-        onClick={() => setSpin(0, 0)}
-        className="text-[10px] text-slate-400 hover:text-white mt-1.5 transition-colors underline"
-      >
-        Reset
-      </button>
+
+      <span className="text-[9px] font-semibold text-slate-400 mt-2 text-center truncate w-full">
+        {getSpinLabel()}
+      </span>
     </div>
   );
 };

@@ -47,6 +47,7 @@ const AdminSettingsPage = lazy(() => import("../pages/admin/AdminSettingsPage").
 const AdminFeaturesPage = lazy(() => import("../pages/admin/AdminFeaturesPage").then((m) => ({ default: m.AdminFeaturesPage })));
 const AdminTournamentsPage = lazy(() => import("../pages/admin/AdminTournamentsPage").then((m) => ({ default: m.AdminTournamentsPage })));
 const AdminTournamentDetailPage = lazy(() => import("../pages/admin/AdminTournamentDetailPage").then((m) => ({ default: m.AdminTournamentDetailPage })));
+const AdminTournamentDisputesPage = lazy(() => import("../pages/admin/AdminTournamentDisputesPage").then((m) => ({ default: m.AdminTournamentDisputesPage })));
 const AdminCouponsPage = lazy(() => import("../pages/admin/AdminCouponsPage").then((m) => ({ default: m.AdminCouponsPage })));
 const AdminAnnouncementsPage = lazy(() => import("../pages/admin/AdminAnnouncementsPage").then((m) => ({ default: m.AdminAnnouncementsPage })));
 const AdminCrmPage = lazy(() => import("../pages/admin/AdminCrmPage").then((m) => ({ default: m.AdminCrmPage })));
@@ -135,6 +136,7 @@ export const router = createBrowserRouter([
           { path: "matches", element: <SuspensePage><AdminMatchesPage /></SuspensePage> },
           { path: "rooms", element: <SuspensePage><AdminRoomsPage /></SuspensePage> },
           { path: "tournaments", element: <SuspensePage><AdminTournamentsPage /></SuspensePage> },
+          { path: "tournaments/disputes", element: <SuspensePage><AdminTournamentDisputesPage /></SuspensePage> },
           { path: "tournaments/:id", element: <SuspensePage><AdminTournamentDetailPage /></SuspensePage> },
           { path: "coupons", element: <SuspensePage><AdminCouponsPage /></SuspensePage> },
           { path: "announcements", element: <SuspensePage><AdminAnnouncementsPage /></SuspensePage> },

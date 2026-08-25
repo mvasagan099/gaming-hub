@@ -115,6 +115,7 @@ export const gameSettingsSchema = z.object({
   featuredGames: z.array(z.string().trim().min(1).max(40)).default([]),
   matchmakingTimeoutSeconds: z.number().int().min(5).max(600).default(120),
   turnTimerSeconds: z.number().int().min(0).max(600).default(45),
+  maxMatchDurationSeconds: z.number().int().min(30).max(600).default(600),
   spectatorModeEnabled: z.boolean().default(true),
   reconnectTimeoutSeconds: z.number().int().min(5).max(600).default(90),
   xpRewardPerWin: z.number().int().min(0).max(10_000).default(50),

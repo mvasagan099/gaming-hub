@@ -29,6 +29,8 @@ import {
   type DrawPolicy,
   PRIZE_MODES,
   DRAW_POLICIES,
+  TIMEOUT_RESOLUTIONS,
+  type TimeoutResolution,
 } from '@gaming-hub/shared';
 
 interface AdminGameConfigRow extends GameConfig {
@@ -50,7 +52,7 @@ const defMap = new Map(GAME_DEFINITIONS.map((g) => [g.id, g]));
 export function AdminGamesPage() {
   const [games, setGames] = useState<AdminGameConfigRow[]>([]);
   const [auditLogs, setAuditLogs] = useState<ConfigAuditLog[]>([]);
-  const [activeTab, setActiveTab] = useState<'games' | 'audit'>('games');
+  const [activeTab, setActiveTab] = useState<'games' | 'timeouts' | 'global' | 'audit'>('games');
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
@@ -60,6 +62,19 @@ export function AdminGamesPage() {
   const [formData, setFormData] = useState<Partial<GameConfig>>({});
   const [newFeeInput, setNewFeeInput] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
+
+  const [matchSettings, setMatchSettings] = useState<{
+    maxMatchDurationSeconds: number;
+    warningTimesSeconds: number[];
+    defaultTurnTimeoutSeconds: number;
+    version: number;
+  }>({
+    maxMatchDurationSeconds: 600,
+    warningTimesSeconds: [300, 120, 60, 30, 10],
+    defaultTurnTimeoutSeconds: 30,
+    version: 1,
+  });
+  const [isSavingMatchSettings, setIsSavingMatchSettings] = useState(false);
 
   const fetchGames = async () => {
     setIsLoading(true);
@@ -82,9 +97,35 @@ export function AdminGamesPage() {
     }
   };
 
+  const fetchMatchSettings = async () => {
+    try {
+      const res = await apiClient.get<{ ok: true; settings: typeof matchSettings }>('/admin/match-settings');
+      if (res.settings) {
+        setMatchSettings(res.settings);
+      }
+    } catch {
+      // Fallback
+    }
+  };
+
+  const handleSaveMatchSettings = async () => {
+    setIsSavingMatchSettings(true);
+    try {
+      await apiClient.patch('/admin/match-settings', matchSettings);
+      toast.success('Global match settings updated successfully!');
+      await fetchMatchSettings();
+      await fetchAuditLogs();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update match settings');
+    } finally {
+      setIsSavingMatchSettings(false);
+    }
+  };
+
   useEffect(() => {
     void fetchGames();
     void fetchAuditLogs();
+    void fetchMatchSettings();
   }, []);
 
   const filteredGames = useMemo(() => {
@@ -139,7 +180,9 @@ export function AdminGamesPage() {
       defaultEntryFee: game.defaultEntryFee,
       turnTimerSeconds: game.turnTimerSeconds,
       reconnectWindowSeconds: game.reconnectWindowSeconds,
-      matchDurationSeconds: game.matchDurationSeconds,
+      matchDurationSeconds: game.matchDurationSeconds ?? 600,
+      timeoutResolution: game.timeoutResolution ?? "GAME_SPECIFIC",
+      allowDraw: game.allowDraw !== false,
       prizeMode: game.prizeMode,
       winnerPercentage: game.winnerPercentage,
       fixedPrizeAmount: game.fixedPrizeAmount,
@@ -259,6 +302,28 @@ export function AdminGamesPage() {
               All Games ({games.length})
             </button>
             <button
+              onClick={() => setActiveTab('timeouts')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                activeTab === 'timeouts'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              Game Settings
+            </button>
+            <button
+              onClick={() => setActiveTab('global')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                activeTab === 'global'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              Match Settings
+            </button>
+            <button
               onClick={() => setActiveTab('audit')}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'audit'
@@ -275,6 +340,7 @@ export function AdminGamesPage() {
             onClick={() => {
               void fetchGames();
               void fetchAuditLogs();
+              void fetchMatchSettings();
             }}
             className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
             title="Refresh"
@@ -284,7 +350,8 @@ export function AdminGamesPage() {
         </div>
       </div>
 
-      {activeTab === 'games' ? (
+      {/* TAB 1: ALL GAMES OVERVIEW */}
+      {activeTab === 'games' && (
         <>
           {/* Filter Bar */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -401,69 +468,76 @@ export function AdminGamesPage() {
                               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all ${
                                 game.onlineEnabled
                                   ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20'
-                                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20'
+                                  : 'bg-slate-500/10 text-slate-500 border border-slate-500/20 hover:bg-slate-500/20'
                               }`}
                             >
                               <Zap className="w-3.5 h-3.5" />
-                              {game.onlineEnabled ? 'Online PVP' : 'Offline Solo'}
+                              {game.onlineEnabled ? 'Online Active' : 'Offline Only'}
                             </button>
                           </td>
 
-                          {/* Allowed Entry Fees */}
+                          {/* Entry Fees Tag Preview */}
                           <td className="px-4 py-4">
-                            <div className="flex flex-wrap gap-1 items-center">
-                              {game.entryFees.map((fee) => (
+                            <div className="flex flex-wrap gap-1 max-w-[200px]">
+                              {game.entryFees.slice(0, 4).map((fee) => (
                                 <span
                                   key={fee}
                                   className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
                                     fee === game.defaultEntryFee
-                                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-extrabold'
-                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                                      ? 'bg-amber-500 text-slate-950 font-black'
+                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                                   }`}
                                 >
                                   🪙 {fee}
                                 </span>
                               ))}
+                              {game.entryFees.length > 4 && (
+                                <span className="text-[10px] text-slate-400 self-center">
+                                  +{game.entryFees.length - 4} more
+                                </span>
+                              )}
                             </div>
                           </td>
 
                           {/* Turn Timer */}
-                          <td className="px-4 py-4 text-xs font-medium text-slate-600 dark:text-slate-300">
-                            <div className="flex items-center gap-1">
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-1.5 font-mono text-xs text-slate-600 dark:text-slate-300">
                               <Clock className="w-3.5 h-3.5 text-slate-400" />
-                              {game.turnTimerSeconds > 0 ? `${game.turnTimerSeconds}s` : 'Realtime'}
+                              {game.turnTimerSeconds > 0 ? `${game.turnTimerSeconds}s` : 'Real-time'}
                             </div>
                           </td>
 
                           {/* Prize Mode */}
                           <td className="px-4 py-4">
-                            <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                            <span className="px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                               {game.prizeMode === 'WINNER_PERCENTAGE'
-                                ? `${game.winnerPercentage}% Winner`
+                                ? `${game.winnerPercentage}% Pot`
                                 : game.prizeMode.replace(/_/g, ' ')}
                             </span>
                           </td>
 
                           {/* Active Matches */}
                           <td className="px-4 py-4">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold bg-blue-500/10 text-blue-500 border border-blue-500/20">
-                              <Users className="w-3 h-3" />
-                              {game.activeMatchesCount}
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 font-mono text-xs font-bold">
+                              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              {game.activeMatchesCount} active
                             </span>
                           </td>
 
-                          {/* Version */}
-                          <td className="px-4 py-4 text-xs font-mono text-slate-400">
-                            v{game.configVersion}
+                          {/* Config Version */}
+                          <td className="px-4 py-4 font-mono text-xs text-slate-400">
+                            <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                              v{game.configVersion}
+                            </span>
                           </td>
 
                           {/* Actions */}
                           <td className="px-6 py-4 text-right">
                             <button
                               onClick={() => openConfigModal(game)}
-                              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm shadow-indigo-500/20 transition-all flex items-center gap-1.5 ml-auto"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all shadow-sm"
                             >
-                              <Settings2 className="w-3.5 h-3.5" />
+                              <Sliders className="w-3.5 h-3.5" />
                               Configure
                             </button>
                           </td>
@@ -476,15 +550,209 @@ export function AdminGamesPage() {
             </div>
           </div>
         </>
-      ) : (
-        /* Audit Logs View */
+      )}
+
+      {/* TAB 2: GAME SETTINGS & TIMEOUT CONFIGURATION (ALL 10 GAMES) */}
+      {activeTab === 'timeouts' && (
+        <div className="space-y-6">
+          <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-500/20 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-indigo-600 text-white font-bold">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                  Centralized Game Time & Timeout Resolution Strategy
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Configure maximum match duration (up to 10 minutes) and game-specific authoritative tie-break resolutions.
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-mono px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold border border-indigo-500/20">
+              Active Match Snapshot Protected
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {games.map((game) => {
+              const def = defMap.get(game.gameId as GameId);
+              return (
+                <div
+                  key={game.gameId}
+                  className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between space-y-4 hover:border-indigo-500/40 transition-colors"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-2xl shadow-inner">
+                        {def?.icon ?? '🎮'}
+                      </div>
+                      <div>
+                        <h4 className="font-black text-slate-900 dark:text-white text-base">
+                          {game.name}
+                        </h4>
+                        <span className="text-[11px] font-mono text-slate-400">v{game.configVersion}</span>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                        game.enabled
+                          ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                          : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
+                      }`}
+                    >
+                      {game.enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500">Maximum Match Time:</span>
+                      <span className="font-bold text-slate-900 dark:text-white font-mono">
+                        {Math.floor((game.matchDurationSeconds ?? 600) / 60)}m {(game.matchDurationSeconds ?? 600) % 60}s ({(game.matchDurationSeconds ?? 600)}s)
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500">Turn Timeout:</span>
+                      <span className="font-bold text-slate-900 dark:text-white font-mono">
+                        {game.turnTimerSeconds > 0 ? `${game.turnTimerSeconds} seconds` : 'N/A (Real-time)'}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500">Timeout Resolution:</span>
+                      <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 font-bold border border-indigo-500/20 text-[11px]">
+                        {game.timeoutResolution?.replace(/_/g, ' ') || 'GAME SPECIFIC'}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500">Allow Draw / Tie:</span>
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        {game.allowDraw !== false ? 'Yes (Supported)' : 'No'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => openConfigModal(game)}
+                    className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-800 dark:text-slate-200 text-xs font-bold transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Settings2 className="w-4 h-4" />
+                    Edit Game Settings
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: GLOBAL MATCH SETTINGS */}
+      {activeTab === 'global' && (
+        <div className="max-w-3xl space-y-6">
+          <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-indigo-500" />
+                Global Platform Match Limits
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Configure platform-wide maximum duration safety ceilings and countdown warning triggers.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
+                  Maximum Match Duration (Platform Ceiling)
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={30}
+                    max={600}
+                    value={matchSettings.maxMatchDurationSeconds}
+                    onChange={(e) =>
+                      setMatchSettings({
+                        ...matchSettings,
+                        maxMatchDurationSeconds: Math.min(600, parseInt(e.target.value, 10) || 600),
+                      })
+                    }
+                    className="w-40 px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 font-mono"
+                  />
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                    {Math.floor(matchSettings.maxMatchDurationSeconds / 60)} minutes ({matchSettings.maxMatchDurationSeconds} seconds)
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  * Hard platform ceiling: 600s (10 minutes). No individual game may exceed this limit.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
+                  Default Turn Timeout (Seconds)
+                </label>
+                <input
+                  type="number"
+                  min={5}
+                  max={120}
+                  value={matchSettings.defaultTurnTimeoutSeconds}
+                  onChange={(e) =>
+                    setMatchSettings({
+                      ...matchSettings,
+                      defaultTurnTimeoutSeconds: parseInt(e.target.value, 10) || 30,
+                    })
+                  }
+                  className="w-40 px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
+                  Warning Checkpoint Notifications
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {matchSettings.warningTimesSeconds.map((sec) => (
+                    <span
+                      key={sec}
+                      className="px-3 py-1.5 rounded-xl bg-indigo-500/10 text-indigo-500 font-mono text-xs font-bold border border-indigo-500/20"
+                    >
+                      ⏱ {sec >= 60 ? `${Math.floor(sec / 60)} min` : `${sec} sec`}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Visual alerts dispatched to clients when timer drops below checkpoints.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={handleSaveMatchSettings}
+                disabled={isSavingMatchSettings}
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isSavingMatchSettings ? 'Saving...' : 'Save Global Match Settings'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: AUDIT TRAIL */}
+      {activeTab === 'audit' && (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90 backdrop-blur-md overflow-hidden shadow-sm">
-          <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-              <History className="w-4 h-4 text-indigo-500" />
-              Game Configuration Audit Logs
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h3 className="font-black text-slate-900 dark:text-white text-sm">
+              Configuration Change History & Audit Logs
             </h3>
-            <span className="text-xs text-slate-400">Recorded system & admin rule updates</span>
+            <span className="text-xs text-slate-400">{auditLogs.length} recent operations logged</span>
           </div>
 
           <div className="overflow-x-auto">
@@ -523,7 +791,7 @@ export function AdminGamesPage() {
                         {log.adminDisplayName || log.adminUsername}
                       </td>
                       <td className="px-6 py-3 text-slate-500 dark:text-slate-400 truncate max-w-xs">
-                        v{log.meta?.configVersion ?? '?'} - {JSON.stringify(log.meta?.newConfig?.entryFees ?? '')}
+                        v{log.meta?.configVersion ?? '?'} - {JSON.stringify(log.meta?.newConfig?.entryFees ?? log.meta?.newConfig?.matchDurationSeconds ?? '')}
                       </td>
                     </tr>
                   ))
@@ -697,28 +965,36 @@ export function AdminGamesPage() {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
-                    Turn Timer (s)
+                    Turn Timeout (s)
                   </label>
                   <input
                     type="number"
                     min={0}
+                    max={600}
                     value={formData.turnTimerSeconds ?? 30}
-                    onChange={(e) => setFormData({ ...formData, turnTimerSeconds: parseInt(e.target.value, 10) })}
+                    onChange={(e) => setFormData({ ...formData, turnTimerSeconds: parseInt(e.target.value, 10) || 0 })}
                     className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-sm transition-all"
                   />
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    {formData.turnTimerSeconds === 0 ? '0 = Real-time' : `${formData.turnTimerSeconds}s per turn`}
+                  </span>
                 </div>
 
                 <div>
                   <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
-                    Match Duration (s)
+                    Maximum Match Duration (s)
                   </label>
                   <input
                     type="number"
-                    min={0}
-                    value={formData.matchDurationSeconds ?? 300}
-                    onChange={(e) => setFormData({ ...formData, matchDurationSeconds: parseInt(e.target.value, 10) })}
+                    min={30}
+                    max={600}
+                    value={formData.matchDurationSeconds ?? 600}
+                    onChange={(e) => setFormData({ ...formData, matchDurationSeconds: Math.min(600, parseInt(e.target.value, 10) || 600) })}
                     className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-sm transition-all"
                   />
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    Max: 600s ({Math.floor((formData.matchDurationSeconds ?? 600) / 60)}m {(formData.matchDurationSeconds ?? 600) % 60}s)
+                  </span>
                 </div>
 
                 <div>
@@ -733,6 +1009,57 @@ export function AdminGamesPage() {
                     onChange={(e) => setFormData({ ...formData, reconnectWindowSeconds: parseInt(e.target.value, 10) })}
                     className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-sm transition-all"
                   />
+                </div>
+              </div>
+
+              {/* Timeout Resolution & Draw Policy */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-indigo-500" />
+                    10-Minute Timeout Tiebreaker Resolution
+                  </h4>
+                  <span className="text-xs text-slate-400 font-mono">Server Authoritative</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
+                      Timeout Resolution Strategy
+                    </label>
+                    <select
+                      value={formData.timeoutResolution ?? "GAME_SPECIFIC"}
+                      onChange={(e) => setFormData({ ...formData, timeoutResolution: e.target.value as TimeoutResolution })}
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                    >
+                      <option value="CURRENT_POSITION">Board Position (Closest to 100)</option>
+                      <option value="CURRENT_PROGRESS">Token Progress towards Home</option>
+                      <option value="CONFIGURED_CHESS_RESOLUTION">Material Balance & Clock Time</option>
+                      <option value="CURRENT_SCORE">Highest Slice / Mass Score</option>
+                      <option value="CURRENT_SCORE_PROGRESS">Highest Score & Remaining Bubbles</option>
+                      <option value="CURRENT_MATCH_SCORE">Sets Won & Current Set Points</option>
+                      <option value="CURRENT_RUNS">Runs Scored & Wickets Lost</option>
+                      <option value="CURRENT_POINTS">Pocketed Assigned Coins & Queen</option>
+                      <option value="CURRENT_FRAME_SCORE">Frame Points & Highest Break</option>
+                      <option value="GAME_SPECIFIC">Rule Engine Standard Tiebreak</option>
+                      <option value="DRAW">Authoritative Co-Winner Draw</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center">
+                    <label className="flex items-center gap-3 cursor-pointer pt-4">
+                      <input
+                        type="checkbox"
+                        checked={formData.allowDraw !== false}
+                        onChange={(e) => setFormData({ ...formData, allowDraw: e.target.checked })}
+                        className="size-5 rounded text-indigo-600 focus:ring-indigo-500 accent-indigo-600"
+                      />
+                      <div>
+                        <p className="font-bold text-sm text-slate-900 dark:text-white">Allow Draw / Tie</p>
+                        <p className="text-xs text-slate-400">Co-winners share pot or receive refund</p>
+                      </div>
+                    </label>
+                  </div>
                 </div>
               </div>
 

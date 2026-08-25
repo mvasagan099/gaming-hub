@@ -27,6 +27,9 @@ export type Permission =
   | "admin:features:edit"
   | "admin:tournaments:view"
   | "admin:tournaments:manage"
+  | "tournaments.disputes.view"
+  | "tournaments.disputes.review"
+  | "tournaments.results.override"
   | "admin:coupons:view"
   | "admin:coupons:manage"
   | "admin:announcements:view"
@@ -64,6 +67,9 @@ export const ROLE_PERMISSIONS: Record<DbUserRole, readonly Permission[]> = {
     "admin:errors:view",
     "admin:crm:view",
     "admin:crm:manage",
+    "admin:tournaments:view",
+    "tournaments.disputes.view",
+    "tournaments.disputes.review",
   ],
   ADMIN: [
     "admin:users:view",
@@ -85,6 +91,9 @@ export const ROLE_PERMISSIONS: Record<DbUserRole, readonly Permission[]> = {
     "admin:features:edit",
     "admin:tournaments:view",
     "admin:tournaments:manage",
+    "tournaments.disputes.view",
+    "tournaments.disputes.review",
+    "tournaments.results.override",
     "admin:coupons:view",
     "admin:coupons:manage",
     "admin:announcements:view",
