@@ -57,11 +57,44 @@ export class TournamentSettlementService {
 
     const calculatedPrizes = calculatePrizes(grossPool, distribution);
 
+    // Validate sum of calculated prizes equals the prize pool (50% + 25% + 15% + 10% = 100% = prizePool)
+    const totalPrizeSum = calculatedPrizes.reduce((sum, p) => sum + p.amount, 0);
+    if (totalPrizeSum !== grossPool && grossPool > 0) {
+      throw new AppError(
+        "VALIDATION_ERROR",
+        `Prize distribution sum (${totalPrizeSum}) must exactly equal configured prize pool (${grossPool})`,
+        400,
+      );
+    }
+
+    // Explicit Platform/Operating Amount Calculation
+    const maxEntryCollection = tournament.entryFee * (tournament.maxPlayers || 0);
+    const platformShare = Math.max(0, maxEntryCollection - tournament.prizePool);
+
+    const prizesByRank: Record<number, { percentage: number; amount: number }> = {};
+    for (const dist of distribution) {
+      const calc = calculatedPrizes.find((c) => c.rank === dist.rank);
+      prizesByRank[dist.rank] = {
+        percentage: dist.percentage ?? 0,
+        amount: calc?.amount ?? dist.amount ?? 0,
+      };
+    }
+
     const snapshot: TournamentPrizeConfigSnapshot = {
+      entryFee: tournament.entryFee,
       prizePool: tournament.prizePool,
       grossPool,
+      platformShare,
       prizeDistribution: distribution,
-      calculatedPrizes,
+      calculatedPrizes: calculatedPrizes.map((p) => {
+        const d = distribution.find((x) => x.rank === p.rank);
+        return {
+          rank: p.rank,
+          amount: p.amount,
+          percentage: d?.percentage,
+        };
+      }),
+      prizesByRank,
       currency: "coins",
       format: tournament.format as TournamentFormat,
       gameId: tournament.gameId,
@@ -90,6 +123,7 @@ export class TournamentSettlementService {
     const tournament = await client.tournament.findUnique({
       where: { id: tournamentId },
       select: {
+        entryFee: true,
         prizePool: true,
         grossPool: true,
         prizeDistribution: true,
@@ -221,6 +255,17 @@ export class TournamentSettlementService {
     // Retrieve authoritative snapshot
     const prizeSnapshot = await this.getAuthoritativePrizeSnapshot(tournamentId);
 
+    // Pre-settlement validation: Verify 1st + 2nd + 3rd + 4th === prizePool (sum must match exactly)
+    const sumOfPrizes = prizeSnapshot.calculatedPrizes.reduce((sum, p) => sum + p.amount, 0);
+    const expectedPool = prizeSnapshot.grossPool > 0 ? prizeSnapshot.grossPool : prizeSnapshot.prizePool;
+    if (sumOfPrizes !== expectedPool && expectedPool > 0) {
+      throw new AppError(
+        "VALIDATION_ERROR",
+        `Prize distribution sum validation failed: Sum of prizes (${sumOfPrizes}) does not match configured prize pool (${expectedPool}). Settlement halted for review.`,
+        400,
+      );
+    }
+
     // Ranked players sorted by finalRank (1st, 2nd, 3rd...)
     const rankedPlayers = tournament.players
       .filter((p) => p.finalRank !== null && p.finalRank > 0)
@@ -243,22 +288,32 @@ export class TournamentSettlementService {
       const player = rankedPlayers.find((p) => p.finalRank === prize.rank);
       if (!player || prize.amount <= 0) continue;
 
-      // Check existing settlement record
+      // Find or create settlement record idempotently
       let prizeRecord = await prisma.tournamentPrize.findUnique({
         where: { tournamentId_userId: { tournamentId, userId: player.userId } },
       });
 
       if (!prizeRecord) {
-        prizeRecord = await prisma.tournamentPrize.create({
-          data: {
-            tournamentId,
-            userId: player.userId,
-            playerId: player.id,
-            rank: prize.rank,
-            amount: prize.amount,
-            status: "PENDING",
-          },
-        });
+        try {
+          prizeRecord = await prisma.tournamentPrize.create({
+            data: {
+              tournamentId,
+              userId: player.userId,
+              playerId: player.id,
+              rank: prize.rank,
+              amount: prize.amount,
+              status: "PENDING",
+            },
+          });
+        } catch (e: any) {
+          if (e?.code === "P2002") {
+            prizeRecord = await prisma.tournamentPrize.findUniqueOrThrow({
+              where: { tournamentId_userId: { tournamentId, userId: player.userId } },
+            });
+          } else {
+            throw e;
+          }
+        }
       }
 
       // Exactly-once check: skip if already COMPLETED / PAID
@@ -295,6 +350,7 @@ export class TournamentSettlementService {
               tournamentTitle: tournament.title,
               rank: prize.rank,
               prizeAmount: prize.amount,
+              settlementId: prizeRecord.id,
               meta: {
                 settlementId: prizeRecord.id,
                 position: prize.rank,
@@ -328,9 +384,13 @@ export class TournamentSettlementService {
           meta: {
             tournamentId,
             userId: player.userId,
+            position: prize.rank,
             rank: prize.rank,
             amount: prize.amount,
+            settlementId: prizeRecord.id,
+            transactionId: `tournament-prize-${tournamentId}-${player.userId}-${prize.rank}`,
             reason: options?.reason,
+            timestamp: new Date().toISOString(),
           },
         });
 
@@ -441,6 +501,8 @@ export class TournamentSettlementService {
     if (!tournament) throw new AppError("NOT_FOUND", "Tournament not found", 404);
 
     const grossPool = tournament.grossPool > 0 ? tournament.grossPool : tournament.prizePool;
+    const maxEntryCollection = tournament.entryFee * (tournament.maxPlayers || 0);
+    const platformShare = Math.max(0, maxEntryCollection - tournament.prizePool);
     const allPrizes = tournament.prizes;
 
     const completedCount = allPrizes.filter((p) => p.status === "COMPLETED" || p.status === "PAID").length;
@@ -454,6 +516,19 @@ export class TournamentSettlementService {
     const totalUnpaidAmount = allPrizes
       .filter((p) => p.status !== "COMPLETED" && p.status !== "PAID")
       .reduce((sum, p) => sum + p.amount, 0);
+
+    let overallSettlementStatus: "NOT_STARTED" | "PROCESSING" | "PARTIALLY_SETTLED" | "SETTLED" | "SETTLEMENT_FAILED" = "NOT_STARTED";
+    if (tournament.settledAt || (allPrizes.length > 0 && completedCount === allPrizes.length && failedCount === 0)) {
+      overallSettlementStatus = "SETTLED";
+    } else if (completedCount > 0 && failedCount > 0) {
+      overallSettlementStatus = "PARTIALLY_SETTLED";
+    } else if (failedCount > 0 && completedCount === 0) {
+      overallSettlementStatus = "SETTLEMENT_FAILED";
+    } else if (pendingCount > 0 || tournament.status === "SETTLING") {
+      overallSettlementStatus = "PROCESSING";
+    } else {
+      overallSettlementStatus = "NOT_STARTED";
+    }
 
     const filtered = filters?.status
       ? allPrizes.filter((p) => p.status === filters.status)
@@ -487,8 +562,10 @@ export class TournamentSettlementService {
       tournamentId: tournament.id,
       tournamentTitle: tournament.title,
       status: tournament.status as TournamentStatus,
+      overallSettlementStatus,
       prizePool: tournament.prizePool,
       grossPool,
+      platformShare,
       totalPrizesCount: allPrizes.length,
       completedCount,
       pendingCount,

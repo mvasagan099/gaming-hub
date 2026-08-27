@@ -31,6 +31,7 @@ import { assertGameEnabled, createMatchConfigSnapshot } from "../settings";
 import { GameEventBus } from "../events/GameEventBus";
 import { GameStateSyncManager } from "../sync/GameStateSyncManager";
 import { MatchTimeoutMonitoringService } from "./MatchTimeoutMonitoringService";
+import { UniversalMatchFinalizer } from "./UniversalMatchFinalizer";
 
 const DISCONNECT_GRACE_MS = 30_000;
 const MATCH_READY_TIMEOUT_MS = 30_000;
@@ -1410,6 +1411,8 @@ export class RoomManager {
           expiredAt: Date.now(),
         }),
       );
+      await this.finishMatch(room, [], "TIME_LIMIT");
+      return;
     }
 
     let result;
@@ -1427,7 +1430,7 @@ export class RoomManager {
     if (result.ok) {
       this.emitGameState(room, result.events);
       if (result.finished) {
-        await this.finishMatch(room, result.winnerSeats, kind === "match" ? "TIME_LIMIT" : "TIMEOUT");
+        await this.finishMatch(room, result.winnerSeats, "TIMEOUT");
       } else {
         this.scheduleClockCheck(room);
       }
@@ -1469,6 +1472,7 @@ export class RoomManager {
       (room.match.matchDeadline && Date.now() >= room.match.matchDeadline)
     ) {
       console.log(`[RoomManager] applyGameAction rejected: Match time limit expired`);
+      void this.finishMatch(room, [], "TIME_LIMIT");
       throw new AppError("MATCH_TIME_EXPIRED", "Match time limit expired; action rejected");
     }
 
@@ -1726,243 +1730,14 @@ export class RoomManager {
 
   private async finishMatch(
     room: RoomRuntime,
-    winnerSeats: number[],
-    resultReason: "NORMAL" | "TIME_LIMIT" | "TIMEOUT" | "ABANDONED" = "NORMAL",
+    winnerSeats: number[] = [],
+    resultReason: "NORMAL" | "TIME_LIMIT" | "TIMEOUT" | "ABANDONED" | "FORFEIT" | "DISCONNECT" | "DRAW" = "NORMAL",
   ) {
     if (!room.match) return;
-    const matchId = room.match.matchId;
-
-    // Atomic Mutex Check: Exactly-once match finalization
-    if (
-      this.finalizingMatches.has(matchId) ||
-      room.match.matchStatus === "FINALIZING" ||
-      room.match.matchStatus === "COMPLETED"
-    ) {
-      console.log(`[MATCH] Finalization already active or completed for match ${matchId}`);
-      return;
-    }
-    this.finalizingMatches.add(matchId);
-    room.match.matchStatus = "FINALIZING";
-
     this.clearClockTimer(room.id);
-    const participants = [...room.players.values()].filter((p) => !p.isSpectator && p.seat !== null);
-
-    const winnerIds = winnerSeats
-      .map((seat) => {
-        const entry = participants.find((p) => p.seat === seat);
-        return entry?.userId;
-      })
-      .filter((id): id is string => Boolean(id));
-
-    const isDraw = winnerSeats.length === 0;
-    const hasForfeit = participants.some((p) => p.connectionStatus === "forfeited");
-    const resultType: "WIN" | "LOSS" | "DRAW" | "FORFEIT" = hasForfeit
-      ? "FORFEIT"
-      : isDraw
-        ? "DRAW"
-        : "WIN";
-
-    const winnerId = winnerIds[0] ?? null;
-    const loserId = participants.find((p) => !winnerIds.includes(p.userId))?.userId ?? null;
-
-    // Extract per-player authoritative scores from engine
-    const scores: Record<string, number> = {};
-    const engineState = (room.match.engine as any).state;
-    for (const p of participants) {
-      if (engineState?.scores && p.seat !== null && engineState.scores[p.seat] !== undefined) {
-        scores[p.userId] = Number(engineState.scores[p.seat]) || 0;
-      } else if (engineState?.coins) {
-        const myColor = p.seat === 0 ? "white" : "black";
-        const pocketedCount = engineState.coins.filter((c: any) => c.type === myColor && c.pocketed).length;
-        scores[p.userId] = pocketedCount;
-      } else {
-        scores[p.userId] = 0;
-      }
-    }
-
-    console.log("[MATCH] TIMEOUT_FINALIZATION_STARTED", {
-      matchId,
-      gameId: room.gameId,
-      resultReason,
-    });
-
-    console.log("[MATCH] TIMEOUT_WINNER_RESOLVED", {
-      matchId,
-      gameId: room.gameId,
-      winnerId,
-      loserId,
-      resultReason,
+    await UniversalMatchFinalizer.finalizeMatch(this.io, room, {
       winnerSeats,
-    });
-
-    const endedAt = new Date();
-    await prisma.match.update({
-      where: { id: matchId },
-      data: {
-        winnerIds,
-        status: "FINISHED",
-        endedAt,
-        resultReason,
-      },
-    }).catch((err) => {
-      console.error(`[MATCH] Database update failed for match ${matchId}:`, err);
-    });
-
-    console.log("[MATCH] MATCH_COMPLETED", {
-      matchId,
-      gameId: room.gameId,
-      resultType,
-      resultReason,
-      winnerId,
-      loserId,
-      scores,
-    });
-
-    // Authoritative Result Object (Requirement 8)
-    const authoritativeResult = {
-      matchId,
-      gameType: room.gameId,
-      winnerId,
-      loserId,
-      resultReason,
-      finalScore: scores,
-      finalScores: scores,
-      finalState: room.match.engine.serialize(),
-      endedAt: endedAt.getTime(),
-      winnerSeats,
-      resultType,
-    };
-
-    this.emitToRoom(room, "game:finished", authoritativeResult);
-    GameEventBus.broadcastEvent(
-      this.io,
-      room,
-      GameEventBus.createEnvelope("GAME_FINISHED", matchId, room.gameId, authoritativeResult)
-    );
-
-    GameEventBus.broadcastEvent(
-      this.io,
-      room,
-      GameEventBus.createEnvelope("MATCH_COMPLETED", matchId, room.gameId, authoritativeResult)
-    );
-
-    GameEventBus.broadcastEvent(
-      this.io,
-      room,
-      GameEventBus.createEnvelope("RESULT_CREATED", matchId, room.gameId, {
-        matchId,
-        resultId: `res_${matchId}`,
-      })
-    );
-
-    GameEventBus.broadcastEvent(
-      this.io,
-      room,
-      GameEventBus.createEnvelope("SETTLEMENT_STARTED", matchId, room.gameId, {
-        matchId,
-        totalPot: room.stake * participants.length,
-        entryFee: room.stake,
-      })
-    );
-
-    try {
-      const settlement = await settleMatch(matchId, {
-        winnerIds,
-        scores,
-        resultType,
-        rated: room.settings.rated !== false,
-        reason: resultReason,
-      });
-
-      const winnerPayout = settlement?.result?.payouts?.find((p) => p.userId === winnerId)?.amount ?? 0;
-
-      this.emitToRoom(room, "game:settlement-completed", {
-        matchId,
-        resultType,
-        coinsWon: winnerPayout,
-      });
-
-      console.log("[MATCH] SETTLEMENT_COMPLETED", {
-        matchId,
-        gameId: room.gameId,
-        winnerPayout,
-        isDraw,
-      });
-
-      GameEventBus.broadcastEvent(
-        this.io,
-        room,
-        GameEventBus.createEnvelope("SETTLEMENT_COMPLETED", matchId, room.gameId, {
-          matchId,
-          prizePool: settlement?.result?.pot ?? (room.stake * participants.length),
-          winnerPayout,
-          refundPerPlayer: isDraw ? room.stake : 0,
-          isDraw,
-          winnerIds,
-        })
-      );
-    } catch (error) {
-      console.error(`Settlement failed for match ${matchId}`, error);
-      MatchTimeoutMonitoringService.recordSettlementFailure();
-    }
-
-    const durationSec = Math.max(0, Math.round((endedAt.getTime() - (room.match.startedAt ?? endedAt.getTime())) / 1000));
-    MatchTimeoutMonitoringService.recordCompletion({
-      gameId: room.gameId,
-      resultReason,
-      durationSec,
-      success: true,
-    });
-
-    room.match.matchStatus = "COMPLETED";
-    room.match.endedAt = endedAt.getTime();
-    room.match.resultReason = resultReason;
-    this.finalizingMatches.delete(matchId);
-
-    // Tournament bracket advancement (fire-and-forget)
-    const roomSettings = room.settings as Record<string, unknown>;
-    const tournamentId = typeof roomSettings.tournamentId === "string" ? roomSettings.tournamentId : null;
-    const tournamentRoundId = typeof roomSettings.tournamentRoundId === "string" ? roomSettings.tournamentRoundId : null;
-    if (tournamentId && tournamentRoundId && winnerId && !isDraw) {
-      console.log("[MATCH] TOURNAMENT_ADVANCED", {
-        matchId,
-        tournamentId,
-        roundId: tournamentRoundId,
-        winnerId,
-      });
-      reportTournamentMatchResult({
-        matchId,
-        tournamentId,
-        roundId: tournamentRoundId,
-        winnerId,
-        loserId: loserId ?? undefined,
-        scores,
-      }).catch((err) =>
-        console.error(`[TOURNAMENT] match-result report failed for ${matchId}`, err),
-      );
-    }
-
-    const finalState = room.match.engine.serialize();
-    const configSnapshot = (room.settings as Record<string, unknown>)?.configSnapshot as any;
-    GameStateSyncManager.finalizeMatch(matchId, finalState, {
-      winnerIds,
-      resultReason,
-      finalScores: scores,
-      entryFee: room.stake,
-      configurationVersion: configSnapshot?.configVersion ?? 1,
-    });
-
-    room.match = null;
-    room.rematch = null;
-    room.status = "ended";
-    await prisma.room.update({ where: { id: room.id }, data: { status: "ENDED" } });
-
-    this.emitToRoom(room, "game:over", {
-      roomId: room.id,
-      matchId,
-      winnerSeats,
-      winnerIds,
-      state: finalState,
+      triggerReason: resultReason,
     });
     this.broadcastRoomUpdate(room);
   }

@@ -1232,6 +1232,48 @@ model TournamentResultIdempotency {
   @@index([tournamentId])
 }
 
+// ---------------------------------------------------------------------------
+// Tournament Tiers — admin-managed config templates for hourly tournaments
+// ---------------------------------------------------------------------------
+
+model TournamentTier {
+  id                String    @id @default(uuid())
+  name              String                          // "Mini", "Basic", "Standard", "Premium", "Pro"
+  code              String    @unique               // "mini", "basic", "standard", "premium", "pro"
+  description       String?
+  entryFee          Int                             // redeemed coins
+  maxPlayers        Int
+  prizePool         Int                             // guaranteed prize pool in coins
+  prizeDistribution Json      @default("[]")        // [{rank: number, percentage: number}]
+  gameId            String?                         // null = randomly selected from rotation
+  format            String    @default("SINGLE_ELIMINATION")
+  enableThirdPlace  Boolean   @default(true)
+  autoStartWhenFull Boolean   @default(false)
+  isActive          Boolean   @default(true)
+  sortOrder         Int       @default(0)
+  createdBy         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  scheduleLogs      TournamentTierScheduleLog[]
+
+  @@index([isActive, sortOrder])
+}
+
+/// Idempotency guard — one tournament instance per tier per clock-hour (UTC)
+model TournamentTierScheduleLog {
+  id           String   @id @default(uuid())
+  tierId       String
+  tournamentId String   @unique
+  slotHour     DateTime // truncated to the hour (UTC)
+  createdAt    DateTime @default(now())
+
+  tier         TournamentTier @relation(fields: [tierId], references: [id], onDelete: Cascade)
+
+  @@unique([tierId, slotHour])
+  @@index([tierId, slotHour])
+}
+
 enum IdempotencyStatus {
   PROCESSING
   COMPLETED

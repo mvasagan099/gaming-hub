@@ -16,14 +16,18 @@ import {
   ChevronRight,
   Shield,
   Loader2,
+  Medal,
+  Crown,
+  Layers,
 } from 'lucide-react';
-import { GAME_DEFINITIONS } from '@gaming-hub/shared';
+import { GAME_DEFINITIONS, type PlayerTournamentCareerStats } from '@gaming-hub/shared';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Skeleton } from '../Skeleton';
 import { usePlayerTournamentStore } from '../../store/playerTournamentStore';
-import type { PlayerMyTournamentsItem } from '../../services/api/enterprise';
+import { useAuthStore } from '../../store/authStore';
+import { tournamentsApi, type PlayerMyTournamentsItem } from '../../services/api/enterprise';
 
 const gameById = new Map(GAME_DEFINITIONS.map((g) => [g.id, g]));
 
@@ -64,13 +68,20 @@ function formatCountdown(targetDate: string | null): string {
 
 export function MyTournamentsView() {
   const navigate = useNavigate();
+  const session = useAuthStore((s) => s.session);
   const { myTournaments, fetchMyTournaments, isLoading, error } = usePlayerTournamentStore();
+  const [careerStats, setCareerStats] = useState<PlayerTournamentCareerStats | null>(null);
   const [filter, setFilter] = useState<'ALL' | 'ACTIVE' | 'REGISTERED' | 'COMPLETED' | 'WON'>('ALL');
   const [search, setSearch] = useState('');
 
   useEffect(() => {
     fetchMyTournaments();
-  }, [fetchMyTournaments]);
+    if (session?.user?.id) {
+      tournamentsApi.playerCareerStats(session.user.id)
+        .then(setCareerStats)
+        .catch(() => undefined);
+    }
+  }, [fetchMyTournaments, session?.user?.id]);
 
   const filteredTournaments = myTournaments.filter((t) => {
     if (filter === 'ACTIVE') {
@@ -106,12 +117,73 @@ export function MyTournamentsView() {
       navigate(`/tournaments/${tournament.tournamentId}`);
       return;
     }
-    // Route to gameplay room
     navigate(`/game/${tournament.gameId}?matchId=${tournament.myCurrentMatch.matchId}&tournamentId=${tournament.tournamentId}`);
   };
 
   return (
     <div className="space-y-6">
+      {/* ------------------------------------------------------------- */}
+      {/* 0. CAREER TOURNAMENT STATS PROFILE SUMMARY                    */}
+      {/* ------------------------------------------------------------- */}
+      {careerStats && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-lg backdrop-blur-md">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="text-base font-black text-white flex items-center gap-2">
+              <Trophy className="size-4 text-amber-400" /> Career Tournament Statistics
+            </h3>
+            <span className="text-xs font-mono text-amber-400 font-bold">
+              {careerStats.rankingScore} Ranking Pts
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 text-center">
+              <div className="text-xs font-bold text-slate-400">Played</div>
+              <div className="mt-1 text-xl font-black text-white font-mono">{careerStats.tournamentsPlayed}</div>
+            </div>
+            <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 text-center">
+              <div className="text-xs font-bold text-amber-400">1st Place</div>
+              <div className="mt-1 text-xl font-black text-amber-400 font-mono">{careerStats.tournamentWins}</div>
+            </div>
+            <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 text-center">
+              <div className="text-xs font-bold text-indigo-400">Top 4 Finishes</div>
+              <div className="mt-1 text-xl font-black text-indigo-400 font-mono">{careerStats.topFourFinishes}</div>
+            </div>
+            <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 text-center">
+              <div className="text-xs font-bold text-emerald-400">Win Rate</div>
+              <div className="mt-1 text-xl font-black text-emerald-400 font-mono">{careerStats.winRate}%</div>
+            </div>
+            <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 text-center">
+              <div className="text-xs font-bold text-slate-400">Matches Won</div>
+              <div className="mt-1 text-xl font-black text-slate-200 font-mono">{careerStats.totalMatchesWon}</div>
+            </div>
+            <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 text-center">
+              <div className="text-xs font-bold text-amber-400">Total Prizes</div>
+              <div className="mt-1 text-xl font-black text-amber-400 font-mono">🪙 {careerStats.totalPrizesWon.toLocaleString()}</div>
+            </div>
+          </div>
+
+          {/* 5 Tier Breakdown */}
+          {careerStats.tierBreakdown && careerStats.tierBreakdown.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-slate-800/80">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1">
+                <Layers className="size-3" /> Tier Participation
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {careerStats.tierBreakdown.map((t) => (
+                  <div key={t.tierCode} className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-2 text-xs">
+                    <div className="font-bold text-slate-300">{t.tierName}</div>
+                    <div className="mt-0.5 text-[11px] text-slate-400">
+                      {t.tournamentsPlayed} Played · <span className="text-amber-400 font-bold">{t.tournamentsWon} Won</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ------------------------------------------------------------- */}
       {/* 1. CURRENT ACTIVE TOURNAMENT HERO CARD                        */}
       {/* ------------------------------------------------------------- */}

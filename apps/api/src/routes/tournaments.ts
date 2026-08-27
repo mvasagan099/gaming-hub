@@ -225,6 +225,31 @@ export async function tournamentsRoutes(app: FastifyInstance) {
     return TournamentLeaderboardService.getPlayerCareerStats(userId);
   });
 
+  /** Get Global Tournament Leaderboard with multi-game, tier, and period filters */
+  app.get("/api/tournaments/leaderboard/global", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    const q = queryParams(request);
+    const page = q.page ? parseInt(queryString(q.page), 10) : 1;
+    const pageSize = q.pageSize ? parseInt(queryString(q.pageSize), 10) : 20;
+    const scope = (queryString(q.scope) || "overall") as any;
+    const gameId = queryString(q.gameId);
+    const tier = queryString(q.tier);
+    const period = (queryString(q.period) || "all") as any;
+    const search = queryString(q.search);
+
+    const { TournamentLeaderboardService } = await import("../services/tournamentLeaderboardService");
+    return TournamentLeaderboardService.getGlobalTournamentLeaderboard({
+      scope,
+      gameId,
+      tier,
+      period,
+      search,
+      page,
+      pageSize,
+      viewerId: user.id,
+    });
+  });
+
   /** Get game-specific tournament rankings */
   app.get("/api/tournaments/games/:gameId/rankings", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
@@ -239,6 +264,117 @@ export async function tournamentsRoutes(app: FastifyInstance) {
       pageSize,
       viewerId: user.id,
     });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Public Tier API
+  // ---------------------------------------------------------------------------
+
+  /**
+   * List all active tournament tiers (public).
+   * Returns tier configuration for the lobby UI to display available entry points.
+   */
+  app.get("/api/tournament-tiers", { preHandler: authenticate }, async (_request) => {
+    const { prisma: db } = await import("@gaming-hub/db");
+    const tiers = await db.tournamentTier.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: "asc" },
+    });
+
+    return {
+      items: tiers.map((t) => ({
+        id: t.id,
+        name: t.name,
+        code: t.code,
+        description: t.description,
+        entryFee: t.entryFee,
+        maxPlayers: t.maxPlayers,
+        prizePool: t.prizePool,
+        prizeDistribution: t.prizeDistribution,
+        gameId: t.gameId,
+        format: t.format,
+        enableThirdPlace: t.enableThirdPlace,
+        sortOrder: t.sortOrder,
+      })),
+    };
+  });
+
+  /**
+   * Get the upcoming (or current) hourly tournament instance for a given tier code.
+   * Useful for the lobby UI to link players directly to the next joinable tournament.
+   */
+  app.get("/api/tournament-tiers/:code/upcoming", { preHandler: authenticate }, async (request) => {
+    const { prisma: db } = await import("@gaming-hub/db");
+    const { code } = routeParams(request);
+
+    const tier = await db.tournamentTier.findUnique({
+      where: { code, isActive: true },
+    });
+    if (!tier) throw new AppError("NOT_FOUND", `Tier "${code}" not found or inactive`, 404);
+
+    const now = new Date();
+
+    // Find the most recent log entry for this tier — its tournament is the
+    // current or upcoming instance players should join.
+    const log = await db.tournamentTierScheduleLog.findFirst({
+      where: { tierId: tier.id },
+      orderBy: { slotHour: "desc" },
+    });
+
+    if (!log) {
+      return {
+        tier: { id: tier.id, code: tier.code, name: tier.name },
+        tournament: null,
+        message: "No hourly tournament has been scheduled for this tier yet.",
+      };
+    }
+
+    const tournament = await db.tournament.findUnique({
+      where: { id: log.tournamentId },
+      include: { _count: { select: { players: true } } },
+    });
+
+    if (!tournament) {
+      return {
+        tier: { id: tier.id, code: tier.code, name: tier.name },
+        tournament: null,
+        message: "Scheduled tournament record not found.",
+      };
+    }
+
+    const registrationOpen =
+      tournament.status === "REGISTRATION_OPEN" ||
+      tournament.status === "UPCOMING";
+
+    return {
+      tier: {
+        id: tier.id,
+        code: tier.code,
+        name: tier.name,
+        entryFee: tier.entryFee,
+        maxPlayers: tier.maxPlayers,
+        prizePool: tier.prizePool,
+        prizeDistribution: tier.prizeDistribution,
+      },
+      tournament: {
+        id: tournament.id,
+        title: tournament.title,
+        gameId: tournament.gameId,
+        status: tournament.status,
+        entryFee: tournament.entryFee,
+        maxPlayers: tournament.maxPlayers,
+        registeredPlayers: tournament._count.players,
+        startTime: tournament.startTime.toISOString(),
+        registrationStartsAt: tournament.registrationStartsAt?.toISOString() ?? null,
+        registrationEndsAt: tournament.registrationEndsAt?.toISOString() ?? null,
+        prizePool: tournament.prizePool,
+        prizeDistribution: tournament.prizeDistribution,
+        registrationOpen,
+        spotsLeft: Math.max(0, tournament.maxPlayers - tournament._count.players),
+        slotHour: log.slotHour.toISOString(),
+        now: now.toISOString(),
+      },
+    };
   });
 }
 

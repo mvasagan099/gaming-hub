@@ -376,6 +376,56 @@ export class TournamentRecoveryService {
           console.error(`[RECOVERY] Failed settlement for tournament ${t.id}:`, err);
         }
       }
+
+      // -----------------------------------------------------------------------
+      // 5. CANCELLED TOURNAMENT REFUND RECOVERY
+      // -----------------------------------------------------------------------
+      const cancelledTournaments = await prisma.tournament.findMany({
+        where: {
+          status: "CANCELLED",
+        },
+        select: { id: true, rules: true },
+      });
+
+      let refundsRecovered = 0;
+      const { RefundService } = await import("./refundService");
+      for (const t of cancelledTournaments) {
+        try {
+          const debits = await prisma.transaction.findMany({
+            where: {
+              referenceId: t.id,
+              referenceType: "TOURNAMENT_ENTRY",
+              type: "DEBIT",
+            },
+          });
+          for (const debit of debits) {
+            const alreadyCredited = await prisma.transaction.findFirst({
+              where: {
+                referenceId: t.id,
+                referenceType: "TOURNAMENT_ENTRY",
+                type: "CREDIT",
+                userId: debit.userId,
+              },
+            });
+            if (!alreadyCredited) {
+              const res = await RefundService.refundTournamentEntry({
+                tournamentId: t.id,
+                userId: debit.userId,
+                reason: ((t.rules as any)?.cancellationReason) ?? "recovery_reconcile_refund",
+              });
+              if (res.status === "REFUNDED") {
+                refundsRecovered++;
+                logAction(t.id, "REFUND_RECOVERED", "CANCELLED", "REFUNDED", {
+                  userId: debit.userId,
+                  amount: res.refundAmount,
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`[RECOVERY] Failed refund recovery for tournament ${t.id}:`, err);
+        }
+      }
     } finally {
       isRecoveryRunning = false;
     }

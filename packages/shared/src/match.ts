@@ -9,9 +9,39 @@ export type UniversalMatchState =
   | "READY_CHECK"
   | "COUNTDOWN"
   | "LIVE"
+  | "FINALIZING"
   | "COMPLETED"
   | "CANCELLED"
   | "TIME_EXPIRED";
+
+export type UniversalResultReason =
+  | "NORMAL"
+  | "TIME_LIMIT"
+  | "FORFEIT"
+  | "DISCONNECT"
+  | "DRAW"
+  | "TIMEOUT"
+  | "ABANDONED";
+
+export interface StandardMatchResult {
+  matchId: string;
+  gameType: GameId;
+  player1: string;
+  player2: string;
+  winner: string | null;
+  loser: string | null;
+  finalScore: Record<string, number>;
+  resultReason: UniversalResultReason;
+  startedAt: number;
+  endedAt: number;
+  duration: number; // Duration in seconds
+  stateVersion: number;
+  winnerSeats?: number[];
+  isDraw?: boolean;
+  resultType?: "WIN" | "LOSS" | "DRAW" | "FORFEIT";
+  finalState?: Record<string, unknown>;
+  validatedAt?: number;
+}
 
 export type MatchPlayerResult = "pending" | "win" | "loss" | "draw";
 

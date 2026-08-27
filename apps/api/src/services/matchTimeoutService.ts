@@ -49,37 +49,28 @@ export class MatchTimeoutService {
       };
     }
 
-    // Turn has expired: execute idempotent forfeit settlement
-    const idempotencyKey = `TIMEOUT:TURN:${params.matchId}:${params.currentTurnSeat}:${params.turnStartedAt.getTime()}`;
+    // Turn has expired: execute forfeit settlement
+    const timedOutPlayer = match.players.find((p) => p.seat === params.currentTurnSeat);
+    const winners = match.players
+      .filter((p) => p.seat !== params.currentTurnSeat)
+      .map((p) => p.userId);
 
-    return IdempotencyService.executeOnce({
-      key: idempotencyKey,
-      operation: "TURN_TIMEOUT_SETTLEMENT",
-      referenceId: params.matchId,
-      handler: async () => {
-        const timedOutPlayer = match.players.find((p) => p.seat === params.currentTurnSeat);
-        const winners = match.players
-          .filter((p) => p.seat !== params.currentTurnSeat)
-          .map((p) => p.userId);
-
-        const summary = await SettlementService.settleMatch({
-          matchId: params.matchId,
-          winnerIds: winners,
-          options: {
-            resultType: "FORFEIT",
-            reason: `turn_timeout_seat_${params.currentTurnSeat}`,
-          },
-        });
-
-        return {
-          expired: true,
-          remainingSeconds: 0,
-          status: summary.status,
-          timedOutSeat: params.currentTurnSeat,
-          winners,
-        };
+    const summary = await SettlementService.settleMatch({
+      matchId: params.matchId,
+      winnerIds: winners,
+      options: {
+        resultType: "FORFEIT",
+        reason: `turn_timeout_seat_${params.currentTurnSeat}`,
       },
     });
+
+    return {
+      expired: true,
+      remainingSeconds: 0,
+      status: summary.status,
+      timedOutSeat: params.currentTurnSeat,
+      winners,
+    };
   }
 
   /**
@@ -123,26 +114,17 @@ export class MatchTimeoutService {
     }
 
     // Expired: cancel match and refund all joined players
-    const idempotencyKey = `TIMEOUT:JOIN:${params.matchId}`;
-
-    return IdempotencyService.executeOnce({
-      key: idempotencyKey,
-      operation: "JOIN_TIMEOUT_REFUND",
-      referenceId: params.matchId,
-      handler: async () => {
-        await RefundService.refundCancelledMatch({
-          matchId: params.matchId,
-          reason: "match_join_timeout",
-        });
-
-        return {
-          expired: true,
-          remainingSeconds: 0,
-          status: "ABORTED",
-          refunded: true,
-        };
-      },
+    await RefundService.refundCancelledMatch({
+      matchId: params.matchId,
+      reason: "match_join_timeout",
     });
+
+    return {
+      expired: true,
+      remainingSeconds: 0,
+      status: "ABORTED",
+      refunded: true,
+    };
   }
 
   /**
@@ -178,34 +160,25 @@ export class MatchTimeoutService {
       };
     }
 
-    const idempotencyKey = `TIMEOUT:DISCONNECT:${params.matchId}:${params.disconnectedUserId}`;
+    const remainingWinners = match.players
+      .filter((p) => p.userId !== params.disconnectedUserId)
+      .map((p) => p.userId);
 
-    return IdempotencyService.executeOnce({
-      key: idempotencyKey,
-      operation: "DISCONNECT_TIMEOUT_FORFEIT",
-      referenceId: params.matchId,
-      handler: async () => {
-        const remainingWinners = match.players
-          .filter((p) => p.userId !== params.disconnectedUserId)
-          .map((p) => p.userId);
-
-        const summary = await SettlementService.settleMatch({
-          matchId: params.matchId,
-          winnerIds: remainingWinners,
-          options: {
-            resultType: "FORFEIT",
-            reason: "disconnect_grace_timeout",
-          },
-        });
-
-        return {
-          expired: true,
-          remainingSeconds: 0,
-          status: summary.status,
-          winners: remainingWinners,
-        };
+    const summary = await SettlementService.settleMatch({
+      matchId: params.matchId,
+      winnerIds: remainingWinners,
+      options: {
+        resultType: "FORFEIT",
+        reason: "disconnect_grace_timeout",
       },
     });
+
+    return {
+      expired: true,
+      remainingSeconds: 0,
+      status: summary.status,
+      winners: remainingWinners,
+    };
   }
 
   /**

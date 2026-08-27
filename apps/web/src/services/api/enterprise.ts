@@ -568,7 +568,19 @@ export const tournamentsApi = {
     return apiClient.get<Page<TournamentSummary>>(`/tournaments?${qs.toString()}`);
   },
   detail: (id: string) => apiClient.get<TournamentDetail>(`/tournaments/${id}`),
-  register: (id: string) => apiClient.post<{ ok: boolean }>(`/tournaments/${id}/register`),
+  register: (id: string) =>
+    apiClient.post<{
+      ok: boolean;
+      registrationId: string;
+      tournamentId: string;
+      gameId: string;
+      status: string;
+      registeredPlayers: number;
+      maximumPlayers: number;
+      registrationEndTime: string | null;
+      tournamentStartTime: string;
+      entryFee: number;
+    }>(`/tournaments/${id}/register`),
   cancel: (id: string) => apiClient.post<{ ok: boolean }>(`/tournaments/${id}/cancel`),
   bracket: (id: string) => apiClient.get<TournamentBracket>(`/tournaments/${id}/bracket`),
   myStatus: (id: string) => apiClient.get<TournamentPlayerStatus>(`/tournaments/${id}/my-status`),
@@ -589,6 +601,17 @@ export const tournamentsApi = {
     if (params.period) qs.set('period', params.period);
     return apiClient.get<Page<TournamentLeaderboardEntry>>(`/tournaments/leaderboard?${qs.toString()}`);
   },
+  globalLeaderboard: (params: { scope?: string; gameId?: string; tier?: string; period?: string; search?: string; page?: number; pageSize?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.scope) qs.set('scope', params.scope);
+    if (params.gameId && params.gameId !== 'all') qs.set('gameId', params.gameId);
+    if (params.tier && params.tier !== 'all') qs.set('tier', params.tier);
+    if (params.period) qs.set('period', params.period);
+    if (params.search) qs.set('search', params.search);
+    if (params.page) qs.set('page', String(params.page));
+    if (params.pageSize) qs.set('pageSize', String(params.pageSize));
+    return apiClient.get<import('@gaming-hub/shared').GlobalTournamentLeaderboardResponse>(`/tournaments/leaderboard/global?${qs.toString()}`);
+  },
   myTournaments: () => apiClient.get<PlayerMyTournamentsItem[]>('/tournaments/my-tournaments'),
   playerDashboard: (tournamentId: string) => apiClient.get<PlayerTournamentDashboardData>(`/tournaments/${tournamentId}/dashboard`),
   submitDispute: (payload: CreateDisputePayload) => apiClient.post<TournamentDisputeSummary>('/tournaments/disputes', payload),
@@ -604,13 +627,16 @@ export const tournamentsApi = {
     if (params.round) qs.set('round', String(params.round));
     return apiClient.get<TournamentLeaderboardResponse>(`/tournaments/${tournamentId}/leaderboard?${qs.toString()}`);
   },
-  playerCareerStats: (userId: string) => apiClient.get<PlayerTournamentCareerStats>(`/tournaments/players/${userId}/career`),
+  playerCareerStats: (userId: string) => apiClient.get<import('@gaming-hub/shared').PlayerTournamentCareerStats>(`/tournaments/players/${userId}/career`),
   gameTournamentRankings: (gameId: string, params: { page?: number; pageSize?: number } = {}) => {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', String(params.page));
     if (params.pageSize) qs.set('pageSize', String(params.pageSize));
     return apiClient.get<{ page: number; pageSize: number; total: number; items: GameTournamentRankingEntry[] }>(`/tournaments/games/${gameId}/rankings?${qs.toString()}`);
   },
+  tiers: () => apiClient.get<{ items: import('@gaming-hub/shared').TournamentTierConfig[] }>('/tournament-tiers'),
+  upcomingTier: (code: string) =>
+    apiClient.get<{ tier: import('@gaming-hub/shared').TournamentTierConfig; tournament: any; message?: string }>(`/tournament-tiers/${code}/upcoming`),
 };
 
 export const adminTournamentsApi = {
@@ -636,6 +662,30 @@ export const adminTournamentsApi = {
     if (params.status) qs.set('status', params.status);
     if (params.round) qs.set('round', String(params.round));
     return apiClient.get<TournamentLeaderboardResponse>(`/admin/tournaments/${tournamentId}/leaderboard?${qs.toString()}`);
+  },
+  analytics: (params: { timeFilter?: string; fromDate?: string; toDate?: string; gameId?: string; tier?: string; tournamentId?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.timeFilter) qs.set('timeFilter', params.timeFilter);
+    if (params.fromDate) qs.set('fromDate', params.fromDate);
+    if (params.toDate) qs.set('toDate', params.toDate);
+    if (params.gameId && params.gameId !== 'ALL' && params.gameId !== 'all') qs.set('gameId', params.gameId);
+    if (params.tier && params.tier !== 'ALL' && params.tier !== 'all') qs.set('tier', params.tier);
+    if (params.tournamentId && params.tournamentId !== 'ALL' && params.tournamentId !== 'all') qs.set('tournamentId', params.tournamentId);
+    return apiClient.get<import('@gaming-hub/shared').TournamentAnalyticsResponse>(`/admin/tournaments/analytics?${qs.toString()}`);
+  },
+  healthOverview: () => apiClient.get<import('@gaming-hub/shared').TournamentHealthSummary>('/admin/tournaments/health-overview'),
+  generateReport: (payload: import('@gaming-hub/shared').TournamentReportRequest) =>
+    apiClient.post<import('@gaming-hub/shared').TournamentReportResult>('/admin/tournaments/reports/generate', payload),
+  getExportCsvUrl: (params: { reportType: string; timeFilter?: string; fromDate?: string; toDate?: string; gameId?: string; tier?: string; status?: string }) => {
+    const qs = new URLSearchParams();
+    qs.set('reportType', params.reportType);
+    if (params.timeFilter) qs.set('timeFilter', params.timeFilter);
+    if (params.fromDate) qs.set('fromDate', params.fromDate);
+    if (params.toDate) qs.set('toDate', params.toDate);
+    if (params.gameId && params.gameId !== 'ALL' && params.gameId !== 'all') qs.set('gameId', params.gameId);
+    if (params.tier && params.tier !== 'ALL' && params.tier !== 'all') qs.set('tier', params.tier);
+    if (params.status && params.status !== 'ALL') qs.set('status', params.status);
+    return `/api/admin/tournaments/reports/export-csv?${qs.toString()}`;
   },
 };
 
@@ -874,6 +924,15 @@ export const adminApi = {
   resumeTournament: (id: string) => apiClient.post(`/admin/tournaments/${id}/resume`),
   cancelTournament: (id: string, reason?: string) =>
     apiClient.post(`/admin/tournaments/${id}/cancel`, { reason }),
+  tournamentCancellationPreview: (id: string) =>
+    apiClient.get<import('@gaming-hub/shared').TournamentCancellationPreview>(`/admin/tournaments/${id}/cancellation-preview`),
+  tournamentRefunds: (id: string) =>
+    apiClient.get<import('@gaming-hub/shared').TournamentRefundSummary>(`/admin/tournaments/${id}/refunds`),
+  retryTournamentRefunds: (id: string, reason: string, targetUserId?: string) =>
+    apiClient.post<{ ok: boolean; retriedCount?: number; succeededCount?: number; failedCount?: number }>(
+      `/admin/tournaments/${id}/refunds/retry`,
+      { reason, targetUserId }
+    ),
   settleTournament: (id: string) => apiClient.post(`/admin/tournaments/${id}/settle`),
   tournamentSettlements: (id: string, status?: string) => {
     const qs = status && status !== 'ALL' ? `?status=${status}` : '';
@@ -881,6 +940,31 @@ export const adminApi = {
   },
   retryTournamentSettlements: (id: string, reason: string, prizeId?: string) =>
     apiClient.post<{ ok: boolean; retriedCount?: number }>(`/admin/tournaments/${id}/settlements/retry`, { reason, prizeId }),
+  tournamentNotifications: (id: string, params?: { userId?: string; eventType?: string; status?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.userId) qs.set('userId', params.userId);
+    if (params?.eventType) qs.set('eventType', params.eventType);
+    if (params?.status) qs.set('status', params.status);
+    return apiClient.get<{ summary: { total: number; sent: number; pending: number; failed: number }; emailLogs: any[]; inAppLogs: any[] }>(
+      `/admin/tournaments/${id}/notifications?${qs.toString()}`
+    );
+  },
+  retryTournamentEmail: (emailId: string) =>
+    apiClient.post<{ success: boolean; record: any }>(`/admin/tournaments/emails/${emailId}/retry`),
+  tournamentSchedulerInfo: () =>
+    apiClient.get<import('@gaming-hub/shared').TournamentSchedulerInfo>('/admin/tournaments/scheduler'),
+  toggleTournamentScheduler: (paused: boolean, reason?: string) =>
+    apiClient.post<import('@gaming-hub/shared').TournamentSchedulerInfo>('/admin/tournaments/scheduler/toggle', { paused, reason }),
+  tournamentSchedulerPreview: (hours = 6) =>
+    apiClient.get<import('@gaming-hub/shared').SchedulerPreviewSlot[]>(`/admin/tournaments/scheduler/preview?hours=${hours}`),
+  tournamentGameTiers: () =>
+    apiClient.get<import('@gaming-hub/shared').GameTierAvailability>('/admin/tournaments/game-tiers'),
+  updateTournamentGameTiers: (matrix: import('@gaming-hub/shared').GameTierAvailability) =>
+    apiClient.put<import('@gaming-hub/shared').GameTierAvailability>('/admin/tournaments/game-tiers', matrix),
+  tournamentFinancials: (id: string) =>
+    apiClient.get<import('@gaming-hub/shared').TournamentFinancialSummary>(`/admin/tournaments/${id}/financials`),
+  tournamentTiers: () => apiClient.get<any[]>('/admin/tournament-tiers'),
+  updateTournamentTier: (id: string, data: any) => apiClient.put(`/admin/tournament-tiers/${id}`, data),
 
   coupons: (page = 1, pageSize = 50, status?: string) => {
     const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });

@@ -254,10 +254,12 @@ export class WalletTransactionService {
       tournamentId: string;
       tournamentTitle: string;
       entryFee: number;
+      tierId?: string | null;
       meta?: Record<string, unknown>;
     },
   ): Promise<Wallet> {
-    const transactionId = `tournament-entry-${params.tournamentId}-${params.userId}`;
+    const transactionId = (params.meta?.transactionId as string) || `tournament-entry-${params.tournamentId}-${params.userId}`;
+    const createdAt = new Date().toISOString();
     return this.createDebit(tx, {
       userId: params.userId,
       amount: params.entryFee,
@@ -265,9 +267,15 @@ export class WalletTransactionService {
       referenceId: params.tournamentId,
       meta: {
         transactionId,
+        userId: params.userId,
+        tournamentId: params.tournamentId,
+        tierId: params.tierId ?? null,
         tournamentTitle: params.tournamentTitle,
         entryFee: params.entryFee,
+        amount: params.entryFee,
+        currency: "COINS",
         status: "COMPLETED",
+        createdAt,
         description: `Registration fee for ${params.tournamentTitle}`,
         ...params.meta,
       },
@@ -285,10 +293,12 @@ export class WalletTransactionService {
       tournamentTitle: string;
       prizeAmount: number;
       rank: number;
+      settlementId?: string;
       meta?: Record<string, unknown>;
     },
   ): Promise<Wallet> {
-    const transactionId = `tournament-prize-${params.tournamentId}-${params.userId}-${params.rank}`;
+    const transactionId = (params.meta?.transactionId as string) || `tournament-prize-${params.tournamentId}-${params.userId}-${params.rank}`;
+    const createdAt = new Date().toISOString();
     return this.createCredit(tx, {
       userId: params.userId,
       amount: params.prizeAmount,
@@ -296,9 +306,16 @@ export class WalletTransactionService {
       referenceId: params.tournamentId,
       meta: {
         transactionId,
-        tournamentTitle: params.tournamentTitle,
+        settlementId: params.settlementId ?? (params.meta?.settlementId as string) ?? null,
+        userId: params.userId,
+        tournamentId: params.tournamentId,
+        position: params.rank,
         rank: params.rank,
+        amount: params.prizeAmount,
+        currency: "COINS",
+        tournamentTitle: params.tournamentTitle,
         status: "COMPLETED",
+        createdAt,
         description: `Rank #${params.rank} prize in ${params.tournamentTitle}`,
         ...params.meta,
       },
@@ -315,11 +332,13 @@ export class WalletTransactionService {
       tournamentId: string;
       tournamentTitle: string;
       refundAmount: number;
+      originalTransactionId?: string | null;
       reason?: string;
       meta?: Record<string, unknown>;
     },
   ): Promise<Wallet> {
-    const transactionId = `tournament-refund-${params.tournamentId}-${params.userId}`;
+    const transactionId = (params.meta?.transactionId as string) || `tournament-refund-${params.tournamentId}-${params.userId}`;
+    const createdAt = new Date().toISOString();
     return this.createCredit(tx, {
       userId: params.userId,
       amount: params.refundAmount,
@@ -327,10 +346,18 @@ export class WalletTransactionService {
       referenceId: params.tournamentId,
       meta: {
         transactionId,
+        refundTransactionId: transactionId,
+        originalTransactionId: params.originalTransactionId ?? (params.meta?.originalTransactionId as string) ?? null,
+        originalEntryTransactionId: params.originalTransactionId ?? (params.meta?.originalTransactionId as string) ?? null,
+        userId: params.userId,
+        tournamentId: params.tournamentId,
+        amount: params.refundAmount,
+        currency: "COINS",
         tournamentTitle: params.tournamentTitle,
         refund: true,
         reason: params.reason ?? "tournament_cancelled",
         status: "REFUNDED",
+        createdAt,
         description: `Refund for ${params.tournamentTitle} (${params.reason ?? "cancelled"})`,
         ...params.meta,
       },

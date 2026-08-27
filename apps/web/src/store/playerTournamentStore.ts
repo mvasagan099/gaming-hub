@@ -119,6 +119,39 @@ export const usePlayerTournamentStore = create<PlayerTournamentState>((set, get)
       }
     });
 
+    socket.on('tournament:player-count-updated', (data: Record<string, unknown>) => {
+      const count = data.registeredPlayers as number | undefined;
+      const max = data.maxPlayers as number | undefined;
+      if (count != null) {
+        set((state) => ({
+          detail: state.detail ? { ...state.detail, registeredCount: count, maxPlayers: max ?? state.detail.maxPlayers } : null,
+          dashboardData: state.dashboardData
+            ? {
+                ...state.dashboardData,
+                tournament: {
+                  ...state.dashboardData.tournament,
+                  registeredPlayers: count,
+                  maxPlayers: max ?? state.dashboardData.tournament.maxPlayers,
+                  availableSlots: Math.max(0, (max ?? state.dashboardData.tournament.maxPlayers) - count),
+                },
+              }
+            : null,
+        }));
+      }
+    });
+
+    socket.on('tournament:player-registered', (data: Record<string, unknown>) => {
+      handleTournamentEvent('tournament:player-registered', data);
+      get().refreshDetail(tournamentId);
+    });
+
+    socket.on('tournament:match-assigned', (data: Record<string, unknown>) => {
+      handleTournamentEvent('tournament:match-assigned', data);
+      get().refreshCurrentMatch(tournamentId);
+      get().refreshMyStatus(tournamentId);
+      get().refreshBracket(tournamentId);
+    });
+
     socket.on('tournament:match-created', (data: Record<string, unknown>) => {
       handleTournamentEvent('tournament:match-created', data);
       get().refreshBracket(tournamentId);

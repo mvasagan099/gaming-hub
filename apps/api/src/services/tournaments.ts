@@ -36,7 +36,13 @@ async function assertTournamentsEnabled(): Promise<void> {
 
 export async function listTournaments(page: number, pageSize: number, status?: TournamentStatus, gameId?: string) {
   const where: Record<string, unknown> = {
-    ...(status ? { status } : { status: { in: ["UPCOMING", "LIVE"] } }),
+    ...(status
+      ? status === "UPCOMING"
+        ? { status: { in: ["UPCOMING", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "STARTING"] } }
+        : status === "LIVE"
+        ? { status: { in: ["LIVE", "IN_PROGRESS", "STARTING"] } }
+        : { status }
+      : { status: { not: "CANCELLED" } }),
     ...(gameId ? { gameId } : {}),
   };
   const [items, total] = await Promise.all([
@@ -172,6 +178,8 @@ export async function registerForTournament(userId: string, tournamentId: string
           gameId: true,
           status: true,
           entryFee: true,
+          prizePool: true,
+          configSnapshot: true,
           maxPlayers: true,
           startTime: true,
           registrationStartsAt: true,
@@ -227,11 +235,13 @@ export async function registerForTournament(userId: string, tournamentId: string
 
       // 5. Atomically debit entry fee with balance guard
       if (lockedTournament.entryFee > 0) {
+        const tierId = (lockedTournament.configSnapshot as any)?.tierId ?? null;
         await WalletTransactionService.createTournamentEntry(tx, {
           userId,
           tournamentId,
           tournamentTitle: lockedTournament.title,
           entryFee: lockedTournament.entryFee,
+          tierId,
         });
       }
 
@@ -241,6 +251,7 @@ export async function registerForTournament(userId: string, tournamentId: string
           tournamentId,
           userId,
           registeredAt: new Date(),
+          liveStatus: "REGISTERED",
         },
       });
 
@@ -257,13 +268,16 @@ export async function registerForTournament(userId: string, tournamentId: string
         ok: true,
         registrationId: createdPlayer.id,
         tournamentId: lockedTournament.id,
+        tournamentTitle: lockedTournament.title,
+        tierId: (lockedTournament.configSnapshot as any)?.tierId ?? null,
         gameId: lockedTournament.gameId,
-        status: "WAITING_FOR_TOURNAMENT_START",
+        entryFee: lockedTournament.entryFee,
+        prizePool: lockedTournament.prizePool,
+        status: "REGISTERED",
         registeredPlayers: newCount,
         maximumPlayers: lockedTournament.maxPlayers,
         registrationEndTime: lockedTournament.registrationEndsAt?.toISOString() ?? null,
         tournamentStartTime: lockedTournament.startTime.toISOString(),
-        entryFee: lockedTournament.entryFee,
         tournament: lockedTournament,
       };
     },
@@ -276,7 +290,15 @@ export async function registerForTournament(userId: string, tournamentId: string
         category: "game",
         targetType: "tournament",
         targetId: res.tournament.id,
-        meta: { title: res.tournament.title, entryFee: res.tournament.entryFee },
+        meta: {
+          userId,
+          tournamentId: res.tournament.id,
+          title: res.tournament.title,
+          entryFee: res.tournament.entryFee,
+          amount: res.tournament.entryFee,
+          transactionId: `tournament-entry-${res.tournament.id}-${userId}`,
+          timestamp: new Date().toISOString(),
+        },
       });
 
       const updatedCount = await prisma.tournamentPlayer.count({ where: { tournamentId } });
@@ -339,11 +361,21 @@ export async function cancelRegistration(userId: string, tournamentId: string) {
       if (tournament.entryFee > 0) {
         const tournamentSettings = await getCategorySettings("tournament");
         if (tournamentSettings.refundOnCancel) {
+          const debitTx = await tx.transaction.findFirst({
+            where: {
+              userId,
+              referenceId: tournament.id,
+              referenceType: "TOURNAMENT_ENTRY",
+              type: "DEBIT",
+            },
+          });
+          const originalTransactionId = debitTx?.id ?? `tournament-entry-${tournament.id}-${userId}`;
           await WalletTransactionService.createTournamentRefund(tx, {
             userId,
             tournamentId: tournament.id,
             tournamentTitle: tournament.title,
             refundAmount: tournament.entryFee,
+            originalTransactionId,
             reason: "player_cancelled_registration",
           });
         }
@@ -365,6 +397,23 @@ export async function cancelRegistration(userId: string, tournamentId: string) {
       return { ok: true, remainingCount };
     },
   }).then(async (res) => {
+    audit({
+      actorType: "user",
+      actorId: userId,
+      action: "tournament.registration.cancelled",
+      category: "game",
+      targetType: "tournament",
+      targetId: tournamentId,
+      meta: {
+        userId,
+        tournamentId,
+        refundAmount: tournament.entryFee,
+        originalTransactionId: `tournament-entry-${tournamentId}-${userId}`,
+        refundTransactionId: `tournament-refund-${tournamentId}-${userId}`,
+        timestamp: new Date().toISOString(),
+      },
+    });
+
     const updatedCount = await prisma.tournamentPlayer.count({ where: { tournamentId } });
     await Promise.all([
       notifyUserSocket(userId, "tournament:player-unregistered", { tournamentId }),
@@ -417,6 +466,7 @@ export async function getRegistrationInfo(tournamentId: string, userId: string |
   let userBalance = 0;
   let canRegister = false;
   let ineligibilityReason: string | undefined = undefined;
+  let insufficientBalanceDetails: { required: number; available: number; shortage: number } | undefined = undefined;
 
   if (userId) {
     const [entry, userWallet, userRecord] = await Promise.all([
@@ -456,6 +506,11 @@ export async function getRegistrationInfo(tournamentId: string, userId: string |
     } else if (tournament.entryFee > 0 && userBalance < tournament.entryFee) {
       canRegister = false;
       ineligibilityReason = "Insufficient balance";
+      insufficientBalanceDetails = {
+        required: tournament.entryFee,
+        available: userBalance,
+        shortage: tournament.entryFee - userBalance,
+      };
     } else {
       canRegister = true;
     }
@@ -466,6 +521,7 @@ export async function getRegistrationInfo(tournamentId: string, userId: string |
     title: tournament.title,
     gameId: tournament.gameId,
     entryFee: tournament.entryFee,
+    prizePool: tournament.prizePool,
     maxPlayers: tournament.maxPlayers,
     registeredPlayers: registeredCount,
     availableSlots,
@@ -479,6 +535,7 @@ export async function getRegistrationInfo(tournamentId: string, userId: string |
     balanceAfterRegistration: Math.max(0, userBalance - tournament.entryFee),
     canRegister,
     ineligibilityReason,
+    insufficientBalanceDetails,
   };
 }
 

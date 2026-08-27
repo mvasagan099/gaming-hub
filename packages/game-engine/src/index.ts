@@ -13,3 +13,5 @@ export * from "./snake-vs-worms";
 export * from "./fruit-ninja";
 export * from "./snooker";
 export * from "./registry";
+export * from "./adapters";
+export * from "./validators";

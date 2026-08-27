@@ -1,6 +1,7 @@
 import type { GameId } from "./games";
 
-export type ResultReason = "NORMAL" | "TIME_LIMIT" | "TIMEOUT" | "ABANDONED" | "DRAW";
+export type ResultReason = "NORMAL" | "TIME_LIMIT" | "TIMEOUT" | "ABANDONED" | "DRAW" | "FORFEIT" | "DISCONNECT";
+
 
 export interface MatchHistoryPlayer {
   userId: string;

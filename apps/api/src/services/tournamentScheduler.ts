@@ -11,6 +11,7 @@ import {
 } from "./tournamentEngine";
 import { TournamentMatchService } from "./tournamentMatchService";
 import { TournamentNotificationService } from "./tournamentNotificationService";
+import { scheduleHourlyTournaments } from "./hourlyTournamentScheduler";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -100,30 +101,52 @@ async function closeExpiredRegistrations(): Promise<number> {
       status: "REGISTRATION_OPEN",
       registrationEndsAt: { not: null, lte: now },
     },
-    select: { id: true, title: true, minPlayers: true, _count: { select: { players: true } } },
+    select: {
+      id: true,
+      title: true,
+      minPlayers: true,
+      maxPlayers: true,
+      startTime: true,
+      _count: { select: { players: true } },
+    },
   });
 
   let processed = 0;
   for (const t of expired) {
     try {
       const playerCount = t._count.players;
-      if (playerCount < (t.minPlayers ?? 2)) {
-        // Not enough players → cancel + refund
-        await cancelTournamentWithRefunds(t.id, "Insufficient players at registration close", null);
+      const minRequired = t.minPlayers ?? 2;
+
+      // Close registration first
+      await transitionTournamentStatus(t.id, "REGISTRATION_CLOSED", null);
+      auditEvent("TOURNAMENT_SCHEDULER_REGISTRATION_CLOSED", {
+        playerCount,
+        minPlayers: minRequired,
+        maxPlayers: t.maxPlayers,
+      }, t.id);
+
+      // Evaluate minimum players requirement
+      if (playerCount < minRequired) {
+        // Minimum not reached -> Cancel tournament & execute authoritative refunds
+        await cancelTournamentWithRefunds(t.id, "MINIMUM_PLAYERS_NOT_REACHED", null);
         auditEvent("TOURNAMENT_SCHEDULER_REGISTRATION_CANCELLED", {
-          reason: "insufficient_players",
+          reason: "MINIMUM_PLAYERS_NOT_REACHED",
           playerCount,
-          minPlayers: t.minPlayers ?? 2,
+          minPlayers: minRequired,
         }, t.id);
       } else {
-        await transitionTournamentStatus(t.id, "REGISTRATION_CLOSED", null);
-        auditEvent("TOURNAMENT_SCHEDULER_REGISTRATION_CLOSED", {
-          playerCount,
-        }, t.id);
+        // Minimum reached -> Ready to start when scheduled
+        if (t.startTime && t.startTime <= now) {
+          await startTournament(t.id, null);
+          auditEvent("TOURNAMENT_SCHEDULER_STARTED", {
+            reason: "registration_closed_and_min_reached",
+            playerCount,
+          }, t.id);
+        }
       }
       processed++;
     } catch (error) {
-      console.error(`[SCHEDULER] Failed to close registration for tournament ${t.id}:`, error);
+      console.error(`[SCHEDULER] Failed to process registration close for tournament ${t.id}:`, error);
     }
   }
   return processed;
@@ -644,6 +667,7 @@ async function sendTournamentStartingReminders(): Promise<number> {
 // ---------------------------------------------------------------------------
 
 export interface SchedulerRunResult {
+  hourlyTournamentsCreated: number;
   registrationsClosed: number;
   tournamentsStarted: number;
   matchesRecovered: number;
@@ -660,6 +684,7 @@ export interface SchedulerRunResult {
 
 export async function runTournamentScheduler(): Promise<SchedulerRunResult> {
   const result: SchedulerRunResult = {
+    hourlyTournamentsCreated: 0,
     registrationsClosed: 0,
     tournamentsStarted: 0,
     matchesRecovered: 0,
@@ -684,6 +709,17 @@ export async function runTournamentScheduler(): Promise<SchedulerRunResult> {
   }
 
   try {
+    // -1. Create hourly tier-based tournaments for the current clock-hour slot
+    try {
+      const hourlyResult = await scheduleHourlyTournaments();
+      result.hourlyTournamentsCreated = hourlyResult.created;
+      for (const err of hourlyResult.errors) {
+        result.errors.push(err);
+      }
+    } catch (error) {
+      result.errors.push(`scheduleHourlyTournaments: ${error}`);
+    }
+
     // 0. Open scheduled registrations (registrationStartsAt)
     try {
       await openScheduledRegistrations();

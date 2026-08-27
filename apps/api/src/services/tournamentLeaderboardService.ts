@@ -8,8 +8,26 @@ import {
   type TournamentLeaderboardResponse,
   type PlayerTournamentCareerStats,
   type GameTournamentRankingEntry,
+  type GlobalTournamentLeaderboardResponse,
+  type GlobalTournamentLeaderboardEntry,
+  type TournamentTierBreakdownStat,
+  type GameTournamentBreakdownStat,
 } from "@gaming-hub/shared";
 import { audit } from "./audit";
+
+export function getTournamentTierCode(t: { title: string; entryFee: number; configSnapshot?: any; rules?: any }): "mini" | "basic" | "standard" | "premium" | "pro" {
+  const code = (t.configSnapshot as any)?.tierCode || (t.rules as any)?.tierCode;
+  if (code && ["mini", "basic", "standard", "premium", "pro"].includes(code.toLowerCase())) {
+    return code.toLowerCase() as any;
+  }
+  const title = (t.title || "").toLowerCase();
+  if (title.includes("pro") || t.entryFee >= 100) return "pro";
+  if (title.includes("premium") || t.entryFee >= 50) return "premium";
+  if (title.includes("standard") || t.entryFee >= 25) return "standard";
+  if (title.includes("basic") || t.entryFee >= 10) return "basic";
+  return "mini";
+}
+
 
 export interface UpdateOnMatchCompleteParams {
   tournamentId: string;
@@ -486,7 +504,7 @@ export class TournamentLeaderboardService {
   }
 
   /**
-   * Retrieves player's complete career tournament profile statistics.
+   * Retrieves player's complete career tournament profile statistics across all 5 tiers and 10 games.
    */
   static async getPlayerCareerStats(userId: string): Promise<PlayerTournamentCareerStats> {
     const user = await prisma.user.findUnique({
@@ -498,7 +516,7 @@ export class TournamentLeaderboardService {
       throw new AppError("NOT_FOUND", `User ${userId} not found`, 404);
     }
 
-    // Completed tournaments the player participated in
+    // All tournament participations (completed or settled)
     const participations = await prisma.tournamentPlayer.findMany({
       where: {
         userId,
@@ -508,28 +526,59 @@ export class TournamentLeaderboardService {
       },
       include: {
         tournament: {
-          select: { id: true, gameId: true },
+          select: { id: true, gameId: true, title: true, entryFee: true, configSnapshot: true, rules: true },
         },
         prizes: true,
       },
+    });
+
+    // Total registrations (including all statuses)
+    const totalEntries = await prisma.tournamentPlayer.count({
+      where: { userId },
     });
 
     const tournamentAppearances = participations.length;
     let tournamentWins = 0;
     let finalsReached = 0;
     let topThreeFinishes = 0;
+    let topFourFinishes = 0;
     let totalMatchesPlayed = 0;
     let totalMatchesWon = 0;
     let totalPrizesWon = 0;
     let bestRank: number | null = null;
+    let rankingScore = 0;
 
-    const gameStatsMap = new Map<string, { wins: number; appearances: number; prizes: number }>();
+    // 5 Tier aggregators
+    const TIERS: Array<"mini" | "basic" | "standard" | "premium" | "pro"> = ["mini", "basic", "standard", "premium", "pro"];
+    const tierMap = new Map<string, { played: number; won: number; topFour: number; prizes: number }>();
+    for (const t of TIERS) {
+      tierMap.set(t, { played: 0, won: 0, topFour: 0, prizes: 0 });
+    }
+
+    // 10 Game aggregators
+    const ALL_GAMES = [
+      "chess",
+      "ludo",
+      "snake-ladder",
+      "bubble-shooter",
+      "fruit-ninja",
+      "snake-vs-worms",
+      "table-tennis",
+      "carrom",
+      "cricket",
+      "snooker",
+    ];
+    const gameMap = new Map<string, { played: number; won: number; topFour: number; wins: number; losses: number; prizes: number }>();
+    for (const g of ALL_GAMES) {
+      gameMap.set(g, { played: 0, won: 0, topFour: 0, wins: 0, losses: 0, prizes: 0 });
+    }
 
     for (const p of participations) {
       const rank = p.finalRank ?? p.result;
       if (rank === 1) tournamentWins++;
       if (rank && rank <= 2) finalsReached++;
       if (rank && rank <= 3) topThreeFinishes++;
+      if (rank && rank <= 4) topFourFinishes++;
 
       if (rank) {
         if (bestRank === null || rank < bestRank) {
@@ -540,34 +589,77 @@ export class TournamentLeaderboardService {
       totalMatchesPlayed += p.matchesPlayed;
       totalMatchesWon += p.wins;
 
+      // Ranking score calculation
+      if (rank === 1) rankingScore += 100;
+      else if (rank === 2) rankingScore += 50;
+      else if (rank === 3) rankingScore += 30;
+      else if (rank === 4) rankingScore += 20;
+      rankingScore += p.wins * 10;
+      rankingScore += p.losses * 2;
+
+      let tournPrize = 0;
       for (const prize of p.prizes) {
         if (prize.status === "COMPLETED" || prize.status === "PAID") {
           totalPrizesWon += prize.amount;
+          tournPrize += prize.amount;
         }
       }
 
+      // Tier Aggregation
+      const tierCode = getTournamentTierCode(p.tournament);
+      const tierData = tierMap.get(tierCode) || { played: 0, won: 0, topFour: 0, prizes: 0 };
+      tierData.played++;
+      if (rank === 1) tierData.won++;
+      if (rank && rank <= 4) tierData.topFour++;
+      tierData.prizes += tournPrize;
+      tierMap.set(tierCode, tierData);
+
+      // Game Aggregation
       const gid = p.tournament.gameId;
-      const gEntry = gameStatsMap.get(gid) || { wins: 0, appearances: 0, prizes: 0 };
-      gEntry.appearances++;
-      if (rank === 1) gEntry.wins++;
-      for (const prize of p.prizes) {
-        if (prize.status === "COMPLETED" || prize.status === "PAID") {
-          gEntry.prizes += prize.amount;
-        }
-      }
-      gameStatsMap.set(gid, gEntry);
+      const gameData = gameMap.get(gid) || { played: 0, won: 0, topFour: 0, wins: 0, losses: 0, prizes: 0 };
+      gameData.played++;
+      if (rank === 1) gameData.won++;
+      if (rank && rank <= 4) gameData.topFour++;
+      gameData.wins += p.wins;
+      gameData.losses += p.losses;
+      gameData.prizes += tournPrize;
+      gameMap.set(gid, gameData);
     }
 
     const winRate = tournamentAppearances > 0
       ? Number(((tournamentWins / tournamentAppearances) * 100).toFixed(2))
       : 0;
 
-    const gameBreakdown = Array.from(gameStatsMap.entries()).map(([gameId, stat]) => ({
+    const TIER_NAMES: Record<string, string> = {
+      mini: "Mini",
+      basic: "Basic",
+      standard: "Standard",
+      premium: "Premium",
+      pro: "Pro",
+    };
+
+    const tierBreakdown: TournamentTierBreakdownStat[] = TIERS.map((tierCode) => {
+      const data = tierMap.get(tierCode)!;
+      return {
+        tierCode,
+        tierName: TIER_NAMES[tierCode] || tierCode,
+        tournamentsPlayed: data.played,
+        tournamentsWon: data.won,
+        topFourFinishes: data.topFour,
+        totalPrizesWon: data.prizes,
+        winRate: data.played > 0 ? Number(((data.won / data.played) * 100).toFixed(2)) : 0,
+      };
+    });
+
+    const gameBreakdown: GameTournamentBreakdownStat[] = Array.from(gameMap.entries()).map(([gameId, data]) => ({
       gameId,
-      tournamentWins: stat.wins,
-      tournamentAppearances: stat.appearances,
-      winRate: stat.appearances > 0 ? Number(((stat.wins / stat.appearances) * 100).toFixed(2)) : 0,
-      totalPrizesWon: stat.prizes,
+      tournamentsPlayed: data.played,
+      tournamentsWon: data.won,
+      topFourFinishes: data.topFour,
+      matchWins: data.wins,
+      matchLosses: data.losses,
+      winRate: data.played > 0 ? Number(((data.won / data.played) * 100).toFixed(2)) : 0,
+      totalPrizesWon: data.prizes,
     }));
 
     return {
@@ -576,70 +668,127 @@ export class TournamentLeaderboardService {
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
       tournamentWins,
+      tournamentsPlayed: tournamentAppearances,
       tournamentAppearances,
       finalsReached,
       topThreeFinishes,
+      topFourFinishes,
+      totalTournamentEntries: totalEntries,
+      totalTournamentPrizes: totalPrizesWon,
+      currentRanking: null,
+      rankingScore,
       winRate,
       totalMatchesPlayed,
       totalMatchesWon,
       totalPrizesWon,
       bestRank,
+      tierBreakdown,
       gameBreakdown,
     };
   }
 
   /**
-   * Retrieves game-specific tournament rankings across any of the 10 games.
+   * Retrieves unified Global Tournament Leaderboard with multi-game, multi-tier, and time period filters.
    */
-  static async getGameTournamentRankings(
-    gameId: string,
-    params: { page?: number; pageSize?: number; viewerId?: string },
-  ): Promise<{ page: number; pageSize: number; total: number; items: GameTournamentRankingEntry[] }> {
+  static async getGlobalTournamentLeaderboard(params: {
+    scope?: "overall" | "game" | "tier";
+    gameId?: string;
+    tier?: string;
+    period?: "all" | "month" | "week";
+    search?: string;
+    page?: number;
+    pageSize?: number;
+    viewerId?: string;
+  }): Promise<GlobalTournamentLeaderboardResponse> {
+    const scope = params.scope || "overall";
+    const period = params.period || "all";
     const { page, pageSize } = clampPagination(params.page, params.pageSize);
 
-    // Group completed tournament wins & stats for this game
+    // Compute period date filter
+    const now = new Date();
+    let minDate: Date | undefined;
+    if (period === "week") {
+      minDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (period === "month") {
+      minDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    const tournamentWhere: Record<string, unknown> = {
+      status: { in: ["COMPLETED", "SETTLING", "SETTLED"] },
+    };
+
+    if (params.gameId && params.gameId !== "all") {
+      tournamentWhere.gameId = params.gameId;
+    }
+
+    if (minDate) {
+      tournamentWhere.createdAt = { gte: minDate };
+    }
+
     const participations = await prisma.tournamentPlayer.findMany({
       where: {
-        tournament: {
-          gameId,
-          status: { in: ["COMPLETED", "SETTLING", "SETTLED"] },
-        },
+        tournament: tournamentWhere,
       },
       include: {
         user: {
-          select: { id: true, username: true, displayName: true, avatarUrl: true },
+          select: { id: true, username: true, displayName: true, avatarUrl: true, createdAt: true },
+        },
+        tournament: {
+          select: { id: true, gameId: true, title: true, entryFee: true, configSnapshot: true, rules: true },
         },
         prizes: true,
       },
     });
 
     const userAggMap = new Map<string, {
-      user: { id: string; username: string; displayName: string; avatarUrl: string | null };
+      user: { id: string; username: string; displayName: string; avatarUrl: string | null; createdAt: Date };
       tournamentsWon: number;
       tournamentsPlayed: number;
+      topFourFinishes: number;
+      matchWins: number;
+      matchLosses: number;
+      points: number;
       totalPrizesWon: number;
-      totalMatchesWon: number;
-      totalMatchesPlayed: number;
     }>();
+
+    const targetTier = params.tier?.toLowerCase();
 
     for (const p of participations) {
       if (!p.user) continue;
+
+      // Filter by tier if specified
+      if (targetTier && targetTier !== "all") {
+        const tournTier = getTournamentTierCode(p.tournament);
+        if (tournTier !== targetTier) continue;
+      }
+
       const uid = p.userId;
       const agg = userAggMap.get(uid) || {
         user: p.user,
         tournamentsWon: 0,
         tournamentsPlayed: 0,
+        topFourFinishes: 0,
+        matchWins: 0,
+        matchLosses: 0,
+        points: 0,
         totalPrizesWon: 0,
-        totalMatchesWon: 0,
-        totalMatchesPlayed: 0,
       };
 
       agg.tournamentsPlayed++;
-      if (p.finalRank === 1 || p.result === 1) {
-        agg.tournamentsWon++;
-      }
-      agg.totalMatchesPlayed += p.matchesPlayed;
-      agg.totalMatchesWon += p.wins;
+      const rank = p.finalRank ?? p.result;
+      if (rank === 1) agg.tournamentsWon++;
+      if (rank && rank <= 4) agg.topFourFinishes++;
+
+      agg.matchWins += p.wins;
+      agg.matchLosses += p.losses;
+
+      // Ranking Score Points
+      if (rank === 1) agg.points += 100;
+      else if (rank === 2) agg.points += 50;
+      else if (rank === 3) agg.points += 30;
+      else if (rank === 4) agg.points += 20;
+      agg.points += p.wins * 10;
+      agg.points += p.losses * 2;
 
       for (const pr of p.prizes) {
         if (pr.status === "COMPLETED" || pr.status === "PAID") {
@@ -650,42 +799,141 @@ export class TournamentLeaderboardService {
       userAggMap.set(uid, agg);
     }
 
-    const sortedList = Array.from(userAggMap.values())
-      .map((entry) => ({
-        ...entry,
-        winRate: entry.tournamentsPlayed > 0
-          ? Number(((entry.tournamentsWon / entry.tournamentsPlayed) * 100).toFixed(2))
-          : 0,
-      }))
-      .sort((a, b) => {
-        if (b.tournamentsWon !== a.tournamentsWon) return b.tournamentsWon - a.tournamentsWon;
-        if (b.totalPrizesWon !== a.totalPrizesWon) return b.totalPrizesWon - a.totalPrizesWon;
-        return b.totalMatchesWon - a.totalMatchesWon;
-      });
-
-    const total = sortedList.length;
-    const startIndex = (page - 1) * pageSize;
-    const paginated = sortedList.slice(startIndex, startIndex + pageSize);
-
-    const items: GameTournamentRankingEntry[] = paginated.map((entry, idx) => ({
-      rank: startIndex + idx + 1,
+    let allEntries = Array.from(userAggMap.values()).map((entry) => ({
       userId: entry.user.id,
       username: entry.user.username,
       displayName: entry.user.displayName,
       avatarUrl: entry.user.avatarUrl,
-      gameId,
+      gameId: params.gameId,
+      tier: params.tier,
       tournamentsWon: entry.tournamentsWon,
       tournamentsPlayed: entry.tournamentsPlayed,
-      winRate: entry.winRate,
+      topFourFinishes: entry.topFourFinishes,
+      matchWins: entry.matchWins,
+      matchLosses: entry.matchLosses,
+      winRate: entry.tournamentsPlayed > 0
+        ? Number(((entry.tournamentsWon / entry.tournamentsPlayed) * 100).toFixed(2))
+        : 0,
+      points: entry.points,
       totalPrizesWon: entry.totalPrizesWon,
-      totalMatchesWon: entry.totalMatchesWon,
-      totalMatchesPlayed: entry.totalMatchesPlayed,
+      createdAt: entry.user.createdAt,
     }));
 
+    // Search filter
+    if (params.search && params.search.trim()) {
+      const q = params.search.trim().toLowerCase();
+      allEntries = allEntries.filter(
+        (e) =>
+          e.username.toLowerCase().includes(q) ||
+          e.displayName.toLowerCase().includes(q) ||
+          e.userId.toLowerCase().includes(q),
+      );
+    }
+
+    // Deterministic Tie-Breaking Sort:
+    // 1. Points desc
+    // 2. Tournaments won desc
+    // 3. Top 4 finishes desc
+    // 4. Match wins desc
+    // 5. Win rate desc
+    // 6. User account creation asc
+    allEntries.sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.tournamentsWon !== a.tournamentsWon) return b.tournamentsWon - a.tournamentsWon;
+      if (b.topFourFinishes !== a.topFourFinishes) return b.topFourFinishes - a.topFourFinishes;
+      if (b.matchWins !== a.matchWins) return b.matchWins - a.matchWins;
+      if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+      return a.createdAt.getTime() - b.createdAt.getTime();
+    });
+
+    const total = allEntries.length;
+    const totalPages = Math.ceil(total / pageSize);
+    const startIndex = (page - 1) * pageSize;
+    const paginated = allEntries.slice(startIndex, startIndex + pageSize);
+
+    const items: GlobalTournamentLeaderboardEntry[] = paginated.map((entry, idx) => ({
+      rank: startIndex + idx + 1,
+      userId: entry.userId,
+      username: entry.username,
+      displayName: entry.displayName,
+      avatarUrl: entry.avatarUrl,
+      gameId: entry.gameId,
+      tier: entry.tier,
+      tournamentsWon: entry.tournamentsWon,
+      tournamentsPlayed: entry.tournamentsPlayed,
+      topFourFinishes: entry.topFourFinishes,
+      matchWins: entry.matchWins,
+      matchLosses: entry.matchLosses,
+      winRate: entry.winRate,
+      points: entry.points,
+      totalPrizesWon: entry.totalPrizesWon,
+    }));
+
+    // Viewer's Rank
+    let myRank: GlobalTournamentLeaderboardResponse["myRank"] = null;
+    if (params.viewerId) {
+      const myIdx = allEntries.findIndex((e) => e.userId === params.viewerId);
+      if (myIdx !== -1) {
+        const me = allEntries[myIdx]!;
+        myRank = {
+          rank: myIdx + 1,
+          points: me.points,
+          tournamentsWon: me.tournamentsWon,
+          tournamentsPlayed: me.tournamentsPlayed,
+          matchWins: me.matchWins,
+          matchLosses: me.matchLosses,
+        };
+      }
+    }
+
     return {
+      scope,
+      gameId: params.gameId,
+      tier: params.tier,
+      period,
       page,
       pageSize,
       total,
+      totalPages,
+      myRank,
+      items,
+    };
+  }
+
+  /**
+   * Retrieves game-specific tournament rankings across any of the 10 games.
+   */
+  static async getGameTournamentRankings(
+    gameId: string,
+    params: { page?: number; pageSize?: number; viewerId?: string },
+  ): Promise<{ page: number; pageSize: number; total: number; items: GameTournamentRankingEntry[] }> {
+    const res = await this.getGlobalTournamentLeaderboard({
+      scope: "game",
+      gameId,
+      page: params.page,
+      pageSize: params.pageSize,
+      viewerId: params.viewerId,
+    });
+
+    const items: GameTournamentRankingEntry[] = res.items.map((it) => ({
+      rank: it.rank,
+      userId: it.userId,
+      username: it.username,
+      displayName: it.displayName,
+      avatarUrl: it.avatarUrl,
+      gameId,
+      tournamentsWon: it.tournamentsWon,
+      tournamentsPlayed: it.tournamentsPlayed,
+      winRate: it.winRate,
+      totalPrizesWon: it.totalPrizesWon,
+      totalMatchesWon: it.matchWins,
+      totalMatchesPlayed: it.matchWins + it.matchLosses,
+    }));
+
+    return {
+      page: res.page,
+      pageSize: res.pageSize,
+      total: res.total,
       items,
     };
   }

@@ -24,7 +24,7 @@ import {
   Eye,
   Coins,
 } from 'lucide-react';
-import type { TournamentStatus } from '@gaming-hub/shared';
+import type { TournamentStatus, TournamentRefundSummary, TournamentCancellationPreview } from '@gaming-hub/shared';
 import { GAME_DEFINITIONS } from '@gaming-hub/shared';
 import {
   adminApi,
@@ -94,6 +94,18 @@ export function AdminTournamentDetailPage() {
   const [retryReason, setRetryReason] = useState('');
   const [isRetrySubmitting, setIsRetrySubmitting] = useState(false);
 
+  // Refunds & Cancellation State
+  const [refundSummary, setRefundSummary] = useState<TournamentRefundSummary | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancellationPreview, setCancellationPreview] = useState<TournamentCancellationPreview | null>(null);
+  const [isCancelPreviewLoading, setIsCancelPreviewLoading] = useState(false);
+  const [cancelJustification, setCancelJustification] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [showRefundRetryModal, setShowRefundRetryModal] = useState(false);
+  const [retryRefundTargetUserId, setRetryRefundTargetUserId] = useState<string | undefined>(undefined);
+  const [retryRefundReason, setRetryRefundReason] = useState('');
+  const [isRefundRetrySubmitting, setIsRefundRetrySubmitting] = useState(false);
+
   // Filters & Search
   const [matchRoundFilter, setMatchRoundFilter] = useState<string>('ALL');
   const [matchStatusFilter, setMatchStatusFilter] = useState<string>('ALL');
@@ -137,16 +149,26 @@ export function AdminTournamentDetailPage() {
     }
   }, [id, settlementStatusFilter]);
 
+  const loadRefunds = useCallback(async () => {
+    if (!id) return;
+    try {
+      const rData = await adminApi.tournamentRefunds(id);
+      setRefundSummary(rData);
+    } catch {
+      // Refunds not applicable yet
+    }
+  }, [id]);
+
   const loadAll = useCallback(async () => {
     if (!id) return;
     setIsLoading(true);
     setError(null);
     try {
-      await Promise.all([loadControlCenter(), loadBracket(), loadSettlements()]);
+      await Promise.all([loadControlCenter(), loadBracket(), loadSettlements(), loadRefunds()]);
     } finally {
       setIsLoading(false);
     }
-  }, [id, loadControlCenter, loadBracket, loadSettlements]);
+  }, [id, loadControlCenter, loadBracket, loadSettlements, loadRefunds]);
 
   useEffect(() => {
     loadAll();
@@ -235,6 +257,56 @@ export function AdminTournamentDetailPage() {
     }
   };
 
+  const openCancelModal = async () => {
+    if (!id) return;
+    setIsCancelPreviewLoading(true);
+    setShowCancelModal(true);
+    setCancelJustification('');
+    try {
+      const preview = await adminApi.tournamentCancellationPreview(id);
+      setCancellationPreview(preview);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch cancellation preview');
+    } finally {
+      setIsCancelPreviewLoading(false);
+    }
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!id || !cancelJustification.trim()) return;
+    setIsCancelling(true);
+    setError(null);
+    try {
+      await adminApi.cancelTournament(id, cancelJustification.trim());
+      flash('Tournament cancelled and refund processing initiated');
+      setShowCancelModal(false);
+      setCancelJustification('');
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Tournament cancellation failed');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleRetryRefund = async () => {
+    if (!id || !retryRefundReason.trim()) return;
+    setIsRefundRetrySubmitting(true);
+    setError(null);
+    try {
+      await adminApi.retryTournamentRefunds(id, retryRefundReason.trim(), retryRefundTargetUserId);
+      flash('Tournament refund retry executed successfully');
+      setShowRefundRetryModal(false);
+      setRetryRefundTargetUserId(undefined);
+      setRetryRefundReason('');
+      await loadRefunds();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Refund retry failed');
+    } finally {
+      setIsRefundRetrySubmitting(false);
+    }
+  };
+
   const getAvailableActions = (status: TournamentStatus): ActionDef[] => {
     const actions: ActionDef[] = [];
     if (!id) return actions;
@@ -242,35 +314,26 @@ export function AdminTournamentDetailPage() {
     switch (status) {
       case 'DRAFT':
         actions.push({ label: 'Open Registration', variant: 'primary', action: () => adminApi.openRegistration(id) });
+        actions.push({ label: 'Cancel Tournament', variant: 'danger', action: openCancelModal });
         break;
       case 'REGISTRATION_OPEN':
         actions.push({ label: 'Close Registration', variant: 'secondary', action: () => adminApi.closeRegistration(id) });
         actions.push({ label: 'Start Tournament', variant: 'primary', action: () => adminApi.startTournament(id) });
+        actions.push({ label: 'Cancel Tournament', variant: 'danger', action: openCancelModal });
         break;
       case 'REGISTRATION_CLOSED':
       case 'UPCOMING':
         actions.push({ label: 'Start Tournament', variant: 'primary', action: () => adminApi.startTournament(id) });
+        actions.push({ label: 'Cancel Tournament', variant: 'danger', action: openCancelModal });
         break;
       case 'STARTING':
       case 'IN_PROGRESS':
         actions.push({ label: 'Pause', variant: 'outline', action: () => adminApi.pauseTournament(id) });
-        actions.push({
-          label: 'Cancel',
-          variant: 'danger',
-          action: () => adminApi.cancelTournament(id, cancelReason || undefined),
-          requiresConfirm: true,
-          confirmMessage: 'Cancel this tournament and refund all participants? This cannot be undone.',
-        });
+        actions.push({ label: 'Cancel Tournament', variant: 'danger', action: openCancelModal });
         break;
       case 'PAUSED':
         actions.push({ label: 'Resume', variant: 'primary', action: () => adminApi.resumeTournament(id) });
-        actions.push({
-          label: 'Cancel',
-          variant: 'danger',
-          action: () => adminApi.cancelTournament(id, cancelReason || undefined),
-          requiresConfirm: true,
-          confirmMessage: 'Cancel this tournament and refund all participants? This cannot be undone.',
-        });
+        actions.push({ label: 'Cancel Tournament', variant: 'danger', action: openCancelModal });
         break;
       case 'COMPLETED':
       case 'ENDED':
@@ -520,6 +583,19 @@ export function AdminTournamentDetailPage() {
             {settlementSummary && settlementSummary.failedCount > 0 && (
               <span className="ml-1.5 rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-bold text-rose-400">
                 {settlementSummary.failedCount} Failed
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="refunds">
+            Refunds & Cancellations
+            {refundSummary && refundSummary.failedCount > 0 && (
+              <span className="ml-1.5 rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-bold text-rose-400">
+                {refundSummary.failedCount} Failed
+              </span>
+            )}
+            {refundSummary && refundSummary.overallRefundStatus === 'REFUNDED' && (
+              <span className="ml-1.5 rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
+                ✓
               </span>
             )}
           </TabsTrigger>
@@ -875,13 +951,16 @@ export function AdminTournamentDetailPage() {
         {/* Tab 5: Settlements & Prize Distribution */}
         {/* ================================================================= */}
         <TabsContent value="settlements" className="mt-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <Card className="bg-slate-900/50 border-slate-800">
               <CardContent className="p-4 flex items-center gap-3">
                 <Trophy className="size-6 text-amber-400" />
                 <div>
-                  <p className="text-xs text-slate-400">Total Prizes</p>
-                  <p className="text-xl font-bold text-slate-100">{settlementSummary?.totalPrizesCount ?? 0}</p>
+                  <p className="text-xs text-slate-400">Prize Pool</p>
+                  <p className="text-xl font-bold text-amber-400">
+                    {(settlementSummary?.prizePool ?? data?.tournament.prizePool ?? 0).toLocaleString()} Coins
+                  </p>
+                  <p className="text-[10px] text-slate-500">{settlementSummary?.totalPrizesCount ?? 0} Prize Positions</p>
                 </div>
               </CardContent>
             </Card>
@@ -912,6 +991,25 @@ export function AdminTournamentDetailPage() {
                 <div>
                   <p className="text-xs text-slate-400">Failed / Retries</p>
                   <p className="text-xl font-bold text-rose-400">{settlementSummary?.failedCount ?? 0}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-slate-900/50 border-slate-800">
+              <CardContent className="p-4 flex items-center gap-3">
+                <Shield className="size-6 text-cyan-400" />
+                <div>
+                  <p className="text-xs text-slate-400">Settlement Status</p>
+                  <Badge
+                    variant={
+                      settlementSummary?.overallSettlementStatus === 'SETTLED' ? 'success' :
+                      settlementSummary?.overallSettlementStatus === 'PARTIALLY_SETTLED' ? 'warning' :
+                      settlementSummary?.overallSettlementStatus === 'SETTLEMENT_FAILED' ? 'danger' :
+                      settlementSummary?.overallSettlementStatus === 'PROCESSING' ? 'accent' : 'outline'
+                    }
+                    className="mt-1 font-bold text-xs"
+                  >
+                    {settlementSummary?.overallSettlementStatus ?? 'NOT_STARTED'}
+                  </Badge>
                 </div>
               </CardContent>
             </Card>
@@ -1013,6 +1111,178 @@ export function AdminTournamentDetailPage() {
                                 onClick={() => {
                                   setRetryTargetPrizeId(s.id);
                                   setShowRetryModal(true);
+                                }}
+                              >
+                                Retry
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ================================================================= */}
+        {/* Tab 5b: Refunds & Cancellation Monitor */}
+        {/* ================================================================= */}
+        <TabsContent value="refunds" className="mt-6 space-y-6">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+            <Card className="bg-slate-900/50 border-slate-800">
+              <CardContent className="p-4 flex items-center gap-3">
+                <Users className="size-6 text-indigo-400" />
+                <div>
+                  <p className="text-xs text-slate-400">Registered Players</p>
+                  <p className="text-xl font-bold text-slate-100">{refundSummary?.totalPlayersCount ?? data?.players.length ?? 0}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-slate-900/50 border-slate-800">
+              <CardContent className="p-4 flex items-center gap-3">
+                <DollarSign className="size-6 text-amber-400" />
+                <div>
+                  <p className="text-xs text-slate-400">Total Entry Collected</p>
+                  <p className="text-xl font-bold text-amber-400">
+                    {(refundSummary?.totalRefundableAmount ?? (data?.players.length ?? 0) * (data?.tournament.entryFee ?? 0)).toLocaleString()} Coins
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-slate-900/50 border-slate-800">
+              <CardContent className="p-4 flex items-center gap-3">
+                <CheckCircle2 className="size-6 text-emerald-400" />
+                <div>
+                  <p className="text-xs text-slate-400">Total Refunded</p>
+                  <p className="text-xl font-bold text-emerald-400">
+                    {(refundSummary?.totalRefundedAmount ?? 0).toLocaleString()} Coins
+                  </p>
+                  <p className="text-[10px] text-slate-500">{refundSummary?.completedCount ?? 0} Completed</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-slate-900/50 border-slate-800">
+              <CardContent className="p-4 flex items-center gap-3">
+                <AlertTriangle className="size-6 text-rose-400" />
+                <div>
+                  <p className="text-xs text-slate-400">Failed Refunds</p>
+                  <p className="text-xl font-bold text-rose-400">{refundSummary?.failedCount ?? 0}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-slate-900/50 border-slate-800">
+              <CardContent className="p-4 flex items-center gap-3">
+                <Shield className="size-6 text-cyan-400" />
+                <div>
+                  <p className="text-xs text-slate-400">Refund Status</p>
+                  <Badge
+                    variant={
+                      refundSummary?.overallRefundStatus === 'REFUNDED' ? 'success' :
+                      refundSummary?.overallRefundStatus === 'PARTIALLY_REFUNDED' ? 'warning' :
+                      refundSummary?.overallRefundStatus === 'FAILED' ? 'danger' :
+                      refundSummary?.overallRefundStatus === 'PROCESSING' ? 'accent' : 'outline'
+                    }
+                    className="mt-1 font-bold text-xs"
+                  >
+                    {refundSummary?.overallRefundStatus ?? 'NOT_REQUIRED'}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="bg-slate-900/50 border-slate-800">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="text-base font-bold flex items-center gap-2">
+                <Coins className="size-5 text-emerald-400" /> Tournament Entry Fee Refund Monitor
+              </CardTitle>
+              <div className="flex items-center gap-3">
+                {refundSummary && refundSummary.failedCount > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-rose-500/30 text-rose-400 hover:bg-rose-500/10 text-xs"
+                    onClick={() => {
+                      setRetryRefundTargetUserId(undefined);
+                      setShowRefundRetryModal(true);
+                    }}
+                  >
+                    Retry Failed Refunds ({refundSummary.failedCount})
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" className="text-xs" onClick={loadRefunds}>
+                  <RefreshCw className="size-3.5 mr-1" /> Refresh
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-slate-800 bg-slate-950/40">
+                    <tr className="text-left text-xs uppercase tracking-wider text-slate-400">
+                      <th className="py-3 px-4">Player</th>
+                      <th className="py-3 px-4">Entry Fee Charged</th>
+                      <th className="py-3 px-4">Refund Amount</th>
+                      <th className="py-3 px-4">Refund Status</th>
+                      <th className="py-3 px-4">Original Entry Debit Tx</th>
+                      <th className="py-3 px-4">Refund Credit Tx</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {!refundSummary || refundSummary.refunds.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center text-slate-500">
+                          {data.tournament.entryFee === 0 ? 'Free tournament — no entry fee refunds required' : 'No refund records recorded for this tournament'}
+                        </td>
+                      </tr>
+                    ) : (
+                      refundSummary.refunds.map((r) => (
+                        <tr key={r.id} className="hover:bg-slate-800/30 transition-colors text-xs">
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-slate-200">{r.displayName || r.username || r.userId}</div>
+                            <div className="font-mono text-[10px] text-slate-500">{r.userId}</div>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-300 font-medium">
+                            {r.entryFee} Coins
+                          </td>
+                          <td className="py-3 px-4 font-bold text-emerald-400 font-mono">
+                            {r.refundAmount} Coins
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge
+                              variant={
+                                r.status === 'REFUNDED' ? 'success' :
+                                r.status === 'PROCESSING' ? 'accent' :
+                                r.status === 'FAILED' ? 'danger' : 'outline'
+                              }
+                            >
+                              {r.status}
+                            </Badge>
+                            {r.failureReason && (
+                              <p className="mt-1 font-mono text-[10px] text-rose-400 truncate max-w-xs" title={r.failureReason}>
+                                {r.failureReason}
+                              </p>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
+                            {r.originalTransactionId ?? '—'}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[11px] text-emerald-400">
+                            {r.refundTransactionId ?? '—'}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            {r.status === 'FAILED' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs text-rose-400 border-rose-500/30 hover:bg-rose-500/10"
+                                onClick={() => {
+                                  setRetryRefundTargetUserId(r.userId);
+                                  setShowRefundRetryModal(true);
                                 }}
                               >
                                 Retry
@@ -1353,6 +1623,134 @@ export function AdminTournamentDetailPage() {
                 onClick={handleRetrySettlements}
               >
                 Execute Retry
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Cancellation Confirmation & Preview Modal */}
+      {showCancelModal && (
+        <Modal
+          isOpen={true}
+          onClose={() => setShowCancelModal(false)}
+          title="Confirm Tournament Cancellation & Refund Protection"
+        >
+          <div className="space-y-4 text-sm">
+            {isCancelPreviewLoading ? (
+              <div className="py-8 flex flex-col items-center justify-center gap-2">
+                <Loader2 className="size-6 animate-spin text-rose-500" />
+                <p className="text-xs text-slate-400">Loading cancellation financial preview...</p>
+              </div>
+            ) : cancellationPreview ? (
+              <>
+                {cancellationPreview.blockingReason ? (
+                  <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs">
+                    🚫 <strong>Cancellation Blocked:</strong> {cancellationPreview.blockingReason}
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs">
+                    ⚠️ <strong>Irreversible Action:</strong> Cancelling this tournament will permanently stop it and automatically execute full entry fee refunds to all registered players via the authoritative coin wallet ledger.
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-950 p-3 rounded-lg border border-slate-800">
+                  <div>
+                    <span className="text-slate-400">Tournament:</span>
+                    <p className="font-semibold text-slate-200">{cancellationPreview.title}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Current Status:</span>
+                    <p className="font-semibold text-slate-200">{cancellationPreview.status}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Registered Players:</span>
+                    <p className="font-semibold text-slate-200">
+                      {cancellationPreview.registeredPlayers} / {cancellationPreview.maxPlayers} (Min: {cancellationPreview.minPlayers})
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Entry Fee:</span>
+                    <p className="font-semibold text-slate-200">{cancellationPreview.entryFee} Coins</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Total Entry Collection:</span>
+                    <p className="font-bold text-amber-400 font-mono">{cancellationPreview.totalEntryCollection.toLocaleString()} Coins</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Total Refundable Amount:</span>
+                    <p className="font-bold text-emerald-400 font-mono">{cancellationPreview.totalRefundableAmount.toLocaleString()} Coins</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Administrative Cancellation Reason (Required)
+                  </label>
+                  <textarea
+                    placeholder="e.g., Minimum players not reached / Technical maintenance / Event reschedule..."
+                    value={cancelJustification}
+                    onChange={(e) => setCancelJustification(e.target.value)}
+                    rows={3}
+                    className="w-full rounded-lg bg-slate-950 border border-slate-800 p-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                  <Button variant="ghost" onClick={() => setShowCancelModal(false)}>
+                    Close
+                  </Button>
+                  <Button
+                    variant="danger"
+                    loading={isCancelling}
+                    disabled={!cancellationPreview.canCancel || !cancelJustification.trim()}
+                    onClick={handleConfirmCancel}
+                  >
+                    Confirm Cancellation & Refund All
+                  </Button>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </Modal>
+      )}
+
+      {/* Retry Refund Modal */}
+      {showRefundRetryModal && (
+        <Modal
+          isOpen={true}
+          onClose={() => setShowRefundRetryModal(false)}
+          title={retryRefundTargetUserId ? "Retry Individual Player Refund" : "Retry All Failed Refunds"}
+        >
+          <div className="space-y-4 text-sm">
+            <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs">
+              ⚠️ <strong>Idempotent Safe Execution:</strong> This will retry the refund transaction against the wallet ledger. Already refunded players are strictly protected from double credits.
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Administrative Justification Reason (Required)
+              </label>
+              <textarea
+                placeholder="Reason for triggering refund retry..."
+                value={retryRefundReason}
+                onChange={(e) => setRetryRefundReason(e.target.value)}
+                rows={3}
+                className="w-full rounded-lg bg-slate-950 border border-slate-800 p-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <Button variant="ghost" onClick={() => setShowRefundRetryModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                loading={isRefundRetrySubmitting}
+                disabled={!retryRefundReason.trim()}
+                onClick={handleRetryRefund}
+              >
+                Execute Refund Retry
               </Button>
             </div>
           </div>

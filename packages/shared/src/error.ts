@@ -81,6 +81,7 @@ export const ERROR_CODES = [
   "INVALID_EVIDENCE",
   "DISPUTE_RESOLVED",
   "DISPUTE_UNAUTHORIZED",
+  "CONFLICT",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

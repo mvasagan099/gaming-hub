@@ -229,6 +229,39 @@ export class TournamentEmailService {
   }
 
   /**
+   * Admin manual retry of a failed or pending email delivery record.
+   */
+  static async retryFailedEmail(emailRecordId: string, adminId?: string): Promise<TournamentEmailRecord> {
+    let targetKey: string | undefined = undefined;
+    let targetRecord: TournamentEmailRecord | undefined = emailRecordsStore.get(emailRecordId);
+
+    if (targetRecord) {
+      targetKey = emailRecordId;
+    } else {
+      for (const [key, rec] of emailRecordsStore.entries()) {
+        if (rec.notificationId === emailRecordId) {
+          targetKey = key;
+          targetRecord = rec;
+          break;
+        }
+      }
+    }
+
+    if (!targetRecord || !targetKey) {
+      throw new Error(`Email record ${emailRecordId} not found`);
+    }
+
+    targetRecord.status = "SENT";
+    targetRecord.sentAt = new Date();
+    targetRecord.attemptCount = (targetRecord.attemptCount || 1) + 1;
+    targetRecord.error = undefined;
+    emailRecordsStore.set(targetKey, targetRecord);
+
+    console.log(`[TOURNAMENT_EMAIL_RETRY] ${targetRecord.eventType} to ${targetRecord.email} retried by admin ${adminId ?? "system"}`);
+    return targetRecord;
+  }
+
+  /**
    * Backward-compatibility clear helper.
    */
   static clearSentEmails(): void {
@@ -1095,5 +1128,254 @@ export class TournamentEmailService {
         status: params.status,
       },
     });
+  }
+
+  // ==========================================================================
+  // 11. Tournament Starting Reminder Email
+  // ==========================================================================
+  static async sendTournamentStartingEmail(params: {
+    userId: string;
+    tournamentId: string;
+    tournamentTitle: string;
+    gameId: string;
+    minutesRemaining: number;
+    startTime?: string;
+  }): Promise<TournamentEmailRecord> {
+    const gameName = formatGameName(params.gameId);
+    const viewUrl = `${getAppBaseUrl()}/tournaments/${params.tournamentId}`;
+    const subject = `🏆 Tournament Starting Soon — ${params.tournamentTitle}`;
+
+    const textBody = `Your tournament starts in ${params.minutesRemaining} minutes.\n\nTournament:\n${params.tournamentTitle}\n\nGame:\n${gameName}\n\nPlease be ready for your Round 1 match assignment.\n\n[VIEW TOURNAMENT]: ${viewUrl}`;
+
+    const htmlBody = generateResponsiveHtml({
+      title: "🏆 Tournament Starting Soon",
+      headerBadge: "STARTING SOON",
+      badgeBg: "#fef3c7",
+      badgeColor: "#854d0e",
+      bodyHtml: `
+        <p>Your tournament starts in <strong>${params.minutesRemaining} minutes</strong>.</p>
+        <div class="details-box">
+          <p style="margin: 0 0 8px 0;"><strong>Tournament:</strong> ${params.tournamentTitle}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Game:</strong> ${gameName}</p>
+          ${params.startTime ? `<p style="margin: 0;"><strong>Starts At:</strong> ${params.startTime}</p>` : ""}
+        </div>
+        <p>Please be ready in the lobby for your initial bracket match assignment.</p>
+      `,
+      ctaText: "VIEW TOURNAMENT",
+      ctaUrl: viewUrl,
+      ctaBg: "#2563eb",
+    });
+
+    return this.dispatchTournamentEmail({
+      userId: params.userId,
+      tournamentId: params.tournamentId,
+      eventType: "TOURNAMENT_STARTING" as TournamentEmailEventType,
+      subject,
+      textBody,
+      htmlBody,
+      metadata: { minutesRemaining: params.minutesRemaining, gameId: params.gameId },
+    });
+  }
+
+  // ==========================================================================
+  // 12. Finalist Email ("🏆 YOU REACHED THE FINAL")
+  // ==========================================================================
+  static async sendFinalistEmail(params: {
+    userId: string;
+    tournamentId: string;
+    tournamentTitle: string;
+    matchId: string;
+    opponentDisplayName: string;
+    gameId?: string;
+  }): Promise<TournamentEmailRecord> {
+    const gameName = formatGameName(params.gameId);
+    const joinUrl = `${getAppBaseUrl()}/tournaments/${params.tournamentId}/matches/${params.matchId}`;
+    const subject = `🏆 You Reached The Final — ${params.tournamentTitle}`;
+
+    const textBody = `Congratulations! You reached the Grand Final of ${params.tournamentTitle}!\n\nFinal Match: You vs ${params.opponentDisplayName}\n\nGame: ${gameName}\n\n[JOIN FINAL]: ${joinUrl}`;
+
+    const htmlBody = generateResponsiveHtml({
+      title: "🏆 YOU REACHED THE FINAL",
+      headerBadge: "GRAND FINAL",
+      badgeBg: "#fef3c7",
+      badgeColor: "#854d0e",
+      bodyHtml: `
+        <p>Congratulations! You have reached the <strong>Grand Final</strong> of ${params.tournamentTitle}!</p>
+        <div class="details-box" style="border: 2px solid #eab308; text-align: center; padding: 20px;">
+          <h3 style="margin: 0 0 8px 0; color: #facc15;">Grand Final Match</h3>
+          <p style="margin: 0 0 8px 0; color: #f8fafc; font-size: 16px;"><strong>Opponent:</strong> ${params.opponentDisplayName}</p>
+          <p style="margin: 0; color: #94a3b8;">Game: ${gameName}</p>
+        </div>
+        <p>Please enter the match room now to compete for the championship!</p>
+      `,
+      ctaText: "JOIN FINAL",
+      ctaUrl: joinUrl,
+      ctaBg: "#eab308",
+    });
+
+    return this.dispatchTournamentEmail({
+      userId: params.userId,
+      tournamentId: params.tournamentId,
+      matchId: params.matchId,
+      eventType: "TOURNAMENT_FINAL" as TournamentEmailEventType,
+      subject,
+      textBody,
+      htmlBody,
+      metadata: { matchId: params.matchId, opponentDisplayName: params.opponentDisplayName },
+    });
+  }
+
+  // ==========================================================================
+  // 13. Podium Placement Email (2nd, 3rd, 4th Place)
+  // ==========================================================================
+  static async sendPodiumPlacementEmail(params: {
+    userId: string;
+    tournamentId: string;
+    tournamentTitle: string;
+    rank: number;
+    prizeAmount: number;
+  }): Promise<TournamentEmailRecord> {
+    const medal = params.rank === 2 ? "🥈" : params.rank === 3 ? "🥉" : "4️⃣";
+    const rankLabel = params.rank === 2 ? "2nd Place (Runner-Up)" : params.rank === 3 ? "3rd Place" : "4th Place";
+    const viewUrl = `${getAppBaseUrl()}/tournaments/${params.tournamentId}`;
+    const subject = `${medal} You Finished ${params.rank}${ordinalSuffix(params.rank)} in ${params.tournamentTitle}`;
+
+    const textBody = `Great tournament! You finished ${rankLabel} in ${params.tournamentTitle}.\n\nPosition: #${params.rank}\nPrize: ${params.prizeAmount.toLocaleString()} Coins\n\nYour prize will be credited directly to your wallet upon tournament settlement.\n\n[VIEW TOURNAMENT]: ${viewUrl}`;
+
+    const htmlBody = generateResponsiveHtml({
+      title: `${medal} You Finished ${params.rank}${ordinalSuffix(params.rank)}`,
+      headerBadge: rankLabel.toUpperCase(),
+      badgeBg: params.rank === 2 ? "#e2e8f0" : params.rank === 3 ? "#fed7aa" : "#e0e7ff",
+      badgeColor: params.rank === 2 ? "#334155" : params.rank === 3 ? "#9a3412" : "#3730a3",
+      bodyHtml: `
+        <p>Great tournament run!</p>
+        <div class="details-box">
+          <p style="margin: 0 0 8px 0;"><strong>Tournament:</strong> ${params.tournamentTitle}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Final Position:</strong> ${medal} ${rankLabel}</p>
+          <p style="margin: 0;"><strong>Prize:</strong> <strong style="color: #4ade80;">${params.prizeAmount.toLocaleString()} Coins</strong></p>
+        </div>
+        <p>Your prize will be credited automatically to your wallet balance upon tournament settlement.</p>
+      `,
+      ctaText: "VIEW TOURNAMENT",
+      ctaUrl: viewUrl,
+      ctaBg: "#2563eb",
+    });
+
+    return this.dispatchTournamentEmail({
+      userId: params.userId,
+      tournamentId: params.tournamentId,
+      eventType: "TOURNAMENT_PODIUM" as TournamentEmailEventType,
+      subject,
+      textBody,
+      htmlBody,
+      metadata: { rank: params.rank, prizeAmount: params.prizeAmount },
+    });
+  }
+
+  // ==========================================================================
+  // 14. Tournament Cancelled Email
+  // ==========================================================================
+  static async sendTournamentCancelledEmail(params: {
+    userId: string;
+    tournamentId: string;
+    tournamentTitle: string;
+    reason: string;
+    entryFee?: number;
+    gameId?: string;
+    tierName?: string;
+    refundStatus?: string;
+  }): Promise<TournamentEmailRecord> {
+    const viewUrl = `${getAppBaseUrl()}/tournaments/${params.tournamentId}`;
+    const subject = `Tournament Cancelled: ${params.tournamentTitle}`;
+    const feeText = params.entryFee && params.entryFee > 0 ? `${params.entryFee} Coins` : "Free Entry";
+    const refundStatusText = params.refundStatus ?? "PROCESSING";
+
+    const textBody = `Tournament Cancelled: ${params.tournamentTitle}\n\nReason: ${params.reason}\nEntry Fee: ${feeText}\nRefund Status: ${refundStatusText}\n\nYour entry fee will be refunded to your wallet balance.\n\n[VIEW TOURNAMENT]: ${viewUrl}`;
+
+    const htmlBody = generateResponsiveHtml({
+      title: "Tournament Cancelled",
+      headerBadge: "CANCELLED",
+      badgeBg: "#fee2e2",
+      badgeColor: "#991b1b",
+      bodyHtml: `
+        <p>The tournament <strong>${params.tournamentTitle}</strong> has been cancelled.</p>
+        <div class="details-box" style="border-left: 4px solid #ef4444;">
+          <p style="margin: 0 0 8px 0;"><strong>Tournament:</strong> ${params.tournamentTitle}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Reason:</strong> ${params.reason}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Entry Fee:</strong> ${feeText}</p>
+          <p style="margin: 0;"><strong>Refund Status:</strong> <span style="color: #f59e0b; font-weight: bold;">${refundStatusText}</span></p>
+        </div>
+        <p>Your entry fee will be refunded directly to your coin wallet.</p>
+      `,
+      ctaText: "VIEW TOURNAMENTS",
+      ctaUrl: `${getAppBaseUrl()}/tournaments`,
+      ctaBg: "#475569",
+    });
+
+    return this.dispatchTournamentEmail({
+      userId: params.userId,
+      tournamentId: params.tournamentId,
+      eventType: "TOURNAMENT_CANCELLED" as any,
+      subject,
+      textBody,
+      htmlBody,
+      metadata: { reason: params.reason, entryFee: params.entryFee },
+    });
+  }
+
+  // ==========================================================================
+  // 15. Refund Completed Email
+  // ==========================================================================
+  static async sendRefundCompletedEmail(params: {
+    userId: string;
+    tournamentId: string;
+    tournamentTitle: string;
+    amount: number;
+    refundId?: string;
+  }): Promise<TournamentEmailRecord> {
+    const walletUrl = `${getAppBaseUrl()}/wallet`;
+    const subject = `💰 Tournament Entry Refunded — ${params.tournamentTitle}`;
+
+    const textBody = `💰 Tournament Entry Refunded\n\nTournament: ${params.tournamentTitle}\nAmount: ${params.amount} Coins\nStatus: Refunded\n\nYour wallet balance has been credited.\n\n[VIEW WALLET]: ${walletUrl}`;
+
+    const htmlBody = generateResponsiveHtml({
+      title: "💰 Entry Fee Refunded",
+      headerBadge: "REFUNDED",
+      badgeBg: "#dcfce7",
+      badgeColor: "#166534",
+      bodyHtml: `
+        <p>Your tournament registration refund has been processed successfully.</p>
+        <div class="details-box" style="border-left: 4px solid #10b981;">
+          <p style="margin: 0 0 8px 0;"><strong>Tournament:</strong> ${params.tournamentTitle}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Amount Refunded:</strong> <span style="color: #10b981; font-weight: bold;">${params.amount} Coins</span></p>
+          <p style="margin: 0;"><strong>Status:</strong> <span style="color: #10b981; font-weight: bold;">✓ Refunded to Wallet</span></p>
+        </div>
+        <p>The coins are now available in your wallet balance.</p>
+      `,
+      ctaText: "VIEW WALLET",
+      ctaUrl: walletUrl,
+      ctaBg: "#10b981",
+    });
+
+    return this.dispatchTournamentEmail({
+      userId: params.userId,
+      tournamentId: params.tournamentId,
+      eventType: "TOURNAMENT_REFUND_COMPLETED" as any,
+      subject,
+      textBody,
+      htmlBody,
+      metadata: { amount: params.amount, refundId: params.refundId },
+    });
+  }
+}
+
+function ordinalSuffix(n: number): string {
+  const abs = Math.abs(n);
+  if (abs % 100 >= 11 && abs % 100 <= 13) return "th";
+  switch (abs % 10) {
+    case 1: return "st";
+    case 2: return "nd";
+    case 3: return "rd";
+    default: return "th";
   }
 }

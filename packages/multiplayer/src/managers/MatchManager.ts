@@ -271,10 +271,28 @@ export class MatchManager {
     if (!player) {
       return this.createErrorResult(null, "Player not in room");
     }
+
+    if (player.isSpectator || player.seat === null || player.seat === undefined) {
+      return this.createErrorResult(null, "Spectators are not authorized to perform game actions");
+    }
+
+    const actionId = (action as any).actionId as string | undefined;
+    if (actionId) {
+      const cached = this.framework.antiCheatManager.getCachedActionResult(roomId, actionId);
+      if (cached) {
+        return cached;
+      }
+    }
     
     // Serialize state mutations per room so concurrent actions never corrupt
     // the authoritative engine.
     return this.framework.gameStateManager.enqueue(roomId, async () => {
+      // 10-Minute Hard Match Timer Limit
+      const MATCH_LIMIT_MS = 10 * 60 * 1000;
+      if (room!.match?.startedAt && Date.now() - room!.match.startedAt > MATCH_LIMIT_MS) {
+        return this.createErrorResult(null, "Match deadline exceeded (10-minute limit)");
+      }
+
       // Framework-level pre-validation (turn, spectator, rate limiting).
       const validation = this.framework.actionValidator.validate(room!, player, action);
       if (!validation.ok) {
@@ -350,6 +368,9 @@ export class MatchManager {
           // Reschedule clock check
           this.scheduleClockCheck(room!);
         }
+
+        // Cache action result for idempotency
+        this.framework.antiCheatManager.cacheActionResult(roomId, actionId, result);
       }
       
       return result;

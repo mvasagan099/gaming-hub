@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -26,9 +26,19 @@ import {
   Crown,
   Medal,
   Search,
+  LogOut,
+  AlertCircle,
+  AlertOctagon,
+  Gift,
 } from 'lucide-react';
-import { GAME_DEFINITIONS } from '@gaming-hub/shared';
-import type { TournamentStatus, TournamentLeaderboardResponse } from '@gaming-hub/shared';
+import {
+  GAME_DEFINITIONS,
+  TOURNAMENT_TIER_VISUALS,
+  DEFAULT_TIER_PRIZE_DISTRIBUTION,
+  type TournamentStatus,
+  type TournamentLeaderboardResponse,
+  type PrizeDistributionEntry,
+} from '@gaming-hub/shared';
 import { tournamentsApi } from '../../services/api/enterprise';
 import { usePlayerTournamentStore } from '../../store/playerTournamentStore';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -39,55 +49,81 @@ import { Modal } from '../../components/ui/Modal';
 import { Skeleton } from '../../components/Skeleton';
 import { PlayerBracketView } from '../../components/tournaments/PlayerBracketView';
 import { DisputeReportModal } from '../../components/tournaments/DisputeReportModal';
+import { TournamentTimeline } from '../../components/tournaments/TournamentTimeline';
 import { ShieldAlert } from 'lucide-react';
 
 const gameById = new Map(GAME_DEFINITIONS.map((g) => [g.id, g]));
 
-const STATUS_BADGE: Record<string, { variant: 'success' | 'warning' | 'danger' | 'accent' | 'default' | 'outline'; label: string }> = {
+const STATUS_BADGE: Record<
+  string,
+  { variant: 'success' | 'warning' | 'danger' | 'accent' | 'default' | 'outline'; label: string }
+> = {
   DRAFT: { variant: 'outline', label: 'Draft' },
   REGISTRATION_OPEN: { variant: 'accent', label: 'Registration Open' },
   REGISTRATION_CLOSED: { variant: 'default', label: 'Registration Closed' },
   UPCOMING: { variant: 'default', label: 'Upcoming' },
   STARTING: { variant: 'warning', label: 'Starting Soon' },
-  IN_PROGRESS: { variant: 'success', label: 'In Progress' },
+  IN_PROGRESS: { variant: 'success', label: 'Live Now' },
   PAUSED: { variant: 'warning', label: 'Paused' },
   COMPLETED: { variant: 'accent', label: 'Completed' },
   SETTLING: { variant: 'warning', label: 'Settling' },
   SETTLED: { variant: 'success', label: 'Settled' },
-  LIVE: { variant: 'success', label: 'Live' },
+  LIVE: { variant: 'success', label: 'Live Now' },
   CANCELLED: { variant: 'danger', label: 'Cancelled' },
 };
 
-const PLAYER_STATUS_BADGE: Record<string, { variant: 'success' | 'warning' | 'danger' | 'accent' | 'default' | 'outline'; label: string }> = {
-  REGISTERED: { variant: 'default', label: 'Registered' },
+const PLAYER_STATUS_BADGE: Record<
+  string,
+  { variant: 'success' | 'warning' | 'danger' | 'accent' | 'default' | 'outline'; label: string }
+> = {
+  REGISTERED: { variant: 'accent', label: '✓ Registered' },
   WAITING: { variant: 'warning', label: 'Waiting for Match' },
-  MATCH_READY: { variant: 'accent', label: 'Match Ready' },
-  LIVE: { variant: 'success', label: 'Live Match' },
-  ADVANCED: { variant: 'accent', label: 'Advanced' },
+  MATCH_READY: { variant: 'accent', label: '🎮 Match Ready' },
+  LIVE: { variant: 'success', label: 'Live Match 🔴' },
+  ADVANCED: { variant: 'accent', label: 'Advanced ⭐' },
   ELIMINATED: { variant: 'danger', label: 'Eliminated' },
   WINNER: { variant: 'success', label: 'Champion 🏆' },
   COMPLETED: { variant: 'default', label: 'Completed' },
 };
 
-function CountdownTimer({ target }: { target: string }) {
-  const [remaining, setRemaining] = useState('');
+function formatCountdown(targetDate: string | null | undefined): string {
+  if (!targetDate) return '';
+  const diff = new Date(targetDate).getTime() - Date.now();
+  if (diff <= 0) return '00:00:00';
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function detectTier(title: string, entryFee: number): string {
+  const t = title.toLowerCase();
+  if (t.includes('pro') || entryFee >= 100) return 'pro';
+  if (t.includes('premium') || entryFee >= 50) return 'premium';
+  if (t.includes('standard') || entryFee >= 25) return 'standard';
+  if (t.includes('basic') || entryFee >= 10) return 'basic';
+  return 'mini';
+}
+
+function LiveCountdown({ target, label }: { target: string; label?: string }) {
+  const [cd, setCd] = useState(() => formatCountdown(target));
   useEffect(() => {
-    const tick = () => {
-      const diff = new Date(target).getTime() - Date.now();
-      if (diff <= 0) {
-        setRemaining('00:00:00');
-        return;
-      }
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      setRemaining(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
-    };
-    tick();
-    const id = setInterval(tick, 1000);
+    const update = () => setCd(formatCountdown(target));
+    update();
+    const id = setInterval(update, 1000);
     return () => clearInterval(id);
   }, [target]);
-  return <span className="tabular-nums font-mono font-bold text-amber-300">{remaining}</span>;
+
+  const isExpired = cd === '00:00:00';
+
+  return (
+    <div className="flex items-center gap-1.5 font-mono">
+      {label && <span className="text-slate-400 text-xs font-medium">{label}</span>}
+      <span className={`text-sm font-black tabular-nums ${isExpired ? 'text-slate-500' : 'text-amber-300'}`}>
+        {cd}
+      </span>
+    </div>
+  );
 }
 
 function MatchDeadlineTimer({ deadline }: { deadline: string | null }) {
@@ -117,7 +153,7 @@ function MatchDeadlineTimer({ deadline }: { deadline: string | null }) {
   }, [deadline]);
 
   return (
-    <div className="flex items-center gap-1.5 font-mono text-sm font-black">
+    <div className="flex items-center gap-1.5 font-mono text-xs sm:text-sm font-black">
       <Clock className={`size-4 ${isExpired ? 'text-rose-400 animate-pulse' : 'text-amber-400'}`} />
       <span className={isExpired ? 'text-rose-400' : 'text-amber-300'}>
         {timeLeft} {isExpired ? '(TIME EXPIRED)' : 'remaining'}
@@ -126,21 +162,30 @@ function MatchDeadlineTimer({ deadline }: { deadline: string | null }) {
   );
 }
 
+interface RegistrationSuccessData {
+  tournamentTitle: string;
+  entryFee: number;
+  startTime: string;
+  registrationId: string;
+  gameName: string;
+}
+
 export function TournamentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const store = usePlayerTournamentStore();
-  const { detail, bracket, myStatus, currentMatch, dashboardData, walletBalance, isLoading, error, events, connected } = store;
+  const { detail, bracket, myStatus, currentMatch, dashboardData, walletBalance, isLoading, error, events, connected } =
+    store;
 
   const [activeTab, setActiveTab] = useState('my-match');
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
-  const [registerSuccess, setRegisterSuccess] = useState(false);
+  const [registrationSuccessData, setRegistrationSuccessData] = useState<RegistrationSuccessData | null>(null);
   const [disputeTargetMatch, setDisputeTargetMatch] = useState<{ matchId: string; roundNumber?: number } | null>(null);
   const [mySettlement, setMySettlement] = useState<any>(null);
 
-  // Leaderboard state
   const [leaderboardData, setLeaderboardData] = useState<TournamentLeaderboardResponse | null>(null);
   const [leaderboardSearch, setLeaderboardSearch] = useState('');
   const [leaderboardStatus, setLeaderboardStatus] = useState('ALL');
@@ -159,7 +204,6 @@ export function TournamentDetailPage() {
       });
       setLeaderboardData(data);
     } catch {
-      // ignore
     } finally {
       setIsLeaderboardLoading(false);
     }
@@ -175,35 +219,43 @@ export function TournamentDetailPage() {
   }, [id, fetchLeaderboard]);
 
   const handleJoin = useCallback(async () => {
-    if (!id) return;
+    if (!id || isJoining) return;
     setIsJoining(true);
     setJoinError(null);
     try {
-      await tournamentsApi.register(id);
+      const res = await tournamentsApi.register(id);
       await store.fetchAll(id);
       setShowJoinModal(false);
-      setRegisterSuccess(true);
-      setTimeout(() => setRegisterSuccess(false), 4000);
+
+      const gameName = gameById.get((detail?.gameId ?? '') as any)?.name ?? detail?.gameId ?? 'Match';
+      setRegistrationSuccessData({
+        tournamentTitle: detail?.title ?? 'Tournament',
+        entryFee: res.entryFee ?? detail?.entryFee ?? 0,
+        startTime: res.tournamentStartTime ?? detail?.startTime ?? new Date().toISOString(),
+        registrationId: res.registrationId,
+        gameName,
+      });
     } catch (err) {
       setJoinError(err instanceof Error ? err.message : 'Failed to join tournament');
     } finally {
       setIsJoining(false);
     }
-  }, [id, store]);
+  }, [id, isJoining, detail, store]);
 
   const handleCancel = useCallback(async () => {
-    if (!id) return;
+    if (!id || isJoining) return;
     setIsJoining(true);
     setJoinError(null);
     try {
       await tournamentsApi.cancel(id);
       await store.fetchAll(id);
+      setShowLeaveModal(false);
     } catch (err) {
       setJoinError(err instanceof Error ? err.message : 'Failed to cancel registration');
     } finally {
       setIsJoining(false);
     }
-  }, [id, store]);
+  }, [id, isJoining, store]);
 
   const handleEnterMatch = (matchId: string | null) => {
     if (!detail) return;
@@ -217,14 +269,13 @@ export function TournamentDetailPage() {
   if (isLoading && !detail && !dashboardData) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-8 space-y-4">
-        <Skeleton className="h-56 w-full rounded-3xl" />
+        <Skeleton className="h-64 w-full rounded-3xl" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Skeleton className="h-24 rounded-2xl" />
           <Skeleton className="h-24 rounded-2xl" />
           <Skeleton className="h-24 rounded-2xl" />
           <Skeleton className="h-24 rounded-2xl" />
         </div>
-        <Skeleton className="h-96 rounded-3xl" />
       </div>
     );
   }
@@ -262,26 +313,41 @@ export function TournamentDetailPage() {
     startTime: detail!.startTime,
     stateVersion: detail!.stateVersion ?? 0,
     rules: {},
-    prizeDistribution: [],
+    prizeDistribution: detail!.prizeDistribution ?? [],
   };
 
   const pData = dashboardData?.player;
   const game = gameById.get(tourn.gameId as any);
+  const tierCode = detectTier(tourn.title, tourn.entryFee);
+  const vis = TOURNAMENT_TIER_VISUALS[tierCode] ?? TOURNAMENT_TIER_VISUALS.mini!;
+
   const statusInfo = STATUS_BADGE[tourn.status] ?? { variant: 'outline' as const, label: tourn.status };
   const playerStatus = pData?.status ?? (myStatus?.isRegistered ? (myStatus.eliminated ? 'ELIMINATED' : 'REGISTERED') : null);
 
   const isRegOpen = tourn.status === 'REGISTRATION_OPEN';
+  const isLive = tourn.status === 'IN_PROGRESS' || tourn.status === 'LIVE';
+  const isStarting = tourn.status === 'STARTING';
+  const isCompleted = tourn.status === 'COMPLETED' || tourn.status === 'SETTLED';
+
   const isFull = tourn.registeredPlayers >= tourn.maxPlayers;
+  const isAlmostFull = isRegOpen && !isFull && tourn.registeredPlayers / tourn.maxPlayers >= 0.8;
   const isRegistered = Boolean(pData || myStatus?.isRegistered || detail?.registered);
 
-  const balanceAfterJoin = (walletBalance ?? 0) - tourn.entryFee;
+  const currentBal = walletBalance ?? 0;
+  const balanceAfterJoin = currentBal - tourn.entryFee;
   const canAfford = balanceAfterJoin >= 0;
+
+  const prizesList: Array<{ rank: number; label: string; emoji: string; percentage: number; amount: number }> = [
+    { rank: 1, label: '1st Place (Champion)', emoji: '🥇', percentage: 50, amount: Math.floor((tourn.prizePool * 50) / 100) },
+    { rank: 2, label: '2nd Place (Finalist)', emoji: '🥈', percentage: 25, amount: Math.floor((tourn.prizePool * 25) / 100) },
+    { rank: 3, label: '3rd Place', emoji: '🥉', percentage: 15, amount: Math.floor((tourn.prizePool * 15) / 100) },
+    { rank: 4, label: '4th Place', emoji: '4️⃣', percentage: 10, amount: Math.floor((tourn.prizePool * 10) / 100) },
+  ];
 
   const matchData = dashboardData?.myCurrentMatch;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6">
-      {/* Top Back Navigation */}
+    <div className="mx-auto max-w-5xl space-y-6 px-3 py-6 sm:px-6">
       <div className="flex items-center justify-between">
         <button
           onClick={() => navigate('/tournaments')}
@@ -297,83 +363,87 @@ export function TournamentDetailPage() {
         )}
       </div>
 
-      {/* Messages */}
       {error && (
         <div className="flex items-center gap-2 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-400">
           <XCircle className="size-4 shrink-0" /> {error}
           <button onClick={store.clearError} className="ml-auto text-rose-400 hover:text-rose-200">✕</button>
         </div>
       )}
-      {registerSuccess && (
-        <div className="flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">
-          <CheckCircle2 className="size-4 shrink-0" /> Registered successfully for {tourn.title}!
-        </div>
-      )}
 
-      {/* ------------------------------------------------------------- */}
-      {/* 1. HERO BANNER                                                */}
-      {/* ------------------------------------------------------------- */}
-      <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900/90 to-slate-950 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
-        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
-          <div className="space-y-3">
+      <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
+        <div className={`absolute top-0 right-0 h-64 w-64 bg-gradient-to-bl ${vis.gradientClass} blur-3xl pointer-events-none opacity-40`} />
+
+        <div className="relative z-10 flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
+          <div className="space-y-3.5">
             <div className="flex flex-wrap items-center gap-2">
+              <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-black border ${vis.badgeBgClass}`}>
+                <span>{vis.badgeEmoji}</span>
+                <span className="uppercase tracking-wider">{vis.name} TIER</span>
+              </span>
+
               <Badge variant={statusInfo.variant} className="font-bold text-xs uppercase">
-                {statusInfo.label}
+                {isLive ? 'LIVE NOW 🔴' : isAlmostFull ? 'ALMOST FULL' : isFull ? 'TOURNAMENT FULL' : statusInfo.label}
               </Badge>
+
               {playerStatus && (
-                <Badge variant={PLAYER_STATUS_BADGE[playerStatus]?.variant ?? 'default'} className="font-bold text-xs">
+                <Badge variant={PLAYER_STATUS_BADGE[playerStatus]?.variant ?? 'default'} className="font-black text-xs">
                   {PLAYER_STATUS_BADGE[playerStatus]?.label ?? playerStatus}
                 </Badge>
               )}
+
               {pData?.registrationSequence && (
-                <span className="text-xs font-semibold text-slate-400">
-                  Reg #{pData.registrationSequence}
-                </span>
-              )}
-              {pData?.seed && (
-                <span className="text-xs font-semibold text-sky-400">
-                  Seed #{pData.seed}
+                <span className="text-xs font-bold text-slate-400 bg-slate-900/80 px-2.5 py-0.5 rounded-full border border-slate-800">
+                  Registered: #{pData.registrationSequence}
                 </span>
               )}
             </div>
 
-            <div className="flex items-center gap-3">
-              <span className="text-4xl">{game?.icon ?? '🏆'}</span>
+            <div className="flex items-center gap-3.5">
+              <span className="text-4xl sm:text-5xl drop-shadow-md">{game?.icon ?? '🏆'}</span>
               <div>
                 <h1 className="text-2xl font-black text-white sm:text-3xl tracking-tight">
                   {tourn.title}
                 </h1>
-                <p className="text-xs text-slate-400 sm:text-sm">
-                  {game?.name ?? tourn.gameId} · {tourn.format.replace(/_/g, ' ')}
+                <p className="text-xs text-slate-400 sm:text-sm font-medium">
+                  {game?.name ?? tourn.gameId} · {tourn.format.replace(/_/g, ' ')} · 10-Minute Match Limit
                 </p>
               </div>
             </div>
 
-            {/* Quick Specs */}
-            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300 pt-1">
-              <span className="flex items-center gap-1.5 text-amber-400 font-bold">
-                <DollarSign className="size-4" /> Prize Pool: {tourn.prizePool.toLocaleString()} coins
-              </span>
-              <span className="flex items-center gap-1.5 text-slate-400">
-                <Users className="size-4" /> Players: {tourn.registeredPlayers}/{tourn.maxPlayers} ({tourn.availableSlots} slots left)
-              </span>
-              <span className="flex items-center gap-1.5 text-slate-400">
-                <CalendarClock className="size-4" /> Starts: {new Date(tourn.startTime).toLocaleTimeString()}
-              </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-2.5">
+                <p className="text-[10px] font-bold uppercase text-slate-500">Prize Pool</p>
+                <p className="text-base font-black text-amber-400">🪙 {tourn.prizePool.toLocaleString()}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-2.5">
+                <p className="text-[10px] font-bold uppercase text-slate-500">Entry Fee</p>
+                <p className="text-base font-black text-slate-200">🪙 {tourn.entryFee.toLocaleString()}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-2.5">
+                <p className="text-[10px] font-bold uppercase text-slate-500">Players</p>
+                <p className="text-base font-black text-slate-200">
+                  {tourn.registeredPlayers} <span className="text-xs text-slate-400">/ {tourn.maxPlayers}</span>
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-2.5">
+                <p className="text-[10px] font-bold uppercase text-slate-500">Start Time</p>
+                <p className="text-xs font-bold text-slate-200 truncate">
+                  {new Date(tourn.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Registration / Action area */}
-          <div className="flex flex-col gap-2.5 sm:flex-row lg:flex-col shrink-0">
+          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col shrink-0">
             {isRegOpen && !isRegistered && (
               <Button
                 size="lg"
                 disabled={isFull || isJoining}
                 loading={isJoining}
                 onClick={() => setShowJoinModal(true)}
-                className="bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black hover:from-amber-400 hover:to-orange-400 shadow-lg shadow-amber-500/20 px-8 py-6 text-base"
+                className="w-full sm:w-auto bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black hover:from-amber-400 hover:to-orange-400 shadow-xl shadow-amber-500/25 px-8 py-6 text-base rounded-2xl"
               >
-                {isFull ? 'Registration Full' : `Join Tournament (${tourn.entryFee} coins)`}
+                {isFull ? 'TOURNAMENT FULL' : `JOIN TOURNAMENT (${tourn.entryFee} Coins)`}
               </Button>
             )}
 
@@ -382,18 +452,39 @@ export function TournamentDetailPage() {
                 variant="outline"
                 size="sm"
                 loading={isJoining}
-                onClick={handleCancel}
-                className="border-rose-500/40 text-rose-400 hover:bg-rose-950/40"
+                onClick={() => setShowLeaveModal(true)}
+                className="border-rose-500/40 text-rose-400 hover:bg-rose-950/40 rounded-xl"
               >
-                Cancel Registration
+                <LogOut className="size-3.5 mr-1.5" /> Leave Tournament (Refund)
               </Button>
             )}
           </div>
         </div>
 
-        {/* ------------------------------------------------------------- */}
-        {/* CHAMPION / ADVANCED / ELIMINATED CELEBRATION BANNERS          */}
-        {/* ------------------------------------------------------------- */}
+        {isRegistered && (isRegOpen || isStarting) && (
+          <div className="mt-6 rounded-2xl border border-emerald-500/40 bg-gradient-to-r from-emerald-950/50 via-slate-900 to-teal-950/40 p-4.5 text-emerald-200 shadow-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="size-6 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
+                    ✓ YOU ARE REGISTERED IN THIS TOURNAMENT
+                  </h3>
+                  <p className="text-xs text-emerald-300/80">
+                    Registration Position: <span className="font-bold text-white">#{pData?.registrationSequence ?? 1}</span> · Seed: <span className="font-bold text-white">{pData?.seed ? `#${pData.seed}` : 'Pending Bracket Generation'}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 self-start sm:self-center bg-slate-950/80 border border-emerald-500/30 px-3.5 py-2 rounded-xl">
+                <LiveCountdown target={tourn.startTime} label="STARTS IN: " />
+              </div>
+            </div>
+          </div>
+        )}
+
         {playerStatus === 'WINNER' && (
           <div className="mt-6 rounded-2xl border border-amber-500/50 bg-gradient-to-r from-amber-500/20 via-yellow-500/10 to-amber-500/20 p-5 text-amber-200 shadow-xl">
             <div className="flex items-center gap-3">
@@ -403,7 +494,7 @@ export function TournamentDetailPage() {
                 <p className="text-xs text-amber-300/90 mt-0.5">
                   Congratulations! You conquered all rounds and won the grand prize of{' '}
                   <span className="font-extrabold text-amber-400">
-                    {(mySettlement?.prizeAmount ?? pData?.prizeWon ?? tourn.prizePool).toLocaleString()} coins
+                    {(mySettlement?.prizeAmount ?? pData?.prizeWon ?? prizesList[0]!.amount).toLocaleString()} coins
                   </span>!
                 </p>
                 {mySettlement?.status === 'COMPLETED' || mySettlement?.status === 'PAID' ? (
@@ -414,33 +505,7 @@ export function TournamentDetailPage() {
                       <span className="font-mono">{mySettlement.transactionId || 'COMPLETED'}</span>
                     </span>
                   </div>
-                ) : mySettlement?.status === 'PENDING' || mySettlement?.status === 'PROCESSING' ? (
-                  <div className="mt-2.5 inline-flex items-center gap-2 rounded-lg bg-amber-500/20 border border-amber-500/40 px-3 py-1 text-xs text-amber-300">
-                    <Clock className="size-4 text-amber-400 animate-spin" />
-                    <span>Prize settlement in progress...</span>
-                  </div>
                 ) : null}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {playerStatus !== 'WINNER' && mySettlement && mySettlement.prizeAmount > 0 && (
-          <div className="mt-6 rounded-2xl border border-indigo-500/50 bg-indigo-950/40 p-4 text-indigo-200">
-            <div className="flex items-center gap-3">
-              <Award className="size-7 text-indigo-400 shrink-0" />
-              <div>
-                <h3 className="font-bold text-sm text-white">
-                  🎉 #{mySettlement.rank} Place Finish — {mySettlement.prizeAmount.toLocaleString()} Coins Prize
-                </h3>
-                {mySettlement.status === 'COMPLETED' || mySettlement.status === 'PAID' ? (
-                  <p className="text-xs text-emerald-300 mt-1 flex items-center gap-1.5">
-                    <CheckCircle2 className="size-3.5" />
-                    Prize credited to your wallet ({mySettlement.transactionId || 'COMPLETED'})
-                  </p>
-                ) : (
-                  <p className="text-xs text-indigo-300/80 mt-1">Prize settlement processing</p>
-                )}
               </div>
             </div>
           </div>
@@ -462,52 +527,124 @@ export function TournamentDetailPage() {
 
         {playerStatus === 'ELIMINATED' && (
           <div className="mt-6 rounded-2xl border border-rose-500/30 bg-rose-950/30 p-4 text-rose-300">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
                 <XCircle className="size-5 text-rose-400" />
                 <h3 className="font-bold text-sm text-white">
                   TOURNAMENT ELIMINATED ({pData?.eliminatedInRound ? `Round ${pData.eliminatedInRound}` : 'Eliminated'})
                 </h3>
               </div>
-              {dashboardData?.myMatchHistory.length ? (
-                <span className="text-xs text-rose-400/80">
-                  {dashboardData.myMatchHistory.length} matches played in this tournament.
-                </span>
-              ) : null}
+          </div>
+        )}
+
+        {tourn.status === 'CANCELLED' && (
+          <div className="mt-6 rounded-2xl border border-rose-500/40 bg-gradient-to-r from-rose-950/40 via-red-950/20 to-rose-950/40 p-5 text-rose-200">
+            <div className="flex items-start gap-3">
+              <AlertOctagon className="size-7 text-rose-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-base sm:text-lg font-black text-white">
+                  TOURNAMENT CANCELLED
+                </h3>
+                <p className="text-xs text-rose-300 mt-1">
+                  Reason:{' '}
+                  <span className="font-semibold text-white">
+                    {(tourn as any).cancellationReason === 'MINIMUM_PLAYERS_NOT_REACHED'
+                      ? 'Minimum players not reached'
+                      : (tourn as any).cancellationReason || 'The tournament was cancelled before start'}
+                  </span>
+                </p>
+                {tourn.entryFee > 0 && isRegistered && (
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <div className="rounded-xl border border-rose-500/30 bg-slate-950/60 px-3.5 py-1.5 text-xs">
+                      <span className="text-slate-400">Entry Fee:</span>{' '}
+                      <span className="font-bold text-white">{tourn.entryFee} coins</span>
+                    </div>
+                    <div className="rounded-xl border border-emerald-500/30 bg-slate-950/60 px-3.5 py-1.5 text-xs flex items-center gap-2">
+                      <CheckCircle2 className="size-3.5 text-emerald-400" />
+                      <span className="text-slate-400">Refund Status:</span>{' '}
+                      <span className="font-bold text-emerald-400">REFUNDED TO WALLET</span>
+                    </div>
+                    <button
+                      onClick={() => navigate('/wallet')}
+                      className="text-xs font-semibold text-amber-400 hover:text-amber-300 underline ml-auto"
+                    >
+                      View Wallet History →
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* ------------------------------------------------------------- */}
-      {/* TABS NAVIGATION                                               */}
-      {/* ------------------------------------------------------------- */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 sm:p-6 backdrop-blur-xl">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Trophy className="size-4 text-amber-400" />
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-200">
+              Prize Distribution (Guaranteed {tourn.prizePool.toLocaleString()} Coins)
+            </h3>
+          </div>
+          <span className="text-[11px] text-slate-500 font-semibold">Top 4 Positions Paid</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          {prizesList.map((p) => (
+            <div
+              key={p.rank}
+              className={`rounded-2xl border p-3.5 flex flex-col justify-between transition-all ${
+                p.rank === 1
+                  ? 'border-amber-500/40 bg-gradient-to-b from-amber-500/15 via-amber-500/5 to-transparent'
+                  : p.rank === 2
+                  ? 'border-slate-400/30 bg-gradient-to-b from-slate-400/10 via-slate-400/5 to-transparent'
+                  : p.rank === 3
+                  ? 'border-amber-700/30 bg-gradient-to-b from-amber-700/10 via-amber-700/5 to-transparent'
+                  : 'border-indigo-500/30 bg-gradient-to-b from-indigo-500/10 via-indigo-500/5 to-transparent'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xl">{p.emoji}</span>
+                <span className="text-[10px] font-mono font-bold text-slate-400">{p.percentage}%</span>
+              </div>
+              <div className="mt-2">
+                <p className="text-[10px] font-bold uppercase text-slate-400">{p.label}</p>
+                <p className="text-base sm:text-lg font-black text-white mt-0.5">
+                  🪙 {p.amount.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <Tabs value={activeTab} onChange={setActiveTab}>
-        <TabsList className="bg-slate-900/60 p-1 border border-slate-800 rounded-2xl">
-          <TabsTrigger value="my-match" className="gap-1.5">
-            <Swords className="size-4" /> My Match
+        <TabsList className="bg-slate-900/60 p-1 border border-slate-800 rounded-2xl flex-wrap">
+          <TabsTrigger value="my-match" className="gap-1.5 text-xs">
+            <Swords className="size-4" /> My Match / Lobby
           </TabsTrigger>
-          <TabsTrigger value="bracket" className="gap-1.5">
+          <TabsTrigger value="bracket" className="gap-1.5 text-xs">
             <Trophy className="size-4" /> Bracket
           </TabsTrigger>
-          <TabsTrigger value="progress" className="gap-1.5">
-            <TrendingUp className="size-4" /> Progress & Stats
+          <TabsTrigger value="standings" className="gap-1.5 text-xs">
+            <TrendingUp className="size-4" /> Standings ({tourn.registeredPlayers})
           </TabsTrigger>
-          <TabsTrigger value="history" className="gap-1.5">
-            <Clock className="size-4" /> My Match History ({dashboardData?.myMatchHistory.length ?? 0})
-          </TabsTrigger>
-          <TabsTrigger value="players" className="gap-1.5">
-            <Users className="size-4" /> Players ({tourn.registeredPlayers})
-          </TabsTrigger>
-          <TabsTrigger value="events" className="gap-1.5">
+          <TabsTrigger value="events" className="gap-1.5 text-xs">
             <Flame className="size-4" /> Events ({events.length})
           </TabsTrigger>
         </TabsList>
 
-        {/* ----------------------------------------------------------- */}
-        {/* TAB 1: MY MATCH HUB                                         */}
-        {/* ----------------------------------------------------------- */}
         <TabsContent value="my-match" className="mt-6 space-y-6">
+          <TournamentTimeline
+            tournamentStatus={tourn.status}
+            isRegistered={isRegistered}
+            currentRound={matchData?.roundNumber || 1}
+            totalRounds={bracket?.rounds?.length || 3}
+            activeMatchId={matchData?.matchId}
+            onJoinMatch={(mId) => handleEnterMatch(mId)}
+            onViewBracket={() => setActiveTab('bracket')}
+            onViewWallet={() => navigate('/wallet')}
+          />
+
           {matchData ? (
             <Card className="overflow-hidden border-slate-800 bg-slate-900/60 backdrop-blur">
               <CardHeader className="border-b border-slate-800/80 bg-slate-950/40 p-5">
@@ -518,26 +655,34 @@ export function TournamentDetailPage() {
                       Round {matchData.roundNumber} Match
                     </CardTitle>
                   </div>
-                  <Badge variant={matchData.status === 'IN_PROGRESS' ? 'success' : matchData.status === 'READY' ? 'accent' : 'default'}>
-                    {matchData.status === 'IN_PROGRESS' ? 'LIVE NOW' : matchData.status === 'READY' ? 'MATCH READY' : matchData.status}
+                  <Badge
+                    variant={
+                      matchData.status === 'IN_PROGRESS'
+                        ? 'success'
+                        : matchData.status === 'READY'
+                        ? 'accent'
+                        : 'default'
+                    }
+                  >
+                    {matchData.status === 'IN_PROGRESS'
+                      ? 'LIVE NOW'
+                      : matchData.status === 'READY'
+                      ? 'MATCH READY 🎮'
+                      : matchData.status}
                   </Badge>
                 </div>
               </CardHeader>
 
               <CardContent className="p-6 space-y-6">
-                {/* Players & Live Score Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-6 rounded-2xl border border-slate-800 bg-slate-950/60 p-6 text-center">
-                  {/* Player You */}
                   <div className="flex flex-col items-center">
                     <div className="size-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-2xl font-black text-amber-400">
                       {pData?.displayName?.[0] || 'Y'}
                     </div>
                     <div className="mt-2 font-bold text-slate-100">You ({pData?.displayName || pData?.username})</div>
-                    {pData?.seed && <span className="text-xs text-slate-400">Seed #{pData.seed}</span>}
                     <div className="mt-3 text-3xl font-black text-amber-400">{matchData.myScore}</div>
                   </div>
 
-                  {/* VS & Timer */}
                   <div className="flex flex-col items-center justify-center space-y-2">
                     <span className="text-xs font-bold uppercase tracking-widest text-slate-500">VERSUS</span>
                     {matchData.matchDeadline && (
@@ -545,10 +690,8 @@ export function TournamentDetailPage() {
                         <MatchDeadlineTimer deadline={matchData.matchDeadline} />
                       </div>
                     )}
-                    <span className="text-[11px] text-slate-500">10-Minute Match Limit</span>
                   </div>
 
-                  {/* Opponent */}
                   <div className="flex flex-col items-center">
                     <div className="size-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl font-black text-slate-300">
                       {matchData.opponent?.displayName?.[0] || matchData.opponent?.username?.[0] || '?'}
@@ -556,20 +699,15 @@ export function TournamentDetailPage() {
                     <div className="mt-2 font-bold text-slate-100">
                       {matchData.opponent?.displayName || matchData.opponent?.username || 'Opponent'}
                     </div>
-                    {matchData.opponent?.seed && (
-                      <span className="text-xs text-slate-400">Seed #{matchData.opponent.seed}</span>
-                    )}
                     <div className="mt-3 text-3xl font-black text-slate-300">{matchData.opponentScore}</div>
                   </div>
                 </div>
 
-                {/* Email reminder notice */}
                 <div className="flex items-center gap-2 rounded-xl bg-sky-950/30 border border-sky-500/30 p-3 text-xs text-sky-300">
                   <Mail className="size-4 text-sky-400 shrink-0" />
                   <span>Check your registered email account for instant server notifications and match alerts.</span>
                 </div>
 
-                {/* Action CTAs */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                   <Button
                     type="button"
@@ -582,7 +720,7 @@ export function TournamentDetailPage() {
                       }
                     }}
                   >
-                    <ShieldAlert className="size-3.5 text-amber-400" /> Report Match Result
+                    <ShieldAlert className="size-3.5 text-amber-400" /> Report Result Dispute
                   </Button>
 
                   <Button
@@ -595,53 +733,42 @@ export function TournamentDetailPage() {
                 </div>
               </CardContent>
             </Card>
-          ) : playerStatus === 'ADVANCED' ? (
-            <Card className="border-teal-500/30 bg-teal-950/20">
-              <CardContent className="p-8 text-center space-y-3">
-                <Sparkles className="size-12 text-teal-400 mx-auto animate-pulse" />
-                <h3 className="text-lg font-black text-white">You Have Advanced to the Next Round!</h3>
-                <p className="text-xs text-teal-300/80 max-w-md mx-auto">
-                  Your opponent's match is currently in progress. As soon as both players are finalized, your match will transition to MATCH READY.
-                </p>
-              </CardContent>
-            </Card>
-          ) : playerStatus === 'ELIMINATED' ? (
+          ) : isRegistered && (isRegOpen || isStarting) ? (
             <Card className="border-slate-800 bg-slate-900/40">
-              <CardContent className="p-8 text-center space-y-3">
-                <XCircle className="size-12 text-rose-500 mx-auto" />
-                <h3 className="text-lg font-black text-slate-100">Tournament Eliminated</h3>
-                <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  You are no longer active in the bracket. You can watch the remaining matches in the Bracket view or review your replays in Match History.
-                </p>
-                <Button
-                  variant="outline"
-                  onClick={() => setActiveTab('history')}
-                  className="border-slate-700 text-slate-200"
-                >
-                  View Match History
-                </Button>
+              <CardContent className="p-8 text-center space-y-4">
+                <div className="size-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto">
+                  <Clock className="size-8 text-emerald-400 animate-spin" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-xl font-black text-white">Waiting for Tournament Start</h3>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    You are registered. When the registration window closes, the bracket will be seeded and Round 1 match assignments will be announced immediately.
+                  </p>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 border border-slate-800 px-5 py-2.5">
+                  <LiveCountdown target={tourn.startTime} label="STARTS IN: " />
+                </div>
               </CardContent>
             </Card>
           ) : (
             <Card className="border-slate-800 bg-slate-900/40">
               <CardContent className="p-8 text-center space-y-3">
-                <Clock className="size-12 text-slate-500 mx-auto animate-spin" />
-                <h3 className="text-lg font-black text-slate-100">Waiting for Next Match</h3>
+                <Trophy className="size-12 text-slate-600 mx-auto" />
+                <h3 className="text-lg font-black text-slate-100">
+                  {isRegOpen ? 'Registration is Open' : isCompleted ? 'Tournament Finished' : 'Tournament In Progress'}
+                </h3>
                 <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  {tourn.status === 'REGISTRATION_OPEN' || tourn.status === 'UPCOMING'
-                    ? 'Matches will be scheduled automatically when registration closes and the tournament begins.'
-                    : 'The tournament orchestrator is assembling current round matches. Please stand by.'}
+                  {isRegOpen && !isRegistered
+                    ? `Click "Join Tournament" above to secure your spot for ${tourn.entryFee} coins.`
+                    : 'Check the Bracket tab to view current matches and player progression.'}
                 </p>
               </CardContent>
             </Card>
           )}
         </TabsContent>
 
-        {/* ----------------------------------------------------------- */}
-        {/* TAB 2: BRACKET VIEW                                         */}
-        {/* ----------------------------------------------------------- */}
         <TabsContent value="bracket" className="mt-6 space-y-4">
-          {bracket ? (
+          {bracket && bracket.rounds?.length > 0 ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs text-slate-400 px-1">
                 <span>Hover or tap match slots to view match details. Your path is highlighted.</span>
@@ -650,18 +777,32 @@ export function TournamentDetailPage() {
               <div className="overflow-x-auto rounded-3xl border border-slate-800 bg-slate-950/60 p-4">
                 <PlayerBracketView
                   bracket={bracket}
-                  myStatus={myStatus ?? {
-                    isRegistered: true,
-                    seed: pData?.seed ?? null,
-                    eliminated: pData?.eliminated ?? false,
-                    eliminatedInRound: pData?.eliminatedInRound ?? null,
-                    finalRank: pData?.finalRank ?? null,
-                    currentRoundId: null,
-                    currentMatchId: matchData?.matchId ?? null,
-                    currentRound: matchData?.roundNumber ?? null,
-                    opponent: matchData?.opponent ? { id: matchData.opponent.userId, username: matchData.opponent.username, displayName: matchData.opponent.displayName, avatarUrl: matchData.opponent.avatarUrl } : null,
-                    matchStatus: matchData?.status === 'READY' || matchData?.status === 'IN_PROGRESS' || matchData?.status === 'COMPLETED' ? matchData.status : 'PENDING',
-                  }}
+                  myStatus={
+                    myStatus ?? {
+                      isRegistered: isRegistered,
+                      seed: pData?.seed ?? null,
+                      eliminated: pData?.eliminated ?? false,
+                      eliminatedInRound: pData?.eliminatedInRound ?? null,
+                      finalRank: pData?.finalRank ?? null,
+                      currentRoundId: null,
+                      currentMatchId: matchData?.matchId ?? null,
+                      currentRound: matchData?.roundNumber ?? null,
+                      opponent: matchData?.opponent
+                        ? {
+                            id: matchData.opponent.userId,
+                            username: matchData.opponent.username,
+                            displayName: matchData.opponent.displayName,
+                            avatarUrl: matchData.opponent.avatarUrl,
+                          }
+                        : null,
+                      matchStatus:
+                        matchData?.status === 'READY' ||
+                        matchData?.status === 'IN_PROGRESS' ||
+                        matchData?.status === 'COMPLETED'
+                          ? matchData.status
+                          : 'PENDING',
+                    }
+                  }
                   players={tourn.registeredPlayers ? (detail?.players || []) : []}
                   onPlayMatch={(matchId) => handleEnterMatch(matchId)}
                 />
@@ -968,6 +1109,10 @@ export function TournamentDetailPage() {
                                 <span className="inline-flex items-center gap-1 text-amber-700 font-black">
                                   <Medal className="size-4 fill-amber-700" /> #3
                                 </span>
+                              ) : s.rank === 4 ? (
+                                <span className="inline-flex items-center gap-1 text-indigo-400 font-black">
+                                  <span className="inline-flex items-center justify-center size-4 rounded-full bg-indigo-500/20 text-indigo-400 font-bold text-[10px]">4</span> #4
+                                </span>
                               ) : (
                                 <span className="text-slate-500">#{s.rank}</span>
                               )}
@@ -1102,52 +1247,94 @@ export function TournamentDetailPage() {
       <Modal
         isOpen={showJoinModal}
         onClose={() => { setShowJoinModal(false); setJoinError(null); }}
-        title="Join Tournament"
+        title="Register for Tournament"
         size="sm"
         footer={
           <>
             <Button variant="ghost" onClick={() => setShowJoinModal(false)}>Cancel</Button>
-            <Button
-              variant="primary"
-              loading={isJoining}
-              disabled={!canAfford}
-              onClick={handleJoin}
-              className="bg-amber-500 text-slate-950 font-bold hover:bg-amber-400"
-            >
-              Confirm Registration
-            </Button>
+            {canAfford ? (
+              <Button
+                variant="primary"
+                loading={isJoining}
+                disabled={!canAfford || isJoining}
+                onClick={handleJoin}
+                className="bg-amber-500 text-slate-950 font-bold hover:bg-amber-400"
+              >
+                Confirm & Register
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setShowJoinModal(false);
+                  navigate('/wallet');
+                }}
+                className="bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold hover:from-amber-400 hover:to-yellow-400"
+              >
+                ADD COINS
+              </Button>
+            )}
           </>
         }
       >
         <div className="space-y-4 text-xs">
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-slate-900 p-3 border border-slate-800">
-              <p className="text-slate-500">Entry Fee</p>
-              <p className="text-base font-black text-amber-400">🪙 {tourn.entryFee.toLocaleString()}</p>
+              <p className="text-slate-500 font-medium">Entry Fee</p>
+              <p className="text-base font-black text-amber-400">🪙 {tourn.entryFee.toLocaleString()} Coins</p>
             </div>
             <div className="rounded-xl bg-slate-900 p-3 border border-slate-800">
-              <p className="text-slate-500">Prize Pool</p>
-              <p className="text-base font-black text-emerald-400">🪙 {tourn.prizePool.toLocaleString()}</p>
+              <p className="text-slate-500 font-medium">Prize Pool</p>
+              <p className="text-base font-black text-emerald-400">🪙 {tourn.prizePool.toLocaleString()} Coins</p>
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
+          {/* Authoritative Financial Breakdown */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 space-y-2.5">
             <div className="flex justify-between text-slate-400">
-              <span>Your Current Balance</span>
-              <span className="font-bold text-slate-200">🪙 {(walletBalance ?? 0).toLocaleString()}</span>
+              <span>Current Balance:</span>
+              <span className="font-bold text-slate-200">🪙 {(walletBalance ?? 0).toLocaleString()} Coins</span>
             </div>
             <div className="flex justify-between text-slate-400">
-              <span>Balance After Entry</span>
+              <span>Entry Fee:</span>
+              <span className="font-bold text-amber-400">🪙 {tourn.entryFee.toLocaleString()} Coins</span>
+            </div>
+            <div className="pt-2 border-t border-slate-800 flex justify-between font-semibold">
+              <span className="text-slate-300">Balance After Entry:</span>
               <span className={`font-bold ${canAfford ? 'text-emerald-400' : 'text-rose-400'}`}>
-                🪙 {balanceAfterJoin.toLocaleString()}
+                🪙 {balanceAfterJoin.toLocaleString()} Coins
               </span>
             </div>
           </div>
 
+          {/* Insufficient Balance Experience */}
           {!canAfford && (
-            <p className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-rose-400">
-              Insufficient coin balance. You need {tourn.entryFee.toLocaleString()} coins to enter.
-            </p>
+            <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 p-4 space-y-3">
+              <div className="flex items-center gap-2 text-rose-400 font-bold uppercase tracking-wider text-xs">
+                <AlertCircle className="size-4 shrink-0" />
+                <span>INSUFFICIENT COINS</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
+                <div>
+                  <p className="text-slate-500 text-[10px]">Required:</p>
+                  <p className="font-bold text-slate-200">{tourn.entryFee.toLocaleString()} coins</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-[10px]">Available:</p>
+                  <p className="font-bold text-rose-400">{(walletBalance ?? 0).toLocaleString()} coins</p>
+                </div>
+              </div>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setShowJoinModal(false);
+                  navigate('/wallet');
+                }}
+                className="w-full bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold hover:from-amber-400 hover:to-yellow-400 py-2.5 text-xs shadow-lg shadow-amber-500/20"
+              >
+                ADD COINS
+              </Button>
+            </div>
           )}
 
           {joinError && (
@@ -1157,6 +1344,60 @@ export function TournamentDetailPage() {
           )}
         </div>
       </Modal>
+
+      {/* ------------------------------------------------------------- */}
+      {/* REGISTRATION SUCCESS CONFIRMATION MODAL                       */}
+      {/* ------------------------------------------------------------- */}
+      {registrationSuccessData && (
+        <Modal
+          isOpen={Boolean(registrationSuccessData)}
+          onClose={() => setRegistrationSuccessData(null)}
+          title="Registration Confirmed"
+          size="sm"
+          footer={
+            <Button
+              variant="primary"
+              onClick={() => setRegistrationSuccessData(null)}
+              className="w-full bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400"
+            >
+              Done
+            </Button>
+          }
+        >
+          <div className="text-center space-y-4 py-2">
+            <div className="mx-auto w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/10">
+              <CheckCircle2 className="size-8" />
+            </div>
+
+            <h3 className="text-lg font-black text-emerald-400">
+              ✓ Tournament Registration Successful
+            </h3>
+
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 text-left space-y-2.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Tournament:</span>
+                <span className="font-bold text-slate-200">{registrationSuccessData.tournamentTitle}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Game:</span>
+                <span className="font-bold text-slate-200">{registrationSuccessData.gameName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Entry Fee:</span>
+                <span className="font-bold text-amber-400">{registrationSuccessData.entryFee.toLocaleString()} coins</span>
+              </div>
+              <div className="flex justify-between border-t border-slate-800 pt-2 font-semibold">
+                <span className="text-slate-300">Prize Pool:</span>
+                <span className="font-bold text-emerald-400">🪙 {tourn.prizePool.toLocaleString()} coins</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-400">
+              Your match bracket position will update automatically when the tournament begins.
+            </p>
+          </div>
+        </Modal>
+      )}
 
       {/* Dispute / Report Modal */}
       {disputeTargetMatch && (

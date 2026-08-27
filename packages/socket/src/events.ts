@@ -12,6 +12,7 @@ import type {
   AuthoritativeMatchState,
   AuthoritativeStateSyncRequest,
   AuthoritativeStateSyncResponse,
+  StandardMatchResult,
 } from "@gaming-hub/shared";
 
 /**
@@ -159,6 +160,14 @@ export interface ServerToClientEvents {
     state: JsonObject;
   }) => void;
 
+  "game:finished": (payload: StandardMatchResult) => void;
+
+  "game:settlement-completed": (payload: {
+    matchId: string;
+    resultType: string;
+    coinsWon: number;
+  }) => void;
+
   "carrom:striker-position": (payload: {
     roomId: string;
     matchId: string;
@@ -190,6 +199,9 @@ export interface ServerToClientEvents {
   "wallet:updated": (payload: WalletUpdatePayload) => void;
 
   "tournament:updated": (data: { tournamentId: string; stateVersion: number }) => void;
+  "tournament:player-count-updated": (data: { tournamentId: string; registeredPlayers: number; maxPlayers: number }) => void;
+  "tournament:player-registered": (data: { tournamentId: string; userId?: string }) => void;
+  "tournament:match-assigned": (data: { tournamentId: string; matchId?: string; roundNumber?: number }) => void;
   "tournament:match-created": (data: { tournamentId: string; matchId: string; roundNumber: number }) => void;
   "tournament:match-started": (data: { tournamentId: string; matchId: string }) => void;
   "tournament:match-completed": (data: { tournamentId: string; matchId: string; winnerId?: string }) => void;

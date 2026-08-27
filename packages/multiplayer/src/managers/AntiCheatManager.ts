@@ -55,6 +55,8 @@ export class AntiCheatManager {
   private readonly actionHistory = new Map<string, number[]>(); // playerId -> action timestamps
   private readonly suspiciousEvents = new Map<string, SuspiciousEvent[]>(); // playerId -> events
   private readonly actionSequences = new Map<string, number>(); // playerId -> last sequence number
+  private readonly processedActionCache = new Map<string, { timestamp: number; result: any }>(); // roomId:actionId -> cached result
+  private readonly playerRiskScores = new Map<string, number>(); // playerId -> internal fair play risk score (0-100)
   
   constructor(framework: MultiplayerFramework, config?: Partial<AntiCheatConfig>) {
     this.framework = framework;
@@ -72,6 +74,10 @@ export class AntiCheatManager {
         "fruit-ninja": { maxActionsPerSecond: 40, minActionIntervalMs: 10 },
         // Snooker sends aim updates and strike actions
         snooker: { maxActionsPerSecond: 25, minActionIntervalMs: 0 },
+        // Table Tennis sends frequent paddle positions
+        "table-tennis": { maxActionsPerSecond: 30, minActionIntervalMs: 15 },
+        // Snake vs Worms sends frequent direction inputs
+        "snake-vs-worms": { maxActionsPerSecond: 30, minActionIntervalMs: 15 },
       },
       ...config,
     };
@@ -85,6 +91,42 @@ export class AntiCheatManager {
     this.actionHistory.clear();
     this.suspiciousEvents.clear();
     this.actionSequences.clear();
+    this.processedActionCache.clear();
+    this.playerRiskScores.clear();
+  }
+
+  /**
+   * Check if an actionId was already processed to guarantee idempotency.
+   */
+  getCachedActionResult(roomId: string, actionId?: string): any | null {
+    if (!actionId) return null;
+    const key = `${roomId}:${actionId}`;
+    const cached = this.processedActionCache.get(key);
+    return cached ? cached.result : null;
+  }
+
+  /**
+   * Cache a processed action result for idempotency.
+   */
+  cacheActionResult(roomId: string, actionId: string | undefined, result: any): void {
+    if (!actionId) return;
+    const key = `${roomId}:${actionId}`;
+    this.processedActionCache.set(key, { timestamp: Date.now(), result });
+
+    // Prune entries older than 2 minutes if cache grows large
+    if (this.processedActionCache.size > 1000) {
+      const cutoff = Date.now() - 120000;
+      for (const [k, v] of this.processedActionCache.entries()) {
+        if (v.timestamp < cutoff) this.processedActionCache.delete(k);
+      }
+    }
+  }
+
+  /**
+   * Internal fair-play risk score (0-100). Higher = more suspicious anomalies.
+   */
+  getFairPlayRiskScore(playerId: string): number {
+    return this.playerRiskScores.get(playerId) ?? 0;
   }
   
   /**
@@ -105,8 +147,51 @@ export class AntiCheatManager {
       timestamp: now,
       actionSequence: this.getNextActionSequence(player.id),
     };
+
+    // 1. Authoritative 10-Minute Hard Match Timer Protection
+    const MATCH_HARD_LIMIT_MS = 10 * 60 * 1000; // 10 minutes
+    if (room.match && room.match.startedAt) {
+      const elapsed = now - room.match.startedAt;
+      if (elapsed > MATCH_HARD_LIMIT_MS) {
+        this.logSuspiciousEvent({
+          playerId: player.id,
+          roomId: room.id,
+          eventType: "timeout_action",
+          details: { actionType: action.type, elapsedMs: elapsed },
+          timestamp: now,
+          severity: "high",
+        });
+        return {
+          valid: false,
+          reason: "Match deadline exceeded (10-minute limit)",
+          confidence: 1.0,
+        };
+      }
+    }
+
+    // 2. State Version Validation (Reject stale client updates)
+    const clientStateVersion = (action as any).stateVersion ?? (action as any).version;
+    if (typeof clientStateVersion === "number" && room.match) {
+      const currentVersion = room.match.turnNumber ?? 0;
+      // Stale by more than 2 turns
+      if (clientStateVersion < currentVersion - 2 && currentVersion > 2) {
+        this.logSuspiciousEvent({
+          playerId: player.id,
+          roomId: room.id,
+          eventType: "stale_state_version",
+          details: { actionType: action.type, clientVersion: clientStateVersion, currentVersion },
+          timestamp: now,
+          severity: "low",
+        });
+        return {
+          valid: false,
+          reason: "Stale state version update ignored",
+          confidence: 0.9,
+        };
+      }
+    }
     
-    // Real-time game inputs that can be sent frequently
+    // Real-time continuous game inputs that can be sent frequently
     if (
       action.type === "paddle-move" ||
       action.type === "direction" ||
@@ -210,19 +295,19 @@ export class AntiCheatManager {
     const events = this.suspiciousEvents.get(event.playerId) ?? [];
     events.push(fullEvent);
     this.suspiciousEvents.set(event.playerId, events);
+
+    // Update internal fair-play risk score (0 - 100)
+    const currentScore = this.playerRiskScores.get(event.playerId) ?? 0;
+    const increment =
+      event.severity === "critical" ? 30 :
+      event.severity === "high" ? 15 :
+      event.severity === "medium" ? 5 : 2;
+    this.playerRiskScores.set(event.playerId, Math.min(100, currentScore + increment));
     
     this.framework.error(
-      `Suspicious event: ${event.eventType} by player ${event.playerId} in room ${event.roomId}`,
+      `Suspicious event: ${event.eventType} (severity: ${event.severity}) by player ${event.playerId} in room ${event.roomId}`,
       event.details
     );
-    
-    // Check if player should be auto-kicked
-    const criticalCount = events.filter(e => e.severity === "critical").length;
-    const highCount = events.filter(e => e.severity === "high").length;
-    
-    if (criticalCount >= 2 || highCount >= this.config.maxSuspiciousEvents) {
-      this.autoKickPlayer(event.playerId, event.roomId, "suspicious_behavior");
-    }
   }
   
   /**

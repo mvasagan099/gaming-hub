@@ -266,6 +266,8 @@ export class TournamentNotificationService {
     tournamentId: string;
     tournamentTitle: string;
     minutesRemaining: number;
+    gameId?: string;
+    startTime?: string;
   }): Promise<void> {
     const players = await prisma.tournamentPlayer.findMany({
       where: { tournamentId: params.tournamentId },
@@ -282,6 +284,15 @@ export class TournamentNotificationService {
         data: { minutesRemaining: params.minutesRemaining },
         referenceId: `starting_${params.minutesRemaining}m`,
       });
+
+      await TournamentEmailService.sendTournamentStartingEmail({
+        userId: player.userId,
+        tournamentId: params.tournamentId,
+        tournamentTitle: params.tournamentTitle,
+        gameId: params.gameId ?? "tournament",
+        minutesRemaining: params.minutesRemaining,
+        startTime: params.startTime,
+      }).catch(() => undefined);
     }
   }
 
@@ -514,7 +525,7 @@ export class TournamentNotificationService {
 
   /**
    * TOURNAMENT_FINAL
-   * Sent when player reaches the final round.
+   * Sent when player reaches the final round ("🏆 YOU REACHED THE FINAL").
    */
   static async notifyFinal(params: {
     tournamentId: string;
@@ -523,26 +534,75 @@ export class TournamentNotificationService {
     opponentId: string;
     matchId: string;
     roundNumber: number;
+    gameId?: string;
   }): Promise<void> {
     const opponent = await prisma.user.findUnique({
       where: { id: params.opponentId },
       select: { displayName: true },
     });
+    const opponentDisplayName = opponent?.displayName ?? "Opponent";
 
     await sendTournamentNotification({
       tournamentId: params.tournamentId,
       playerId: params.playerId,
       eventType: "TOURNAMENT_FINAL",
       title: "Grand Final!",
-      body: `You reached the Grand Final of ${params.tournamentTitle}! Final: You vs ${opponent?.displayName ?? "Opponent"}`,
+      body: `You reached the Grand Final of ${params.tournamentTitle}! Final: You vs ${opponentDisplayName}`,
       data: {
         tournamentId: params.tournamentId,
         matchId: params.matchId,
         opponentId: params.opponentId,
+        opponentDisplayName,
         roundNumber: params.roundNumber,
+        gameId: params.gameId,
       },
       referenceId: params.matchId,
     });
+
+    await TournamentEmailService.sendFinalistEmail({
+      userId: params.playerId,
+      tournamentId: params.tournamentId,
+      tournamentTitle: params.tournamentTitle,
+      matchId: params.matchId,
+      opponentDisplayName,
+      gameId: params.gameId,
+    }).catch(() => undefined);
+  }
+
+  /**
+   * TOURNAMENT_PODIUM
+   * Sent to 2nd, 3rd, and 4th place finishers with exact authoritative prize coins.
+   */
+  static async notifyPodiumPlacement(params: {
+    tournamentId: string;
+    tournamentTitle: string;
+    playerId: string;
+    rank: number;
+    prizeAmount: number;
+  }): Promise<void> {
+    const medal = params.rank === 2 ? "🥈" : params.rank === 3 ? "🥉" : "4️⃣";
+    const rankLabel = params.rank === 2 ? "2nd Place" : params.rank === 3 ? "3rd Place" : "4th Place";
+
+    await sendTournamentNotification({
+      tournamentId: params.tournamentId,
+      playerId: params.playerId,
+      eventType: "TOURNAMENT_PODIUM",
+      title: `${medal} You Finished ${rankLabel}!`,
+      body: `You finished ${rankLabel} in ${params.tournamentTitle}! Prize: ${params.prizeAmount.toLocaleString()} Coins.`,
+      data: {
+        rank: params.rank,
+        prizeAmount: params.prizeAmount,
+      },
+      referenceId: `podium_${params.rank}_${params.playerId}`,
+    });
+
+    await TournamentEmailService.sendPodiumPlacementEmail({
+      userId: params.playerId,
+      tournamentId: params.tournamentId,
+      tournamentTitle: params.tournamentTitle,
+      rank: params.rank,
+      prizeAmount: params.prizeAmount,
+    }).catch(() => undefined);
   }
 
   /**
@@ -629,6 +689,7 @@ export class TournamentNotificationService {
     playerId: string;
     rank: number;
     amount: number;
+    transactionId?: string;
   }): Promise<void> {
     await sendTournamentNotification({
       tournamentId: params.tournamentId,
@@ -639,39 +700,83 @@ export class TournamentNotificationService {
       data: {
         rank: params.rank,
         amount: params.amount,
+        transactionId: params.transactionId ?? null,
       },
       referenceId: `prize_${params.playerId}`,
       bypassPreferences: true,
     });
+
+    await TournamentEmailService.sendPrizeCreditedEmail({
+      userId: params.playerId,
+      tournamentId: params.tournamentId,
+      tournamentTitle: params.tournamentTitle,
+      rank: params.rank,
+      amount: params.amount,
+      transactionId: params.transactionId,
+    }).catch(() => undefined);
   }
 
   /**
    * TOURNAMENT_CANCELLED
-   * Sent to all registered players when tournament is cancelled.
+   * Sent to registered players when tournament is cancelled.
    */
   static async notifyCancelled(params: {
     tournamentId: string;
     tournamentTitle: string;
     reason?: string;
+    entryFee?: number;
+    playerId?: string;
   }): Promise<void> {
-    const players = await prisma.tournamentPlayer.findMany({
-      where: { tournamentId: params.tournamentId },
-      select: { userId: true },
-    });
+    const reasonText = params.reason || "The minimum number of players was not reached.";
+    const body =
+      params.entryFee && params.entryFee > 0
+        ? `The tournament was cancelled (${reasonText}). Your ${params.entryFee} coins will be refunded according to the tournament refund process.`
+        : `The tournament was cancelled (${reasonText}).`;
 
-    const reasonText = params.reason ? ` Reason: ${params.reason}` : "";
-
-    for (const player of players) {
+    if (params.playerId) {
       await sendTournamentNotification({
         tournamentId: params.tournamentId,
-        playerId: player.userId,
+        playerId: params.playerId,
         eventType: "TOURNAMENT_CANCELLED",
         title: "Tournament Cancelled",
-        body: `${params.tournamentTitle} has been cancelled.${reasonText}`,
-        data: { reason: params.reason ?? null },
-        referenceId: `cancelled`,
+        body,
+        data: { reason: params.reason, entryFee: params.entryFee },
+        referenceId: `cancelled_${params.tournamentId}`,
         bypassPreferences: true,
       });
+      await TournamentEmailService.sendTournamentCancelledEmail({
+        userId: params.playerId,
+        tournamentId: params.tournamentId,
+        tournamentTitle: params.tournamentTitle,
+        reason: reasonText,
+        entryFee: params.entryFee,
+        refundStatus: "PROCESSING",
+      }).catch(() => undefined);
+    } else {
+      const players = await prisma.tournamentPlayer.findMany({
+        where: { tournamentId: params.tournamentId },
+        select: { userId: true },
+      });
+      for (const player of players) {
+        await sendTournamentNotification({
+          tournamentId: params.tournamentId,
+          playerId: player.userId,
+          eventType: "TOURNAMENT_CANCELLED",
+          title: "Tournament Cancelled",
+          body,
+          data: { reason: params.reason, entryFee: params.entryFee },
+          referenceId: `cancelled_${params.tournamentId}`,
+          bypassPreferences: true,
+        });
+        await TournamentEmailService.sendTournamentCancelledEmail({
+          userId: player.userId,
+          tournamentId: params.tournamentId,
+          tournamentTitle: params.tournamentTitle,
+          reason: reasonText,
+          entryFee: params.entryFee,
+          refundStatus: "PROCESSING",
+        }).catch(() => undefined);
+      }
     }
   }
 
@@ -684,17 +789,26 @@ export class TournamentNotificationService {
     tournamentTitle: string;
     playerId: string;
     amount: number;
+    refundId?: string;
   }): Promise<void> {
     await sendTournamentNotification({
       tournamentId: params.tournamentId,
       playerId: params.playerId,
       eventType: "TOURNAMENT_REFUNDED",
-      title: "Entry Fee Refunded",
-      body: `${params.amount.toLocaleString()} Coins have been refunded to your wallet.`,
-      data: { amount: params.amount },
-      referenceId: `refund_${params.playerId}`,
+      title: "💰 Tournament Entry Refunded",
+      body: `Your entry fee of ${params.amount.toLocaleString()} coins for ${params.tournamentTitle} has been refunded to your wallet.`,
+      data: { tournamentId: params.tournamentId, amount: params.amount, refundId: params.refundId },
+      referenceId: `refund_${params.tournamentId}_${params.playerId}`,
       bypassPreferences: true,
     });
+
+    await TournamentEmailService.sendRefundCompletedEmail({
+      userId: params.playerId,
+      tournamentId: params.tournamentId,
+      tournamentTitle: params.tournamentTitle,
+      amount: params.amount,
+      refundId: params.refundId,
+    }).catch(() => undefined);
   }
 
   // -----------------------------------------------------------------------
@@ -874,6 +988,40 @@ export class TournamentNotificationService {
     });
 
     await TournamentEmailService.sendMatchForfeitedEmail(params).catch(() => undefined);
+  }
+
+  /**
+   * Send match reminder (In-App + Socket + Email) if player has not joined waiting room.
+   */
+  static async notifyMatchReminder(params: {
+    userId: string;
+    tournamentId: string;
+    tournamentTitle: string;
+    matchId: string;
+    roundNumber: number | string;
+    gameId: string;
+    opponentDisplayName: string;
+  }): Promise<void> {
+    if (TournamentEmailService.isPlayerJoined({ matchId: params.matchId, userId: params.userId })) {
+      return;
+    }
+
+    await sendTournamentNotification({
+      tournamentId: params.tournamentId,
+      playerId: params.userId,
+      eventType: "TOURNAMENT_MATCH_REMINDER",
+      title: "⏰ Match Waiting",
+      body: `Your Round ${params.roundNumber} match in ${params.tournamentTitle} is waiting. vs ${params.opponentDisplayName}`,
+      data: {
+        matchId: params.matchId,
+        roundNumber: params.roundNumber,
+        gameId: params.gameId,
+        opponentDisplayName: params.opponentDisplayName,
+      },
+      referenceId: `reminder_${params.matchId}`,
+    });
+
+    await TournamentEmailService.sendMatchStartingReminder(params).catch(() => undefined);
   }
 
   /**

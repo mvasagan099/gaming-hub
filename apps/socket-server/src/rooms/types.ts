@@ -27,7 +27,14 @@ export type MatchLifecycleStatus =
   | "COMPLETED"
   | "CANCELLED";
 
-export type MatchResultReason = "NORMAL" | "TIME_LIMIT" | "TIMEOUT" | "ABANDONED";
+export type MatchResultReason =
+  | "NORMAL"
+  | "TIME_LIMIT"
+  | "TIMEOUT"
+  | "ABANDONED"
+  | "FORFEIT"
+  | "DISCONNECT"
+  | "DRAW";
 
 export interface MatchRuntime {
   matchId: string;
@@ -38,7 +45,7 @@ export interface MatchRuntime {
   matchDeadline?: number;
   matchStatus?: MatchLifecycleStatus;
   endedAt?: number | null;
-  resultReason?: MatchResultReason | null;
+  resultReason?: MatchResultReason | string | null;
   timeExpired?: boolean;
 }
 

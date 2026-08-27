@@ -1,4 +1,6 @@
 import { prisma } from "@gaming-hub/db";
+import type { Prisma } from "@gaming-hub/db";
+import { DEFAULT_TOURNAMENT_TIERS } from "@gaming-hub/shared";
 
 interface SeedAchievement {
   code: string;
@@ -62,6 +64,49 @@ async function main() {
     });
   }
   console.log(`Seeded ${ACHIEVEMENTS.length} achievements`);
+
+  // -------------------------------------------------------------------------
+  // Tournament Tiers
+  // -------------------------------------------------------------------------
+  let tiersSeeded = 0;
+  for (const defaults of DEFAULT_TOURNAMENT_TIERS) {
+    const dist = defaults.prizeDistribution as unknown as Prisma.InputJsonValue;
+    await prisma.tournamentTier.upsert({
+      where: { code: defaults.code },
+      create: {
+        name: defaults.name,
+        code: defaults.code,
+        description: defaults.description ?? null,
+        entryFee: defaults.entryFee,
+        maxPlayers: defaults.maxPlayers,
+        prizePool: defaults.prizePool,
+        prizeDistribution: dist,
+        gameId: defaults.gameId,
+        format: defaults.format,
+        enableThirdPlace: defaults.enableThirdPlace,
+        autoStartWhenFull: defaults.autoStartWhenFull,
+        isActive: defaults.isActive,
+        sortOrder: defaults.sortOrder,
+        createdBy: "system:seed",
+      },
+      update: {
+        name: defaults.name,
+        description: defaults.description ?? null,
+        entryFee: defaults.entryFee,
+        maxPlayers: defaults.maxPlayers,
+        prizePool: defaults.prizePool,
+        prizeDistribution: dist,
+        format: defaults.format,
+        enableThirdPlace: defaults.enableThirdPlace,
+        autoStartWhenFull: defaults.autoStartWhenFull,
+        sortOrder: defaults.sortOrder,
+        // Do NOT overwrite isActive — admin may have disabled a tier intentionally
+      },
+    });
+    tiersSeeded++;
+  }
+  console.log(`Seeded ${tiersSeeded} tournament tiers`);
+
   await prisma.$disconnect();
 }
 

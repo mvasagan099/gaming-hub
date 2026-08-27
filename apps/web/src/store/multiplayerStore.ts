@@ -364,6 +364,21 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         });
       });
 
+      socket.on("game:finished", (payload) => {
+        console.log("[MultiplayerStore] game:finished received", payload);
+        set({
+          winner: {
+            winnerSeats: payload.winnerSeats || [],
+            winnerIds: payload.winner ? [payload.winner] : [],
+          },
+          gameState: (payload.finalState as any) ?? get().gameState,
+          matchId: payload.matchId,
+          disconnectGrace: null,
+          matchTimerWarning: null,
+          renderKey: get().renderKey + 1,
+        });
+      });
+
       socket.on("game:player-disconnected" as any, (payload: { matchId: string; playerId: string; reconnectExpiresAt: number }) => {
         console.log("[MultiplayerStore] game:player-disconnected received", payload);
         set({
@@ -493,15 +508,21 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
             matchTimeExpired: true,
             matchTimerWarning: null,
           });
-        } else if (envelope.eventType === "GAME_FINISHED" && envelope.payload) {
+        } else if ((envelope.eventType === "GAME_FINISHED" || envelope.eventType === "MATCH_COMPLETED") && envelope.payload) {
           set({
             winner: {
               winnerSeats: envelope.payload.winnerSeats || [],
-              winnerIds: envelope.payload.winnerId ? [envelope.payload.winnerId] : [],
+              winnerIds: envelope.payload.winner
+                ? [envelope.payload.winner]
+                : envelope.payload.winnerId
+                  ? [envelope.payload.winnerId]
+                  : [],
             },
+            gameState: (envelope.payload.finalState as any) ?? get().gameState,
             matchId: envelope.matchId,
             disconnectGrace: null,
             matchTimerWarning: null,
+            renderKey: (get().renderKey || 0) + 1,
           });
         }
 

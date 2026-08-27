@@ -84,6 +84,31 @@ function getActionRoute(n: AppNotification): string | null {
   const data = n.data as Record<string, string> | null;
   if (data?.url) return data.url;
 
+  if (n.type === "TOURNAMENT") {
+    const tournamentId = data?.tournamentId || (n.referenceId?.startsWith("tourn") ? n.referenceId : null);
+    const matchId = data?.matchId || (n.referenceId?.startsWith("match") ? n.referenceId : null);
+    const event = n.tournamentEventType;
+
+    if (matchId && (
+      event === "TOURNAMENT_MATCH_READY" ||
+      event === "TOURNAMENT_MATCH_ASSIGNED" ||
+      event === "TOURNAMENT_MATCH_REMINDER" ||
+      event === "TOURNAMENT_FINAL"
+    )) {
+      return tournamentId ? `/tournaments/${tournamentId}?tab=my-match&matchId=${matchId}` : `/tournaments`;
+    }
+
+    if (event === "TOURNAMENT_PRIZE_CREDITED") {
+      return "/wallet";
+    }
+
+    if (tournamentId) {
+      return `/tournaments/${tournamentId}`;
+    }
+
+    return "/tournaments";
+  }
+
   switch (n.type) {
     case "MATCH_INVITE":
     case "MATCH_RESULT":
@@ -91,8 +116,6 @@ function getActionRoute(n: AppNotification): string | null {
     case "FRIEND_REQUEST":
     case "FRIEND_ACCEPTED":
       return "/friends";
-    case "TOURNAMENT":
-      return "/tournaments";
     case "ACHIEVEMENT":
       return "/achievements";
     case "REFERRAL":
@@ -111,15 +134,34 @@ function getActionRoute(n: AppNotification): string | null {
 }
 
 /** Action label for notification card badge */
-function getActionLabel(type: NotificationType): string | null {
-  switch (type) {
+function getActionLabel(n: AppNotification): string | null {
+  if (n.type === "TOURNAMENT") {
+    const event = n.tournamentEventType;
+    if (
+      event === "TOURNAMENT_MATCH_READY" ||
+      event === "TOURNAMENT_MATCH_ASSIGNED" ||
+      event === "TOURNAMENT_MATCH_REMINDER"
+    ) {
+      return "Join Match";
+    }
+    if (event === "TOURNAMENT_FINAL") {
+      return "Join Final";
+    }
+    if (event === "TOURNAMENT_PRIZE_CREDITED") {
+      return "View Wallet";
+    }
+    if (event === "TOURNAMENT_ADVANCED" || event === "TOURNAMENT_BYE") {
+      return "View Bracket";
+    }
+    return "View Tournament";
+  }
+
+  switch (n.type) {
     case "MATCH_INVITE":
       return "Join Match";
     case "FRIEND_REQUEST":
     case "FRIEND_ACCEPTED":
       return "View Friends";
-    case "TOURNAMENT":
-      return "View Tournament";
     case "ACHIEVEMENT":
       return "View Badge";
     case "COUPON":
@@ -135,7 +177,7 @@ function getActionLabel(type: NotificationType): string | null {
   }
 }
 
-type CategoryFilter = "ALL" | "UNREAD" | "MATCHES" | "SOCIAL" | "REWARDS" | "SYSTEM";
+type CategoryFilter = "ALL" | "UNREAD" | "TOURNAMENTS" | "MATCHES" | "SOCIAL" | "REWARDS" | "SYSTEM";
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
@@ -266,8 +308,10 @@ export const NotificationsPage: React.FC = () => {
     switch (activeTab) {
       case "UNREAD":
         return !n.readAt;
+      case "TOURNAMENTS":
+        return n.type === "TOURNAMENT";
       case "MATCHES":
-        return ["MATCH_INVITE", "MATCH_RESULT", "TOURNAMENT"].includes(n.type);
+        return ["MATCH_INVITE", "MATCH_RESULT"].includes(n.type);
       case "SOCIAL":
         return ["FRIEND_REQUEST", "FRIEND_ACCEPTED", "MESSAGE"].includes(n.type);
       case "REWARDS":
@@ -293,7 +337,7 @@ export const NotificationsPage: React.FC = () => {
             )}
           </h1>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Stay updated with matches, achievements, friend invites, and rewards.
+            Stay updated with matches, achievements, tournaments, friend invites, and rewards.
           </p>
         </div>
 
@@ -322,6 +366,7 @@ export const NotificationsPage: React.FC = () => {
         {[
           { id: "ALL", label: "All", count: total },
           { id: "UNREAD", label: "Unread", count: unread },
+          { id: "TOURNAMENTS", label: "Tournaments" },
           { id: "MATCHES", label: "Matches" },
           { id: "SOCIAL", label: "Social" },
           { id: "REWARDS", label: "Rewards" },
@@ -387,7 +432,7 @@ export const NotificationsPage: React.FC = () => {
             {filteredItems.map((n) => {
               const Icon = TYPE_ICONS[n.type] ?? Bell;
               const route = getActionRoute(n);
-              const actionText = getActionLabel(n.type);
+              const actionText = getActionLabel(n);
               const isUnread = !n.readAt;
 
               return (

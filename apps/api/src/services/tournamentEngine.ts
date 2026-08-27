@@ -661,7 +661,18 @@ export async function finalizeTournament(tournamentId: string): Promise<void> {
   });
 
   // Transition to COMPLETED
-  if (canTransitionTournamentStatus(currentStatus, "COMPLETED")) {
+  const latestTournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: { status: true },
+  });
+  const latestStatus = (latestTournament?.status ?? currentStatus) as TournamentStatus;
+
+  if (
+    latestStatus !== "COMPLETED" &&
+    latestStatus !== "SETTLING" &&
+    latestStatus !== "SETTLED" &&
+    canTransitionTournamentStatus(latestStatus, "COMPLETED")
+  ) {
     await transitionTournamentStatus(tournamentId, "COMPLETED", null);
   }
 
@@ -684,12 +695,16 @@ export async function settleTournament(tournamentId: string, adminId?: string): 
 
 export async function cancelTournamentWithRefunds(
   tournamentId: string,
-  reason = "Tournament cancelled",
+  reason = "MINIMUM_PLAYERS_NOT_REACHED",
   cancelledBy: string | null = null,
 ): Promise<void> {
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
-    include: { players: true },
+    include: {
+      players: true,
+      rounds: { where: { status: "IN_PROGRESS" } },
+      _count: { select: { players: true } },
+    },
   });
   if (!tournament) throw new AppError("NOT_FOUND", "Tournament not found", 404);
 
@@ -702,55 +717,67 @@ export async function cancelTournamentWithRefunds(
     );
   }
 
-  await prisma.$transaction(async (tx) => {
-    // Refund entry fees if tournament was paid
-    if (tournament.entryFee > 0) {
-      for (const player of tournament.players) {
-        const transactionId = `tournament-cancel-refund-${tournamentId}-${player.userId}`;
-        await applyTransaction(
-          tx,
-          player.userId,
-          tournament.entryFee,
-          "TOURNAMENT_ENTRY",
-          tournamentId,
-          { transactionId, refund: true, reason, status: "REFUNDED" },
-        );
-      }
-    }
+  // Active Tournament Protection: Once matches have started, standard pre-tournament cancellation is blocked
+  if (currentStatus === "IN_PROGRESS" && tournament.rounds.length > 0) {
+    throw new AppError(
+      "INVALID_ACTION",
+      "Active tournament has live matches in progress and cannot be cancelled through standard pre-tournament cancellation",
+      409,
+    );
+  }
 
-    await tx.tournament.update({
-      where: { id: tournamentId },
-      data: { status: "CANCELLED", stateVersion: { increment: 1 } },
-    });
-  });
-
-  // Notify all players of cancellation
+  // 1. Notify players of cancellation first
   await TournamentNotificationService.notifyCancelled({
     tournamentId,
     tournamentTitle: tournament.title,
     reason,
+    entryFee: tournament.entryFee,
   });
 
-  // Send individual refund notifications after wallet commit
-  if (tournament.entryFee > 0) {
-    for (const player of tournament.players) {
+  // 2. Perform authoritative idempotent refunds via RefundService
+  const { RefundService } = await import("./refundService");
+  const refundResult = await RefundService.refundCancelledTournament({
+    tournamentId,
+    reason,
+    adminId: cancelledBy ?? undefined,
+  });
+
+  // Update cancellationReason and status if not updated
+  await prisma.tournament.update({
+    where: { id: tournamentId },
+    data: {
+      status: "CANCELLED",
+      cancellationReason: reason,
+      stateVersion: { increment: 1 },
+    } as any,
+  });
+
+  // 3. Send individual refund confirmations ONLY for successful refunds
+  for (const refund of refundResult.refunds) {
+    if (refund.status === "REFUNDED" || refund.status === "ALREADY_REFUNDED") {
       await TournamentNotificationService.notifyRefunded({
         tournamentId,
         tournamentTitle: tournament.title,
-        playerId: player.userId,
-        amount: tournament.entryFee,
+        playerId: refund.userId,
+        amount: refund.refundAmount,
+        refundId: refund.transactionId,
       });
     }
   }
 
   audit({
-    actorType: "user",
-    actorId: cancelledBy,
+    actorType: cancelledBy ? "user" : "system",
+    actorId: cancelledBy ?? null,
     action: "tournament.cancelled",
     category: "game",
     targetType: "tournament",
     targetId: tournamentId,
-    meta: { reason },
+    meta: {
+      reason,
+      registeredPlayers: tournament._count.players,
+      minPlayers: tournament.minPlayers ?? 2,
+      refundCount: refundResult.refunds.length,
+    },
   });
 }
 

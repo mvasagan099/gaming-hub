@@ -265,6 +265,14 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
     return { ok: true, status: "IN_PROGRESS" };
   });
 
+  /** Cancellation preview (financial impact before cancellation) */
+  app.get("/api/admin/tournaments/:id/cancellation-preview", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const { id } = routeParams(request);
+    const { RefundService } = await import("../services/refundService");
+    return RefundService.getCancellationPreview(id);
+  });
+
   /** Cancel tournament with player refunds */
   app.post("/api/admin/tournaments/:id/cancel", { preHandler: authenticate }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
@@ -277,6 +285,37 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
       meta: { reason: body.reason },
     });
     return { ok: true, status: "CANCELLED" };
+  });
+
+  /** Get tournament refund summary and record ledger */
+  app.get("/api/admin/tournaments/:id/refunds", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const { id } = routeParams(request);
+    const { RefundService } = await import("../services/refundService");
+    return RefundService.listTournamentRefunds(id);
+  });
+
+  /** Retry failed tournament refunds (admin recovery) */
+  app.post("/api/admin/tournaments/:id/refunds/retry", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
+    const { id } = routeParams(request);
+    const retrySchema = z.object({
+      reason: z.string().trim().min(3).max(300),
+      targetUserId: z.string().optional(),
+    });
+    const body = parseSchema(retrySchema, request.body);
+    const { RefundService } = await import("../services/refundService");
+    const result = await RefundService.retryFailedTournamentRefunds(id, admin.id, body.reason, body.targetUserId);
+    auditFromRequest(request, {
+      actorType: "user",
+      actorId: admin.id,
+      action: "admin.tournament.refunds.retried",
+      category: "admin",
+      targetType: "tournament",
+      targetId: id,
+      meta: { ...result, reason: body.reason },
+    });
+    return result;
   });
 
   /** Force-settle (admin override) */
@@ -435,4 +474,299 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
       roundNumber,
     });
   });
+
+  // ------------------------------------------------------------------
+  // Admin Tournament Notification Monitor & Delivery Logs
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/:id/notifications", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const { id } = routeParams(request);
+    const q = queryParams(request);
+    const userId = queryString(q.userId);
+    const eventType = queryString(q.eventType);
+    const status = queryString(q.status);
+
+    const { TournamentEmailService } = await import("../services/tournamentEmailService");
+    const emailLogs = TournamentEmailService.getEmailDeliveryRecords({
+      tournamentId: id,
+      userId: userId || undefined,
+      eventType: eventType || undefined,
+      status: status as any || undefined,
+    });
+
+    const inAppLogs = await prisma.appNotification.findMany({
+      where: {
+        type: "TOURNAMENT",
+        ...(userId ? { userId } : {}),
+        ...(eventType ? { tournamentEventType: eventType } : {}),
+        ...(id ? { data: { path: ["tournamentId"], equals: id } } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: {
+        user: { select: { id: true, username: true, displayName: true } },
+      },
+    });
+
+    const sentCount = emailLogs.filter((e) => e.status === "SENT").length + inAppLogs.length;
+    const pendingCount = emailLogs.filter((e) => e.status === "PENDING").length;
+    const failedCount = emailLogs.filter((e) => e.status === "FAILED").length;
+
+    return {
+      summary: {
+        total: emailLogs.length + inAppLogs.length,
+        sent: sentCount,
+        pending: pendingCount,
+        failed: failedCount,
+      },
+      emailLogs,
+      inAppLogs,
+    };
+  });
+
+  // ------------------------------------------------------------------
+  // Admin Email Delivery Retry
+  // ------------------------------------------------------------------
+  app.post("/api/admin/tournaments/emails/:id/retry", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
+    const { id } = routeParams(request);
+    const { TournamentEmailService } = await import("../services/tournamentEmailService");
+    const record = await TournamentEmailService.retryFailedEmail(id, admin.id);
+    return { success: true, record };
+  });
+
+  // ------------------------------------------------------------------
+  // Scheduler Info & Controls
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/scheduler", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const { getHourlySchedulerInfo } = await import("../services/hourlyTournamentScheduler");
+    return getHourlySchedulerInfo();
+  });
+
+  app.post("/api/admin/tournaments/scheduler/toggle", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
+    const body = (request.body as { paused: boolean; reason?: string }) || {};
+    const { setHourlySchedulerPaused, getHourlySchedulerInfo } = await import("../services/hourlyTournamentScheduler");
+    setHourlySchedulerPaused(Boolean(body.paused), admin.id, body.reason);
+    return getHourlySchedulerInfo();
+  });
+
+  app.get("/api/admin/tournaments/scheduler/preview", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const q = queryParams(request);
+    const hours = q.hours ? parseInt(queryString(q.hours), 10) : 6;
+    const { getHourlySchedulerPreview } = await import("../services/hourlyTournamentScheduler");
+    return getHourlySchedulerPreview(hours);
+  });
+
+  // ------------------------------------------------------------------
+  // Game-Tier Availability Matrix
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/game-tiers", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const { getGameTierAvailabilityMatrix } = await import("../services/hourlyTournamentScheduler");
+    return getGameTierAvailabilityMatrix();
+  });
+
+  app.put("/api/admin/tournaments/game-tiers", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
+    const matrix = request.body as any;
+    const { updateGameTierAvailabilityMatrix } = await import("../services/hourlyTournamentScheduler");
+    return updateGameTierAvailabilityMatrix(matrix, admin.id);
+  });
+
+  // ------------------------------------------------------------------
+  // Authoritative Financial Summary
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/:id/financials", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const { id } = routeParams(request);
+
+    const tournament = await prisma.tournament.findUnique({
+      where: { id },
+      include: {
+        players: { select: { id: true, userId: true } },
+        prizes: true,
+      },
+    });
+
+    if (!tournament) throw new AppError("NOT_FOUND", "Tournament not found", 404);
+
+    const entryFee = tournament.entryFee;
+    const registeredPlayers = tournament.players.length;
+    const totalCollected = entryFee * registeredPlayers;
+    const configuredPrizePool = tournament.prizePool;
+    const platformShare = Math.max(0, totalCollected - configuredPrizePool);
+
+    const distributedPrize = tournament.prizes
+      .filter((p) => p.status === "PAID")
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    const pendingSettlementCount = tournament.prizes.filter((p) => p.status === "PENDING").length;
+    const failedSettlementCount = tournament.prizes.filter((p) => p.status === "FAILED").length;
+
+    return {
+      tournamentId: tournament.id,
+      entryFee,
+      registeredPlayers,
+      totalCollected,
+      configuredPrizePool,
+      platformShare,
+      distributedPrize,
+      pendingSettlementCount,
+      failedSettlementCount,
+      status: tournament.status,
+    };
+  });
+
+  // ------------------------------------------------------------------
+  // Operational Data Export (CSV / JSON)
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/export", { preHandler: authenticate }, async (request, reply) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const q = queryParams(request);
+    const format = queryString(q.format) || "json";
+
+    const tournaments = await prisma.tournament.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: {
+        _count: { select: { players: true } },
+        prizes: true,
+      },
+    });
+
+    const exportData = tournaments.map((t) => {
+      const totalCollected = t.entryFee * t._count.players;
+      const totalDistributed = t.prizes
+        .filter((p) => p.status === "PAID")
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      return {
+        tournamentId: t.id,
+        title: t.title,
+        gameId: t.gameId,
+        tier: (t.configSnapshot as any)?.tierName ?? "Standard",
+        status: t.status,
+        startTime: t.startTime.toISOString(),
+        entryFee: t.entryFee,
+        prizePool: t.prizePool,
+        totalCollected,
+        totalDistributed,
+        participantCount: t._count.players,
+      };
+    });
+
+    if (format === "csv") {
+      const headers = [
+        "Tournament ID",
+        "Title",
+        "Game",
+        "Tier",
+        "Status",
+        "Start Time",
+        "Entry Fee",
+        "Prize Pool",
+        "Total Collected",
+        "Total Distributed",
+        "Participants",
+      ];
+      const rows = exportData.map((d) => [
+        `"${d.tournamentId}"`,
+        `"${d.title}"`,
+        `"${d.gameId}"`,
+        `"${d.tier}"`,
+        `"${d.status}"`,
+        `"${d.startTime}"`,
+        d.entryFee,
+        d.prizePool,
+        d.totalCollected,
+        d.totalDistributed,
+        d.participantCount,
+      ]);
+      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+
+      reply.header("Content-Type", "text/csv");
+      reply.header("Content-Disposition", `attachment; filename=tournaments-export-${Date.now()}.csv`);
+      return reply.send(csv);
+    }
+
+    return exportData;
+  });
+
+  // ------------------------------------------------------------------
+  // Complete Tournament Analytics & Performance System
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/analytics", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const q = queryParams(request);
+    const timeFilter = queryString(q.timeFilter) as any;
+    const fromDate = queryString(q.fromDate);
+    const toDate = queryString(q.toDate);
+    const gameId = queryString(q.gameId);
+    const tier = queryString(q.tier);
+    const tournamentId = queryString(q.tournamentId);
+
+    const { TournamentAnalyticsService } = await import("../services/tournamentAnalyticsService");
+    return TournamentAnalyticsService.getTournamentAnalytics({
+      timeFilter,
+      fromDate,
+      toDate,
+      gameId,
+      tier,
+      tournamentId,
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // Operational Health Overview & Stuck Detection
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/health-overview", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const { TournamentAnalyticsService } = await import("../services/tournamentAnalyticsService");
+    return TournamentAnalyticsService.getTournamentHealthOverview();
+  });
+
+  // ------------------------------------------------------------------
+  // Report Generation
+  // ------------------------------------------------------------------
+  app.post("/api/admin/tournaments/reports/generate", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:view", prisma);
+    const body = request.body as any;
+    const { TournamentAnalyticsService } = await import("../services/tournamentAnalyticsService");
+    return TournamentAnalyticsService.generateReport(admin.id, body);
+  });
+
+  // ------------------------------------------------------------------
+  // Sanitized CSV Export for Reports
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/reports/export-csv", { preHandler: authenticate }, async (request, reply) => {
+    const admin = await requirePermission(request, "admin:tournaments:view", prisma);
+    const q = queryParams(request);
+    const reportType = (queryString(q.reportType) || "TOURNAMENT") as any;
+    const timeFilter = queryString(q.timeFilter) as any;
+    const fromDate = queryString(q.fromDate);
+    const toDate = queryString(q.toDate);
+    const gameId = queryString(q.gameId);
+    const tier = queryString(q.tier);
+    const status = queryString(q.status);
+
+    const { TournamentAnalyticsService } = await import("../services/tournamentAnalyticsService");
+    const report = await TournamentAnalyticsService.generateReport(admin.id, {
+      reportType,
+      timeFilter,
+      fromDate,
+      toDate,
+      gameId,
+      tier,
+      status,
+    });
+
+    const csv = TournamentAnalyticsService.exportCsv(report);
+    reply.header("Content-Type", "text/csv");
+    reply.header("Content-Disposition", `attachment; filename=tournament-report-${reportType.toLowerCase()}-${Date.now()}.csv`);
+    return reply.send(csv);
+  });
 }
+

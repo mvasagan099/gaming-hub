@@ -8,27 +8,23 @@ describe("Feature 10: Server-Authoritative Match Timeout Engine", () => {
   const createdUserIds: string[] = [];
 
   async function createTestUser(prefix: string, balance = 1000) {
-    const userId = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    createdUserIds.push(userId);
+    const id = `u_to_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const rand = Math.random().toString(36).slice(2, 10);
+    createdUserIds.push(id);
 
     await prisma.user.create({
       data: {
-        id: userId,
-        username: `u_${userId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 16)}`,
-        displayName: `User ${userId.slice(0, 8)}`,
-        email: `${userId}@test.com`,
-        wallet: {
-          create: {
-            balance,
-          },
-        },
-        profile: {
-          create: {},
-        },
+        id,
+        email: `${prefix}_${Date.now().toString(36)}_${rand}@gaminghub.test`,
+        username: `usr_${Date.now().toString(36)}_${rand}`,
+        displayName: `User ${id.slice(0, 8)}`,
+        role: "USER",
+        profile: { create: {} },
+        wallet: { create: { balance } },
       },
     });
 
-    return userId;
+    return id;
   }
 
   async function getWallet(userId: string) {
@@ -37,10 +33,17 @@ describe("Feature 10: Server-Authoritative Match Timeout Engine", () => {
 
   afterEach(async () => {
     if (createdUserIds.length > 0) {
-      await prisma.user.deleteMany({
-        where: { id: { in: createdUserIds } },
-      }).catch(() => undefined);
+      const userIds = [...createdUserIds];
       createdUserIds.length = 0;
+      try {
+        await prisma.transaction.deleteMany({ where: { userId: { in: userIds } } });
+        await prisma.matchPlayer.deleteMany({ where: { userId: { in: userIds } } });
+        await prisma.wallet.deleteMany({ where: { userId: { in: userIds } } });
+        await prisma.profile.deleteMany({ where: { userId: { in: userIds } } });
+        await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+      } catch {
+        // Safe fallback
+      }
     }
   });
 

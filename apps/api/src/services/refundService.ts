@@ -1,5 +1,12 @@
 import { prisma } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
+import type {
+  TournamentStatus,
+  TournamentRefundSummary,
+  TournamentRefundRecord,
+  TournamentRefundStatus,
+  TournamentCancellationPreview,
+} from "@gaming-hub/shared";
 import { WalletTransactionService } from "./walletTransactionService";
 import { IdempotencyService } from "./idempotencyService";
 import { audit } from "./audit";
@@ -231,29 +238,38 @@ export class RefundService {
 
         // Execute atomic credit refund in wallet ledger
         const refundAmount = debitTx.amount;
+        const refundTransactionId = `tournament-refund-${tournament.id}-${params.userId}`;
         await WalletTransactionService.createTournamentRefund(tx, {
           userId: params.userId,
           tournamentId: tournament.id,
           tournamentTitle: tournament.title,
           refundAmount,
+          originalTransactionId: debitTx.id,
           reason,
           meta: {
+            transactionId: refundTransactionId,
             adminId: params.adminId ?? null,
             originalTransactionId: debitTx.id,
           },
         });
 
-        if (params.adminId) {
-          audit({
-            actorType: "user",
-            actorId: params.adminId,
-            action: "admin.refund.tournament",
-            category: "admin",
-            targetType: "tournament",
-            targetId: tournament.id,
-            meta: { userId: params.userId, refundAmount, reason },
-          });
-        }
+        audit({
+          actorType: params.adminId ? "user" : "system",
+          actorId: params.adminId ?? "system",
+          action: "tournament.entry.refunded",
+          category: "wallet",
+          targetType: "tournament",
+          targetId: tournament.id,
+          meta: {
+            userId: params.userId,
+            tournamentId: tournament.id,
+            originalTransactionId: debitTx.id,
+            refundTransactionId,
+            amount: refundAmount,
+            reason,
+            timestamp: new Date().toISOString(),
+          },
+        });
 
         await createNotification(
           params.userId,
@@ -426,5 +442,274 @@ export class RefundService {
       adminId: params.adminId,
       force: true,
     });
+  }
+
+  /**
+   * 6. List all refunds for a tournament with summary KPI metrics.
+   */
+  static async listTournamentRefunds(tournamentId: string): Promise<TournamentRefundSummary> {
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: {
+        players: {
+          include: {
+            user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+          },
+        },
+      },
+    });
+
+    if (!tournament) {
+      throw new AppError("NOT_FOUND", "Tournament not found", 404);
+    }
+
+    const debits = await prisma.transaction.findMany({
+      where: {
+        referenceId: tournamentId,
+        referenceType: "TOURNAMENT_ENTRY",
+        type: "DEBIT",
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const credits = await prisma.transaction.findMany({
+      where: {
+        referenceId: tournamentId,
+        referenceType: "TOURNAMENT_ENTRY",
+        type: "CREDIT",
+      },
+    });
+
+    const refundRecords: TournamentRefundRecord[] = [];
+    let completedCount = 0;
+    let failedCount = 0;
+    let pendingCount = 0;
+    let totalRefundedAmount = 0;
+    let totalRefundableAmount = 0;
+
+    for (const debit of debits) {
+      totalRefundableAmount += debit.amount;
+      const player = tournament.players.find((p) => p.userId === debit.userId);
+      const credit = credits.find((c) => c.userId === debit.userId);
+
+      if (credit) {
+        completedCount++;
+        totalRefundedAmount += credit.amount;
+        refundRecords.push({
+          id: `refund-${credit.id}`,
+          userId: debit.userId,
+          playerId: player?.id,
+          username: player?.user?.username,
+          displayName: player?.user?.displayName,
+          avatarUrl: player?.user?.avatarUrl,
+          entryFee: debit.amount,
+          refundAmount: credit.amount,
+          status: "REFUNDED",
+          originalTransactionId: debit.id,
+          refundTransactionId: credit.id,
+          createdAt: debit.createdAt.toISOString(),
+          refundedAt: credit.createdAt.toISOString(),
+        });
+      } else {
+        // Check for failed idempotency record
+        const idempotencyKey = `REFUND:TOURNAMENT:${tournamentId}:${debit.userId}`;
+        const idem = await prisma.idempotencyRecord.findUnique({ where: { key: idempotencyKey } });
+        if (idem?.status === "FAILED") {
+          failedCount++;
+          refundRecords.push({
+            id: `refund-failed-${debit.userId}`,
+            userId: debit.userId,
+            playerId: player?.id,
+            username: player?.user?.username,
+            displayName: player?.user?.displayName,
+            avatarUrl: player?.user?.avatarUrl,
+            entryFee: debit.amount,
+            refundAmount: debit.amount,
+            status: "FAILED",
+            originalTransactionId: debit.id,
+            refundTransactionId: null,
+            failureReason: typeof idem.response === "object" && (idem.response as any)?.error ? (idem.response as any).error : "Refund execution failed",
+            createdAt: debit.createdAt.toISOString(),
+            refundedAt: null,
+          });
+        } else {
+          pendingCount++;
+          refundRecords.push({
+            id: `refund-pending-${debit.userId}`,
+            userId: debit.userId,
+            playerId: player?.id,
+            username: player?.user?.username,
+            displayName: player?.user?.displayName,
+            avatarUrl: player?.user?.avatarUrl,
+            entryFee: debit.amount,
+            refundAmount: debit.amount,
+            status: "PENDING",
+            originalTransactionId: debit.id,
+            refundTransactionId: null,
+            createdAt: debit.createdAt.toISOString(),
+            refundedAt: null,
+          });
+        }
+      }
+    }
+
+    let overallRefundStatus: TournamentRefundStatus = "NOT_REQUIRED";
+    if (debits.length === 0) {
+      overallRefundStatus = "NOT_REQUIRED";
+    } else if (completedCount === debits.length && failedCount === 0) {
+      overallRefundStatus = "REFUNDED";
+    } else if (completedCount > 0 && (failedCount > 0 || pendingCount > 0)) {
+      overallRefundStatus = "PARTIALLY_REFUNDED";
+    } else if (failedCount > 0 && completedCount === 0) {
+      overallRefundStatus = "FAILED";
+    } else if (pendingCount > 0) {
+      overallRefundStatus = "PROCESSING";
+    }
+
+    return {
+      tournamentId: tournament.id,
+      tournamentTitle: tournament.title,
+      status: tournament.status as TournamentStatus,
+      cancellationReason: (tournament as any).cancellationReason ?? null,
+      overallRefundStatus,
+      totalRefundableAmount,
+      totalRefundedAmount,
+      totalPlayersCount: debits.length,
+      completedCount,
+      pendingCount,
+      failedCount,
+      refunds: refundRecords,
+    };
+  }
+
+  /**
+   * 7. Retry failed tournament refunds (admin recovery).
+   */
+  static async retryFailedTournamentRefunds(
+    tournamentId: string,
+    adminId: string,
+    reason: string,
+    targetUserId?: string,
+  ): Promise<{ ok: true; retriedCount: number; succeededCount: number; failedCount: number }> {
+    if (!adminId) throw new AppError("FORBIDDEN", "Admin authorization required", 403);
+    if (!reason || reason.trim().length < 3) {
+      throw new AppError("VALIDATION_ERROR", "A valid justification reason is required for retry", 400);
+    }
+
+    const debits = await prisma.transaction.findMany({
+      where: {
+        referenceId: tournamentId,
+        referenceType: "TOURNAMENT_ENTRY",
+        type: "DEBIT",
+        ...(targetUserId ? { userId: targetUserId } : {}),
+      },
+    });
+
+    let retriedCount = 0;
+    let succeededCount = 0;
+    let failedCount = 0;
+
+    for (const debit of debits) {
+      const alreadyRefunded = await prisma.transaction.findFirst({
+        where: {
+          referenceId: tournamentId,
+          referenceType: "TOURNAMENT_ENTRY",
+          type: "CREDIT",
+          userId: debit.userId,
+        },
+      });
+      if (alreadyRefunded) continue; // Skip already completed refunds
+
+      retriedCount++;
+      try {
+        const res = await this.refundTournamentEntry({
+          tournamentId,
+          userId: debit.userId,
+          reason,
+          adminId,
+          force: true,
+        });
+        if (res.status === "REFUNDED" || res.status === "ALREADY_REFUNDED") {
+          succeededCount++;
+        } else {
+          failedCount++;
+        }
+      } catch (err) {
+        failedCount++;
+      }
+    }
+
+    audit({
+      actorType: "user",
+      actorId: adminId,
+      action: "admin.tournament.refunds.retry",
+      category: "admin",
+      targetType: "tournament",
+      targetId: tournamentId,
+      meta: { reason, retriedCount, succeededCount, failedCount },
+    });
+
+    return {
+      ok: true,
+      retriedCount,
+      succeededCount,
+      failedCount,
+    };
+  }
+
+  /**
+   * 8. Generate Cancellation Preview with financial metrics before confirming cancellation.
+   */
+  static async getCancellationPreview(tournamentId: string): Promise<TournamentCancellationPreview> {
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: {
+        _count: { select: { players: true } },
+        rounds: { where: { status: "IN_PROGRESS" } },
+      },
+    });
+
+    if (!tournament) {
+      throw new AppError("NOT_FOUND", "Tournament not found", 404);
+    }
+
+    const debits = await prisma.transaction.findMany({
+      where: {
+        referenceId: tournamentId,
+        referenceType: "TOURNAMENT_ENTRY",
+        type: "DEBIT",
+      },
+    });
+
+    const totalEntryCollection = debits.reduce((sum, d) => sum + d.amount, 0);
+    const registeredPlayers = tournament._count.players;
+
+    // Active tournament protection: If tournament has started matches in progress, block standard cancellation
+    const isLiveWithMatches = tournament.status === "IN_PROGRESS" && tournament.rounds.length > 0;
+    const canCancel = tournament.status !== "COMPLETED" && tournament.status !== "SETTLED" && tournament.status !== "CANCELLED" && !isLiveWithMatches;
+
+    let blockingReason: string | undefined;
+    if (tournament.status === "CANCELLED") {
+      blockingReason = "Tournament is already cancelled";
+    } else if (tournament.status === "COMPLETED" || tournament.status === "SETTLED") {
+      blockingReason = "Tournament is already completed/settled";
+    } else if (isLiveWithMatches) {
+      blockingReason = "Active tournament has matches in progress and cannot be cancelled without dispute/emergency resolution";
+    }
+
+    return {
+      tournamentId: tournament.id,
+      title: tournament.title,
+      status: tournament.status as TournamentStatus,
+      registeredPlayers,
+      minPlayers: tournament.minPlayers ?? 2,
+      maxPlayers: tournament.maxPlayers,
+      entryFee: tournament.entryFee,
+      prizePool: tournament.prizePool,
+      totalEntryCollection,
+      totalRefundableAmount: totalEntryCollection,
+      canCancel,
+      blockingReason,
+    };
   }
 }

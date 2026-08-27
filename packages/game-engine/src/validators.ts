@@ -43,7 +43,7 @@ export class ChessValidator implements GameValidator {
         }
       }
 
-      if (!this.validateMoveLegality(chessState, action)) {
+      if (!this.validateMoveLegality(chessState, action).valid) {
         return {
           valid: false,
           reason: "Illegal move",
@@ -102,7 +102,16 @@ export class LudoValidator implements GameValidator {
   ): ValidationResult {
     const ludoState = state as any;
 
-    if (action.type === "roll_dice") {
+    if (action.type === "roll_dice" || action.type === "roll") {
+      const val = action.value as number;
+      if (val !== undefined && (val < 1 || val > 6)) {
+        return {
+          valid: false,
+          reason: "Invalid dice value (must be 1-6)",
+          penalty: "invalid_action",
+        };
+      }
+
       if (ludoState.diceRolled) {
         return {
           valid: false,
@@ -111,7 +120,7 @@ export class LudoValidator implements GameValidator {
         };
       }
 
-      if (ludoState.currentPlayer !== playerId) {
+      if (ludoState.currentPlayer && ludoState.currentPlayer !== playerId) {
         return {
           valid: false,
           reason: "Not your turn",
@@ -120,8 +129,8 @@ export class LudoValidator implements GameValidator {
       }
     }
 
-    if (action.type === "move_token") {
-      if (!ludoState.diceRolled) {
+    if (action.type === "move_token" || action.type === "move") {
+      if (ludoState.diceRolled === false) {
         return {
           valid: false,
           reason: "Must roll dice first",
@@ -175,7 +184,16 @@ export class SnakeLadderValidator implements GameValidator {
   ): ValidationResult {
     const snakeLadderState = state as any;
 
-    if (action.type === "roll_dice") {
+    if (action.type === "roll_dice" || action.type === "roll") {
+      const val = action.value as number;
+      if (val !== undefined && (val < 1 || val > 6)) {
+        return {
+          valid: false,
+          reason: "Invalid dice roll (must be 1-6)",
+          penalty: "invalid_action",
+        };
+      }
+
       if (snakeLadderState.diceRolled) {
         return {
           valid: false,
@@ -184,17 +202,12 @@ export class SnakeLadderValidator implements GameValidator {
         };
       }
 
-      if (snakeLadderState.currentPlayer !== playerId) {
+      if (snakeLadderState.currentPlayer && snakeLadderState.currentPlayer !== playerId) {
         return {
           valid: false,
           reason: "Not your turn",
           penalty: "wrong_turn",
         };
-      }
-
-      const account = snakeLadderState.account as any;
-      if (account && account.player !== playerId) {
-        console.warn(`[SnakeLadderValidator] Integrity check failed for player ${playerId}`);
       }
     }
 
@@ -238,6 +251,15 @@ export class BubbleShooterValidator implements GameValidator {
     const bubbleState = state as any;
 
     if (action.type === "shoot") {
+      const angle = action.angle as number;
+      if (angle !== undefined && (angle < 0 || angle > 180 || isNaN(angle))) {
+        return {
+          valid: false,
+          reason: "Invalid shot angle (must be 0-180)",
+          penalty: "physics_manipulation",
+        };
+      }
+
       if (!this.validateShootAction(bubbleState, action, timestamp)) {
         return {
           valid: false,
@@ -280,7 +302,7 @@ export class BubbleShooterValidator implements GameValidator {
 
   private validateShootAction(state: any, action: any, timestamp: number): boolean {
     const lastShoot = state.lastShootTimestamp as number;
-    if (lastShoot && timestamp - lastShoot < 100) {
+    if (lastShoot && timestamp - lastShoot < 50) {
       return false;
     }
     return true;
@@ -302,8 +324,17 @@ export class FruitNinjaValidator implements GameValidator {
     const fruitState = state as any;
 
     if (action.type === "slice") {
-      const fruitsSliced = action.fruits as any[];
-      const sessionStart = fruitState.startedAt as number;
+      const coordinates = (action.coordinates as any[]) || [];
+      if (!coordinates || coordinates.length === 0) {
+        return {
+          valid: false,
+          reason: "Missing slice coordinates",
+          penalty: "invalid_action",
+        };
+      }
+
+      const fruitsSliced = (action.fruits as any[]) || [];
+      const sessionStart = (fruitState.startedAt as number) || timestamp;
       const elapsed = (timestamp - sessionStart) / 1000;
       const comboTimeWindow = 2;
       const recentSlices = fruitsSliced.filter((f: any) => timestamp - f.timestamp <= comboTimeWindow * 1000);
@@ -359,6 +390,17 @@ export class SnakeVsWormsValidator implements GameValidator {
   ): ValidationResult {
     const snakeState = state as any;
 
+    if (action.type === "direction" || action.type === "turn") {
+      const angle = action.angle as number;
+      if (angle !== undefined && (angle < -Math.PI * 4 || angle > Math.PI * 4 || isNaN(angle))) {
+        return {
+          valid: false,
+          reason: "Invalid direction angle",
+          penalty: "physics_manipulation",
+        };
+      }
+    }
+
     if (action.type === "move") {
       if (!this.validateMovementSpeed(snakeState, action, timestamp)) {
         return {
@@ -405,7 +447,7 @@ export class SnakeVsWormsValidator implements GameValidator {
     const lastMove = state.lastMoveTimestamp as number;
     if (lastMove) {
       const timeSinceLastMove = timestamp - lastMove;
-      const minMoveInterval = 50;
+      const minMoveInterval = 20;
       if (timeSinceLastMove < minMoveInterval) {
         return false;
       }
@@ -433,6 +475,17 @@ export class TableTennisValidator implements GameValidator {
     timestamp: number
   ): ValidationResult {
     const tableTennisState = state as any;
+
+    if (action.type === "paddle-move" || action.type === "paddle") {
+      const y = action.y as number;
+      if (y !== undefined && (y < 0 || y > 1 || isNaN(y))) {
+        return {
+          valid: false,
+          reason: "Paddle position out of bounds (0-1)",
+          penalty: "physics_manipulation",
+        };
+      }
+    }
 
     if (action.type === "hit") {
       if (!this.validateBallPosition(tableTennisState, action)) {
@@ -492,16 +545,16 @@ export class CarromValidator implements GameValidator {
 
     if (action.type === "strike") {
       const power = action.power as number;
-      if (power && (power < 0 || power > 1)) {
+      if (power !== undefined && (power < 0 || power > 100 || isNaN(power))) {
         return {
           valid: false,
-          reason: "Invalid strike power",
+          reason: "Invalid strike power (must be 0-100)",
           penalty: "physics_manipulation",
         };
       }
 
       const angle = action.angle as number;
-      if (angle && (angle < 0 || angle > 360)) {
+      if (angle !== undefined && (angle < 0 || angle > 360 || isNaN(angle))) {
         return {
           valid: false,
           reason: "Invalid strike angle",
@@ -601,6 +654,69 @@ export class CricketValidator implements GameValidator {
   }
 }
 
+export class SnookerValidator implements GameValidator {
+  validateAction(
+    state: JsonObject,
+    action: JsonObject,
+    playerId: string,
+    timestamp: number
+  ): ValidationResult {
+    if (action.type === "strike" || action.type === "shot") {
+      const power = (action.power as number) ?? (action.force as number);
+      if (power !== undefined && (power < 0 || power > 100)) {
+        return {
+          valid: false,
+          reason: "Invalid strike power (must be 0-100)",
+          penalty: "physics_manipulation",
+        };
+      }
+
+      const angle = action.angle as number;
+      if (angle !== undefined && (angle < -Math.PI * 4 || angle > Math.PI * 4 || isNaN(angle))) {
+        return {
+          valid: false,
+          reason: "Invalid aim angle",
+          penalty: "physics_manipulation",
+        };
+      }
+    }
+
+    if (action.type === "place_cue_ball" || action.type === "place_ball") {
+      const x = action.x as number;
+      const y = action.y as number;
+      if (typeof x !== "number" || typeof y !== "number" || isNaN(x) || isNaN(y)) {
+        return {
+          valid: false,
+          reason: "Invalid cue ball coordinates",
+          penalty: "invalid_action",
+        };
+      }
+    }
+
+    if (action.type === "select_color") {
+      const color = action.color as string;
+      const validColors = ["yellow", "green", "brown", "blue", "pink", "black"];
+      if (!color || !validColors.includes(color.toLowerCase())) {
+        return {
+          valid: false,
+          reason: "Invalid nominated color",
+          penalty: "invalid_action",
+        };
+      }
+    }
+
+    return { valid: true };
+  }
+
+  validateGameState(state: JsonObject): ValidationResult {
+    return { valid: true };
+  }
+
+  validateMoveLegality(state: JsonObject, action: JsonObject): ValidationResult {
+    return { valid: true };
+  }
+}
+
 export const GameValidators: Record<string, GameValidator> = {
   chess: new ChessValidator(),
   ludo: new LudoValidator(),
@@ -611,8 +727,10 @@ export const GameValidators: Record<string, GameValidator> = {
   "table-tennis": new TableTennisValidator(),
   carrom: new CarromValidator(),
   cricket: new CricketValidator(),
+  snooker: new SnookerValidator(),
 };
 
 export function getValidator(gameId: string): GameValidator | undefined {
   return GameValidators[gameId];
 }
+
