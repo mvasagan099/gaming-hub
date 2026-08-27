@@ -49,6 +49,26 @@ import {
   type PlayerAnalyticsByDateItem,
   type AnonymizedPlayerItem,
   type PlayerAnalyticsSection,
+  type TopParticipationGameItem,
+  type TopParticipationTierItem,
+  type TopParticipationPeriodItem,
+  type TopParticipationSummary,
+  type TopParticipationSection,
+  type PlayerPerformanceSummary,
+  type PlayerPerformanceByGameItem,
+  type PlayerPerformanceByTierItem,
+  type PlayerPerformanceByDateItem,
+  type AnonymizedPerformerItem,
+  type PlayerPerformanceSection,
+  type WinRateSummary,
+  type WinRateByGameItem,
+  type WinRateByTierItem,
+  type WinRateByDateItem,
+  type WinRateAnalyticsSection,
+  type GameSpecificPerformanceItem,
+  type GameSpecificPerformanceSection,
+  type TierTrendDataPoint,
+  type TierPerformanceTrendsSection,
   type TournamentTrendPoint,
   type TournamentReportRequest,
   type TournamentReportResult,
@@ -804,12 +824,14 @@ export class TournamentAnalyticsService {
     // Match counts for game win rates
     const gameMatchWins = new Map<string, number>();
     const gameMatchTotal = new Map<string, number>();
+    const gameCapacityMap = new Map<string, number>();
 
     for (const t of filteredTournaments) {
       const g = gameMap.get(t.gameId);
       if (g) {
         g.tournamentsCount++;
         g.playersCount += t.players.length;
+        gameCapacityMap.set(t.gameId, (gameCapacityMap.get(t.gameId) || 0) + t.maxPlayers);
         if (t.status === "COMPLETED" || t.status === "SETTLED") g.completedCount++;
         if (t.status === "CANCELLED") {
           g.cancelledCount++;
@@ -852,6 +874,7 @@ export class TournamentAnalyticsService {
         entryFee: t.entryFee,
         tournamentsCount: 0,
         registrationsCount: 0,
+        averageRegistrations: 0,
         entryFeesCollected: 0,
         configuredPrizePool: 0,
         prizesDistributed: 0,
@@ -890,12 +913,68 @@ export class TournamentAnalyticsService {
       const cap = tierCapacityMap.get(ts.tierCode) || 0;
       const fillRatePercent = cap > 0 ? Math.round((ts.registrationsCount / cap) * 1000) / 10 : 0;
       const completionRatePercent = ts.tournamentsCount > 0 ? Math.round((completed / ts.tournamentsCount) * 1000) / 10 : 0;
+      const averageRegistrations = ts.tournamentsCount > 0 ? Math.round((ts.registrationsCount / ts.tournamentsCount) * 10) / 10 : 0;
       return {
         ...ts,
+        averageRegistrations,
         completionRatePercent,
         fillRatePercent,
       };
     });
+
+    // 5b. Tier Performance Trends Timeline across all 5 tiers
+    const tierTrendMap = new Map<string, {
+      date: string;
+      label: string;
+      tierCode: TournamentTierCode;
+      tournamentsCount: number;
+      registrationsCount: number;
+      maxCapacity: number;
+      completedCount: number;
+    }>();
+
+    for (const t of filteredTournaments) {
+      const tierCode = this.getTierCode(t);
+      const dStr = new Date(t.createdAt).toISOString().split("T")[0]!;
+      const key = `${dStr}_${tierCode}`;
+      let item = tierTrendMap.get(key);
+      if (!item) {
+        item = {
+          date: dStr,
+          label: dStr,
+          tierCode,
+          tournamentsCount: 0,
+          registrationsCount: 0,
+          maxCapacity: 0,
+          completedCount: 0,
+        };
+        tierTrendMap.set(key, item);
+      }
+      item.tournamentsCount++;
+      item.registrationsCount += t.players.length;
+      item.maxCapacity += t.maxPlayers;
+      if (t.status === "COMPLETED" || t.status === "SETTLED") {
+        item.completedCount++;
+      }
+    }
+
+    const tierTimeline: TierTrendDataPoint[] = Array.from(tierTrendMap.values())
+      .map((item) => ({
+        date: item.date,
+        label: item.label,
+        tierCode: item.tierCode,
+        tournamentsCount: item.tournamentsCount,
+        registrationsCount: item.registrationsCount,
+        averageRegistrations: item.tournamentsCount > 0 ? Math.round((item.registrationsCount / item.tournamentsCount) * 10) / 10 : 0,
+        fillRatePercent: item.maxCapacity > 0 ? Math.round((item.registrationsCount / item.maxCapacity) * 1000) / 10 : 0,
+        completionRatePercent: item.tournamentsCount > 0 ? Math.round((item.completedCount / item.tournamentsCount) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const tierPerformanceTrends: TierPerformanceTrendsSection = {
+      tiers,
+      timeline: tierTimeline,
+    };
 
     // 6. 24-Hour Hourly Performance Distribution
     const hourlyCounts = Array.from({ length: 24 }, (_, hour) => {
@@ -1135,6 +1214,473 @@ export class TournamentAnalyticsService {
       byTier: playerByTier,
       byDate: playerByDate,
       cohorts: anonymizedCohorts,
+    };
+
+    // 7c. Top Participation Analytics (Most Participated Games, Popular Tiers, Active Periods)
+    const topParticipationGames: TopParticipationGameItem[] = games
+      .map((g) => {
+        const cap = gameCapacityMap.get(g.gameId) || 0;
+        const fillRate = cap > 0 ? Math.min(100, Math.round((g.playersCount / cap) * 100)) : 0;
+        return {
+          rank: 0,
+          gameId: g.gameId,
+          gameName: g.gameName,
+          tournamentsCount: g.tournamentsCount,
+          totalRegistrations: g.playersCount,
+          fillRatePercent: fillRate,
+        };
+      })
+      .sort((a, b) => b.totalRegistrations - a.totalRegistrations || b.tournamentsCount - a.tournamentsCount)
+      .map((item, idx) => ({ ...item, rank: idx + 1 }));
+
+    const topParticipationTiers: TopParticipationTierItem[] = tiers
+      .map((t) => ({
+        rank: 0,
+        tierCode: t.tierCode,
+        tierName: t.tierName,
+        entryFee: t.entryFee,
+        tournamentsCount: t.tournamentsCount,
+        totalRegistrations: t.registrationsCount,
+        fillRatePercent: t.fillRatePercent,
+      }))
+      .sort((a, b) => b.totalRegistrations - a.totalRegistrations || b.tournamentsCount - a.tournamentsCount)
+      .map((item, idx) => ({ ...item, rank: idx + 1 }));
+
+    const topParticipationPeriods: TopParticipationPeriodItem[] = hourlyPerformance
+      .map((h) => ({
+        rank: 0,
+        hour: h.hour,
+        hourLabel: h.hourLabel,
+        tournamentsCount: h.tournamentsCount,
+        totalRegistrations: h.registrationsCount,
+        isPeakHour: h.isPeakHour,
+      }))
+      .sort((a, b) => b.totalRegistrations - a.totalRegistrations || b.tournamentsCount - a.tournamentsCount)
+      .map((item, idx) => ({ ...item, rank: idx + 1 }));
+
+    const topParticipation: TopParticipationSection = {
+      summary: {
+        topGame: topParticipationGames[0] || null,
+        topTier: topParticipationTiers[0] || null,
+        topPeriod: topParticipationPeriods[0] || null,
+        totalRegistrations,
+      },
+      games: topParticipationGames,
+      tiers: topParticipationTiers,
+      periods: topParticipationPeriods,
+    };
+
+    // 7d. Player Performance Analytics (Wins, Top 4, Matches Played/Won/Lost)
+    const perfByGameMap = new Map<string, { tournCount: number; wins: number; top4: number; mPlayed: number; mWon: number; mLost: number }>();
+    for (const g of GAME_DEFINITIONS) {
+      perfByGameMap.set(g.id, { tournCount: 0, wins: 0, top4: 0, mPlayed: 0, mWon: 0, mLost: 0 });
+    }
+
+    const perfByTierMap = new Map<TournamentTierCode, { tournCount: number; wins: number; top4: number; mPlayed: number; mWon: number; mLost: number }>();
+    for (const tc of tierOrderCodes) {
+      perfByTierMap.set(tc, { tournCount: 0, wins: 0, top4: 0, mPlayed: 0, mWon: 0, mLost: 0 });
+    }
+
+    const perfByDateMap = new Map<string, { wins: number; top4: number; mPlayed: number; mWon: number; mLost: number }>();
+
+    // Individual player stats for top performers
+    const playerPerfMap = new Map<string, {
+      tourns: number;
+      wins: number;
+      top4: number;
+      mWon: number;
+      mLost: number;
+      points: number;
+      gameCounts: Map<string, number>;
+      lastActive: Date;
+    }>();
+
+    let totalTournWins = 0;
+    let totalTop4Finishes = 0;
+    let totalMatchesWon = 0;
+    let totalMatchesLost = 0;
+
+    for (const t of filteredTournaments) {
+      const tierCode = this.getTierCode(t);
+      const dKey = new Date(t.createdAt).toISOString().split("T")[0]!;
+
+      const gEntry = perfByGameMap.get(t.gameId);
+      if (gEntry) gEntry.tournCount++;
+
+      const tEntry = perfByTierMap.get(tierCode);
+      if (tEntry) tEntry.tournCount++;
+
+      let dateEntry = perfByDateMap.get(dKey);
+      if (!dateEntry) {
+        dateEntry = { wins: 0, top4: 0, mPlayed: 0, mWon: 0, mLost: 0 };
+        perfByDateMap.set(dKey, dateEntry);
+      }
+
+      for (const p of t.players) {
+        const wins = p.wins || 0;
+        const losses = p.losses || 0;
+        const isWin = p.finalRank === 1;
+        const isTop4 = p.finalRank && p.finalRank >= 1 && p.finalRank <= 4;
+
+        if (isWin) {
+          totalTournWins++;
+          if (gEntry) gEntry.wins++;
+          if (tEntry) tEntry.wins++;
+          dateEntry.wins++;
+        }
+
+        if (isTop4) {
+          totalTop4Finishes++;
+          if (gEntry) gEntry.top4++;
+          if (tEntry) tEntry.top4++;
+          dateEntry.top4++;
+        }
+
+        totalMatchesWon += wins;
+        totalMatchesLost += losses;
+
+        if (gEntry) {
+          gEntry.mWon += wins;
+          gEntry.mLost += losses;
+          gEntry.mPlayed += wins + losses;
+        }
+
+        if (tEntry) {
+          tEntry.mWon += wins;
+          tEntry.mLost += losses;
+          tEntry.mPlayed += wins + losses;
+        }
+
+        dateEntry.mWon += wins;
+        dateEntry.mLost += losses;
+        dateEntry.mPlayed += wins + losses;
+
+        // Player Perf Aggregation
+        let pData = playerPerfMap.get(p.userId);
+        if (!pData) {
+          pData = {
+            tourns: 0,
+            wins: 0,
+            top4: 0,
+            mWon: 0,
+            mLost: 0,
+            points: 0,
+            gameCounts: new Map(),
+            lastActive: new Date(t.createdAt),
+          };
+          playerPerfMap.set(p.userId, pData);
+        }
+
+        pData.tourns++;
+        if (isWin) pData.wins++;
+        if (isTop4) pData.top4++;
+        pData.mWon += wins;
+        pData.mLost += losses;
+        pData.points += p.points || 0;
+        pData.gameCounts.set(t.gameId, (pData.gameCounts.get(t.gameId) || 0) + 1);
+        const tDate = new Date(t.createdAt);
+        if (tDate > pData.lastActive) pData.lastActive = tDate;
+      }
+    }
+
+    const totalMatchesPlayed = totalMatchesWon + totalMatchesLost;
+    const overallWinRate = totalMatchesPlayed > 0 ? Math.round((totalMatchesWon / totalMatchesPlayed) * 1000) / 10 : 0;
+
+    const perfSummary: PlayerPerformanceSummary = {
+      tournamentWins: totalTournWins,
+      top4Finishes: totalTop4Finishes,
+      matchesPlayed: totalMatchesPlayed,
+      matchesWon: totalMatchesWon,
+      matchesLost: totalMatchesLost,
+      winRatePercent: overallWinRate,
+    };
+
+    const perfByGame: PlayerPerformanceByGameItem[] = GAME_DEFINITIONS.map((g) => {
+      const gEntry = perfByGameMap.get(g.id)!;
+      const mPlayed = gEntry.mPlayed;
+      const winRate = mPlayed > 0 ? Math.round((gEntry.mWon / mPlayed) * 1000) / 10 : 0;
+      return {
+        gameId: g.id,
+        gameName: g.name,
+        tournamentsCount: gEntry.tournCount,
+        tournamentWins: gEntry.wins,
+        top4Finishes: gEntry.top4,
+        matchesPlayed: mPlayed,
+        matchesWon: gEntry.mWon,
+        matchesLost: gEntry.mLost,
+        winRatePercent: winRate,
+      };
+    });
+
+    const perfByTier: PlayerPerformanceByTierItem[] = tierOrderCodes.map((tc) => {
+      const tEntry = perfByTierMap.get(tc)!;
+      const mPlayed = tEntry.mPlayed;
+      const winRate = mPlayed > 0 ? Math.round((tEntry.mWon / mPlayed) * 1000) / 10 : 0;
+      return {
+        tierCode: tc,
+        tierName: tierNameMap[tc].name,
+        entryFee: tierNameMap[tc].entryFee,
+        tournamentsCount: tEntry.tournCount,
+        tournamentWins: tEntry.wins,
+        top4Finishes: tEntry.top4,
+        matchesPlayed: mPlayed,
+        matchesWon: tEntry.mWon,
+        matchesLost: tEntry.mLost,
+        winRatePercent: winRate,
+      };
+    });
+
+    const perfByDate: PlayerPerformanceByDateItem[] = Array.from(perfByDateMap.entries())
+      .map(([date, dEntry]) => {
+        const mPlayed = dEntry.mPlayed;
+        const winRate = mPlayed > 0 ? Math.round((dEntry.mWon / mPlayed) * 1000) / 10 : 0;
+        return {
+          date,
+          label: date,
+          tournamentWins: dEntry.wins,
+          top4Finishes: dEntry.top4,
+          matchesPlayed: mPlayed,
+          matchesWon: dEntry.mWon,
+          matchesLost: dEntry.mLost,
+          winRatePercent: winRate,
+        };
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const topPerformers: AnonymizedPerformerItem[] = Array.from(playerPerfMap.entries())
+      .map(([uId, pData]) => {
+        let favGame = "snooker";
+        let maxGamePlays = 0;
+        for (const [gId, count] of pData.gameCounts.entries()) {
+          if (count > maxGamePlays) {
+            maxGamePlays = count;
+            favGame = gId;
+          }
+        }
+        const mPlayed = pData.mWon + pData.mLost;
+        const winRate = mPlayed > 0 ? Math.round((pData.mWon / mPlayed) * 1000) / 10 : 0;
+        return {
+          maskedId: `Player #${uId.slice(-6)}`,
+          tournamentsCount: pData.tourns,
+          tournamentWins: pData.wins,
+          top4Finishes: pData.top4,
+          matchesPlayed: mPlayed,
+          matchesWon: pData.mWon,
+          matchesLost: pData.mLost,
+          winRatePercent: winRate,
+          totalPoints: pData.points,
+          favoriteGame: GAME_DEFINITIONS.find((g) => g.id === favGame)?.name || favGame,
+          lastActiveAt: pData.lastActive.toISOString(),
+        };
+      })
+      .sort((a, b) => b.tournamentWins - a.tournamentWins || b.top4Finishes - a.top4Finishes || b.matchesWon - a.matchesWon || b.totalPoints - a.totalPoints)
+      .slice(0, 50);
+
+    const playerPerformance: PlayerPerformanceSection = {
+      summary: perfSummary,
+      byGame: perfByGame,
+      byTier: perfByTier,
+      byDate: perfByDate,
+      topPerformers,
+    };
+
+    // 7e. Win Rate Analytics (Matches Won / Completed Matches * 100 with Draws excluded)
+    const winRateByGameMap = new Map<string, { tournCount: number; mWon: number; mLost: number; mDrawn: number }>();
+    for (const g of GAME_DEFINITIONS) {
+      winRateByGameMap.set(g.id, { tournCount: 0, mWon: 0, mLost: 0, mDrawn: 0 });
+    }
+
+    const winRateByTierMap = new Map<TournamentTierCode, { tournCount: number; mWon: number; mLost: number; mDrawn: number }>();
+    for (const tc of tierOrderCodes) {
+      winRateByTierMap.set(tc, { tournCount: 0, mWon: 0, mLost: 0, mDrawn: 0 });
+    }
+
+    const winRateByDateMap = new Map<string, { mWon: number; mLost: number; mDrawn: number }>();
+
+    let totalWinRateMatchesWon = 0;
+    let totalWinRateMatchesLost = 0;
+    let totalWinRateMatchesDrawn = 0;
+
+    for (const t of filteredTournaments) {
+      const tierCode = this.getTierCode(t);
+      const dKey = new Date(t.createdAt).toISOString().split("T")[0]!;
+
+      const gEntry = winRateByGameMap.get(t.gameId);
+      if (gEntry) gEntry.tournCount++;
+
+      const tEntry = winRateByTierMap.get(tierCode);
+      if (tEntry) tEntry.tournCount++;
+
+      let dateEntry = winRateByDateMap.get(dKey);
+      if (!dateEntry) {
+        dateEntry = { mWon: 0, mLost: 0, mDrawn: 0 };
+        winRateByDateMap.set(dKey, dateEntry);
+      }
+
+      for (const p of t.players) {
+        const wins = p.wins || 0;
+        const losses = p.losses || 0;
+        totalWinRateMatchesWon += wins;
+        totalWinRateMatchesLost += losses;
+
+        if (gEntry) {
+          gEntry.mWon += wins;
+          gEntry.mLost += losses;
+        }
+        if (tEntry) {
+          tEntry.mWon += wins;
+          tEntry.mLost += losses;
+        }
+        dateEntry.mWon += wins;
+        dateEntry.mLost += losses;
+      }
+
+      // Check completed rounds for any draws (matches where status is COMPLETED and winnerId is null)
+      for (const r of t.rounds) {
+        if (r.status === "COMPLETED" && !r.winnerId) {
+          totalWinRateMatchesDrawn++;
+          if (gEntry) gEntry.mDrawn++;
+          if (tEntry) tEntry.mDrawn++;
+          dateEntry.mDrawn++;
+        }
+      }
+    }
+
+    const decisiveMatchesTotal = totalWinRateMatchesWon + totalWinRateMatchesLost;
+    const completedMatchesTotal = decisiveMatchesTotal + totalWinRateMatchesDrawn;
+    const overallWinRateCalculated = decisiveMatchesTotal > 0
+      ? Math.round((totalWinRateMatchesWon / decisiveMatchesTotal) * 1000) / 10
+      : 0;
+
+    const winRateSummary: WinRateSummary = {
+      overallWinRate: overallWinRateCalculated,
+      totalCompletedMatches: completedMatchesTotal,
+      totalMatchesWon: totalWinRateMatchesWon,
+      totalMatchesLost: totalWinRateMatchesLost,
+      totalMatchesDrawn: totalWinRateMatchesDrawn,
+      decisiveMatches: decisiveMatchesTotal,
+    };
+
+    const winRateByGame: WinRateByGameItem[] = GAME_DEFINITIONS.map((g) => {
+      const gEntry = winRateByGameMap.get(g.id)!;
+      const decisive = gEntry.mWon + gEntry.mLost;
+      const completed = decisive + gEntry.mDrawn;
+      const winRate = decisive > 0 ? Math.round((gEntry.mWon / decisive) * 1000) / 10 : 0;
+      return {
+        gameId: g.id,
+        gameName: g.name,
+        tournamentsCount: gEntry.tournCount,
+        completedMatches: completed,
+        matchesWon: gEntry.mWon,
+        matchesLost: gEntry.mLost,
+        matchesDrawn: gEntry.mDrawn,
+        winRatePercent: winRate,
+      };
+    });
+
+    const winRateByTier: WinRateByTierItem[] = tierOrderCodes.map((tc) => {
+      const tEntry = winRateByTierMap.get(tc)!;
+      const decisive = tEntry.mWon + tEntry.mLost;
+      const completed = decisive + tEntry.mDrawn;
+      const winRate = decisive > 0 ? Math.round((tEntry.mWon / decisive) * 1000) / 10 : 0;
+      return {
+        tierCode: tc,
+        tierName: tierNameMap[tc].name,
+        entryFee: tierNameMap[tc].entryFee,
+        tournamentsCount: tEntry.tournCount,
+        completedMatches: completed,
+        matchesWon: tEntry.mWon,
+        matchesLost: tEntry.mLost,
+        matchesDrawn: tEntry.mDrawn,
+        winRatePercent: winRate,
+      };
+    });
+
+    const winRateByDate: WinRateByDateItem[] = Array.from(winRateByDateMap.entries())
+      .map(([date, dEntry]) => {
+        const decisive = dEntry.mWon + dEntry.mLost;
+        const completed = decisive + dEntry.mDrawn;
+        const winRate = decisive > 0 ? Math.round((dEntry.mWon / decisive) * 1000) / 10 : 0;
+        return {
+          date,
+          label: date,
+          completedMatches: completed,
+          matchesWon: dEntry.mWon,
+          matchesLost: dEntry.mLost,
+          matchesDrawn: dEntry.mDrawn,
+          winRatePercent: winRate,
+        };
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const winRateAnalytics: WinRateAnalyticsSection = {
+      summary: winRateSummary,
+      byGame: winRateByGame,
+      byTier: winRateByTier,
+      byDate: winRateByDate,
+    };
+
+    // 7f. Game-Specific Performance Analytics across all 10 engine profiles
+    const GAME_ENGINE_METRIC_CONFIGS: Record<string, { scoreUnit: string; resultFormat: string }> = {
+      "snake-ladder": { scoreUnit: "Board Points / Squares", resultFormat: "Rank / Board Position" },
+      "ludo": { scoreUnit: "Tokens Home / Points", resultFormat: "Finished Tokens / Rank" },
+      "chess": { scoreUnit: "Match Points / Rating", resultFormat: "Wins / Losses / Draws" },
+      "fruit-ninja": { scoreUnit: "Sliced Fruit Score", resultFormat: "Total Score / Combos" },
+      "bubble-shooter": { scoreUnit: "Bubbles Cleared / Points", resultFormat: "Points Scored / Clear Rate" },
+      "table-tennis": { scoreUnit: "Set Points / Rallies", resultFormat: "Sets Won / Points" },
+      "snake-vs-worms": { scoreUnit: "Mass / Length Score", resultFormat: "Length Score / Mass" },
+      "cricket": { scoreUnit: "Runs Scored / Wickets", resultFormat: "Runs / Overs / Wickets" },
+      "carrom": { scoreUnit: "Board Points / Coins", resultFormat: "Points / Queen Covers" },
+      "snooker": { scoreUnit: "Frame Points / Breaks", resultFormat: "Frame Score / Breaks" },
+    };
+
+    const gamePointsMap = new Map<string, { totalPoints: number; highestScore: number }>();
+    for (const g of GAME_DEFINITIONS) {
+      gamePointsMap.set(g.id, { totalPoints: 0, highestScore: 0 });
+    }
+
+    for (const t of filteredTournaments) {
+      const gPoints = gamePointsMap.get(t.gameId);
+      if (gPoints) {
+        for (const p of t.players) {
+          const pt = p.points || 0;
+          gPoints.totalPoints += pt;
+          if (pt > gPoints.highestScore) gPoints.highestScore = pt;
+        }
+      }
+    }
+
+    const gameSpecificPerformanceItems: GameSpecificPerformanceItem[] = GAME_DEFINITIONS.map((g) => {
+      const gEntry = winRateByGameMap.get(g.id)!;
+      const gPoints = gamePointsMap.get(g.id) || { totalPoints: 0, highestScore: 0 };
+      const decisive = gEntry.mWon + gEntry.mLost;
+      const completed = decisive + gEntry.mDrawn;
+      const winRate = decisive > 0 ? Math.round((gEntry.mWon / decisive) * 1000) / 10 : 0;
+      const avgScore = completed > 0 ? Math.round((gPoints.totalPoints / completed) * 10) / 10 : 0;
+      const engineConfig = GAME_ENGINE_METRIC_CONFIGS[g.id] || { scoreUnit: "Points", resultFormat: "Wins / Losses" };
+
+      return {
+        gameId: g.id,
+        gameName: g.name,
+        icon: g.icon,
+        category: g.category,
+        mode: g.mode,
+        scoreUnit: engineConfig.scoreUnit,
+        resultFormat: engineConfig.resultFormat,
+        tournamentsCount: gEntry.tournCount,
+        completedMatches: completed,
+        matchesWon: gEntry.mWon,
+        matchesLost: gEntry.mLost,
+        matchesDrawn: gEntry.mDrawn,
+        winRatePercent: winRate,
+        totalPointsScored: gPoints.totalPoints,
+        avgScorePerMatch: avgScore,
+        highestMatchScore: gPoints.highestScore,
+      };
+    });
+
+    const gameSpecificPerformance: GameSpecificPerformanceSection = {
+      games: gameSpecificPerformanceItems,
     };
 
     // 8. Notification & Email Delivery Analytics
@@ -1427,6 +1973,11 @@ export class TournamentAnalyticsService {
       settlementAnalytics,
       notificationAnalytics,
       playerAnalytics,
+      topParticipation,
+      playerPerformance,
+      winRateAnalytics,
+      gameSpecificPerformance,
+      tierPerformanceTrends,
       games,
       tiers,
       hourlyPerformance,
@@ -1873,6 +2424,9 @@ export class TournamentAnalyticsService {
   static async generateReport(adminId: string, params: TournamentReportRequest): Promise<TournamentReportResult> {
     const { startDate, endDate } = this.getDateRange(params);
     const reportType = params.reportType;
+    const filterGame = params.gameId && params.gameId.toUpperCase() !== "ALL" ? params.gameId : undefined;
+    const filterTier = params.tier && params.tier.toUpperCase() !== "ALL" ? params.tier.toLowerCase() : undefined;
+    const filterStatus = params.status && params.status.toUpperCase() !== "ALL" ? params.status.toUpperCase() : undefined;
 
     let headers: string[] = [];
     let rows: Array<Record<string, any>> = [];
@@ -1882,14 +2436,19 @@ export class TournamentAnalyticsService {
       const tournaments = await prisma.tournament.findMany({
         where: {
           createdAt: { gte: startDate, lte: endDate },
-          ...(params.gameId && params.gameId !== "all" ? { gameId: params.gameId } : {}),
-          ...(params.status && params.status !== "all" ? { status: params.status as any } : {}),
+          ...(filterGame ? { gameId: filterGame } : {}),
+          ...(filterStatus ? { status: filterStatus as any } : {}),
         },
         include: { _count: { select: { players: true } } },
         orderBy: { createdAt: "desc" },
+        take: 1000,
       });
 
-      rows = tournaments.map((t) => ({
+      const filtered = filterTier
+        ? tournaments.filter((t) => this.getTierCode(t) === filterTier)
+        : tournaments;
+
+      rows = filtered.map((t) => ({
         "Tournament ID": t.id,
         "Title": t.title,
         "Game": t.gameId,
@@ -1902,17 +2461,26 @@ export class TournamentAnalyticsService {
         "Prize Pool": t.prizePool,
       }));
     } else if (reportType === "FINANCIAL") {
-      headers = ["Tournament ID", "Title", "Tier", "Entry Fee", "Players", "Total Collected", "Prize Pool", "Prize Distributed", "Refunds", "Platform Profit"];
+      headers = ["Tournament ID", "Title", "Game", "Tier", "Status", "Entry Fee", "Players", "Total Collected", "Prize Pool", "Prize Distributed", "Refunds", "Platform Profit"];
       const tournaments = await prisma.tournament.findMany({
-        where: { createdAt: { gte: startDate, lte: endDate } },
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+          ...(filterGame ? { gameId: filterGame } : {}),
+          ...(filterStatus ? { status: filterStatus as any } : {}),
+        },
         include: {
           players: { select: { id: true } },
           prizes: true,
         },
         orderBy: { createdAt: "desc" },
+        take: 1000,
       });
 
-      rows = tournaments.map((t) => {
+      const filtered = filterTier
+        ? tournaments.filter((t) => this.getTierCode(t) === filterTier)
+        : tournaments;
+
+      rows = filtered.map((t) => {
         const totalCollected = t.entryFee * t.players.length;
         const totalDistributed = t.prizes.filter((p) => p.status === "PAID").reduce((sum, p) => sum + p.amount, 0);
         const refunds = t.status === "CANCELLED" ? totalCollected : 0;
@@ -1920,7 +2488,9 @@ export class TournamentAnalyticsService {
         return {
           "Tournament ID": t.id,
           "Title": t.title,
+          "Game": t.gameId,
           "Tier": this.getTierCode(t),
+          "Status": t.status,
           "Entry Fee": t.entryFee,
           "Players": t.players.length,
           "Total Collected": totalCollected,
@@ -1931,37 +2501,52 @@ export class TournamentAnalyticsService {
         };
       });
     } else if (reportType === "PLAYER_PARTICIPATION") {
-      headers = ["User ID", "Username", "Display Name", "Tournaments Played", "Tournaments Won", "Win Rate %", "Total Prizes Won"];
-      const tournamentPlayers = await prisma.tournamentPlayer.findMany({
-        include: {
-          user: { select: { id: true, username: true, displayName: true } },
-          prizes: { where: { status: "PAID" }, select: { amount: true } },
+      headers = ["User ID", "Username", "Display Name", "Tournaments Played", "Tournaments Won", "Matches Won", "Matches Lost", "Win Rate %", "Total Prizes Won"];
+      const tournaments = await prisma.tournament.findMany({
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+          ...(filterGame ? { gameId: filterGame } : {}),
+          ...(filterStatus ? { status: filterStatus as any } : {}),
         },
-        take: 200,
+        include: {
+          players: {
+            include: {
+              user: { select: { id: true, username: true, displayName: true } },
+              prizes: { where: { status: "PAID" }, select: { amount: true } },
+            },
+          },
+        },
+        take: 500,
       });
+
+      const filteredTournaments = filterTier
+        ? tournaments.filter((t) => this.getTierCode(t) === filterTier)
+        : tournaments;
 
       const userMap = new Map<string, { username: string; displayName: string; played: number; won: number; wins: number; losses: number; prizes: number }>();
 
-      for (const tp of tournamentPlayers) {
-        const uId = tp.userId;
-        let u = userMap.get(uId);
-        if (!u) {
-          u = {
-            username: tp.user.username,
-            displayName: tp.user.displayName || tp.user.username,
-            played: 0,
-            won: 0,
-            wins: 0,
-            losses: 0,
-            prizes: 0,
-          };
-          userMap.set(uId, u);
+      for (const t of filteredTournaments) {
+        for (const tp of t.players) {
+          const uId = tp.userId;
+          let u = userMap.get(uId);
+          if (!u) {
+            u = {
+              username: tp.user.username,
+              displayName: tp.user.displayName || tp.user.username,
+              played: 0,
+              won: 0,
+              wins: 0,
+              losses: 0,
+              prizes: 0,
+            };
+            userMap.set(uId, u);
+          }
+          u.played++;
+          if (tp.finalRank === 1) u.won++;
+          u.wins += tp.wins;
+          u.losses += tp.losses;
+          u.prizes += tp.prizes.reduce((sum, p) => sum + p.amount, 0);
         }
-        u.played++;
-        if (tp.finalRank === 1) u.won++;
-        u.wins += tp.wins;
-        u.losses += tp.losses;
-        u.prizes += tp.prizes.reduce((sum, p) => sum + p.amount, 0);
       }
 
       rows = Array.from(userMap.entries()).map(([userId, u]) => {
@@ -1973,20 +2558,41 @@ export class TournamentAnalyticsService {
           "Display Name": u.displayName,
           "Tournaments Played": u.played,
           "Tournaments Won": u.won,
+          "Matches Won": u.wins,
+          "Matches Lost": u.losses,
           "Win Rate %": winRate,
           "Total Prizes Won": u.prizes,
         };
       });
     } else if (reportType === "SETTLEMENT") {
-      headers = ["Prize ID", "Tournament ID", "User ID", "Rank", "Prize Amount", "Status", "Paid At", "Failure Reason"];
+      headers = ["Prize ID", "Tournament ID", "Game", "Tier", "User ID", "Rank", "Prize Amount", "Status", "Paid At", "Failure Reason"];
       const prizes = await prisma.tournamentPrize.findMany({
-        where: { createdAt: { gte: startDate, lte: endDate } },
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+        },
+        include: {
+          tournament: { select: { id: true, gameId: true, entryFee: true, status: true, title: true } },
+        },
         orderBy: { createdAt: "desc" },
+        take: 1000,
       });
 
-      rows = prizes.map((p) => ({
+      let filteredPrizes = prizes;
+      if (filterGame) {
+        filteredPrizes = filteredPrizes.filter((p) => p.tournament?.gameId === filterGame);
+      }
+      if (filterStatus) {
+        filteredPrizes = filteredPrizes.filter((p) => p.tournament?.status === filterStatus);
+      }
+      if (filterTier) {
+        filteredPrizes = filteredPrizes.filter((p) => p.tournament && this.getTierCode(p.tournament as any) === filterTier);
+      }
+
+      rows = filteredPrizes.map((p) => ({
         "Prize ID": p.id,
         "Tournament ID": p.tournamentId,
+        "Game": p.tournament?.gameId || "unknown",
+        "Tier": p.tournament ? this.getTierCode(p.tournament as any) : "unknown",
         "User ID": p.userId,
         "Rank": p.rank,
         "Prize Amount": p.amount,
@@ -1995,12 +2601,26 @@ export class TournamentAnalyticsService {
         "Failure Reason": p.failureReason || "—",
       }));
     } else if (reportType === "NOTIFICATION") {
-      headers = ["Notification ID", "User ID", "Tournament ID", "Event Type", "Status", "Created At", "Sent At"];
+      headers = ["Notification ID", "User ID", "Tournament ID", "Game", "Tier", "Event Type", "Status", "Created At", "Sent At"];
       const emailLogs = TournamentEmailService.getEmailDeliveryRecords();
-      rows = emailLogs.map((e) => ({
+      let filteredLogs = emailLogs.filter((e) => {
+        const logDate = new Date(e.createdAt);
+        return logDate >= startDate && logDate <= endDate;
+      });
+
+      if (filterGame) {
+        filteredLogs = filteredLogs.filter((e) => ((e as any).gameId || (e.metadata as any)?.gameId) === filterGame);
+      }
+      if (filterTier) {
+        filteredLogs = filteredLogs.filter((e) => ((e as any).tierCode || (e.metadata as any)?.tierCode) === filterTier);
+      }
+
+      rows = filteredLogs.slice(0, 1000).map((e) => ({
         "Notification ID": e.notificationId,
         "User ID": e.userId,
         "Tournament ID": e.tournamentId,
+        "Game": (e as any).gameId || (e.metadata as any)?.gameId || "ALL",
+        "Tier": (e as any).tierCode || (e.metadata as any)?.tierCode || "ALL",
         "Event Type": e.eventType,
         "Status": e.status,
         "Created At": e.createdAt.toISOString(),

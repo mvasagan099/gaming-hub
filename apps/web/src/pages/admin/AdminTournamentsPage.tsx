@@ -33,8 +33,10 @@ import {
   Send,
   Mail,
   Users,
+  Award,
   Percent,
   Scale,
+  Gamepad2,
 } from 'lucide-react';
 import {
   GAME_DEFINITIONS,
@@ -79,7 +81,7 @@ const STATUS_VARIANT: Record<TournamentStatus, 'success' | 'warning' | 'danger' 
 
 const TIER_ORDER: TournamentTierCode[] = ['mini', 'basic', 'standard', 'premium', 'pro'];
 
-type MainTab = 'TOURNAMENTS' | 'ANALYTICS' | 'SCHEDULER' | 'TIERS' | 'GAME_MATRIX';
+type MainTab = 'TOURNAMENTS' | 'ANALYTICS' | 'REPORTS' | 'SCHEDULER' | 'TIERS' | 'GAME_MATRIX';
 type StatusTab = 'ALL' | 'LIVE' | 'UPCOMING' | 'REGISTRATION' | 'COMPLETED' | 'CANCELLED';
 
 const EMPTY_FORM = {
@@ -148,6 +150,13 @@ export function AdminTournamentsPage() {
   const [notifChannelFilter, setNotifChannelFilter] = useState<'ALL' | 'EMAIL' | 'IN_APP' | 'SOCKET'>('ALL');
   const [notifStatusFilter, setNotifStatusFilter] = useState<'ALL' | 'SENT' | 'PENDING' | 'FAILED'>('ALL');
   const [playerBreakdownTab, setPlayerBreakdownTab] = useState<'SUMMARY' | 'GAME' | 'TIER' | 'DATE' | 'COHORT'>('SUMMARY');
+  const [topPartBreakdownTab, setTopPartBreakdownTab] = useState<'OVERVIEW' | 'GAMES' | 'TIERS' | 'PERIODS'>('OVERVIEW');
+  const [playerPerfBreakdownTab, setPlayerPerfBreakdownTab] = useState<'SUMMARY' | 'GAME' | 'TIER' | 'DATE' | 'PERFORMERS'>('SUMMARY');
+  const [winRateBreakdownTab, setWinRateBreakdownTab] = useState<'OVERVIEW' | 'GAME' | 'TIER' | 'DATE'>('OVERVIEW');
+  const [selectedGameProfileId, setSelectedGameProfileId] = useState<string>('all');
+  const [trendMetricTab, setTrendMetricTab] = useState<'ALL' | 'VOLUME' | 'REGISTRATIONS' | 'COMPLETION' | 'COLLECTION' | 'PRIZES'>('ALL');
+  const [tierTrendMetricTab, setTierTrendMetricTab] = useState<'ALL' | 'COUNT' | 'REGISTRATIONS' | 'AVERAGE' | 'FILL_RATE' | 'COMPLETION_RATE'>('ALL');
+  const [selectedTierTrendCode, setSelectedTierTrendCode] = useState<string>('all');
 
   // Report Generator State
   const [showReportModal, setShowReportModal] = useState(false);
@@ -278,6 +287,17 @@ export function AdminTournamentsPage() {
     window.open(url, '_blank');
   };
 
+  const handleDownloadReportJson = () => {
+    if (!generatedReport) return;
+    const blob = new Blob([JSON.stringify(generatedReport, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tournament-report-${generatedReport.reportType.toLowerCase()}-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Dynamic filter for tournaments list
   const filteredItems = useMemo(() => {
     return items.filter((t) => {
@@ -312,18 +332,62 @@ export function AdminTournamentsPage() {
   };
 
   const handleToggleGameTier = async (gameId: string, tierCode: TournamentTierCode) => {
+    const currentEnabled = (gameMatrix[gameId]?.[tierCode] ?? true);
     const updated = {
       ...gameMatrix,
       [gameId]: {
         ...(gameMatrix[gameId] || { mini: true, basic: true, standard: true, premium: true, pro: true }),
-        [tierCode]: !gameMatrix[gameId]?.[tierCode],
+        [tierCode]: !currentEnabled,
       },
     };
     setGameMatrix(updated);
     setIsMatrixSaving(true);
     try {
       await adminApi.updateTournamentGameTiers(updated);
-      flash(`Updated tier availability for ${formatGame(gameId)}`);
+      flash(`Updated tier availability for ${formatGame(gameId)} → ${tierCode.toUpperCase()} (${!currentEnabled ? 'Enabled' : 'Disabled'})`);
+    } catch {
+      setError('Failed to update game-tier availability');
+    } finally {
+      setIsMatrixSaving(false);
+    }
+  };
+
+  const handleToggleGameAllTiers = async (gameId: string, enable: boolean) => {
+    const updated = {
+      ...gameMatrix,
+      [gameId]: {
+        mini: enable,
+        basic: enable,
+        standard: enable,
+        premium: enable,
+        pro: enable,
+      },
+    };
+    setGameMatrix(updated);
+    setIsMatrixSaving(true);
+    try {
+      await adminApi.updateTournamentGameTiers(updated);
+      flash(`${enable ? 'Enabled' : 'Disabled'} all tiers for ${formatGame(gameId)}`);
+    } catch {
+      setError('Failed to update game-tier availability');
+    } finally {
+      setIsMatrixSaving(false);
+    }
+  };
+
+  const handleToggleTierAllGames = async (tierCode: TournamentTierCode, enable: boolean) => {
+    const updated: GameTierAvailability = { ...gameMatrix };
+    for (const g of GAME_DEFINITIONS) {
+      updated[g.id] = {
+        ...(updated[g.id] || { mini: true, basic: true, standard: true, premium: true, pro: true }),
+        [tierCode]: enable,
+      };
+    }
+    setGameMatrix(updated);
+    setIsMatrixSaving(true);
+    try {
+      await adminApi.updateTournamentGameTiers(updated);
+      flash(`${enable ? 'Enabled' : 'Disabled'} ${tierCode.toUpperCase()} tier across all 10 games`);
     } catch {
       setError('Failed to update game-tier availability');
     } finally {
@@ -464,7 +528,8 @@ export function AdminTournamentsPage() {
         <div className="flex items-center gap-2 mt-8 overflow-x-auto pb-1 no-scrollbar border-b border-indigo-900/60">
           {[
             { id: 'TOURNAMENTS', label: 'Tournaments Directory', icon: Trophy },
-            { id: 'ANALYTICS', label: 'Analytics & Reporting', icon: BarChart3 },
+            { id: 'ANALYTICS', label: 'Analytics & Overview', icon: BarChart3 },
+            { id: 'REPORTS', label: 'Tournament Reports', icon: FileText },
             { id: 'SCHEDULER', label: 'Hourly Scheduler & Preview', icon: Clock },
             { id: 'TIERS', label: '5-Tier Configuration', icon: Sliders },
             { id: 'GAME_MATRIX', label: 'Game-Tier Matrix', icon: Grid },
@@ -1439,7 +1504,403 @@ export function AdminTournamentsPage() {
                 </div>
               </div>
 
-              {/* 3. Authoritative Financial Ledger & Prize Settlement Card */}
+              {/* 3. TOURNAMENT TRENDS & TEMPORAL VISUALIZATION */}
+              <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl backdrop-blur space-y-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-base font-black text-white flex items-center gap-2">
+                      <TrendingUp className="size-4 text-indigo-400" /> Tournament Trends &amp; Temporal Performance
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Temporal volume, registration fill, completion rates, and wallet ledger distributions across the selected date range
+                    </p>
+                  </div>
+
+                  {/* Trend Metric Switcher */}
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950/80 border border-slate-800 flex-wrap">
+                    {[
+                      { id: 'ALL', label: '📊 All 5 Charts' },
+                      { id: 'VOLUME', label: '🏟️ Volume' },
+                      { id: 'REGISTRATIONS', label: '👥 Registrations' },
+                      { id: 'COMPLETION', label: '🏁 Completion %' },
+                      { id: 'COLLECTION', label: '🪙 Collection' },
+                      { id: 'PRIZES', label: '🏆 Prize Distribution' },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setTrendMetricTab(tab.id as 'ALL' | 'VOLUME' | 'REGISTRATIONS' | 'COMPLETION' | 'COLLECTION' | 'PRIZES')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          trendMetricTab === tab.id
+                            ? 'bg-indigo-600 text-white shadow font-black'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Authoritative Ledger Disclaimer */}
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <Shield className="size-4 text-indigo-400 flex-shrink-0" />
+                    <span>
+                      <strong>Authoritative Ledger &amp; Database Verification:</strong> Trend analytics are computed directly from immutable tournament records and confirmed wallet transaction logs. This section does not modify tournament schedules, match results, leaderboards, wallet balances, or prize allocations.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Trends Charts Grid */}
+                {(!analyticsData.trends || analyticsData.trends.length === 0) ? (
+                  <div className="text-center py-12 text-slate-400 bg-slate-950/40 rounded-2xl border border-slate-800">
+                    No trend datapoints found for the selected filter timeframe.
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* 1. Tournament Volume Chart */}
+                    {(trendMetricTab === 'ALL' || trendMetricTab === 'VOLUME') && (
+                      <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black text-white">🏟️ Tournament Volume Trend</span>
+                            <span className="text-xs text-slate-400">(Events Created per Day)</span>
+                          </div>
+                          <div className="text-xs font-mono font-bold text-indigo-300">
+                            Total: {analyticsData.trends.reduce((acc, curr) => acc + curr.tournamentVolume, 0)} events
+                          </div>
+                        </div>
+
+                        {/* Responsive SVG Bar Chart */}
+                        <div className="h-40 w-full flex items-end gap-1.5 pt-4 pb-2 px-2 overflow-x-auto">
+                          {(() => {
+                            const maxVal = Math.max(...analyticsData.trends.map((t) => t.tournamentVolume), 1);
+                            return analyticsData.trends.map((t, idx) => {
+                              const heightPct = Math.max(8, Math.round((t.tournamentVolume / maxVal) * 100));
+                              return (
+                                <div key={idx} className="flex-1 min-w-[28px] max-w-[48px] flex flex-col items-center gap-1 group relative">
+                                  <div className="text-[9px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {t.tournamentVolume}
+                                  </div>
+                                  <div
+                                    style={{ height: `${heightPct}%` }}
+                                    className="w-full rounded-t-md bg-indigo-500 hover:bg-indigo-400 transition-all cursor-pointer shadow"
+                                    title={`${t.label}: ${t.tournamentVolume} tournaments`}
+                                  />
+                                  <div className="text-[9px] font-mono text-slate-500 truncate w-full text-center">
+                                    {t.label.slice(-5)}
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 2. Total Registrations Chart */}
+                    {(trendMetricTab === 'ALL' || trendMetricTab === 'REGISTRATIONS') && (
+                      <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black text-white">👥 Total Registrations Trend</span>
+                            <span className="text-xs text-slate-400">(Players Registered per Day)</span>
+                          </div>
+                          <div className="text-xs font-mono font-bold text-sky-300">
+                            Total: {analyticsData.trends.reduce((acc, curr) => acc + curr.registrations, 0)} registrations
+                          </div>
+                        </div>
+
+                        {/* Responsive SVG Bar Chart */}
+                        <div className="h-40 w-full flex items-end gap-1.5 pt-4 pb-2 px-2 overflow-x-auto">
+                          {(() => {
+                            const maxVal = Math.max(...analyticsData.trends.map((t) => t.registrations), 1);
+                            return analyticsData.trends.map((t, idx) => {
+                              const heightPct = Math.max(8, Math.round((t.registrations / maxVal) * 100));
+                              return (
+                                <div key={idx} className="flex-1 min-w-[28px] max-w-[48px] flex flex-col items-center gap-1 group relative">
+                                  <div className="text-[9px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {t.registrations}
+                                  </div>
+                                  <div
+                                    style={{ height: `${heightPct}%` }}
+                                    className="w-full rounded-t-md bg-sky-500 hover:bg-sky-400 transition-all cursor-pointer shadow"
+                                    title={`${t.label}: ${t.registrations} registrations`}
+                                  />
+                                  <div className="text-[9px] font-mono text-slate-500 truncate w-full text-center">
+                                    {t.label.slice(-5)}
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3. Completion Rate (%) Chart */}
+                    {(trendMetricTab === 'ALL' || trendMetricTab === 'COMPLETION') && (
+                      <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black text-white">🏁 Tournament Completion Rate Trend</span>
+                            <span className="text-xs text-slate-400">(% Finished / Settled)</span>
+                          </div>
+                          <div className="text-xs font-mono font-bold text-emerald-400">
+                            {analyticsData.overview.completionRatePercent}% overall completion
+                          </div>
+                        </div>
+
+                        {/* Responsive SVG Bar Chart */}
+                        <div className="h-40 w-full flex items-end gap-1.5 pt-4 pb-2 px-2 overflow-x-auto">
+                          {analyticsData.trends.map((t, idx) => {
+                            const heightPct = Math.max(8, Math.min(100, t.completionRate));
+                            return (
+                              <div key={idx} className="flex-1 min-w-[28px] max-w-[48px] flex flex-col items-center gap-1 group relative">
+                                <div className="text-[9px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {t.completionRate}%
+                                </div>
+                                <div
+                                  style={{ height: `${heightPct}%` }}
+                                  className="w-full rounded-t-md bg-emerald-500 hover:bg-emerald-400 transition-all cursor-pointer shadow"
+                                  title={`${t.label}: ${t.completionRate}% completed`}
+                                />
+                                <div className="text-[9px] font-mono text-slate-500 truncate w-full text-center">
+                                  {t.label.slice(-5)}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 4. Total Entry-Fee Collection Chart */}
+                    {(trendMetricTab === 'ALL' || trendMetricTab === 'COLLECTION') && (
+                      <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black text-white">🪙 Total Entry-Fee Collection Trend</span>
+                            <span className="text-xs text-slate-400">(Coins Deposited per Day)</span>
+                          </div>
+                          <div className="text-xs font-mono font-bold text-amber-400">
+                            Total: 🪙 {analyticsData.trends.reduce((acc, curr) => acc + curr.entryCollection, 0).toLocaleString()}
+                          </div>
+                        </div>
+
+                        {/* Responsive SVG Bar Chart */}
+                        <div className="h-40 w-full flex items-end gap-1.5 pt-4 pb-2 px-2 overflow-x-auto">
+                          {(() => {
+                            const maxVal = Math.max(...analyticsData.trends.map((t) => t.entryCollection), 1);
+                            return analyticsData.trends.map((t, idx) => {
+                              const heightPct = Math.max(8, Math.round((t.entryCollection / maxVal) * 100));
+                              return (
+                                <div key={idx} className="flex-1 min-w-[28px] max-w-[48px] flex flex-col items-center gap-1 group relative">
+                                  <div className="text-[9px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    🪙{t.entryCollection}
+                                  </div>
+                                  <div
+                                    style={{ height: `${heightPct}%` }}
+                                    className="w-full rounded-t-md bg-amber-500 hover:bg-amber-400 transition-all cursor-pointer shadow"
+                                    title={`${t.label}: 🪙 ${t.entryCollection.toLocaleString()} collected`}
+                                  />
+                                  <div className="text-[9px] font-mono text-slate-500 truncate w-full text-center">
+                                    {t.label.slice(-5)}
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 5. Total Prize Distribution Chart */}
+                    {(trendMetricTab === 'ALL' || trendMetricTab === 'PRIZES') && (
+                      <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black text-white">🏆 Total Prize Distribution Trend</span>
+                            <span className="text-xs text-slate-400">(Coins Distributed to Winners)</span>
+                          </div>
+                          <div className="text-xs font-mono font-bold text-purple-400">
+                            Total: 🪙 {analyticsData.trends.reduce((acc, curr) => acc + curr.prizeDistribution, 0).toLocaleString()}
+                          </div>
+                        </div>
+
+                        {/* Responsive SVG Bar Chart */}
+                        <div className="h-40 w-full flex items-end gap-1.5 pt-4 pb-2 px-2 overflow-x-auto">
+                          {(() => {
+                            const maxVal = Math.max(...analyticsData.trends.map((t) => t.prizeDistribution), 1);
+                            return analyticsData.trends.map((t, idx) => {
+                              const heightPct = Math.max(8, Math.round((t.prizeDistribution / maxVal) * 100));
+                              return (
+                                <div key={idx} className="flex-1 min-w-[28px] max-w-[48px] flex flex-col items-center gap-1 group relative">
+                                  <div className="text-[9px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    🪙{t.prizeDistribution}
+                                  </div>
+                                  <div
+                                    style={{ height: `${heightPct}%` }}
+                                    className="w-full rounded-t-md bg-purple-500 hover:bg-purple-400 transition-all cursor-pointer shadow"
+                                    title={`${t.label}: 🪙 ${t.prizeDistribution.toLocaleString()} distributed`}
+                                  />
+                                  <div className="text-[9px] font-mono text-slate-500 truncate w-full text-center">
+                                    {t.label.slice(-5)}
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 4. TIER PERFORMANCE TRENDS (MINI TO PRO) */}
+              <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl backdrop-blur space-y-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-base font-black text-white flex items-center gap-2">
+                      <Layers className="size-4 text-amber-400" /> Tier Performance Trends (Mini → Pro)
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Authoritative tracking across all 5 tiers: Tournament count, total registrations, average registrations, fill rate %, and completion rate %
+                    </p>
+                  </div>
+
+                  {/* Metric & Tier Selector Pills */}
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950/80 border border-slate-800 flex-wrap">
+                    {[
+                      { id: 'ALL', label: '📊 Overview Matrix' },
+                      { id: 'COUNT', label: '🏟️ Count' },
+                      { id: 'REGISTRATIONS', label: '👥 Registrations' },
+                      { id: 'AVERAGE', label: '📈 Avg Regs' },
+                      { id: 'FILL_RATE', label: '⚡ Fill Rate %' },
+                      { id: 'COMPLETION_RATE', label: '🏁 Completion %' },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setTierTrendMetricTab(tab.id as 'ALL' | 'COUNT' | 'REGISTRATIONS' | 'AVERAGE' | 'FILL_RATE' | 'COMPLETION_RATE')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          tierTrendMetricTab === tab.id
+                            ? 'bg-amber-600 text-slate-950 shadow font-black'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Non-Mutation & Tier Integrity Notice */}
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <Shield className="size-4 text-amber-400 flex-shrink-0" />
+                    <span>
+                      <strong>Authoritative Tier Verification:</strong> Metrics reflect verified database records and registration history across all 5 tiers. Does not modify tournament configurations, entry fees, prize pools, wallet ledgers, or leaderboard rankings.
+                    </span>
+                  </div>
+                </div>
+
+                {/* 5 Tier Performance Summary Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  {(analyticsData.tiers || []).map((t) => (
+                    <div
+                      key={t.tierCode}
+                      className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-3 hover:border-slate-700 transition-all"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                        <div>
+                          <span className="uppercase text-[10px] font-black text-amber-400 tracking-wider">
+                            {t.tierCode} Tier
+                          </span>
+                          <div className="text-base font-black text-white">{t.tierName}</div>
+                        </div>
+                        <div className="text-right">
+                          <span className="px-2 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold">
+                            🪙 {t.entryFee}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-xs font-mono">
+                        <div className="flex justify-between items-center text-slate-300">
+                          <span className="text-slate-500 font-sans">Tournaments:</span>
+                          <span className="font-bold text-white">{t.tournamentsCount}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-300">
+                          <span className="text-slate-500 font-sans">Total Regs:</span>
+                          <span className="font-bold text-indigo-300">{t.registrationsCount}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-300">
+                          <span className="text-slate-500 font-sans">Avg Regs / Tourn:</span>
+                          <span className="font-bold text-sky-400">{t.averageRegistrations}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-300">
+                          <span className="text-slate-500 font-sans">Fill Rate:</span>
+                          <span className="font-bold text-amber-400">{t.fillRatePercent}%</span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-300">
+                          <span className="text-slate-500 font-sans">Completion Rate:</span>
+                          <span className="font-bold text-emerald-400">{t.completionRatePercent}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Detailed Comparison Table / Visual Charts */}
+                <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase">
+                          <th className="py-2.5 px-4">Tournament Tier</th>
+                          <th className="py-2.5 px-3 text-center">Entry Fee</th>
+                          <th className="py-2.5 px-3 text-center">Tournaments</th>
+                          <th className="py-2.5 px-3 text-center">Total Registrations</th>
+                          <th className="py-2.5 px-3 text-center">Avg Regs / Tourn</th>
+                          <th className="py-2.5 px-3 text-center">Capacity Fill Rate</th>
+                          <th className="py-2.5 px-3 text-center">Completion Rate</th>
+                          <th className="py-2.5 px-4 text-right">Coins Collected</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                        {(analyticsData.tiers || []).map((t) => (
+                          <tr key={t.tierCode} className="hover:bg-slate-800/40 transition-colors">
+                            <td className="py-2.5 px-4 font-sans font-bold text-slate-200 flex items-center gap-2">
+                              <span className="uppercase text-[10px] font-black text-amber-400">{t.tierCode}</span>
+                              <span>{t.tierName}</span>
+                            </td>
+                            <td className="py-2.5 px-3 text-center text-amber-400 font-bold">🪙 {t.entryFee}</td>
+                            <td className="py-2.5 px-3 text-center text-white font-bold">{t.tournamentsCount}</td>
+                            <td className="py-2.5 px-3 text-center text-indigo-300 font-bold">{t.registrationsCount}</td>
+                            <td className="py-2.5 px-3 text-center text-sky-400 font-bold">{t.averageRegistrations}</td>
+                            <td className="py-2.5 px-3 text-center">
+                              <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 font-bold">
+                                {t.fillRatePercent}%
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold">
+                                {t.completionRatePercent}%
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-4 text-right font-bold text-amber-400">
+                              🪙 {t.entryFeesCollected.toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. Authoritative Financial Ledger & Prize Settlement Card */}
               <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl backdrop-blur space-y-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
                   <div>
@@ -2740,7 +3201,950 @@ export function AdminTournamentsPage() {
                 </div>
               </div>
 
-              {/* 9. Notification Analytics Section */}
+              {/* 9. Top Participation Section */}
+              <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl backdrop-blur space-y-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-base font-black text-white flex items-center gap-2">
+                      <TrendingUp className="size-4 text-amber-400" /> Top Participation &amp; Popularity Analytics
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Most participated games, most popular tournament tiers, and peak activity time periods
+                    </p>
+                  </div>
+
+                  {/* Breakdown Dimension Switcher */}
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950/80 border border-slate-800 flex-wrap">
+                    {[
+                      { id: 'OVERVIEW', label: '📊 Overview' },
+                      { id: 'GAMES', label: '🎮 Most Participated Games', count: analyticsData.topParticipation?.games?.length ?? 10 },
+                      { id: 'TIERS', label: '⚡ Tiers (Mini → Pro)', count: analyticsData.topParticipation?.tiers?.length ?? 5 },
+                      { id: 'PERIODS', label: '⏰ Active Periods (24h)', count: analyticsData.topParticipation?.periods?.length ?? 24 },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setTopPartBreakdownTab(tab.id as 'OVERVIEW' | 'GAMES' | 'TIERS' | 'PERIODS')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          topPartBreakdownTab === tab.id
+                            ? 'bg-indigo-600 text-white shadow font-black'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3 Key Highlight Metric Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+                    <span className="text-[10px] font-bold text-amber-400 uppercase">🎮 Most Participated Game</span>
+                    <div className="text-xl font-black text-white font-mono mt-1 flex items-center gap-2">
+                      <span>{GAME_DEFINITIONS.find((g) => g.id === analyticsData.topParticipation?.summary.topGame?.gameId)?.icon ?? '🎮'}</span>
+                      <span className="truncate">{analyticsData.topParticipation?.summary.topGame?.gameName || '—'}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between font-mono">
+                      <span>{analyticsData.topParticipation?.summary.topGame?.totalRegistrations ?? 0} players</span>
+                      <span className="text-amber-400">{analyticsData.topParticipation?.summary.topGame?.tournamentsCount ?? 0} tourns</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/30">
+                    <span className="text-[10px] font-bold text-indigo-400 uppercase">⚡ Most Popular Tier</span>
+                    <div className="text-xl font-black text-white font-mono mt-1 flex items-center gap-2">
+                      <span className="uppercase text-amber-400 text-sm font-black">
+                        {analyticsData.topParticipation?.summary.topTier?.tierCode || 'standard'}
+                      </span>
+                      <span>{analyticsData.topParticipation?.summary.topTier?.tierName || 'Standard'}</span>
+                      <span className="text-xs text-slate-400 font-normal">
+                        (🪙 {analyticsData.topParticipation?.summary.topTier?.entryFee ?? 25})
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between font-mono">
+                      <span>{analyticsData.topParticipation?.summary.topTier?.totalRegistrations ?? 0} players</span>
+                      <span className="text-indigo-400">{analyticsData.topParticipation?.summary.topTier?.tournamentsCount ?? 0} tourns</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/30">
+                    <span className="text-[10px] font-bold text-cyan-400 uppercase">⏰ Peak Tournament Period</span>
+                    <div className="text-xl font-black text-white font-mono mt-1 flex items-center gap-2">
+                      <span>🔥 {analyticsData.topParticipation?.summary.topPeriod?.hourLabel || '18:00'}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between font-mono">
+                      <span>{analyticsData.topParticipation?.summary.topPeriod?.totalRegistrations ?? 0} players</span>
+                      <span className="text-cyan-400">{analyticsData.topParticipation?.summary.topPeriod?.tournamentsCount ?? 0} tourns</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fair Play & Non-Mutation Notice */}
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <Shield className="size-4 text-amber-400 flex-shrink-0" />
+                    <span>
+                      <strong>Fair Play &amp; Operational Guarantee:</strong> Participation metrics are purely for operational scheduling. Participation data is never used to determine player skill, winners, or modify leaderboard, wallet, or prize settlement logic.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sub-Views */}
+                <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
+                  {topPartBreakdownTab === 'OVERVIEW' ? (
+                    <div className="p-5 space-y-6">
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Top 3 Games */}
+                        <div className="space-y-3">
+                          <div className="text-xs font-bold text-slate-300 uppercase flex items-center gap-1.5">
+                            <span>🎮</span> Top 3 Games
+                          </div>
+                          <div className="space-y-2">
+                            {(analyticsData.topParticipation?.games || []).slice(0, 3).map((g) => (
+                              <div key={g.gameId} className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-sm font-black text-amber-400 font-mono">#{g.rank}</span>
+                                  <span>{GAME_DEFINITIONS.find((def) => def.id === g.gameId)?.icon ?? '🎮'}</span>
+                                  <div>
+                                    <div className="text-xs font-bold text-white">{g.gameName}</div>
+                                    <div className="text-[10px] text-slate-500 font-mono">{g.tournamentsCount} tournaments</div>
+                                  </div>
+                                </div>
+                                <div className="text-right font-mono">
+                                  <div className="text-xs font-black text-white">{g.totalRegistrations}</div>
+                                  <div className="text-[10px] text-amber-400">{g.fillRatePercent}% fill</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Top Tiers */}
+                        <div className="space-y-3">
+                          <div className="text-xs font-bold text-slate-300 uppercase flex items-center gap-1.5">
+                            <span>⚡</span> Tier Popularity Ranking
+                          </div>
+                          <div className="space-y-2">
+                            {(analyticsData.topParticipation?.tiers || []).slice(0, 3).map((t) => (
+                              <div key={t.tierCode} className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-sm font-black text-indigo-400 font-mono">#{t.rank}</span>
+                                  <div>
+                                    <div className="text-xs font-bold text-white flex items-center gap-1">
+                                      <span className="uppercase text-[10px] font-black text-amber-400">{t.tierCode}</span>
+                                      <span>{t.tierName}</span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 font-mono">🪙 {t.entryFee} entry fee</div>
+                                  </div>
+                                </div>
+                                <div className="text-right font-mono">
+                                  <div className="text-xs font-black text-white">{t.totalRegistrations}</div>
+                                  <div className="text-[10px] text-indigo-400">{t.tournamentsCount} tourns</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Top Hours */}
+                        <div className="space-y-3">
+                          <div className="text-xs font-bold text-slate-300 uppercase flex items-center gap-1.5">
+                            <span>⏰</span> Peak Activity Hours
+                          </div>
+                          <div className="space-y-2">
+                            {(analyticsData.topParticipation?.periods || []).slice(0, 3).map((p) => (
+                              <div key={p.hour} className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-sm font-black text-cyan-400 font-mono">#{p.rank}</span>
+                                  <div>
+                                    <div className="text-xs font-bold text-white">{p.hourLabel}</div>
+                                    <div className="text-[10px] text-slate-500 font-mono">{p.tournamentsCount} tournaments</div>
+                                  </div>
+                                </div>
+                                <div className="text-right font-mono">
+                                  <div className="text-xs font-black text-white">{p.totalRegistrations} players</div>
+                                  <div className="text-[10px] text-cyan-400">
+                                    {p.isPeakHour ? '🔥 Peak' : 'Active'}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : topPartBreakdownTab === 'GAMES' ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase">
+                            <th className="py-2.5 px-4 text-center">Rank</th>
+                            <th className="py-2.5 px-4">Game Discipline</th>
+                            <th className="py-2.5 px-3 text-center">Tournament Count</th>
+                            <th className="py-2.5 px-3 text-center">Total Registrations</th>
+                            <th className="py-2.5 px-4 text-right">Fill Rate (%)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                          {(analyticsData.topParticipation?.games || []).map((g) => (
+                            <tr key={g.gameId} className="hover:bg-slate-800/40 transition-colors">
+                              <td className="py-2.5 px-4 text-center font-bold">
+                                {g.rank === 1 ? (
+                                  <span className="text-amber-400 font-black">🥇 #1</span>
+                                ) : g.rank === 2 ? (
+                                  <span className="text-slate-300 font-black">🥈 #2</span>
+                                ) : g.rank === 3 ? (
+                                  <span className="text-amber-600 font-black">🥉 #3</span>
+                                ) : (
+                                  <span className="text-slate-500">#{g.rank}</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-4 font-sans font-bold text-slate-200 flex items-center gap-2">
+                                <span>{GAME_DEFINITIONS.find((def) => def.id === g.gameId)?.icon ?? '🎮'}</span>
+                                <span>{g.gameName}</span>
+                              </td>
+                              <td className="py-2.5 px-3 text-center text-slate-300 font-bold">{g.tournamentsCount}</td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-bold">{g.totalRegistrations}</td>
+                              <td className="py-2.5 px-4 text-right font-black text-white">{g.fillRatePercent}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : topPartBreakdownTab === 'TIERS' ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase">
+                            <th className="py-2.5 px-4 text-center">Rank</th>
+                            <th className="py-2.5 px-4">Tournament Tier</th>
+                            <th className="py-2.5 px-3 text-center">Entry Fee</th>
+                            <th className="py-2.5 px-3 text-center">Tournament Count</th>
+                            <th className="py-2.5 px-3 text-center">Total Registrations</th>
+                            <th className="py-2.5 px-4 text-right">Fill Rate (%)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                          {(analyticsData.topParticipation?.tiers || []).map((t) => (
+                            <tr key={t.tierCode} className="hover:bg-slate-800/40 transition-colors">
+                              <td className="py-2.5 px-4 text-center font-bold">
+                                {t.rank === 1 ? (
+                                  <span className="text-amber-400 font-black">🥇 #1</span>
+                                ) : t.rank === 2 ? (
+                                  <span className="text-slate-300 font-black">🥈 #2</span>
+                                ) : t.rank === 3 ? (
+                                  <span className="text-amber-600 font-black">🥉 #3</span>
+                                ) : (
+                                  <span className="text-slate-500">#{t.rank}</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-4 font-sans font-bold text-slate-200 flex items-center gap-2">
+                                <span className="uppercase text-[10px] font-black text-amber-400">{t.tierCode}</span>
+                                <span>{t.tierName}</span>
+                              </td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-bold">🪙 {t.entryFee}</td>
+                              <td className="py-2.5 px-3 text-center text-slate-300 font-bold">{t.tournamentsCount}</td>
+                              <td className="py-2.5 px-3 text-center text-indigo-300 font-bold">{t.totalRegistrations}</td>
+                              <td className="py-2.5 px-4 text-right font-black text-white">{t.fillRatePercent}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase">
+                            <th className="py-2.5 px-4 text-center">Rank</th>
+                            <th className="py-2.5 px-4">Time Period (1 Hour Window)</th>
+                            <th className="py-2.5 px-3 text-center">Tournaments Created</th>
+                            <th className="py-2.5 px-3 text-center">Total Player Registrations</th>
+                            <th className="py-2.5 px-4 text-right">Participation Intensity</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                          {(analyticsData.topParticipation?.periods || []).map((p) => (
+                            <tr key={p.hour} className="hover:bg-slate-800/40 transition-colors">
+                              <td className="py-2.5 px-4 text-center font-bold">
+                                {p.rank === 1 ? (
+                                  <span className="text-amber-400 font-black">🥇 #1</span>
+                                ) : p.rank === 2 ? (
+                                  <span className="text-slate-300 font-black">🥈 #2</span>
+                                ) : p.rank === 3 ? (
+                                  <span className="text-amber-600 font-black">🥉 #3</span>
+                                ) : (
+                                  <span className="text-slate-500">#{p.rank}</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-4 font-bold text-slate-200 flex items-center gap-2">
+                                <span>{p.hourLabel}</span>
+                                {p.isPeakHour && (
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-black uppercase">
+                                    🔥 Peak
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-center text-slate-300 font-bold">{p.tournamentsCount}</td>
+                              <td className="py-2.5 px-3 text-center text-cyan-300 font-bold">{p.totalRegistrations}</td>
+                              <td className="py-2.5 px-4 text-right font-black text-white">
+                                {p.isPeakHour ? 'High Participation' : p.totalRegistrations > 0 ? 'Moderate' : 'Low Activity'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 10. Player Performance Section */}
+              <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl backdrop-blur space-y-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-base font-black text-white flex items-center gap-2">
+                      <Award className="size-4 text-emerald-400" /> Player Performance &amp; Match Results
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Authoritative tournament wins, Top 4 podium finishes, and match win/loss records across games and tiers
+                    </p>
+                  </div>
+
+                  {/* Breakdown Dimension Switcher */}
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950/80 border border-slate-800 flex-wrap">
+                    {[
+                      { id: 'SUMMARY', label: '📊 Summary' },
+                      { id: 'GAME', label: '🎮 By Game', count: analyticsData.playerPerformance?.byGame?.length ?? 10 },
+                      { id: 'TIER', label: '⚡ By Tier', count: analyticsData.playerPerformance?.byTier?.length ?? 5 },
+                      { id: 'DATE', label: '📅 By Date', count: analyticsData.playerPerformance?.byDate?.length ?? 0 },
+                      { id: 'PERFORMERS', label: '🏆 Top Performers', count: analyticsData.playerPerformance?.topPerformers?.length ?? 0 },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setPlayerPerfBreakdownTab(tab.id as 'SUMMARY' | 'GAME' | 'TIER' | 'DATE' | 'PERFORMERS')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          playerPerfBreakdownTab === tab.id
+                            ? 'bg-indigo-600 text-white shadow font-black'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 5 Core Performance KPI Summary Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+                    <span className="text-[10px] font-bold text-amber-400 uppercase">🏆 Tournament Wins</span>
+                    <div className="text-xl font-black text-white font-mono mt-1">
+                      {(analyticsData.playerPerformance?.summary.tournamentWins ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Champions crowned</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30">
+                    <span className="text-[10px] font-bold text-indigo-400 uppercase">🎖️ Top 4 Finishes</span>
+                    <div className="text-xl font-black text-indigo-300 font-mono mt-1">
+                      {(analyticsData.playerPerformance?.summary.top4Finishes ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Podium placements</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-800/60 border border-slate-700/60">
+                    <span className="text-[10px] font-bold text-slate-300 uppercase">⚔️ Matches Played</span>
+                    <div className="text-xl font-black text-white font-mono mt-1">
+                      {(analyticsData.playerPerformance?.summary.matchesPlayed ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Competitive duels</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30">
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase">🟢 Matches Won</span>
+                    <div className="text-xl font-black text-emerald-400 font-mono mt-1">
+                      {(analyticsData.playerPerformance?.summary.matchesWon ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      {analyticsData.playerPerformance?.summary.winRatePercent ?? 50}% win rate
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30">
+                    <span className="text-[10px] font-bold text-rose-400 uppercase">🔴 Matches Lost</span>
+                    <div className="text-xl font-black text-rose-400 font-mono mt-1">
+                      {(analyticsData.playerPerformance?.summary.matchesLost ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Match defeats</div>
+                  </div>
+                </div>
+
+                {/* Fair Play & Privacy Protected Notice */}
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <Shield className="size-4 text-emerald-400 flex-shrink-0" />
+                    <span>
+                      <strong>Fair Play &amp; Non-Mutation Protected:</strong> Performance data reflects authoritative tournament results. These metrics are strictly observational and are not used to determine winners or modify leaderboard, wallet, or prize settlement logic.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sub-Views */}
+                <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
+                  {playerPerfBreakdownTab === 'SUMMARY' ? (
+                    <div className="p-5 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                          <div className="text-xs text-slate-400 font-bold">Overall Match Win Rate</div>
+                          <div className="text-2xl font-black text-emerald-400 font-mono mt-1">
+                            {analyticsData.playerPerformance?.summary.winRatePercent ?? 50}%
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">Across all tournament matches</div>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                          <div className="text-xs text-slate-400 font-bold">Podium Placement Ratio</div>
+                          <div className="text-2xl font-black text-indigo-400 font-mono mt-1">
+                            {(() => {
+                              const totalRegs = analyticsData.overview.totalRegistrations || 1;
+                              const top4 = analyticsData.playerPerformance?.summary.top4Finishes || 0;
+                              return Math.min(100, Math.round((top4 / totalRegs) * 100));
+                            })()}%
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">Top 4 finishes per registration</div>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                          <div className="text-xs text-slate-400 font-bold">Championship Victory Ratio</div>
+                          <div className="text-2xl font-black text-amber-400 font-mono mt-1">
+                            {(() => {
+                              const completed = analyticsData.overview.completedTournaments || 1;
+                              const wins = analyticsData.playerPerformance?.summary.tournamentWins || 0;
+                              return Math.min(100, Math.round((wins / completed) * 100));
+                            })()}%
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">1st place crowns per completed event</div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : playerPerfBreakdownTab === 'GAME' ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase">
+                            <th className="py-2.5 px-4">Game Discipline</th>
+                            <th className="py-2.5 px-3 text-center">Tournaments</th>
+                            <th className="py-2.5 px-3 text-center">Tournament Wins</th>
+                            <th className="py-2.5 px-3 text-center">Top 4 Finishes</th>
+                            <th className="py-2.5 px-3 text-center">Matches Played</th>
+                            <th className="py-2.5 px-3 text-center">Matches Won</th>
+                            <th className="py-2.5 px-3 text-center">Matches Lost</th>
+                            <th className="py-2.5 px-4 text-right">Win Rate (%)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                          {(analyticsData.playerPerformance?.byGame || []).map((bg) => (
+                            <tr key={bg.gameId} className="hover:bg-slate-800/40 transition-colors">
+                              <td className="py-2.5 px-4 font-sans font-bold text-slate-200 flex items-center gap-2">
+                                <span>{GAME_DEFINITIONS.find((def) => def.id === bg.gameId)?.icon ?? '🎮'}</span>
+                                <span>{bg.gameName}</span>
+                              </td>
+                              <td className="py-2.5 px-3 text-center text-slate-300 font-bold">{bg.tournamentsCount}</td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-bold">{bg.tournamentWins}</td>
+                              <td className="py-2.5 px-3 text-center text-indigo-400 font-bold">{bg.top4Finishes}</td>
+                              <td className="py-2.5 px-3 text-center text-white font-bold">{bg.matchesPlayed}</td>
+                              <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{bg.matchesWon}</td>
+                              <td className="py-2.5 px-3 text-center text-rose-400 font-bold">{bg.matchesLost}</td>
+                              <td className="py-2.5 px-4 text-right font-black text-amber-400">{bg.winRatePercent}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : playerPerfBreakdownTab === 'TIER' ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase">
+                            <th className="py-2.5 px-4">Tournament Tier</th>
+                            <th className="py-2.5 px-3 text-center">Entry Fee</th>
+                            <th className="py-2.5 px-3 text-center">Tournaments</th>
+                            <th className="py-2.5 px-3 text-center">Tournament Wins</th>
+                            <th className="py-2.5 px-3 text-center">Top 4 Finishes</th>
+                            <th className="py-2.5 px-3 text-center">Matches Played</th>
+                            <th className="py-2.5 px-3 text-center">Matches Won</th>
+                            <th className="py-2.5 px-3 text-center">Matches Lost</th>
+                            <th className="py-2.5 px-4 text-right">Win Rate (%)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                          {(analyticsData.playerPerformance?.byTier || []).map((bt) => (
+                            <tr key={bt.tierCode} className="hover:bg-slate-800/40 transition-colors">
+                              <td className="py-2.5 px-4 font-sans font-bold text-slate-200 flex items-center gap-2">
+                                <span className="uppercase text-[10px] font-black text-amber-400">{bt.tierCode}</span>
+                                <span>{bt.tierName}</span>
+                              </td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-mono font-bold">🪙 {bt.entryFee}</td>
+                              <td className="py-2.5 px-3 text-center text-slate-300 font-bold">{bt.tournamentsCount}</td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-bold">{bt.tournamentWins}</td>
+                              <td className="py-2.5 px-3 text-center text-indigo-400 font-bold">{bt.top4Finishes}</td>
+                              <td className="py-2.5 px-3 text-center text-white font-bold">{bt.matchesPlayed}</td>
+                              <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{bt.matchesWon}</td>
+                              <td className="py-2.5 px-3 text-center text-rose-400 font-bold">{bt.matchesLost}</td>
+                              <td className="py-2.5 px-4 text-right font-black text-amber-400">{bt.winRatePercent}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : playerPerfBreakdownTab === 'DATE' ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase">
+                            <th className="py-2.5 px-4">Date</th>
+                            <th className="py-2.5 px-3 text-center">Tournament Wins</th>
+                            <th className="py-2.5 px-3 text-center">Top 4 Finishes</th>
+                            <th className="py-2.5 px-3 text-center">Matches Played</th>
+                            <th className="py-2.5 px-3 text-center">Matches Won</th>
+                            <th className="py-2.5 px-3 text-center">Matches Lost</th>
+                            <th className="py-2.5 px-4 text-right">Win Rate (%)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                          {(analyticsData.playerPerformance?.byDate || []).length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="py-8 text-center text-slate-400 font-sans">
+                                No performance records found for selected period.
+                              </td>
+                            </tr>
+                          ) : (
+                            (analyticsData.playerPerformance?.byDate || []).map((bd) => (
+                              <tr key={bd.date} className="hover:bg-slate-800/40 transition-colors">
+                                <td className="py-2.5 px-4 font-bold text-slate-200">{bd.label}</td>
+                                <td className="py-2.5 px-3 text-center text-amber-400 font-bold">{bd.tournamentWins}</td>
+                                <td className="py-2.5 px-3 text-center text-indigo-400 font-bold">{bd.top4Finishes}</td>
+                                <td className="py-2.5 px-3 text-center text-white font-bold">{bd.matchesPlayed}</td>
+                                <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{bd.matchesWon}</td>
+                                <td className="py-2.5 px-3 text-center text-rose-400 font-bold">{bd.matchesLost}</td>
+                                <td className="py-2.5 px-4 text-right font-black text-amber-400">{bd.winRatePercent}%</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase">
+                            <th className="py-2.5 px-4">Player Identifier (Masked)</th>
+                            <th className="py-2.5 px-3 text-center">Tournaments</th>
+                            <th className="py-2.5 px-3 text-center">Wins 🏆</th>
+                            <th className="py-2.5 px-3 text-center">Top 4 🎖️</th>
+                            <th className="py-2.5 px-3 text-center">Matches Won 🟢</th>
+                            <th className="py-2.5 px-3 text-center">Matches Lost 🔴</th>
+                            <th className="py-2.5 px-3 text-center">Win Rate (%)</th>
+                            <th className="py-2.5 px-3 text-center">Points</th>
+                            <th className="py-2.5 px-3">Favorite Game</th>
+                            <th className="py-2.5 px-4 text-right">Last Active</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                          {(analyticsData.playerPerformance?.topPerformers || []).length === 0 ? (
+                            <tr>
+                              <td colSpan={10} className="py-8 text-center text-slate-400 font-sans">
+                                No top performer records found for selected period.
+                              </td>
+                            </tr>
+                          ) : (
+                            (analyticsData.playerPerformance?.topPerformers || []).map((p) => (
+                              <tr key={p.maskedId} className="hover:bg-slate-800/40 transition-colors">
+                                <td className="py-2.5 px-4 text-emerald-400 font-bold">{p.maskedId}</td>
+                                <td className="py-2.5 px-3 text-center font-bold text-white">{p.tournamentsCount}</td>
+                                <td className="py-2.5 px-3 text-center text-amber-400 font-bold">{p.tournamentWins}</td>
+                                <td className="py-2.5 px-3 text-center text-indigo-400 font-bold">{p.top4Finishes}</td>
+                                <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{p.matchesWon}</td>
+                                <td className="py-2.5 px-3 text-center text-rose-400 font-bold">{p.matchesLost}</td>
+                                <td className="py-2.5 px-3 text-center text-amber-300 font-bold">{p.winRatePercent}%</td>
+                                <td className="py-2.5 px-3 text-center text-white font-bold">{p.totalPoints}</td>
+                                <td className="py-2.5 px-3 font-sans text-slate-300 text-[11px]">{p.favoriteGame}</td>
+                                <td className="py-2.5 px-4 text-right text-slate-400 text-[10px]">
+                                  {new Date(p.lastActiveAt).toLocaleDateString()}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 11. Win Rate Analytics Section */}
+              <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl backdrop-blur space-y-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-base font-black text-white flex items-center gap-2">
+                      <Percent className="size-4 text-emerald-400" /> Match Win Rate &amp; Efficiency Analytics
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                      Formula: Win Rate = (Matches Won ÷ Completed Matches) × 100 · Draws excluded from decisive win calculations
+                    </p>
+                  </div>
+
+                  {/* Breakdown Dimension Switcher */}
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950/80 border border-slate-800 flex-wrap">
+                    {[
+                      { id: 'OVERVIEW', label: '📊 Overview' },
+                      { id: 'GAME', label: '🎮 By Game', count: analyticsData.winRateAnalytics?.byGame?.length ?? 10 },
+                      { id: 'TIER', label: '⚡ By Tier', count: analyticsData.winRateAnalytics?.byTier?.length ?? 5 },
+                      { id: 'DATE', label: '📅 By Date', count: analyticsData.winRateAnalytics?.byDate?.length ?? 0 },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setWinRateBreakdownTab(tab.id as 'OVERVIEW' | 'GAME' | 'TIER' | 'DATE')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          winRateBreakdownTab === tab.id
+                            ? 'bg-indigo-600 text-white shadow font-black'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 5 Core Win Rate KPI Summary Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30">
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase">📈 Overall Win Rate</span>
+                    <div className="text-2xl font-black text-white font-mono mt-1">
+                      {analyticsData.winRateAnalytics?.summary.overallWinRate ?? 50}%
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Across completed duels</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30">
+                    <span className="text-[10px] font-bold text-indigo-400 uppercase">⚔️ Completed Matches</span>
+                    <div className="text-xl font-black text-indigo-300 font-mono mt-1">
+                      {(analyticsData.winRateAnalytics?.summary.totalCompletedMatches ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Authoritative results</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-sky-500/10 border border-sky-500/30">
+                    <span className="text-[10px] font-bold text-sky-400 uppercase">🟢 Matches Won</span>
+                    <div className="text-xl font-black text-white font-mono mt-1">
+                      {(analyticsData.winRateAnalytics?.summary.totalMatchesWon ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Decisive victories</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30">
+                    <span className="text-[10px] font-bold text-rose-400 uppercase">🔴 Matches Lost</span>
+                    <div className="text-xl font-black text-rose-400 font-mono mt-1">
+                      {(analyticsData.winRateAnalytics?.summary.totalMatchesLost ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Decisive defeats</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+                    <span className="text-[10px] font-bold text-amber-400 uppercase">⚖️ Matches Drawn</span>
+                    <div className="text-xl font-black text-amber-300 font-mono mt-1">
+                      {(analyticsData.winRateAnalytics?.summary.totalMatchesDrawn ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Excluded from win %</div>
+                  </div>
+                </div>
+
+                {/* Mathematical Integrity & Non-Mutation Notice */}
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <Shield className="size-4 text-emerald-400 flex-shrink-0" />
+                    <span>
+                      <strong>Authoritative Match Verification:</strong> Win rates are calculated strictly from completed match results and never from registrations or entry fees. Win rates do not alter tournament results, rankings, wallet balances, or prize distributions. Draws are excluded from decisive win rate calculations.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sub-Views */}
+                <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
+                  {winRateBreakdownTab === 'OVERVIEW' ? (
+                    <div className="p-5 space-y-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                          <div className="text-xs text-slate-400 font-bold">Decisive Match Ratio</div>
+                          <div className="text-2xl font-black text-white font-mono mt-1">
+                            {(() => {
+                              const total = analyticsData.winRateAnalytics?.summary.totalCompletedMatches || 1;
+                              const decisive = analyticsData.winRateAnalytics?.summary.decisiveMatches || 0;
+                              return Math.round((decisive / total) * 100);
+                            })()}%
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            {analyticsData.winRateAnalytics?.summary.decisiveMatches ?? 0} decisive outcomes
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                          <div className="text-xs text-slate-400 font-bold">Draw / Tie Rate</div>
+                          <div className="text-2xl font-black text-amber-400 font-mono mt-1">
+                            {(() => {
+                              const total = analyticsData.winRateAnalytics?.summary.totalCompletedMatches || 1;
+                              const drawn = analyticsData.winRateAnalytics?.summary.totalMatchesDrawn || 0;
+                              return Math.round((drawn / total) * 100);
+                            })()}%
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            {analyticsData.winRateAnalytics?.summary.totalMatchesDrawn ?? 0} drawn matches
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                          <div className="text-xs text-slate-400 font-bold">Total Competitive Duels</div>
+                          <div className="text-2xl font-black text-emerald-400 font-mono mt-1">
+                            {(analyticsData.winRateAnalytics?.summary.totalCompletedMatches ?? 0).toLocaleString()}
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">Authoritatively verified</div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : winRateBreakdownTab === 'GAME' ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase">
+                            <th className="py-2.5 px-4">Game Discipline</th>
+                            <th className="py-2.5 px-3 text-center">Tournaments</th>
+                            <th className="py-2.5 px-3 text-center">Completed Matches</th>
+                            <th className="py-2.5 px-3 text-center">Matches Won</th>
+                            <th className="py-2.5 px-3 text-center">Matches Lost</th>
+                            <th className="py-2.5 px-3 text-center">Matches Drawn</th>
+                            <th className="py-2.5 px-4 text-right">Win Rate (%)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                          {(analyticsData.winRateAnalytics?.byGame || []).map((bg) => (
+                            <tr key={bg.gameId} className="hover:bg-slate-800/40 transition-colors">
+                              <td className="py-2.5 px-4 font-sans font-bold text-slate-200 flex items-center gap-2">
+                                <span>{GAME_DEFINITIONS.find((def) => def.id === bg.gameId)?.icon ?? '🎮'}</span>
+                                <span>{bg.gameName}</span>
+                              </td>
+                              <td className="py-2.5 px-3 text-center text-slate-300 font-bold">{bg.tournamentsCount}</td>
+                              <td className="py-2.5 px-3 text-center text-white font-bold">{bg.completedMatches}</td>
+                              <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{bg.matchesWon}</td>
+                              <td className="py-2.5 px-3 text-center text-rose-400 font-bold">{bg.matchesLost}</td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-bold">{bg.matchesDrawn}</td>
+                              <td className="py-2.5 px-4 text-right font-black text-emerald-400 font-mono text-xs">
+                                {bg.winRatePercent}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : winRateBreakdownTab === 'TIER' ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase">
+                            <th className="py-2.5 px-4">Tournament Tier</th>
+                            <th className="py-2.5 px-3 text-center">Entry Fee</th>
+                            <th className="py-2.5 px-3 text-center">Tournaments</th>
+                            <th className="py-2.5 px-3 text-center">Completed Matches</th>
+                            <th className="py-2.5 px-3 text-center">Matches Won</th>
+                            <th className="py-2.5 px-3 text-center">Matches Lost</th>
+                            <th className="py-2.5 px-3 text-center">Matches Drawn</th>
+                            <th className="py-2.5 px-4 text-right">Win Rate (%)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                          {(analyticsData.winRateAnalytics?.byTier || []).map((bt) => (
+                            <tr key={bt.tierCode} className="hover:bg-slate-800/40 transition-colors">
+                              <td className="py-2.5 px-4 font-sans font-bold text-slate-200 flex items-center gap-2">
+                                <span className="uppercase text-[10px] font-black text-amber-400">{bt.tierCode}</span>
+                                <span>{bt.tierName}</span>
+                              </td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-mono font-bold">🪙 {bt.entryFee}</td>
+                              <td className="py-2.5 px-3 text-center text-slate-300 font-bold">{bt.tournamentsCount}</td>
+                              <td className="py-2.5 px-3 text-center text-white font-bold">{bt.completedMatches}</td>
+                              <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{bt.matchesWon}</td>
+                              <td className="py-2.5 px-3 text-center text-rose-400 font-bold">{bt.matchesLost}</td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-bold">{bt.matchesDrawn}</td>
+                              <td className="py-2.5 px-4 text-right font-black text-emerald-400 font-mono text-xs">
+                                {bt.winRatePercent}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase">
+                            <th className="py-2.5 px-4">Date</th>
+                            <th className="py-2.5 px-3 text-center">Completed Matches</th>
+                            <th className="py-2.5 px-3 text-center">Matches Won</th>
+                            <th className="py-2.5 px-3 text-center">Matches Lost</th>
+                            <th className="py-2.5 px-3 text-center">Matches Drawn</th>
+                            <th className="py-2.5 px-4 text-right">Win Rate (%)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                          {(analyticsData.winRateAnalytics?.byDate || []).length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="py-8 text-center text-slate-400 font-sans">
+                                No win rate records found for selected period.
+                              </td>
+                            </tr>
+                          ) : (
+                            (analyticsData.winRateAnalytics?.byDate || []).map((bd) => (
+                              <tr key={bd.date} className="hover:bg-slate-800/40 transition-colors">
+                                <td className="py-2.5 px-4 font-bold text-slate-200">{bd.label}</td>
+                                <td className="py-2.5 px-3 text-center text-white font-bold">{bd.completedMatches}</td>
+                                <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{bd.matchesWon}</td>
+                                <td className="py-2.5 px-3 text-center text-rose-400 font-bold">{bd.matchesLost}</td>
+                                <td className="py-2.5 px-3 text-center text-amber-400 font-bold">{bd.matchesDrawn}</td>
+                                <td className="py-2.5 px-4 text-right font-black text-emerald-400 font-mono text-xs">
+                                  {bd.winRatePercent}%
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 12. Game-Specific Performance Analytics Section */}
+              <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl backdrop-blur space-y-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-base font-black text-white flex items-center gap-2">
+                      <Gamepad2 className="size-4 text-sky-400" /> Game-Specific Performance Analytics
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Authoritative engine metrics, native scoring units, and verified match results across all 10 competitive games
+                    </p>
+                  </div>
+
+                  {/* Filter Pills for All 10 Games */}
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950/80 border border-slate-800 flex-wrap max-w-full">
+                    <button
+                      onClick={() => setSelectedGameProfileId('all')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                        selectedGameProfileId === 'all'
+                          ? 'bg-indigo-600 text-white shadow font-black'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      All Games (10)
+                    </button>
+                    {GAME_DEFINITIONS.map((g) => (
+                      <button
+                        key={g.id}
+                        onClick={() => setSelectedGameProfileId(g.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                          selectedGameProfileId === g.id
+                            ? 'bg-sky-600 text-white shadow font-black'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        <span>{g.icon}</span>
+                        <span className="hidden sm:inline">{g.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Non-Mutation & Native Engine Integrity Notice */}
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <Shield className="size-4 text-sky-400 flex-shrink-0" />
+                    <span>
+                      <strong>Native Engine Verification:</strong> Displays only authoritative metrics derived from each game's engine (e.g. Chess wins/losses, Snooker frame score, Cricket runs/wickets, Carrom points, Table Tennis sets). Does not alter game rules, scoring, tournament results, leaderboard, wallet, or prize logic.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Game Profiles Grid / Table */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {(analyticsData.gameSpecificPerformance?.games || [])
+                    .filter((g) => selectedGameProfileId === 'all' || g.gameId === selectedGameProfileId)
+                    .map((g) => (
+                      <div
+                        key={g.gameId}
+                        className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-3 hover:border-slate-700 transition-all"
+                      >
+                        {/* Game Header */}
+                        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-2xl">{g.icon}</span>
+                            <div>
+                              <div className="text-sm font-black text-white">{g.gameName}</div>
+                              <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-semibold">{g.category}</span>
+                                <span>•</span>
+                                <span className="text-sky-400 font-mono">{g.mode}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right font-mono">
+                            <div className="text-xs text-slate-400">Win Rate</div>
+                            <div className="text-base font-black text-emerald-400">{g.winRatePercent}%</div>
+                          </div>
+                        </div>
+
+                        {/* Engine Metrics Context */}
+                        <div className="grid grid-cols-2 gap-2 text-[11px] font-mono bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
+                          <div>
+                            <span className="text-slate-500 block text-[9px] uppercase font-sans font-bold">Scoring Unit</span>
+                            <span className="text-amber-300 font-bold">{g.scoreUnit}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[9px] uppercase font-sans font-bold">Result Format</span>
+                            <span className="text-indigo-300 font-bold">{g.resultFormat}</span>
+                          </div>
+                        </div>
+
+                        {/* Core Match Statistics */}
+                        <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono pt-1">
+                          <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                            <div className="text-slate-400">Tournaments</div>
+                            <div className="text-xs font-black text-white mt-0.5">{g.tournamentsCount}</div>
+                          </div>
+                          <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                            <div className="text-slate-400">Completed</div>
+                            <div className="text-xs font-black text-indigo-300 mt-0.5">{g.completedMatches}</div>
+                          </div>
+                          <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                            <div className="text-slate-400">Won / Lost / Draw</div>
+                            <div className="text-xs font-black text-emerald-400 mt-0.5">
+                              {g.matchesWon} / {g.matchesLost} / {g.matchesDrawn}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* High Score & Points Summary */}
+                        <div className="flex items-center justify-between text-[11px] font-mono pt-1 text-slate-300 border-t border-slate-800/60">
+                          <span>Avg Score: <strong className="text-white">{g.avgScorePerMatch}</strong></span>
+                          <span>High Score: <strong className="text-amber-400">{g.highestMatchScore}</strong></span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* 13. Notification Analytics Section */}
               <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl backdrop-blur space-y-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
                   <div>
@@ -3066,7 +4470,336 @@ export function AdminTournamentsPage() {
       )}
 
       {/* ===================================================================== */}
-      {/* 3. HOURLY SCHEDULER & PREVIEW TAB */}
+      {/* 3. TOURNAMENT REPORTS & EXPORT ENGINE TAB                            */}
+      {/* ===================================================================== */}
+      {mainTab === 'REPORTS' && (
+        <div className="space-y-6">
+          {/* Main Reporting Controls Card */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl backdrop-blur space-y-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <FileText className="size-5 text-indigo-400" />
+                  Authoritative Tournament Reporting &amp; Export Engine
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Generate, preview, and download authoritative operational, financial, participation, settlement, and notification reports.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleGenerateReport}
+                  disabled={isGeneratingReport}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs gap-1.5 shadow-md"
+                >
+                  {isGeneratingReport ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                  {isGeneratingReport ? 'Generating Report...' : 'Generate & Preview Report'}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadReportCsv}
+                  className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 text-xs font-bold gap-1.5"
+                >
+                  <Download className="size-3.5 text-emerald-400" /> Download CSV
+                </Button>
+
+                {generatedReport && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDownloadReportJson}
+                    className="border-purple-500/40 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 text-xs font-bold gap-1.5"
+                  >
+                    <Download className="size-3.5 text-purple-400" /> Download JSON
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Read-Only & Non-Mutation Guarantee Notice */}
+            <div className="rounded-2xl border border-indigo-900/40 bg-indigo-950/20 p-3.5 flex items-center justify-between text-xs text-indigo-300">
+              <div className="flex items-center gap-2.5">
+                <Shield className="size-4 text-indigo-400 flex-shrink-0" />
+                <span>
+                  <strong>Authoritative Read-Only Guarantee:</strong> Report generation runs purely observational aggregations against database and wallet ledger records. It does not modify tournament results, player rankings, wallet balances, prizes, refunds, or notification logs. Datasets are safely buffered and capped at 1,000 records to ensure responsive performance on large datasets.
+                </span>
+              </div>
+            </div>
+
+            {/* Report Type Selector Pills */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                1. Select Report Category
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {[
+                  {
+                    id: 'TOURNAMENT' as TournamentReportType,
+                    name: 'Tournament Report',
+                    icon: '🏟️',
+                    desc: 'Operational schedules, status, player counts & capacities',
+                  },
+                  {
+                    id: 'FINANCIAL' as TournamentReportType,
+                    name: 'Financial Report',
+                    icon: '💰',
+                    desc: 'Entry collections, prize distribution, refunds & profit',
+                  },
+                  {
+                    id: 'PLAYER_PARTICIPATION' as TournamentReportType,
+                    name: 'Player Participation',
+                    icon: '👥',
+                    desc: 'Tournaments played, wins, match stats & total prizes won',
+                  },
+                  {
+                    id: 'SETTLEMENT' as TournamentReportType,
+                    name: 'Settlement Report',
+                    icon: '⚖️',
+                    desc: 'Prize payout audit records, timestamps & failure logs',
+                  },
+                  {
+                    id: 'NOTIFICATION' as TournamentReportType,
+                    name: 'Notification Report',
+                    icon: '🔔',
+                    desc: 'Multi-channel notification delivery logs & status history',
+                  },
+                ].map((rep) => (
+                  <button
+                    key={rep.id}
+                    onClick={() => {
+                      setReportType(rep.id);
+                      setGeneratedReport(null);
+                    }}
+                    className={`p-3.5 rounded-2xl border text-left transition-all ${
+                      reportType === rep.id
+                        ? 'border-indigo-500 bg-indigo-950/40 text-white shadow-lg ring-1 ring-indigo-500/50'
+                        : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold text-sm text-white">
+                      <span>{rep.icon}</span>
+                      <span>{rep.name}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                      {rep.desc}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Comprehensive Filter Configuration Bar */}
+            <div className="space-y-3 pt-4 border-t border-slate-800">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                2. Configure Scope &amp; Date Filters
+              </label>
+
+              {/* Timeframe Presets */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[
+                  { value: 'today', label: 'Today' },
+                  { value: 'last7days', label: 'Last 7 Days' },
+                  { value: 'last30days', label: 'Last 30 Days' },
+                  { value: 'thismonth', label: 'This Month' },
+                  { value: 'custom', label: 'Custom Range' },
+                ].map((p) => (
+                  <button
+                    key={p.value}
+                    onClick={() => setReportTimeFilter(p.value as TournamentAnalyticsTimeFilter)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      reportTimeFilter === p.value
+                        ? 'bg-indigo-600 text-white shadow font-black'
+                        : 'bg-slate-950/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-800'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Scope Dropdowns */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+                {reportTimeFilter === 'custom' && (
+                  <>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-400 mb-1">From Date</label>
+                      <input
+                        type="date"
+                        value={reportFromDate}
+                        onChange={(e) => setReportFromDate(e.target.value)}
+                        className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-400 mb-1">To Date</label>
+                      <input
+                        type="date"
+                        value={reportToDate}
+                        onChange={(e) => setReportToDate(e.target.value)}
+                        className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1">Game Discipline</label>
+                  <select
+                    value={reportGame}
+                    onChange={(e) => setReportGame(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="ALL">All 10 Games</option>
+                    {GAME_DEFINITIONS.map((g) => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1">Tournament Tier</label>
+                  <select
+                    value={reportTier}
+                    onChange={(e) => setReportTier(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="ALL">All 5 Tiers</option>
+                    <option value="mini">🟢 Mini (5🪙)</option>
+                    <option value="basic">🔵 Basic (10🪙)</option>
+                    <option value="standard">🟣 Standard (25🪙)</option>
+                    <option value="premium">🟠 Premium (50🪙)</option>
+                    <option value="pro">🔴 Pro (100🪙)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1">Tournament Status</label>
+                  <select
+                    value={reportStatus}
+                    onChange={(e) => setReportStatus(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="ALL">All Statuses</option>
+                    <option value="LIVE">🟢 Live / In Progress</option>
+                    <option value="UPCOMING">⏳ Upcoming</option>
+                    <option value="REGISTRATION_OPEN">📝 Registration Open</option>
+                    <option value="COMPLETED">🏆 Completed</option>
+                    <option value="SETTLED">✅ Settled</option>
+                    <option value="CANCELLED">❌ Cancelled</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Real-Time Live Preview Table */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl backdrop-blur space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <h3 className="text-base font-black text-white">
+                  Report Live Preview
+                </h3>
+                {generatedReport && (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    {generatedReport.totalRecords} Records Found
+                  </span>
+                )}
+              </div>
+
+              {generatedReport && (
+                <div className="text-xs text-slate-400 font-mono">
+                  Generated at {new Date(generatedReport.generatedAt).toLocaleTimeString()}
+                </div>
+              )}
+            </div>
+
+            {isGeneratingReport ? (
+              <div className="flex flex-col items-center justify-center py-20 bg-slate-950/40 rounded-2xl border border-slate-800">
+                <Loader2 className="size-8 animate-spin text-indigo-400 mb-2" />
+                <p className="text-xs text-slate-400">Querying authoritative records and formatting report...</p>
+              </div>
+            ) : !generatedReport ? (
+              <div className="text-center py-16 bg-slate-950/40 rounded-2xl border border-slate-800 p-6 space-y-3">
+                <FileText className="size-12 text-slate-600 mx-auto" />
+                <p className="text-sm font-bold text-slate-300">No Report Generated Yet</p>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Select your desired report type and filters above, then click <strong>"Generate &amp; Preview Report"</strong> to preview data before exporting.
+                </p>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleGenerateReport}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs gap-1.5 shadow"
+                >
+                  <RefreshCw className="size-3.5" /> Generate {reportType.replace('_', ' ')} Report
+                </Button>
+              </div>
+            ) : generatedReport.rows.length === 0 ? (
+              <div className="text-center py-16 bg-slate-950/40 rounded-2xl border border-slate-800 p-6 text-slate-400 text-xs">
+                No matching records found for the selected date range and filter criteria.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/60 max-h-[600px] overflow-y-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="sticky top-0 bg-slate-900/95 border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider backdrop-blur">
+                    <tr>
+                      {generatedReport.headers.map((header) => (
+                        <th key={header} className="py-3 px-4 whitespace-nowrap">
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-mono text-[11px] text-slate-300">
+                    {generatedReport.rows.map((row, rowIdx) => (
+                      <tr key={rowIdx} className="hover:bg-slate-800/40 transition-colors">
+                        {generatedReport.headers.map((header) => {
+                          const val = row[header];
+                          const isCoinField = header.includes('Fee') || header.includes('Prize') || header.includes('Collected') || header.includes('Distributed') || header.includes('Refunds') || header.includes('Profit') || header.includes('Amount');
+                          const isStatusField = header === 'Status';
+
+                          return (
+                            <td key={header} className="py-2.5 px-4 whitespace-nowrap">
+                              {isStatusField ? (
+                                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                  val === 'COMPLETED' || val === 'SETTLED' || val === 'PAID' || val === 'SENT'
+                                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                    : val === 'LIVE' || val === 'IN_PROGRESS' || val === 'REGISTRATION_OPEN'
+                                    ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
+                                    : val === 'PENDING' || val === 'UPCOMING'
+                                    ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                    : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                                }`}>
+                                  {val}
+                                </span>
+                              ) : isCoinField && typeof val === 'number' ? (
+                                <span className="font-bold text-amber-300">
+                                  🪙 {val.toLocaleString()}
+                                </span>
+                              ) : (
+                                <span>{val !== undefined && val !== null ? String(val) : '—'}</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* 4. HOURLY SCHEDULER & PREVIEW TAB */}
       {/* ===================================================================== */}
       {mainTab === 'SCHEDULER' && (
         <div className="space-y-6">
@@ -3280,55 +5013,165 @@ export function AdminTournamentsPage() {
       {/* 4. GAME-TIER MATRIX TAB */}
       {/* ===================================================================== */}
       {mainTab === 'GAME_MATRIX' && (
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-xl backdrop-blur space-y-4">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-xl backdrop-blur space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Grid className="size-5 text-indigo-400" />
-                Game + Tier Availability Matrix
+                Game × Tournament Tier Configuration Matrix
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Toggle which tournament tiers are eligible to be created for each of the 10 games
+                Manage tier eligibility across all 10 competitive games and 5 tournament tiers. Changes apply strictly to future tournament instances.
               </p>
             </div>
-            {isMatrixSaving && <Loader2 className="size-4 animate-spin text-indigo-400" />}
+            {isMatrixSaving && (
+              <div className="flex items-center gap-2 text-xs text-indigo-400 font-bold bg-indigo-500/10 px-3 py-1.5 rounded-xl border border-indigo-500/20">
+                <Loader2 className="size-4 animate-spin" /> Saving Matrix...
+              </div>
+            )}
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-800 bg-slate-950/60 uppercase font-semibold text-slate-400">
+          {/* Configuration Snapshot & Future Instance Scoping Banner */}
+          <div className="rounded-2xl border border-indigo-900/40 bg-indigo-950/20 p-3.5 flex items-center justify-between text-xs text-indigo-300">
+            <div className="flex items-center gap-2.5">
+              <Shield className="size-4 text-indigo-400 flex-shrink-0" />
+              <span>
+                <strong>Configuration Snapshot Guarantee:</strong> Changes to Game × Tier availability apply only to future scheduled and on-demand tournament creations. Already created, open, or running tournaments maintain their immutable configuration snapshot. Game rules, wallet logic, prize distributions, and tournament brackets remain unaffected.
+              </span>
+            </div>
+          </div>
+
+          {/* Tier Source of Truth Summary Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            {TIER_ORDER.map((code) => {
+              const visual = TOURNAMENT_TIER_VISUALS[code];
+              const tierConfig = (tiersList || []).find((t: any) => t.code === code) || {
+                entryFee: code === 'mini' ? 5 : code === 'basic' ? 10 : code === 'standard' ? 25 : code === 'premium' ? 50 : 100,
+                maxPlayers: code === 'mini' ? 64 : code === 'basic' ? 128 : code === 'standard' ? 256 : code === 'premium' ? 512 : 1000,
+                prizePool: code === 'mini' ? 4500 : code === 'basic' ? 9000 : code === 'standard' ? 22500 : code === 'premium' ? 45000 : 90000,
+              };
+              return (
+                <div key={code} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-white flex items-center gap-1.5">
+                      <span>{visual?.badgeEmoji || '🏆'}</span>
+                      <span>{visual?.name || code}</span>
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                      🪙 {tierConfig.entryFee}
+                    </span>
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-400 flex justify-between">
+                    <span>Max: {tierConfig.maxPlayers} players</span>
+                    <span className="text-purple-300">Pool: 🪙{tierConfig.prizePool.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center gap-1 pt-1 border-t border-slate-800/80">
+                    <button
+                      onClick={() => handleToggleTierAllGames(code, true)}
+                      className="flex-1 py-1 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-all text-center"
+                    >
+                      Enable All
+                    </button>
+                    <button
+                      onClick={() => handleToggleTierAllGames(code, false)}
+                      className="flex-1 py-1 rounded text-[10px] font-bold bg-slate-800 text-slate-400 hover:bg-slate-700 transition-all text-center"
+                    >
+                      Disable All
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Interactive 10 Games × 5 Tiers Matrix Table */}
+          <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/60">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="border-b border-slate-800 bg-slate-900/90 text-slate-300 uppercase font-bold text-[11px]">
                 <tr>
-                  <th className="px-5 py-3">Game</th>
+                  <th className="px-5 py-3.5 min-w-[200px]">Game Discipline</th>
                   {TIER_ORDER.map((code) => {
                     const visual = TOURNAMENT_TIER_VISUALS[code];
                     return (
-                      <th key={code} className="px-4 py-3 text-center">
-                        {visual.badgeEmoji} {visual.name}
+                      <th key={code} className="px-3 py-3.5 text-center min-w-[150px]">
+                        <div className="flex items-center justify-center gap-1">
+                          <span>{visual?.badgeEmoji}</span>
+                          <span>{visual?.name}</span>
+                        </div>
                       </th>
                     );
                   })}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 text-slate-300">
+              <tbody className="divide-y divide-slate-800/60 text-slate-300 font-sans">
                 {GAME_DEFINITIONS.map((g) => {
                   const availability = gameMatrix[g.id] || { mini: true, basic: true, standard: true, premium: true, pro: true };
                   return (
-                    <tr key={g.id} className="hover:bg-slate-800/40">
-                      <td className="px-5 py-3.5 font-bold text-white">{g.name}</td>
+                    <tr key={g.id} className="hover:bg-slate-800/30 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">{g.icon ?? '🎮'}</span>
+                            <span className="font-bold text-white text-sm">{g.name}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleToggleGameAllTiers(g.id, true)}
+                              className="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30"
+                              title="Enable all tiers for this game"
+                            >
+                              All On
+                            </button>
+                            <button
+                              onClick={() => handleToggleGameAllTiers(g.id, false)}
+                              className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700"
+                              title="Disable all tiers for this game"
+                            >
+                              All Off
+                            </button>
+                          </div>
+                        </div>
+                      </td>
                       {TIER_ORDER.map((code) => {
                         const enabled = availability[code] !== false;
+                        const tierConfig = (tiersList || []).find((t: any) => t.code === code) || {
+                          entryFee: code === 'mini' ? 5 : code === 'basic' ? 10 : code === 'standard' ? 25 : code === 'premium' ? 50 : 100,
+                          maxPlayers: code === 'mini' ? 64 : code === 'basic' ? 128 : code === 'standard' ? 256 : code === 'premium' ? 512 : 1000,
+                          prizePool: code === 'mini' ? 4500 : code === 'basic' ? 9000 : code === 'standard' ? 22500 : code === 'premium' ? 45000 : 90000,
+                        };
                         return (
-                          <td key={code} className="px-4 py-3.5 text-center">
-                            <button
-                              onClick={() => handleToggleGameTier(g.id, code)}
-                              className={`p-1.5 rounded-lg transition-all ${
-                                enabled
-                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                                  : 'bg-slate-800 text-slate-600 border border-slate-700'
-                              }`}
-                            >
-                              {enabled ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
-                            </button>
+                          <td key={code} className="px-3 py-3 text-center">
+                            <div className={`p-2.5 rounded-xl border transition-all space-y-1.5 ${
+                              enabled
+                                ? 'bg-emerald-950/20 border-emerald-800/40 text-emerald-300'
+                                : 'bg-slate-900/40 border-slate-800 text-slate-500 opacity-60'
+                            }`}>
+                              <button
+                                onClick={() => handleToggleGameTier(g.id, code)}
+                                className={`w-full py-1 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-sm ${
+                                  enabled
+                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                                    : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+                                }`}
+                              >
+                                {enabled ? <CheckCircle2 className="size-3.5" /> : <XCircle className="size-3.5" />}
+                                <span>{enabled ? 'ENABLED' : 'DISABLED'}</span>
+                              </button>
+                              <div className="text-[10px] font-mono space-y-0.5 pt-0.5">
+                                <div className="flex justify-between items-center text-slate-400">
+                                  <span>Fee:</span>
+                                  <span className="font-bold text-amber-400">🪙{tierConfig.entryFee}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-slate-400">
+                                  <span>Max:</span>
+                                  <span className="font-bold text-white">{tierConfig.maxPlayers}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-slate-400">
+                                  <span>Prize:</span>
+                                  <span className="font-bold text-purple-300">🪙{tierConfig.prizePool.toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
                           </td>
                         );
                       })}

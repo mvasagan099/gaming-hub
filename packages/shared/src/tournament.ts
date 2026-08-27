@@ -1101,6 +1101,7 @@ export interface TierAnalyticsStat {
   entryFee: number;
   tournamentsCount: number;
   registrationsCount: number;
+  averageRegistrations: number;
   entryFeesCollected: number;
   configuredPrizePool: number;
   prizesDistributed: number;
@@ -1556,6 +1557,203 @@ export interface PlayerAnalyticsSection {
   cohorts: AnonymizedPlayerItem[];
 }
 
+export interface TopParticipationGameItem {
+  rank: number;
+  gameId: string;
+  gameName: string;
+  tournamentsCount: number;
+  totalRegistrations: number;
+  fillRatePercent: number;
+}
+
+export interface TopParticipationTierItem {
+  rank: number;
+  tierCode: TournamentTierCode;
+  tierName: string;
+  entryFee: number;
+  tournamentsCount: number;
+  totalRegistrations: number;
+  fillRatePercent: number;
+}
+
+export interface TopParticipationPeriodItem {
+  rank: number;
+  hour: number;
+  hourLabel: string;
+  tournamentsCount: number;
+  totalRegistrations: number;
+  isPeakHour: boolean;
+}
+
+export interface TopParticipationSummary {
+  topGame: TopParticipationGameItem | null;
+  topTier: TopParticipationTierItem | null;
+  topPeriod: TopParticipationPeriodItem | null;
+  totalRegistrations: number;
+}
+
+export interface TopParticipationSection {
+  summary: TopParticipationSummary;
+  games: TopParticipationGameItem[];
+  tiers: TopParticipationTierItem[];
+  periods: TopParticipationPeriodItem[];
+}
+
+export interface PlayerPerformanceSummary {
+  tournamentWins: number;
+  top4Finishes: number;
+  matchesPlayed: number;
+  matchesWon: number;
+  matchesLost: number;
+  winRatePercent: number;
+}
+
+export interface PlayerPerformanceByGameItem {
+  gameId: string;
+  gameName: string;
+  tournamentsCount: number;
+  tournamentWins: number;
+  top4Finishes: number;
+  matchesPlayed: number;
+  matchesWon: number;
+  matchesLost: number;
+  winRatePercent: number;
+}
+
+export interface PlayerPerformanceByTierItem {
+  tierCode: TournamentTierCode;
+  tierName: string;
+  entryFee: number;
+  tournamentsCount: number;
+  tournamentWins: number;
+  top4Finishes: number;
+  matchesPlayed: number;
+  matchesWon: number;
+  matchesLost: number;
+  winRatePercent: number;
+}
+
+export interface PlayerPerformanceByDateItem {
+  date: string;
+  label: string;
+  tournamentWins: number;
+  top4Finishes: number;
+  matchesPlayed: number;
+  matchesWon: number;
+  matchesLost: number;
+  winRatePercent: number;
+}
+
+export interface AnonymizedPerformerItem {
+  maskedId: string;
+  tournamentsCount: number;
+  tournamentWins: number;
+  top4Finishes: number;
+  matchesPlayed: number;
+  matchesWon: number;
+  matchesLost: number;
+  winRatePercent: number;
+  totalPoints: number;
+  favoriteGame: string;
+  lastActiveAt: string;
+}
+
+export interface PlayerPerformanceSection {
+  summary: PlayerPerformanceSummary;
+  byGame: PlayerPerformanceByGameItem[];
+  byTier: PlayerPerformanceByTierItem[];
+  byDate: PlayerPerformanceByDateItem[];
+  topPerformers: AnonymizedPerformerItem[];
+}
+
+export interface WinRateSummary {
+  overallWinRate: number;
+  totalCompletedMatches: number;
+  totalMatchesWon: number;
+  totalMatchesLost: number;
+  totalMatchesDrawn: number;
+  decisiveMatches: number;
+}
+
+export interface WinRateByGameItem {
+  gameId: string;
+  gameName: string;
+  tournamentsCount: number;
+  completedMatches: number;
+  matchesWon: number;
+  matchesLost: number;
+  matchesDrawn: number;
+  winRatePercent: number;
+}
+
+export interface WinRateByTierItem {
+  tierCode: TournamentTierCode;
+  tierName: string;
+  entryFee: number;
+  tournamentsCount: number;
+  completedMatches: number;
+  matchesWon: number;
+  matchesLost: number;
+  matchesDrawn: number;
+  winRatePercent: number;
+}
+
+export interface WinRateByDateItem {
+  date: string;
+  label: string;
+  completedMatches: number;
+  matchesWon: number;
+  matchesLost: number;
+  matchesDrawn: number;
+  winRatePercent: number;
+}
+
+export interface WinRateAnalyticsSection {
+  summary: WinRateSummary;
+  byGame: WinRateByGameItem[];
+  byTier: WinRateByTierItem[];
+  byDate: WinRateByDateItem[];
+}
+
+export interface GameSpecificPerformanceItem {
+  gameId: string;
+  gameName: string;
+  icon: string;
+  category: string;
+  mode: string;
+  scoreUnit: string;
+  resultFormat: string;
+  tournamentsCount: number;
+  completedMatches: number;
+  matchesWon: number;
+  matchesLost: number;
+  matchesDrawn: number;
+  winRatePercent: number;
+  totalPointsScored: number;
+  avgScorePerMatch: number;
+  highestMatchScore: number;
+}
+
+export interface GameSpecificPerformanceSection {
+  games: GameSpecificPerformanceItem[];
+}
+
+export interface TierTrendDataPoint {
+  date: string;
+  label: string;
+  tierCode: TournamentTierCode;
+  tournamentsCount: number;
+  registrationsCount: number;
+  averageRegistrations: number;
+  fillRatePercent: number;
+  completionRatePercent: number;
+}
+
+export interface TierPerformanceTrendsSection {
+  tiers: TierAnalyticsStat[];
+  timeline: TierTrendDataPoint[];
+}
+
 export interface TournamentAnalyticsResponse {
   timeFilter: TournamentAnalyticsTimeFilter;
   startDate: string;
@@ -1566,6 +1764,11 @@ export interface TournamentAnalyticsResponse {
   settlementAnalytics: SettlementAnalyticsSection;
   notificationAnalytics: NotificationAnalyticsSection;
   playerAnalytics: PlayerAnalyticsSection;
+  topParticipation: TopParticipationSection;
+  playerPerformance: PlayerPerformanceSection;
+  winRateAnalytics: WinRateAnalyticsSection;
+  gameSpecificPerformance: GameSpecificPerformanceSection;
+  tierPerformanceTrends: TierPerformanceTrendsSection;
   games: GameAnalyticsStat[];
   tiers: TierAnalyticsStat[];
   hourlyPerformance: HourlyPerformanceStat[];
