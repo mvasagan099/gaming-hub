@@ -370,9 +370,15 @@ export function TournamentDetailPage() {
                 {isLive ? 'LIVE NOW 🔴' : isAlmostFull ? 'ALMOST FULL' : isFull ? 'TOURNAMENT FULL' : statusInfo.label}
               </Badge>
 
-              {playerStatus && (
+              {playerStatus && tourn.status !== 'CANCELLED' && (
                 <Badge variant={PLAYER_STATUS_BADGE[playerStatus]?.variant ?? 'default'} className="font-black text-xs">
                   {PLAYER_STATUS_BADGE[playerStatus]?.label ?? playerStatus}
+                </Badge>
+              )}
+
+              {tourn.status === 'CANCELLED' && isRegistered && (
+                <Badge variant="success" className="font-bold text-xs bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                  {tourn.entryFee > 0 ? 'REFUNDED' : 'CANCELLED'}
                 </Badge>
               )}
 
@@ -408,6 +414,11 @@ export function TournamentDetailPage() {
                 <p className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Players</p>
                 <p className="text-base font-black text-slate-900 dark:text-slate-200">
                   {tourn.registeredPlayers} <span className="text-xs text-slate-400 dark:text-slate-500">/ {tourn.maxPlayers}</span>
+                  {tourn.status === 'CANCELLED' && (
+                    <span className="ml-1.5 text-[10px] font-bold text-rose-500 dark:text-rose-400">
+                      ({tourn.minPlayers ?? (tourn.title?.toLowerCase().includes('pro') ? 64 : tourn.title?.toLowerCase().includes('premium') ? 32 : tourn.title?.toLowerCase().includes('standard') ? 32 : tourn.title?.toLowerCase().includes('basic') ? 16 : 8)} min req)
+                    </span>
+                  )}
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-2.5 shadow-sm dark:shadow-none">
@@ -417,6 +428,7 @@ export function TournamentDetailPage() {
                 </p>
               </div>
             </div>
+
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row lg:flex-col shrink-0">
@@ -509,45 +521,77 @@ export function TournamentDetailPage() {
           </div>
         )}
 
-        {tourn.status === 'CANCELLED' && (
-          <div className="mt-6 rounded-2xl border border-rose-500/40 bg-rose-50 dark:bg-gradient-to-r dark:from-rose-950/40 dark:via-red-950/20 dark:to-rose-950/40 p-5 text-rose-900 dark:text-rose-200">
-            <div className="flex items-start gap-3">
-              <AlertOctagon className="size-7 text-rose-500 dark:text-rose-400 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                  TOURNAMENT CANCELLED
-                </h3>
-                <p className="text-xs text-rose-700 dark:text-rose-300 mt-1">
-                  Reason:{' '}
-                  <span className="font-semibold text-slate-900 dark:text-white">
-                    {(tourn as any).cancellationReason === 'MINIMUM_PLAYERS_NOT_REACHED'
-                      ? 'Minimum players not reached'
-                      : (tourn as any).cancellationReason || 'The tournament was cancelled before start'}
-                  </span>
-                </p>
-                {tourn.entryFee > 0 && isRegistered && (
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <div className="rounded-xl border border-rose-500/30 bg-white dark:bg-slate-950/60 px-3.5 py-1.5 text-xs shadow-sm">
-                      <span className="text-slate-500 dark:text-slate-400">Entry Fee:</span>{' '}
-                      <span className="font-bold text-slate-900 dark:text-white">{tourn.entryFee} coins</span>
-                    </div>
-                    <div className="rounded-xl border border-emerald-500/30 bg-white dark:bg-slate-950/60 px-3.5 py-1.5 text-xs flex items-center gap-2 shadow-sm">
-                      <CheckCircle2 className="size-3.5 text-emerald-500 dark:text-emerald-400" />
-                      <span className="text-slate-500 dark:text-slate-400">Refund Status:</span>{' '}
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400">REFUNDED TO WALLET</span>
-                    </div>
-                    <button
-                      onClick={() => navigate('/wallet')}
-                      className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 underline ml-auto"
-                    >
-                      View Wallet History →
-                    </button>
+        {tourn.status === 'CANCELLED' && (() => {
+          const reason = (tourn as any).cancellationReason || (tourn as any).cancellationDetails?.reason || (tourn.rules as any)?.cancellationReason;
+          const registered = (tourn as any).cancellationDetails?.registeredPlayers ?? tourn.registeredPlayers ?? (tourn as any).registeredCount ?? 0;
+          const minRequired = tourn.minPlayers ?? (tourn as any).cancellationDetails?.minPlayers ?? (tourn.rules as any)?.minPlayersRequired ?? (
+            tourn.title?.toLowerCase().includes('pro') ? 64 :
+            tourn.title?.toLowerCase().includes('premium') ? 32 :
+            tourn.title?.toLowerCase().includes('standard') ? 32 :
+            tourn.title?.toLowerCase().includes('basic') ? 16 : 8
+          );
+
+          let headline = 'Minimum player requirement not met';
+          let details = `This tournament required at least ${minRequired} players to start, but only ${registered} player${registered === 1 ? '' : 's'} registered before the registration deadline. The tournament was automatically cancelled.`;
+
+          if (reason && reason !== 'MINIMUM_PLAYERS_NOT_REACHED' && !reason.includes('Insufficient players')) {
+            if (reason === 'INSUFFICIENT_PLAYERS_AUTO_START' || reason.includes('auto-start')) {
+              headline = 'Auto-start threshold not reached';
+              details = `The tournament was set to auto-start, but did not reach the minimum player threshold (${registered}/${minRequired} players required).`;
+            } else {
+              headline = 'Cancelled by Platform Administration';
+              details = `Reason: ${reason}`;
+            }
+          }
+
+          return (
+            <div className="mt-6 rounded-2xl border border-rose-500/40 bg-rose-50 dark:bg-gradient-to-r dark:from-rose-950/40 dark:via-red-950/20 dark:to-rose-950/40 p-5 text-rose-900 dark:text-rose-200">
+              <div className="flex items-start gap-3.5">
+                <AlertOctagon className="size-7 text-rose-500 dark:text-rose-400 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                      TOURNAMENT CANCELLED
+                    </h3>
+                    <span className="rounded-md bg-rose-500/20 border border-rose-500/30 px-2 py-0.5 text-[11px] font-bold text-rose-600 dark:text-rose-300">
+                      {headline}
+                    </span>
                   </div>
-                )}
+
+                  <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 mt-1.5 leading-relaxed">
+                    {details}
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                    <div className="rounded-xl border border-rose-500/20 bg-white/80 dark:bg-slate-900/80 px-3 py-1.5 text-xs font-semibold shadow-sm text-slate-700 dark:text-slate-200">
+                      <span className="text-slate-400">Turnout:</span>{' '}
+                      <span className="text-rose-600 dark:text-rose-400 font-bold">{registered}</span> / {minRequired} players required
+                    </div>
+
+                    {tourn.entryFee > 0 && isRegistered && (
+                      <>
+                        <div className="rounded-xl border border-rose-500/20 bg-white/80 dark:bg-slate-900/80 px-3 py-1.5 text-xs font-semibold shadow-sm text-slate-700 dark:text-slate-200">
+                          <span className="text-slate-400">Entry Fee:</span>{' '}
+                          <span className="font-bold text-slate-900 dark:text-white">{tourn.entryFee} coins</span>
+                        </div>
+                        <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-950/40 px-3 py-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 shadow-sm">
+                          <CheckCircle2 className="size-3.5" />
+                          <span>100% REFUNDED TO WALLET</span>
+                        </div>
+                        <button
+                          onClick={() => navigate('/wallet')}
+                          className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 underline ml-auto"
+                        >
+                          View Wallet History →
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/70 p-5 sm:p-6 shadow-sm dark:shadow-none backdrop-blur-xl">

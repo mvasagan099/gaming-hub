@@ -560,12 +560,18 @@ export async function getRegistrationInfo(tournamentId: string, userId: string |
     }
   }
 
+  const rules = (tournament.rules as Record<string, unknown>) ?? {};
+  const cancellationReason =
+    (rules.cancellationReason as string | undefined) ??
+    (tournament.status === "CANCELLED" ? "MINIMUM_PLAYERS_NOT_REACHED" : undefined);
+
   return {
     tournamentId: tournament.id,
     title: tournament.title,
     gameId: tournament.gameId,
     entryFee: tournament.entryFee,
     prizePool: tournament.prizePool,
+    minPlayers: tournament.minPlayers ?? 2,
     maxPlayers: tournament.maxPlayers,
     registeredPlayers: registeredCount,
     availableSlots,
@@ -573,6 +579,14 @@ export async function getRegistrationInfo(tournamentId: string, userId: string |
     registrationEndsAt: tournament.registrationEndsAt?.toISOString() ?? null,
     startTime: tournament.startTime.toISOString(),
     status: tournament.status,
+    cancellationReason,
+    cancellationDetails: tournament.status === "CANCELLED" ? {
+      reason: cancellationReason,
+      minPlayers: tournament.minPlayers ?? 2,
+      registeredPlayers: (rules.registeredAtCancellation as number | undefined) ?? registeredCount,
+      cancelledAt: (rules.cancelledAt as string | undefined) ?? null,
+      cancelledBy: (rules.cancelledBy as string | undefined) ?? "SYSTEM",
+    } : null,
     registrationState,
     isRegistered,
     userBalance,
@@ -582,6 +596,7 @@ export async function getRegistrationInfo(tournamentId: string, userId: string |
     insufficientBalanceDetails,
   };
 }
+
 
 // ---------------------------------------------------------------------------
 // Admin registration summary
