@@ -182,6 +182,10 @@ describe("Feature 12: Persistent Match State Recovery", () => {
     const userA = await createTestUser("u-pms-5-a", 1000);
     const matchId = `match-pms-5-${Date.now()}`;
 
+    // Clean any previous test dangling created or active matches
+    await prisma.match.deleteMany({ where: { status: { in: ["CREATED", "ACTIVE"] } } });
+
+
     // Create stalled match lobby
     await GameEntryLifecycleService.initiateEntry({ userId: userA, gameId: "table-tennis", stake: 100, matchId });
 
@@ -191,7 +195,8 @@ describe("Feature 12: Persistent Match State Recovery", () => {
       data: { createdAt: new Date(Date.now() - 120000) },
     });
 
-    const result = await PersistentMatchStateService.startupRecoveryWorker({ batchSize: 10 });
+    const result = await PersistentMatchStateService.startupRecoveryWorker({ batchSize: 50 });
+
     expect(result.scannedCount).toBeGreaterThan(0);
     expect(result.refunded).toContain(matchId);
 

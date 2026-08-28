@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
+
 import { prisma } from "@gaming-hub/db";
 import { LeaderboardService, RATING_WIN, RATING_LOSS, RATING_DRAW, XP_WIN } from "../leaderboardService";
 import { AppError } from "@gaming-hub/shared";
@@ -60,6 +61,12 @@ describe("Feature 28: Global Leaderboard System", () => {
       createdUserIds.length = 0;
     }
   });
+
+  beforeEach(async () => {
+    await prisma.playerStatistic.deleteMany({}).catch(() => undefined);
+    await prisma.leaderboard.deleteMany({}).catch(() => undefined);
+  });
+
 
   // ---------------------------------------------------------------------------
   // 1. Ranking Calculation & Rating System

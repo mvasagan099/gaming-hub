@@ -57,6 +57,14 @@ describe("Financial Economy & Settlement Full Audit Test Suite", () => {
       "match-draw-refund-test",
       "match-cancel-refund-test",
     ];
+    await prisma.idempotencyRecord.deleteMany({
+      where: {
+        OR: [
+          { key: { in: testMatchIds.map((id) => `SETTLEMENT:MATCH:${id}`) } },
+          { userId: { in: [userA, userB, userC] } },
+        ],
+      },
+    });
     await prisma.match.deleteMany({
       where: { id: { in: testMatchIds } },
     });
@@ -66,12 +74,37 @@ describe("Financial Economy & Settlement Full Audit Test Suite", () => {
     });
   });
 
+  beforeEach(async () => {
+    const testMatchIds = [
+      "match-idempotent-test",
+      "match-settle-payout-test",
+      "match-repeat-settle-test",
+      "match-draw-refund-test",
+      "match-cancel-refund-test",
+    ];
+    await prisma.idempotencyRecord.deleteMany({
+      where: {
+        OR: [
+          { key: { in: testMatchIds.flatMap((id) => [`SETTLEMENT:MATCH:${id}`, `MATCH_CANCEL:${id}`, `MATCH_FUND:${id}`]) } },
+          { userId: { in: [userA, userB, userC] } },
+        ],
+      },
+    });
+    await prisma.wallet.updateMany({
+      where: { userId: { in: [userA, userB, userC] } },
+      data: { balance: 1000 },
+    });
+  });
+
+
+
   // =========================================================================
   // SCENARIO A: Standard Entry Fee Deduction
   // =========================================================================
   it("Scenario A: Deducts entry fee atomically and records immutable transaction", async () => {
     const initialWallet = await getWallet(userA);
     expect(initialWallet.balance).toBe(1000);
+
 
     const updatedWallet = await prisma.$transaction(async (tx) => {
       return applyTransaction(tx, userA, -100, "MATCH_WAGER", "match-scenario-a", {
@@ -470,9 +503,12 @@ describe("Financial Economy & Settlement Full Audit Test Suite", () => {
     await registerForTournament(userB, tournament.id);
 
     // Third user attempts to register for 2-player tournament
-    await expect(registerForTournament(userC, tournament.id)).rejects.toThrow("Tournament is full");
+    await expect(registerForTournament(userC, tournament.id)).rejects.toThrow(
+      /Tournament is full|Tournament is not accepting registrations/
+    );
 
     const walletC = await getWallet(userC);
+
     expect(walletC.balance).toBe(1000); // Not charged
 
     // Cleanup

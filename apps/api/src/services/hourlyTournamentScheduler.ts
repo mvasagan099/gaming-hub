@@ -183,8 +183,12 @@ export async function scheduleHourlyTournaments(): Promise<HourlyScheduleResult>
 
     for (const gameId of gamePool) {
       try {
-        await createTierSlotIfAbsent(tier, gameId, currentSlotHour, nextSlotHour);
-        result.created++;
+        const wasCreated = await createTierSlotIfAbsent(tier, gameId, currentSlotHour, nextSlotHour);
+        if (wasCreated) {
+          result.created++;
+        } else {
+          result.skipped++;
+        }
       } catch (err: unknown) {
         // Unique-constraint violation = slot already exists — safe to skip
         if (isUniqueConstraintViolation(err)) {
@@ -197,6 +201,7 @@ export async function scheduleHourlyTournaments(): Promise<HourlyScheduleResult>
       }
     }
   }
+
 
   if (result.created > 0) {
     console.log(
@@ -279,7 +284,19 @@ async function createTierSlotIfAbsent(
   gameId: string,
   currentSlotHour: Date,
   startTime: Date,
-): Promise<void> {
+): Promise<boolean> {
+  // Fast pre-check before opening transaction
+  const existingLog = await prisma.tournamentTierScheduleLog.findFirst({
+    where: {
+      tierId: tier.id,
+      gameId,
+      slotHour: currentSlotHour,
+    },
+    select: { id: true },
+  });
+  if (existingLog) {
+    return false;
+  }
 
   // Prize distribution — read from tier (already stored as JSON array)
   const rawDist = tier.prizeDistribution as unknown as PrizeDistributionEntry[];
@@ -344,9 +361,11 @@ async function createTierSlotIfAbsent(
 
   const tournamentTitle = `${tier.name} Hourly — ${formatGameName(gameId)} — ${formatSlotLabel(currentSlotHour)}`;
 
-  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    // 1. Create the Tournament instance with a frozen snapshot
-    const tournament = await tx.tournament.create({
+  await prisma.$transaction(
+    async (tx: Prisma.TransactionClient) => {
+      // 1. Create the Tournament instance with a frozen snapshot
+      const tournament = await tx.tournament.create({
+
       data: {
         gameId,
         title: tournamentTitle,
@@ -410,8 +429,12 @@ async function createTierSlotIfAbsent(
     });
 
     TournamentAnalyticsCache.invalidateTournaments(tournament.id, gameId, tier.code);
-  });
+  }, { timeout: 15000, maxWait: 10000 });
+
+  return true;
 }
+
+
 
 // ---------------------------------------------------------------------------
 // Helpers

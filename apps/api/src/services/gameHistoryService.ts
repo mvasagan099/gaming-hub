@@ -273,8 +273,9 @@ export class GameHistoryService {
       total,
       page,
       pageSize,
-      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      totalPages: total === 0 ? 0 : Math.ceil(total / pageSize),
     };
+
   }
 
   /**

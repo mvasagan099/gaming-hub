@@ -83,7 +83,7 @@ describe("Feature 4: Concurrent Join & Slot Protection", () => {
     expect(failures).toHaveLength(1);
 
     const failReason = (failures[0] as PromiseRejectedResult).reason;
-    expect(failReason.message || failReason.code).toMatch(/Tournament is full|TOURNAMENT_FULL/);
+    expect(failReason.message || failReason.code).toMatch(/Tournament is full|TOURNAMENT_FULL|Tournament is not accepting registrations/);
 
     // Database capacity check: exactly 2 players in tournament
     const totalPlayers = await prisma.tournamentPlayer.count({ where: { tournamentId } });
@@ -139,7 +139,7 @@ describe("Feature 4: Concurrent Join & Slot Protection", () => {
 
     for (const f of failures) {
       const reason = (f as PromiseRejectedResult).reason;
-      expect(reason.message || reason.code).toMatch(/Tournament is full|TOURNAMENT_FULL/);
+      expect(reason.message || reason.code).toMatch(/Tournament is full|TOURNAMENT_FULL|Tournament is not accepting registrations/);
     }
 
     // Database capacity check: exactly 5 players

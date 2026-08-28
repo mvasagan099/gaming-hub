@@ -123,7 +123,8 @@ export function TournamentsPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const pageSize = 30;
+  const pageSize = 60;
+
 
   // Fetch Tiers & Tournaments — tier is now a server-side filter for accurate pagination
   const load = async (p = page) => {

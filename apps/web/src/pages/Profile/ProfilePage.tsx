@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   User,
   Mail,
@@ -42,11 +42,25 @@ type ProfileTab = "profile" | "tournaments" | "security" | "activity" | "history
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get("tab") as ProfileTab | null;
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
   const { me, loading, reload } = useMe();
 
-  const [activeTab, setActiveTab] = useState<ProfileTab>("profile");
+  const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
+    if (tabFromUrl && ["profile", "tournaments", "security", "activity", "history", "stats"].includes(tabFromUrl)) {
+      return tabFromUrl;
+    }
+    return "profile";
+  });
+
+  useEffect(() => {
+    if (tabFromUrl && ["profile", "tournaments", "security", "activity", "history", "stats"].includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
+
   const [kycStatus, setKycStatus] = useState<string>("NOT_STARTED");
 
   useEffect(() => {
