@@ -21,6 +21,8 @@ import { IdempotencyService } from "./idempotencyService";
 import { TournamentNotificationService } from "./tournamentNotificationService";
 import { TournamentEmailService } from "./tournamentEmailService";
 import { audit } from "./audit";
+import { broadcastAdminAnalytics } from "./socketBridge";
+import { TournamentAnalyticsCache } from "./tournamentAnalyticsCache";
 
 export class TournamentSettlementService {
   /**
@@ -418,6 +420,15 @@ export class TournamentSettlementService {
           amount: prize.amount,
           transactionId: `tournament-prize-${tournamentId}-${player.userId}-${prize.rank}`,
         });
+
+        void broadcastAdminAnalytics("admin:analytics:settlement-updated", {
+          tournamentId,
+          prizeId: prizeRecord.id,
+          status: "PAID",
+          amount: prize.amount,
+          userId: player.userId,
+          timestamp: new Date().toISOString(),
+        });
       } catch (err: any) {
         const errorMessage = err?.message || String(err);
         console.error(`[PRIZE_SETTLEMENT_FAILED] Tournament ${tournamentId} Player ${player.userId} Rank ${prize.rank}:`, errorMessage);
@@ -446,6 +457,15 @@ export class TournamentSettlementService {
           },
         });
 
+        void broadcastAdminAnalytics("admin:analytics:settlement-updated", {
+          tournamentId,
+          prizeId: prizeRecord.id,
+          status: "FAILED",
+          amount: prize.amount,
+          userId: player.userId,
+          timestamp: new Date().toISOString(),
+        });
+
         failedPrizes.push({
           userId: player.userId,
           rank: prize.rank,
@@ -466,6 +486,8 @@ export class TournamentSettlementService {
         },
       });
     }
+
+    TournamentAnalyticsCache.invalidateSettlements(tournamentId);
 
     return {
       ok: true,

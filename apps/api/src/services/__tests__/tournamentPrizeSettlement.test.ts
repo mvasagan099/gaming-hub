@@ -182,8 +182,8 @@ describe("Tournament Prize Distribution & Settlement Verification", () => {
       const snapshot = runningTournament?.configSnapshot as any;
       expect(snapshot.prizePool).toBe(10000);
       expect(snapshot.calculatedPrizes).toEqual([
-        { rank: 1, amount: 6000 },
-        { rank: 2, amount: 4000 },
+        { rank: 1, amount: 6000, percentage: 60 },
+        { rank: 2, amount: 4000, percentage: 40 },
       ]);
 
       // Admin attempts to tamper with prize pool in tournament table

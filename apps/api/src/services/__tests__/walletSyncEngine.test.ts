@@ -35,9 +35,12 @@ describe("Feature 16: Authoritative Live Wallet Balance Sync", () => {
 
   afterEach(async () => {
     if (createdUserIds.length > 0) {
-      await prisma.user.deleteMany({
-        where: { id: { in: createdUserIds } },
-      }).catch(() => undefined);
+      await prisma.matchPlayer.deleteMany({ where: { userId: { in: createdUserIds } } }).catch(() => undefined);
+      await prisma.tournamentPlayer.deleteMany({ where: { userId: { in: createdUserIds } } }).catch(() => undefined);
+      await prisma.transaction.deleteMany({ where: { userId: { in: createdUserIds } } }).catch(() => undefined);
+      await prisma.wallet.deleteMany({ where: { userId: { in: createdUserIds } } }).catch(() => undefined);
+      await prisma.profile.deleteMany({ where: { userId: { in: createdUserIds } } }).catch(() => undefined);
+      await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } }).catch(() => undefined);
       createdUserIds.length = 0;
     }
   });

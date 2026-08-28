@@ -147,15 +147,27 @@ export class TournamentRecoveryService {
           status: "REGISTRATION_CLOSED",
           startTime: { lte: now },
         },
+        include: {
+          _count: { select: { players: true } },
+        },
       });
 
       for (const t of pendingStarts) {
         try {
-          await startTournament(t.id, null);
-          tournamentsStarted++;
-          logAction(t.id, "TOURNAMENT_AUTO_STARTED", "REGISTRATION_CLOSED", "IN_PROGRESS");
+          const playerCount = t._count.players;
+          if (playerCount < (t.minPlayers ?? 2)) {
+            await cancelTournamentWithRefunds(t.id, "Insufficient players at tournament start", null);
+            logAction(t.id, "START_CANCELLED_INSUFFICIENT_PLAYERS", "REGISTRATION_CLOSED", "CANCELLED", {
+              playerCount,
+              minPlayers: t.minPlayers ?? 2,
+            });
+          } else {
+            await startTournament(t.id, null);
+            tournamentsStarted++;
+            logAction(t.id, "TOURNAMENT_AUTO_STARTED", "REGISTRATION_CLOSED", "IN_PROGRESS");
+          }
         } catch (err) {
-          console.error(`[RECOVERY] Failed to start tournament ${t.id}:`, err);
+          console.error(`[RECOVERY] Failed to process start for tournament ${t.id}:`, err);
         }
       }
 

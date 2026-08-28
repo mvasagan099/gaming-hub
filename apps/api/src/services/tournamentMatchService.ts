@@ -2,7 +2,7 @@ import { prisma } from "@gaming-hub/db";
 import type { Prisma } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
 import { env } from "../env";
-import { notifyUserSocket } from "./socketBridge";
+import { notifyUserSocket, broadcastAdminAnalytics } from "./socketBridge";
 import { audit } from "./audit";
 import { TournamentNotificationService } from "./tournamentNotificationService";
 
@@ -303,6 +303,14 @@ export class TournamentMatchService {
 
     // Broadcast bracket update to all tournament participants
     await this.broadcastTournamentUpdated(slot.tournamentId);
+
+    void broadcastAdminAnalytics("admin:analytics:match-updated", {
+      matchId,
+      tournamentId: slot.tournamentId,
+      status: "LIVE",
+      roundNumber: slot.roundNumber,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   /**
@@ -327,6 +335,12 @@ export class TournamentMatchService {
         notifyUserSocket(p.userId, "tournament:updated", payload)
       )
     );
+
+    void broadcastAdminAnalytics("admin:analytics:tournament-updated", {
+      tournamentId,
+      status: "LIVE",
+      timestamp: new Date().toISOString(),
+    });
   }
 
   /**

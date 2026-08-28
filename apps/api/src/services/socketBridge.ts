@@ -48,3 +48,32 @@ export async function notifyUserSocket(
     // Fire-and-forget bridge; failures are intentionally swallowed.
   }
 }
+
+/**
+ * Fire-and-forget push to all connected admin sockets in room 'admin:analytics'.
+ * Used for real-time live tournament, match, registration, prize settlement,
+ * refund, notification failure, and scheduler status events.
+ */
+export async function broadcastAdminAnalytics(
+  event: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  if (process.env.NODE_ENV === "test") {
+    socketBridge.calls.push({ userId: "admin:analytics", event, payload });
+    return;
+  }
+
+  try {
+    await fetch(`${SOCKET_SERVER_URL}/internal/broadcast`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-internal-key": env.INTERNAL_API_KEY,
+      },
+      body: JSON.stringify({ room: "admin:analytics", event, payload }),
+      signal: AbortSignal.timeout(1500),
+    });
+  } catch {
+    // Fire-and-forget bridge; failures are intentionally swallowed.
+  }
+}

@@ -1,4 +1,5 @@
 import { prisma } from "@gaming-hub/db";
+import { broadcastAdminAnalytics } from "./socketBridge";
 
 // ============================================================================
 // 1. Types & Enums
@@ -437,6 +438,13 @@ export class TournamentEmailService {
         if (mockFailureMode === "FATAL_BOUNCE" || record.attemptCount >= MAX_ATTEMPTS) {
           record.status = "FAILED";
           emailRecordsStore.set(idempotencyKey, record);
+          void broadcastAdminAnalytics("admin:analytics:notification-failed", {
+            notificationId: record.notificationId,
+            channel: "EMAIL",
+            tournamentId: record.tournamentId,
+            error: record.error,
+            timestamp: new Date().toISOString(),
+          });
           return record;
         }
       }
@@ -444,6 +452,13 @@ export class TournamentEmailService {
 
     record.status = "FAILED";
     emailRecordsStore.set(idempotencyKey, record);
+    void broadcastAdminAnalytics("admin:analytics:notification-failed", {
+      notificationId: record.notificationId,
+      channel: "EMAIL",
+      tournamentId: record.tournamentId,
+      error: record.error,
+      timestamp: new Date().toISOString(),
+    });
     return record;
   }
 

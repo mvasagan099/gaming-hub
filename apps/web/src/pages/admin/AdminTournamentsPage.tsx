@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Trophy,
@@ -37,7 +37,14 @@ import {
   Percent,
   Scale,
   Gamepad2,
+  Radio,
+  Wifi,
+  WifiOff,
+  Zap,
+  Inbox,
 } from 'lucide-react';
+import { createTypedSocket, type TypedSocket } from '@gaming-hub/socket';
+import { useAuthStore } from '../../store/authStore';
 import {
   GAME_DEFINITIONS,
   TOURNAMENT_TIER_VISUALS,
@@ -97,6 +104,15 @@ const EMPTY_FORM = {
   registrationEndsAt: '',
 };
 
+interface RealTimeEventItem {
+  id: string;
+  type: 'TOURNAMENT' | 'MATCH' | 'REGISTRATION' | 'SETTLEMENT' | 'REFUND' | 'NOTIFICATION' | 'SCHEDULER';
+  title: string;
+  timestamp: string;
+  details?: string;
+  variant: 'info' | 'success' | 'warning' | 'danger';
+}
+
 export function AdminTournamentsPage() {
   const navigate = useNavigate();
   const [mainTab, setMainTab] = useState<MainTab>('TOURNAMENTS');
@@ -106,6 +122,14 @@ export function AdminTournamentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Real-Time Socket & Live Stream State
+  const [socketStatus, setSocketStatus] = useState<'connected' | 'connecting' | 'reconnecting' | 'disconnected'>('connecting');
+  const [lastSyncTimestamp, setLastSyncTimestamp] = useState<Date | null>(null);
+  const [realTimeEvents, setRealTimeEvents] = useState<RealTimeEventItem[]>([]);
+  const [showRealTimeDrawer, setShowRealTimeDrawer] = useState(false);
+  const socketRef = useRef<TypedSocket | null>(null);
+  const wasDisconnectedRef = useRef(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -135,6 +159,7 @@ export function AdminTournamentsPage() {
   // Analytics & Health State
   const [analyticsData, setAnalyticsData] = useState<TournamentAnalyticsResponse | null>(null);
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [analyticsTimeFilter, setAnalyticsTimeFilter] = useState<TournamentAnalyticsTimeFilter>('last30days');
   const [analyticsFromDate, setAnalyticsFromDate] = useState('');
   const [analyticsToDate, setAnalyticsToDate] = useState('');
@@ -170,9 +195,106 @@ export function AdminTournamentsPage() {
   const [generatedReport, setGeneratedReport] = useState<TournamentReportResult | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
+  // Data Validation State
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [isValidatingAudit, setIsValidatingAudit] = useState(false);
+  const [validationFilterTab, setValidationFilterTab] = useState<'ALL' | 'CRITICAL' | 'WARNING' | 'FINANCIAL' | 'REGISTRATION' | 'PRIZE' | 'REFUND'>('ALL');
+
+  // Data Integrity Alerts State
+  const [showAlertsDrawer, setShowAlertsDrawer] = useState(false);
+  const [alertsList, setAlertsList] = useState<import('@gaming-hub/shared').TournamentIntegrityAlert[]>([]);
+  const [alertsStats, setAlertsStats] = useState({ total: 0, openCount: 0, criticalCount: 0, underReviewCount: 0, resolvedCount: 0 });
+  const [alertFilterStatus, setAlertFilterStatus] = useState<string>('OPEN');
+  const [alertFilterSeverity, setAlertFilterSeverity] = useState<string>('ALL');
+  const [alertFilterIssueType, setAlertFilterIssueType] = useState<string>('ALL');
+  const [isAlertsLoading, setIsAlertsLoading] = useState(false);
+  const [isScanningAlerts, setIsScanningAlerts] = useState(false);
+  const [selectedAlertForResolve, setSelectedAlertForResolve] = useState<import('@gaming-hub/shared').TournamentIntegrityAlert | null>(null);
+  const [resolutionNotesInput, setResolutionNotesInput] = useState('');
+  const [isUpdatingAlert, setIsUpdatingAlert] = useState(false);
+
   const flash = (msg: string) => {
     setSuccessMessage(msg);
     setTimeout(() => setSuccessMessage(null), 3500);
+  };
+
+  const handleRunLiveAudit = async () => {
+    setIsValidatingAudit(true);
+    try {
+      const summary = await adminApi.runTournamentAnalyticsValidation({
+        gameId: analyticsGame !== 'ALL' ? analyticsGame : undefined,
+      });
+      if (analyticsData) {
+        setAnalyticsData({
+          ...analyticsData,
+          validation: summary,
+        });
+      }
+      flash(`Live audit complete: ${summary.status === 'VALID' ? 'All records verified & balanced' : `${summary.issuesCount} issues detected`}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to run live validation audit');
+    } finally {
+      setIsValidatingAudit(false);
+    }
+  };
+
+  const loadIntegrityAlerts = async () => {
+    setIsAlertsLoading(true);
+    try {
+      const res = await adminApi.tournamentIntegrityAlerts({
+        status: alertFilterStatus !== 'ALL' ? alertFilterStatus : undefined,
+        severity: alertFilterSeverity !== 'ALL' ? alertFilterSeverity : undefined,
+        issueType: alertFilterIssueType !== 'ALL' ? alertFilterIssueType : undefined,
+        gameId: analyticsGame !== 'ALL' ? analyticsGame : undefined,
+      });
+      setAlertsList(res.items || []);
+      setAlertsStats({
+        total: res.total || 0,
+        openCount: res.openCount || 0,
+        criticalCount: res.criticalCount || 0,
+        underReviewCount: res.underReviewCount || 0,
+        resolvedCount: res.resolvedCount || 0,
+      });
+    } catch {
+      // Best effort load
+    } finally {
+      setIsAlertsLoading(false);
+    }
+  };
+
+  const handleScanIntegrityAlerts = async () => {
+    setIsScanningAlerts(true);
+    try {
+      const res = await adminApi.scanTournamentIntegrityAlerts(analyticsTournament !== 'ALL' ? analyticsTournament : undefined);
+      setAlertsList(res.items || []);
+      setAlertsStats({
+        total: res.total || 0,
+        openCount: res.openCount || 0,
+        criticalCount: res.criticalCount || 0,
+        underReviewCount: res.underReviewCount || 0,
+        resolvedCount: res.resolvedCount || 0,
+      });
+      flash(`Automated integrity scan completed: ${res.openCount} open alerts`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to scan integrity alerts');
+    } finally {
+      setIsScanningAlerts(false);
+    }
+  };
+
+  const handleUpdateAlertStatus = async (alertId: string, status: string, notes?: string) => {
+    setIsUpdatingAlert(true);
+    try {
+      await adminApi.updateTournamentIntegrityAlertStatus(alertId, status, notes);
+      flash(`Alert status updated to ${status}`);
+      setSelectedAlertForResolve(null);
+      setResolutionNotesInput('');
+      loadIntegrityAlerts();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update alert status');
+    } finally {
+      setIsUpdatingAlert(false);
+    }
   };
 
   const loadTournaments = async (p = page) => {
@@ -216,13 +338,9 @@ export function AdminTournamentsPage() {
     }
   };
 
-  useEffect(() => {
-    loadTournaments(1);
-    setPage(1);
-  }, [statusTab]);
-
-  const loadAnalytics = async () => {
-    setIsAnalyticsLoading(true);
+  const loadAnalytics = async (silent = false) => {
+    if (!silent) setIsAnalyticsLoading(true);
+    setAnalyticsError(null);
     try {
       const data = await adminTournamentsApi.analytics({
         timeFilter: analyticsTimeFilter,
@@ -233,12 +351,337 @@ export function AdminTournamentsPage() {
         tournamentId: analyticsTournament,
       });
       setAnalyticsData(data);
+      setLastSyncTimestamp(new Date());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load tournament analytics');
+      const msg = err instanceof Error ? err.message : 'Failed to load tournament analytics';
+      setAnalyticsError(msg);
+      if (!silent) {
+        setError(msg);
+      }
     } finally {
-      setIsAnalyticsLoading(false);
+      if (!silent) setIsAnalyticsLoading(false);
     }
   };
+
+  const handleManualReconnect = () => {
+    if (socketRef.current) {
+      socketRef.current.connect();
+    }
+    loadAnalytics();
+    loadScheduler();
+    loadTournaments(1);
+    flash('Reconnecting real-time stream & refreshing authoritative data...');
+  };
+
+  // Socket Connection & Real-Time Analytics Pipeline
+  useEffect(() => {
+    function getSocketUrl(): string {
+      const envUrl = (import.meta.env.VITE_SOCKET_URL as string | undefined) || 'http://localhost:4001';
+      if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        return envUrl.replace('localhost', window.location.hostname).replace('127.0.0.1', window.location.hostname);
+      }
+      return envUrl;
+    }
+
+    const token = useAuthStore.getState().session?.access_token;
+    if (!token) {
+      setSocketStatus('disconnected');
+      return;
+    }
+
+    const socket = createTypedSocket({
+      url: getSocketUrl(),
+      token: () => useAuthStore.getState().session?.access_token ?? null,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+    });
+    socketRef.current = socket;
+    socket.connect();
+
+    socket.on('connect', () => {
+      setSocketStatus('connected');
+      setLastSyncTimestamp(new Date());
+      socket.emit('admin:analytics:subscribe');
+
+      if (wasDisconnectedRef.current) {
+        wasDisconnectedRef.current = false;
+        flash('🟢 Real-time connection restored. Latest authoritative data loaded.');
+        loadAnalytics(true);
+        loadScheduler();
+        loadTournaments(1);
+      }
+    });
+
+    socket.on('disconnect', () => {
+      wasDisconnectedRef.current = true;
+      setSocketStatus('reconnecting');
+    });
+
+    socket.on('connect_error', () => {
+      wasDisconnectedRef.current = true;
+      setSocketStatus('reconnecting');
+    });
+
+    // 1. Live Tournaments Update
+    socket.on('admin:analytics:tournament-updated', (data) => {
+      const eventItem: RealTimeEventItem = {
+        id: `t_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        type: 'TOURNAMENT',
+        title: `Tournament ${data.status.replace('_', ' ')}`,
+        timestamp: data.timestamp || new Date().toISOString(),
+        details: `ID: #${data.tournamentId.slice(-6)} ${data.tier ? `(${data.tier})` : ''}`,
+        variant: data.status === 'CANCELLED' ? 'danger' : data.status === 'PAUSED' ? 'warning' : 'info',
+      };
+      setRealTimeEvents((prev) => [eventItem, ...prev].slice(0, 20));
+
+      setAnalyticsData((prev) => {
+        if (!prev) return prev;
+        const isLive = data.status === 'IN_PROGRESS' || data.status === 'LIVE';
+        const isCompleted = data.status === 'COMPLETED' || data.status === 'SETTLED';
+        const isCancelled = data.status === 'CANCELLED';
+        return {
+          ...prev,
+          overview: {
+            ...prev.overview,
+            liveTournaments: isLive
+              ? prev.overview.liveTournaments + 1
+              : Math.max(0, prev.overview.liveTournaments - 1),
+            completedTournaments: isCompleted
+              ? prev.overview.completedTournaments + 1
+              : prev.overview.completedTournaments,
+            cancellationRatePercent: isCancelled
+              ? Number((((prev.overview.totalTournaments > 0 ? (prev.overview.cancellationRatePercent * prev.overview.totalTournaments / 100) + 1 : 1) / Math.max(1, prev.overview.totalTournaments + 1)) * 100).toFixed(1))
+              : prev.overview.cancellationRatePercent,
+          },
+        };
+      });
+
+      setItems((prev) =>
+        prev.map((t) =>
+          t.id === data.tournamentId
+            ? { ...t, status: data.status as any }
+            : t
+        )
+      );
+    });
+
+    // 2. Active Match Update
+    socket.on('admin:analytics:match-updated', (data) => {
+      const eventItem: RealTimeEventItem = {
+        id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        type: 'MATCH',
+        title: `Match ${data.status}`,
+        timestamp: data.timestamp || new Date().toISOString(),
+        details: `Match #${data.matchId.slice(-6)} ${data.roundNumber ? `Round ${data.roundNumber}` : ''}`,
+        variant: data.status === 'LIVE' ? 'info' : 'success',
+      };
+      setRealTimeEvents((prev) => [eventItem, ...prev].slice(0, 20));
+
+      setAnalyticsData((prev) => {
+        if (!prev) return prev;
+        const isLive = data.status === 'LIVE';
+        return {
+          ...prev,
+          health: {
+            ...prev.health,
+            stuckMatchesCount: isLive ? Math.max(0, prev.health.stuckMatchesCount - 1) : prev.health.stuckMatchesCount,
+          },
+        };
+      });
+    });
+
+    // 3. Player Registration Update
+    socket.on('admin:analytics:registration-updated', (data) => {
+      const eventItem: RealTimeEventItem = {
+        id: `r_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        type: 'REGISTRATION',
+        title: 'Player Registered',
+        timestamp: data.timestamp || new Date().toISOString(),
+        details: `Tournament #${data.tournamentId.slice(-6)}: ${data.registeredPlayers}/${data.maxPlayers} players`,
+        variant: 'info',
+      };
+      setRealTimeEvents((prev) => [eventItem, ...prev].slice(0, 20));
+
+      setAnalyticsData((prev) => {
+        if (!prev) return prev;
+        const newTotalReg = prev.overview.totalRegistrations + 1;
+        const newRevenue = prev.overview.totalEntryCollection + (data.entryFee || 0);
+        return {
+          ...prev,
+          overview: {
+            ...prev.overview,
+            totalRegistrations: newTotalReg,
+            totalEntryCollection: newRevenue,
+            platformOperatingAmount: newRevenue - prev.overview.actualPrizeDistributed,
+          },
+        };
+      });
+
+      setItems((prev) =>
+        prev.map((t) =>
+          t.id === data.tournamentId
+            ? { ...t, registeredPlayers: data.registeredPlayers, maxPlayers: data.maxPlayers }
+            : t
+        )
+      );
+    });
+
+    // 4. Prize Settlement Update
+    socket.on('admin:analytics:settlement-updated', (data) => {
+      const isPaid = data.status === 'PAID';
+      const eventItem: RealTimeEventItem = {
+        id: `s_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        type: 'SETTLEMENT',
+        title: isPaid ? 'Prize Settled' : 'Settlement Failed',
+        timestamp: data.timestamp || new Date().toISOString(),
+        details: `Tournament #${data.tournamentId.slice(-6)} ${data.amount ? `(${data.amount}🪙)` : ''}`,
+        variant: isPaid ? 'success' : 'danger',
+      };
+      setRealTimeEvents((prev) => [eventItem, ...prev].slice(0, 20));
+
+      setAnalyticsData((prev) => {
+        if (!prev) return prev;
+        if (isPaid) {
+          const newPrizes = prev.overview.actualPrizeDistributed + (data.amount || 0);
+          return {
+            ...prev,
+            overview: {
+              ...prev.overview,
+              actualPrizeDistributed: newPrizes,
+              platformOperatingAmount: prev.overview.totalEntryCollection - newPrizes,
+            },
+            settlementAnalytics: {
+              ...prev.settlementAnalytics,
+              summary: {
+                ...prev.settlementAnalytics.summary,
+                creditedSettlements: prev.settlementAnalytics.summary.creditedSettlements + 1,
+                failedSettlements: Math.max(0, prev.settlementAnalytics.summary.failedSettlements - 1),
+                totalSettledAmount: prev.settlementAnalytics.summary.totalSettledAmount + (data.amount || 0),
+              },
+            },
+          };
+        } else {
+          return {
+            ...prev,
+            settlementAnalytics: {
+              ...prev.settlementAnalytics,
+              summary: {
+                ...prev.settlementAnalytics.summary,
+                failedSettlements: prev.settlementAnalytics.summary.failedSettlements + 1,
+                totalFailedAmount: prev.settlementAnalytics.summary.totalFailedAmount + (data.amount || 0),
+              },
+            },
+            health: {
+              ...prev.health,
+              failedSettlementsCount: prev.health.failedSettlementsCount + 1,
+            },
+          };
+        }
+      });
+    });
+
+    // 5. Refund Update
+    socket.on('admin:analytics:refund-updated', (data) => {
+      const eventItem: RealTimeEventItem = {
+        id: `rf_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        type: 'REFUND',
+        title: `Refund Processed (${data.status})`,
+        timestamp: data.timestamp || new Date().toISOString(),
+        details: `Tournament #${data.tournamentId.slice(-6)} ${data.amount ? `(${data.amount}🪙)` : ''}`,
+        variant: data.status === 'COMPLETED' ? 'warning' : 'danger',
+      };
+      setRealTimeEvents((prev) => [eventItem, ...prev].slice(0, 20));
+
+      setAnalyticsData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          overview: {
+            ...prev.overview,
+            totalRefunds: prev.overview.totalRefunds + (data.amount || 0),
+          },
+          refundAnalytics: {
+            ...prev.refundAnalytics,
+            summary: {
+              ...prev.refundAnalytics.summary,
+              totalRefundRequests: prev.refundAnalytics.summary.totalRefundRequests + 1,
+              successfulRefundsCount: prev.refundAnalytics.summary.successfulRefundsCount + 1,
+              totalRefundedCoins: prev.refundAnalytics.summary.totalRefundedCoins + (data.amount || 0),
+            },
+          },
+        };
+      });
+    });
+
+    // 6. Notification Failure Update
+    socket.on('admin:analytics:notification-failed', (data) => {
+      const eventItem: RealTimeEventItem = {
+        id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        type: 'NOTIFICATION',
+        title: 'Notification Failed',
+        timestamp: data.timestamp || new Date().toISOString(),
+        details: `${data.channel} - ${data.error || 'Delivery failed'}`,
+        variant: 'danger',
+      };
+      setRealTimeEvents((prev) => [eventItem, ...prev].slice(0, 20));
+
+      setAnalyticsData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          notificationAnalytics: {
+            ...prev.notificationAnalytics,
+            summary: {
+              ...prev.notificationAnalytics.summary,
+              emailsFailed: prev.notificationAnalytics.summary.emailsFailed + 1,
+            },
+          },
+          health: {
+            ...prev.health,
+            failedNotificationsCount: prev.health.failedNotificationsCount + 1,
+          },
+        };
+      });
+    });
+
+    // 7. Scheduler Status Update
+    socket.on('admin:analytics:scheduler-status', (data) => {
+      const eventItem: RealTimeEventItem = {
+        id: `sc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        type: 'SCHEDULER',
+        title: `Scheduler ${data.isPaused ? 'Paused' : 'Running'}`,
+        timestamp: data.timestamp || new Date().toISOString(),
+        details: `Status: ${data.status}`,
+        variant: data.isPaused ? 'warning' : 'success',
+      };
+      setRealTimeEvents((prev) => [eventItem, ...prev].slice(0, 20));
+
+      setSchedulerInfo((prev) => (prev ? { ...prev, isPaused: data.isPaused, status: data.status as any } : prev));
+      setAnalyticsData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          health: {
+            ...prev.health,
+            schedulerHealth: {
+              ...prev.health.schedulerHealth,
+              status: data.isPaused ? 'STOPPED' : 'RUNNING',
+            },
+          },
+        };
+      });
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    loadTournaments(1);
+    setPage(1);
+  }, [statusTab]);
 
   useEffect(() => {
     if (mainTab === 'ANALYTICS') {
@@ -274,17 +717,30 @@ export function AdminTournamentsPage() {
     }
   };
 
-  const handleDownloadReportCsv = () => {
-    const url = adminTournamentsApi.getExportCsvUrl({
-      reportType,
-      timeFilter: reportTimeFilter,
-      fromDate: reportTimeFilter === 'custom' ? reportFromDate : undefined,
-      toDate: reportTimeFilter === 'custom' ? reportToDate : undefined,
-      gameId: reportGame,
-      tier: reportTier,
-      status: reportStatus,
-    });
-    window.open(url, '_blank');
+  const handleDownloadReportCsv = async () => {
+    try {
+      await adminTournamentsApi.downloadReportCsv({
+        reportType,
+        timeFilter: reportTimeFilter,
+        fromDate: reportTimeFilter === 'custom' ? reportFromDate : undefined,
+        toDate: reportTimeFilter === 'custom' ? reportToDate : undefined,
+        gameId: reportGame,
+        tier: reportTier,
+        status: reportStatus,
+      });
+      flash(`Downloaded CSV for ${reportType.replace(/_/g, ' ')} Report`);
+    } catch {
+      const url = adminTournamentsApi.getExportCsvUrl({
+        reportType,
+        timeFilter: reportTimeFilter,
+        fromDate: reportTimeFilter === 'custom' ? reportFromDate : undefined,
+        toDate: reportTimeFilter === 'custom' ? reportToDate : undefined,
+        gameId: reportGame,
+        tier: reportTier,
+        status: reportStatus,
+      });
+      window.open(url, '_blank');
+    }
   };
 
   const handleDownloadReportJson = () => {
@@ -471,6 +927,37 @@ export function AdminTournamentsPage() {
                     {schedulerInfo.isPaused ? '⏸ SCHEDULER PAUSED' : '⚡ HOURLY AUTO-RUN'}
                   </Badge>
                 )}
+                <button
+                  onClick={() => setShowRealTimeDrawer(true)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black transition-all cursor-pointer border ${
+                    socketStatus === 'connected'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 shadow-sm shadow-emerald-500/10'
+                      : socketStatus === 'reconnecting'
+                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20 animate-pulse'
+                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30 hover:bg-rose-500/20'
+                  }`}
+                  title="Click to view real-time activity stream"
+                >
+                  <span className={`size-2 rounded-full ${
+                    socketStatus === 'connected'
+                      ? 'bg-emerald-400 animate-ping'
+                      : socketStatus === 'reconnecting'
+                      ? 'bg-amber-400 animate-spin'
+                      : 'bg-rose-400'
+                  }`} />
+                  <span>
+                    {socketStatus === 'connected'
+                      ? 'LIVE REAL-TIME'
+                      : socketStatus === 'reconnecting'
+                      ? 'RECONNECTING...'
+                      : 'DISCONNECTED'}
+                  </span>
+                  {realTimeEvents.length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 rounded-full bg-slate-900/80 text-[10px] text-white">
+                      {realTimeEvents.length}
+                    </span>
+                  )}
+                </button>
               </div>
               <p className="text-xs sm:text-sm text-indigo-200/80 mt-1">
                 Server-authoritative 5-tier & 10-game management, automated scheduling, and financial recovery
@@ -480,6 +967,15 @@ export function AdminTournamentsPage() {
 
           {/* Action Bar */}
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRealTimeDrawer(true)}
+              className="border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20 text-xs font-bold gap-1.5"
+            >
+              <Zap className="size-3.5 text-amber-400" /> Live Stream ({realTimeEvents.length})
+            </Button>
+
             <Button
               variant="outline"
               size="sm"
@@ -553,6 +1049,38 @@ export function AdminTournamentsPage() {
           })}
         </div>
       </div>
+
+      {/* Real-time Connection Warning Banner */}
+      {socketStatus !== 'connected' && (
+        <div className="rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-950/60 via-slate-900/90 to-amber-950/60 p-4 shadow-xl text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
+          <div className="flex items-center gap-3.5">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 shrink-0">
+              <WifiOff className="size-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="text-sm font-black text-white flex items-center gap-2">
+                <span>Real-Time Connection Interrupted</span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold uppercase tracking-wider">
+                  {socketStatus === 'reconnecting' ? 'Auto-Reconnecting...' : 'Disconnected'}
+                </span>
+              </div>
+              <p className="text-xs text-amber-300/80 mt-0.5">
+                Live tournament event stream is disconnected. System is reconnecting automatically and will refresh authoritative data upon reconnection.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleManualReconnect}
+              className="border-amber-500/50 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-bold gap-1.5 w-full sm:w-auto shadow-md"
+            >
+              <RefreshCw className="size-3.5 animate-spin" /> Reconnect &amp; Refresh
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Success & Error Alert Messages */}
       {successMessage && (
@@ -917,18 +1445,253 @@ export function AdminTournamentsPage() {
             </div>
           </div>
 
-          {isAnalyticsLoading ? (
-            <div className="flex flex-col items-center justify-center py-20 bg-slate-900/40 rounded-3xl border border-slate-800">
-              <Loader2 className="size-8 animate-spin text-indigo-400 mb-2" />
-              <p className="text-xs text-slate-400">Aggregating authoritative tournament data...</p>
+          {/* Real-Time Live Activity Bar */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-inner">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className={`flex size-10 items-center justify-center rounded-xl shrink-0 ${
+                socketStatus === 'connected'
+                  ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 shadow-sm shadow-emerald-500/10'
+                  : 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
+              }`}>
+                <Radio className={`size-5 ${socketStatus === 'connected' ? 'animate-pulse' : ''}`} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black text-white">Live Stream Ticker:</span>
+                  {realTimeEvents.length > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-indigo-300 truncate font-mono">
+                      <span className={`inline-block size-2 rounded-full ${
+                        realTimeEvents[0].variant === 'danger'
+                          ? 'bg-rose-400 animate-pulse'
+                          : realTimeEvents[0].variant === 'warning'
+                          ? 'bg-amber-400 animate-pulse'
+                          : 'bg-emerald-400 animate-pulse'
+                      }`} />
+                      <strong className="text-slate-100">{realTimeEvents[0].title}</strong> — {realTimeEvents[0].details}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">Listening for live tournament updates across 7 operations...</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-2.5 flex-wrap">
+                  <span>Authoritative sync: <strong className="text-slate-400">{lastSyncTimestamp ? lastSyncTimestamp.toLocaleTimeString() : 'Just now'}</strong></span>
+                  <span>·</span>
+                  <span><strong>{realTimeEvents.length}</strong> events logged in session</span>
+                  <span>·</span>
+                  <span className={socketStatus === 'connected' ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                    Socket: {socketStatus.toUpperCase()}
+                  </span>
+                </div>
+              </div>
             </div>
-          ) : !analyticsData ? (
-            <div className="text-center py-16 bg-slate-900/40 rounded-3xl border border-slate-800 p-6">
-              <Activity className="size-12 text-slate-600 mx-auto mb-3" />
-              <p className="text-base font-bold text-slate-300">No analytics data available for selected filter</p>
+
+            <div className="flex items-center gap-2 shrink-0 w-full md:w-auto justify-end">
+              <button
+                onClick={() => setShowRealTimeDrawer(true)}
+                className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold transition-all flex items-center gap-1.5"
+              >
+                <Zap className="size-3.5 text-amber-400" /> Event Stream ({realTimeEvents.length})
+              </button>
+              <button
+                onClick={() => loadAnalytics()}
+                disabled={isAnalyticsLoading}
+                className="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-200 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+              >
+                <RefreshCw className={`size-3.5 text-indigo-400 ${isAnalyticsLoading ? 'animate-spin' : ''}`} /> Refresh Snapshot
+              </button>
+            </div>
+          </div>
+
+          {/* Disconnected Stream Warning Banner */}
+          {socketStatus !== 'connected' && (
+            <div className="rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-950/60 via-slate-900 to-amber-950/40 p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-md">
+              <div className="flex items-center gap-2.5 text-amber-200">
+                <AlertTriangle className="size-4 text-amber-400 shrink-0 animate-pulse" />
+                <span>
+                  <strong>Real-Time Stream Disconnected ({socketStatus.toUpperCase()})</strong> — Displaying last valid snapshot from <strong>{lastSyncTimestamp ? lastSyncTimestamp.toLocaleTimeString() : 'earlier'}</strong>. Reconnecting automatically...
+                </span>
+              </div>
+              <button
+                onClick={handleManualReconnect}
+                className="px-3 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-bold shrink-0 transition-all"
+              >
+                Reconnect Stream
+              </button>
+            </div>
+          )}
+
+          {/* 1. Loading State */}
+          {isAnalyticsLoading && !analyticsData ? (
+            <div className="space-y-6 animate-pulse">
+              <div className="p-8 rounded-3xl border border-slate-800 bg-slate-900/60 flex flex-col items-center justify-center text-center">
+                <Loader2 className="size-10 animate-spin text-indigo-400 mb-3" />
+                <h3 className="text-base font-bold text-white">Aggregating Authoritative Tournament Analytics</h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-md">
+                  Cross-checking registrations, prize distributions, wallet transactions, and match brackets across all 10 games and 5 tiers...
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <div key={i} className="h-28 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+                    <div className="h-3 w-1/2 bg-slate-800 rounded" />
+                    <div className="h-6 w-3/4 bg-slate-700 rounded" />
+                    <div className="h-2 w-1/3 bg-slate-800 rounded" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : analyticsError && !analyticsData ? (
+            /* 2. Error State (No misleading zero values) */
+            <div className="p-8 rounded-3xl border border-rose-800/40 bg-gradient-to-br from-rose-950/40 via-slate-900 to-rose-950/20 flex flex-col items-center justify-center text-center space-y-4 shadow-xl">
+              <div className="size-14 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 shadow-lg shadow-rose-500/10">
+                <AlertTriangle className="size-7" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">Unable to Load Tournament Analytics</h3>
+                <p className="text-xs text-rose-300 mt-1 max-w-md">
+                  {analyticsError}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  No misleading zero values are displayed. Please verify database connectivity or permissions and retry.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => loadAnalytics()}
+                  disabled={isAnalyticsLoading}
+                  className="text-xs font-bold"
+                >
+                  <RefreshCw className={`size-3.5 mr-1.5 ${isAnalyticsLoading ? 'animate-spin' : ''}`} />
+                  Retry Request
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setAnalyticsTimeFilter('last30days');
+                    setAnalyticsGame('ALL');
+                    setAnalyticsTier('ALL');
+                    setAnalyticsTournament('ALL');
+                    setTimeout(() => loadAnalytics(), 0);
+                  }}
+                  className="text-xs font-bold text-slate-300"
+                >
+                  Reset Filters & Retry
+                </Button>
+              </div>
+            </div>
+          ) : !analyticsData || (analyticsData.overview.totalTournaments === 0 && analyticsData.overview.totalRegistrations === 0) ? (
+            /* 3. Empty State (No tournament activity matches filters) */
+            <div className="p-10 rounded-3xl border border-dashed border-slate-800 bg-slate-950/60 flex flex-col items-center justify-center text-center space-y-4">
+              <div className="size-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400">
+                <Inbox className="size-7" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">No Tournament Activity Found</h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-md">
+                  No tournaments, registrations, or prize payouts match the selected filter criteria (
+                  {analyticsGame !== 'ALL' ? `Game: ${analyticsGame}` : 'All Games'}, {analyticsTier !== 'ALL' ? `Tier: ${analyticsTier}` : 'All Tiers'}, Timeframe: {analyticsTimeFilter}
+                  ).
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setAnalyticsTimeFilter('last30days');
+                  setAnalyticsGame('ALL');
+                  setAnalyticsTier('ALL');
+                  setAnalyticsTournament('ALL');
+                  setTimeout(() => loadAnalytics(), 0);
+                }}
+                className="text-xs font-bold text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/10"
+              >
+                Reset All Filters
+              </Button>
             </div>
           ) : (
             <>
+              {/* ========================================================================= */}
+              {/* 0. DATA VALIDATION & FINANCIAL CROSS-CHECK LAYER                          */}
+              {/* ========================================================================= */}
+              <div className={`rounded-3xl border p-5 shadow-xl backdrop-blur transition-all ${
+                analyticsData.validation?.status === 'CRITICAL_INCONSISTENCY'
+                  ? 'border-rose-500/40 bg-gradient-to-r from-rose-950/70 via-slate-900/90 to-rose-950/40'
+                  : analyticsData.validation?.status === 'NEEDS_REVIEW'
+                  ? 'border-amber-500/40 bg-gradient-to-r from-amber-950/60 via-slate-900/90 to-amber-950/30'
+                  : 'border-emerald-500/30 bg-gradient-to-r from-emerald-950/50 via-slate-900/90 to-emerald-950/20'
+              }`}>
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className={`flex size-11 items-center justify-center rounded-2xl shrink-0 font-black text-lg ${
+                      analyticsData.validation?.status === 'CRITICAL_INCONSISTENCY'
+                        ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
+                        : analyticsData.validation?.status === 'NEEDS_REVIEW'
+                        ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
+                        : 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
+                    }`}>
+                      <Shield className="size-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Data Validation Engine</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider ${
+                          analyticsData.validation?.status === 'CRITICAL_INCONSISTENCY'
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                            : analyticsData.validation?.status === 'NEEDS_REVIEW'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        }`}>
+                          {analyticsData.validation?.status === 'VALID' ? 'DATA VALIDATION: VERIFIED & BALANCED' : 'DATA VALIDATION / NEEDS REVIEW'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 mt-1">
+                        {analyticsData.validation?.status === 'VALID'
+                          ? `All ${analyticsData.validation.totalCheckedTournaments} tournaments, ${analyticsData.validation.totalCheckedRegistrations} registrations, entry fees, prizes, and ${analyticsData.validation.totalCheckedRefunds} refunds match ledger transactions perfectly.`
+                          : `${analyticsData.validation?.criticalIssuesCount || 0} critical inconsistencies and ${analyticsData.validation?.warningIssuesCount || 0} warnings detected across financial ledger and settlement records.`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 shrink-0 w-full md:w-auto justify-end flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowAlertsDrawer(true);
+                        loadIntegrityAlerts();
+                      }}
+                      className="text-xs font-bold text-amber-300 border-amber-500/40 hover:bg-amber-500/10"
+                    >
+                      <AlertTriangle className="size-3.5 mr-1 text-amber-400" />
+                      Integrity Alerts
+                    </Button>
+                    <Button
+                      variant={analyticsData.validation?.status === 'VALID' ? 'outline' : 'primary'}
+                      size="sm"
+                      onClick={() => setShowValidationModal(true)}
+                      className="text-xs font-bold"
+                    >
+                      <FileText className="size-3.5 mr-1" />
+                      {analyticsData.validation?.status === 'VALID' ? 'View Audit Scorecard' : `Inspect Issues (${analyticsData.validation?.issuesCount || 0})`}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRunLiveAudit}
+                      disabled={isValidatingAudit}
+                      className="text-xs font-bold text-slate-300 hover:text-white"
+                    >
+                      <RefreshCw className={`size-3.5 mr-1 text-indigo-400 ${isValidatingAudit ? 'animate-spin' : ''}`} />
+                      Live Re-Audit
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
               {/* ========================================================================= */}
               {/* 1. COMPREHENSIVE TOURNAMENT HEALTH & OPERATIONAL MONITORING              */}
               {/* ========================================================================= */}
@@ -4604,9 +5367,11 @@ export function AdminTournamentsPage() {
               <div className="flex items-center gap-1.5 flex-wrap">
                 {[
                   { value: 'today', label: 'Today' },
+                  { value: 'yesterday', label: 'Yesterday' },
                   { value: 'last7days', label: 'Last 7 Days' },
                   { value: 'last30days', label: 'Last 30 Days' },
                   { value: 'thismonth', label: 'This Month' },
+                  { value: 'all', label: 'All Time' },
                   { value: 'custom', label: 'Custom Range' },
                 ].map((p) => (
                   <button
@@ -5621,6 +6386,621 @@ export function AdminTournamentsPage() {
                   <Download className="size-3.5" /> Download CSV Export
                 </Button>
               </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Real-time Live Activity Stream Modal */}
+      {showRealTimeDrawer && (
+        <Modal
+          isOpen={showRealTimeDrawer}
+          onClose={() => setShowRealTimeDrawer(false)}
+          title="⚡ Real-Time Operational Activity Stream"
+        >
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+            <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/20 p-3 text-xs text-indigo-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`size-2 rounded-full ${socketStatus === 'connected' ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
+                <span>Socket Channel: <strong>admin:analytics</strong></span>
+              </div>
+              <span className={`font-mono text-[11px] font-bold ${socketStatus === 'connected' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                Status: {socketStatus.toUpperCase()}
+              </span>
+            </div>
+
+            {realTimeEvents.length === 0 ? (
+              <div className="text-center py-10 text-slate-400 text-xs">
+                <Radio className="size-8 mx-auto mb-2 text-slate-600 animate-pulse" />
+                No real-time events received yet in this active session.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {realTimeEvents.map((evt) => (
+                  <div
+                    key={evt.id}
+                    className={`p-3 rounded-xl border transition-all ${
+                      evt.variant === 'danger'
+                        ? 'bg-rose-950/20 border-rose-800/40 text-rose-200'
+                        : evt.variant === 'warning'
+                        ? 'bg-amber-950/20 border-amber-800/40 text-amber-200'
+                        : evt.variant === 'success'
+                        ? 'bg-emerald-950/20 border-emerald-800/40 text-emerald-200'
+                        : 'bg-slate-900 border-slate-800 text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="flex items-center gap-1.5">
+                        <span className={`size-1.5 rounded-full ${
+                          evt.variant === 'danger' ? 'bg-rose-400' : evt.variant === 'warning' ? 'bg-amber-400' : evt.variant === 'success' ? 'bg-emerald-400' : 'bg-indigo-400'
+                        }`} />
+                        {evt.title}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {new Date(evt.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    {evt.details && (
+                      <div className="text-[11px] text-slate-400 font-mono mt-1">
+                        {evt.details}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="pt-2 flex items-center justify-between border-t border-slate-800">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRealTimeEvents([])}
+                className="text-xs text-slate-400 hover:text-slate-200"
+              >
+                Clear Stream Log
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setShowRealTimeDrawer(false)}
+                className="text-xs font-bold"
+              >
+                Close Stream
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ========================================================================= */}
+      {/* DATA VALIDATION & FINANCIAL CROSS-CHECK AUDIT MODAL                       */}
+      {/* ========================================================================= */}
+      {showValidationModal && analyticsData?.validation && (
+        <Modal
+          isOpen={showValidationModal}
+          onClose={() => setShowValidationModal(false)}
+          title="Data Validation & Financial Integrity Scorecard"
+          size="lg"
+        >
+          <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-1">
+            {/* Overall Status Banner */}
+            <div className={`p-4 rounded-2xl border flex items-center justify-between gap-4 ${
+              analyticsData.validation.status === 'CRITICAL_INCONSISTENCY'
+                ? 'bg-rose-950/40 border-rose-800 text-rose-200'
+                : analyticsData.validation.status === 'NEEDS_REVIEW'
+                ? 'bg-amber-950/40 border-amber-800 text-amber-200'
+                : 'bg-emerald-950/40 border-emerald-800 text-emerald-200'
+            }`}>
+              <div className="flex items-center gap-3">
+                <Shield className="size-6 shrink-0" />
+                <div>
+                  <div className="text-sm font-black uppercase tracking-wider">
+                    Status: {analyticsData.validation.status === 'VALID' ? 'VALID & BALANCED' : 'NEEDS REVIEW'}
+                  </div>
+                  <div className="text-xs text-slate-300 mt-0.5">
+                    Checked {analyticsData.validation.totalCheckedTournaments} tournaments, {analyticsData.validation.totalCheckedRegistrations} registrations, {analyticsData.validation.totalCheckedMatches} matches, {analyticsData.validation.totalCheckedPrizes} prizes, and {analyticsData.validation.totalCheckedRefunds} refunds against {analyticsData.validation.totalCheckedTransactions} ledger transactions.
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRunLiveAudit}
+                disabled={isValidatingAudit}
+                className="shrink-0 text-xs font-bold"
+              >
+                <RefreshCw className={`size-3.5 mr-1 ${isValidatingAudit ? 'animate-spin' : ''}`} />
+                Live Re-Check
+              </Button>
+            </div>
+
+            {/* Metrics Checklist Scorecard */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Integrity Metrics Verification</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 rounded-xl border border-slate-800 bg-slate-900/80">
+                  <div className="text-[11px] font-bold text-slate-400">Tournament Counts</div>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    {analyticsData.validation.metrics.tournamentCountMatches ? (
+                      <span className="flex items-center gap-1 text-xs font-bold text-emerald-400">
+                        <CheckCircle2 className="size-3.5" /> Matched
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs font-bold text-rose-400">
+                        <XCircle className="size-3.5" /> Discrepancy
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl border border-slate-800 bg-slate-900/80">
+                  <div className="text-[11px] font-bold text-slate-400">Registration Counts</div>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    {analyticsData.validation.metrics.registrationCountMatches ? (
+                      <span className="flex items-center gap-1 text-xs font-bold text-emerald-400">
+                        <CheckCircle2 className="size-3.5" /> Matched
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs font-bold text-rose-400">
+                        <XCircle className="size-3.5" /> Discrepancy
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl border border-slate-800 bg-slate-900/80">
+                  <div className="text-[11px] font-bold text-slate-400">Entry Fee Ledger</div>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    {analyticsData.validation.metrics.entryFeeTotalMatches ? (
+                      <span className="flex items-center gap-1 text-xs font-bold text-emerald-400">
+                        <CheckCircle2 className="size-3.5" /> Balanced
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs font-bold text-amber-400">
+                        <AlertTriangle className="size-3.5" /> Unbalanced
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl border border-slate-800 bg-slate-900/80">
+                  <div className="text-[11px] font-bold text-slate-400">Prize Distributions</div>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    {analyticsData.validation.metrics.prizeTotalMatches ? (
+                      <span className="flex items-center gap-1 text-xs font-bold text-emerald-400">
+                        <CheckCircle2 className="size-3.5" /> Matched
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs font-bold text-rose-400">
+                        <XCircle className="size-3.5" /> Discrepancy
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl border border-slate-800 bg-slate-900/80">
+                  <div className="text-[11px] font-bold text-slate-400">Refund Totals</div>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    {analyticsData.validation.metrics.refundTotalMatches ? (
+                      <span className="flex items-center gap-1 text-xs font-bold text-emerald-400">
+                        <CheckCircle2 className="size-3.5" /> 100% Credited
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs font-bold text-rose-400">
+                        <XCircle className="size-3.5" /> Missing
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl border border-slate-800 bg-slate-900/80">
+                  <div className="text-[11px] font-bold text-slate-400">Settlement Ledger</div>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    {analyticsData.validation.metrics.settlementTotalMatches ? (
+                      <span className="flex items-center gap-1 text-xs font-bold text-emerald-400">
+                        <CheckCircle2 className="size-3.5" /> Verified
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs font-bold text-amber-400">
+                        <AlertTriangle className="size-3.5" /> Unverified
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl border border-slate-800 bg-slate-900/80">
+                  <div className="text-[11px] font-bold text-slate-400">Match Slots & Scores</div>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    {analyticsData.validation.metrics.matchCountMatches ? (
+                      <span className="flex items-center gap-1 text-xs font-bold text-emerald-400">
+                        <CheckCircle2 className="size-3.5" /> Non-negative
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs font-bold text-amber-400">
+                        <AlertTriangle className="size-3.5" /> Negative Scores
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl border border-slate-800 bg-slate-900/80">
+                  <div className="text-[11px] font-bold text-slate-400">Financial Ledger</div>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    {analyticsData.validation.metrics.financialLedgerBalanced ? (
+                      <span className="flex items-center gap-1 text-xs font-bold text-emerald-400">
+                        <CheckCircle2 className="size-3.5" /> Balanced
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs font-bold text-rose-400">
+                        <XCircle className="size-3.5" /> Inconsistent
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Inconsistencies List */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Detected Discrepancies ({analyticsData.validation.inconsistencies.length})
+                </h4>
+                <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                  {(['ALL', 'CRITICAL', 'WARNING', 'FINANCIAL', 'REGISTRATION', 'PRIZE', 'REFUND'] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setValidationFilterTab(tab)}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                        validationFilterTab === tab
+                          ? 'bg-indigo-600 text-white'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {analyticsData.validation.inconsistencies.length === 0 ? (
+                <div className="text-center py-10 rounded-2xl border border-dashed border-slate-800 bg-slate-950/60 p-4">
+                  <CheckCircle2 className="size-8 text-emerald-400 mx-auto mb-2" />
+                  <p className="text-sm font-bold text-white">No Data Inconsistencies Found</p>
+                  <p className="text-xs text-slate-400 mt-0.5">All tournament records, registrations, and wallet transactions are completely in sync.</p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {analyticsData.validation.inconsistencies
+                    .filter((item) => {
+                      if (validationFilterTab === 'ALL') return true;
+                      if (validationFilterTab === 'CRITICAL' || validationFilterTab === 'WARNING') return item.severity === validationFilterTab;
+                      return item.category === validationFilterTab;
+                    })
+                    .map((item) => (
+                      <div
+                        key={item.id}
+                        className={`p-3.5 rounded-xl border space-y-1.5 ${
+                          item.severity === 'CRITICAL'
+                            ? 'border-rose-800/60 bg-rose-950/20 text-rose-200'
+                            : item.severity === 'WARNING'
+                            ? 'border-amber-800/60 bg-amber-950/20 text-amber-200'
+                            : 'border-slate-800 bg-slate-900 text-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                              item.severity === 'CRITICAL' ? 'bg-rose-500 text-white' : item.severity === 'WARNING' ? 'bg-amber-500 text-slate-950' : 'bg-slate-700 text-white'
+                            }`}>
+                              {item.severity}
+                            </span>
+                            <span className="font-mono text-xs font-bold text-white">{item.code}</span>
+                            <span className="text-slate-400">·</span>
+                            <span className="text-[11px] text-slate-400 uppercase font-semibold">{item.category}</span>
+                          </div>
+                          {item.tournamentId && (
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              Tourn: {item.tournamentTitle || item.tournamentId.slice(0, 12)}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-slate-200 font-medium">{item.message}</p>
+
+                        <div className="flex items-center justify-between gap-4 text-[11px] text-slate-400 pt-1 border-t border-slate-800/60 flex-wrap">
+                          <div className="flex items-center gap-3 font-mono text-[10px]">
+                            <span>Expected: <strong className="text-slate-200">{String(item.expected)}</strong></span>
+                            <span>Actual: <strong className="text-slate-200">{String(item.actual)}</strong></span>
+                            {item.discrepancy !== undefined && (
+                              <span className="text-amber-400 font-bold">Diff: {String(item.discrepancy)}</span>
+                            )}
+                          </div>
+                          <div className="text-indigo-300 font-medium text-[11px]">
+                            Action: {item.suggestedAction}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-slate-800 flex justify-end">
+              <Button
+                variant="primary"
+                onClick={() => setShowValidationModal(false)}
+                className="text-xs font-bold"
+              >
+                Close Audit Scorecard
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ========================================================================= */}
+      {/* DATA INTEGRITY ALERTS CENTER MODAL                                        */}
+      {/* ========================================================================= */}
+      {showAlertsDrawer && (
+        <Modal
+          isOpen={showAlertsDrawer}
+          onClose={() => setShowAlertsDrawer(false)}
+          title="Data Integrity Alerts Center"
+          size="lg"
+        >
+          <div className="space-y-5 max-h-[80vh] overflow-y-auto pr-1">
+            {/* Summary Counters */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              <div className="p-3 rounded-xl border border-rose-800/40 bg-rose-950/20 text-rose-300">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-rose-400">Critical</div>
+                <div className="text-xl font-black">{alertsStats.criticalCount}</div>
+              </div>
+              <div className="p-3 rounded-xl border border-amber-800/40 bg-amber-950/20 text-amber-300">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Open Alerts</div>
+                <div className="text-xl font-black">{alertsStats.openCount}</div>
+              </div>
+              <div className="p-3 rounded-xl border border-indigo-800/40 bg-indigo-950/20 text-indigo-300">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Under Review</div>
+                <div className="text-xl font-black">{alertsStats.underReviewCount}</div>
+              </div>
+              <div className="p-3 rounded-xl border border-emerald-800/40 bg-emerald-950/20 text-emerald-300">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Resolved</div>
+                <div className="text-xl font-black">{alertsStats.resolvedCount}</div>
+              </div>
+              <div className="p-3 rounded-xl border border-slate-800 bg-slate-900 text-slate-300">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Tracked</div>
+                <div className="text-xl font-black">{alertsStats.total}</div>
+              </div>
+            </div>
+
+            {/* Filter Toolbar & Actions */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-xl border border-slate-800 bg-slate-950">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-bold text-slate-400 mr-1">Status:</span>
+                {(['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'ALL'] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => {
+                      setAlertFilterStatus(st);
+                      setTimeout(loadIntegrityAlerts, 0);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                      alertFilterStatus === st
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    {st === 'ALL' ? 'All' : st.replace('_', ' ')}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleScanIntegrityAlerts}
+                  disabled={isScanningAlerts}
+                  className="text-xs font-bold"
+                >
+                  <RefreshCw className={`size-3.5 mr-1 ${isScanningAlerts ? 'animate-spin' : ''}`} />
+                  Run Integrity Scan
+                </Button>
+              </div>
+            </div>
+
+            {/* Alerts List */}
+            {isAlertsLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="size-6 animate-spin text-indigo-400 mb-2" />
+                <p className="text-xs text-slate-400">Loading integrity alerts...</p>
+              </div>
+            ) : alertsList.length === 0 ? (
+              <div className="text-center py-12 rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-6">
+                <CheckCircle2 className="size-10 text-emerald-400 mx-auto mb-2" />
+                <p className="text-sm font-bold text-white">No {alertFilterStatus} Integrity Alerts</p>
+                <p className="text-xs text-slate-400 mt-1">All tournament ledger entries, registrations, prizes, and refunds are consistent.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {alertsList.map((alert) => (
+                  <div
+                    key={alert.id || alert.alertId}
+                    className={`p-4 rounded-2xl border space-y-2 transition-all ${
+                      alert.status === 'RESOLVED'
+                        ? 'border-emerald-800/40 bg-emerald-950/10 opacity-75'
+                        : alert.severity === 'CRITICAL'
+                        ? 'border-rose-800/60 bg-rose-950/20'
+                        : alert.severity === 'HIGH'
+                        ? 'border-amber-800/60 bg-amber-950/20'
+                        : 'border-slate-800 bg-slate-900/80'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                          alert.severity === 'CRITICAL'
+                            ? 'bg-rose-500 text-white'
+                            : alert.severity === 'HIGH'
+                            ? 'bg-amber-500 text-slate-950'
+                            : alert.severity === 'MEDIUM'
+                            ? 'bg-yellow-500 text-slate-950'
+                            : 'bg-slate-700 text-white'
+                        }`}>
+                          {alert.severity}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                          alert.status === 'RESOLVED'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            : alert.status === 'UNDER_REVIEW'
+                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                        }`}>
+                          {alert.status}
+                        </span>
+                        <span className="font-mono text-xs font-bold text-white">
+                          {alert.issueType.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        Detected: {new Date(alert.detectedAt).toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 block">Tournament</span>
+                        <span className="text-slate-200 font-medium">
+                          {alert.tournamentTitle || `Tournament #${alert.tournamentId.slice(-6)}`}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 block">Game / Tier</span>
+                        <span className="text-slate-200 font-medium uppercase">
+                          {alert.gameId} · {alert.tier}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 block">Affected Record</span>
+                        <span className="text-slate-300 font-mono text-[11px] truncate block">
+                          {alert.affectedRecord}
+                        </span>
+                      </div>
+                    </div>
+
+                    {alert.details && (
+                      <p className="text-xs text-slate-300 pt-1 border-t border-slate-800/60 font-medium">
+                        {alert.details}
+                      </p>
+                    )}
+
+                    {alert.status === 'RESOLVED' && (
+                      <div className="p-2.5 rounded-xl border border-emerald-800/40 bg-emerald-950/20 text-xs text-emerald-300 space-y-1">
+                        <div className="flex items-center justify-between text-[11px] font-bold">
+                          <span>Resolved by Admin: {alert.resolvedBy || 'Admin'}</span>
+                          {alert.resolvedAt && <span>{new Date(alert.resolvedAt).toLocaleString()}</span>}
+                        </div>
+                        {alert.resolutionNotes && (
+                          <p className="text-[11px] text-emerald-200/90 italic">
+                            Notes: {alert.resolutionNotes}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {alert.status !== 'RESOLVED' && (
+                      <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800/60">
+                        {alert.status === 'OPEN' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleUpdateAlertStatus(alert.alertId || alert.id, 'UNDER_REVIEW')}
+                            disabled={isUpdatingAlert}
+                            className="text-xs font-bold text-indigo-300 hover:text-white"
+                          >
+                            Mark Under Review
+                          </Button>
+                        )}
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedAlertForResolve(alert);
+                            setResolutionNotesInput('');
+                          }}
+                          disabled={isUpdatingAlert}
+                          className="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white"
+                        >
+                          <CheckCircle2 className="size-3.5 mr-1" />
+                          Mark as Resolved
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-slate-800 flex justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowAlertsDrawer(false)}
+                className="text-xs font-bold"
+              >
+                Close Alerts Center
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ========================================================================= */}
+      {/* RESOLVE ALERT MODAL                                                       */}
+      {/* ========================================================================= */}
+      {selectedAlertForResolve && (
+        <Modal
+          isOpen={!!selectedAlertForResolve}
+          onClose={() => setSelectedAlertForResolve(null)}
+          title="Resolve Data Integrity Alert"
+          size="md"
+        >
+          <div className="space-y-4">
+            <p className="text-xs text-slate-300">
+              You are marking alert <strong className="text-white font-mono">{selectedAlertForResolve.issueType}</strong> for tournament <strong className="text-white">{selectedAlertForResolve.tournamentTitle}</strong> as <strong>RESOLVED</strong>.
+            </p>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1">Resolution Audit Notes</label>
+              <textarea
+                value={resolutionNotesInput}
+                onChange={(e) => setResolutionNotesInput(e.target.value)}
+                placeholder="Describe actions taken or verified (e.g., manually verified ledger entries, issued missing refund via admin console)..."
+                rows={3}
+                className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-xs text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedAlertForResolve(null)}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => handleUpdateAlertStatus(selectedAlertForResolve.alertId || selectedAlertForResolve.id, 'RESOLVED', resolutionNotesInput)}
+                disabled={isUpdatingAlert}
+                className="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white"
+              >
+                {isUpdatingAlert ? <Loader2 className="size-3.5 animate-spin mr-1" /> : <CheckCircle2 className="size-3.5 mr-1" />}
+                Confirm Resolution
+              </Button>
             </div>
           </div>
         </Modal>

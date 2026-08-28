@@ -26,6 +26,8 @@ import type {
 } from "@gaming-hub/shared";
 import { audit } from "./audit";
 import { formatGameName } from "./tournamentEmailService";
+import { broadcastAdminAnalytics } from "./socketBridge";
+import { TournamentAnalyticsCache } from "./tournamentAnalyticsCache";
 
 // ---------------------------------------------------------------------------
 // Scheduler State & Game-Tier Matrix Stores
@@ -53,6 +55,12 @@ export function setHourlySchedulerPaused(paused: boolean, adminId?: string, reas
       timestamp: new Date().toISOString(),
     },
   });
+  void broadcastAdminAnalytics("admin:analytics:scheduler-status", {
+    isPaused: paused,
+    status: paused ? "PAUSED" : "RUNNING",
+    timestamp: new Date().toISOString(),
+  });
+  TournamentAnalyticsCache.invalidateScheduler();
   console.log(`[HOURLY_SCHEDULER] Scheduler is now ${paused ? "PAUSED" : "ACTIVE"} (by ${adminId ?? "system"})`);
 }
 
@@ -371,6 +379,17 @@ async function createTierSlotIfAbsent(
         entryFee: tier.entryFee,
       },
     });
+
+    void broadcastAdminAnalytics("admin:analytics:tournament-updated", {
+      tournamentId: tournament.id,
+      status: "REGISTRATION_OPEN",
+      gameId,
+      tier: tier.code,
+      registeredPlayers: 0,
+      timestamp: new Date().toISOString(),
+    });
+
+    TournamentAnalyticsCache.invalidateTournaments(tournament.id, gameId, tier.code);
   });
 }
 

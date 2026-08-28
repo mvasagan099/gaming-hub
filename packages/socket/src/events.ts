@@ -111,6 +111,9 @@ export interface ClientToServerEvents {
 
   "tournament:subscribe": (payload: { tournamentId: string }, ack?: Ack<{ subscribed: boolean }>) => void;
   "tournament:unsubscribe": (payload: { tournamentId: string }) => void;
+
+  "admin:analytics:subscribe": (ack?: Ack<{ subscribed: boolean }>) => void;
+  "admin:analytics:unsubscribe": () => void;
 }
 
 export interface ServerToClientEvents {
@@ -210,6 +213,62 @@ export interface ServerToClientEvents {
   "tournament:final-started": (data: { tournamentId: string }) => void;
   "tournament:completed": (data: { tournamentId: string; winnerId: string }) => void;
   "tournament:settlement-completed": (data: { tournamentId: string }) => void;
+
+  "admin:analytics:tournament-updated": (data: {
+    tournamentId: string;
+    status: string;
+    title?: string;
+    registeredPlayers?: number;
+    gameId?: string;
+    tier?: string;
+    timestamp?: string;
+  }) => void;
+  "admin:analytics:match-updated": (data: {
+    matchId: string;
+    tournamentId?: string;
+    status: string;
+    roundNumber?: number;
+    winnerId?: string;
+    timestamp?: string;
+  }) => void;
+  "admin:analytics:registration-updated": (data: {
+    tournamentId: string;
+    userId: string;
+    registeredPlayers: number;
+    maxPlayers: number;
+    entryFee: number;
+    timestamp?: string;
+  }) => void;
+  "admin:analytics:settlement-updated": (data: {
+    tournamentId: string;
+    prizeId?: string;
+    status: "PAID" | "PENDING" | "FAILED" | string;
+    amount?: number;
+    userId?: string;
+    timestamp?: string;
+  }) => void;
+  "admin:analytics:refund-updated": (data: {
+    tournamentId: string;
+    refundId?: string;
+    status: "COMPLETED" | "FAILED" | "PENDING" | string;
+    amount?: number;
+    userId?: string;
+    timestamp?: string;
+  }) => void;
+  "admin:analytics:notification-failed": (data: {
+    notificationId: string;
+    channel: string;
+    tournamentId?: string;
+    error?: string;
+    timestamp?: string;
+  }) => void;
+  "admin:analytics:scheduler-status": (data: {
+    isPaused: boolean;
+    status: string;
+    lastRunAt?: string | null;
+    nextRunAt?: string | null;
+    timestamp?: string;
+  }) => void;
 
   "latency:ping": (payload: { timestamp: number }, ack: () => void) => void;
 

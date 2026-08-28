@@ -11,7 +11,8 @@ export type AuditCategory =
   | "account"
   | "game"
   | "system"
-  | "security";
+  | "security"
+  | "report";
 
 export interface AuditEntry {
   /** Who performed the action: "user", "system" (no actor) or "internal" (service-to-service). */

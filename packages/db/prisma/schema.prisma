@@ -1080,8 +1080,14 @@ model Tournament {
   prizes  TournamentPrize[]
   disputes TournamentDispute[]
   snapshots TournamentResultSnapshot[]
+  integrityAlerts TournamentIntegrityAlert[]
 
   @@index([status, startTime])
+  @@index([gameId, status])
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@index([gameId, createdAt])
+  @@index([settledAt])
 }
 
 model TournamentPlayer {
@@ -1113,6 +1119,10 @@ model TournamentPlayer {
   @@index([tournamentId, points(sort: Desc)])
   @@index([tournamentId, finalRank])
   @@index([userId])
+  @@index([registeredAt])
+  @@index([userId, registeredAt])
+  @@index([tournamentId, eliminated])
+  @@index([tournamentId, liveStatus])
 }
 
 model TournamentRound {
@@ -1137,6 +1147,8 @@ model TournamentRound {
   @@unique([tournamentId, roundNumber, matchNumber])
   @@index([tournamentId, roundNumber])
   @@index([matchId])
+  @@index([status, completedAt])
+  @@index([completedAt])
 }
 
 model TournamentPrize {
@@ -1161,6 +1173,10 @@ model TournamentPrize {
   @@unique([tournamentId, userId])
   @@index([tournamentId, status])
   @@index([status])
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@index([paidAt])
+  @@index([tournamentId, rank])
 }
 
 model TournamentResultSnapshot {
@@ -1230,6 +1246,30 @@ model TournamentResultIdempotency {
   processedAt  DateTime @default(now())
 
   @@index([tournamentId])
+}
+
+model TournamentIntegrityAlert {
+  id              String    @id @default(uuid())
+  alertId         String    @unique
+  tournamentId    String
+  gameId          String
+  tier            String
+  issueType       String
+  affectedRecord  String
+  severity        String    @default("HIGH") // LOW, MEDIUM, HIGH, CRITICAL
+  status          String    @default("OPEN") // OPEN, UNDER_REVIEW, RESOLVED
+  details         String?
+  resolutionNotes String?
+  resolvedBy      String?
+  resolvedAt      DateTime?
+  detectedAt      DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+
+  tournament      Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@index([status, severity])
+  @@index([tournamentId, status])
+  @@index([issueType])
 }
 
 // ---------------------------------------------------------------------------

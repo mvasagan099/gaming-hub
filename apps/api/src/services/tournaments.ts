@@ -10,9 +10,10 @@ import { getCategorySettings } from "./settings";
 import { audit } from "./audit";
 import { AchievementService } from "./achievementService";
 import { ReferralService } from "./referrals";
-import { notifyUserSocket } from "./socketBridge";
+import { notifyUserSocket, broadcastAdminAnalytics } from "./socketBridge";
 import { TournamentNotificationService } from "./tournamentNotificationService";
 import { isFeatureEnabled } from "./featureFlags";
+import { TournamentAnalyticsCache } from "./tournamentAnalyticsCache";
 
 export interface CreateTournamentInput {
   gameId: string;
@@ -323,6 +324,17 @@ export async function registerForTournament(userId: string, tournamentId: string
         }),
       ]);
 
+      void broadcastAdminAnalytics("admin:analytics:registration-updated", {
+        tournamentId,
+        userId,
+        registeredPlayers: updatedCount,
+        maxPlayers: res.tournament.maxPlayers,
+        entryFee: res.tournament.entryFee,
+        timestamp: new Date().toISOString(),
+      });
+
+      TournamentAnalyticsCache.invalidateRegistrations(tournamentId, userId);
+
       // Evaluate referral qualification (TOURNAMENT_JOIN)
       try {
         await ReferralService.evaluateQualification(userId, "TOURNAMENT_JOIN", { tournamentId });
@@ -423,6 +435,17 @@ export async function cancelRegistration(userId: string, tournamentId: string) {
         maxPlayers: tournament.maxPlayers,
       }),
     ]);
+
+    void broadcastAdminAnalytics("admin:analytics:registration-updated", {
+      tournamentId,
+      userId,
+      registeredPlayers: updatedCount,
+      maxPlayers: tournament.maxPlayers,
+      entryFee: tournament.entryFee,
+      timestamp: new Date().toISOString(),
+    });
+
+    TournamentAnalyticsCache.invalidateRegistrations(tournamentId, userId);
     return res;
   });
 }
@@ -628,6 +651,7 @@ export async function createTournament(input: CreateTournamentInput, createdBy: 
     targetId: tournament.id,
     meta: { title: tournament.title },
   });
+  TournamentAnalyticsCache.invalidateTournaments(tournament.id, tournament.gameId);
   return tournament;
 }
 
@@ -657,6 +681,7 @@ export async function updateTournament(id: string, input: Partial<CreateTourname
     targetId: id,
     meta: { title: tournament.title },
   });
+  TournamentAnalyticsCache.invalidateTournaments(id, tournament.gameId);
   return tournament;
 }
 
@@ -686,6 +711,7 @@ export async function setTournamentStatus(id: string, status: TournamentStatus, 
     targetId: id,
     meta: { status },
   });
+  TournamentAnalyticsCache.invalidateTournaments(id, tournament.gameId);
 
   if (status === "CANCELLED") {
     const { RefundService } = await import("./refundService");

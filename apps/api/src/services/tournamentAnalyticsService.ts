@@ -72,10 +72,13 @@ import {
   type TournamentTrendPoint,
   type TournamentReportRequest,
   type TournamentReportResult,
+  type TournamentValidationSummary,
 } from "@gaming-hub/shared";
+import { TournamentValidationService } from "./tournamentValidationService";
 import { isHourlySchedulerPaused, getHourlySchedulerInfo } from "./hourlyTournamentScheduler";
 import { TournamentEmailService } from "./tournamentEmailService";
 import { audit } from "./audit";
+import { TournamentAnalyticsCache } from "./tournamentAnalyticsCache";
 
 export interface AnalyticsFilterParams {
   timeFilter?: TournamentAnalyticsTimeFilter;
@@ -88,16 +91,50 @@ export interface AnalyticsFilterParams {
 
 export class TournamentAnalyticsService {
   /**
+   * Resolves friendly display name for a game.
+   */
+  static getGameName(gameId?: string | null): string {
+    if (!gameId) return "Unknown Game";
+    const found = GAME_DEFINITIONS.find((g) => g.id.toLowerCase() === gameId.toLowerCase());
+    return found ? found.name : gameId;
+  }
+
+  /**
+   * Resolves friendly display name for a tournament tier.
+   */
+  static getTierName(tierCode?: string | null): string {
+    if (!tierCode) return "Standard";
+    const found = DEFAULT_TOURNAMENT_TIERS.find((t) => t.code.toLowerCase() === tierCode.toLowerCase());
+    return found ? found.name : tierCode.charAt(0).toUpperCase() + tierCode.slice(1);
+  }
+
+  /**
    * Resolves the start and end dates based on timezone and time filter.
    */
   static getDateRange(params: AnalyticsFilterParams): { startDate: Date; endDate: Date; label: string } {
-    const filter = params.timeFilter || "last30days";
+    const filter = params.timeFilter || (params.fromDate && params.toDate ? "custom" : "last30days");
     const now = new Date();
 
-    if (filter === "custom" && params.fromDate && params.toDate) {
+    if (filter === "all") {
       return {
-        startDate: new Date(params.fromDate),
-        endDate: new Date(params.toDate),
+        startDate: new Date(0),
+        endDate: new Date("2100-01-01T00:00:00.000Z"),
+        label: "All Time",
+      };
+    }
+
+    if ((filter === "custom" || (params.fromDate && params.toDate)) && params.fromDate && params.toDate) {
+      let from = new Date(params.fromDate);
+      let to = new Date(params.toDate);
+      if (params.fromDate.length <= 10) {
+        from = new Date(`${params.fromDate}T00:00:00.000Z`);
+      }
+      if (params.toDate.length <= 10) {
+        to = new Date(`${params.toDate}T23:59:59.999Z`);
+      }
+      return {
+        startDate: from,
+        endDate: to,
         label: "Custom Range",
       };
     }
@@ -160,6 +197,12 @@ export class TournamentAnalyticsService {
    * Main aggregated analytics endpoint payload.
    */
   static async getTournamentAnalytics(params: AnalyticsFilterParams): Promise<TournamentAnalyticsResponse> {
+    const cacheKey = TournamentAnalyticsCache.buildKey("FULL_SUMMARY", params as Record<string, unknown>);
+    const cached = TournamentAnalyticsCache.get<TournamentAnalyticsResponse>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const { startDate, endDate } = this.getDateRange(params);
     const filter = params.timeFilter || "last30days";
 
@@ -199,6 +242,7 @@ export class TournamentAnalyticsService {
         },
       },
       orderBy: { createdAt: "asc" },
+      take: 2000,
     });
 
     // 2. Filter by tier if specified
@@ -1963,7 +2007,7 @@ export class TournamentAnalyticsService {
       }
     }
 
-    return {
+    const response: TournamentAnalyticsResponse = {
       timeFilter: filter,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
@@ -1986,19 +2030,29 @@ export class TournamentAnalyticsService {
       health,
       trends,
       gameTierMatrix,
+      validation: await TournamentValidationService.validateTournamentAnalytics(params),
     };
+
+    TournamentAnalyticsCache.set(cacheKey, response, "FULL_SUMMARY");
+    return response;
   }
 
   /**
    * Evaluates real-time health across stuck tournaments, stuck matches, settlements, and scheduler.
    */
   static async getTournamentHealthOverview(): Promise<TournamentHealthSummary> {
+    const cacheKey = TournamentAnalyticsCache.buildKey("HEALTH", {});
+    const cached = TournamentAnalyticsCache.get<TournamentHealthSummary>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const now = new Date();
     const stuckTournaments: StuckTournamentItem[] = [];
     const stuckMatches: StuckMatchItem[] = [];
     const reviewItems: TournamentReviewItem[] = [];
 
-    // Query active and recent tournaments
+    // Query active and recent tournaments (bounded to latest 100 relevant tournaments for performance)
     const tournaments = await prisma.tournament.findMany({
       where: {
         status: { in: ["IN_PROGRESS", "LIVE", "STARTING", "SETTLING", "REGISTRATION_OPEN", "DRAFT", "SETTLED", "COMPLETED"] },
@@ -2015,6 +2069,7 @@ export class TournamentAnalyticsService {
         },
       },
       orderBy: { createdAt: "desc" },
+      take: 100,
     });
 
     let healthyTournamentsCount = 0;
@@ -2399,7 +2454,7 @@ export class TournamentAnalyticsService {
       overallStatus = "ATTENTION";
     }
 
-    return {
+    const healthSummary: TournamentHealthSummary = {
       overallStatus,
       healthyTournamentsCount,
       attentionTournamentsCount,
@@ -2416,13 +2471,20 @@ export class TournamentAnalyticsService {
       schedulerHealth,
       checkedAt: now.toISOString(),
     };
+
+    TournamentAnalyticsCache.set(cacheKey, healthSummary, "HEALTH");
+    return healthSummary;
   }
 
   /**
    * Generates formatted, filtered operational report for download and viewing.
    */
-  static async generateReport(adminId: string, params: TournamentReportRequest): Promise<TournamentReportResult> {
-    const { startDate, endDate } = this.getDateRange(params);
+  static async generateReport(
+    adminId: string,
+    params: TournamentReportRequest,
+    context?: { ip?: string | null; userAgent?: string | null; exportStatus?: "PREVIEW" | "EXPORTED_CSV" | "SUCCESS" | "FAILED" }
+  ): Promise<TournamentReportResult> {
+    const { startDate, endDate, label: dateRangeLabel } = this.getDateRange(params);
     const reportType = params.reportType;
     const filterGame = params.gameId && params.gameId.toUpperCase() !== "ALL" ? params.gameId : undefined;
     const filterTier = params.tier && params.tier.toUpperCase() !== "ALL" ? params.tier.toLowerCase() : undefined;
@@ -2432,7 +2494,28 @@ export class TournamentAnalyticsService {
     let rows: Array<Record<string, any>> = [];
 
     if (reportType === "TOURNAMENT") {
-      headers = ["Tournament ID", "Title", "Game", "Tier", "Status", "Start Time", "Players", "Max Players", "Entry Fee", "Prize Pool"];
+      headers = [
+        "Tournament ID",
+        "Title",
+        "Game ID",
+        "Game Name",
+        "Tier",
+        "Format",
+        "Status",
+        "Start Time",
+        "End Time",
+        "Registration Starts At",
+        "Registration Ends At",
+        "Registered Players",
+        "Min Players",
+        "Max Players",
+        "Entry Fee",
+        "Prize Pool",
+        "Gross Pool",
+        "Created At",
+        "Settled At",
+      ];
+
       const tournaments = await prisma.tournament.findMany({
         where: {
           createdAt: { gte: startDate, lte: endDate },
@@ -2441,39 +2524,7 @@ export class TournamentAnalyticsService {
         },
         include: { _count: { select: { players: true } } },
         orderBy: { createdAt: "desc" },
-        take: 1000,
-      });
-
-      const filtered = filterTier
-        ? tournaments.filter((t) => this.getTierCode(t) === filterTier)
-        : tournaments;
-
-      rows = filtered.map((t) => ({
-        "Tournament ID": t.id,
-        "Title": t.title,
-        "Game": t.gameId,
-        "Tier": this.getTierCode(t),
-        "Status": t.status,
-        "Start Time": t.startTime.toISOString(),
-        "Players": t._count.players,
-        "Max Players": t.maxPlayers,
-        "Entry Fee": t.entryFee,
-        "Prize Pool": t.prizePool,
-      }));
-    } else if (reportType === "FINANCIAL") {
-      headers = ["Tournament ID", "Title", "Game", "Tier", "Status", "Entry Fee", "Players", "Total Collected", "Prize Pool", "Prize Distributed", "Refunds", "Platform Profit"];
-      const tournaments = await prisma.tournament.findMany({
-        where: {
-          createdAt: { gte: startDate, lte: endDate },
-          ...(filterGame ? { gameId: filterGame } : {}),
-          ...(filterStatus ? { status: filterStatus as any } : {}),
-        },
-        include: {
-          players: { select: { id: true } },
-          prizes: true,
-        },
-        orderBy: { createdAt: "desc" },
-        take: 1000,
+        take: 5000,
       });
 
       const filtered = filterTier
@@ -2481,27 +2532,51 @@ export class TournamentAnalyticsService {
         : tournaments;
 
       rows = filtered.map((t) => {
-        const totalCollected = t.entryFee * t.players.length;
-        const totalDistributed = t.prizes.filter((p) => p.status === "PAID").reduce((sum, p) => sum + p.amount, 0);
-        const refunds = t.status === "CANCELLED" ? totalCollected : 0;
-        const platformProfit = Math.max(0, totalCollected - totalDistributed - refunds);
+        const tierCode = this.getTierCode(t);
         return {
           "Tournament ID": t.id,
           "Title": t.title,
-          "Game": t.gameId,
-          "Tier": this.getTierCode(t),
+          "Game ID": t.gameId,
+          "Game Name": this.getGameName(t.gameId),
+          "Tier": this.getTierName(tierCode),
+          "Format": t.format,
           "Status": t.status,
+          "Start Time": t.startTime.toISOString(),
+          "End Time": t.endTime ? t.endTime.toISOString() : "—",
+          "Registration Starts At": t.registrationStartsAt ? t.registrationStartsAt.toISOString() : "—",
+          "Registration Ends At": t.registrationEndsAt ? t.registrationEndsAt.toISOString() : "—",
+          "Registered Players": t._count.players,
+          "Min Players": t.minPlayers,
+          "Max Players": t.maxPlayers,
           "Entry Fee": t.entryFee,
-          "Players": t.players.length,
-          "Total Collected": totalCollected,
           "Prize Pool": t.prizePool,
-          "Prize Distributed": totalDistributed,
-          "Refunds": refunds,
-          "Platform Profit": platformProfit,
+          "Gross Pool": t.grossPool,
+          "Created At": t.createdAt.toISOString(),
+          "Settled At": t.settledAt ? t.settledAt.toISOString() : "—",
         };
       });
-    } else if (reportType === "PLAYER_PARTICIPATION") {
-      headers = ["User ID", "Username", "Display Name", "Tournaments Played", "Tournaments Won", "Matches Won", "Matches Lost", "Win Rate %", "Total Prizes Won"];
+    } else if (reportType === "FINANCIAL") {
+      headers = [
+        "Tournament ID",
+        "Title",
+        "Game ID",
+        "Game Name",
+        "Tier",
+        "Status",
+        "Entry Fee",
+        "Registered Players",
+        "Total Collected",
+        "Configured Prize Pool",
+        "Prizes Paid",
+        "Pending Settlements Amount",
+        "Failed Settlements Amount",
+        "Refunds Processed",
+        "Platform Margin",
+        "Settlement Status",
+        "Start Time",
+        "Settled At",
+      ];
+
       const tournaments = await prisma.tournament.findMany({
         where: {
           createdAt: { gte: startDate, lte: endDate },
@@ -2509,72 +2584,251 @@ export class TournamentAnalyticsService {
           ...(filterStatus ? { status: filterStatus as any } : {}),
         },
         include: {
-          players: {
-            include: {
-              user: { select: { id: true, username: true, displayName: true } },
-              prizes: { where: { status: "PAID" }, select: { amount: true } },
+          players: { select: { id: true, userId: true } },
+          prizes: {
+            select: {
+              id: true,
+              amount: true,
+              status: true,
             },
           },
         },
-        take: 500,
+        orderBy: { createdAt: "desc" },
+        take: 5000,
+      });
+
+      const filtered = filterTier
+        ? tournaments.filter((t) => this.getTierCode(t) === filterTier)
+        : tournaments;
+
+      rows = filtered.map((t) => {
+        const tierCode = this.getTierCode(t);
+        const playerCount = t.players.length;
+        const totalCollected = t.entryFee * playerCount;
+        const prizesPaid = t.prizes
+          .filter((p) => p.status === "PAID")
+          .reduce((sum, p) => sum + p.amount, 0);
+        const pendingAmount = t.prizes
+          .filter((p) => p.status === "PENDING" || p.status === "PROCESSING")
+          .reduce((sum, p) => sum + p.amount, 0);
+        const failedAmount = t.prizes
+          .filter((p) => p.status === "FAILED")
+          .reduce((sum, p) => sum + p.amount, 0);
+        const refundsProcessed = t.status === "CANCELLED" ? totalCollected : 0;
+        const platformMargin = Math.max(0, totalCollected - prizesPaid - refundsProcessed);
+
+        let settlementStatus = "NOT_APPLICABLE";
+        if (t.status === "CANCELLED") {
+          settlementStatus = "REFUNDED";
+        } else if (t.prizes.length > 0) {
+          if (t.prizes.every((p) => p.status === "PAID")) {
+            settlementStatus = "SETTLED";
+          } else if (t.prizes.some((p) => p.status === "FAILED")) {
+            settlementStatus = "FAILED";
+          } else if (t.prizes.some((p) => p.status === "PENDING" || p.status === "PROCESSING")) {
+            settlementStatus = "PENDING";
+          }
+        }
+
+        return {
+          "Tournament ID": t.id,
+          "Title": t.title,
+          "Game ID": t.gameId,
+          "Game Name": this.getGameName(t.gameId),
+          "Tier": this.getTierName(tierCode),
+          "Status": t.status,
+          "Entry Fee": t.entryFee,
+          "Registered Players": playerCount,
+          "Total Collected": totalCollected,
+          "Configured Prize Pool": t.prizePool,
+          "Prizes Paid": prizesPaid,
+          "Pending Settlements Amount": pendingAmount,
+          "Failed Settlements Amount": failedAmount,
+          "Refunds Processed": refundsProcessed,
+          "Platform Margin": platformMargin,
+          "Settlement Status": settlementStatus,
+          "Start Time": t.startTime.toISOString(),
+          "Settled At": t.settledAt ? t.settledAt.toISOString() : "—",
+        };
+      });
+    } else if (reportType === "PLAYER_PARTICIPATION") {
+      headers = [
+        "User ID",
+        "Username",
+        "Display Name",
+        "Tournaments Played",
+        "Tournaments Won",
+        "Top 4 Finishes",
+        "Matches Played",
+        "Matches Won",
+        "Matches Lost",
+        "Win Rate %",
+        "Total Entry Fees Paid",
+        "Total Prizes Won",
+        "Net Profit / Loss",
+      ];
+
+      const tournaments = await prisma.tournament.findMany({
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+          ...(filterGame ? { gameId: filterGame } : {}),
+          ...(filterStatus ? { status: filterStatus as any } : {}),
+        },
+        select: {
+          id: true,
+          gameId: true,
+          entryFee: true,
+          title: true,
+          configSnapshot: true,
+          rules: true,
+          players: {
+            select: {
+              id: true,
+              userId: true,
+              finalRank: true,
+              matchesPlayed: true,
+              wins: true,
+              losses: true,
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                },
+              },
+              prizes: {
+                where: { status: "PAID" },
+                select: { amount: true, rank: true },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 3000,
       });
 
       const filteredTournaments = filterTier
         ? tournaments.filter((t) => this.getTierCode(t) === filterTier)
         : tournaments;
 
-      const userMap = new Map<string, { username: string; displayName: string; played: number; won: number; wins: number; losses: number; prizes: number }>();
+      const userMap = new Map<
+        string,
+        {
+          username: string;
+          displayName: string;
+          played: number;
+          won: number;
+          top4: number;
+          matchesPlayed: number;
+          wins: number;
+          losses: number;
+          totalFees: number;
+          totalPrizes: number;
+        }
+      >();
 
       for (const t of filteredTournaments) {
         for (const tp of t.players) {
           const uId = tp.userId;
+          if (!uId) continue;
           let u = userMap.get(uId);
           if (!u) {
             u = {
-              username: tp.user.username,
-              displayName: tp.user.displayName || tp.user.username,
+              username: tp.user?.username || uId,
+              displayName: tp.user?.displayName || tp.user?.username || uId,
               played: 0,
               won: 0,
+              top4: 0,
+              matchesPlayed: 0,
               wins: 0,
               losses: 0,
-              prizes: 0,
+              totalFees: 0,
+              totalPrizes: 0,
             };
             userMap.set(uId, u);
           }
+
           u.played++;
-          if (tp.finalRank === 1) u.won++;
-          u.wins += tp.wins;
-          u.losses += tp.losses;
-          u.prizes += tp.prizes.reduce((sum, p) => sum + p.amount, 0);
+          const isWon = tp.finalRank === 1 || tp.prizes.some((p) => p.rank === 1);
+          const isTop4 = (tp.finalRank && tp.finalRank <= 4) || tp.prizes.some((p) => p.rank <= 4);
+          if (isWon) u.won++;
+          if (isTop4) u.top4++;
+
+          u.matchesPlayed += tp.matchesPlayed || (tp.wins + tp.losses);
+          u.wins += tp.wins || 0;
+          u.losses += tp.losses || 0;
+          u.totalFees += t.entryFee || 0;
+          u.totalPrizes += tp.prizes.reduce((sum, p) => sum + p.amount, 0);
         }
       }
 
       rows = Array.from(userMap.entries()).map(([userId, u]) => {
         const totalMatches = u.wins + u.losses;
         const winRate = totalMatches > 0 ? Math.round((u.wins / totalMatches) * 100) : 0;
+        const netProfit = u.totalPrizes - u.totalFees;
         return {
           "User ID": userId,
           "Username": u.username,
           "Display Name": u.displayName,
           "Tournaments Played": u.played,
           "Tournaments Won": u.won,
+          "Top 4 Finishes": u.top4,
+          "Matches Played": u.matchesPlayed,
           "Matches Won": u.wins,
           "Matches Lost": u.losses,
           "Win Rate %": winRate,
-          "Total Prizes Won": u.prizes,
+          "Total Entry Fees Paid": u.totalFees,
+          "Total Prizes Won": u.totalPrizes,
+          "Net Profit / Loss": netProfit,
         };
       });
     } else if (reportType === "SETTLEMENT") {
-      headers = ["Prize ID", "Tournament ID", "Game", "Tier", "User ID", "Rank", "Prize Amount", "Status", "Paid At", "Failure Reason"];
+      headers = [
+        "Prize ID",
+        "Tournament ID",
+        "Tournament Title",
+        "Game ID",
+        "Game Name",
+        "Tier",
+        "Tournament Status",
+        "User ID",
+        "Username",
+        "Rank",
+        "Prize Amount",
+        "Settlement Status",
+        "Transaction ID",
+        "Retry Count",
+        "Failure Reason",
+        "Paid At",
+        "Created At",
+      ];
+
       const prizes = await prisma.tournamentPrize.findMany({
         where: {
           createdAt: { gte: startDate, lte: endDate },
         },
         include: {
-          tournament: { select: { id: true, gameId: true, entryFee: true, status: true, title: true } },
+          tournament: {
+            select: {
+              id: true,
+              title: true,
+              gameId: true,
+              entryFee: true,
+              status: true,
+              configSnapshot: true,
+              rules: true,
+            },
+          },
+          player: {
+            include: {
+              user: {
+                select: { id: true, username: true, displayName: true },
+              },
+            },
+          },
         },
         orderBy: { createdAt: "desc" },
-        take: 1000,
+        take: 5000,
       });
 
       let filteredPrizes = prizes;
@@ -2582,65 +2836,192 @@ export class TournamentAnalyticsService {
         filteredPrizes = filteredPrizes.filter((p) => p.tournament?.gameId === filterGame);
       }
       if (filterStatus) {
-        filteredPrizes = filteredPrizes.filter((p) => p.tournament?.status === filterStatus);
+        filteredPrizes = filteredPrizes.filter(
+          (p) => p.tournament?.status === filterStatus || p.status === filterStatus
+        );
       }
       if (filterTier) {
-        filteredPrizes = filteredPrizes.filter((p) => p.tournament && this.getTierCode(p.tournament as any) === filterTier);
+        filteredPrizes = filteredPrizes.filter(
+          (p) => p.tournament && this.getTierCode(p.tournament as any) === filterTier
+        );
       }
 
-      rows = filteredPrizes.map((p) => ({
-        "Prize ID": p.id,
-        "Tournament ID": p.tournamentId,
-        "Game": p.tournament?.gameId || "unknown",
-        "Tier": p.tournament ? this.getTierCode(p.tournament as any) : "unknown",
-        "User ID": p.userId,
-        "Rank": p.rank,
-        "Prize Amount": p.amount,
-        "Status": p.status,
-        "Paid At": p.paidAt?.toISOString() || "—",
-        "Failure Reason": p.failureReason || "—",
-      }));
+      rows = filteredPrizes.map((p) => {
+        const tierCode = p.tournament ? this.getTierCode(p.tournament as any) : "standard";
+        return {
+          "Prize ID": p.id,
+          "Tournament ID": p.tournamentId,
+          "Tournament Title": p.tournament?.title || "Unknown Tournament",
+          "Game ID": p.tournament?.gameId || "unknown",
+          "Game Name": p.tournament?.gameId ? this.getGameName(p.tournament.gameId) : "Unknown",
+          "Tier": this.getTierName(tierCode),
+          "Tournament Status": p.tournament?.status || "UNKNOWN",
+          "User ID": p.userId,
+          "Username": p.player?.user?.username || p.userId,
+          "Rank": p.rank,
+          "Prize Amount": p.amount,
+          "Settlement Status": p.status,
+          "Transaction ID": p.transactionId || "—",
+          "Retry Count": p.retryCount || 0,
+          "Failure Reason": p.failureReason || "—",
+          "Paid At": p.paidAt ? p.paidAt.toISOString() : "—",
+          "Created At": p.createdAt.toISOString(),
+        };
+      });
     } else if (reportType === "NOTIFICATION") {
-      headers = ["Notification ID", "User ID", "Tournament ID", "Game", "Tier", "Event Type", "Status", "Created At", "Sent At"];
+      headers = [
+        "Notification ID",
+        "Channel",
+        "User ID",
+        "Username",
+        "Tournament ID",
+        "Tournament Title",
+        "Game",
+        "Tier",
+        "Event Type",
+        "Delivery Status",
+        "Failure Reason",
+        "Created At",
+        "Delivered At",
+      ];
+
+      // 1. Fetch email delivery records
       const emailLogs = TournamentEmailService.getEmailDeliveryRecords();
-      let filteredLogs = emailLogs.filter((e) => {
+      const filteredEmailLogs = emailLogs.filter((e) => {
         const logDate = new Date(e.createdAt);
         return logDate >= startDate && logDate <= endDate;
       });
 
-      if (filterGame) {
-        filteredLogs = filteredLogs.filter((e) => ((e as any).gameId || (e.metadata as any)?.gameId) === filterGame);
-      }
-      if (filterTier) {
-        filteredLogs = filteredLogs.filter((e) => ((e as any).tierCode || (e.metadata as any)?.tierCode) === filterTier);
+      // 2. Fetch in-app notifications
+      const inAppNotifications = await prisma.appNotification.findMany({
+        where: {
+          type: "TOURNAMENT",
+          createdAt: { gte: startDate, lte: endDate },
+        },
+        include: {
+          user: { select: { id: true, username: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 2500,
+      });
+
+      // Build unified rows
+      const combinedRows: Array<{
+        notificationId: string;
+        channel: string;
+        userId: string;
+        username: string;
+        tournamentId: string;
+        tournamentTitle: string;
+        gameId: string;
+        tierCode: string;
+        eventType: string;
+        status: string;
+        failureReason: string;
+        createdAt: Date;
+        deliveredAt: Date | null;
+      }> = [];
+
+      for (const e of filteredEmailLogs) {
+        combinedRows.push({
+          notificationId: e.notificationId,
+          channel: "EMAIL",
+          userId: e.userId,
+          username: e.email || e.userId,
+          tournamentId: e.tournamentId,
+          tournamentTitle: (e.metadata as any)?.tournamentTitle || `Tournament ${e.tournamentId}`,
+          gameId: (e as any).gameId || (e.metadata as any)?.gameId || "ALL",
+          tierCode: (e as any).tierCode || (e.metadata as any)?.tierCode || "standard",
+          eventType: e.eventType,
+          status: e.status,
+          failureReason: e.error || "—",
+          createdAt: new Date(e.createdAt),
+          deliveredAt: e.sentAt ? new Date(e.sentAt) : null,
+        });
       }
 
-      rows = filteredLogs.slice(0, 1000).map((e) => ({
-        "Notification ID": e.notificationId,
-        "User ID": e.userId,
-        "Tournament ID": e.tournamentId,
-        "Game": (e as any).gameId || (e.metadata as any)?.gameId || "ALL",
-        "Tier": (e as any).tierCode || (e.metadata as any)?.tierCode || "ALL",
-        "Event Type": e.eventType,
-        "Status": e.status,
-        "Created At": e.createdAt.toISOString(),
-        "Sent At": e.sentAt?.toISOString() || "—",
+      for (const n of inAppNotifications) {
+        const data = (n.data as any) || {};
+        const tournamentId = data.tournamentId || n.referenceId || "—";
+        combinedRows.push({
+          notificationId: n.id,
+          channel: "IN_APP",
+          userId: n.userId,
+          username: n.user?.username || n.userId,
+          tournamentId,
+          tournamentTitle: data.tournamentTitle || n.title || `Tournament ${tournamentId}`,
+          gameId: data.gameId || "ALL",
+          tierCode: data.tierCode || "standard",
+          eventType: n.tournamentEventType || n.type,
+          status: n.readAt ? "READ" : "DELIVERED",
+          failureReason: "—",
+          createdAt: n.createdAt,
+          deliveredAt: n.readAt || n.createdAt,
+        });
+      }
+
+      let filteredCombined = combinedRows;
+      if (filterGame) {
+        filteredCombined = filteredCombined.filter((r) => r.gameId === "ALL" || r.gameId === filterGame);
+      }
+      if (filterTier) {
+        filteredCombined = filteredCombined.filter((r) => r.tierCode === "standard" || r.tierCode.toLowerCase() === filterTier);
+      }
+      if (filterStatus) {
+        filteredCombined = filteredCombined.filter(
+          (r) => r.status.toUpperCase() === filterStatus.toUpperCase()
+        );
+      }
+
+      filteredCombined.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+      rows = filteredCombined.slice(0, 5000).map((r) => ({
+        "Notification ID": r.notificationId,
+        "Channel": r.channel,
+        "User ID": r.userId,
+        "Username": r.username,
+        "Tournament ID": r.tournamentId,
+        "Tournament Title": r.tournamentTitle,
+        "Game": r.gameId === "ALL" ? "All Games" : this.getGameName(r.gameId),
+        "Tier": this.getTierName(r.tierCode),
+        "Event Type": r.eventType,
+        "Delivery Status": r.status,
+        "Failure Reason": r.failureReason,
+        "Created At": r.createdAt.toISOString(),
+        "Delivered At": r.deliveredAt ? r.deliveredAt.toISOString() : "—",
       }));
     }
 
-    // Audit Report Generation
+    // Audit Report Generation / Export
+    const exportStatus = context?.exportStatus || "SUCCESS";
+    const generationTime = new Date().toISOString();
+
     audit({
       actorType: "user",
       actorId: adminId,
-      action: "tournament.report_generated",
-      category: "game",
+      action: exportStatus === "EXPORTED_CSV" ? "tournament.report_exported" : "tournament.report_generated",
+      category: "report",
       targetType: "report",
       targetId: reportType,
+      ip: context?.ip || null,
+      userAgent: context?.userAgent || null,
       meta: {
+        adminId,
         reportType,
-        timeFilter: params.timeFilter,
+        selectedDateRange: {
+          timeFilter: params.timeFilter,
+          fromDate: params.fromDate || null,
+          toDate: params.toDate || null,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          label: dateRangeLabel,
+        },
+        gameFilter: params.gameId && params.gameId.toUpperCase() !== "ALL" ? params.gameId : "ALL",
+        tierFilter: params.tier && params.tier.toUpperCase() !== "ALL" ? params.tier.toLowerCase() : "ALL",
+        tournamentStatusFilter: params.status && params.status.toUpperCase() !== "ALL" ? params.status.toUpperCase() : "ALL",
+        generationTime,
+        exportStatus,
         totalRecords: rows.length,
-        generatedAt: new Date().toISOString(),
       },
     });
 
@@ -2656,18 +3037,24 @@ export class TournamentAnalyticsService {
   }
 
   /**
-   * Formats report result to sanitized CSV string.
+   * Formats report result to sanitized RFC 4180 CSV string with formula injection protection.
    */
   static exportCsv(report: TournamentReportResult): string {
-    const headerLine = report.headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(",");
+    const sanitizeValue = (val: any): string => {
+      if (val === undefined || val === null) return "";
+      let str = String(val);
+      // Formula Injection Prevention: If string starts with =, +, -, @, \t, \r
+      // and isn't a plain number (e.g. -123 is a number, but =SUM(...) is a formula)
+      if (/^[=+\-@\t\r]/.test(str) && isNaN(Number(str))) {
+        str = `'${str}`;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const headerLine = report.headers.map((h) => sanitizeValue(h)).join(",");
     const rowLines = report.rows.map((row) =>
-      report.headers
-        .map((h) => {
-          const val = row[h] !== undefined && row[h] !== null ? String(row[h]) : "";
-          return `"${val.replace(/"/g, '""')}"`;
-        })
-        .join(",")
+      report.headers.map((h) => sanitizeValue(row[h])).join(",")
     );
-    return [headerLine, ...rowLines].join("\n");
+    return [headerLine, ...rowLines].join("\r\n");
   }
 }

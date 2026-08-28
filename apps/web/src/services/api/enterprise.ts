@@ -687,6 +687,37 @@ export const adminTournamentsApi = {
     if (params.status && params.status !== 'ALL') qs.set('status', params.status);
     return `/api/admin/tournaments/reports/export-csv?${qs.toString()}`;
   },
+  downloadReportCsv: async (params: { reportType: string; timeFilter?: string; fromDate?: string; toDate?: string; gameId?: string; tier?: string; status?: string }) => {
+    const qs = new URLSearchParams();
+    qs.set('reportType', params.reportType);
+    if (params.timeFilter) qs.set('timeFilter', params.timeFilter);
+    if (params.fromDate) qs.set('fromDate', params.fromDate);
+    if (params.toDate) qs.set('toDate', params.toDate);
+    if (params.gameId && params.gameId !== 'ALL' && params.gameId !== 'all') qs.set('gameId', params.gameId);
+    if (params.tier && params.tier !== 'ALL' && params.tier !== 'all') qs.set('tier', params.tier);
+    if (params.status && params.status !== 'ALL') qs.set('status', params.status);
+
+    const token = (await import('../../store/authStore')).useAuthStore.getState().session?.access_token;
+    const envUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000/api';
+    const baseUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+      ? envUrl.replace('localhost', window.location.hostname).replace('127.0.0.1', window.location.hostname)
+      : envUrl;
+
+    const res = await fetch(`${baseUrl}/admin/tournaments/reports/export-csv?${qs.toString()}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      throw new Error(`CSV Export failed with status ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const sanitizedType = params.reportType.toLowerCase().replace(/_/g, '-');
+    a.download = `tournament-report-${sanitizedType}-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -963,6 +994,37 @@ export const adminApi = {
     apiClient.put<import('@gaming-hub/shared').GameTierAvailability>('/admin/tournaments/game-tiers', matrix),
   tournamentFinancials: (id: string) =>
     apiClient.get<import('@gaming-hub/shared').TournamentFinancialSummary>(`/admin/tournaments/${id}/financials`),
+  tournamentAnalyticsValidation: (gameId?: string) => {
+    const qs = gameId && gameId !== 'ALL' ? `?gameId=${gameId}` : '';
+    return apiClient.get<import('@gaming-hub/shared').TournamentValidationSummary>(`/admin/tournaments/analytics/validate${qs}`);
+  },
+  runTournamentAnalyticsValidation: (body?: Record<string, unknown>) =>
+    apiClient.post<import('@gaming-hub/shared').TournamentValidationSummary>('/admin/tournaments/analytics/validate/run', body || {}),
+  tournamentIntegrityAlerts: (params?: Record<string, string>) => {
+    const qs = new URLSearchParams(params || {});
+    return apiClient.get<{
+      items: import('@gaming-hub/shared').TournamentIntegrityAlert[];
+      total: number;
+      openCount: number;
+      criticalCount: number;
+      underReviewCount: number;
+      resolvedCount: number;
+    }>(`/admin/tournaments/integrity-alerts?${qs.toString()}`);
+  },
+  scanTournamentIntegrityAlerts: (tournamentId?: string) =>
+    apiClient.post<{
+      items: import('@gaming-hub/shared').TournamentIntegrityAlert[];
+      total: number;
+      openCount: number;
+      criticalCount: number;
+      underReviewCount: number;
+      resolvedCount: number;
+    }>('/admin/tournaments/integrity-alerts/scan', { tournamentId }),
+  updateTournamentIntegrityAlertStatus: (id: string, status: string, resolutionNotes?: string) =>
+    apiClient.patch<import('@gaming-hub/shared').TournamentIntegrityAlert>(`/admin/tournaments/integrity-alerts/${id}/status`, {
+      status,
+      resolutionNotes,
+    }),
   tournamentTiers: () => apiClient.get<any[]>('/admin/tournament-tiers'),
   updateTournamentTier: (id: string, data: any) => apiClient.put(`/admin/tournament-tiers/${id}`, data),
 

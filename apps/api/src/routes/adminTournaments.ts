@@ -7,6 +7,8 @@ import { authenticate } from "../plugins/authenticate";
 import { parseSchema, routeParams, queryParams, queryString } from "../lib/http";
 import { requirePermission } from "../lib/permissions";
 import { auditFromRequest } from "../services/audit";
+import { broadcastAdminAnalytics } from "../services/socketBridge";
+import { TournamentAnalyticsCache } from "../services/tournamentAnalyticsCache";
 import {
   createTournament,
   updateTournament,
@@ -250,6 +252,12 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
       actorType: "user", actorId: admin.id, action: "admin.tournament.paused",
       category: "admin", targetType: "tournament", targetId: id,
     });
+    void broadcastAdminAnalytics("admin:analytics:tournament-updated", {
+      tournamentId: id,
+      status: "PAUSED",
+      timestamp: new Date().toISOString(),
+    });
+    TournamentAnalyticsCache.invalidateTournaments(id);
     return { ok: true, status: "PAUSED" };
   });
 
@@ -262,6 +270,12 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
       actorType: "user", actorId: admin.id, action: "admin.tournament.resumed",
       category: "admin", targetType: "tournament", targetId: id,
     });
+    void broadcastAdminAnalytics("admin:analytics:tournament-updated", {
+      tournamentId: id,
+      status: "IN_PROGRESS",
+      timestamp: new Date().toISOString(),
+    });
+    TournamentAnalyticsCache.invalidateTournaments(id);
     return { ok: true, status: "IN_PROGRESS" };
   });
 
@@ -284,6 +298,18 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
       category: "admin", targetType: "tournament", targetId: id,
       meta: { reason: body.reason },
     });
+    void broadcastAdminAnalytics("admin:analytics:tournament-updated", {
+      tournamentId: id,
+      status: "CANCELLED",
+      timestamp: new Date().toISOString(),
+    });
+    void broadcastAdminAnalytics("admin:analytics:refund-updated", {
+      tournamentId: id,
+      status: "COMPLETED",
+      timestamp: new Date().toISOString(),
+    });
+    TournamentAnalyticsCache.invalidateTournaments(id);
+    TournamentAnalyticsCache.invalidateRefunds(id);
     return { ok: true, status: "CANCELLED" };
   });
 
@@ -315,6 +341,12 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
       targetId: id,
       meta: { ...result, reason: body.reason },
     });
+    void broadcastAdminAnalytics("admin:analytics:refund-updated", {
+      tournamentId: id,
+      status: "COMPLETED",
+      timestamp: new Date().toISOString(),
+    });
+    TournamentAnalyticsCache.invalidateRefunds(id);
     return result;
   });
 
@@ -327,6 +359,7 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
       actorType: "user", actorId: admin.id, action: "admin.tournament.settled",
       category: "admin", targetType: "tournament", targetId: id,
     });
+    TournamentAnalyticsCache.invalidateSettlements(id);
     return { ok: true, status: "SETTLED" };
   });
 
@@ -444,12 +477,19 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
     const { id } = routeParams(request);
     const body = (request.body as any) || {};
     const { TournamentSettlementService } = await import("../services/tournamentSettlementService");
-    return TournamentSettlementService.retryFailedSettlements(
+    const result = await TournamentSettlementService.retryFailedSettlements(
       id,
       admin.id,
       body.reason || "Admin settlement retry",
       body.prizeId,
     );
+    void broadcastAdminAnalytics("admin:analytics:settlement-updated", {
+      tournamentId: id,
+      prizeId: body.prizeId,
+      status: "PAID",
+      timestamp: new Date().toISOString(),
+    });
+    return result;
   });
 
   // ------------------------------------------------------------------
@@ -729,13 +769,74 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
   });
 
   // ------------------------------------------------------------------
+  // Data Validation & Financial Cross-Check Layer
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/analytics/validate", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const q = queryParams(request);
+    const gameId = queryString(q.gameId);
+    const { TournamentValidationService } = await import("../services/tournamentValidationService");
+    return TournamentValidationService.validateTournamentAnalytics({ gameId: gameId || undefined });
+  });
+
+  app.post("/api/admin/tournaments/analytics/validate/run", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
+    const body = (request.body as any) || {};
+    const { TournamentValidationService } = await import("../services/tournamentValidationService");
+    return TournamentValidationService.validateTournamentAnalytics(body, admin.id);
+  });
+
+  // ------------------------------------------------------------------
+  // Data Integrity Alerts Center
+  // ------------------------------------------------------------------
+  app.get("/api/admin/tournaments/integrity-alerts", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const q = queryParams(request);
+    const status = queryString(q.status) as any;
+    const severity = queryString(q.severity) as any;
+    const issueType = queryString(q.issueType) as any;
+    const gameId = queryString(q.gameId);
+    const tier = queryString(q.tier);
+    const tournamentId = queryString(q.tournamentId);
+
+    const { TournamentIntegrityAlertService } = await import("../services/tournamentIntegrityAlertService");
+    return TournamentIntegrityAlertService.listAlerts({
+      status,
+      severity,
+      issueType,
+      gameId,
+      tier,
+      tournamentId,
+    });
+  });
+
+  app.post("/api/admin/tournaments/integrity-alerts/scan", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:manage", prisma);
+    const body = (request.body as any) || {};
+    const { TournamentIntegrityAlertService } = await import("../services/tournamentIntegrityAlertService");
+    return TournamentIntegrityAlertService.scanAndDetectAlerts(body.tournamentId);
+  });
+
+  app.patch("/api/admin/tournaments/integrity-alerts/:id/status", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
+    const { id } = routeParams(request);
+    const body = (request.body as any) || {};
+    const { TournamentIntegrityAlertService } = await import("../services/tournamentIntegrityAlertService");
+    return TournamentIntegrityAlertService.updateAlertStatus(id, body.status, admin.id, body.resolutionNotes);
+  });
+
+  // ------------------------------------------------------------------
   // Report Generation
   // ------------------------------------------------------------------
   app.post("/api/admin/tournaments/reports/generate", { preHandler: authenticate }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:view", prisma);
     const body = request.body as any;
     const { TournamentAnalyticsService } = await import("../services/tournamentAnalyticsService");
-    return TournamentAnalyticsService.generateReport(admin.id, body);
+    return TournamentAnalyticsService.generateReport(admin.id, body, {
+      ip: request.ip,
+      userAgent: request.headers["user-agent"] as string,
+      exportStatus: "PREVIEW",
+    });
   });
 
   // ------------------------------------------------------------------
@@ -753,19 +854,29 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
     const status = queryString(q.status);
 
     const { TournamentAnalyticsService } = await import("../services/tournamentAnalyticsService");
-    const report = await TournamentAnalyticsService.generateReport(admin.id, {
-      reportType,
-      timeFilter,
-      fromDate,
-      toDate,
-      gameId,
-      tier,
-      status,
-    });
+    const report = await TournamentAnalyticsService.generateReport(
+      admin.id,
+      {
+        reportType,
+        timeFilter,
+        fromDate,
+        toDate,
+        gameId,
+        tier,
+        status,
+      },
+      {
+        ip: request.ip,
+        userAgent: request.headers["user-agent"] as string,
+        exportStatus: "EXPORTED_CSV",
+      },
+    );
 
     const csv = TournamentAnalyticsService.exportCsv(report);
-    reply.header("Content-Type", "text/csv");
-    reply.header("Content-Disposition", `attachment; filename=tournament-report-${reportType.toLowerCase()}-${Date.now()}.csv`);
+    const filenameType = String(reportType).toLowerCase().replace(/_/g, "-");
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="tournament-report-${filenameType}-${Date.now()}.csv"`);
+    reply.header("Cache-Control", "no-cache, no-store, must-revalidate");
     return reply.send(csv);
   });
 }

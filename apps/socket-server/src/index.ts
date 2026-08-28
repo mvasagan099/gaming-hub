@@ -98,6 +98,42 @@ async function main(): Promise<void> {
       return;
     }
 
+    if (req.method === "POST" && req.url === "/internal/broadcast") {
+      let body = "";
+      req.on("data", (chunk: Buffer) => {
+        body += chunk;
+        if (body.length > 64 * 1024) req.destroy();
+      });
+      req.on("end", () => {
+        try {
+          if (req.headers["x-internal-key"] !== env.INTERNAL_API_KEY) {
+            res.writeHead(401, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ ok: false, error: "UNAUTHORIZED" }));
+            return;
+          }
+          const parsed = JSON.parse(body) as {
+            room?: string;
+            event?: string;
+            payload?: unknown;
+          };
+          const event = typeof parsed.event === "string" ? parsed.event : "";
+          const targetRoom = typeof parsed.room === "string" && parsed.room ? parsed.room : "admin:analytics";
+          if (!event) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ ok: false, error: "VALIDATION_ERROR" }));
+            return;
+          }
+          const emitted = io.to(targetRoom).emit(event as any, parsed.payload);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, emitted: Boolean(emitted) }));
+        } catch {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: false, error: "INTERNAL_ERROR" }));
+        }
+      });
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/internal/tournament/create-match") {
       // Internal endpoint for creating tournament matches with metadata
       if (req.headers["x-internal-key"] !== env.INTERNAL_API_KEY) {
@@ -419,6 +455,30 @@ async function main(): Promise<void> {
         // No active room to reconnect to
       });
     }
+
+    // Admin Real-Time Analytics Subscription
+    socket.on("admin:analytics:subscribe", (ack) => {
+      socket.join("admin:analytics");
+      if (ack) ack({ ok: true, data: { subscribed: true } });
+    });
+
+    socket.on("admin:analytics:unsubscribe", () => {
+      socket.leave("admin:analytics");
+    });
+
+    // Tournament Subscription
+    socket.on("tournament:subscribe", (payload, ack) => {
+      if (payload?.tournamentId) {
+        socket.join(`tournament:${payload.tournamentId}`);
+      }
+      if (ack) ack({ ok: true, data: { subscribed: true } });
+    });
+
+    socket.on("tournament:unsubscribe", (payload) => {
+      if (payload?.tournamentId) {
+        socket.leave(`tournament:${payload.tournamentId}`);
+      }
+    });
 
     const guard = async (
       ack: ((res: { ok: false; error: SocketErrorPayload }) => void) | undefined,

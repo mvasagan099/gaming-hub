@@ -1030,6 +1030,7 @@ export type TournamentAnalyticsTimeFilter =
   | "last7days"
   | "last30days"
   | "thismonth"
+  | "all"
   | "custom";
 
 export interface TournamentPrizeDistributionBreakdown {
@@ -1777,6 +1778,80 @@ export interface TournamentAnalyticsResponse {
   health: TournamentHealthSummary;
   trends: TournamentTrendPoint[];
   gameTierMatrix: Record<string, Record<TournamentTierCode, { count: number; fillRate: number }>>;
+  validation: TournamentValidationSummary;
+}
+
+export interface AnalyticsFilterParams {
+  timeFilter?: TournamentAnalyticsTimeFilter;
+  fromDate?: string;
+  toDate?: string;
+  gameId?: string;
+  tier?: string;
+  tournamentId?: string;
+}
+
+export type TournamentValidationStatus =
+  | "VALID"
+  | "NEEDS_REVIEW"
+  | "CRITICAL_INCONSISTENCY";
+
+export type TournamentValidationCategory =
+  | "TOURNAMENT"
+  | "REGISTRATION"
+  | "FINANCIAL"
+  | "PRIZE"
+  | "REFUND"
+  | "SETTLEMENT"
+  | "MATCH"
+  | "TRANSACTION";
+
+export type TournamentValidationSeverity =
+  | "INFO"
+  | "WARNING"
+  | "CRITICAL";
+
+export interface TournamentInconsistencyItem {
+  id: string;
+  category: TournamentValidationCategory;
+  severity: TournamentValidationSeverity;
+  code: string;
+  tournamentId?: string | null;
+  tournamentTitle?: string | null;
+  userId?: string | null;
+  matchId?: string | null;
+  message: string;
+  expected: number | string;
+  actual: number | string;
+  discrepancy?: number | string;
+  suggestedAction: string;
+  detectedAt: string;
+}
+
+export interface TournamentValidationMetrics {
+  tournamentCountMatches: boolean;
+  registrationCountMatches: boolean;
+  entryFeeTotalMatches: boolean;
+  prizeTotalMatches: boolean;
+  refundTotalMatches: boolean;
+  settlementTotalMatches: boolean;
+  matchCountMatches: boolean;
+  financialLedgerBalanced: boolean;
+}
+
+export interface TournamentValidationSummary {
+  status: TournamentValidationStatus;
+  checkedAt: string;
+  totalCheckedTournaments: number;
+  totalCheckedRegistrations: number;
+  totalCheckedMatches: number;
+  totalCheckedPrizes: number;
+  totalCheckedRefunds: number;
+  totalCheckedTransactions: number;
+  issuesCount: number;
+  criticalIssuesCount: number;
+  warningIssuesCount: number;
+  metrics: TournamentValidationMetrics;
+  inconsistencies: TournamentInconsistencyItem[];
 }
 
 export type TournamentReportType =
@@ -1804,6 +1879,64 @@ export interface TournamentReportResult {
   totalRecords: number;
   headers: string[];
   rows: Array<Record<string, any>>;
+}
+
+// ---------------------------------------------------------------------------
+// Tournament Data Integrity Alerts
+// ---------------------------------------------------------------------------
+
+export type TournamentIntegrityIssueType =
+  | "REGISTRATION_WITHOUT_ENTRY_FEE"
+  | "ENTRY_FEE_WITHOUT_REGISTRATION"
+  | "PRIZE_SETTLEMENT_WITHOUT_COMPLETION"
+  | "PRIZE_AMOUNT_SNAPSHOT_MISMATCH"
+  | "REFUND_WITHOUT_ENTRY_TRANSACTION"
+  | "DUPLICATE_SETTLEMENT"
+  | "DUPLICATE_REFUND"
+  | "SETTLEMENT_AMOUNT_MISMATCH"
+  | "INCORRECT_TOURNAMENT_TOTALS";
+
+export type TournamentIntegrityAlertSeverity =
+  | "LOW"
+  | "MEDIUM"
+  | "HIGH"
+  | "CRITICAL";
+
+export type TournamentIntegrityAlertStatus =
+  | "OPEN"
+  | "UNDER_REVIEW"
+  | "RESOLVED";
+
+export interface TournamentIntegrityAlert {
+  id: string;
+  alertId: string;
+  tournamentId: string;
+  tournamentTitle?: string;
+  gameId: string;
+  tier: string;
+  issueType: TournamentIntegrityIssueType;
+  affectedRecord: string;
+  severity: TournamentIntegrityAlertSeverity;
+  status: TournamentIntegrityAlertStatus;
+  details?: string | null;
+  resolutionNotes?: string | null;
+  resolvedBy?: string | null;
+  resolvedAt?: string | null;
+  detectedAt: string;
+}
+
+export interface ResolveTournamentIntegrityAlertPayload {
+  status: TournamentIntegrityAlertStatus;
+  resolutionNotes?: string;
+}
+
+export interface IntegrityAlertsFilterParams {
+  status?: TournamentIntegrityAlertStatus | "ALL";
+  severity?: TournamentIntegrityAlertSeverity | "ALL";
+  issueType?: TournamentIntegrityIssueType | "ALL";
+  gameId?: string;
+  tier?: string;
+  tournamentId?: string;
 }
 
 

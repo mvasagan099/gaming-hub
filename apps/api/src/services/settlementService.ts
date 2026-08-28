@@ -58,7 +58,7 @@ export class SettlementService {
   }): Promise<SettlementSummary> {
     const idempotencyKey = `SETTLEMENT:MATCH:${params.matchId}`;
 
-    return IdempotencyService.executeOnce({
+    const result = await IdempotencyService.executeOnce<SettlementSummary>({
       key: idempotencyKey,
       operation: "UNIVERSAL_MATCH_SETTLEMENT",
       referenceId: params.matchId,
@@ -230,49 +230,6 @@ export class SettlementService {
           });
         }
 
-        const newlyUnlocked: { code: string; title: string; icon: string }[] = [];
-        for (const player of match.players) {
-          const won = winnerSet.has(player.userId);
-          try {
-            const unlocked = await AchievementService.evaluateAchievements(player.userId, {
-              userId: player.userId,
-              matchResult: { won, gameId: match.gameId, isDraw },
-            });
-            for (const achievement of unlocked) {
-              newlyUnlocked.push({
-                code: achievement.code,
-                title: achievement.title,
-                icon: achievement.icon,
-              });
-            }
-          } catch {
-            // Achievement unlock is a non-critical side effect
-          }
-
-          // Evaluate referral qualification (FIRST_WIN / FIRST_GAME)
-          try {
-            await ReferralService.evaluateQualification(
-              player.userId,
-              won ? "FIRST_WIN" : "FIRST_GAME",
-              { matchId: match.id, gameId: match.gameId }
-            );
-          } catch {
-            // Referral qualification is a non-critical side effect
-          }
-
-          createNotification(
-            player.userId,
-            "MATCH_RESULT",
-            won ? "Victory!" : isDraw ? "Match drawn" : "Defeat",
-            won
-              ? `You won ${winnerPayout} coins!`
-              : isDraw
-                ? "Match was a draw. Wagers refunded."
-                : "Better luck next time!",
-            { matchId: match.id, gameId: match.gameId, payout: won ? winnerPayout : 0 },
-          ).catch(() => undefined);
-        }
-
         return {
           matchId: match.id,
           gameId: match.gameId,
@@ -282,10 +239,59 @@ export class SettlementService {
           winners: Array.from(winnerSet),
           payouts,
           scores: params.options?.scores ?? {},
-          newlyUnlocked,
+          newlyUnlocked: [] as { code: string; title: string; icon: string }[],
+          playerList: match.players.map((p) => ({ userId: p.userId, won: winnerSet.has(p.userId) })),
+          isDraw,
+          winnerPayout,
         };
       },
     });
+
+    // Execute asynchronous post-commit side effects after transaction commit
+    if (result && (result as any).playerList) {
+      const { playerList, isDraw, winnerPayout, matchId, gameId } = result as any;
+      for (const player of playerList) {
+        try {
+          const unlocked = await AchievementService.evaluateAchievements(player.userId, {
+            userId: player.userId,
+            matchResult: { won: player.won, gameId, isDraw },
+          });
+          for (const achievement of unlocked) {
+            result.newlyUnlocked.push({
+              code: achievement.code,
+              title: achievement.title,
+              icon: achievement.icon,
+            });
+          }
+        } catch {
+          // Non-critical
+        }
+
+        try {
+          await ReferralService.evaluateQualification(
+            player.userId,
+            player.won ? "FIRST_WIN" : "FIRST_GAME",
+            { matchId, gameId },
+          );
+        } catch {
+          // Non-critical
+        }
+
+        createNotification(
+          player.userId,
+          "MATCH_RESULT",
+          player.won ? "Victory!" : isDraw ? "Match drawn" : "Defeat",
+          player.won
+            ? `You won ${winnerPayout} coins!`
+            : isDraw
+              ? "Match was a draw. Wagers refunded."
+              : "Better luck next time!",
+          { matchId, gameId, payout: player.won ? winnerPayout : 0 },
+        ).catch(() => undefined);
+      }
+    }
+
+    return result;
   }
 
   /**

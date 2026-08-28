@@ -132,7 +132,7 @@ describe("TOURNAMENT REGISTRATION, ELIGIBILITY & ANTI-ABUSE SYSTEM", () => {
       expect(res.gameId).toBe("snooker");
       expect(res.registeredPlayers).toBe(1);
       expect(res.maximumPlayers).toBe(16);
-      expect(res.status).toBe("WAITING_FOR_TOURNAMENT_START");
+      expect(res.status).toBe("REGISTERED");
 
       // Verify wallet debit
       const wallet = await prisma.wallet.findUnique({ where: { userId: player.id } });
