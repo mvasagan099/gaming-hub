@@ -742,14 +742,13 @@ export async function cancelTournamentWithRefunds(
     adminId: cancelledBy ?? undefined,
   });
 
-  // Update cancellationReason and status if not updated
+  // Update status if not updated
   await prisma.tournament.update({
     where: { id: tournamentId },
     data: {
       status: "CANCELLED",
-      cancellationReason: reason,
       stateVersion: { increment: 1 },
-    } as any,
+    },
   });
 
   // 3. Send individual refund confirmations ONLY for successful refunds

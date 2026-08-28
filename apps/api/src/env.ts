@@ -11,18 +11,89 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().default(300),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   BODY_LIMIT: z.coerce.number().default(262_144),
+  // Email configuration (SMTP / SendGrid / SES)
+  EMAIL_PROVIDER: z.enum(["smtp", "sendgrid", "ses", "mock"]).optional().default("mock"),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().optional().default(587),
+  SMTP_SECURE: z.enum(["true", "false"]).optional().transform((v) => v === "true"),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional().default("noreply@gaminghub.com"),
+  SENDGRID_API_KEY: z.string().optional(),
+  SENDGRID_FROM: z.string().optional(),
+  AWS_SES_REGION: z.string().optional(),
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  SES_FROM: z.string().optional(),
+  REDIS_URL: z.string().optional().default(""),
+  DB_CONNECTION_LIMIT: z.coerce.number().optional().default(20),
   // "true" (default in production) rejects access tokens whose email is not
   // yet verified. Supabase projects should enable email confirmation.
   REQUIRE_EMAIL_VERIFICATION: z
     .enum(["true", "false"])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "true")),
+}).superRefine((data, ctx) => {
+  // 1. Prevent mock email provider from being used in production
+  if (data.NODE_ENV === "production" && (!data.EMAIL_PROVIDER || data.EMAIL_PROVIDER === "mock")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["EMAIL_PROVIDER"],
+      message: "EMAIL_PROVIDER must be explicitly configured as 'sendgrid' or 'smtp' in production. 'mock' email transport is forbidden in production.",
+    });
+  }
+
+  // 2. Validate Email Provider credentials when in production mode
+  if (data.NODE_ENV === "production" && data.EMAIL_PROVIDER === "sendgrid" && !data.SENDGRID_API_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["SENDGRID_API_KEY"],
+      message: "SENDGRID_API_KEY is required when EMAIL_PROVIDER is 'sendgrid' in production",
+    });
+  }
+
+  if (data.NODE_ENV === "production" && data.EMAIL_PROVIDER === "smtp" && !data.SMTP_HOST) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["SMTP_HOST"],
+      message: "SMTP_HOST is required when EMAIL_PROVIDER is 'smtp' in production",
+    });
+  }
+
+  // 3. Validate CORS_ORIGIN in production (must not be wildcard "*")
+  if (data.NODE_ENV === "production" && (data.CORS_ORIGIN === "*" || !data.CORS_ORIGIN.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["CORS_ORIGIN"],
+      message: "CORS_ORIGIN must specify an explicit production domain (e.g. 'https://app.gaminghub.com'), wildcard '*' is forbidden in production.",
+    });
+  }
+
+  // 4. Validate Redis URL format if specified
+  if (data.REDIS_URL && data.REDIS_URL.trim().length > 0) {
+    if (!data.REDIS_URL.startsWith("redis://") && !data.REDIS_URL.startsWith("rediss://")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["REDIS_URL"],
+        message: "REDIS_URL must start with redis:// or rediss://",
+      });
+    }
+  }
+
+  // 5. Prevent insecure or short secret in production
+  if (data.NODE_ENV === "production" && data.INTERNAL_API_KEY.length < 16) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["INTERNAL_API_KEY"],
+      message: "INTERNAL_API_KEY must be at least 16 characters in production for security",
+    });
+  }
 });
 
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  console.error("Invalid environment configuration:", parsed.error.flatten().fieldErrors);
+  console.error("❌ Invalid environment configuration:", JSON.stringify(parsed.error.flatten().fieldErrors, null, 2));
   process.exit(1);
 }
 

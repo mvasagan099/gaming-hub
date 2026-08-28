@@ -2496,6 +2496,7 @@ export class RoomManager {
           username: p.user.username,
           displayName: p.user.displayName,
           avatarUrl: p.user.avatarUrl,
+          role: p.user.role,
         };
         const rPlayer = this.makePlayer(authUser, p.seat, p.seat === 0, false, false);
         rPlayer.connectionStatus = "disconnected";

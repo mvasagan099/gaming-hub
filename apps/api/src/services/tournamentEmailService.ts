@@ -1,5 +1,6 @@
 import { prisma } from "@gaming-hub/db";
 import { broadcastAdminAnalytics } from "./socketBridge";
+import { env } from "../env";
 
 // ============================================================================
 // 1. Types & Enums
@@ -58,6 +59,7 @@ export interface PlayerMatchPresence {
 
 const emailRecordsStore: Map<string, TournamentEmailRecord> = new Map();
 const playerJoinedStore: Map<string, PlayerMatchPresence> = new Map();
+const inFlightDispatches: Map<string, Promise<TournamentEmailRecord>> = new Map();
 const emailQueue: string[] = [];
 
 // Pluggable transport hook for tests & provider simulation
@@ -186,6 +188,7 @@ export class TournamentEmailService {
   static resetState(): void {
     emailRecordsStore.clear();
     playerJoinedStore.clear();
+    inFlightDispatches.clear();
     emailQueue.length = 0;
     mockFailureMode = "NONE";
     remainingFailures = 0;
@@ -334,7 +337,13 @@ export class TournamentEmailService {
     const { userId, tournamentId, matchId, eventType, subject, textBody, htmlBody, metadata } = params;
     const idempotencyKey = this.getIdempotencyKey({ userId, tournamentId, matchId, eventType });
 
-    // 1. Idempotency Check: Protects against socket reconnect, server retry, duplicate events
+    // 1. Check in-flight promise to deduplicate concurrent dispatch calls
+    const inFlight = inFlightDispatches.get(idempotencyKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    // 2. Idempotency Check: Protects against socket reconnect, server retry, duplicate events
     const existing = emailRecordsStore.get(idempotencyKey);
     if (existing) {
       if (existing.status === "SENT" || existing.status === "PENDING" || existing.status === "SKIPPED_NO_EMAIL") {
@@ -342,58 +351,67 @@ export class TournamentEmailService {
       }
     }
 
-    // 2. Resolve registered user email
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, displayName: true, username: true },
-    });
+    const dispatchPromise = (async () => {
+      try {
+        // Resolve registered user email
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true, email: true, displayName: true, username: true },
+        });
 
-    const notificationId = `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const notificationId = `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-    if (!user || !user.email) {
-      const skippedRecord: TournamentEmailRecord = {
-        notificationId,
-        userId,
-        tournamentId,
-        matchId,
-        eventType,
-        email: "",
-        subject,
-        textBody,
-        htmlBody,
-        status: "SKIPPED_NO_EMAIL",
-        createdAt: new Date(),
-        sentAt: null,
-        attemptCount: 0,
-        lastAttemptAt: null,
-        metadata,
-      };
-      emailRecordsStore.set(idempotencyKey, skippedRecord);
-      return skippedRecord;
-    }
+        if (!user || !user.email) {
+          const skippedRecord: TournamentEmailRecord = {
+            notificationId,
+            userId,
+            tournamentId,
+            matchId,
+            eventType,
+            email: "",
+            subject,
+            textBody,
+            htmlBody,
+            status: "SKIPPED_NO_EMAIL",
+            createdAt: new Date(),
+            sentAt: null,
+            attemptCount: 0,
+            lastAttemptAt: null,
+            metadata,
+          };
+          emailRecordsStore.set(idempotencyKey, skippedRecord);
+          return skippedRecord;
+        }
 
-    // 3. Create Record in PENDING state
-    const record: TournamentEmailRecord = {
-      notificationId,
-      userId,
-      tournamentId,
-      matchId,
-      eventType,
-      email: user.email,
-      subject,
-      textBody,
-      htmlBody,
-      status: "PENDING",
-      createdAt: new Date(),
-      sentAt: null,
-      attemptCount: 0,
-      lastAttemptAt: null,
-      metadata,
-    };
-    emailRecordsStore.set(idempotencyKey, record);
+        // Create Record in PENDING state
+        const record: TournamentEmailRecord = {
+          notificationId,
+          userId,
+          tournamentId,
+          matchId,
+          eventType,
+          email: user.email,
+          subject,
+          textBody,
+          htmlBody,
+          status: "PENDING",
+          createdAt: new Date(),
+          sentAt: null,
+          attemptCount: 0,
+          lastAttemptAt: null,
+          metadata,
+        };
+        emailRecordsStore.set(idempotencyKey, record);
 
-    // 4. Process delivery immediately or via worker
-    return this.deliverEmailRecord(idempotencyKey);
+        // Process delivery immediately
+        return await this.deliverEmailRecord(idempotencyKey);
+      } finally {
+        inFlightDispatches.delete(idempotencyKey);
+      }
+    })();
+
+    inFlightDispatches.set(idempotencyKey, dispatchPromise);
+    return dispatchPromise;
   }
 
   /**
@@ -422,6 +440,11 @@ export class TournamentEmailService {
         if (mockFailureMode === "RETRYABLE_ERROR" && remainingFailures > 0) {
           remainingFailures -= 1;
           throw new Error("SMTP 421: Service temporarily unavailable");
+        }
+
+        // Production provider transport integration (SendGrid REST API / SMTP / Mock)
+        if (process.env.NODE_ENV !== "test" && env.EMAIL_PROVIDER && env.EMAIL_PROVIDER !== "mock") {
+          await this.sendThroughProvider(record);
         }
 
         // Successful Delivery
@@ -460,6 +483,77 @@ export class TournamentEmailService {
       timestamp: new Date().toISOString(),
     });
     return record;
+  }
+
+  /**
+   * Dispatches email through configured production transport (SendGrid, SMTP, SES).
+   * Safely handles errors without crashing or exposing credentials.
+   */
+  private static async sendThroughProvider(record: TournamentEmailRecord): Promise<void> {
+    if (process.env.NODE_ENV === "test" || !env.EMAIL_PROVIDER || env.EMAIL_PROVIDER === "mock") {
+      return;
+    }
+
+    // 1. SendGrid REST API
+    if (env.EMAIL_PROVIDER === "sendgrid" || env.SENDGRID_API_KEY) {
+      const fromEmail = env.SENDGRID_FROM || env.SMTP_FROM || "noreply@gaminghub.com";
+      const apiKey = env.SENDGRID_API_KEY;
+      if (!apiKey) {
+        throw new Error("SENDGRID_API_KEY is not configured in environment");
+      }
+
+      const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: record.email }] }],
+          from: { email: fromEmail, name: "Gaming Hub Tournaments" },
+          subject: record.subject,
+          content: [
+            { type: "text/plain", value: record.textBody },
+            { type: "text/html", value: record.htmlBody },
+          ],
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`SendGrid API returned status ${res.status}: ${errText || res.statusText}`);
+      }
+      return;
+    }
+
+    // 2. SMTP Transport
+    if (env.EMAIL_PROVIDER === "smtp" || env.SMTP_HOST) {
+      const host = env.SMTP_HOST;
+      if (!host) {
+        throw new Error("SMTP_HOST is not configured in environment");
+      }
+
+      try {
+        const nodemailer = await import("nodemailer");
+        const transporter = nodemailer.createTransport({
+          host,
+          port: env.SMTP_PORT ?? 587,
+          secure: env.SMTP_SECURE ?? false,
+          auth: env.SMTP_USER && env.SMTP_PASS ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
+        });
+
+        await transporter.sendMail({
+          from: env.SMTP_FROM || '"Gaming Hub" <noreply@gaminghub.com>',
+          to: record.email,
+          subject: record.subject,
+          text: record.textBody,
+          html: record.htmlBody,
+        });
+        return;
+      } catch (err: any) {
+        throw new Error(`SMTP Transport error: ${err?.message || String(err)}`);
+      }
+    }
   }
 
   // ==========================================================================

@@ -16,12 +16,41 @@ const envSchema = z.object({
     .enum(["true", "false"])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "true")),
+}).superRefine((data, ctx) => {
+  // Validate Redis URL format if specified
+  if (data.REDIS_URL && data.REDIS_URL.trim().length > 0) {
+    if (!data.REDIS_URL.startsWith("redis://") && !data.REDIS_URL.startsWith("rediss://")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["REDIS_URL"],
+        message: "REDIS_URL must start with redis:// or rediss://",
+      });
+    }
+  }
+
+  // Validate CORS_ORIGIN in production (must not be wildcard "*")
+  if (data.NODE_ENV === "production" && (data.CORS_ORIGIN === "*" || !data.CORS_ORIGIN.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["CORS_ORIGIN"],
+      message: "CORS_ORIGIN must specify an explicit production domain (e.g. 'https://app.gaminghub.com'), wildcard '*' is forbidden in production.",
+    });
+  }
+
+  // Prevent weak internal secret in production
+  if (data.NODE_ENV === "production" && data.INTERNAL_API_KEY.length < 16) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["INTERNAL_API_KEY"],
+      message: "INTERNAL_API_KEY must be at least 16 characters in production for security",
+    });
+  }
 });
 
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  console.error("Invalid environment configuration:", parsed.error.flatten().fieldErrors);
+  console.error("❌ Invalid socket-server environment configuration:", JSON.stringify(parsed.error.flatten().fieldErrors, null, 2));
   process.exit(1);
 }
 

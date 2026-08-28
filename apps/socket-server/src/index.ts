@@ -404,10 +404,23 @@ async function main(): Promise<void> {
   io.attach(httpServer);
 
   if (env.REDIS_URL) {
-    const pub = new Redis(env.REDIS_URL);
+    const pub = new Redis(env.REDIS_URL, {
+      maxRetriesPerRequest: 3,
+      retryStrategy(times) {
+        return Math.min(times * 100, 3000);
+      },
+    });
     const sub = pub.duplicate();
+
+    pub.on("error", (err) => {
+      logger.warn({ err: err?.message || String(err) }, "Redis publisher error");
+    });
+    sub.on("error", (err) => {
+      logger.warn({ err: err?.message || String(err) }, "Redis subscriber error");
+    });
+
     io.adapter(createAdapter(pub, sub));
-    logger.info("Redis adapter attached");
+    logger.info("Redis adapter attached with fault-tolerant reconnects");
   }
 
   // Initialize Multiplayer Framework
@@ -458,6 +471,18 @@ async function main(): Promise<void> {
 
     // Admin Real-Time Analytics Subscription
     socket.on("admin:analytics:subscribe", (ack) => {
+      if (user.role !== "ADMIN") {
+        if (ack) {
+          ack({
+            ok: false,
+            error: {
+              code: "FORBIDDEN",
+              message: "Admin authorization required for analytics subscription",
+            },
+          });
+        }
+        return;
+      }
       socket.join("admin:analytics");
       if (ack) ack({ ok: true, data: { subscribed: true } });
     });

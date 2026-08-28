@@ -11,6 +11,7 @@ export interface AuthenticatedUser {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  role: string;
 }
 
 export async function authenticateToken(token: string): Promise<AuthenticatedUser> {
@@ -39,5 +40,6 @@ export async function authenticateToken(token: string): Promise<AuthenticatedUse
     username: user.username,
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
+    role: user.role,
   };
 }

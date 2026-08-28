@@ -528,4 +528,57 @@ describe("TOURNAMENT EMAIL REMINDER & MATCH-READY SYSTEM", () => {
       expect(emailsA[0].email).toBe("int.a@test.local");
     });
   });
+
+  // ===========================================================================
+  // 9. Production Provider Routing & Security Verification
+  // ===========================================================================
+  describe("9. Production Provider Routing & Security Verification", () => {
+    it("never logs or exposes SMTP / SendGrid credentials in delivery records or errors", async () => {
+      const user = await createTestUserWithEmail("sec.test@gaminghub.test", "Security User");
+      const record = await TournamentEmailService.sendRegistrationEmail({
+        userId: user.id,
+        tournamentId: "tourn_sec_1",
+        tournamentTitle: "Secure Cup",
+        gameId: "chess",
+      });
+
+      expect(record.status).toBe("SENT");
+      expect(JSON.stringify(record)).not.toContain("SG.");
+      expect(JSON.stringify(record)).not.toContain("password");
+      expect(JSON.stringify(record)).not.toContain("SECRET");
+    });
+
+    it("deduplicates concurrent email dispatch attempts across same event and user", async () => {
+      const user = await createTestUserWithEmail("dedup.test@gaminghub.test", "Dedup User");
+      const [res1, res2, res3] = await Promise.all([
+        TournamentEmailService.sendRegistrationEmail({
+          userId: user.id,
+          tournamentId: "tourn_dedup_1",
+          tournamentTitle: "Dedup Cup",
+          gameId: "ludo",
+        }),
+        TournamentEmailService.sendRegistrationEmail({
+          userId: user.id,
+          tournamentId: "tourn_dedup_1",
+          tournamentTitle: "Dedup Cup",
+          gameId: "ludo",
+        }),
+        TournamentEmailService.sendRegistrationEmail({
+          userId: user.id,
+          tournamentId: "tourn_dedup_1",
+          tournamentTitle: "Dedup Cup",
+          gameId: "ludo",
+        }),
+      ]);
+
+      expect(res1.notificationId).toBe(res2.notificationId);
+      expect(res2.notificationId).toBe(res3.notificationId);
+      const deliveryRecords = TournamentEmailService.getEmailDeliveryRecords({
+        userId: user.id,
+        tournamentId: "tourn_dedup_1",
+        eventType: "TOURNAMENT_REGISTERED",
+      });
+      expect(deliveryRecords).toHaveLength(1);
+    });
+  });
 });

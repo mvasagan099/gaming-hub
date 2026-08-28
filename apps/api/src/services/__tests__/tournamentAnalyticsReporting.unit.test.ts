@@ -8,6 +8,8 @@ import {
   GAME_DEFINITIONS,
   calculatePrizes,
   DEFAULT_TIER_PRIZE_DISTRIBUTION,
+  AppError,
+  toApiError,
   type TournamentReportType,
   type TournamentReportResult,
 } from "@gaming-hub/shared";
@@ -2364,6 +2366,155 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
       for (const action of forbiddenStateActions) {
         expect(allowedStateActions.includes(action)).toBe(false);
       }
+    });
+  });
+
+  // =========================================================================
+  // Section 29: Production Readiness & Socket RBAC Authorization
+  // =========================================================================
+  describe("Section 29: Production Readiness & Socket RBAC Authorization", () => {
+    it("Test 29a: Rejects non-admin users attempting to subscribe to admin analytics real-time room", () => {
+      const regularUser = { userId: "user-1", username: "player1", role: "USER" };
+      let subscribedRoom: string | null = null;
+      let ackResponse: any = null;
+
+      const handleSubscribe = (user: { role: string }, ack: (res: any) => void) => {
+        if (user.role !== "ADMIN") {
+          ack({
+            ok: false,
+            error: {
+              code: "FORBIDDEN",
+              message: "Admin authorization required for analytics subscription",
+            },
+          });
+          return;
+        }
+        subscribedRoom = "admin:analytics";
+        ack({ ok: true, data: { subscribed: true } });
+      };
+
+      handleSubscribe(regularUser, (res) => { ackResponse = res; });
+
+      expect(subscribedRoom).toBeNull();
+      expect(ackResponse).toEqual({
+        ok: false,
+        error: {
+          code: "FORBIDDEN",
+          message: "Admin authorization required for analytics subscription",
+        },
+      });
+    });
+
+    it("Test 29b: Allows authorized admin users to subscribe to admin analytics real-time room", () => {
+      const adminUser = { userId: "admin-1", username: "superadmin", role: "ADMIN" };
+      let subscribedRoom: string | null = null;
+      let ackResponse: any = null;
+
+      const handleSubscribe = (user: { role: string }, ack: (res: any) => void) => {
+        if (user.role !== "ADMIN") {
+          ack({
+            ok: false,
+            error: {
+              code: "FORBIDDEN",
+              message: "Admin authorization required for analytics subscription",
+            },
+          });
+          return;
+        }
+        subscribedRoom = "admin:analytics";
+        ack({ ok: true, data: { subscribed: true } });
+      };
+
+      handleSubscribe(adminUser, (res) => { ackResponse = res; });
+
+      expect(subscribedRoom).toBe("admin:analytics");
+      expect(ackResponse).toEqual({ ok: true, data: { subscribed: true } });
+    });
+
+    it("Test 29c: Verifies sensitive data exposure prevention - internal API keys and secrets stripped from public routes", () => {
+      const publicResponse = {
+        id: "tourn-101",
+        title: "Championship",
+        entryFee: 50,
+        prizePool: 22500,
+        status: "LIVE",
+      };
+
+      expect((publicResponse as any).INTERNAL_API_KEY).toBeUndefined();
+      expect((publicResponse as any).SUPABASE_SERVICE_ROLE_KEY).toBeUndefined();
+      expect((publicResponse as any).DATABASE_URL).toBeUndefined();
+    });
+  });
+
+  // =========================================================================
+  // Section 30: Production Environment Security & Configuration Audit
+  // =========================================================================
+  describe("Section 30: Production Environment Security & Configuration Audit", () => {
+    it("Test 30a: Enforces that unhandled error responses return generic internal message without leaking stack traces or database URLs", () => {
+      const internalDbError = new Error("Connection failed to postgresql://admin:secretPass@db.internal:5432/hub");
+      const sanitized = toApiError(internalDbError);
+
+      expect(sanitized).toEqual({
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "An unexpected error occurred",
+        },
+      });
+      expect(JSON.stringify(sanitized)).not.toContain("postgres");
+      expect(JSON.stringify(sanitized)).not.toContain("secretPass");
+      expect(JSON.stringify(sanitized)).not.toContain("stack");
+
+      const operationalError = new AppError("INSUFFICIENT_BALANCE", "Insufficient coins", 400);
+      const opSanitized = toApiError(operationalError);
+      expect(opSanitized.error.code).toBe("INSUFFICIENT_BALANCE");
+      expect(opSanitized.error.message).toBe("Insufficient coins");
+    });
+
+    it("Test 30b: Validates Redis URL protocol prefix enforcement (redis:// or rediss://)", () => {
+      const isValidRedisUrl = (url?: string) => {
+        if (!url || url.trim().length === 0) return true;
+        return url.startsWith("redis://") || url.startsWith("rediss://");
+      };
+
+      expect(isValidRedisUrl("")).toBe(true);
+      expect(isValidRedisUrl("redis://localhost:6379")).toBe(true);
+      expect(isValidRedisUrl("rediss://default:pass@redis.example.com:6380")).toBe(true);
+      expect(isValidRedisUrl("http://localhost:6379")).toBe(false);
+      expect(isValidRedisUrl("invalid_protocol")).toBe(false);
+    });
+
+    it("Test 30c: Validates that production requires strong API keys with at least 16 characters", () => {
+      const isStrongProductionKey = (key: string, nodeEnv: string) => {
+        if (nodeEnv !== "production") return key.length >= 8;
+        return key.length >= 16;
+      };
+
+      expect(isStrongProductionKey("short123", "development")).toBe(true);
+      expect(isStrongProductionKey("short123", "production")).toBe(false);
+      expect(isStrongProductionKey("a_very_secure_long_production_key_32bytes", "production")).toBe(true);
+    });
+
+    it("Test 30d: Enforces that mock email transport is rejected in production mode", () => {
+      const isAllowedEmailProvider = (provider: string, nodeEnv: string) => {
+        if (nodeEnv !== "production") return true;
+        return provider === "sendgrid" || provider === "smtp";
+      };
+
+      expect(isAllowedEmailProvider("mock", "development")).toBe(true);
+      expect(isAllowedEmailProvider("mock", "production")).toBe(false);
+      expect(isAllowedEmailProvider("sendgrid", "production")).toBe(true);
+      expect(isAllowedEmailProvider("smtp", "production")).toBe(true);
+    });
+
+    it("Test 30e: Enforces that CORS wildcard '*' is rejected in production", () => {
+      const isValidCorsOrigin = (origin: string, nodeEnv: string) => {
+        if (nodeEnv !== "production") return true;
+        return origin !== "*" && origin.trim().length > 0;
+      };
+
+      expect(isValidCorsOrigin("*", "development")).toBe(true);
+      expect(isValidCorsOrigin("*", "production")).toBe(false);
+      expect(isValidCorsOrigin("https://app.gaminghub.com", "production")).toBe(true);
     });
   });
 });

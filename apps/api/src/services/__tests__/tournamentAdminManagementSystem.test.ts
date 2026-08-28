@@ -20,6 +20,7 @@ import {
   settleTournament,
   createTournamentMatch,
 } from "../tournamentEngine";
+import { registerForTournament } from "../tournaments";
 import { TournamentSettlementService } from "../tournamentSettlementService";
 import { DEFAULT_TOURNAMENT_TIERS, TOURNAMENT_TIER_VISUALS } from "@gaming-hub/shared";
 import type { TournamentTierCode } from "@gaming-hub/shared";
@@ -301,22 +302,9 @@ describe("COMPLETE TOURNAMENT ADMIN MANAGEMENT SYSTEM", () => {
         },
       });
 
-      // Register players and debit entry fees
-      await prisma.wallet.update({
-        where: { userId: player1.id },
-        data: { balance: { decrement: 25 } },
-      });
-      await prisma.tournamentPlayer.create({
-        data: { tournamentId: tourn.id, userId: player1.id, seed: 1 },
-      });
-
-      await prisma.wallet.update({
-        where: { userId: player2.id },
-        data: { balance: { decrement: 25 } },
-      });
-      await prisma.tournamentPlayer.create({
-        data: { tournamentId: tourn.id, userId: player2.id, seed: 2 },
-      });
+      // Register players and debit entry fees through official flow
+      await registerForTournament(player1.id, tourn.id);
+      await registerForTournament(player2.id, tourn.id);
 
       // Cancel with refund
       await cancelTournamentWithRefunds(tourn.id, "Admin emergency cancellation");
