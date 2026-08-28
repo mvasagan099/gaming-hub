@@ -559,12 +559,13 @@ export const announcementsApi = {
 // ---------------------------------------------------------------------------
 
 export const tournamentsApi = {
-  list: (params: { page?: number; pageSize?: number; status?: string; gameId?: string } = {}) => {
+  list: (params: { page?: number; pageSize?: number; status?: string; gameId?: string; tier?: string } = {}) => {
     const qs = new URLSearchParams();
     qs.set('page', String(params.page ?? 1));
     qs.set('pageSize', String(params.pageSize ?? 20));
     if (params.status) qs.set('status', params.status);
     if (params.gameId) qs.set('gameId', params.gameId);
+    if (params.tier) qs.set('tier', params.tier);
     return apiClient.get<Page<TournamentSummary>>(`/tournaments?${qs.toString()}`);
   },
   detail: (id: string) => apiClient.get<TournamentDetail>(`/tournaments/${id}`),

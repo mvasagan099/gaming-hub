@@ -272,6 +272,8 @@ export interface ServerToClientEvents {
 
   "latency:ping": (payload: { timestamp: number }, ack: () => void) => void;
 
+  "auth:session-revoked": (payload: { reason: string }) => void;
+
   "error": (payload: SocketErrorPayload) => void;
 }
 

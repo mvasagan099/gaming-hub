@@ -446,11 +446,11 @@ export const LeaderboardView: React.FC = () => {
           </div>
 
           {/* Sub-Filters: Time Period and Metric Selection */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-800/80 backdrop-blur-md">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-100 dark:bg-slate-900/40 p-3 rounded-2xl border border-slate-200 dark:border-slate-800/80 shadow-sm dark:shadow-none backdrop-blur-md">
             {/* Periods */}
             {periodsEnabled && (
               <div className="flex items-center gap-1">
-                <span className="text-[10px] font-black uppercase text-slate-400 mr-1">Period:</span>
+                <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 mr-1">Period:</span>
                 {LEADERBOARD_PERIODS.map((p) => (
                   <button
                     key={p}
@@ -459,10 +459,10 @@ export const LeaderboardView: React.FC = () => {
                       setPage(1);
                     }}
                     className={cn(
-                      "rounded-lg px-2.5 py-1 text-xs font-bold transition-colors",
+                      "rounded-lg px-2.5 py-1 text-xs font-bold transition-all",
                       period === p
                         ? "bg-accent-500 text-white shadow-sm"
-                        : "bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700",
+                        : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-transparent shadow-sm dark:shadow-none",
                     )}
                   >
                     {LEADERBOARD_PERIOD_LABELS[p]}
@@ -473,7 +473,7 @@ export const LeaderboardView: React.FC = () => {
 
             {/* Metrics */}
             <div className="flex items-center gap-1 flex-wrap">
-              <span className="text-[10px] font-black uppercase text-slate-400 mr-1">Metric:</span>
+              <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 mr-1">Metric:</span>
               {LEADERBOARD_METRICS.filter((m) => m !== "coins").map((m) => (
                 <button
                   key={m}
@@ -482,10 +482,10 @@ export const LeaderboardView: React.FC = () => {
                     setPage(1);
                   }}
                   className={cn(
-                    "flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition-colors",
+                    "flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition-all",
                     metric === m
                       ? "bg-accent-500 text-white shadow-sm"
-                      : "bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700",
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-transparent shadow-sm dark:shadow-none",
                   )}
                 >
                   {METRIC_ICONS[m]}
@@ -494,6 +494,7 @@ export const LeaderboardView: React.FC = () => {
               ))}
             </div>
           </div>
+
 
           {/* Content Body */}
           {error ? (

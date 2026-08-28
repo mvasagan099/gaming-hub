@@ -43,16 +43,17 @@ export async function tournamentsRoutes(app: FastifyInstance) {
     return TournamentHistoryService.getTournamentHistoryDetails(user.id, id);
   });
 
-  /** List tournaments (filterable by status/gameId) */
+  /** List tournaments (filterable by status/gameId/tier) */
   app.get("/api/tournaments", { preHandler: authenticate }, async (request) => {
     const q = queryParams(request);
     const { page, pageSize } = clampPagination(queryString(q.page), queryString(q.pageSize));
     const status = queryString(q.status) as "UPCOMING" | "LIVE" | "ENDED" | "REGISTRATION_OPEN" | "IN_PROGRESS" | undefined;
     const gameId = queryString(q.gameId) || undefined;
+    const tier = queryString(q.tier) || undefined;
     if (gameId && !isGameId(gameId)) {
       throw new AppError("VALIDATION_ERROR", "Unknown game", 400);
     }
-    return listTournaments(page, pageSize, status as any, gameId);
+    return listTournaments(page, pageSize, status as any, gameId, tier);
   });
 
   /** Full tournament detail including player list */

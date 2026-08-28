@@ -1,8 +1,8 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { apiClient } from "./client";
 import type { DetailedPublicProfile } from "@gaming-hub/shared";
 
-const cache = new Map<string, DetailedPublicProfile | null>();
+const cache = new Map<string, DetailedPublicProfile>();
 
 interface UsePublicProfileResult {
   profile: DetailedPublicProfile | null;
@@ -21,12 +21,10 @@ export function usePublicProfile(userId: string | null | undefined): UsePublicPr
   );
   const [loading, setLoading] = useState(false);
   const [fetchIndex, setFetchIndex] = useState(0);
-  const lastFetched = useRef<string | null>(null);
 
   const refetch = () => {
     if (userId) {
       cache.delete(userId);
-      lastFetched.current = null;
       setFetchIndex((i) => i + 1);
     }
   };
@@ -34,17 +32,15 @@ export function usePublicProfile(userId: string | null | undefined): UsePublicPr
   useEffect(() => {
     if (!userId) {
       setProfile(null);
+      setLoading(false);
       return;
     }
 
-    // Already cached and not forced
     if (cache.has(userId) && fetchIndex === 0) {
       setProfile(cache.get(userId) ?? null);
+      setLoading(false);
       return;
     }
-
-    if (lastFetched.current === userId && fetchIndex === 0) return;
-    lastFetched.current = userId;
 
     let cancelled = false;
     setLoading(true);
@@ -53,12 +49,14 @@ export function usePublicProfile(userId: string | null | undefined): UsePublicPr
       .get<DetailedPublicProfile>(`/users/${userId}/public-profile`)
       .then((data) => {
         if (cancelled) return;
-        cache.set(userId, data);
+        if (data) {
+          cache.set(userId, data);
+        }
         setProfile(data);
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return;
-        cache.set(userId, null);
+        console.error("[usePublicProfile] Failed to fetch profile:", err);
         setProfile(null);
       })
       .finally(() => {
@@ -72,3 +70,4 @@ export function usePublicProfile(userId: string | null | undefined): UsePublicPr
 
   return { profile, loading, refetch };
 }
+

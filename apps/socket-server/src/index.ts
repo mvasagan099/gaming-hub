@@ -457,6 +457,22 @@ async function main(): Promise<void> {
 
   io.on("connection", (socket) => {
     const user = (socket.data as { user: AuthenticatedUser }).user;
+    socket.data.tokenHash = user.tokenHash;
+
+
+    // Single-active-session: Evict any existing socket for this user that has an older/different tokenHash
+    const userSockets = io.sockets.adapter.rooms.get(`user:${user.userId}`);
+    if (userSockets) {
+      for (const socketId of userSockets) {
+        if (socketId !== socket.id) {
+          const oldSocket = io.sockets.sockets.get(socketId);
+          if (oldSocket && (oldSocket.data as any)?.tokenHash !== user.tokenHash) {
+            oldSocket.emit("auth:session-revoked", { reason: "NEW_LOGIN" });
+            oldSocket.disconnect(true);
+          }
+        }
+      }
+    }
 
     // Join a personal room so internal services can target a single user.
     socket.join(`user:${user.userId}`);
@@ -468,6 +484,7 @@ async function main(): Promise<void> {
         // No active room to reconnect to
       });
     }
+
 
     // Admin Real-Time Analytics Subscription
     socket.on("admin:analytics:subscribe", (ack) => {

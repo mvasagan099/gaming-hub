@@ -79,27 +79,27 @@ export const TournamentTimeline: React.FC<TournamentTimelineProps> = ({
   const getStatusIcon = (status: TournamentTimelineStatus, id: string) => {
     switch (status) {
       case "COMPLETED":
-        return <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
+        return <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />;
       case "ACTIVE":
-        if (id === "match_assigned") return <Swords className="w-5 h-5 text-amber-400 animate-pulse" />;
-        if (id === "settlement") return <Wallet className="w-5 h-5 text-purple-400 animate-pulse" />;
-        return <Clock className="w-5 h-5 text-blue-400 animate-pulse" />;
+        if (id === "match_assigned") return <Swords className="w-5 h-5 text-amber-500 dark:text-amber-400 animate-pulse" />;
+        if (id === "settlement") return <Wallet className="w-5 h-5 text-purple-500 dark:text-purple-400 animate-pulse" />;
+        return <Clock className="w-5 h-5 text-blue-500 dark:text-blue-400 animate-pulse" />;
       case "FAILED":
-        return <AlertCircle className="w-5 h-5 text-rose-400" />;
+        return <AlertCircle className="w-5 h-5 text-rose-500 dark:text-rose-400" />;
       default:
-        return <div className="w-2.5 h-2.5 rounded-full bg-slate-600" />;
+        return <div className="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-600" />;
     }
   };
 
   return (
-    <div className={`bg-slate-900/90 border border-slate-800 rounded-xl p-4 sm:p-6 backdrop-blur-sm ${className}`}>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-800">
+    <div className={`bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-6 shadow-md shadow-slate-200/50 dark:shadow-none backdrop-blur-sm transition-colors ${className}`}>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>
-          <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-amber-400" />
+          <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-amber-500 dark:text-amber-400" />
             Tournament Progression Timeline
           </h3>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Real-time authoritative tracking from registration to prize settlement
           </p>
         </div>
@@ -129,10 +129,10 @@ export const TournamentTimeline: React.FC<TournamentTimelineProps> = ({
               >
                 {/* Connecting Line */}
                 {!isLast && (
-                  <div className="hidden md:block absolute top-5 left-1/2 w-full h-0.5 bg-slate-800 z-0">
+                  <div className="hidden md:block absolute top-5 left-1/2 w-full h-0.5 bg-slate-200 dark:bg-slate-800 z-0">
                     <div
                       className={`h-full transition-all duration-500 ${
-                        step.status === "COMPLETED" ? "bg-emerald-500/50" : "bg-slate-800"
+                        step.status === "COMPLETED" ? "bg-emerald-500/50" : "bg-slate-200 dark:bg-slate-800"
                       }`}
                     />
                   </div>
@@ -142,10 +142,10 @@ export const TournamentTimeline: React.FC<TournamentTimelineProps> = ({
                 <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center border z-10 transition-all ${
                     step.status === "COMPLETED"
-                      ? "bg-slate-900 border-emerald-500 shadow-sm shadow-emerald-500/20"
+                      ? "bg-emerald-50 dark:bg-slate-900 border-emerald-500 shadow-sm shadow-emerald-500/20"
                       : step.status === "ACTIVE"
-                      ? "bg-slate-900 border-amber-400 shadow-md shadow-amber-400/20"
-                      : "bg-slate-950 border-slate-800"
+                      ? "bg-amber-50 dark:bg-slate-900 border-amber-400 shadow-md shadow-amber-400/20"
+                      : "bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
                   }`}
                 >
                   {getStatusIcon(step.status, step.id)}
@@ -154,11 +154,11 @@ export const TournamentTimeline: React.FC<TournamentTimelineProps> = ({
                 {/* Content */}
                 <div className="ml-3 md:ml-0 md:mt-3 flex-1">
                   <div className="flex items-center md:justify-center gap-2">
-                    <span className="text-sm font-semibold text-slate-200">{step.label}</span>
+                    <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{step.label}</span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{step.description}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{step.description}</p>
                   {step.timestamp && (
-                    <span className="text-[10px] text-slate-400 block mt-1 font-mono">{step.timestamp}</span>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 block mt-1 font-mono">{step.timestamp}</span>
                   )}
                 </div>
               </div>
@@ -168,20 +168,20 @@ export const TournamentTimeline: React.FC<TournamentTimelineProps> = ({
       </div>
 
       {/* Quick Action Bar for Tournament Navigation */}
-      <div className="mt-6 pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2 text-slate-400">
-          <ShieldCheck className="w-4 h-4 text-blue-400" />
+      <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+          <ShieldCheck className="w-4 h-4 text-blue-500 dark:text-blue-400" />
           <span>Server-authoritative state & 10-minute timers</span>
         </div>
 
         <div className="flex items-center gap-2">
           {onViewBracket && (
-            <Button size="sm" variant="secondary" onClick={onViewBracket} className="text-xs h-8">
+            <Button size="sm" variant="secondary" onClick={onViewBracket} className="text-xs h-8 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700">
               View Bracket
             </Button>
           )}
           {onViewWallet && (
-            <Button size="sm" variant="secondary" onClick={onViewWallet} className="text-xs h-8">
+            <Button size="sm" variant="secondary" onClick={onViewWallet} className="text-xs h-8 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700">
               View Wallet
             </Button>
           )}
@@ -190,3 +190,4 @@ export const TournamentTimeline: React.FC<TournamentTimelineProps> = ({
     </div>
   );
 };
+

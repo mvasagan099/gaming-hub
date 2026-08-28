@@ -35,7 +35,24 @@ async function assertTournamentsEnabled(): Promise<void> {
   });
 }
 
-export async function listTournaments(page: number, pageSize: number, status?: TournamentStatus, gameId?: string) {
+/** Entry fee for each canonical tier (must match TournamentTier seeds). */
+const TIER_ENTRY_FEE: Record<string, number> = {
+  mini: 5,
+  basic: 10,
+  standard: 25,
+  premium: 50,
+  pro: 100,
+};
+
+export async function listTournaments(
+  page: number,
+  pageSize: number,
+  status?: TournamentStatus,
+  gameId?: string,
+  tier?: string,
+) {
+  const tierEntryFee = tier ? TIER_ENTRY_FEE[tier.toLowerCase()] : undefined;
+
   const where: Record<string, unknown> = {
     ...(status
       ? status === "UPCOMING"
@@ -45,6 +62,9 @@ export async function listTournaments(page: number, pageSize: number, status?: T
         : { status }
       : { status: { not: "CANCELLED" } }),
     ...(gameId ? { gameId } : {}),
+    // Filter by exact entryFee for the requested tier.
+    // This is more reliable than title-parsing and makes pagination accurate.
+    ...(tierEntryFee !== undefined ? { entryFee: tierEntryFee } : {}),
   };
   const [items, total] = await Promise.all([
     prisma.tournament.findMany({
@@ -81,6 +101,7 @@ export async function listTournaments(page: number, pageSize: number, status?: T
     pageSize,
   };
 }
+
 
 export async function getTournamentDetail(id: string, userId: string | null) {
   const tournament = await prisma.tournament.findUnique({

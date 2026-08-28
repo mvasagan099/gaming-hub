@@ -171,19 +171,30 @@ export async function scheduleHourlyTournaments(): Promise<HourlyScheduleResult>
     return result;
   }
 
+  // Create one tournament per (tier × game) per hour → 10 games × 5 tiers = 50 slots/hour
   for (const tier of activeTiers) {
-    try {
-      await createTierSlotIfAbsent(tier, currentSlotHour, nextSlotHour);
-      result.created++;
-    } catch (err: unknown) {
-      // Unique-constraint violation = slot already exists — safe to skip
-      if (isUniqueConstraintViolation(err)) {
-        result.skipped++;
-        continue;
+    const allowedGames = GAME_IDS.filter((g) => {
+      const tiers = gameTierMatrixStore.get(g);
+      if (!tiers) return true;
+      return (tiers as any)[tier.code.toLowerCase()] !== false;
+    });
+
+    const gamePool = allowedGames.length > 0 ? allowedGames : GAME_IDS;
+
+    for (const gameId of gamePool) {
+      try {
+        await createTierSlotIfAbsent(tier, gameId, currentSlotHour, nextSlotHour);
+        result.created++;
+      } catch (err: unknown) {
+        // Unique-constraint violation = slot already exists — safe to skip
+        if (isUniqueConstraintViolation(err)) {
+          result.skipped++;
+          continue;
+        }
+        const msg = `scheduleHourlyTournaments: tier=${tier.code} game=${gameId}: ${String(err)}`;
+        console.error(`[HOURLY_SCHEDULER] ${msg}`);
+        result.errors.push(msg);
       }
-      const msg = `scheduleHourlyTournaments: tier=${tier.code}: ${String(err)}`;
-      console.error(`[HOURLY_SCHEDULER] ${msg}`);
-      result.errors.push(msg);
     }
   }
 
@@ -231,17 +242,26 @@ export async function getHourlySchedulerPreview(hoursAhead = 6): Promise<Schedul
 
     for (const tier of activeTiers) {
       const tierCode = (tier.code.toLowerCase()) as TournamentTierCode;
-      const gameId = tier.gameId ?? pickGameId(tier.id, tierCode, slotHour);
-      slots.push({
-        scheduledTime,
-        gameId,
-        gameName: formatGameName(gameId),
-        tierCode,
-        tierName: tier.name,
-        entryFee: tier.entryFee,
-        prizePool: tier.prizePool,
-        maxPlayers: tier.maxPlayers,
+      // Show all enabled games for this tier
+      const enabledGames = GAME_IDS.filter((g) => {
+        const tiers = gameTierMatrixStore.get(g);
+        if (!tiers) return true;
+        return (tiers as any)[tierCode] !== false;
       });
+      const gamePool = enabledGames.length > 0 ? enabledGames : GAME_IDS;
+
+      for (const gameId of gamePool) {
+        slots.push({
+          scheduledTime,
+          gameId,
+          gameName: formatGameName(gameId),
+          tierCode,
+          tierName: tier.name,
+          entryFee: tier.entryFee,
+          prizePool: tier.prizePool,
+          maxPlayers: tier.maxPlayers,
+        });
+      }
     }
   }
 
@@ -256,11 +276,10 @@ type TierRow = Awaited<ReturnType<typeof prisma.tournamentTier.findMany>>[number
 
 async function createTierSlotIfAbsent(
   tier: TierRow,
+  gameId: string,
   currentSlotHour: Date,
   startTime: Date,
 ): Promise<void> {
-  // Determine game (use tier's fixed gameId or pick deterministically)
-  const gameId = tier.gameId ?? pickGameId(tier.id, tier.code.toLowerCase(), currentSlotHour);
 
   // Prize distribution — read from tier (already stored as JSON array)
   const rawDist = tier.prizeDistribution as unknown as PrizeDistributionEntry[];
@@ -323,7 +342,7 @@ async function createTierSlotIfAbsent(
     snapshottedAt: new Date().toISOString(),
   };
 
-  const tournamentTitle = `${tier.name} Hourly — ${formatSlotLabel(currentSlotHour)}`;
+  const tournamentTitle = `${tier.name} Hourly — ${formatGameName(gameId)} — ${formatSlotLabel(currentSlotHour)}`;
 
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     // 1. Create the Tournament instance with a frozen snapshot
@@ -351,12 +370,13 @@ async function createTierSlotIfAbsent(
       select: { id: true },
     });
 
-    // 2. Record the slot log — unique constraint [tierId, slotHour] is the
+    // 2. Record the slot log — unique constraint [tierId, gameId, slotHour] is the
     //    final idempotency guard; if two processes race here, one will throw
     //    a unique-constraint error which we catch outside this fn.
     await tx.tournamentTierScheduleLog.create({
       data: {
         tierId: tier.id,
+        gameId,
         tournamentId: tournament.id,
         slotHour: currentSlotHour,
       },
@@ -414,7 +434,10 @@ function isUniqueConstraintViolation(err: unknown): boolean {
     if (code === "P2002") return true;
     // Also catch native pg error code 23505
     const meta = (err as Record<string, unknown>).meta as Record<string, unknown> | undefined;
-    if (meta && typeof meta.target === "string" && meta.target.includes("slotHour")) return true;
+    if (meta && typeof meta.target === "string") {
+      // Match old [tierId, slotHour] or new [tierId, gameId, slotHour] constraint names
+      if (meta.target.includes("slotHour")) return true;
+    }
   }
   return false;
 }

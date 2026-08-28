@@ -96,6 +96,26 @@ export const usePlayerTournamentStore = create<PlayerTournamentState>((set, get)
 
     socket.on('disconnect', () => set({ connected: false }));
 
+    socket.on('connect_error', (err: any) => {
+      if (err?.message === 'SESSION_REVOKED') {
+        socket.disconnect();
+        useAuthStore.getState().signOut().catch(() => {});
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login?reason=session_revoked';
+        }
+      }
+    });
+
+    socket.on('auth:session-revoked', ({ reason }) => {
+      console.warn('[PlayerTournamentStore] auth:session-revoked received:', reason);
+      socket.disconnect();
+      useAuthStore.getState().signOut().catch(() => {});
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login?reason=session_revoked';
+      }
+    });
+
+
     const handleTournamentEvent = (type: string, data: Record<string, unknown>) => {
       if ((data as { tournamentId?: string }).tournamentId !== tournamentId) return;
       const evtType = data.eventType as string | undefined;
@@ -205,6 +225,7 @@ export const usePlayerTournamentStore = create<PlayerTournamentState>((set, get)
     });
 
     set({ socket });
+    socket.connect();
   },
 
   unsubscribe: () => {

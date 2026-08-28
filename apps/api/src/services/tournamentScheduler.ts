@@ -18,50 +18,30 @@ import { scheduleHourlyTournaments } from "./hourlyTournamentScheduler";
 // ---------------------------------------------------------------------------
 
 const STALE_MATCH_START_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-const LOCK_TTL_MS = 30_000; // 30 seconds
 
 // ---------------------------------------------------------------------------
-// Distributed lock via PostgreSQL advisory lock
+// In-process mutex (replaces unreliable PG advisory lock)
+//
+// WHY: Prisma's connection pool assigns a different Postgres connection on each
+// $queryRaw call.  pg_advisory_lock is session-level — connection A acquires
+// it, returns to the pool, and connection B (different session) then sees the
+// lock as "held by another instance".  The real idempotency guard is the
+// TournamentTierScheduleLog @@unique([tierId, gameId, slotHour]) constraint,
+// so this mutex is only an optimisation to skip redundant work.
 // ---------------------------------------------------------------------------
 
-const HELD_LOCKS = new Set<string>();
+let schedulerRunning = false;
 
-async function acquireLock(lockKey: string): Promise<boolean> {
-  try {
-    // pg_advisory_lock takes a bigint; derive a stable numeric key from string
-    const numericKey = hashStringToBigInt(lockKey);
-    const rows = await prisma.$queryRaw<{ pg_advisory_lock: boolean }[]>`
-      SELECT pg_advisory_lock(${numericKey}::bigint) as "pg_advisory_lock"
-    `;
-    if (rows[0]?.pg_advisory_lock) {
-      HELD_LOCKS.add(lockKey);
-      return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
+function acquireLock(_lockKey: string): boolean {
+  if (schedulerRunning) return false;
+  schedulerRunning = true;
+  return true;
 }
 
-async function releaseLock(lockKey: string): Promise<void> {
-  if (!HELD_LOCKS.has(lockKey)) return;
-  try {
-    const numericKey = hashStringToBigInt(lockKey);
-    await prisma.$queryRaw`SELECT pg_advisory_unlock(${numericKey}::bigint)`;
-    HELD_LOCKS.delete(lockKey);
-  } catch {
-    // Best effort
-  }
+function releaseLock(_lockKey: string): void {
+  schedulerRunning = false;
 }
 
-function hashStringToBigInt(str: string): bigint {
-  let hash = BigInt(0);
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << BigInt(5)) - hash + BigInt(char)) & BigInt(0x7FFFFFFFFFFFFFFF);
-  }
-  return hash;
-}
 
 // ---------------------------------------------------------------------------
 // Audit helper
@@ -701,10 +681,10 @@ export async function runTournamentScheduler(): Promise<SchedulerRunResult> {
 
   const lockKey = "tournament:scheduler:global";
 
-  // Try to acquire the distributed lock
-  const locked = await acquireLock(lockKey);
+  // Try to acquire the in-process lock (prevents concurrent scheduler runs)
+  const locked = acquireLock(lockKey);
   if (!locked) {
-    console.log("[SCHEDULER] Another instance holds the lock, skipping");
+    console.log("[SCHEDULER] Scheduler already running, skipping");
     return result;
   }
 
@@ -810,7 +790,7 @@ export async function runTournamentScheduler(): Promise<SchedulerRunResult> {
       result.errors.push(`sendTournamentStartingReminders: ${error}`);
     }
   } finally {
-    await releaseLock(lockKey);
+    releaseLock(lockKey);
   }
 
   return result;

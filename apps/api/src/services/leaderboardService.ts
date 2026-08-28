@@ -496,10 +496,10 @@ export class LeaderboardService {
       }
       case "tournament": {
         const rows = await prisma.tournamentPlayer.findMany({
-          where: { tournament: { status: "ENDED" } },
           select: { userId: true },
         });
-        return [...new Set(rows.map((r) => r.userId))];
+        const ids = [...new Set(rows.map((r) => r.userId))];
+        return ids.length > 0 ? ids : null;
       }
       default:
         return null;
@@ -628,7 +628,7 @@ export class LeaderboardService {
       SELECT tp."userId", COUNT(*) AS played
       FROM "TournamentPlayer" tp
       JOIN "Tournament" t ON t.id = tp."tournamentId"
-      WHERE t."status"::text = 'ENDED'
+      WHERE t."status"::text IN ('ENDED', 'COMPLETED', 'SETTLED', 'SETTLING', 'IN_PROGRESS', 'STARTING', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED')
       GROUP BY tp."userId"
     `;
     for (const row of playedRows) {
@@ -636,13 +636,13 @@ export class LeaderboardService {
     }
 
     const winRows = await prisma.$queryRaw<{ userId: string; wins: bigint }[]>`
-      WITH ended AS (
-        SELECT id FROM "Tournament" WHERE "status"::text = 'ENDED'
+      WITH completed_tournaments AS (
+        SELECT id FROM "Tournament" WHERE "status"::text IN ('ENDED', 'COMPLETED', 'SETTLED', 'SETTLING')
       ),
       finals AS (
         SELECT tr."tournamentId", MAX(tr."roundNumber") AS rn
         FROM "TournamentRound" tr
-        JOIN ended e ON e.id = tr."tournamentId"
+        JOIN completed_tournaments e ON e.id = tr."tournamentId"
         WHERE tr."winnerId" IS NOT NULL
         GROUP BY tr."tournamentId"
       )
@@ -794,7 +794,7 @@ export class LeaderboardService {
       case "fastestWin":
         return ctx.fastestWinSec;
       case "streak":
-        return ctx.maxStreak > 0 ? ctx.maxStreak : null;
+        return ctx.maxStreak ?? 0;
     }
   }
 

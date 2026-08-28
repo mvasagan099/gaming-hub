@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { AppError, updateProfileSchema, clampPagination } from "@gaming-hub/shared";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, optionalAuthenticate } from "../plugins/authenticate";
 import { requireUser, parseSchema, routeParams, queryParams, queryString } from "../lib/http";
 import { assertFeatureEnabled } from "../services/featureFlags";
 import { updateUserProfile } from "../services/users";
@@ -24,21 +24,23 @@ export async function usersRoutes(app: FastifyInstance) {
   /**
    * Public player profile with complete game stats, ratings, tournament results, and recent matches.
    */
-  app.get("/api/users/:id/public-profile", { preHandler: authenticate }, async (request) => {
+  app.get("/api/users/:id/public-profile", { preHandler: optionalAuthenticate }, async (request) => {
     await assertFeatureEnabled("social.profiles", "Public profiles");
-    const user = requireUser(request);
+    const viewerId = request.user?.id;
+    const isAdmin = request.user?.role === "ADMIN";
     const { id } = routeParams(request);
-    return PlayerProfileService.getPublicProfile(id, user.id, user.role === "ADMIN");
+    return PlayerProfileService.getPublicProfile(id, viewerId, isAdmin);
   });
 
   /**
    * Standard user profile endpoint (backward compatible).
    */
-  app.get("/api/users/:id", { preHandler: authenticate }, async (request) => {
+  app.get("/api/users/:id", { preHandler: optionalAuthenticate }, async (request) => {
     await assertFeatureEnabled("social.profiles", "Public profiles");
-    const user = requireUser(request);
+    const viewerId = request.user?.id;
+    const isAdmin = request.user?.role === "ADMIN";
     const { id } = routeParams(request);
-    return PlayerProfileService.getPublicProfile(id, user.id, user.role === "ADMIN");
+    return PlayerProfileService.getPublicProfile(id, viewerId, isAdmin);
   });
 
   /**

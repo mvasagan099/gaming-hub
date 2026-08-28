@@ -80,10 +80,11 @@ function formatCountdown(targetDate: string | null | undefined): string {
 
 function detectTier(title: string, entryFee: number): string {
   const t = title.toLowerCase();
-  if (t.includes('pro') || entryFee >= 100) return 'pro';
-  if (t.includes('premium') || entryFee >= 50) return 'premium';
-  if (t.includes('standard') || entryFee >= 25) return 'standard';
-  if (t.includes('basic') || entryFee >= 10) return 'basic';
+  // IMPORTANT: check 'premium' BEFORE 'pro' — 'premium' contains the substring 'pro'
+  if (t.includes('premium') || (entryFee >= 50 && entryFee < 100)) return 'premium';
+  if (t.includes(' pro ') || t.startsWith('pro ') || t.endsWith(' pro') || t === 'pro' || entryFee >= 100) return 'pro';
+  if (t.includes('standard') || (entryFee >= 25 && entryFee < 50)) return 'standard';
+  if (t.includes('basic') || (entryFee >= 10 && entryFee < 25)) return 'basic';
   return 'mini';
 }
 
@@ -124,7 +125,7 @@ export function TournamentsPage() {
   const [total, setTotal] = useState(0);
   const pageSize = 30;
 
-  // Fetch Tiers & Tournaments
+  // Fetch Tiers & Tournaments — tier is now a server-side filter for accurate pagination
   const load = async (p = page) => {
     setLoading(true);
     setError(null);
@@ -135,6 +136,7 @@ export function TournamentsPage() {
           pageSize,
           status: statusFilter || undefined,
           gameId: gameFilter || undefined,
+          tier: tierFilter || undefined,
         }),
         tournamentsApi.tiers().catch(() => ({ items: [] as TournamentTierConfig[] })),
       ]);
@@ -156,27 +158,31 @@ export function TournamentsPage() {
   useEffect(() => {
     setPage(1);
     load(1);
-  }, [statusFilter, gameFilter]);
+  }, [statusFilter, gameFilter, tierFilter]);
 
-  // Client filtering on search and tier
+  // Reset to page 1 when text search changes (search is still client-side only)
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  // Client-side filter: only text search (tier is handled server-side)
   const filtered = useMemo(() => {
+    if (!search) return items;
+    const q = search.toLowerCase();
     return items.filter((t) => {
-      if (tierFilter) {
-        const tier = detectTier(t.title, t.entryFee);
-        if (tier !== tierFilter) return false;
-      }
-      if (search) {
-        const q = search.toLowerCase();
-        const game = gameById.get(t.gameId);
-        const matchTitle = t.title.toLowerCase().includes(q);
-        const matchGame = game?.name?.toLowerCase().includes(q) || t.gameId.toLowerCase().includes(q);
-        if (!matchTitle && !matchGame) return false;
-      }
-      return true;
+      const game = gameById.get(t.gameId);
+      return (
+        t.title.toLowerCase().includes(q) ||
+        game?.name?.toLowerCase().includes(q) ||
+        t.gameId.toLowerCase().includes(q)
+      );
     });
-  }, [items, search, tierFilter]);
+  }, [items, search]);
 
-  const totalPages = Math.ceil(total / pageSize);
+  // Pagination — always accurate since tier is now server-side
+  const filteredTotal = search ? filtered.length : total;
+  const totalPages = Math.ceil(filteredTotal / pageSize);
+
 
   const displayTiers = backendTiers.length > 0 ? backendTiers : DEFAULT_TOURNAMENT_TIERS;
 
@@ -185,31 +191,31 @@ export function TournamentsPage() {
       {/* ------------------------------------------------------------- */}
       {/* 1. HERO HEADER                                                */}
       {/* ------------------------------------------------------------- */}
-      <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/40 p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-white via-slate-50 to-amber-500/5 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950/40 p-6 sm:p-8 shadow-xl shadow-slate-200/50 dark:shadow-2xl backdrop-blur-xl transition-colors">
         <div className="absolute right-0 top-0 -mr-16 -mt-16 size-80 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
         <div className="absolute left-1/3 bottom-0 size-60 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-black text-amber-400">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-black text-amber-600 dark:text-amber-400">
               <Trophy className="size-3.5" /> HOURLY COMPETITIVE SYSTEM
             </div>
-            <h1 className="text-2xl font-black text-white sm:text-4xl tracking-tight">
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white sm:text-4xl tracking-tight">
               Tournaments Arena
             </h1>
-            <p className="max-w-xl text-xs sm:text-sm text-slate-400">
+            <p className="max-w-xl text-xs sm:text-sm text-slate-600 dark:text-slate-400">
               Compete in hourly bracket tournaments across 10 games. Guaranteed prize pools distributed to top 4 positions (50% / 25% / 15% / 10%).
             </p>
           </div>
 
           {/* Tab Switcher */}
-          <div className="flex items-center gap-1.5 self-start sm:self-center rounded-2xl border border-slate-800 bg-slate-950/80 p-1.5 backdrop-blur-md shrink-0">
+          <div className="flex items-center gap-1.5 self-start sm:self-center rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950/80 p-1.5 backdrop-blur-md shrink-0">
             <button
               onClick={() => setMainTab('explore')}
               className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
                 mainTab === 'explore'
                   ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-md font-black'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Swords className="size-3.5" /> Explore Tournaments
@@ -218,8 +224,8 @@ export function TournamentsPage() {
               onClick={() => setMainTab('my-tournaments')}
               className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
                 mainTab === 'my-tournaments'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-md font-black'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Trophy className="size-3.5" /> My Tournaments
@@ -228,18 +234,18 @@ export function TournamentsPage() {
         </div>
 
         {/* ------------------------------------------------------------- */}
-        {/* 2. FIVE-TIER COMPARISON SHOWCASE (Prompt #2)                  */}
+        {/* 2. FIVE-TIER COMPARISON SHOWCASE                              */}
         {/* ------------------------------------------------------------- */}
         {mainTab === 'explore' && (
-          <div className="mt-8 pt-6 border-t border-slate-800/80">
+          <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800/80">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                <Sparkles className="size-3.5 text-amber-400" /> 5 Tournament Tiers
+              <span className="text-xs font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <Sparkles className="size-3.5 text-amber-500 dark:text-amber-400" /> 5 Tournament Tiers
               </span>
               {tierFilter && (
                 <button
                   onClick={() => setTierFilter('')}
-                  className="text-xs text-amber-400 hover:underline font-semibold"
+                  className="text-xs text-amber-600 dark:text-amber-400 hover:underline font-semibold"
                 >
                   Clear Tier Filter
                 </button>
@@ -257,14 +263,14 @@ export function TournamentsPage() {
                     onClick={() => setTierFilter(isSelected ? '' : tier.code)}
                     className={`group relative overflow-hidden rounded-2xl border p-3.5 text-left transition-all backdrop-blur-md ${
                       isSelected
-                        ? `${vis.borderClass} bg-slate-900/90 shadow-lg shadow-indigo-500/10 ring-2 ring-indigo-500/40`
-                        : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-900/60'
+                        ? `${vis.borderClass} bg-amber-500/10 dark:bg-slate-900/90 shadow-md ring-2 ring-amber-500/40 dark:ring-indigo-500/40`
+                        : 'border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/60 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900/60 shadow-sm dark:shadow-none'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1">
                       <div className="flex items-center gap-1.5">
                         <span className="text-base">{vis.badgeEmoji}</span>
-                        <span className="font-black text-xs text-white uppercase tracking-wider">
+                        <span className="font-black text-xs text-slate-900 dark:text-white uppercase tracking-wider">
                           {tier.name}
                         </span>
                       </div>
@@ -275,21 +281,21 @@ export function TournamentsPage() {
 
                     <div className="mt-2.5 space-y-1">
                       <div className="flex items-baseline justify-between text-xs">
-                        <span className="text-[10px] text-slate-400">Prize Pool</span>
-                        <span className="font-extrabold text-amber-400">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Prize Pool</span>
+                        <span className="font-extrabold text-amber-600 dark:text-amber-400">
                           🪙 {tier.prizePool.toLocaleString()}
                         </span>
                       </div>
                       <div className="flex items-baseline justify-between text-xs">
-                        <span className="text-[10px] text-slate-400">Max Players</span>
-                        <span className="font-semibold text-slate-200">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Max Players</span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">
                           {tier.maxPlayers.toLocaleString()}
                         </span>
                       </div>
                     </div>
 
                     {isSelected && (
-                      <div className="mt-2 text-[10px] font-bold text-amber-400 text-center">
+                      <div className="mt-2 text-[10px] font-bold text-amber-600 dark:text-amber-400 text-center">
                         ✓ FILTERED
                       </div>
                     )}
@@ -309,7 +315,7 @@ export function TournamentsPage() {
       ) : (
         <div className="space-y-6">
           {error && (
-            <div className="flex items-center gap-2 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-400">
+            <div className="flex items-center gap-2 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-500 dark:text-rose-400">
               <AlertCircle className="size-4 shrink-0" /> {error}
             </div>
           )}
@@ -326,7 +332,7 @@ export function TournamentsPage() {
                     className={`rounded-full px-3.5 py-1.5 text-xs font-black transition-all ${
                       statusFilter === f.value
                         ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-md shadow-amber-500/20'
-                        : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                        : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700 shadow-sm dark:shadow-none'
                     }`}
                   >
                     {f.label}
@@ -336,13 +342,13 @@ export function TournamentsPage() {
 
               {/* Tier Quick Filter Buttons */}
               <div className="flex flex-wrap items-center gap-1">
-                <span className="text-[11px] text-slate-500 font-bold uppercase mr-1">Tier:</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase mr-1">Tier:</span>
                 <button
                   onClick={() => setTierFilter('')}
                   className={`rounded-xl px-2.5 py-1 text-[11px] font-bold border transition-all ${
                     !tierFilter
-                      ? 'bg-slate-800 text-white border-slate-700'
-                      : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                      ? 'bg-slate-900 dark:bg-slate-800 text-white border-slate-800 dark:border-slate-700 shadow-sm'
+                      : 'bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-white shadow-sm dark:shadow-none'
                   }`}
                 >
                   All
@@ -357,7 +363,7 @@ export function TournamentsPage() {
                       className={`rounded-xl px-2.5 py-1 text-[11px] font-black border flex items-center gap-1 transition-all ${
                         active
                           ? `${vis.badgeBgClass} ${vis.borderClass}`
-                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                          : 'bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-white shadow-sm dark:shadow-none'
                       }`}
                     >
                       <span>{vis.badgeEmoji}</span>
@@ -371,13 +377,13 @@ export function TournamentsPage() {
             {/* Search and Game dropdown */}
             <div className="flex flex-wrap gap-2.5">
               <div className="relative flex-1 min-w-[220px]">
-                <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
+                <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search by tournament name or game..."
-                  className="w-full rounded-2xl border border-slate-800 bg-slate-950/80 py-2.5 pl-10 pr-4 text-xs sm:text-sm text-white placeholder-slate-500 outline-none focus:border-amber-400 transition-colors"
+                  className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/80 py-2.5 pl-10 pr-4 text-xs sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-amber-500 dark:focus:border-amber-400 shadow-sm dark:shadow-none transition-colors"
                 />
               </div>
 
@@ -385,7 +391,7 @@ export function TournamentsPage() {
                 value={gameFilter}
                 onChange={(e) => setGameFilter(e.target.value)}
                 aria-label="Filter by game"
-                className="rounded-2xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs sm:text-sm text-slate-200 outline-none focus:border-amber-400 transition-colors"
+                className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-4 py-2.5 text-xs sm:text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-amber-500 dark:focus:border-amber-400 shadow-sm dark:shadow-none transition-colors"
               >
                 <option value="">All 10 Games</option>
                 {GAME_DEFINITIONS.map((g) => (
@@ -408,7 +414,7 @@ export function TournamentsPage() {
             </div>
           ) : filtered.length === 0 ? (
             <EmptyState
-              icon={<Trophy className="size-8 text-amber-400" />}
+              icon={<Trophy className="size-8 text-amber-500 dark:text-amber-400" />}
               title="No tournaments match your filter"
               description={search || tierFilter || gameFilter ? 'Try clearing your filters or search terms.' : 'Check back shortly for newly scheduled hourly tournaments.'}
             />
@@ -435,11 +441,11 @@ export function TournamentsPage() {
                       setPage(page - 1);
                       load(page - 1);
                     }}
-                    className="border-slate-800 text-slate-300 hover:text-white"
+                    className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 shadow-sm dark:shadow-none"
                   >
                     Previous
                   </Button>
-                  <span className="text-xs font-mono text-slate-400">
+                  <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
                     Page {page} of {totalPages}
                   </span>
                   <Button
@@ -450,7 +456,7 @@ export function TournamentsPage() {
                       setPage(page + 1);
                       load(page + 1);
                     }}
-                    className="border-slate-800 text-slate-300 hover:text-white"
+                    className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 shadow-sm dark:shadow-none"
                   >
                     Next
                   </Button>
@@ -500,7 +506,7 @@ function TournamentLobbyCard({
           onClick();
         }
       }}
-      className={`group relative flex flex-col justify-between overflow-hidden rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-900/90 via-slate-900/60 to-slate-950 p-5 text-left transition-all hover:border-slate-700 hover:shadow-xl hover:shadow-black/50 backdrop-blur-xl ${
+      className={`group relative flex flex-col justify-between overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-gradient-to-b dark:from-slate-900/90 dark:via-slate-900/60 dark:to-slate-950 p-5 text-left transition-all hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xl hover:shadow-slate-200/60 dark:hover:shadow-black/50 shadow-sm backdrop-blur-xl ${
         isLive ? 'ring-1 ring-emerald-500/40' : ''
       }`}
     >
@@ -535,10 +541,10 @@ function TournamentLobbyCard({
         <div className="mt-3.5 flex items-start gap-3">
           <span className="text-3xl shrink-0 drop-shadow-md">{game?.icon ?? '🏆'}</span>
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-base font-black text-white group-hover:text-amber-400 transition-colors">
+            <h3 className="truncate text-base font-black text-slate-900 dark:text-white group-hover:text-amber-500 dark:group-hover:text-amber-400 transition-colors">
               {t.title}
             </h3>
-            <p className="text-xs text-slate-400 font-medium truncate">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
               {game?.name ?? t.gameId} · {FORMAT_LABELS[t.format] ?? t.format}
             </p>
           </div>
@@ -547,17 +553,17 @@ function TournamentLobbyCard({
         {/* Stats Grid */}
         <div className="mt-4 grid grid-cols-2 gap-2">
           {/* Prize Pool */}
-          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-2.5">
-            <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Prize Pool</p>
-            <p className="text-lg font-black text-amber-400 tracking-tight">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/70 p-2.5">
+            <p className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-500 tracking-wider">Prize Pool</p>
+            <p className="text-lg font-black text-amber-600 dark:text-amber-400 tracking-tight">
               🪙 {t.prizePool.toLocaleString()}
             </p>
           </div>
 
           {/* Entry Fee */}
-          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-2.5">
-            <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Entry Fee</p>
-            <p className="text-lg font-black text-slate-200">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/70 p-2.5">
+            <p className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-500 tracking-wider">Entry Fee</p>
+            <p className="text-lg font-black text-slate-900 dark:text-slate-200">
               🪙 {t.entryFee.toLocaleString()}
             </p>
           </div>
@@ -566,17 +572,17 @@ function TournamentLobbyCard({
         {/* Capacity Progress Bar (Prompt #6) */}
         <div className="mt-3.5 space-y-1.5">
           <div className="flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 font-semibold flex items-center gap-1">
-              <Users className="size-3 text-slate-500" /> Players
+            <span className="text-slate-600 dark:text-slate-400 font-semibold flex items-center gap-1">
+              <Users className="size-3 text-slate-400 dark:text-slate-500" /> Players
             </span>
-            <span className="font-mono font-bold text-slate-200">
-              {t.registeredCount} <span className="text-slate-500">/ {t.maxPlayers}</span>
-              {isFull && <span className="ml-1 text-rose-400 font-black">(FULL)</span>}
-              {isAlmostFull && <span className="ml-1 text-amber-400 font-black">(ALMOST FULL)</span>}
+            <span className="font-mono font-bold text-slate-900 dark:text-slate-200">
+              {t.registeredCount} <span className="text-slate-400 dark:text-slate-500">/ {t.maxPlayers}</span>
+              {isFull && <span className="ml-1 text-rose-500 font-black">(FULL)</span>}
+              {isAlmostFull && <span className="ml-1 text-amber-500 dark:text-amber-400 font-black">(ALMOST FULL)</span>}
             </span>
           </div>
 
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
             <div
               className={`h-full rounded-full transition-all ${
                 isFull
@@ -592,7 +598,7 @@ function TournamentLobbyCard({
       </div>
 
       {/* Footer / CTA (Prompt #1, #7, #29) */}
-      <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex items-center justify-between gap-2">
+      <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
         {/* Countdown Info */}
         <div className="min-w-0 text-xs">
           {isRegOpen ? (
@@ -601,11 +607,11 @@ function TournamentLobbyCard({
               label="Closes: "
             />
           ) : isStarting ? (
-            <span className="text-[11px] font-bold text-amber-400 animate-pulse">
+            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 animate-pulse">
               Starting Bracket...
             </span>
           ) : isLive ? (
-            <span className="text-[11px] font-bold text-emerald-400">
+            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
               Matches In Progress
             </span>
           ) : isCompleted ? (
@@ -613,7 +619,7 @@ function TournamentLobbyCard({
               Tournament Finished
             </span>
           ) : (
-            <span className="text-[11px] text-slate-400 font-medium">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
               Starts: {new Date(t.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
@@ -626,7 +632,7 @@ function TournamentLobbyCard({
               JOIN <ArrowRight className="size-3" />
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 text-xs font-bold text-slate-300 group-hover:border-slate-600 transition-colors">
+            <span className="inline-flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm">
               VIEW <ArrowRight className="size-3" />
             </span>
           )}
@@ -635,3 +641,4 @@ function TournamentLobbyCard({
     </div>
   );
 }
+

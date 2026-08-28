@@ -248,9 +248,27 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         });
       });
 
-      socket.on("connect_error", () => {
+      socket.on("connect_error", (err: any) => {
+        if (err?.message === "SESSION_REVOKED") {
+          socket.disconnect();
+          useAuthStore.getState().signOut().catch(() => {});
+          if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+            window.location.href = "/login?reason=session_revoked";
+          }
+          return;
+        }
         set({ status: "error", error: "Could not reach the game server" });
       });
+
+      socket.on("auth:session-revoked", ({ reason }) => {
+        console.warn("[MultiplayerStore] auth:session-revoked received:", reason);
+        socket.disconnect();
+        useAuthStore.getState().signOut().catch(() => {});
+        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+          window.location.href = "/login?reason=session_revoked";
+        }
+      });
+
 
       socket.on("room:update", (room) => {
         console.log("[MultiplayerStore] room:update received", room.id, "gameId:", room.gameId, "status:", room.status);

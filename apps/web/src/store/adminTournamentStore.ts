@@ -155,6 +155,7 @@ export const useAdminTournamentStore = create<AdminTournamentState>((set, get) =
     });
 
     set({ socket });
+    socket.connect();
   },
 
   disconnect: () => {

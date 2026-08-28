@@ -46,6 +46,16 @@ async function request<T>(path: string, init: RequestInit, tokenOverride?: strin
     } catch {
       // Non-JSON error body.
     }
+    if (response.status === 401) {
+      const code = body.error?.code;
+      if (code === "SESSION_REVOKED" || (body.error?.message && /session has been revoked|terminated because your account/i.test(body.error.message))) {
+        useAuthStore.getState().signOut().catch(() => {});
+        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+          window.location.href = "/login?reason=session_revoked";
+        }
+      }
+    }
+
     throw new ApiError(
       response.status,
       body.error?.code ?? "HTTP_ERROR",
@@ -53,6 +63,7 @@ async function request<T>(path: string, init: RequestInit, tokenOverride?: strin
       body.error?.details,
     );
   }
+
 
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;

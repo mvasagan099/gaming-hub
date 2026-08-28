@@ -563,3 +563,80 @@ describe("SUITE 8 — System Invariants", () => {
     expect(combinationCount).toBe(50);
   });
 });
+
+// ===========================================================================
+// SUITE 9 — Scheduler Integration: 50 tournaments/hour + idempotency
+// ===========================================================================
+
+describe("SUITE 9 — Hourly Scheduler: 50 slots per hour + idempotency", () => {
+  let scheduleHourlyTournaments: () => Promise<import("../hourlyTournamentScheduler").HourlyScheduleResult>;
+
+  beforeAll(async () => {
+    const mod = await import("../hourlyTournamentScheduler");
+    scheduleHourlyTournaments = mod.scheduleHourlyTournaments;
+  });
+
+  it("first run creates exactly 50 tournaments (10 games × 5 active tiers)", async () => {
+    // Count existing schedule log entries for the NEXT hour slot
+    const now = new Date();
+    const nextHour = new Date(now);
+    nextHour.setUTCMinutes(0, 0, 0);
+    nextHour.setUTCHours(nextHour.getUTCHours() + 1);
+
+    const before = await prisma.tournamentTierScheduleLog.count({
+      where: { slotHour: nextHour },
+    });
+
+    // Run the scheduler (it creates for currentSlotHour, not nextHour, but
+    // we verify by inspecting the returned created count)
+    const result = await scheduleHourlyTournaments();
+
+    // Either 50 created (fresh run) or 0 created + 50 skipped (already ran this hour)
+    const total = result.created + result.skipped;
+    expect(result.errors).toHaveLength(0);
+
+    // Total scheduled for the CURRENT slot must be exactly 50 (10 × 5)
+    const activeTierCount = await prisma.tournamentTier.count({ where: { isActive: true } });
+    expect(activeTierCount).toBe(5);
+    // Each of the 5 tiers must have 10 game slots = 50 total
+    expect(total).toBe(50);
+  }, 30000);
+
+  it("second run is fully idempotent — creates 0 new tournaments", async () => {
+    const result = await scheduleHourlyTournaments();
+    // All 50 slots already exist → every attempt is skipped, none created
+    expect(result.created).toBe(0);
+    expect(result.skipped).toBe(50);
+    expect(result.errors).toHaveLength(0);
+  }, 15000);
+
+  it("all 5 tiers have exactly 10 game slots in the DB for the current hour", async () => {
+    const now = new Date();
+    const currentSlot = new Date(now);
+    currentSlot.setUTCMinutes(0, 0, 0);
+
+    const logs = await prisma.tournamentTierScheduleLog.findMany({
+      where: { slotHour: currentSlot },
+      include: { tier: { select: { code: true } } },
+    });
+
+    const byTier: Record<string, string[]> = {};
+    for (const log of logs) {
+      const code = log.tier.code;
+      if (!byTier[code]) byTier[code] = [];
+      byTier[code]!.push(log.gameId);
+    }
+
+    for (const tierCode of ALL_5_TIERS) {
+      const games = byTier[tierCode] ?? [];
+      expect(games.length, `${tierCode} should have 10 game slots`).toBe(10);
+      // All 10 game IDs must be present, each exactly once
+      const gameSet = new Set(games);
+      expect(gameSet.size).toBe(10);
+      for (const g of ALL_10_GAMES) {
+        expect(gameSet.has(g), `${tierCode} missing game ${g}`).toBe(true);
+      }
+    }
+  }, 10000);
+});
+

@@ -36,55 +36,88 @@ export async function recordLoginSession(input: {
   ip: string | null;
   userAgent: string | null;
 }) {
-  // Cap the number of tracked sessions per user to avoid unbounded growth;
-  // the oldest expired/revoked rows are pruned first.
-  const stale = await prisma.loginSession.findMany({
-    where: {
-      userId: input.userId,
-      OR: [{ revokedAt: { not: null } }, { expiresAt: { lt: new Date() } }],
-    },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-    select: { id: true },
-  });
-  if (stale.length > 0) {
-    await prisma.loginSession.deleteMany({
-      where: { id: { in: stale.map((s) => s.id) } },
-    });
-  }
-
   const tokenHash = hashToken(input.token);
-  const existing = await prisma.loginSession.findUnique({ where: { tokenHash } });
-  if (existing) {
-    // Same token re-exchanged: refresh instead of duplicating.
-    return prisma.loginSession.update({
-      where: { id: existing.id },
-      data: {
-        isCurrent: true,
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
+
+  return prisma.$transaction(async (tx) => {
+    // 0. Take an exclusive row lock on the User row to serialize concurrent login attempts
+    await tx.user.update({
+      where: { id: input.userId },
+      data: { updatedAt: now },
+    });
+
+    // 1. Atomically revoke ALL other existing active sessions for this user
+    await tx.loginSession.updateMany({
+      where: {
+        userId: input.userId,
         revokedAt: null,
-        expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+        NOT: { tokenHash },
+      },
+      data: {
+        revokedAt: now,
+        isCurrent: false,
       },
     });
-  }
 
-  return prisma.loginSession.create({
-    data: {
-      userId: input.userId,
-      tokenHash,
-      ip: input.ip,
-      userAgent: input.userAgent,
-      deviceName: deviceNameFromUserAgent(input.userAgent),
-      isCurrent: true,
-      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
-    },
+
+    // 2. Prune old stale/expired sessions beyond the recent history to keep table lean
+    const stale = await tx.loginSession.findMany({
+      where: {
+        userId: input.userId,
+        OR: [{ revokedAt: { not: null } }, { expiresAt: { lt: now } }],
+        NOT: { tokenHash },
+      },
+      orderBy: { createdAt: "desc" },
+      skip: 20,
+      select: { id: true },
+    });
+    if (stale.length > 0) {
+      await tx.loginSession.deleteMany({
+        where: { id: { in: stale.map((s) => s.id) } },
+      });
+    }
+
+    // 3. Upsert the current session as the ONLY active session
+    const existing = await tx.loginSession.findUnique({ where: { tokenHash } });
+    if (existing) {
+      return tx.loginSession.update({
+        where: { id: existing.id },
+        data: {
+          isCurrent: true,
+          revokedAt: null,
+          expiresAt,
+          ip: input.ip ?? existing.ip,
+          userAgent: input.userAgent ?? existing.userAgent,
+          deviceName: deviceNameFromUserAgent(input.userAgent) ?? existing.deviceName,
+        },
+      });
+    }
+
+    return tx.loginSession.create({
+      data: {
+        userId: input.userId,
+        tokenHash,
+        ip: input.ip,
+        userAgent: input.userAgent,
+        deviceName: deviceNameFromUserAgent(input.userAgent),
+        isCurrent: true,
+        expiresAt,
+      },
+    });
   });
 }
 
 export async function listSessions(userId: string, currentTokenHash?: string) {
+  const now = new Date();
   const rows = await prisma.loginSession.findMany({
-    where: { userId, revokedAt: null },
+    where: {
+      userId,
+      revokedAt: null,
+      expiresAt: { gt: now },
+    },
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take: 10,
   });
   return rows.map((s) => ({
     id: s.id,
@@ -122,3 +155,4 @@ export async function revokeOtherSessions(userId: string, currentTokenHash: stri
   });
   return { ok: true, revoked: result.count };
 }
+

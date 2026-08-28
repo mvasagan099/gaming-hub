@@ -1300,18 +1300,19 @@ model TournamentTier {
   @@index([isActive, sortOrder])
 }
 
-/// Idempotency guard — one tournament instance per tier per clock-hour (UTC)
+/// Idempotency guard — one tournament instance per tier+game per clock-hour (UTC)
 model TournamentTierScheduleLog {
   id           String   @id @default(uuid())
   tierId       String
+  gameId       String   // which game was scheduled in this slot
   tournamentId String   @unique
   slotHour     DateTime // truncated to the hour (UTC)
   createdAt    DateTime @default(now())
 
   tier         TournamentTier @relation(fields: [tierId], references: [id], onDelete: Cascade)
 
-  @@unique([tierId, slotHour])
-  @@index([tierId, slotHour])
+  @@unique([tierId, gameId, slotHour])
+  @@index([tierId, gameId, slotHour])
 }
 
 enum IdempotencyStatus {
