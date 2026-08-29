@@ -278,6 +278,15 @@ html[data-contrast="high"] *:focus-visible {
   min-width: 44px;
 }
 
+/* Scrollbar hiding utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Fluid Typography Utilities */
 .text-fluid-title {
   font-size: clamp(1.25rem, 4vw, 2.5rem);

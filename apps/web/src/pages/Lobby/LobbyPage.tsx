@@ -281,10 +281,18 @@ export const LobbyPage: React.FC = () => {
   }, [session, connect, disconnect]);
 
   useEffect(() => {
-    if (room && slug && room.gameId === slug && room.status === "playing" && room.matchId) {
-      navigate(`/games/${slug}`, { state: { mode: "multiplayer", stake: room.stake } });
+    if (room && slug && room.gameId === slug) {
+      if (room.status === "playing" || room.matchId) {
+        if (matchmaking.queued) {
+          useMultiplayerStore.setState({
+            matchmaking: { queued: false, position: 0, gameId: null, stake: null, settings: {} },
+            pendingRequeue: null,
+          });
+        }
+        navigate(`/games/${slug}`, { state: { mode: "multiplayer", stake: room.stake } });
+      }
     }
-  }, [room, slug, navigate]);
+  }, [room, slug, matchmaking.queued, navigate]);
 
   // Client-side queue timeout: gives feedback even if the server eviction
   // event is missed (e.g. while disconnected).

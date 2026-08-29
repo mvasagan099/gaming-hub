@@ -309,11 +309,11 @@ export const ProfilePage: React.FC = () => {
   const countryDisplay = me.profile?.country || "IN";
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 px-4 sm:px-6 py-6">
+    <div className="max-w-5xl w-full min-w-0 mx-auto space-y-6 sm:space-y-8 px-0 sm:px-4 py-2 sm:py-6">
       {/* Top Header & Tab Navigation */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4 min-w-0 w-full">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
             {activeTab === "security"
               ? "Security Settings"
               : activeTab === "history"
@@ -322,7 +322,7 @@ export const ProfilePage: React.FC = () => {
               ? "Player Statistics"
               : "My Profile"}
           </h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
             {activeTab === "security"
               ? "Manage password, two-factor authentication and active sessions."
               : activeTab === "history"
@@ -333,10 +333,11 @@ export const ProfilePage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl shrink-0 flex-wrap">
+        {/* Tab Navigation with sleek horizontal scroll on mobile */}
+        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl w-full md:w-auto max-w-full overflow-x-auto no-scrollbar shrink-0">
           <button
             onClick={() => setActiveTab("profile")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === "profile"
                 ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
                 : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
@@ -346,7 +347,7 @@ export const ProfilePage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab("tournaments")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === "tournaments"
                 ? "bg-amber-500 text-slate-950 shadow-sm font-black"
                 : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
@@ -356,7 +357,7 @@ export const ProfilePage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab("history")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === "history"
                 ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
                 : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
@@ -366,7 +367,7 @@ export const ProfilePage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab("stats")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === "stats"
                 ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
                 : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
@@ -376,7 +377,7 @@ export const ProfilePage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab("security")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === "security"
                 ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
                 : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
@@ -386,7 +387,7 @@ export const ProfilePage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab("activity")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === "activity"
                 ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
                 : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
@@ -654,49 +655,49 @@ export const ProfilePage: React.FC = () => {
       {activeTab === "security" && (
         <div className="space-y-6">
           {/* Top Row: Change Password & Two-Factor Auth */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             {/* Change Password Card */}
-            <div className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-6 sm:p-8 space-y-6 shadow-sm">
-              <div className="flex items-center gap-2.5 text-lg font-black text-slate-900 dark:text-white">
+            <div className="rounded-2xl sm:rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-4 sm:p-6 md:p-8 space-y-5 sm:space-y-6 shadow-sm">
+              <div className="flex items-center gap-2.5 text-base sm:text-lg font-black text-slate-900 dark:text-white">
                 <KeyRound className="w-5 h-5 text-indigo-500" />
                 Change Password
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Current Password</label>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Current Password</label>
                   <input
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">New Password</label>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">New Password</label>
                   <input
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Confirm New Password</label>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Confirm New Password</label>
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <button
                   onClick={handleUpdatePassword}
                   disabled={updatingPassword}
-                  className="w-full py-3.5 rounded-2xl bg-[#1b367d] hover:bg-[#152a62] text-white font-black text-sm uppercase tracking-wide transition-all shadow-md hover:scale-[1.01] duration-200 disabled:opacity-50"
+                  className="w-full py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-[#1b367d] hover:bg-[#152a62] text-white font-black text-xs sm:text-sm uppercase tracking-wide transition-all shadow-md hover:scale-[1.01] duration-200 disabled:opacity-50 cursor-pointer"
                 >
                   {updatingPassword ? "Updating..." : "Update Password"}
                 </button>
@@ -704,24 +705,26 @@ export const ProfilePage: React.FC = () => {
             </div>
 
             {/* Two-Factor Auth Card */}
-            <div className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-6 sm:p-8 space-y-6 shadow-sm">
-              <div className="flex items-center gap-2.5 text-lg font-black text-slate-900 dark:text-white">
-                <Lock className="w-5 h-5 text-indigo-500" />
-                Two-Factor Auth
-              </div>
+            <div className="rounded-2xl sm:rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-4 sm:p-6 md:p-8 space-y-5 sm:space-y-6 shadow-sm flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2.5 text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                  <Lock className="w-5 h-5 text-indigo-500" />
+                  Two-Factor Auth
+                </div>
 
-              {/* Warning Amber Alert Banner */}
-              <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-5 flex items-start gap-3">
-                <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                <p className="text-xs font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
-                  Protect your account and wallet by enabling 2FA.
-                </p>
+                {/* Warning Amber Alert Banner */}
+                <div className="rounded-xl sm:rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 sm:p-5 flex items-start gap-3">
+                  <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-xs font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
+                    Protect your account and wallet by enabling 2FA.
+                  </p>
+                </div>
               </div>
 
               <button
                 onClick={handleToggle2FA}
                 disabled={settingUp2FA}
-                className="px-6 py-3.5 rounded-2xl bg-[#1b367d] hover:bg-[#152a62] disabled:opacity-50 text-white font-black text-sm uppercase tracking-wide transition-all shadow-md hover:scale-[1.02] duration-200 flex items-center gap-2"
+                className="w-full sm:w-auto px-6 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-[#1b367d] hover:bg-[#152a62] disabled:opacity-50 text-white font-black text-xs sm:text-sm uppercase tracking-wide transition-all shadow-md hover:scale-[1.02] duration-200 flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Smartphone className="w-4 h-4" />
                 {settingUp2FA ? "Setting up..." : twoFactorEnabled ? "Disable 2FA" : "Enable 2FA"}
@@ -730,43 +733,43 @@ export const ProfilePage: React.FC = () => {
           </div>
 
           {/* Bottom Full-Width Card: Active Sessions */}
-          <div className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 overflow-hidden shadow-sm">
-            <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div className="rounded-2xl sm:rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 overflow-hidden shadow-sm">
+            <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
                 <Monitor className="w-5 h-5 text-blue-500" />
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">Active Sessions</h3>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">Active Sessions</h3>
               </div>
               {sessions.filter((s) => !s.isCurrent).length > 0 && (
                 <button
                   onClick={() => void handleRevokeAllOtherSessions()}
                   disabled={revokingId === "all"}
-                  className="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-bold text-xs transition-colors disabled:opacity-50"
+                  className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-bold text-xs transition-colors disabled:opacity-50 cursor-pointer"
                 >
-                  {revokingId === "all" ? "Revoking..." : "Revoke Other Sessions"}
+                  {revokingId === "all" ? "Revoking..." : "Revoke Others"}
                 </button>
               )}
             </div>
 
             {sessionsLoading ? (
-              <div className="p-6 space-y-3">
-                <Skeleton className="h-12 w-full rounded-2xl" />
-                <Skeleton className="h-12 w-full rounded-2xl" />
+              <div className="p-4 sm:p-6 space-y-3">
+                <Skeleton className="h-12 w-full rounded-xl sm:rounded-2xl" />
+                <Skeleton className="h-12 w-full rounded-xl sm:rounded-2xl" />
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm border-collapse">
+              <div className="overflow-x-auto no-scrollbar">
+                <table className="w-full min-w-[520px] text-left text-sm border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-black uppercase tracking-wider text-slate-400 bg-slate-50/50 dark:bg-slate-800/30">
-                      <th className="px-6 py-3.5">DEVICE / BROWSER</th>
-                      <th className="px-6 py-3.5">IP ADDRESS</th>
-                      <th className="px-6 py-3.5">LAST ACTIVE</th>
-                      <th className="px-6 py-3.5 text-right">ACTION</th>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-400 bg-slate-50/50 dark:bg-slate-800/30">
+                      <th className="px-4 sm:px-6 py-3 sm:py-3.5">DEVICE / BROWSER</th>
+                      <th className="px-4 sm:px-6 py-3 sm:py-3.5">IP ADDRESS</th>
+                      <th className="px-4 sm:px-6 py-3 sm:py-3.5">LAST ACTIVE</th>
+                      <th className="px-4 sm:px-6 py-3 sm:py-3.5 text-right">ACTION</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                     {sessions.map((s) => (
                       <tr key={s.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
-                        <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
+                        <td className="px-4 sm:px-6 py-3.5 sm:py-4 font-bold text-slate-900 dark:text-white">
                           <div className="flex items-center gap-2">
                             {s.deviceName || "Windows PC"}
                             {s.isCurrent && (

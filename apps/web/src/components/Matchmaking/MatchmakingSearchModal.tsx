@@ -1,12 +1,17 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Swords, X, ShieldAlert, Clock, Trophy, Loader2 } from 'lucide-react';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { getGameDefinition, type GameId } from '@gaming-hub/shared';
 import { useSettingsStore } from '../../store/settingsStore';
 
 export const MatchmakingSearchModal: React.FC = () => {
+  const location = useLocation();
   const matchmaking = useMultiplayerStore((s) => s.matchmaking);
   const leaveMatchmaking = useMultiplayerStore((s) => s.leaveMatchmaking);
+  const room = useMultiplayerStore((s) => s.room);
+  const gameState = useMultiplayerStore((s) => s.gameState);
+  const matchFound = useMultiplayerStore((s) => s.matchFound);
   const siteSettings = useSettingsStore((s) => s.settings);
 
   const [waitElapsed, setWaitElapsed] = useState(0);
@@ -14,8 +19,22 @@ export const MatchmakingSearchModal: React.FC = () => {
 
   const matchmakingTimeout = siteSettings?.game?.matchmakingTimeoutSeconds ?? 90;
 
+  // Determine if a match or game is active or player is already on the game view
+  const isGamePage = location.pathname.startsWith('/games/') || location.pathname.startsWith('/game/');
+  const isMatchActive = Boolean(room || gameState || matchFound || isGamePage);
+
+  // Auto-dismiss and clear matchmaking queue state as soon as a match/room/game is active
   useEffect(() => {
-    if (!matchmaking.queued) {
+    if (isMatchActive && matchmaking.queued) {
+      useMultiplayerStore.setState({
+        matchmaking: { queued: false, position: 0, gameId: null, stake: null, settings: {} },
+        pendingRequeue: null,
+      });
+    }
+  }, [isMatchActive, matchmaking.queued]);
+
+  useEffect(() => {
+    if (!matchmaking.queued || isMatchActive) {
       setWaitElapsed(0);
       setCancelling(false);
       return;
@@ -27,16 +46,16 @@ export const MatchmakingSearchModal: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [matchmaking.queued]);
+  }, [matchmaking.queued, isMatchActive]);
 
   // Auto-cancel when client exceeds timeout
   useEffect(() => {
-    if (matchmaking.queued && waitElapsed >= matchmakingTimeout) {
+    if (matchmaking.queued && !isMatchActive && waitElapsed >= matchmakingTimeout) {
       void leaveMatchmaking();
     }
-  }, [matchmaking.queued, waitElapsed, matchmakingTimeout, leaveMatchmaking]);
+  }, [matchmaking.queued, isMatchActive, waitElapsed, matchmakingTimeout, leaveMatchmaking]);
 
-  if (!matchmaking.queued || !matchmaking.gameId) {
+  if (!matchmaking.queued || !matchmaking.gameId || isMatchActive) {
     return null;
   }
 
@@ -86,7 +105,7 @@ export const MatchmakingSearchModal: React.FC = () => {
           <button
             onClick={handleCancel}
             disabled={cancelling}
-            className="rounded-full p-1 text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
+            className="rounded-full p-1 text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors cursor-pointer"
             title="Cancel Matchmaking"
           >
             <X className="size-4" />
@@ -130,7 +149,7 @@ export const MatchmakingSearchModal: React.FC = () => {
           {/* Progress bar */}
           <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-amber-500 transition-all duration-1000"
+              className="h-full rounded-full bg-gradient-r from-indigo-500 via-purple-500 to-amber-500 transition-all duration-1000"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -146,7 +165,7 @@ export const MatchmakingSearchModal: React.FC = () => {
           <button
             onClick={handleCancel}
             disabled={cancelling}
-            className="w-full rounded-2xl bg-rose-600/90 hover:bg-rose-600 active:scale-[0.98] py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-rose-600/20 transition-all flex items-center justify-center gap-2"
+            className="w-full rounded-2xl bg-rose-600/90 hover:bg-rose-600 active:scale-[0.98] py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-rose-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             {cancelling ? (
               <>
@@ -164,3 +183,5 @@ export const MatchmakingSearchModal: React.FC = () => {
     </div>
   );
 };
+
+export default MatchmakingSearchModal;

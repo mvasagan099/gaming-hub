@@ -55,6 +55,8 @@ export function App() {
   const setSession = useAuthStore((s) => s.setSession);
   const setUser = useAuthStore((s) => s.setUser);
   const setLoading = useAuthStore((s) => s.setLoading);
+  const setIsPasswordRecovery = useAuthStore((s) => s.setIsPasswordRecovery);
+  const setRecoverySession = useAuthStore((s) => s.setRecoverySession);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
 
   useEffect(() => {
@@ -64,26 +66,81 @@ export function App() {
   useEffect(() => {
     let active = true;
 
+    const isRecoveryTarget = () => {
+      const hash = typeof window !== 'undefined' ? window.location.hash || '' : '';
+      const search = typeof window !== 'undefined' ? window.location.search || '' : '';
+      const pathname = typeof window !== 'undefined' ? window.location.pathname || '' : '';
+      return (
+        hash.includes('type=recovery') ||
+        search.includes('type=recovery') ||
+        (pathname === '/reset-password' && (search.includes('code=') || hash.includes('access_token') || hash.includes('type=recovery')))
+      );
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!active) return;
-      setSession(session);
-      setUser(session?.user ?? null);
+      if (isRecoveryTarget()) {
+        setIsPasswordRecovery(true);
+        setRecoverySession(session);
+        setSession(null);
+        setUser(null);
+      } else {
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
       setLoading(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true);
+        setRecoverySession(session);
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        if (window.location.pathname !== '/reset-password') {
+          void router.navigate('/reset-password', { replace: true });
+        }
+      } else if (event === 'SIGNED_IN') {
+        // If recovery flow is active or user is on /reset-password, do not treat as standard app login
+        if (useAuthStore.getState().isPasswordRecovery || isRecoveryTarget() || window.location.pathname === '/reset-password') {
+          setIsPasswordRecovery(true);
+          setRecoverySession(session);
+          setSession(null);
+          setUser(null);
+          setLoading(false);
+        } else {
+          setIsPasswordRecovery(false);
+          setRecoverySession(null);
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setIsPasswordRecovery(false);
+        setRecoverySession(null);
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+      } else if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        if (useAuthStore.getState().isPasswordRecovery) {
+          setRecoverySession(session);
+        } else {
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
+      }
     });
 
     return () => {
       active = false;
       subscription.unsubscribe();
     };
-  }, [setSession, setUser, setLoading]);
+  }, [setSession, setUser, setLoading, setIsPasswordRecovery, setRecoverySession]);
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="gaming-hub-theme">

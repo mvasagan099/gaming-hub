@@ -15,10 +15,11 @@ export function FullPageLoader() {
 export function ProtectedRoute() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const session = useAuthStore((s) => s.session);
+  const isPasswordRecovery = useAuthStore((s) => s.isPasswordRecovery);
   const location = useLocation();
 
   if (isLoading) return <FullPageLoader />;
-  if (!session) {
+  if (!session || isPasswordRecovery) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   return <Outlet />;

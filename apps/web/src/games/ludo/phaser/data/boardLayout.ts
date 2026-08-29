@@ -212,12 +212,39 @@ export const HOME_COL_COORDS: Record<PlayerColor, Array<{ col: number; row: numb
   ],
 };
 
-// ─── Pixel helpers ────────────────────────────────────────────────────────────
+// ─── Dynamic Board Layout Offsets & Pixel Helpers ────────────────────────────
+
+let currentOffsetX = 0;
+let currentOffsetY = 0;
+let currentBoardPx = BOARD_PX;
+
+export function setBoardLayoutConfig(offsetX = 0, offsetY = 0, boardPx = BOARD_PX): void {
+  currentOffsetX = offsetX;
+  currentOffsetY = offsetY;
+  currentBoardPx = boardPx;
+}
+
+export function getCurrentOffsetX(): number {
+  return currentOffsetX;
+}
+
+export function getCurrentOffsetY(): number {
+  return currentOffsetY;
+}
+
+export function getCurrentBoardPx(): number {
+  return currentBoardPx;
+}
+
+export function getCurrentCellSize(): number {
+  return currentBoardPx / BOARD_CELLS;
+}
 
 export function cellToPixel(col: number, row: number): { x: number; y: number } {
+  const cellSize = currentBoardPx / BOARD_CELLS;
   return {
-    x: col * CELL_SIZE + CELL_SIZE / 2,
-    y: row * CELL_SIZE + CELL_SIZE / 2,
+    x: currentOffsetX + col * cellSize + cellSize / 2,
+    y: currentOffsetY + row * cellSize + cellSize / 2,
   };
 }
 

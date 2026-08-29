@@ -23,6 +23,8 @@ const INSET = 2.0;
 export default class BoardManager {
   private scene: Phaser.Scene;
   public readonly boardSize: number;
+  public readonly offsetX: number;
+  public readonly offsetY: number;
   private readonly rows = 10;
   private readonly cols = 10;
   public readonly tileSize: number;
@@ -30,9 +32,11 @@ export default class BoardManager {
   private tilePositions = new Map<number, Phaser.Math.Vector2>();
   private highlightGraphics!: Phaser.GameObjects.Graphics;
 
-  constructor(scene: Phaser.Scene, boardSize = 680) {
+  constructor(scene: Phaser.Scene, boardSize = 680, offsetX = BOARD_OFFSET_X, offsetY = BOARD_OFFSET_Y) {
     this.scene = scene;
     this.boardSize = boardSize;
+    this.offsetX = offsetX;
+    this.offsetY = offsetY;
     this.tileSize = boardSize / this.cols;
     this.generateTilePositions();
   }
@@ -44,8 +48,8 @@ export default class BoardManager {
       const row = Math.floor(index / this.cols);
       let col = index % this.cols;
       if (row % 2 === 1) col = this.cols - 1 - col;
-      const px = BOARD_OFFSET_X + col * this.tileSize + this.tileSize / 2;
-      const py = BOARD_OFFSET_Y + (this.rows - 1 - row) * this.tileSize + this.tileSize / 2;
+      const px = this.offsetX + col * this.tileSize + this.tileSize / 2;
+      const py = this.offsetY + (this.rows - 1 - row) * this.tileSize + this.tileSize / 2;
       this.tilePositions.set(tile, new Phaser.Math.Vector2(px, py));
     }
   }
@@ -54,8 +58,8 @@ export default class BoardManager {
     const g = this.scene.add.graphics();
     g.setDepth(0);
 
-    const bx = BOARD_OFFSET_X;
-    const by = BOARD_OFFSET_Y;
+    const bx = this.offsetX;
+    const by = this.offsetY;
     const bs = this.boardSize;
 
     // ── 1. Multi-Tier Deep Ambient Drop Shadow (Layer 0) ───────────────────

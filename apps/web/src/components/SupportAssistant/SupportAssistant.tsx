@@ -102,7 +102,7 @@ export function SupportAssistant() {
             exit="exit"
             onClick={open}
             className={cn(
-              "fixed bottom-4 right-4 z-[100] flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-300",
+              "fixed bottom-20 right-4 md:bottom-6 md:right-6 z-[100] flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-300",
               "hover:scale-110 hover:shadow-xl active:scale-95",
               effectiveTheme === "dark"
                 ? "bg-accent-500 text-white shadow-accent-500/30"
@@ -133,8 +133,8 @@ export function SupportAssistant() {
             className={cn(
               "fixed z-[100] flex flex-col overflow-hidden rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 transition-all duration-300",
               isMinimized
-                ? "bottom-4 right-4 h-14 w-72"
-                : "bottom-4 right-4 h-[calc(100vh-6rem)] max-h-[620px] w-[calc(100vw-2rem)] sm:w-[420px]",
+                ? "bottom-20 right-4 md:bottom-6 md:right-6 h-14 w-72"
+                : "bottom-20 right-4 md:bottom-6 md:right-6 h-[calc(100vh-8rem)] max-h-[620px] w-[calc(100vw-2rem)] sm:w-[420px]",
               effectiveTheme === "dark" ? "bg-slate-900" : "bg-white"
             )}
           >

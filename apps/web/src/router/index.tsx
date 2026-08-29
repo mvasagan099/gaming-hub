@@ -74,6 +74,11 @@ const SuspensePage = ({ children }: { children: ReactNode }) => (
 
 export const router = createBrowserRouter([
   {
+    path: "/reset-password",
+    element: <SuspensePage><ResetPasswordPage /></SuspensePage>,
+    errorElement: <ErrorPage />,
+  },
+  {
     element: <PublicOnlyRoute />,
     errorElement: <ErrorPage />,
     children: [
@@ -81,7 +86,6 @@ export const router = createBrowserRouter([
       { path: "/2fa", element: <SuspensePage><TwoFactorPage /></SuspensePage> },
       { path: "/signup", element: <SuspensePage><SignupPage /></SuspensePage> },
       { path: "/forgot-password", element: <SuspensePage><ForgotPasswordPage /></SuspensePage> },
-      { path: "/reset-password", element: <SuspensePage><ResetPasswordPage /></SuspensePage> },
     ],
   },
   {

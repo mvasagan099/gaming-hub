@@ -36,11 +36,15 @@ export default class SnakeLadderScene extends Phaser.Scene {
   }
 
   create(): void {
+    const isPortrait = (this.registry.get("isPortrait") as boolean) ?? false;
     const mode = (this.registry.get("mode") as "ai" | "pvp") ?? "ai";
     const count = (this.registry.get("players") as number) ?? 2;
     const mySeat = (this.registry.get("seat") as number | null | undefined) ?? null;
     const names = (this.registry.get("names") as string[] | undefined) ?? [];
     const reduced = prefersReducedMotion();
+
+    const canvasW = isPortrait ? 720 : 1024;
+    const canvasH = isPortrait ? 1080 : 800;
 
     // ── 0. Atmospheric Ambient Backdrop & Vignette (depth -1) ───────────
     const bgG = this.add.graphics();
@@ -48,16 +52,19 @@ export default class SnakeLadderScene extends Phaser.Scene {
 
     // Deep gradient fill
     bgG.fillGradientStyle(0x0b1120, 0x0b1120, 0x030712, 0x030712, 1);
-    bgG.fillRect(0, 0, 1024, 800);
+    bgG.fillRect(0, 0, canvasW, canvasH);
 
     // Ambient radial lighting behind board
     bgG.fillStyle(0x1e3a8a, 0.25);
-    bgG.fillCircle(400, 400, 360);
+    bgG.fillCircle(isPortrait ? 360 : 400, isPortrait ? 470 : 400, isPortrait ? 330 : 360);
     bgG.fillStyle(0x3b82f6, 0.08);
-    bgG.fillCircle(400, 400, 240);
+    bgG.fillCircle(isPortrait ? 360 : 400, isPortrait ? 470 : 400, isPortrait ? 220 : 240);
 
     // ── 1. Board (depth 0–3) ─────────────────────────────────────────────
-    this.board = new BoardManager(this, 680);
+    const boardSize = isPortrait ? 660 : 680;
+    const boardOffsetX = isPortrait ? 30 : 60;
+    const boardOffsetY = isPortrait ? 140 : 60;
+    this.board = new BoardManager(this, boardSize, boardOffsetX, boardOffsetY);
     this.board.drawBoard();
 
 
@@ -75,14 +82,14 @@ export default class SnakeLadderScene extends Phaser.Scene {
     this.playerManager.createPlayers(count);
     if (names.length > 0) this.playerManager.setNames(names);
 
-    // ── 5. HUD sidebar (depth 10) ───────────────────────────────────────
+    // ── 5. HUD sidebar / mobile header & deck (depth 10) ─────────────────
     this.hud = new HUDManager(this);
-    this.hud.create(count);
+    this.hud.create(count, isPortrait);
     if (names.length > 0) this.hud.setNames(names);
 
     // ── 6. Dice (depth 100) ─────────────────────────────────────────────
     this.dice = new DiceManager(this);
-    this.dice.create(912, 210);
+    this.dice.create(isPortrait ? 185 : 912, isPortrait ? 950 : 210);
 
     // ── 7. Feedback text ─────────────────────────────────────────────────
     this.feedback = new FeedbackText(this);

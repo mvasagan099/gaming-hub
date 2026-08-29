@@ -78,28 +78,28 @@ export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, 
     <GameWrapper title="Chess Master" gameId="chess" mode={initialMode} stake={stake} onBack={onBack}>
       <div className="flex flex-col md:flex-row items-center justify-center w-full max-w-3xl mx-auto gap-5">
         {/* Main Panel */}
-        <div className="relative flex flex-col items-center justify-center w-full max-w-sm p-6 glass-panel rounded-3xl border border-amber-500/30 shadow-[0_15px_40px_rgba(0,0,0,0.6)] bg-gradient-to-b from-slate-900/90 via-slate-950/95 to-slate-950">
+        <div className="relative flex flex-col items-center justify-center w-full max-w-sm p-6 glass-panel rounded-3xl border border-amber-500/30 shadow-[0_15px_40px_rgba(0,0,0,0.1)] dark:shadow-[0_15px_40px_rgba(0,0,0,0.6)] bg-white/95 dark:bg-gradient-to-b dark:from-slate-900/90 dark:via-slate-950/95 dark:to-slate-950">
           {/* Crown header */}
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500/30 to-amber-400/10 flex items-center justify-center border border-amber-500/50 mb-3 shadow-[0_0_20px_rgba(245,158,11,0.25)]">
-            <Trophy className="w-7 h-7 text-amber-400" />
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500/20 to-amber-400/10 dark:from-amber-500/30 dark:to-amber-400/10 flex items-center justify-center border border-amber-500/50 mb-3 shadow-[0_0_20px_rgba(245,158,11,0.25)]">
+            <Trophy className="w-7 h-7 text-amber-500 dark:text-amber-400" />
           </div>
 
           <div className="flex items-center gap-1.5 mb-0.5">
-            <h2 className="text-2xl font-black text-white tracking-wide text-center">CHESS MASTER</h2>
-            <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-wide text-center">CHESS MASTER</h2>
+            <Sparkles className="w-4 h-4 text-amber-500 dark:text-amber-400 animate-pulse" />
           </div>
-          <p className="text-[11px] text-amber-400/80 font-bold uppercase tracking-widest text-center">3D Staunton Edition</p>
+          <p className="text-[11px] text-amber-600 dark:text-amber-400/80 font-bold uppercase tracking-widest text-center">3D Staunton Edition</p>
 
           {/* Play Mode Selection */}
           <div className="w-full mt-5">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 text-left">Opponent Type</label>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 text-left">Opponent Type</label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setPlayMode("ai")}
                 className={`py-3 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1.5 ${
                   playMode === "ai"
-                    ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
-                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                    ? "bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                    : "bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:text-slate-900 dark:hover:text-slate-200"
                 }`}
               >
                 <Cpu className="w-4 h-4" />
@@ -109,8 +109,8 @@ export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, 
                 onClick={() => setPlayMode("pvp")}
                 className={`py-3 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1.5 ${
                   playMode === "pvp"
-                    ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
-                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                    ? "bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                    : "bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:text-slate-900 dark:hover:text-slate-200"
                 }`}
               >
                 <Shield className="w-4 h-4" />
@@ -122,7 +122,7 @@ export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, 
           {/* AI Level Selection */}
           {playMode === "ai" && (
             <div className="w-full mt-3.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 text-left">Difficulty Level</label>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 text-left">Difficulty Level</label>
               <div className="grid grid-cols-3 gap-2">
                 {[1, 2, 3].map((lvl) => (
                   <button
@@ -130,8 +130,8 @@ export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, 
                     onClick={() => setAiLevel(lvl)}
                     className={`py-2 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1 ${
                       aiLevel === lvl
-                        ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
-                        : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                        ? "bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+                        : "bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:text-slate-900 dark:hover:text-slate-200"
                     }`}
                   >
                     <Zap className="w-3.5 h-3.5" />
@@ -143,17 +143,17 @@ export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, 
           )}
 
           {/* Stake and play button */}
-          <div className="w-full mt-5 pt-4 border-t border-slate-800/80">
+          <div className="w-full mt-5 pt-4 border-t border-slate-200 dark:border-slate-800/80">
             <div className="flex justify-between items-center mb-4">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Entry Fee</span>
-              <span className="text-base font-black text-amber-400 flex items-center gap-1">
-                🪙 {stake} <span className="text-xs font-bold text-slate-400">Coins</span>
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Entry Fee</span>
+              <span className="text-base font-black text-amber-500 dark:text-amber-400 flex items-center gap-1">
+                🪙 {stake} <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Coins</span>
               </span>
             </div>
 
             <button
               onClick={startGame}
-              className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-[0_0_25px_rgba(245,158,11,0.4)] transform hover:scale-[1.02] active:scale-[0.98] transition-all tracking-wider uppercase flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-[0_0_25px_rgba(245,158,11,0.4)] transform hover:scale-[1.02] active:scale-[0.98] transition-all tracking-wider uppercase flex items-center justify-center gap-2 cursor-pointer"
             >
               <Trophy className="w-4 h-4" /> Start Match
             </button>
@@ -161,9 +161,9 @@ export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, 
         </div>
 
         {/* Side Panel for Theme */}
-        <div className="flex flex-col items-center w-full max-w-[200px] p-5 glass-panel rounded-3xl border border-slate-800 shadow-2xl bg-slate-900/80">
+        <div className="flex flex-col items-center w-full max-w-[200px] p-5 glass-panel rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl bg-white/95 dark:bg-slate-900/80">
           <div className="w-full">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3 text-center">Board Theme</label>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-3 text-center">Board Theme</label>
             <div className="flex flex-col gap-2.5">
               {(["classic", "wood", "cyber"] as const).map((t) => (
                 <button
@@ -171,8 +171,8 @@ export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, 
                   onClick={() => setTheme(t)}
                   className={`py-3 rounded-xl font-black text-xs border transition-all flex flex-col items-center gap-1 uppercase tracking-wider ${
                     theme === t
-                      ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
-                      : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                      ? "bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+                      : "bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:text-slate-900 dark:hover:text-slate-200"
                   }`}
                 >
                   <span>{t}</span>

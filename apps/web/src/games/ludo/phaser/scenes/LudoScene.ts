@@ -38,6 +38,7 @@ export default class LudoScene extends Phaser.Scene {
   }
 
   create(): void {
+    const isPortrait  = (this.registry.get("isPortrait") as boolean) ?? false;
     const mode        = (this.registry.get("mode") as "ai" | "pvp") ?? "ai";
     const playerCount = (this.registry.get("players") as number) ?? 4;
     const mySeat      = (this.registry.get("seat") as number | null | undefined) ?? null;
@@ -51,13 +52,27 @@ export default class LudoScene extends Phaser.Scene {
       mode,
     };
 
+    const canvasW = isPortrait ? 720 : 1024;
+    const canvasH = isPortrait ? 1080 : 800;
+
+    // 0. Ambient backdrop lighting
+    const bgG = this.add.graphics();
+    bgG.setDepth(-1);
+    bgG.fillGradientStyle(0x0a0f1d, 0x0a0f1d, 0x030712, 0x030712, 1);
+    bgG.fillRect(0, 0, canvasW, canvasH);
+    bgG.fillStyle(0x1e3a8a, 0.2);
+    bgG.fillCircle(isPortrait ? 360 : 400, isPortrait ? 470 : 400, isPortrait ? 330 : 360);
+
     // 1. Audio & Particles
     this.audio = new AudioManager(this);
     this.audio.init();
     this.particles = new ParticleManager(this);
 
     // 2. Board
-    this.board = new BoardManager(this);
+    const boardOffsetX = isPortrait ? 20 : 0;
+    const boardOffsetY = isPortrait ? 140 : 0;
+    const boardPx = isPortrait ? 680 : 800;
+    this.board = new BoardManager(this, boardOffsetX, boardOffsetY, boardPx);
     this.board.drawBoard();
 
     // 3. Move Path Overlay (Behind tokens, above board)
@@ -84,7 +99,7 @@ export default class LudoScene extends Phaser.Scene {
 
     // 6. HUD & UI
     this.hud = new HUDManager(this);
-    this.hud.create(playerCount);
+    this.hud.create(playerCount, isPortrait);
     this.hud.setMySeat(online ? (mySeat ?? 0) : 0);
     if (online) {
       if (names.length > 0) this.hud.setNames(names);
@@ -98,7 +113,7 @@ export default class LudoScene extends Phaser.Scene {
 
     // 7. Dice
     this.dice = new DiceManager(this);
-    this.dice.create(912, 205);
+    this.dice.create(isPortrait ? 185 : 912, isPortrait ? 945 : 205);
 
     // 8. Feedback Text
     this.feedback = new FeedbackText(this);

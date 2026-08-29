@@ -5,9 +5,13 @@ import { supabase } from '../services/supabase';
 interface AuthState {
   user: User | null;
   session: Session | null;
+  isPasswordRecovery: boolean;
+  recoverySession: Session | null;
   isLoading: boolean;
   setUser: (user: User | null) => void;
   setSession: (session: Session | null) => void;
+  setIsPasswordRecovery: (isPasswordRecovery: boolean) => void;
+  setRecoverySession: (recoverySession: Session | null) => void;
   setLoading: (isLoading: boolean) => void;
   signOut: () => Promise<void>;
 }
@@ -15,12 +19,20 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   session: null,
+  isPasswordRecovery: false,
+  recoverySession: null,
   isLoading: true,
   setUser: (user) => set({ user }),
   setSession: (session) => set({ session }),
+  setIsPasswordRecovery: (isPasswordRecovery) => set({ isPasswordRecovery }),
+  setRecoverySession: (recoverySession) => set({ recoverySession }),
   setLoading: (isLoading) => set({ isLoading }),
   signOut: async () => {
-    await supabase.auth.signOut();
-    set({ user: null, session: null });
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore network errors on sign out
+    }
+    set({ user: null, session: null, isPasswordRecovery: false, recoverySession: null });
   },
 }));

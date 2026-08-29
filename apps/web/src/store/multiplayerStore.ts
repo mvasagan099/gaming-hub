@@ -145,6 +145,8 @@ function applyRoom(set: (partial: Partial<MultiplayerState>) => void, room: Room
     room,
     mySeat: player?.seat ?? null,
     isSpectator: Boolean(spectator && !player),
+    matchmaking: { ...IDLE_MATCHMAKING },
+    pendingRequeue: null,
   });
 }
 
@@ -310,6 +312,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           lastEvents: payload.events,
           matchId: payload.matchId,
           winner: null,
+          matchmaking: { ...IDLE_MATCHMAKING },
+          pendingRequeue: null,
           lastStateVersion: Math.max(get().lastStateVersion, incomingVersion),
           renderKey: (get().renderKey || 0) + 1, // Always force re-render
         });
@@ -353,6 +357,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
             lastActionId: authoritativeState.lastActionId,
             stateHash: authoritativeState.stateHash ?? null,
             matchId: authoritativeState.matchId,
+            matchmaking: { ...IDLE_MATCHMAKING },
+            pendingRequeue: null,
             renderKey: (get().renderKey || 0) + 1,
           });
           return;
@@ -378,6 +384,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           matchId: payload.matchId,
           disconnectGrace: null,
           rematchState: null,
+          matchmaking: { ...IDLE_MATCHMAKING },
+          pendingRequeue: null,
           renderKey: get().renderKey + 1, // Force re-render
         });
       });
@@ -393,6 +401,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           matchId: payload.matchId,
           disconnectGrace: null,
           matchTimerWarning: null,
+          matchmaking: { ...IDLE_MATCHMAKING },
+          pendingRequeue: null,
           renderKey: get().renderKey + 1,
         });
       });
@@ -428,6 +438,9 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           matchTimeExpired: false,
           matchTimerWarning: null,
           winner: null,
+          countdown: null,
+          matchmaking: { ...IDLE_MATCHMAKING },
+          pendingRequeue: null,
         });
       });
 
@@ -663,11 +676,19 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("game:countdown" as any, (payload: { countdown: number }) => {
-        set({ countdown: payload.countdown });
+        set({
+          countdown: payload.countdown,
+          matchmaking: { ...IDLE_MATCHMAKING },
+          pendingRequeue: null,
+        });
       });
 
       socket.on("game:match-started" as any, () => {
-        set({ countdown: null });
+        set({
+          countdown: null,
+          matchmaking: { ...IDLE_MATCHMAKING },
+          pendingRequeue: null,
+        });
       });
 
       socket.on("game:match-cancelled" as any, (payload: { reason?: string }) => {

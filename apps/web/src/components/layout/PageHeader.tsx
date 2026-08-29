@@ -45,18 +45,18 @@ export default function PageHeader() {
   }
 
   return (
-    <div className="mb-4 flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="text-lg font-bold text-slate-900 dark:text-white truncate">{title}</h1>
+    <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
+      <div className="min-w-0 shrink-0">
+        <h1 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight truncate">{title}</h1>
         {trail.length > 0 && (
           <nav aria-label="Breadcrumb" className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
-            <Link to="/" className="hover:text-accent-500">
+            <Link to="/" className="hover:text-accent-500 transition-colors">
               Home
             </Link>
             {trail.map((crumb) => (
               <span key={crumb.label} className="flex items-center gap-1">
                 <ChevronRight className="w-3 h-3" />
-                <Link to={crumb.to} className="hover:text-accent-500">
+                <Link to={crumb.to} className="hover:text-accent-500 transition-colors">
                   {crumb.label}
                 </Link>
               </span>
@@ -65,17 +65,26 @@ export default function PageHeader() {
         )}
       </div>
 
-      <button
-        onClick={() => setPaletteOpen(true)}
-        className="hidden sm:flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:border-accent-500/50 transition-colors"
-        aria-label="Open search"
-      >
-        <Search className="w-3.5 h-3.5" />
-        <span>Search…</span>
-        <kbd className="rounded border border-slate-200 dark:border-slate-700 px-1.5 text-[10px] font-semibold">
-          Ctrl K
-        </kbd>
-      </button>
+      {/* Centered Search Button - Visible on both mobile and desktop */}
+      <div className="flex-1 flex justify-center w-full sm:w-auto sm:px-4">
+        <button
+          onClick={() => setPaletteOpen(true)}
+          className="w-full sm:w-72 md:w-80 flex items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2 sm:py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:border-accent-500/50 hover:shadow-xs transition-all cursor-pointer shadow-xs"
+          aria-label="Open search (Ctrl K)"
+          title="Search games, players, tournaments... (Ctrl K)"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="truncate">Search games, players...</span>
+          </div>
+          <kbd className="shrink-0 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+            Ctrl K
+          </kbd>
+        </button>
+      </div>
+
+      {/* Right spacer for symmetric alignment on desktop */}
+      <div className="hidden sm:block min-w-0 shrink-0 w-16" aria-hidden="true" />
     </div>
   );
 }

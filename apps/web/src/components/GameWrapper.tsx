@@ -163,64 +163,65 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
   return (
     <div className="h-full w-full flex flex-col items-center justify-between p-2 relative overflow-hidden">
       {/* Header bar */}
-      <div className="w-full max-w-6xl flex items-center justify-between py-3 px-6 rounded-2xl glass-panel border border-slate-800 shadow-xl mb-4 z-20">
-        <div className="flex items-center gap-4">
+      <div className="w-full max-w-6xl flex flex-wrap sm:flex-nowrap items-center justify-between py-2.5 px-3 sm:px-6 rounded-2xl glass-panel border border-slate-200 dark:border-slate-800 shadow-xl mb-4 z-20 gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition-colors border border-slate-700"
+            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 transition-colors border border-slate-200 dark:border-slate-700 shrink-0"
           >
-            <ArrowLeft className="w-4 h-4 text-indigo-400" /> Back to Lobby
+            <ArrowLeft className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+            <span className="hidden xs:inline">Back to Lobby</span>
           </button>
-          <div>
-            <h1 className="text-lg font-black text-white flex items-center gap-2">
-              {title}
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${
-                mode === 'multiplayer' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-1.5 sm:gap-2 truncate">
+              <span className="truncate">{title}</span>
+              <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider shrink-0 ${
+                mode === 'multiplayer' ? 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
               }`}>
-                {mode === 'multiplayer' ? 'PVP Match' : 'VS AI'}
+                {mode === 'multiplayer' ? 'PVP' : 'VS AI'}
               </span>
             </h1>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
           {/* Multiplayer chips */}
           {mode === 'multiplayer' && room && (
             <>
               <button
                 onClick={() => void copyCode()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:border-indigo-500/50 transition-colors text-xs"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500/50 transition-colors text-xs"
                 title="Copy room code"
               >
                 <span className="text-slate-500 text-[9px]">Code</span>
-                <span className="font-mono font-black text-indigo-300 tracking-widest">{room.code}</span>
-                {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                <span className="font-mono font-black text-indigo-600 dark:text-indigo-300 tracking-widest text-[10px] sm:text-xs">{room.code}</span>
+                {copied ? <Check className="w-3 h-3 text-emerald-500 shrink-0" /> : <Copy className="w-3 h-3 text-slate-400 shrink-0" />}
               </button>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-                <Timer className="w-3.5 h-3.5 text-amber-400" />
-                <span className="font-mono font-black text-amber-300">{formatElapsed(elapsed)}</span>
+              <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-white">
+                <Timer className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
+                <span className="font-mono font-black text-amber-600 dark:text-amber-300">{formatElapsed(elapsed)}</span>
               </div>
               {room.spectators.length > 0 && (
-                <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+                <div className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs">
                   <Eye className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="font-black text-slate-300">{room.spectators.length}</span>
+                  <span className="font-black text-slate-700 dark:text-slate-300">{room.spectators.length}</span>
                 </div>
               )}
             </>
           )}
 
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold">
-            <span className="text-slate-400">Prize:</span>
-            <span className="text-amber-400 flex items-center gap-1 font-extrabold">
+          <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold">
+            <span className="text-slate-500 dark:text-slate-400">Prize:</span>
+            <span className="text-amber-500 dark:text-amber-400 flex items-center gap-1 font-extrabold">
               🪙 {stake * 1.8}
             </span>
           </div>
 
           <button
             onClick={() => setIsMuted(!isMuted)}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700"
+            className="p-1.5 sm:p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors border border-slate-200 dark:border-slate-700"
           >
-            {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-indigo-400" />}
+            {isMuted ? <VolumeX className="w-4 h-4 text-rose-500" /> : <Volume2 className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />}
           </button>
         </div>
       </div>

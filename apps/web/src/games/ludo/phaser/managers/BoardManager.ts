@@ -1,8 +1,8 @@
 import Phaser from "phaser";
 import type { PlayerColor } from "../types/ludo.types";
 import {
+  BOARD_CELLS,
   BOARD_PX,
-  CELL_SIZE,
   YARDS,
   YARD_TOKEN_OFFSETS,
   HOME_COL_COORDS,
@@ -13,6 +13,8 @@ import {
   mainPathPixel,
   homeColPixel,
   yardSpawnPixel,
+  setBoardLayoutConfig,
+  getCurrentCellSize,
 } from "../data/boardLayout";
 import { ANIM, LUDO_DESIGN_CONFIG, animDuration } from "../constants";
 
@@ -21,9 +23,18 @@ const PLAYER_COLORS: PlayerColor[] = ["red", "blue", "green", "yellow"];
 export default class BoardManager {
   private scene: Phaser.Scene;
   private highlightGraphics!: Phaser.GameObjects.Graphics;
+  public readonly offsetX: number;
+  public readonly offsetY: number;
+  public readonly boardPx: number;
+  public readonly cellSize: number;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, offsetX = 0, offsetY = 0, boardPx = BOARD_PX) {
     this.scene = scene;
+    this.offsetX = offsetX;
+    this.offsetY = offsetY;
+    this.boardPx = boardPx;
+    this.cellSize = boardPx / BOARD_CELLS;
+    setBoardLayoutConfig(offsetX, offsetY, boardPx);
   }
 
   drawBoard(): void {
@@ -72,29 +83,31 @@ export default class BoardManager {
 
     const cornerR = LUDO_DESIGN_CONFIG.boardCornerRadius;
     const pad = 4;
-    const w = BOARD_PX - pad * 2;
-    const h = BOARD_PX - pad * 2;
+    const bx = this.offsetX + pad;
+    const by = this.offsetY + pad;
+    const w = this.boardPx - pad * 2;
+    const h = this.boardPx - pad * 2;
 
     // 1. Soft Multi-Stage 3D Ambient Drop Shadow under board slab
     g.fillStyle(0x000000, 0.4);
-    g.fillRoundedRect(pad + 10, pad + 16, w, h, cornerR + 4);
+    g.fillRoundedRect(bx + 10, by + 16, w, h, cornerR + 4);
     g.fillStyle(0x000000, 0.25);
-    g.fillRoundedRect(pad + 6, pad + 10, w, h, cornerR + 2);
+    g.fillRoundedRect(bx + 6, by + 10, w, h, cornerR + 2);
     g.fillStyle(0x000000, 0.15);
-    g.fillRoundedRect(pad + 2, pad + 4, w, h, cornerR);
+    g.fillRoundedRect(bx + 2, by + 4, w, h, cornerR);
 
     // 2. 3D Board Base Chassis (Midnight Navy Slab)
     g.fillStyle(0x0a0f1d, 1);
-    g.fillRoundedRect(pad, pad, w, h, cornerR);
+    g.fillRoundedRect(bx, by, w, h, cornerR);
 
     // 3. Satin Board Playfield Surface
     const inset = 6;
     g.fillStyle(0x0f172a, 1);
-    g.fillRoundedRect(pad + inset, pad + inset, w - inset * 2, h - inset * 2, cornerR - 4);
+    g.fillRoundedRect(bx + inset, by + inset, w - inset * 2, h - inset * 2, cornerR - 4);
 
     // 4. Subtle Top-Left Specular Surface Sheen
     g.fillStyle(0xffffff, 0.03);
-    g.fillRoundedRect(pad + inset, pad + inset, w - inset * 2, (h - inset * 2) * 0.45, {
+    g.fillRoundedRect(bx + inset, by + inset, w - inset * 2, (h - inset * 2) * 0.45, {
       tl: cornerR - 4,
       tr: cornerR - 4,
       bl: 0,
@@ -107,13 +120,14 @@ export default class BoardManager {
   private drawYards(): void {
     const g = this.scene.add.graphics();
     g.setDepth(1);
+    const cs = this.cellSize;
 
     for (const color of PLAYER_COLORS) {
       const c = LUDO_DESIGN_CONFIG.colors[color];
       const yard = YARDS[color];
-      const x = yard.col * CELL_SIZE + 4;
-      const y = yard.row * CELL_SIZE + 4;
-      const size = 6 * CELL_SIZE - 8;
+      const x = this.offsetX + yard.col * cs + 4;
+      const y = this.offsetY + yard.row * cs + 4;
+      const size = 6 * cs - 8;
       const cornerR = 18;
 
       // 1. Yard Outer Raised Card (Modern Glass Panel)
@@ -133,7 +147,7 @@ export default class BoardManager {
       g.strokeRoundedRect(x + 1, y + 1, size - 2, size - 2, cornerR - 1);
 
       // 2. Inner Recessed Floor Arena
-      const pad = CELL_SIZE * 0.45;
+      const pad = cs * 0.45;
       const innerW = size - pad * 2;
       const innerH = size - pad * 2;
       g.fillStyle(0x030712, 0.8);
@@ -144,9 +158,9 @@ export default class BoardManager {
       // 3. 3D Recessed Token Pedestals / Sockets
       for (let ti = 0; ti < 4; ti++) {
         const offset = YARD_TOKEN_OFFSETS[ti]!;
-        const cx = (yard.col + offset.col) * CELL_SIZE + CELL_SIZE / 2;
-        const cy = (yard.row + offset.row) * CELL_SIZE + CELL_SIZE / 2;
-        const r = CELL_SIZE * 0.42;
+        const cx = this.offsetX + (yard.col + offset.col) * cs + cs / 2;
+        const cy = this.offsetY + (yard.row + offset.row) * cs + cs / 2;
+        const r = cs * 0.42;
 
         // Outer LED-glow halo
         g.fillStyle(c.glow, 0.2);
@@ -193,16 +207,17 @@ export default class BoardManager {
   private drawMainPath(): void {
     const g = this.scene.add.graphics();
     g.setDepth(2);
+    const cs = this.cellSize;
 
     for (let pos = 0; pos < MAIN_PATH.length; pos++) {
       const coord = MAIN_PATH[pos];
       if (!coord) continue;
-      const x = coord.col * CELL_SIZE;
-      const y = coord.row * CELL_SIZE;
+      const x = this.offsetX + coord.col * cs;
+      const y = this.offsetY + coord.row * cs;
       const inset = 2.0;
       const radius = 6;
-      const w = CELL_SIZE - inset * 2;
-      const h = CELL_SIZE - inset * 2;
+      const w = cs - inset * 2;
+      const h = cs - inset * 2;
 
       // Determine cell styling
       let isStart = false;
@@ -249,18 +264,19 @@ export default class BoardManager {
   private drawHomeColumns(): void {
     const g = this.scene.add.graphics();
     g.setDepth(2);
+    const cs = this.cellSize;
 
     for (const color of PLAYER_COLORS) {
       const c = LUDO_DESIGN_CONFIG.colors[color];
       const coords = HOME_COL_COORDS[color];
 
       coords.forEach((coord, step) => {
-        const x = coord.col * CELL_SIZE;
-        const y = coord.row * CELL_SIZE;
+        const x = this.offsetX + coord.col * cs;
+        const y = this.offsetY + coord.row * cs;
         const inset = 2.0;
         const radius = 6;
-        const w = CELL_SIZE - inset * 2;
-        const h = CELL_SIZE - inset * 2;
+        const w = cs - inset * 2;
+        const h = cs - inset * 2;
 
         // Progressive gradient from entry to home center
         const t = (step + 1) / coords.length;
@@ -284,8 +300,8 @@ export default class BoardManager {
 
         // Directional glowing dot towards center
         if (step < coords.length - 1) {
-          const cx = x + CELL_SIZE / 2;
-          const cy = y + CELL_SIZE / 2;
+          const cx = x + cs / 2;
+          const cy = y + cs / 2;
           g.fillStyle(0xffffff, 0.5);
           g.fillCircle(cx, cy, 3);
         }
@@ -298,15 +314,16 @@ export default class BoardManager {
   private drawCenterStar(): void {
     const g = this.scene.add.graphics();
     g.setDepth(2);
+    const cs = this.cellSize;
 
-    const cx = 7.5 * CELL_SIZE;
-    const cy = 7.5 * CELL_SIZE;
+    const cx = this.offsetX + 7.5 * cs;
+    const cy = this.offsetY + 7.5 * cs;
 
     const corners: Array<[number, number]> = [
-      [6 * CELL_SIZE, 6 * CELL_SIZE],
-      [9 * CELL_SIZE, 6 * CELL_SIZE],
-      [9 * CELL_SIZE, 9 * CELL_SIZE],
-      [6 * CELL_SIZE, 9 * CELL_SIZE],
+      [this.offsetX + 6 * cs, this.offsetY + 6 * cs],
+      [this.offsetX + 9 * cs, this.offsetY + 6 * cs],
+      [this.offsetX + 9 * cs, this.offsetY + 9 * cs],
+      [this.offsetX + 6 * cs, this.offsetY + 9 * cs],
     ];
 
     const triangleColors: number[] = [
@@ -336,7 +353,7 @@ export default class BoardManager {
     });
 
     // 2. Polished Center Gold Hub
-    const hubR = CELL_SIZE * 0.75;
+    const hubR = cs * 0.75;
 
     // Ambient glow halo
     g.fillStyle(0xf59e0b, 0.25);
@@ -443,17 +460,19 @@ export default class BoardManager {
     g.setDepth(30);
 
     const pad = 4;
-    const w = BOARD_PX - pad * 2;
-    const h = BOARD_PX - pad * 2;
+    const bx = this.offsetX + pad;
+    const by = this.offsetY + pad;
+    const w = this.boardPx - pad * 2;
+    const h = this.boardPx - pad * 2;
     const cornerR = LUDO_DESIGN_CONFIG.boardCornerRadius;
 
     // Metallic Outer Chamfer Rim
     g.lineStyle(3, 0x1e293b, 1.0);
-    g.strokeRoundedRect(pad, pad, w, h, cornerR);
+    g.strokeRoundedRect(bx, by, w, h, cornerR);
 
     // Subtle Gold Accent Pinstripe
     g.lineStyle(1.5, 0xf59e0b, 0.5);
-    g.strokeRoundedRect(pad + 3, pad + 3, w - 6, h - 6, cornerR - 2);
+    g.strokeRoundedRect(bx + 3, by + 3, w - 6, h - 6, cornerR - 2);
   }
 
   // ─── Highlights ─────────────────────────────────────────────────────────────
@@ -474,7 +493,7 @@ export default class BoardManager {
   }
 
   private addHighlight(x: number, y: number, color: number): void {
-    const r = CELL_SIZE * 0.45;
+    const r = this.cellSize * 0.45;
     this.highlightGraphics.lineStyle(2.5, color, 0.9);
     this.highlightGraphics.strokeCircle(x, y, r);
     this.highlightGraphics.fillStyle(color, 0.2);
@@ -511,8 +530,8 @@ export default class BoardManager {
     return mainPathPixel(position);
   }
 
-  getCellSize(): number { return CELL_SIZE; }
-  getBoardPx(): number { return BOARD_PX; }
+  getCellSize(): number { return this.cellSize; }
+  getBoardPx(): number { return this.boardPx; }
 }
 
 export { BoardManager };

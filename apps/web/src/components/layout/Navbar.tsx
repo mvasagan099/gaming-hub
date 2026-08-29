@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 import {
-  Search,
   Bell,
   UserCircle2,
   Sun,
@@ -18,7 +17,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "../../contexts/ThemeProvider";
 import { useAuthStore } from "../../store/authStore";
 import { useSettingsStore } from "../../store/settingsStore";
-import { useUIStore } from "../../store/uiStore";
 import { useMe } from "../../services/api/useMe";
 import { Skeleton } from "../Skeleton";
 
@@ -30,7 +28,6 @@ interface NavbarProps {
 export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
   const navigate = useNavigate();
   const { theme, setTheme, effectiveTheme } = useTheme();
-  const setPaletteOpen = useUIStore((s) => s.setPaletteOpen);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
   const settings = useSettingsStore((s) => s.settings);
@@ -105,40 +102,7 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
           </button>
         </div>
 
-        {/* Center Search bar (desktop only) */}
-        <div className="hidden lg:flex items-center w-64 xl:w-80 rounded-xl bg-slate-100 dark:bg-slate-800 px-3.5 py-1.5 border border-slate-200 dark:border-slate-700/50 transition-colors duration-300">
-          <Search size={16} className="text-slate-400 shrink-0" />
-          <input
-            placeholder="Search games, players..."
-            className="ml-2.5 w-full bg-transparent outline-none text-xs text-slate-900 dark:text-white placeholder-slate-400"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
-                navigate(`/search?q=${encodeURIComponent((e.target as HTMLInputElement).value.trim())}`);
-              }
-            }}
-            aria-label="Search games and players"
-          />
-        </div>
-
         <div className="flex items-center gap-2 sm:gap-3 text-slate-500 dark:text-slate-300">
-          <button
-            onClick={() => setPaletteOpen(true)}
-            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            aria-label="Search everything (Ctrl K)"
-            title="Search (Ctrl K)"
-          >
-            <Search size={20} />
-          </button>
-
-          <button
-            onClick={() => setTheme(effectiveTheme === 'dark' ? 'light' : 'dark')}
-            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            aria-label={`Switch to ${effectiveTheme === 'dark' ? 'light' : 'dark'} theme`}
-            title={`Theme: ${theme} (${effectiveTheme})`}
-          >
-            {effectiveTheme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
-
           {session && (
             <button
               onClick={() => navigate('/notifications')}
