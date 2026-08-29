@@ -290,6 +290,8 @@ interface MultiplayerMatchPanelProps {
   showControls?: boolean;
   /** Show the in-match chat panel. */
   showChat?: boolean;
+  /** Additional CSS class names. */
+  className?: string;
 }
 
 /**
@@ -300,6 +302,7 @@ export function MultiplayerMatchPanel({
   compact = false,
   showControls = true,
   showChat = true,
+  className,
 }: MultiplayerMatchPanelProps) {
   const room = useMultiplayerStore((s) => s.room);
   const mySeat = useMultiplayerStore((s) => s.mySeat);
@@ -347,7 +350,7 @@ export function MultiplayerMatchPanel({
   const participants = room.players.slice().sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0));
 
   return (
-    <div className={`${compact ? "w-full max-w-[240px]" : "w-full max-w-xs"} flex flex-col gap-2.5 text-xs select-none`}>
+    <div className={`${className ?? (compact ? "w-full max-w-[240px]" : "w-full max-w-xs")} flex flex-col gap-2.5 text-xs select-none`}>
       <InGameNotificationBanner />
 
       {/* ── Match 10-Minute Safety Limit Timer ─────────────────── */}

@@ -1600,7 +1600,69 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
           </div>
         )}
 
-        <div className="flex flex-col items-center gap-3 w-full max-w-[min(94vw,65dvh,440px)]">
+        {/* ── MOBILE TOP HUD: Compact Scoreboard & Turn Status (< lg) ── */}
+        <div className="flex lg:hidden flex-col gap-1.5 w-full max-w-[min(94vw,440px)] select-none">
+          {/* Score Bar */}
+          <div className="flex items-center justify-between gap-2 p-2 bg-[#0b0f1a]/95 backdrop-blur-xl border border-slate-800/80 rounded-2xl shadow-lg">
+            {/* White (You) */}
+            <div className="flex items-center gap-2 bg-slate-900/90 px-2.5 py-1.5 rounded-xl border border-emerald-500/30">
+              <div className="w-4 h-4 rounded-full bg-white border border-slate-300 shadow-sm" />
+              <div>
+                <div className="text-[9px] font-black text-emerald-400 uppercase leading-none">White (You)</div>
+                <div className="text-sm font-black text-amber-400 leading-none mt-0.5">{pocketedWhiteCount} / 9</div>
+              </div>
+            </div>
+
+            {/* Queen Status Pill */}
+            <div className="flex flex-col items-center">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-0.5">Queen</span>
+              <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border transition-all ${
+                rulesRef.current.queenStatus === 'covered'
+                  ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                  : rulesRef.current.queenStatus === 'pocketed_needs_cover'
+                  ? "bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse"
+                  : "bg-slate-800 text-slate-400 border-slate-700"
+              }`}>
+                👑 {rulesRef.current.queenStatus === 'covered' ? 'Covered' : rulesRef.current.queenStatus === 'pocketed_needs_cover' ? 'Needs Cover' : 'Unpocketed'}
+              </span>
+            </div>
+
+            {/* Black (AI / Opponent) */}
+            <div className="flex items-center gap-2 bg-slate-900/90 px-2.5 py-1.5 rounded-xl border border-slate-800">
+              <div className="text-right">
+                <div className="text-[9px] font-black text-slate-400 uppercase leading-none">Black (AI)</div>
+                <div className="text-sm font-black text-slate-200 leading-none mt-0.5">{pocketedBlackCount} / 9</div>
+              </div>
+              <div className="w-4 h-4 rounded-full bg-slate-950 border border-slate-700 shadow-sm" />
+            </div>
+          </div>
+
+          {/* Turn & Timer Sub-bar */}
+          <div className="flex items-center justify-between px-2.5 py-1 bg-slate-900/80 border border-slate-800/80 rounded-xl">
+            <div className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
+              isMyTurn
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse'
+                : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isMyTurn ? 'bg-emerald-400 animate-ping' : 'bg-rose-400'}`} />
+              <span>{isMyTurn ? 'YOUR TURN' : 'AI THINKING…'}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className={`font-mono text-xs font-black tracking-widest ${timeLeft <= 10 ? 'text-rose-400 animate-pulse' : 'text-slate-300'}`}>
+                00:{timeLeft < 10 ? `0${timeLeft}` : timeLeft}
+              </span>
+              <button
+                onClick={() => setShowRules(true)}
+                className="text-[10px] text-slate-400 hover:text-white font-bold underline cursor-pointer"
+              >
+                Rules
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center gap-2 w-full max-w-[min(94vw,50dvh,420px)]">
           <div className="relative w-full aspect-square">
             <canvas
               ref={canvasRef}
@@ -1615,15 +1677,15 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
           </div>
 
           {!isTurnActive && !gameOver && strikerPhase === 'positioning' && isMyTurn && (
-            <div className="w-full flex flex-col items-center gap-2">
+            <div className="w-full flex flex-col items-center gap-1.5">
               <div
                 className="relative w-full flex items-center px-4"
-                style={{ height: '48px' }}
+                style={{ height: '44px' }}
               >
                 <div
                   className="absolute inset-x-4 rounded-full"
                   style={{
-                    height: '34px',
+                    height: '32px',
                     background: 'linear-gradient(180deg, #c48a3c 0%, #e8a84a 40%, #9a6120 100%)',
                     border: '2px solid #6b3d0f',
                     boxShadow: '0 4px 14px rgba(0,0,0,0.45), inset 0 2px 4px rgba(255,255,255,0.15)',
@@ -1646,9 +1708,9 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
                 <div
                   className="absolute top-1/2 -translate-y-1/2 pointer-events-none z-20 flex items-center justify-center rounded-full shadow-lg"
                   style={{
-                    width: '36px',
-                    height: '36px',
-                    left: `calc(${((strikerPos - STRIKER_POS_MIN) / (STRIKER_POS_MAX - STRIKER_POS_MIN)) * 100}% - ${((strikerPos - STRIKER_POS_MIN) / (STRIKER_POS_MAX - STRIKER_POS_MIN)) * 36}px + 0px)`,
+                    width: '34px',
+                    height: '34px',
+                    left: `calc(${((strikerPos - STRIKER_POS_MIN) / (STRIKER_POS_MAX - STRIKER_POS_MIN)) * 100}% - ${((strikerPos - STRIKER_POS_MIN) / (STRIKER_POS_MAX - STRIKER_POS_MIN)) * 34}px + 0px)`,
                     background: 'radial-gradient(circle at 35% 35%, #ffffff, #f1f5f9 50%, #cbd5e1 100%)',
                     border: '2.5px solid rgba(255,255,255,0.95)',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.45)',
@@ -1656,17 +1718,27 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
                 />
               </div>
               
-              <p className="text-xs text-slate-400 font-semibold tracking-widest uppercase">Slide or tap board to position striker</p>
+              <p className="text-[11px] text-slate-400 font-semibold tracking-wider uppercase text-center">Slide mover or tap baseline to position striker</p>
               {placementOverlapping && (
-                <p className="text-xs text-rose-400 font-bold uppercase tracking-widest animate-pulse">
+                <p className="text-[11px] text-rose-400 font-bold uppercase tracking-widest animate-pulse">
                   Striker overlaps a coin - move it
                 </p>
               )}
             </div>
           )}
+
+          {/* Aim / Wait Instructions on mobile */}
+          <div className="lg:hidden w-full text-center min-h-[20px]">
+            {(!isMyTurn || currentPlayer === 'ai') ? (
+              <p className="text-[11px] text-slate-400 italic">Wait for opponent to shoot…</p>
+            ) : strikerPhase !== 'positioning' ? (
+              <p className="text-[11px] text-emerald-400 font-bold tracking-wide">🎯 Drag backwards from striker to aim &amp; shoot!</p>
+            ) : null}
+          </div>
         </div>
 
-        <div className="flex flex-col items-center gap-3 lg:gap-4 glass-panel p-4 lg:p-6 rounded-3xl border border-slate-800 w-full max-w-[270px] h-auto max-h-[80vh] overflow-y-auto custom-scrollbar">
+        {/* ── DESKTOP SIDEBAR PANEL (>= lg) ── */}
+        <div className="hidden lg:flex flex-col items-center gap-3 lg:gap-4 glass-panel p-4 lg:p-6 rounded-3xl border border-slate-800 w-full max-w-[270px] h-auto max-h-[80vh] overflow-y-auto custom-scrollbar">
           
           {(() => {
             const myColor = mode === 'multiplayer' ? (mySeat === 1 ? 'black' : 'white') : 'white';

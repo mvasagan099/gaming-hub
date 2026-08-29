@@ -1872,17 +1872,23 @@ const CarromMultiplayer: React.FC<Props> = ({
           <MultiplayerMatchPanel compact />
         </div>
 
-        {/* ═══ MOBILE SLIDE-UP SIDEBAR MODAL ═══ */}
+        {/* ═══ MOBILE CENTERED MATCH DETAILS & CHAT MODAL ═══ */}
         {showMobileSidebar && (
-          <div className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end bg-black/75 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-slate-900 border-t border-slate-700 rounded-t-3xl p-4 max-h-[85vh] overflow-y-auto space-y-4 shadow-2xl custom-scrollbar">
+          <div className="lg:hidden fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+            <div
+              className="fixed inset-0"
+              onClick={() => setShowMobileSidebar(false)}
+              aria-hidden="true"
+            />
+            <div className="relative z-10 bg-slate-900/98 border border-slate-700/80 rounded-3xl p-4 max-h-[88vh] w-full max-w-sm overflow-y-auto flex flex-col gap-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] animate-in zoom-in-95 duration-200 custom-scrollbar">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-amber-400" /> Match Details & Chat
                 </h3>
                 <button
                   onClick={() => setShowMobileSidebar(false)}
-                  className="p-1 rounded-full text-slate-400 hover:text-white bg-slate-800"
+                  className="p-1.5 rounded-full text-slate-400 hover:text-white bg-slate-800 transition-colors cursor-pointer"
+                  aria-label="Close panel"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1892,7 +1898,7 @@ const CarromMultiplayer: React.FC<Props> = ({
               <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-slate-400">
                   <span>First to 9 Points</span>
-                  <span className="text-emerald-400">{queenCovered ? "Queen Covered" : queenPocketed ? "Queen Needs Cover" : "Queen Active"}</span>
+                  <span className="text-emerald-400 font-bold">{queenCovered ? "Queen Covered" : queenPocketed ? "Queen Needs Cover" : "Queen Active"}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-center">
@@ -1906,8 +1912,10 @@ const CarromMultiplayer: React.FC<Props> = ({
                 </div>
               </div>
 
-              {/* Match Panel & Chat */}
-              <MultiplayerMatchPanel compact />
+              {/* Match Panel & Chat - Centered and full width */}
+              <div className="w-full flex justify-center py-1">
+                <MultiplayerMatchPanel compact={false} showControls={true} showChat={true} className="w-full max-w-full" />
+              </div>
             </div>
           </div>
         )}
