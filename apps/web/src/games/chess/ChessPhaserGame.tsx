@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { ChessScene } from "./phaser/scenes/ChessScene";
 import { ChessOverlays } from "./components/ChessOverlays";
-import { ChessMatchPanel } from "./components/ChessMatchPanel";
+import { ChessDesktopSidebar, ChessMobileTop, ChessMobileBottom } from "./components/ChessMatchPanel";
 import { CHESS_DESIGN_CONFIG } from "./phaser/constants/chessAnimationConfig";
 
 interface ChessPhaserGameProps {
@@ -68,7 +68,7 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
 
   return (
     /* ── Outer Arena Wrapper ── */
-    <div className="relative w-full max-w-7xl mx-auto flex flex-col lg:flex-row items-center lg:items-stretch justify-center gap-5 px-2 py-4 select-none">
+    <div className="relative w-full max-w-7xl mx-auto flex flex-col lg:flex-row items-center lg:items-stretch justify-center gap-2 sm:gap-4 px-2 py-1 sm:py-3 select-none">
 
       {/* ── Deep Space Background & Board Halo ── */}
       {/* Top-left warm ambient */}
@@ -83,33 +83,46 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
           style={{ background: "radial-gradient(circle, rgba(200,150,40,0.20) 0%, transparent 65%)" }} />
       </div>
 
-      {/* ── 3D Elevated Chess Board ── */}
-      <div className="relative flex-shrink-0 flex flex-col items-center justify-center">
-        {/* Board outer glow ring */}
-        <div className="absolute inset-0 rounded-2xl pointer-events-none"
-          style={{
-            boxShadow: "0 0 60px 12px rgba(180, 120, 30, 0.14), 0 30px 70px rgba(0,0,0,0.75)",
-          }} />
+      {/* ── Mobile Layout Column (< lg) & Board ── */}
+      <div className="relative flex flex-col items-center justify-center gap-2 w-full max-w-[min(96vw,520px)] lg:max-w-none lg:w-auto">
+        {/* Mobile Top HUD (Opponent Card & Clock) */}
+        <div className="w-full lg:hidden flex justify-center">
+          <ChessMobileTop game={gameInstance} />
+        </div>
 
-        {/* Phaser canvas mount */}
-        <div
-          ref={containerRef}
-          className="w-full max-w-[min(92vw,65dvh,560px)] aspect-square rounded-2xl overflow-hidden shadow-2xl"
-          style={{
-            perspective: "1400px",
-          }}
-        />
+        {/* ── 3D Elevated Chess Board ── */}
+        <div className="relative flex-shrink-0 flex flex-col items-center justify-center">
+          {/* Board outer glow ring */}
+          <div className="absolute inset-0 rounded-2xl pointer-events-none"
+            style={{
+              boxShadow: "0 0 50px 10px rgba(180, 120, 30, 0.14), 0 25px 60px rgba(0,0,0,0.75)",
+            }} />
 
-        {/* Edge vignette over board */}
-        <div className="absolute inset-0 rounded-2xl pointer-events-none"
-          style={{
-            background: "radial-gradient(ellipse at center, transparent 55%, rgba(5,8,18,0.60) 100%)",
-          }} />
+          {/* Phaser canvas mount */}
+          <div
+            ref={containerRef}
+            className="w-full max-w-[min(94vw,48dvh,540px)] aspect-square rounded-2xl overflow-hidden shadow-2xl"
+            style={{
+              perspective: "1400px",
+            }}
+          />
+
+          {/* Edge vignette over board */}
+          <div className="absolute inset-0 rounded-2xl pointer-events-none"
+            style={{
+              background: "radial-gradient(ellipse at center, transparent 55%, rgba(5,8,18,0.60) 100%)",
+            }} />
+        </div>
+
+        {/* Mobile Bottom HUD (Player Card & Action Controls) */}
+        <div className="w-full lg:hidden flex justify-center">
+          <ChessMobileBottom game={gameInstance} />
+        </div>
       </div>
 
-      {/* ── Unified Match Panel ── */}
-      <div className="w-full lg:w-[300px] xl:w-[320px] flex-shrink-0 flex justify-center">
-        <ChessMatchPanel game={gameInstance} />
+      {/* ── Desktop Unified Match Sidebar (>= lg) ── */}
+      <div className="hidden lg:flex w-[300px] xl:w-[320px] flex-shrink-0 justify-center">
+        <ChessDesktopSidebar game={gameInstance} />
       </div>
 
       {/* ── Overlays (Promotion, Resign Confirm, Victory) ── */}

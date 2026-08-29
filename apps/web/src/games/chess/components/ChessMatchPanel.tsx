@@ -1,16 +1,10 @@
 /**
  * ChessMatchPanel — Premium In-Game Chess HUD
  *
- * Layout (top-to-bottom):
- *   ┌─ Match header (title + connection badge + sound toggle) ───┐
- *   │  Opponent card (avatar + name + color + captured pieces)   │
- *   │  Opponent clock (digital, large mono)                      │
- *   │  Turn indicator pill (animated)                            │
- *   │  Evaluation bar + advantage label                          │
- *   │  Move history table (scrollable)                           │
- *   │  My clock (digital, large mono)                            │
- *   │  My player card (avatar + name + color + captured pieces)  │
- *   └─ Controls (Draw / Resign / Sound) ──────────────────────────┘
+ * Provides modular components:
+ *   - ChessDesktopSidebar (>= lg): Sleek right-hand match sidebar
+ *   - ChessMobileTop (< lg): Compact opponent card + digital clock + sound toggle
+ *   - ChessMobileBottom (< lg): Compact player card + clock + turn pill + action buttons + move modal
  */
 import { useEffect, useRef, useState } from "react";
 import {
@@ -20,20 +14,20 @@ import {
   Wifi,
   WifiOff,
   Cpu,
+  ScrollText,
+  X,
+  Flag,
+  Handshake,
 } from "lucide-react";
 import type { ChessRemoteState } from "../phaser/managers/ChessMultiplayerDriver";
 import { useMultiplayerStore } from "../../../store/multiplayerStore";
 import {
   liveRemainingMs,
   formatClock,
-  fenAtPly,
   materialEval,
-  buildPgn,
 } from "../utils/chessReactUtils";
 import { ChessEvents } from "../phaser/events/ChessEvents";
 import type { PieceType } from "../phaser/types/chess.types";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ChessMatchPanelProps {
   game?: Phaser.Game | null;
@@ -47,122 +41,18 @@ const PIECE_VALUES: Record<PieceType, number> = {
   p: 1, n: 3, b: 3, r: 5, q: 9, k: 0,
 };
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-/** Large digital clock display */
-function DigitalClock({ ms, active }: { ms: number; active: boolean }) {
-  const isLow      = ms < 10_000;
-  const isCritical = ms < 5_000;
-  const hasTime    = ms < Infinity;
-
-  if (!hasTime) return null;
-
-  return (
-    <div
-      className={`
-        flex items-center justify-center
-        font-mono font-black tabular-nums tracking-widest
-        rounded-xl border px-4 py-2 text-xl
-        transition-all duration-300
-        ${isCritical
-          ? "bg-rose-950/70 border-rose-500 text-rose-300 shadow-[0_0_16px_rgba(244,63,94,0.4)] animate-pulse"
-          : isLow
-            ? "bg-amber-950/60 border-amber-500/70 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)]"
-            : active
-              ? "bg-slate-800/80 border-amber-500/50 text-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.12)]"
-              : "bg-slate-900/60 border-slate-700/60 text-slate-500"
-        }
-      `}
-    >
-      {formatClock(ms)}
-    </div>
-  );
-}
-
-/** Compact player card (avatar icon + name + color badge) */
-function PlayerCard({
-  name,
-  colorIcon,
-  colorLabel,
-  captures,
-  materialScore,
-  isActive,
-  isMe,
-}: {
-  name: string;
-  colorIcon: string;
-  colorLabel: string;
-  captures: PieceType[];
-  materialScore: number;
-  isActive: boolean;
-  isMe: boolean;
-}) {
-  return (
-    <div
-      className={`
-        relative flex items-center gap-3 px-3 py-2.5 rounded-2xl border transition-all duration-300
-        ${isActive
-          ? isMe
-            ? "bg-slate-800/80 border-amber-500/60 shadow-[0_0_20px_rgba(245,158,11,0.14)]"
-            : "bg-slate-800/80 border-sky-500/60 shadow-[0_0_20px_rgba(56,189,248,0.14)]"
-          : "bg-slate-900/60 border-slate-800/80"
-        }
-      `}
-    >
-      {/* Color icon avatar */}
-      <div
-        className={`
-          w-10 h-10 rounded-xl flex items-center justify-center text-xl font-bold flex-shrink-0 border
-          ${colorLabel === "White"
-            ? "bg-gradient-to-br from-amber-50 to-amber-100 text-slate-900 border-amber-200/70 shadow-md"
-            : "bg-gradient-to-br from-slate-900 to-slate-950 text-amber-300 border-slate-700 shadow-md"
-          }
-        `}
-      >
-        {colorIcon}
-      </div>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <p className="font-black text-white text-sm leading-tight truncate">{name}</p>
-        <p className={`text-[10px] font-bold uppercase tracking-widest leading-tight mt-0.5 ${isMe ? "text-amber-400/70" : "text-sky-400/70"}`}>
-          {colorLabel} Pieces
-        </p>
-        {/* Captured pieces tray */}
-        {captures.length > 0 && (
-          <div className="flex flex-wrap items-center gap-0.5 mt-1">
-            {captures.map((p, i) => (
-              <span key={i} className="text-[11px] leading-none text-slate-400">{PIECE_GLYPHS[p]}</span>
-            ))}
-            {materialScore > 0 && (
-              <span className="ml-1 text-[10px] font-black text-emerald-400">+{materialScore}</span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Active indicator */}
-      {isActive && (
-        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isMe ? "bg-amber-400 animate-pulse" : "bg-sky-400 animate-pulse"}`} />
-      )}
-    </div>
-  );
-}
-
-// ─── Main Panel ──────────────────────────────────────────────────────────────
-
-export function ChessMatchPanel({ game }: ChessMatchPanelProps) {
-  const gameState     = useMultiplayerStore((s) => s.gameState) as unknown as ChessRemoteState | null;
-  const room          = useMultiplayerStore((s) => s.room);
-  const mySeat        = useMultiplayerStore((s) => s.mySeat);
+/** Shared hook for chess match panel state and real-time timers */
+export function useChessPanelState(game?: Phaser.Game | null) {
+  const gameState      = useMultiplayerStore((s) => s.gameState) as unknown as ChessRemoteState | null;
+  const room           = useMultiplayerStore((s) => s.room);
+  const mySeat         = useMultiplayerStore((s) => s.mySeat);
   const sendGameAction = useMultiplayerStore((s) => s.sendGameAction);
-  const socketStatus  = useMultiplayerStore((s) => s.status);
+  const socketStatus   = useMultiplayerStore((s) => s.status);
 
   const [localStatus,   setLocalStatus]   = useState<string>("WHITE'S TURN");
   const [localCaptures, setLocalCaptures] = useState<{ w: PieceType[]; b: PieceType[] }>({ w: [], b: [] });
   const [isMuted,       setIsMuted]       = useState(false);
   const [tick,          setTick]          = useState(Date.now());
-  const moveHistoryRef = useRef<HTMLDivElement>(null);
 
   // Clock tick (100ms)
   useEffect(() => {
@@ -183,14 +73,6 @@ export function ChessMatchPanel({ game }: ChessMatchPanelProps) {
     return () => clearInterval(id);
   }, [game]);
 
-  // Auto-scroll move history to latest
-  useEffect(() => {
-    if (moveHistoryRef.current) {
-      moveHistoryRef.current.scrollTop = moveHistoryRef.current.scrollHeight;
-    }
-  });
-
-  // ── Resolve state ──────────────────────────────────────────────────────────
   const s        = gameState;
   const isOnline = !!s;
   const mode     = (game?.registry.get("mode") as "ai" | "pvp") ?? "ai";
@@ -210,7 +92,6 @@ export function ChessMatchPanel({ game }: ChessMatchPanelProps) {
     : "Player 1";
 
   const clocks       = s?.clocks;
-  const timeControl  = s?.timeControl;
   const myKey        = String(myPlayer.seat);
   const oppKey       = String(opponent.seat);
   const myMs         = clocks?.[myKey]  ? liveRemainingMs(clocks[myKey]!,  tick) : Infinity;
@@ -243,7 +124,6 @@ export function ChessMatchPanel({ game }: ChessMatchPanelProps) {
     }
   }
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
   const handleResign = () => {
     if (isOnline) sendGameAction?.({ type: "resign" });
     else {
@@ -259,7 +139,182 @@ export function ChessMatchPanel({ game }: ChessMatchPanelProps) {
     if (scene) { scene.sound.mute = !scene.sound.mute; setIsMuted(scene.sound.mute); }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  return {
+    s,
+    isOnline,
+    mode,
+    aiLevel,
+    opponent,
+    myPlayer,
+    oppName,
+    myName,
+    oppMs,
+    myMs,
+    isMySeatTurn,
+    isOppTurn,
+    drawOfferedByMe,
+    canAcceptDraw,
+    myEval,
+    myCaptures,
+    oppCaptures,
+    myCaptureScore,
+    oppCaptureScore,
+    movePairs,
+    socketStatus,
+    isMuted,
+    toggleSound,
+    handleResign,
+    handleOfferDraw,
+    handleAcceptDraw,
+    handleDeclineDraw,
+  };
+}
+
+/** Large digital clock display */
+function DigitalClock({ ms, active, compact = false }: { ms: number; active: boolean; compact?: boolean }) {
+  const isLow      = ms < 10_000;
+  const isCritical = ms < 5_000;
+  const hasTime    = ms < Infinity;
+
+  if (!hasTime) return null;
+
+  return (
+    <div
+      className={`
+        flex items-center justify-center
+        font-mono font-black tabular-nums tracking-widest
+        rounded-xl border transition-all duration-300
+        ${compact ? "px-2.5 py-1 text-xs sm:text-sm" : "px-4 py-2 text-xl"}
+        ${isCritical
+          ? "bg-rose-950/70 border-rose-500 text-rose-300 shadow-[0_0_16px_rgba(244,63,94,0.4)] animate-pulse"
+          : isLow
+            ? "bg-amber-950/60 border-amber-500/70 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)]"
+            : active
+              ? "bg-slate-800/80 border-amber-500/50 text-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.12)]"
+              : "bg-slate-900/60 border-slate-700/60 text-slate-500"
+        }
+      `}
+    >
+      {formatClock(ms)}
+    </div>
+  );
+}
+
+/** Compact player card (avatar icon + name + color badge + captures) */
+function PlayerCard({
+  name,
+  colorIcon,
+  colorLabel,
+  captures,
+  materialScore,
+  isActive,
+  isMe,
+  compact = false,
+}: {
+  name: string;
+  colorIcon: string;
+  colorLabel: string;
+  captures: PieceType[];
+  materialScore: number;
+  isActive: boolean;
+  isMe: boolean;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`
+        relative flex items-center gap-2.5 rounded-2xl border transition-all duration-300
+        ${compact ? "px-2.5 py-1.5 flex-1 min-w-0" : "px-3 py-2.5 w-full"}
+        ${isActive
+          ? isMe
+            ? "bg-slate-800/90 border-amber-500/60 shadow-[0_0_20px_rgba(245,158,11,0.14)]"
+            : "bg-slate-800/90 border-sky-500/60 shadow-[0_0_20px_rgba(56,189,248,0.14)]"
+          : "bg-slate-900/60 border-slate-800/80"
+        }
+      `}
+    >
+      {/* Color icon avatar */}
+      <div
+        className={`
+          rounded-xl flex items-center justify-center font-bold flex-shrink-0 border
+          ${compact ? "w-8 h-8 text-base" : "w-10 h-10 text-xl"}
+          ${colorLabel === "White"
+            ? "bg-gradient-to-br from-amber-50 to-amber-100 text-slate-900 border-amber-200/70 shadow-md"
+            : "bg-gradient-to-br from-slate-900 to-slate-950 text-amber-300 border-slate-700 shadow-md"
+          }
+        `}
+      >
+        {colorIcon}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <p className="font-black text-white text-xs sm:text-sm leading-tight truncate">{name}</p>
+          {isActive && (
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isMe ? "bg-amber-400 animate-pulse" : "bg-sky-400 animate-pulse"}`} />
+          )}
+        </div>
+        <p className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest leading-tight mt-0.5 ${isMe ? "text-amber-400/70" : "text-sky-400/70"}`}>
+          {colorLabel} Pieces
+        </p>
+        {/* Captured pieces tray */}
+        {captures.length > 0 && (
+          <div className="flex flex-wrap items-center gap-0.5 mt-0.5">
+            {captures.map((p, i) => (
+              <span key={i} className="text-[10px] sm:text-[11px] leading-none text-slate-400">{PIECE_GLYPHS[p]}</span>
+            ))}
+            {materialScore > 0 && (
+              <span className="ml-1 text-[9px] sm:text-[10px] font-black text-emerald-400">+{materialScore}</span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Desktop Sidebar (>= lg) ────────────────────────────────────────────────
+
+export function ChessDesktopSidebar({ game }: ChessMatchPanelProps) {
+  const {
+    s,
+    isOnline,
+    mode,
+    aiLevel,
+    opponent,
+    myPlayer,
+    oppName,
+    myName,
+    oppMs,
+    myMs,
+    isMySeatTurn,
+    isOppTurn,
+    drawOfferedByMe,
+    canAcceptDraw,
+    myEval,
+    myCaptures,
+    oppCaptures,
+    myCaptureScore,
+    oppCaptureScore,
+    movePairs,
+    socketStatus,
+    isMuted,
+    toggleSound,
+    handleResign,
+    handleOfferDraw,
+    handleAcceptDraw,
+    handleDeclineDraw,
+  } = useChessPanelState(game);
+
+  const moveHistoryRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (moveHistoryRef.current) {
+      moveHistoryRef.current.scrollTop = moveHistoryRef.current.scrollHeight;
+    }
+  });
+
   return (
     <div className="
       w-full flex flex-col gap-3 p-4
@@ -268,7 +323,6 @@ export function ChessMatchPanel({ game }: ChessMatchPanelProps) {
       rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.7)]
       text-xs select-none
     ">
-
       {/* ── HEADER ── */}
       <div className="flex items-center justify-between">
         <div>
@@ -282,17 +336,15 @@ export function ChessMatchPanel({ game }: ChessMatchPanelProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Sound toggle */}
           <button
             onClick={toggleSound}
-            className="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-slate-700 flex items-center justify-center border border-slate-700/60 transition-colors"
+            className="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-slate-700 flex items-center justify-center border border-slate-700/60 transition-colors cursor-pointer"
           >
             {isMuted
               ? <VolumeX className="w-3.5 h-3.5 text-rose-400" />
               : <Volume2 className="w-3.5 h-3.5 text-slate-400" />}
           </button>
 
-          {/* Connection status */}
           {isOnline ? (
             <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold border ${
               socketStatus === "connected"
@@ -353,7 +405,6 @@ export function ChessMatchPanel({ game }: ChessMatchPanelProps) {
           <span>{opponent.color === "w" ? "White" : "Black"}</span>
         </div>
         <div className="relative h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-          {/* White advantage bar */}
           <div
             className="absolute left-0 top-0 h-full bg-gradient-to-r from-amber-300 to-amber-400 rounded-full transition-all duration-500"
             style={{ width: `${Math.min(100, Math.max(5, 50 + myEval * 4.5))}%` }}
@@ -425,13 +476,13 @@ export function ChessMatchPanel({ game }: ChessMatchPanelProps) {
           <>
             <button
               onClick={handleAcceptDraw}
-              className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition-all hover:scale-[1.02] active:scale-[0.97]"
+              className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition-all hover:scale-[1.02] active:scale-[0.97] cursor-pointer"
             >
               Accept Draw
             </button>
             <button
               onClick={handleDeclineDraw}
-              className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] uppercase tracking-wider border border-slate-700 transition-colors"
+              className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] uppercase tracking-wider border border-slate-700 transition-colors cursor-pointer"
             >
               Decline
             </button>
@@ -444,7 +495,7 @@ export function ChessMatchPanel({ game }: ChessMatchPanelProps) {
           <button
             onClick={handleOfferDraw}
             disabled={s?.drawOfferedBy != null}
-            className="flex-1 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-amber-400 border border-slate-700 hover:border-amber-500/40 font-black text-[11px] uppercase tracking-wider transition-all disabled:opacity-40"
+            className="flex-1 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-amber-400 border border-slate-700 hover:border-amber-500/40 font-black text-[11px] uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer"
           >
             Offer Draw
           </button>
@@ -452,7 +503,7 @@ export function ChessMatchPanel({ game }: ChessMatchPanelProps) {
 
         <button
           onClick={handleResign}
-          className="flex-1 py-2.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/50 text-rose-400 border border-rose-900/60 hover:border-rose-500/50 font-black text-[11px] uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.97]"
+          className="flex-1 py-2.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/50 text-rose-400 border border-rose-900/60 hover:border-rose-500/50 font-black text-[11px] uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.97] cursor-pointer"
         >
           Resign
         </button>
@@ -461,4 +512,202 @@ export function ChessMatchPanel({ game }: ChessMatchPanelProps) {
   );
 }
 
+// ─── Mobile Top HUD (< lg) ──────────────────────────────────────────────────
+
+export function ChessMobileTop({ game }: ChessMatchPanelProps) {
+  const {
+    opponent,
+    oppName,
+    oppMs,
+    isOppTurn,
+    oppCaptures,
+    oppCaptureScore,
+    myCaptureScore,
+    isMuted,
+    toggleSound,
+    isOnline,
+    mode,
+    aiLevel,
+  } = useChessPanelState(game);
+
+  return (
+    <div className="w-full flex items-center justify-between gap-2 p-2 bg-[#0b0f1a]/95 backdrop-blur-xl border border-slate-800/80 rounded-2xl shadow-lg">
+      <PlayerCard
+        name={oppName}
+        colorIcon={opponent.color === "w" ? "♔" : "♚"}
+        colorLabel={opponent.color === "w" ? "White" : "Black"}
+        captures={oppCaptures}
+        materialScore={oppCaptureScore > myCaptureScore ? oppCaptureScore - myCaptureScore : 0}
+        isActive={isOppTurn}
+        isMe={false}
+        compact={true}
+      />
+      <div className="flex items-center gap-1.5 shrink-0">
+        <DigitalClock ms={oppMs} active={isOppTurn} compact={true} />
+        <span className="hidden sm:inline-block px-2 py-0.5 rounded-md bg-slate-800/80 text-[10px] font-bold text-slate-400">
+          {isOnline ? "PvP" : mode === "ai" ? `AI Lv${aiLevel}` : "Local"}
+        </span>
+        <button
+          onClick={toggleSound}
+          className="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-slate-700 flex items-center justify-center border border-slate-700/60 transition-colors text-slate-400 cursor-pointer"
+          title="Toggle Sound"
+        >
+          {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Mobile Bottom HUD (< lg) ───────────────────────────────────────────────
+
+export function ChessMobileBottom({ game }: ChessMatchPanelProps) {
+  const {
+    myPlayer,
+    myName,
+    myMs,
+    isMySeatTurn,
+    myCaptures,
+    myCaptureScore,
+    oppCaptureScore,
+    myEval,
+    movePairs,
+    isOnline,
+    drawOfferedByMe,
+    canAcceptDraw,
+    handleOfferDraw,
+    handleAcceptDraw,
+    handleResign,
+  } = useChessPanelState(game);
+
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+
+  return (
+    <div className="w-full flex flex-col gap-2">
+      {/* Player Card + Clock + Turn Pill */}
+      <div className="flex items-center justify-between gap-2 p-2 bg-[#0b0f1a]/95 backdrop-blur-xl border border-slate-800/80 rounded-2xl shadow-lg">
+        <PlayerCard
+          name={myName}
+          colorIcon={myPlayer.color === "w" ? "♔" : "♚"}
+          colorLabel={myPlayer.color === "w" ? "White" : "Black"}
+          captures={myCaptures}
+          materialScore={myCaptureScore > oppCaptureScore ? myCaptureScore - oppCaptureScore : 0}
+          isActive={isMySeatTurn}
+          isMe={true}
+          compact={true}
+        />
+        <div className="flex items-center gap-1.5 shrink-0">
+          <DigitalClock ms={myMs} active={isMySeatTurn} compact={true} />
+          <div className={`px-2 py-1 rounded-lg border font-black text-[10px] tracking-wider uppercase flex items-center gap-1 ${
+            isMySeatTurn
+              ? "bg-amber-500/20 border-amber-500/50 text-amber-300 animate-pulse"
+              : "bg-slate-800/60 border-slate-700/60 text-slate-400"
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isMySeatTurn ? "bg-amber-400" : "bg-slate-500"}`} />
+            <span>{isMySeatTurn ? "YOUR TURN" : "WAITING"}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Material advantage thin bar */}
+      <div className="relative h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+        <div
+          className="absolute left-0 top-0 h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-500"
+          style={{ width: `${Math.min(100, Math.max(5, 50 + myEval * 4.5))}%` }}
+        />
+      </div>
+
+      {/* Action Row */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setShowHistoryModal(true)}
+          className="flex-1 py-2 px-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-95"
+        >
+          <ScrollText size={14} className="text-amber-400" />
+          <span>Moves ({movePairs.length})</span>
+        </button>
+
+        {isOnline && (
+          <button
+            onClick={canAcceptDraw ? handleAcceptDraw : handleOfferDraw}
+            disabled={drawOfferedByMe}
+            className="py-2 px-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+          >
+            <Handshake size={14} className="text-indigo-400" />
+            <span>{canAcceptDraw ? "Accept Draw" : "Draw"}</span>
+          </button>
+        )}
+
+        <button
+          onClick={handleResign}
+          className="py-2 px-4 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-900/60 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-95"
+        >
+          <Flag size={14} className="text-rose-400" />
+          <span>Resign</span>
+        </button>
+      </div>
+
+      {/* ── MOBILE MOVE HISTORY MODAL ── */}
+      {showHistoryModal && (
+        <div className="lg:hidden fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div
+            className="fixed inset-0"
+            onClick={() => setShowHistoryModal(false)}
+            aria-hidden="true"
+          />
+          <div className="relative z-10 w-full max-w-sm bg-slate-900/98 border border-slate-700/80 rounded-3xl p-5 shadow-2xl flex flex-col gap-3 max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <ScrollText size={16} className="text-amber-400" />
+                <h3 className="text-sm font-black text-white">Move History</h3>
+                <span className="px-2 py-0.5 rounded-full bg-slate-800 text-[10px] font-bold text-slate-400">
+                  {movePairs.length} turns
+                </span>
+              </div>
+              <button
+                onClick={() => setShowHistoryModal(false)}
+                className="p-1.5 rounded-full bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto max-h-[50vh] pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+              {movePairs.length === 0 ? (
+                <p className="text-slate-500 text-center py-8 italic text-xs">No moves recorded yet</p>
+              ) : (
+                <div className="font-mono text-xs divide-y divide-slate-800/40">
+                  {movePairs.map((pair, idx) => {
+                    const isLatest = idx === movePairs.length - 1;
+                    return (
+                      <div
+                        key={pair.num}
+                        className={`flex items-center px-2 py-1.5 ${
+                          isLatest ? "bg-amber-500/10 text-amber-300 font-bold" : "text-slate-300"
+                        }`}
+                      >
+                        <span className="w-8 text-slate-500 font-bold">{pair.num}.</span>
+                        <span className="flex-1">{pair.white}</span>
+                        <span className="flex-1 text-slate-400">{pair.black ?? "-"}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowHistoryModal(false)}
+              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export const ChessMatchPanel = ChessDesktopSidebar;
 export default ChessMatchPanel;
