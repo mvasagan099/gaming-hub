@@ -9,7 +9,7 @@ import type { TableTennisState } from '@gaming-hub/game-engine';
 import { TABLE_TENNIS_VISUAL_CONFIG, type CameraState } from './constants/tableTennisVisualConfig';
 import { TableTennis3DRenderer } from './utils/tableTennis3DRenderer';
 import { TableTennisOverlays } from './components/TableTennisOverlays';
-import { Timer } from 'lucide-react';
+import { Timer, Users, X } from 'lucide-react';
 
 interface TableTennisProps {
   mode: 'ai' | 'multiplayer';
@@ -47,6 +47,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
   const [currentServer, setCurrentServer] = useState<1 | 2>(1);
   const [isMatchPoint, setIsMatchPoint] = useState(false);
   const [isDeuce, setIsDeuce] = useState(false);
+  const [showMobilePanel, setShowMobilePanel] = useState(false);
   const [, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'disconnected'>('connected');
   const [pointAnimation, setPointAnimation] = useState<{ winner: number; reason: string } | null>(null);
   const [remainingTime, setRemainingTime] = useState(180);
@@ -617,6 +618,16 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
               <span className="text-xl sm:text-3xl font-black font-mono tracking-tight text-sky-400">
                 {String(p2Score).padStart(2, '0')}
               </span>
+              {mode === 'multiplayer' && (
+                <button
+                  onClick={() => setShowMobilePanel(true)}
+                  className="xl:hidden p-1.5 sm:p-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/50 text-indigo-300 flex items-center gap-1 text-[10px] font-bold shadow-lg transition-all active:scale-95 cursor-pointer ml-1 sm:ml-2"
+                  title="Match Details & Chat"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Details</span>
+                </button>
+              )}
             </div>
 
             {/* Player 2 Card (Blue / Background) */}
@@ -681,10 +692,46 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
           </div>
         </div>
 
-        {/* MULTIPLAYER PANEL */}
+        {/* MULTIPLAYER PANEL (DESKTOP >= xl) */}
         {mode === 'multiplayer' && (
           <div className="hidden xl:block flex-shrink-0 self-start">
             <MultiplayerMatchPanel compact />
+          </div>
+        )}
+
+        {/* ═══ MOBILE CENTERED MULTIPLAYER DETAILS MODAL ═══ */}
+        {mode === 'multiplayer' && showMobilePanel && (
+          <div className="xl:hidden fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+            <div
+              className="fixed inset-0"
+              onClick={() => setShowMobilePanel(false)}
+              aria-hidden="true"
+            />
+            <div className="relative z-10 bg-slate-900/98 border border-slate-700/80 rounded-3xl p-4 max-h-[88vh] w-full max-w-sm overflow-y-auto flex flex-col gap-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] animate-in zoom-in-95 duration-200 custom-scrollbar">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+                    <Users size={15} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-white leading-tight">Match Details & Chat</h3>
+                    {room && <p className="text-[10px] text-slate-400 font-mono">Room: <span className="font-bold text-indigo-300">{room.code}</span></p>}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowMobilePanel(false)}
+                  className="p-1.5 rounded-full text-slate-400 hover:text-white bg-slate-800 transition-colors cursor-pointer"
+                  aria-label="Close panel"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Match Panel & Chat */}
+              <div className="w-full flex justify-center py-1">
+                <MultiplayerMatchPanel compact={false} showControls={true} showChat={true} className="w-full max-w-full" />
+              </div>
+            </div>
           </div>
         )}
       </div>

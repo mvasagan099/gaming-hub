@@ -7,6 +7,7 @@ import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPane
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { CricketTossUI } from './components/CricketTossUI';
 import { CricketOverlays } from './components/CricketOverlays';
+import { Users, X } from 'lucide-react';
 
 interface CricketProps {
   mode: 'ai' | 'multiplayer';
@@ -153,6 +154,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
   const [isWin, setIsWin] = useState(false);
   const [showTossUI, setShowTossUI] = useState(false);
   const [tossComplete, setTossComplete] = useState(false);
+  const [showMobilePanel, setShowMobilePanel] = useState(false);
 
   // ── Broadcast HUD state ───────────────────────────────────────────────────
   const [gameEvent, setGameEvent] = useState<{ type: string; runs?: number } | null>(null);
@@ -163,7 +165,8 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
   const winner = useMultiplayerStore((s) => s.winner);
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const isSpectator = useMultiplayerStore((s) => s.isSpectator);
-  const roomPlayers = useMultiplayerStore((s) => s.room?.players) ?? EMPTY_PLAYERS;
+  const room = useMultiplayerStore((s) => s.room);
+  const roomPlayers = room?.players ?? EMPTY_PLAYERS;
   const rematchState = useMultiplayerStore((s) => s.rematchState);
   const myUserId = roomPlayers.find((p) => p.seat === mySeat)?.id;
   const myRematchRequested = Boolean(myUserId && rematchState?.requestedBy?.includes(myUserId));
@@ -253,6 +256,38 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
       (remoteState.currentActor === 'batsman' && remoteState.battingTeam === mySeat)
     : false;
 
+  const currentInning = remoteState?.inning ?? 1;
+  const score1 = remoteState?.team1Score ?? 0;
+  const wkts1 = remoteState?.team1Wickets ?? 0;
+  const score2 = remoteState?.team2Score ?? 0;
+  const wkts2 = remoteState?.team2Wickets ?? 0;
+  const oversStr = `${remoteState?.currentOver ?? 0}.${remoteState?.currentBall ?? 0}/${remoteState?.totalOvers ?? 5}`;
+  const targetVal = remoteState?.target ?? null;
+  const runRateVal = (() => {
+    const ballsBowled = ((remoteState?.currentOver ?? 0) * 6) + (remoteState?.currentBall ?? 0);
+    const currentScore = currentInning === 1 ? score1 : score2;
+    return ballsBowled > 0 ? (currentScore / (ballsBowled / 6)).toFixed(1) : '0.0';
+  })();
+
+  const player1Name = namesBySeat[0] ?? 'Player 1';
+  const player2Name = namesBySeat[1] ?? 'Player 2';
+
+  const actorLabel = (() => {
+    if (!remoteState || !remoteState.currentActor || remoteState.finished) return null;
+    if (remoteState.currentActor === 'bowler') {
+      return remoteState.bowlingTeam === mySeat ? 'YOUR TURN · BOWL' : `${namesBySeat[remoteState.bowlingTeam ?? (1 - (mySeat ?? 0))] ?? 'Opponent'} bowling…`;
+    }
+    if (remoteState.currentActor === 'batsman') {
+      return remoteState.battingTeam === mySeat ? 'YOUR TURN · BAT' : `${namesBySeat[remoteState.battingTeam ?? (1 - (mySeat ?? 0))] ?? 'Opponent'} batting…`;
+    }
+    return null;
+  })();
+
+  const isMyActor = remoteState
+    ? (remoteState.currentActor === 'bowler' && remoteState.bowlingTeam === mySeat) ||
+      (remoteState.currentActor === 'batsman' && remoteState.battingTeam === mySeat)
+    : false;
+
   // ── Waiting state ─────────────────────────────────────────────────────────
 
   if (isMultiplayer && !matchStarted) {
@@ -287,7 +322,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
 
   return (
     <GameWrapper title="Cricket World Premier League" gameId="cricket" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="flex flex-col xl:flex-row items-center xl:items-start justify-center gap-6 w-full max-w-7xl mx-auto relative z-10 p-2">
+      <div className="flex flex-col xl:flex-row items-center xl:items-start justify-center gap-4 xl:gap-6 w-full max-w-7xl mx-auto relative z-10 p-1.5 sm:p-2 overflow-hidden xl:overflow-y-auto">
 
         {/* ── AI: Role picker ── */}
         {!isMultiplayer && !playerRole && (
@@ -352,8 +387,79 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
         {/* ── Main Game Area ── */}
         {(playerRole || (isMultiplayer && matchStarted)) && (
           <>
-            {/* Phaser canvas */}
+            {/* Phaser canvas + Mobile Top HUD */}
             <div className="flex flex-col items-center flex-shrink-0 w-full xl:w-auto">
+              {/* ═══ MOBILE TOP LIVE SCOREBOARD BAR (< xl) ═══ */}
+              {isMultiplayer && remoteState && (
+                <div className="xl:hidden w-full max-w-[min(94vw,65dvh,924px)] bg-[#0d1322]/95 backdrop-blur-xl border border-slate-800/90 rounded-2xl p-2 sm:p-2.5 shadow-xl mb-2 select-none">
+                  {/* Turn indicator pill */}
+                  {actorLabel && (
+                    <div className={`flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl font-extrabold text-[10px] uppercase tracking-wider border mb-1.5 transition-all ${
+                      isMyActor
+                        ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/40'
+                        : 'bg-slate-900/90 text-slate-400 border-slate-800'
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full ${isMyActor ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500 animate-pulse'}`} />
+                      <span>{actorLabel}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+                    {/* Team 1 */}
+                    <div className={`flex-1 flex items-center gap-2 p-1.5 sm:p-2 rounded-xl border transition-all ${
+                      mySeat === 0 ? 'border-amber-500/40 bg-amber-950/20' : 'border-slate-800 bg-slate-900/60'
+                    }`}>
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-black text-[10px] text-amber-300 shrink-0">
+                        {mySeat === 0 ? 'YOU' : 'T1'}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                          {player1Name} {mySeat === 0 && <span className="text-amber-400 font-black">•</span>}
+                        </div>
+                        <div className="text-base sm:text-lg font-black font-mono text-white leading-none mt-0.5">
+                          {score1}<span className="text-slate-400 text-xs font-bold">/{wkts1}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Center Match Stats & Details Toggle */}
+                    <div className="flex flex-col items-center justify-center px-1 shrink-0">
+                      <div className="flex items-center gap-1 text-[9px] font-mono text-slate-300 font-bold">
+                        <span className="text-slate-400">OV:</span> <span className="text-white font-black">{oversStr}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[8px] font-bold mt-0.5">
+                        <span className="text-amber-400 font-mono">RR {runRateVal}</span>
+                        {targetVal != null && <span className="text-sky-400 font-mono">TGT {targetVal}</span>}
+                      </div>
+                      <button
+                        onClick={() => setShowMobilePanel(true)}
+                        className="mt-1 text-[9px] font-bold text-indigo-400 hover:text-indigo-300 underline flex items-center gap-0.5 cursor-pointer"
+                        title="Open Match Details & Chat"
+                      >
+                        <Users className="w-3 h-3" /> Details
+                      </button>
+                    </div>
+
+                    {/* Team 2 */}
+                    <div className={`flex-1 flex items-center justify-end gap-2 p-1.5 sm:p-2 rounded-xl border transition-all ${
+                      mySeat === 1 ? 'border-sky-500/40 bg-sky-950/20' : 'border-slate-800 bg-slate-900/60'
+                    }`}>
+                      <div className="min-w-0 flex-1 text-right">
+                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                          {player2Name} {mySeat === 1 && <span className="text-sky-400 font-black">•</span>}
+                        </div>
+                        <div className="text-base sm:text-lg font-black font-mono text-white leading-none mt-0.5">
+                          {score2}<span className="text-slate-400 text-xs font-bold">/{wkts2}</span>
+                        </div>
+                      </div>
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-sky-500/20 border border-sky-500/40 flex items-center justify-center font-black text-[10px] text-sky-300 shrink-0">
+                        {mySeat === 1 ? 'YOU' : 'T2'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <CricketPhaserGame
                 mode={mode}
                 role={isMultiplayer ? 'batting' : (playerRole ?? 'batting')}
@@ -363,15 +469,51 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
               />
             </div>
 
-            {/* Sidebar */}
+            {/* Sidebar (Desktop >= xl) */}
             {isMultiplayer && (
-              <div className="flex-shrink-0 w-full xl:w-auto flex justify-center xl:block xl:self-start xl:pt-2">
+              <div className="hidden xl:block flex-shrink-0 self-start pt-2">
                 <LiveScoreboard
                   remoteState={remoteState}
                   mySeat={mySeat}
                   namesBySeat={namesBySeat}
                   isMyTurn={isMyTurn}
                 />
+              </div>
+            )}
+
+            {/* ═══ MOBILE CENTERED MULTIPLAYER DETAILS MODAL ═══ */}
+            {isMultiplayer && showMobilePanel && (
+              <div className="xl:hidden fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+                <div
+                  className="fixed inset-0"
+                  onClick={() => setShowMobilePanel(false)}
+                  aria-hidden="true"
+                />
+                <div className="relative z-10 bg-slate-900/98 border border-slate-700/80 rounded-3xl p-4 max-h-[88vh] w-full max-w-sm overflow-y-auto flex flex-col gap-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] animate-in zoom-in-95 duration-200 custom-scrollbar">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+                        <Users size={15} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-black text-white leading-tight">Match Details & Chat</h3>
+                        {room && <p className="text-[10px] text-slate-400 font-mono">Room: <span className="font-bold text-indigo-300">{room.code}</span></p>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowMobilePanel(false)}
+                      className="p-1.5 rounded-full text-slate-400 hover:text-white bg-slate-800 transition-colors cursor-pointer"
+                      aria-label="Close modal"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  {/* Match Panel & Chat */}
+                  <div className="w-full flex justify-center py-1">
+                    <MultiplayerMatchPanel compact={false} showControls={true} showChat={true} className="w-full max-w-full" />
+                  </div>
+                </div>
               </div>
             )}
           </>

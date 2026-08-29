@@ -48,62 +48,62 @@ export const MatchFoundModal: React.FC = () => {
   const prizePool = Math.round(matchFound.entryFee * 2 * 0.9);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in zoom-in-95 duration-200">
-      <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-amber-500/40 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-950 p-6 sm:p-8 text-center shadow-2xl shadow-amber-500/20">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 dark:bg-slate-950/85 backdrop-blur-md animate-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-amber-500/40 bg-white/95 dark:bg-gradient-to-b dark:from-slate-900 dark:via-slate-900/95 dark:to-slate-950 p-6 sm:p-8 text-center shadow-2xl shadow-amber-500/20">
         {/* Glow Header Accent */}
         <div className="absolute -top-12 left-1/2 -translate-x-1/2 size-48 rounded-full bg-amber-500/20 blur-3xl pointer-events-none" />
 
         {/* Top Tag */}
-        <div className="relative z-10 inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 px-4 py-1 text-xs font-black text-amber-400 mb-4 animate-pulse">
+        <div className="relative z-10 inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 px-4 py-1 text-xs font-black text-amber-600 dark:text-amber-400 mb-4 animate-pulse">
           <Sparkles className="size-3.5" /> OPPONENT FOUND!
         </div>
 
         {/* Game Title */}
-        <h3 className="relative z-10 text-2xl font-black text-white flex items-center justify-center gap-2">
+        <h3 className="relative z-10 text-2xl font-black text-slate-900 dark:text-white flex items-center justify-center gap-2">
           <span>{def.icon}</span> {def.name}
         </h3>
-        <p className="relative z-10 text-xs text-slate-400 mt-1">
+        <p className="relative z-10 text-xs text-slate-500 dark:text-slate-400 mt-1">
           🪙 {matchFound.entryFee} Entry Fee · 🏆 {prizePool > 0 ? `${prizePool} Coins Prize` : 'Practice'}
         </p>
 
         {/* VS Layout */}
-        <div className="relative z-10 mt-6 grid grid-cols-3 items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+        <div className="relative z-10 mt-6 grid grid-cols-3 items-center gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 p-5">
           {/* You */}
           <div className="flex flex-col items-center">
-            <div className="size-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center font-black text-indigo-300 text-xl overflow-hidden">
+            <div className="size-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center font-black text-indigo-600 dark:text-indigo-300 text-xl overflow-hidden">
               {myPlayer.avatarUrl ? (
                 <img src={myPlayer.avatarUrl} alt="You" className="size-full object-cover" />
               ) : (
                 myPlayer.displayName?.[0] || 'Y'
               )}
             </div>
-            <span className="mt-2 text-xs font-bold text-slate-200 truncate max-w-[100px]">
+            <span className="mt-2 text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[100px]">
               {myPlayer.displayName || 'You'}
             </span>
-            <span className="text-[10px] text-indigo-400 font-bold uppercase">YOU</span>
+            <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase">YOU</span>
           </div>
 
           {/* VS Badge */}
           <div className="flex flex-col items-center justify-center space-y-1">
-            <div className="size-10 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-black text-xs">
+            <div className="size-10 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-600 dark:text-amber-400 font-black text-xs">
               VS
             </div>
-            <span className="text-[10px] text-slate-500 font-mono">1v1 Online</span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">1v1 Online</span>
           </div>
 
           {/* Opponent */}
           <div className="flex flex-col items-center">
-            <div className="size-16 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center font-black text-rose-300 text-xl overflow-hidden">
+            <div className="size-16 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center font-black text-rose-600 dark:text-rose-300 text-xl overflow-hidden">
               {opponent.avatarUrl ? (
                 <img src={opponent.avatarUrl} alt="Opponent" className="size-full object-cover" />
               ) : (
                 opponent.displayName?.[0] || 'O'
               )}
             </div>
-            <span className="mt-2 text-xs font-bold text-slate-200 truncate max-w-[100px]">
+            <span className="mt-2 text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[100px]">
               {opponent.displayName || 'Opponent'}
             </span>
-            <span className="text-[10px] text-rose-400 font-bold uppercase">OPPONENT</span>
+            <span className="text-[10px] text-rose-600 dark:text-rose-400 font-bold uppercase">OPPONENT</span>
           </div>
         </div>
 

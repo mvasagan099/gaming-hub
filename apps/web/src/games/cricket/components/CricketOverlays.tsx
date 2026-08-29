@@ -14,7 +14,7 @@ interface GraphicsQualityBarProps {
 
 export const GraphicsQualityBar: React.FC<GraphicsQualityBarProps> = ({ quality, onQualityChange }) => {
   return (
-    <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 shadow-lg">
+    <div className="absolute top-3 left-3 z-30 flex items-center gap-1.5 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 shadow-lg">
       <Monitor className="w-3.5 h-3.5 text-slate-400" />
       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Quality:</span>
       {(['LOW', 'MEDIUM', 'HIGH'] as GraphicsQuality[]).map((q) => (
@@ -108,7 +108,7 @@ interface BroadcastScorebarProps {
 export const BroadcastScorebar: React.FC<BroadcastScorebarProps> = ({
   score, wickets, overs, target, runRate, reqRunRate, teamName = 'BATTING', inning = 1,
 }) => (
-  <div className="pointer-events-none absolute bottom-4 left-4 z-30 select-none">
+  <div className="pointer-events-none absolute bottom-4 left-4 z-30 select-none hidden sm:block">
     <div className="
       flex flex-col min-w-[200px]
       bg-slate-950/92 backdrop-blur-md

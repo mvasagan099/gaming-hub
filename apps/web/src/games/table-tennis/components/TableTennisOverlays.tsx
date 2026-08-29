@@ -112,9 +112,9 @@ export const TableTennisOverlays: React.FC<TableTennisOverlaysProps> = ({
 
       {/* ── 5. Victory / Defeat Modal ── */}
       {isGameOver && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in select-none">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in select-none">
           <div className={`
-            relative flex flex-col items-center w-full max-w-sm p-6 sm:p-7
+            relative flex flex-col items-center w-full max-w-sm p-5 sm:p-7 my-auto max-h-[90vh] overflow-y-auto custom-scrollbar
             bg-slate-900/95 backdrop-blur-2xl
             border-2 rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)]
             transform animate-in zoom-in-95 duration-200

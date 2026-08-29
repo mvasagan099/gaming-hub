@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Trophy, RefreshCw, ArrowLeft, Clock, AlertTriangle, Sparkles, Volume2, VolumeX, Flame, Check, Video, Eye } from "lucide-react";
+import { Trophy, RefreshCw, ArrowLeft, Clock, AlertTriangle, Sparkles, Volume2, VolumeX, Flame, Check, Video, Eye, RotateCw, Users } from "lucide-react";
 import type { SnookerPlayer, SnookerBall, SnookerTarget, SnookerFrameStatus, SnookerBallType, SnookerFrameHistoryItem } from "@gaming-hub/game-engine";
 
 interface SnookerHUDProps {
@@ -34,6 +34,10 @@ interface SnookerHUDProps {
   onBack: () => void;
   soundEnabled: boolean;
   setSoundEnabled: (v: boolean) => void;
+  isRotated?: boolean;
+  onToggleRotate?: () => void;
+  showMobileMatchPanelButton?: boolean;
+  onOpenMobileMatchPanel?: () => void;
 }
 
 export const SnookerHUD: React.FC<SnookerHUDProps> = ({
@@ -68,6 +72,10 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
   onBack,
   soundEnabled,
   setSoundEnabled,
+  isRotated = false,
+  onToggleRotate,
+  showMobileMatchPanelButton = false,
+  onOpenMobileMatchPanel,
 }) => {
   const isMyTurn = currentSeat === mySeat;
   const timeRatio = Math.max(0, Math.min(1, timeLeft / maxTime));
@@ -99,85 +107,156 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
   return (
     <div className="w-full flex flex-col gap-2 pointer-events-none select-none">
       {/* ── 1. Top Broadcast TV Scoreboard ───────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 rounded-2xl px-5 py-2.5 shadow-[0_10px_30px_rgba(0,0,0,0.5)] pointer-events-auto">
-        {/* Left Toolbar: Exit & Camera */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 hover:scale-105 active:scale-95"
-            title="Leave Match"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Exit</span>
-          </button>
+      <div className="w-full bg-slate-900/95 backdrop-blur-xl border border-slate-700/60 rounded-2xl p-2 sm:p-2.5 shadow-[0_10px_30px_rgba(0,0,0,0.5)] pointer-events-auto">
+        {/* Mobile Toolbar (Header Top Row) */}
+        <div className="flex items-center justify-between gap-1.5 pb-1.5 mb-1.5 border-b border-slate-800 md:hidden">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 active:scale-95"
+              title="Leave Match"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Exit</span>
+            </button>
 
-          <button
-            onClick={() => setCameraMode((prev) => (prev === "3d" ? "2d" : "3d"))}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 hover:scale-105 active:scale-95"
-            title="Toggle 2D / 3D Perspective"
-          >
-            {cameraMode === "3d" ? <Video className="w-3.5 h-3.5 text-amber-400" /> : <Eye className="w-3.5 h-3.5 text-sky-400" />}
-            <span>{cameraMode === "3d" ? "3D View" : "2D Top"}</span>
-          </button>
+            {onToggleRotate && (
+              <button
+                onClick={onToggleRotate}
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg transition-all text-xs font-bold border active:scale-95 ${
+                  isRotated
+                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm"
+                    : "bg-slate-800/80 text-slate-300 border-slate-700/60 hover:bg-slate-700"
+                }`}
+                title="Rotate Table Orientation (Vertical / Horizontal)"
+              >
+                <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+                <span>{isRotated ? "Vertical" : "Horizontal"}</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setCameraMode((prev) => (prev === "3d" ? "2d" : "3d"))}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 active:scale-95"
+              title="Toggle 2D / 3D Perspective"
+            >
+              {cameraMode === "3d" ? <Video className="w-3.5 h-3.5 text-amber-400" /> : <Eye className="w-3.5 h-3.5 text-sky-400" />}
+              <span>{cameraMode === "3d" ? "3D" : "2D"}</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {showMobileMatchPanelButton && onOpenMobileMatchPanel && (
+              <button
+                onClick={onOpenMobileMatchPanel}
+                className="px-2 py-1 rounded-lg bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold hover:bg-indigo-600/40 active:scale-95 flex items-center gap-1"
+                title="Match Details & Chat"
+              >
+                <Users className="w-3 h-3" />
+                <span>Details</span>
+              </button>
+            )}
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all border border-slate-700/60 active:scale-95"
+              title={soundEnabled ? "Mute Audio" : "Unmute Audio"}
+            >
+              {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
+            </button>
+          </div>
         </div>
 
-        {/* Center Arena Broadcast Scoreboard */}
-        <div className="flex items-center gap-4 md:gap-8">
+        {/* Main Scoreboard Layout */}
+        <div className="flex items-center justify-between gap-2 sm:gap-4 md:gap-8">
+          {/* Desktop Toolbar (Hidden on mobile) */}
+          <div className="hidden md:flex items-center gap-2">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 hover:scale-105 active:scale-95"
+              title="Leave Match"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Exit</span>
+            </button>
+
+            {onToggleRotate && (
+              <button
+                onClick={onToggleRotate}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-xs font-bold border hover:scale-105 active:scale-95 ${
+                  isRotated
+                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm"
+                    : "bg-slate-800/80 text-slate-300 border-slate-700/60 hover:bg-slate-700"
+                }`}
+                title="Rotate Table Orientation"
+              >
+                <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+                <span>{isRotated ? "Vertical Table" : "Horizontal Table"}</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setCameraMode((prev) => (prev === "3d" ? "2d" : "3d"))}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 hover:scale-105 active:scale-95"
+              title="Toggle 2D / 3D Perspective"
+            >
+              {cameraMode === "3d" ? <Video className="w-3.5 h-3.5 text-amber-400" /> : <Eye className="w-3.5 h-3.5 text-sky-400" />}
+              <span>{cameraMode === "3d" ? "3D View" : "2D Top"}</span>
+            </button>
+          </div>
+
           {/* Player 1 Card */}
           <div
-            className={`flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-300 ${
+            className={`flex items-center gap-1.5 sm:gap-3 p-1.5 sm:px-4 sm:py-2 rounded-xl transition-all duration-300 flex-1 md:flex-initial ${
               currentSeat === 0
                 ? "bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-slate-900/40 border-2 border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.25)]"
                 : "bg-slate-800/40 border border-slate-700/50 opacity-85"
             }`}
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-black text-white shadow-md text-xs border border-amber-300/40">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-black text-white shadow-md text-[10px] sm:text-xs border border-amber-300/40 shrink-0">
               P1
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-100 max-w-[110px] truncate">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] sm:text-xs font-bold text-slate-100 truncate max-w-[70px] sm:max-w-[110px]">
                   {mySeat === 0 ? (player1Name ? `${player1Name} (You)` : "You") : (player1Name || "Player 1")}
                 </span>
                 {currentSeat === 0 && (
-                  <span className="relative flex h-2 w-2">
+                  <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2 shrink-0">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+                    <span className="relative inline-flex rounded-full h-full w-full bg-amber-400"></span>
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-2 text-[10px] mt-0.5 font-semibold">
-                <span className="text-amber-400">Frames: {player1FramesWon}</span>
-                {player1HighestBreak > 0 && (
-                  <span className="text-slate-400 font-normal">High: {player1HighestBreak}</span>
-                )}
+              <div className="flex items-center gap-1.5 text-[9px] sm:text-[10px] text-slate-400 font-semibold">
+                <span className="text-amber-400 font-bold">F:{player1FramesWon}</span>
+                {player1HighestBreak > 0 && <span className="hidden sm:inline">H:{player1HighestBreak}</span>}
               </div>
             </div>
-            <div className="text-3xl font-black text-white pl-2 tracking-tight font-mono">
+            <div className="text-xl sm:text-3xl font-black text-white px-1 font-mono shrink-0">
               {player1Score}
             </div>
           </div>
 
           {/* Center Match Frame & Countdown Hub */}
-          <div className="flex flex-col items-center justify-center min-w-[130px]">
-            <div className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
-              FRAME {frameNumber} {totalFrames > 1 ? `OF ${totalFrames}` : ""}
+          <div className="flex flex-col items-center justify-center shrink-0 px-1">
+            <div className="text-[9px] sm:text-[10px] font-black tracking-wider text-slate-400 uppercase whitespace-nowrap">
+              FRAME {frameNumber}{totalFrames > 1 ? `/${totalFrames}` : ""}
             </div>
 
-            <div className="flex items-center gap-1 text-xs font-bold mt-0.5">
+            <div className="flex items-center gap-1 text-[10px] sm:text-xs font-bold mt-0.5">
               {isMyTurn ? (
-                <span className="text-emerald-400 flex items-center gap-1 animate-pulse font-extrabold tracking-wide">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" /> YOUR TURN
+                <span className="text-emerald-400 flex items-center gap-1 animate-pulse font-extrabold tracking-wide text-[10px] sm:text-xs">
+                  <Sparkles className="w-3 h-3 text-emerald-400" /> YOUR TURN
                 </span>
               ) : (
-                <span className="text-rose-400 flex items-center gap-1 font-bold">
-                  <Clock className="w-3.5 h-3.5 text-rose-400" /> OPPONENT
+                <span className="text-rose-400 flex items-center gap-1 font-bold text-[10px] sm:text-xs">
+                  <Clock className="w-3 h-3 text-rose-400" /> OPPONENT
                 </span>
               )}
             </div>
 
             {/* Countdown Progress Bar */}
-            <div className="w-28 h-1.5 bg-slate-950 rounded-full mt-1.5 overflow-hidden border border-slate-700/80">
+            <div className="w-16 sm:w-28 h-1.5 bg-slate-950 rounded-full mt-1 overflow-hidden border border-slate-700/80">
               <div
                 className={`h-full transition-all duration-300 rounded-full ${
                   timeLeft <= 5
@@ -189,55 +268,55 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
                 style={{ width: `${timeRatio * 100}%` }}
               />
             </div>
-            <span className="text-[10px] font-mono font-bold text-slate-400 mt-0.5">
+            <span className="text-[9px] sm:text-[10px] font-mono font-bold text-slate-400 mt-0.5">
               {timeLeft}s
             </span>
           </div>
 
           {/* Player 2 Card */}
           <div
-            className={`flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-300 ${
+            className={`flex items-center gap-1.5 sm:gap-3 p-1.5 sm:px-4 sm:py-2 rounded-xl transition-all duration-300 flex-1 md:flex-initial justify-end ${
               currentSeat === 1
                 ? "bg-gradient-to-l from-blue-500/20 via-blue-500/10 to-slate-900/40 border-2 border-blue-400 shadow-[0_0_25px_rgba(59,130,246,0.25)]"
                 : "bg-slate-800/40 border border-slate-700/50 opacity-85"
             }`}
           >
-            <div className="text-3xl font-black text-white pr-2 tracking-tight font-mono">
+            <div className="text-xl sm:text-3xl font-black text-white px-1 font-mono shrink-0">
               {player2Score}
             </div>
-            <div className="text-right">
-              <div className="flex items-center justify-end gap-1.5">
+            <div className="min-w-0 flex-1 text-right">
+              <div className="flex items-center justify-end gap-1">
                 {currentSeat === 1 && (
-                  <span className="relative flex h-2 w-2">
+                  <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2 shrink-0">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-400"></span>
+                    <span className="relative inline-flex rounded-full h-full w-full bg-blue-400"></span>
                   </span>
                 )}
-                <span className="text-xs font-bold text-slate-100 max-w-[110px] truncate">
+                <span className="text-[11px] sm:text-xs font-bold text-slate-100 truncate max-w-[70px] sm:max-w-[110px]">
                   {mySeat === 1 ? (player2Name ? `${player2Name} (You)` : "You") : mode === "ai" ? "AI Bot" : (player2Name || "Player 2")}
                 </span>
               </div>
-              <div className="flex items-center justify-end gap-2 text-[10px] mt-0.5 font-semibold">
-                {player2HighestBreak > 0 && (
-                  <span className="text-slate-400 font-normal">High: {player2HighestBreak}</span>
-                )}
-                <span className="text-blue-400">Frames: {player2FramesWon}</span>
+              <div className="flex items-center justify-end gap-1.5 text-[9px] sm:text-[10px] text-slate-400 font-semibold">
+                {player2HighestBreak > 0 && <span className="hidden sm:inline">H:{player2HighestBreak}</span>}
+                <span className="text-blue-400 font-bold">F:{player2FramesWon}</span>
               </div>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-blue-400 flex items-center justify-center font-black text-white shadow-md text-xs border border-blue-300/40">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-gradient-to-tr from-blue-600 to-blue-400 flex items-center justify-center font-black text-white shadow-md text-[10px] sm:text-xs border border-blue-300/40 shrink-0">
               {mode === "ai" ? "AI" : "P2"}
             </div>
           </div>
-        </div>
 
-        {/* Audio Toggle */}
-        <button
-          onClick={() => setSoundEnabled(!soundEnabled)}
-          className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs border border-slate-700/60 hover:scale-105 active:scale-95"
-          title={soundEnabled ? "Mute Audio" : "Unmute Audio"}
-        >
-          {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
-        </button>
+          {/* Desktop Audio Toggle (Hidden on mobile) */}
+          <div className="hidden md:flex items-center">
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs border border-slate-700/60 hover:scale-105 active:scale-95"
+              title={soundEnabled ? "Mute Audio" : "Unmute Audio"}
+            >
+              {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* ── 2. Compact Centered Target & Break Strip ──────────────────────── */}

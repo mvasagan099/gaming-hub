@@ -87,6 +87,15 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
   // 3D Perspective & Camera View State
   const [cameraMode, setCameraMode] = useState<"3d" | "2d">("3d");
 
+  // Auto-rotate board to vertical on mobile viewports (< 768px)
+  const [isRotated, setIsRotated] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+  const [showMobilePanel, setShowMobilePanel] = useState(false);
+
   // Carrom-Style Aiming & Pull-Back Power State
   const [aimAngle, setAimAngle] = useState(0);
   const [cuePower, setCuePower] = useState(0.45);
@@ -348,6 +357,31 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     return () => clearTimeout(aiTimeout);
   }, [currentSeat, mode, isSimulating, frameStatus, playKeyframes, syncAuthoritativeState]);
 
+  // Canvas Touch & Mouse Pointer Coordinates (with Rotation & 3D Unprojection)
+  const getPointerCoords = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { clickX: 0, clickY: 0 };
+    const rect = canvas.getBoundingClientRect();
+
+    if (isRotated) {
+      // Screen space on canvas element (0 to rect.width, 0 to rect.height)
+      const normX = (e.clientX - rect.left) * (480 / rect.width);
+      const normY = (e.clientY - rect.top) * (960 / rect.height);
+
+      // Inverse of: X' = y, Y' = 960 - x
+      // Therefore: x = 960 - Y', y = X'
+      const clickX = 960 - normY;
+      const clickY = normX;
+      return { clickX, clickY };
+    } else {
+      const scale = SNOOKER_TABLE_WIDTH / rect.width;
+      const rawX = (e.clientX - rect.left) * scale;
+      const rawY = (e.clientY - rect.top) * scale;
+      const unproj = Snooker3DCamera.unproject(rawX, rawY, rect.width * scale, (rect.width / 2) * scale, cameraMode === "3d");
+      return { clickX: unproj.x, clickY: unproj.y };
+    }
+  };
+
   // Canvas Touch & Mouse Pointer Interaction (with 3D Unprojection)
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
@@ -362,15 +396,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
       // Fallback
     }
 
-    const rect = canvas.getBoundingClientRect();
-    const scale = SNOOKER_TABLE_WIDTH / rect.width;
-    const rawX = (e.clientX - rect.left) * scale;
-    const rawY = (e.clientY - rect.top) * scale;
-
-    // Unproject 3D screen position back to 2D table coordinates
-    const unproj = Snooker3DCamera.unproject(rawX, rawY, rect.width * scale, (rect.width / 2) * scale, cameraMode === "3d");
-    const clickX = unproj.x;
-    const clickY = unproj.y;
+    const { clickX, clickY } = getPointerCoords(e);
 
     const cueBall = balls.find((b) => b.type === "cue");
     if (!cueBall) return;
@@ -439,16 +465,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (isSimulating || (mode === "ai" && currentSeat !== 0) || (mode === "multiplayer" && currentSeat !== mySeat)) return;
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const scale = SNOOKER_TABLE_WIDTH / rect.width;
-    const rawX = (e.clientX - rect.left) * scale;
-    const rawY = (e.clientY - rect.top) * scale;
-
-    const unproj = Snooker3DCamera.unproject(rawX, rawY, rect.width * scale, (rect.width / 2) * scale, cameraMode === "3d");
-    const clickX = unproj.x;
-    const clickY = unproj.y;
+    const { clickX, clickY } = getPointerCoords(e);
 
     const cueBall = balls.find((b) => b.type === "cue");
     if (!cueBall || cueBall.pocketed || cueBallInHand) return;
@@ -606,6 +623,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     nominatedBall,
     cameraMode,
     isMyTurn,
+    isRotated,
   });
 
   // Sync live render refs continuously without restarting the animation loop
@@ -622,6 +640,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
       nominatedBall,
       cameraMode,
       isMyTurn,
+      isRotated,
     };
   });
 
@@ -646,6 +665,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
         nominatedBall: curNominatedBall,
         cameraMode: curCameraMode,
         isMyTurn: curIsMyTurn,
+        isRotated: curIsRotated,
       } = renderStateRef.current;
 
       const w = canvas.width;
@@ -654,29 +674,63 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 
       ctx.clearRect(0, 0, w, h);
 
-      // 1. Draw 3D Snooker Table (Baulk line, D, spots, pockets)
-      SnookerTableRenderer.drawTable(ctx, w, h, is3D);
+      if (curIsRotated) {
+        // Vertical Rotated Table Rendering (90 deg Counterclockwise)
+        ctx.save();
+        ctx.translate(0, h);
+        ctx.rotate(-Math.PI / 2);
 
-      // 2. Draw 22 Snooker Balls with 3D Depth Scaling
-      const cueBall = curBalls.find((b) => b.type === "cue");
-      const legalTypes = SnookerRulesEngine.getLegalBallTypes(curTargetBall, curFreeBallAvailable, curNominatedBall);
+        // 1. Draw 3D Snooker Table (Baulk line, D, spots, pockets)
+        SnookerTableRenderer.drawTable(ctx, 960, 480, is3D);
 
-      for (const b of curBalls) {
-        const isTargetOn = legalTypes.includes(b.type);
-        SnookerBallRenderer.drawBall(ctx, b, w, isTargetOn, is3D, h);
-      }
+        // 2. Draw 22 Snooker Balls with 3D Depth Scaling
+        const cueBall = curBalls.find((b) => b.type === "cue");
+        const legalTypes = SnookerRulesEngine.getLegalBallTypes(curTargetBall, curFreeBallAvailable, curNominatedBall);
 
-      // 3. Draw 3D Cue Stick and Laser Aim Guide (Only when it's your turn and not simulating)
-      const shouldDrawCue =
-        curIsMyTurn &&
-        cueBall &&
-        !cueBall.pocketed &&
-        !curCueBallInHand &&
-        (!curIsSimulating || curStrikeProgress > 0);
+        for (const b of curBalls) {
+          const isTargetOn = legalTypes.includes(b.type);
+          SnookerBallRenderer.drawBall(ctx, b, 960, isTargetOn, is3D, 480);
+        }
 
-      if (shouldDrawCue) {
-        SnookerCueRenderer.drawAimGuide(ctx, cueBall, curBalls, curAimAngle, w, is3D, h);
-        SnookerCueRenderer.drawCue(ctx, cueBall, curAimAngle, curCuePower, w, curStrikeProgress, is3D, h);
+        // 3. Draw 3D Cue Stick and Laser Aim Guide (Only when it's your turn and not simulating)
+        const shouldDrawCue =
+          curIsMyTurn &&
+          cueBall &&
+          !cueBall.pocketed &&
+          !curCueBallInHand &&
+          (!curIsSimulating || curStrikeProgress > 0);
+
+        if (shouldDrawCue) {
+          SnookerCueRenderer.drawAimGuide(ctx, cueBall, curBalls, curAimAngle, 960, is3D, 480);
+          SnookerCueRenderer.drawCue(ctx, cueBall, curAimAngle, curCuePower, 960, curStrikeProgress, is3D, 480);
+        }
+
+        ctx.restore();
+      } else {
+        // Standard Horizontal Landscape Table Rendering
+        SnookerTableRenderer.drawTable(ctx, w, h, is3D);
+
+        // Draw Balls
+        const cueBall = curBalls.find((b) => b.type === "cue");
+        const legalTypes = SnookerRulesEngine.getLegalBallTypes(curTargetBall, curFreeBallAvailable, curNominatedBall);
+
+        for (const b of curBalls) {
+          const isTargetOn = legalTypes.includes(b.type);
+          SnookerBallRenderer.drawBall(ctx, b, w, isTargetOn, is3D, h);
+        }
+
+        // Draw Cue Stick and Laser Aim Guide
+        const shouldDrawCue =
+          curIsMyTurn &&
+          cueBall &&
+          !cueBall.pocketed &&
+          !curCueBallInHand &&
+          (!curIsSimulating || curStrikeProgress > 0);
+
+        if (shouldDrawCue) {
+          SnookerCueRenderer.drawAimGuide(ctx, cueBall, curBalls, curAimAngle, w, is3D, h);
+          SnookerCueRenderer.drawCue(ctx, cueBall, curAimAngle, curCuePower, w, curStrikeProgress, is3D, h);
+        }
       }
 
       animId = requestAnimationFrame(render);
@@ -685,11 +739,12 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     render();
     return () => cancelAnimationFrame(animId);
   }, []); // Run ONCE on mount! Zero re-subscriptions or animation loop cancellations on mouse move!
+
   const showColorPicker = isMyTurn && !isSimulating && (frameStatus === "COLOR_PHASE" || frameStatus === "FREE_BALL");
 
   return (
     <GameWrapper title="Snooker 3D" gameId="snooker" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="relative min-h-[calc(100vh-64px)] w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-between p-3 md:p-4 select-none overflow-hidden">
+      <div className="relative h-full w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-between p-2 sm:p-3 select-none overflow-hidden">
         {/* Top Snooker Championship Broadcast HUD */}
         <SnookerHUD
           player1Name={player1Name}
@@ -723,6 +778,10 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
           onBack={onBack}
           soundEnabled={soundEnabled}
           setSoundEnabled={setSoundEnabled}
+          isRotated={isRotated}
+          onToggleRotate={() => setIsRotated((prev) => !prev)}
+          showMobileMatchPanelButton={mode === "multiplayer"}
+          onOpenMobileMatchPanel={() => setShowMobilePanel(true)}
         />
 
         {/* Color Nomination Overlay */}
@@ -735,14 +794,14 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
         )}
 
         {/* Main Snooker Arena & Tactical Control Dock */}
-        <div className="w-full flex-1 flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-5 max-w-7xl px-2 my-auto overflow-y-auto lg:overflow-visible">
+        <div className="w-full flex-1 flex flex-col lg:flex-row items-center justify-center gap-3 sm:gap-4 lg:gap-5 max-w-7xl px-1 sm:px-2 my-auto overflow-y-auto lg:overflow-visible">
           {/* Snooker Table Main Canvas Container */}
           <div className="relative flex-1 flex items-center justify-center w-full max-w-5xl">
-            <div className="relative w-full aspect-[2/1] rounded-3xl p-1 bg-gradient-to-b from-amber-700/30 via-slate-900/60 to-slate-950/80 shadow-[0_25px_60px_rgba(0,0,0,0.9)] border border-slate-700/60">
+            <div className={`relative ${isRotated ? 'aspect-[1/2] max-h-[min(52vh,480px)] w-auto' : 'aspect-[2/1] w-full max-w-5xl'} rounded-3xl p-1 bg-gradient-to-b from-amber-700/30 via-slate-900/60 to-slate-950/80 shadow-[0_25px_60px_rgba(0,0,0,0.9)] border border-slate-700/60 flex items-center justify-center overflow-hidden`}>
               <canvas
                 ref={canvasRef}
-                width={960}
-                height={480}
+                width={isRotated ? 480 : 960}
+                height={isRotated ? 960 : 480}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
@@ -753,12 +812,12 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 
               {/* Floating Pull-Back Power Meter Overlay inside Table */}
               {isAiming && isMyTurn && !isSimulating && dragRef.current.isPulling && (
-                <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 px-4 sm:px-6 py-2 sm:py-2.5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] flex flex-col items-center gap-1.5 animate-in fade-in zoom-in-95 pointer-events-none z-30">
+                <div className="absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 px-3.5 sm:px-6 py-1.5 sm:py-2.5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] flex flex-col items-center gap-1 sm:gap-1.5 animate-in fade-in zoom-in-95 pointer-events-none z-30">
                   <div className="flex items-center gap-2 sm:gap-3">
                     <span className="text-[9px] sm:text-[10px] font-black tracking-widest text-slate-400 uppercase">
                       POWER
                     </span>
-                    <div className="w-28 sm:w-40 h-2.5 sm:h-3 bg-slate-950 rounded-full p-0.5 border border-slate-800 overflow-hidden">
+                    <div className="w-24 sm:w-40 h-2 sm:h-3 bg-slate-950 rounded-full p-0.5 border border-slate-800 overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all duration-75 ${
                           cuePower < 0.05
@@ -785,15 +844,15 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
           </div>
 
           {/* Right Tactical Dock (Controls + Multiplayer Match Status) */}
-          <div className="flex flex-col sm:flex-row lg:flex-col gap-3 w-full lg:w-56 shrink-0 z-20 justify-center items-stretch sm:items-center lg:items-stretch">
+          <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 sm:gap-3 w-full lg:w-56 shrink-0 z-20 justify-center items-stretch sm:items-center lg:items-stretch">
             {mode === "multiplayer" && (
-              <div className="w-full">
+              <div className="hidden xl:block w-full">
                 <MultiplayerMatchPanel compact />
               </div>
             )}
 
             {/* Tactical Control Deck */}
-            <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 rounded-3xl p-3 sm:p-3.5 shadow-2xl flex flex-row lg:flex-col gap-3 sm:gap-3.5 items-center justify-around w-full">
+            <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 rounded-3xl p-2 sm:p-3.5 shadow-2xl flex flex-row lg:flex-col gap-2 sm:gap-3.5 items-center justify-around w-full max-w-lg lg:max-w-none">
               <SnookerPowerControl
                 power={cuePower}
                 setPower={setCuePower}
@@ -810,13 +869,33 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
               <button
                 onClick={handleDirectShoot}
                 disabled={isSimulating || cueBallInHand || !isMyTurn}
-                className="py-2.5 sm:py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 hover:brightness-110 disabled:opacity-40 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/25 transition-all uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] shrink-0"
+                className="py-2 sm:py-3 px-3.5 sm:px-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 hover:brightness-110 disabled:opacity-40 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/25 transition-all uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] shrink-0"
               >
                 STRIKE
               </button>
             </div>
           </div>
         </div>
+
+        {/* Centered Multiplayer Match Panel Modal for Mobile */}
+        {mode === "multiplayer" && showMobilePanel && (
+          <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="relative w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col animate-in fade-in zoom-in-95">
+              <div className="p-3 bg-slate-800/80 border-b border-slate-700 flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-amber-400">Match Details & Chat</span>
+                <button
+                  onClick={() => setShowMobilePanel(false)}
+                  className="px-2.5 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="p-3 overflow-y-auto flex-1">
+                <MultiplayerMatchPanel />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Bottom Control Helpers */}
         <div className="hidden sm:flex text-[11px] text-slate-500 font-medium items-center gap-4 sm:gap-6 pb-1">

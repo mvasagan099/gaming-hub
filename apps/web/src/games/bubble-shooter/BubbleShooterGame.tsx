@@ -7,7 +7,7 @@ import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPane
 import { BUBBLE_SHOOTER_VISUAL_CONFIG, prefersReducedMotion } from './constants/bubbleShooterVisualConfig';
 import { Bubble3DRenderer } from './utils/bubble3DRenderer';
 import { BubbleShooterOverlays } from './components/BubbleShooterOverlays';
-import { Trophy, Zap, Flame, RefreshCcw, HelpCircle, Shield } from 'lucide-react';
+import { Trophy, Zap, Flame, RefreshCcw, HelpCircle, Shield, Users, X, Swords } from 'lucide-react';
 
 interface BubbleShooterProps {
   mode: 'ai' | 'multiplayer';
@@ -170,6 +170,7 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   const [lose, setLose] = useState(false);
   const [rewardClaimed, setRewardClaimed] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [showMobileMatchModal, setShowMobileMatchModal] = useState(false);
 
   // Game State Refs
   const gridRef = useRef<GridBubble[]>([]);
@@ -929,42 +930,113 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   const winnerSeat = winnerSeats[0] != null ? winnerSeats[0] : null;
   const winnerName = winnerSeat != null ? (namesBySeat[winnerSeat] ?? `Player ${winnerSeat + 1}`) : null;
 
+  const oppPlayer = serverPlayers.find((p) => p.seat !== mySeat);
+  const oppScore = oppPlayer?.score ?? 0;
+  const oppName = oppPlayer ? (namesBySeat[oppPlayer.seat] ?? oppPlayer.name) : 'Opponent';
+
   return (
     <GameWrapper title="Bubble Shooter 3D" gameId="bubble-shooter" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-6 w-full max-w-6xl relative mx-auto h-full p-2 lg:p-4 select-none overflow-y-auto">
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-6 w-full max-w-6xl relative mx-auto h-full p-1.5 sm:p-2 lg:p-4 select-none overflow-hidden lg:overflow-y-auto">
         
         {/* CENTER PLAYFIELD CONTAINER */}
-        <div className="relative flex flex-col items-center justify-center w-full max-w-[min(94vw,72dvh,400px)] shrink-0">
+        <div className="relative flex flex-col items-center justify-center w-full max-w-[min(92vw,calc(100vh-130px),380px)] shrink-0">
           
-          {/* TOP MODERN HUD PILLS */}
-          <div className="w-full flex items-center justify-between gap-2 mb-2 px-1">
-            {/* Score Pill */}
-            <div className="flex-1 py-1.5 px-3 bg-slate-900/90 border border-amber-500/40 rounded-2xl flex items-center justify-between shadow-lg">
-              <div className="flex items-center gap-1.5">
-                <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Score</span>
-              </div>
-              <span className="text-sm font-black font-mono text-white">{score.toLocaleString()}</span>
-            </div>
+          {/* ═══ LIVE MULTIPLAYER SCOREBOARD CARD ═══ */}
+          {isMultiplayer ? (
+            <div className="w-full mb-2 bg-[#0c101d]/95 backdrop-blur-xl border border-slate-800/90 rounded-2xl p-2 sm:p-2.5 shadow-xl select-none">
+              <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+                {/* You */}
+                <div className={`flex-1 flex items-center gap-2 p-1.5 sm:p-2 rounded-xl border transition-all ${
+                  score >= oppScore && score > 0
+                    ? 'bg-emerald-950/30 border-emerald-500/40 shadow-sm'
+                    : 'bg-slate-900/80 border-slate-800'
+                }`}>
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center font-black text-[10px] text-indigo-300 shrink-0">
+                    YOU
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                      <span>You</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    </div>
+                    <div className="text-base sm:text-lg font-black font-mono text-white leading-none mt-0.5">
+                      {score.toLocaleString()} <span className="text-[9px] font-bold text-slate-500">pts</span>
+                    </div>
+                  </div>
+                </div>
 
-            {/* Shots Until Drop Pill */}
-            <div className="py-1.5 px-3 bg-slate-900/90 border border-rose-500/40 rounded-2xl flex items-center gap-2 shadow-lg">
-              <Flame className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-              <div className="text-center">
-                <span className="text-[9px] font-bold text-slate-400 uppercase block">Drop in</span>
-                <span className="text-xs font-black text-rose-400">{shotsUntilDrop} Shots</span>
+                {/* Center match info */}
+                <div className="flex flex-col items-center justify-center px-0.5 shrink-0">
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 text-[9px] font-black">
+                    <Flame className="w-2.5 h-2.5" />
+                    <span>Drop: {shotsUntilDrop}</span>
+                  </div>
+                  <button
+                    onClick={() => setShowMobileMatchModal(true)}
+                    className="mt-1 text-[9px] font-bold text-indigo-400 hover:text-indigo-300 underline flex items-center gap-0.5 cursor-pointer"
+                    title="View live opponent board"
+                  >
+                    <Users className="w-3 h-3" /> Screen
+                  </button>
+                </div>
+
+                {/* Opponent */}
+                <div className={`flex-1 flex items-center justify-end gap-2 p-1.5 sm:p-2 rounded-xl border transition-all ${
+                  oppScore > score
+                    ? 'bg-amber-950/30 border-amber-500/40 shadow-sm'
+                    : 'bg-slate-900/80 border-slate-800'
+                }`}>
+                  <div className="min-w-0 flex-1 text-right">
+                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                      {oppName}
+                    </div>
+                    <div className="text-base sm:text-lg font-black font-mono text-amber-400 leading-none mt-0.5">
+                      {oppScore.toLocaleString()} <span className="text-[9px] font-bold text-slate-500">pts</span>
+                    </div>
+                  </div>
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center font-black text-[10px] text-amber-400 shrink-0 uppercase">
+                    {oppName.slice(0, 2)}
+                  </div>
+                </div>
+
+                {/* Rules */}
+                <button
+                  onClick={() => setShowRules(true)}
+                  className="p-2 bg-slate-900/90 border border-slate-700 hover:border-slate-600 rounded-xl text-slate-400 hover:text-white transition-colors shrink-0 cursor-pointer"
+                  title="View Rules"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
+          ) : (
+            /* Single-player TOP MODERN HUD PILLS */
+            <div className="w-full flex items-center justify-between gap-1.5 sm:gap-2 mb-2 px-1">
+              <div className="flex-1 py-1.5 px-2.5 sm:px-3 bg-slate-900/90 border border-amber-500/40 rounded-2xl flex items-center justify-between shadow-lg">
+                <div className="flex items-center gap-1.5">
+                  <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Score</span>
+                </div>
+                <span className="text-sm font-black font-mono text-white">{score.toLocaleString()}</span>
+              </div>
 
-            {/* Rules Button */}
-            <button
-              onClick={() => setShowRules(true)}
-              className="p-2 bg-slate-900/90 border border-indigo-500/40 hover:border-indigo-400 rounded-2xl text-indigo-400 transition-colors shadow-lg shrink-0"
-              title="View Rules"
-            >
-              <HelpCircle className="w-4 h-4" />
-            </button>
-          </div>
+              <div className="py-1.5 px-2.5 sm:px-3 bg-slate-900/90 border border-rose-500/40 rounded-2xl flex items-center gap-1.5 shadow-lg">
+                <Flame className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                <div className="text-center">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase block leading-none">Drop in</span>
+                  <span className="text-xs font-black text-rose-400 leading-none mt-0.5">{shotsUntilDrop} Shots</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowRules(true)}
+                className="p-2 bg-slate-900/90 border border-slate-700 hover:border-slate-600 rounded-2xl text-slate-400 hover:text-white transition-colors shadow-lg shrink-0 cursor-pointer"
+                title="View Rules"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           {/* MAIN 3D CANVAS PLAYFIELD */}
           <div className="relative w-full aspect-[384/580] bg-[#070b14] rounded-3xl overflow-hidden border-2 border-indigo-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center">
@@ -1001,9 +1073,9 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
           </div>
         </div>
 
-        {/* MULTIPLAYER / OPPONENT SIDE PANEL */}
+        {/* MULTIPLAYER / OPPONENT SIDE PANEL (DESKTOP >= lg) */}
         {isMultiplayer && (
-          <div className="w-full max-w-xs flex flex-col gap-4">
+          <div className="hidden lg:flex w-full max-w-xs flex-col gap-4">
             <div className="bg-slate-900/90 p-5 rounded-3xl border border-slate-800 shadow-2xl">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-3 text-center">Scoreboard</span>
               <div className="space-y-2">
@@ -1052,6 +1124,83 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
 
             <div className="hidden xl:block">
               <MultiplayerMatchPanel compact />
+            </div>
+          </div>
+        )}
+
+        {/* ═══ MOBILE CENTERED MATCH DETAILS & LIVE OPPONENT MODAL ═══ */}
+        {isMultiplayer && showMobileMatchModal && (
+          <div className="lg:hidden fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+            <div
+              className="fixed inset-0"
+              onClick={() => setShowMobileMatchModal(false)}
+              aria-hidden="true"
+            />
+            <div className="relative z-10 bg-slate-900/98 border border-slate-700/80 rounded-3xl p-4 max-h-[88vh] w-full max-w-sm overflow-y-auto flex flex-col gap-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.8)] animate-in zoom-in-95 duration-200 custom-scrollbar">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                  <Users className="w-4 h-4 text-indigo-400" /> Match Scoreboard & Live Board
+                </h3>
+                <button
+                  onClick={() => setShowMobileMatchModal(false)}
+                  className="p-1.5 rounded-full text-slate-400 hover:text-white bg-slate-800 transition-colors cursor-pointer"
+                  aria-label="Close modal"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Scoreboard List */}
+              <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Live Scores</span>
+                <div className="space-y-1.5">
+                  {serverPlayers.map((p) => {
+                    const isMe = p.seat === mySeat;
+                    const statusColor =
+                      p.status === 'won'
+                        ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/40'
+                        : p.status === 'eliminated'
+                          ? 'text-rose-400 border-rose-500/40 bg-rose-950/40'
+                          : 'text-slate-300 border-slate-700 bg-slate-800/60';
+                    const statusLabel =
+                      p.status === 'won' ? 'Won' : p.status === 'eliminated' ? 'Out' : 'Playing';
+                    return (
+                      <div
+                        key={p.seat}
+                        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-left ${
+                          isMe ? 'border-indigo-500/50 bg-indigo-950/40' : 'border-slate-800 bg-slate-900/40'
+                        }`}
+                      >
+                        <span className="text-xs font-bold text-slate-200 truncate">
+                          {isMe ? 'You' : (namesBySeat[p.seat] ?? p.name)}
+                          {isMe && <span className="ml-1 text-indigo-400">•</span>}
+                        </span>
+                        <span className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs font-black text-amber-400">{p.score}</span>
+                          <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${statusColor}`}>
+                            {statusLabel}
+                          </span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Live Opponent Preview */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Opponent Screen</span>
+                {serverPlayers
+                  .filter((p) => p.seat !== mySeat)
+                  .map((opp) => (
+                    <OpponentMiniBoard key={opp.seat} player={opp} name={namesBySeat[opp.seat] ?? opp.name} />
+                  ))}
+              </div>
+
+              {/* Match Controls & Chat */}
+              <div className="w-full flex justify-center pt-1 border-t border-slate-800/80">
+                <MultiplayerMatchPanel compact={false} showControls={true} showChat={true} className="w-full max-w-full" />
+              </div>
             </div>
           </div>
         )}
