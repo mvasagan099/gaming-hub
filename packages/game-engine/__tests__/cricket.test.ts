@@ -57,7 +57,7 @@ describe("CricketEngine", () => {
     expect(s.battingTeam).toBeDefined();
     expect(s.bowlingTeam).toBeDefined();
     expect(s.currentActor).toBe("bowler");
-    expect(s.totalOvers).toBe(5);
+    expect(s.totalOvers).toBe(1);
   });
 
   it("can customize match type", () => {
@@ -92,14 +92,15 @@ describe("CricketEngine", () => {
     expect(s.balls.length).toBe(1);
   });
 
-  it("advances to the next over after 6 balls", () => {
+  it("advances to the second innings after 1 over (6 balls)", () => {
     const eng = setup();
     for (let i = 0; i < 6; i++) {
       const r = ball(eng);
       expect(r.ok).toBe(true);
     }
     const s = eng.state;
-    expect(s.currentOver).toBe(1);
+    expect(s.inning).toBe(2);
+    expect(s.currentOver).toBe(0);
     expect(s.currentBall).toBe(0);
   });
 

@@ -93,38 +93,38 @@ export class CricketHUDManager {
     if (this.mode === "ai") {
       const bestBg = this.scene.add.graphics();
       bestBg.fillStyle(0x0f172a, 0.9); // Dark slate
-      bestBg.fillRoundedRect(CENTER_X - 50, 2, 100, 20, 10);
+      bestBg.fillRoundedRect(CENTER_X - 42, 14, 84, 16, 8);
       bestBg.lineStyle(1.5, 0xf59e0b, 0.6); // Amber glow border
-      bestBg.strokeRoundedRect(CENTER_X - 50, 2, 100, 20, 10);
+      bestBg.strokeRoundedRect(CENTER_X - 42, 14, 84, 16, 8);
       bestBg.setDepth(depth + 2);
       
-      this.bestScoreText = this.scene.add.text(CENTER_X, 12, "BEST: 0", {
-        fontSize: "11px", color: "#f59e0b", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+      this.bestScoreText = this.scene.add.text(CENTER_X, 22, "BEST: 0", {
+        fontSize: "9px", color: "#f59e0b", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
       }).setOrigin(0.5).setDepth(depth + 3);
     }
 
     // Innings pill (used in multiplayer)
-    this.inningsText = this.scene.add.text(CENTER_X, 12, "INN 1", {
-      fontSize: "11px", color: "#f59e0b", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+    this.inningsText = this.scene.add.text(CENTER_X, 22, "INN 1", {
+      fontSize: "9px", color: "#f59e0b", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
     }).setOrigin(0.5).setDepth(depth + 3).setVisible(this.mode === "multiplayer");
 
     // Card background (Broadcast style)
     const bg = this.scene.add.graphics();
     bg.fillGradientStyle(0x1e3a8a, 0x1e3a8a, 0x0f172a, 0x0f172a, 0.92); // Blue gradient
-    bg.fillRoundedRect(CENTER_X - 80, 14, 160, 60, 10);
+    bg.fillRoundedRect(CENTER_X - 65, 32, 130, 44, 8);
     bg.lineStyle(2, 0x60a5fa, 0.6); // Light blue border
-    bg.strokeRoundedRect(CENTER_X - 80, 14, 160, 60, 10);
+    bg.strokeRoundedRect(CENTER_X - 65, 32, 130, 44, 8);
     bg.setDepth(depth);
 
     // Runs
-    this.runsText = this.scene.add.text(CENTER_X, 40, "000", {
-      fontSize: "36px", fontFamily: "Outfit, sans-serif", fontStyle: "900", color: "#ffffff", stroke: "#000000", strokeThickness: 3
+    this.runsText = this.scene.add.text(CENTER_X, 48, "000", {
+      fontSize: "25px", fontFamily: "Outfit, sans-serif", fontStyle: "900", color: "#ffffff", stroke: "#000000", strokeThickness: 2.5
     }).setOrigin(0.5).setDepth(depth + 1);
     this.runsText.setShadow(0, 2, 'rgba(0,0,0,0.5)', 4, true, false);
 
     // Wickets (small, under the runs)
-    this.wicketsText = this.scene.add.text(CENTER_X, 64, "WICKETS: 0", {
-      fontSize: "12px", color: "#cbd5e1", fontStyle: "bold", fontFamily: "Outfit, sans-serif", stroke: "#000000", strokeThickness: 2
+    this.wicketsText = this.scene.add.text(CENTER_X, 65, "WICKETS: 0", {
+      fontSize: "10px", color: "#cbd5e1", fontStyle: "bold", fontFamily: "Outfit, sans-serif", stroke: "#000000", strokeThickness: 1.5
     }).setOrigin(0.5).setDepth(depth + 1);
 
     // Run rate (only meaningful for a live multiplayer match)
@@ -154,9 +154,9 @@ export class CricketHUDManager {
     }
 
     // Status Text (e.g. Next ball in 2...)
-    this.statusText = this.scene.add.text(CENTER_X, 118, this.role === 'batting' ? "Ready for First Ball!" : "Your turn to bowl!", {
-      fontSize: "16px", color: COLORS.accent, fontFamily: "Outfit, sans-serif", fontStyle: "bold",
-      align: "center", stroke: "#000000", strokeThickness: 3
+    this.statusText = this.scene.add.text(CENTER_X, 94, this.role === 'batting' ? "Ready for First Ball!" : "Your turn to bowl!", {
+      fontSize: "13px", color: COLORS.accent, fontFamily: "Outfit, sans-serif", fontStyle: "bold",
+      align: "center", stroke: "#000000", strokeThickness: 2.5
     }).setOrigin(0.5).setDepth(depth);
     this.statusText.setShadow(0, 2, 'rgba(0,0,0,0.8)', 4, true, false);
 
@@ -187,52 +187,53 @@ export class CricketHUDManager {
 
 
   private createPowerBar() {
-    const barWidth = 22;
-    const barHeight = 260;
-    const barX = GAME_W - 55;
-    const barY = 275;
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const barWidth = 8;
+    const barHeight = 220;
+    const barX = isMobile ? (CENTER_X + 120) : (CENTER_X + 235);
+    const barY = 280;
     const depth = 20;
 
     // Power Label above bar
-    const label = this.scene.add.text(barX + barWidth / 2, barY - 14, "POWER", {
-      fontSize: "11px", color: "#38bdf8", fontStyle: "900", fontFamily: "Outfit, sans-serif"
+    const label = this.scene.add.text(barX + barWidth / 2, barY - 11, "POWER", {
+      fontSize: "9px", color: "#38bdf8", fontStyle: "900", fontFamily: "Outfit, sans-serif"
     }).setOrigin(0.5).setDepth(depth + 1);
 
     // Bar background with glowing border
     const bg = this.scene.add.graphics();
     bg.fillStyle(0x0f172a, 0.92);
-    bg.fillRoundedRect(barX - 5, barY - 5, barWidth + 10, barHeight + 10, 12);
-    bg.lineStyle(2, 0x38bdf8, 0.55); // Sky blue glow border
-    bg.strokeRoundedRect(barX - 5, barY - 5, barWidth + 10, barHeight + 10, 12);
+    bg.fillRoundedRect(barX - 3, barY - 3, barWidth + 6, barHeight + 6, 6);
+    bg.lineStyle(1.5, 0x38bdf8, 0.6); // Sky blue glow border
+    bg.strokeRoundedRect(barX - 3, barY - 3, barWidth + 6, barHeight + 6, 6);
     bg.setDepth(depth);
 
     // Gradient Power Sections (Vertical: Red top/bottom, Yellow transitions, Green sweet spot center)
     // 1. Top Red (Too strong / overhit)
     bg.fillGradientStyle(0xf43f5e, 0xf43f5e, 0x9f1239, 0x9f1239, 1);
-    bg.fillRoundedRect(barX, barY, barWidth, 38, 4);
+    bg.fillRoundedRect(barX, barY, barWidth, 34, 2);
 
     // 2. Bottom Red (Too weak)
-    bg.fillRoundedRect(barX, barY + barHeight - 38, barWidth, 38, 4);
+    bg.fillRoundedRect(barX, barY + barHeight - 34, barWidth, 34, 2);
 
     // 3. Yellow transition zones
     bg.fillGradientStyle(0xeab308, 0xeab308, 0x854d0e, 0x854d0e, 1);
-    bg.fillRoundedRect(barX, barY + 34, barWidth, 46, 3);
-    bg.fillRoundedRect(barX, barY + barHeight - 80, barWidth, 46, 3);
+    bg.fillRoundedRect(barX, barY + 30, barWidth, 42, 2);
+    bg.fillRoundedRect(barX, barY + barHeight - 72, barWidth, 42, 2);
 
     // 4. Center Green Sweet Spot (Perfect timing / accuracy)
     bg.fillGradientStyle(0x22c55e, 0x22c55e, 0x166534, 0x166534, 1);
-    bg.fillRoundedRect(barX, barY + 76, barWidth, barHeight - 152, 3);
+    bg.fillRoundedRect(barX, barY + 68, barWidth, barHeight - 136, 2);
 
     // Glowing Indicator Needle (Horizontal bar sliding up and down)
     this.powerBarIndicator = this.scene.add.graphics();
     this.powerBarIndicator.fillStyle(0xffffff, 1);
-    this.powerBarIndicator.fillRoundedRect(barX - 6, barY, barWidth + 12, 6, 3);
+    this.powerBarIndicator.fillRoundedRect(barX - 4, barY, barWidth + 8, 4, 2);
     this.powerBarIndicator.setDepth(depth + 2);
 
     // Glowing halo behind indicator
     const glow = this.scene.add.graphics();
     glow.fillStyle(0xffffff, 0.4);
-    glow.fillCircle(barX + barWidth / 2, barY + 3, 14);
+    glow.fillCircle(barX + barWidth / 2, barY + 2, 8);
     glow.setDepth(depth + 1);
 
     // Tween to move indicator up and down vertically
@@ -247,15 +248,15 @@ export class CricketHUDManager {
       onUpdate: () => {
         this.currentPower = dummy.val;
         if (this.powerBarIndicator) {
-          const yPos = barY + (barHeight - 6) * (1 - this.currentPower);
+          const yPos = barY + (barHeight - 4) * (1 - this.currentPower);
 
           this.powerBarIndicator.clear();
           this.powerBarIndicator.fillStyle(0xffffff, 1);
-          this.powerBarIndicator.fillRoundedRect(barX - 6, yPos, barWidth + 12, 6, 3);
+          this.powerBarIndicator.fillRoundedRect(barX - 4, yPos, barWidth + 8, 4, 2);
 
           glow.clear();
           glow.fillStyle(0xffffff, 0.45);
-          glow.fillCircle(barX + barWidth / 2, yPos + 3, 14);
+          glow.fillCircle(barX + barWidth / 2, yPos + 2, 8);
         }
       }
     });
@@ -264,7 +265,6 @@ export class CricketHUDManager {
     this.powerBarElements.push(bg, label, glow);
   }
 
-  private instructionBanner?: Phaser.GameObjects.Text;
   private ballCounterText?: Phaser.GameObjects.Text;
 
   private createControls() {
@@ -272,89 +272,63 @@ export class CricketHUDManager {
     const btnY = GAME_H - 42;
     
     if (this.role === 'batting') {
-      // ── Direction Instruction Banner (Top Center) ──
-      this.instructionBanner = this.scene.add.text(CENTER_X, 152, "STEP 2. TAP IN THE DIRECTION YOU WANT TO HIT THE BALL", {
-        fontSize: "15px",
-        color: "#ffffff",
-        fontStyle: "bold",
-        fontFamily: "Outfit, Arial, sans-serif",
-        align: "center",
-        stroke: "#000000",
-        strokeThickness: 3
-      }).setOrigin(0.5).setDepth(depth + 5);
-
-      // Subtle pulse animation on instruction banner
-      this.scene.tweens.add({
-        targets: this.instructionBanner,
-        scale: 1.03,
-        duration: 1200,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      });
-
       // ── Ball Count Indicator (Bottom Right: e.g. "2/3") ──
-      this.ballCounterText = this.scene.add.text(GAME_W - 45, GAME_H - 35, "1/6", {
-        fontSize: "26px",
+      this.ballCounterText = this.scene.add.text(CENTER_X + 170, GAME_H - 35, "1/6", {
+        fontSize: "24px",
         color: "#ffffff",
         fontStyle: "bold",
         fontFamily: "Outfit, Arial, sans-serif",
         stroke: "#000000",
         strokeThickness: 4
-      }).setOrigin(1, 1).setDepth(depth + 5);
+      }).setOrigin(0.5, 0.5).setDepth(depth + 5);
 
       // ── Stick Cricket Circular Touch Controls (Left & Right) ──
-      const leftX = 125;
-      const leftY = GAME_H - 200;
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      const r = isMobile ? 36 : 52;
+      const leftX = isMobile ? (CENTER_X - 88) : (CENTER_X - 140);
+      const rightX = isMobile ? (CENTER_X + 88) : (CENTER_X + 140);
+      const touchY = isMobile ? (GAME_H - 165) : (GAME_H - 180);
+      const zoneSize = r * 2 + 14;
+
       const leftGfx = this.scene.add.graphics().setDepth(depth);
 
       const drawGlassBubble = (gfx: Phaser.GameObjects.Graphics, cx: number, cy: number, isRight: boolean) => {
         gfx.clear();
-        const r = 70;
+        const sf = r / 60;
         // Outer soft glow
         gfx.fillStyle(0xffffff, 0.08);
-        gfx.fillCircle(cx, cy, r + 12);
+        gfx.fillCircle(cx, cy, r + 6);
         // Translucent dark glass body
-        gfx.fillStyle(0x0f172a, 0.35);
+        gfx.fillStyle(0x0f172a, 0.55);
         gfx.fillCircle(cx, cy, r);
         // Beveled glass rim
-        gfx.lineStyle(4, 0xffffff, 0.45);
+        gfx.lineStyle(2.5, 0x38bdf8, 0.7);
         gfx.strokeCircle(cx, cy, r);
-        gfx.lineStyle(2, 0xffffff, 0.25);
-        gfx.strokeCircle(cx, cy, r - 4);
+        gfx.lineStyle(1.5, 0xffffff, 0.35);
+        gfx.strokeCircle(cx, cy, r - 2);
 
         // Stick Cricket Batsman Silhouette inside circle
-        gfx.fillStyle(0xffffff, 0.55);
-        gfx.save();
+        gfx.fillStyle(0xffffff, 0.85);
         if (isRight) {
           // Right-facing silhouette
-          // Head
-          gfx.fillCircle(cx + 6, cy - 28, 9);
-          // Torso & Bat
-          gfx.fillRect(cx - 2, cy - 18, 12, 28);
-          // Legs
-          gfx.fillRect(cx - 8, cy + 10, 8, 26);
-          gfx.fillRect(cx + 4, cy + 10, 8, 26);
-          // Bat held horizontally
-          gfx.fillRect(cx + 10, cy - 12, 34, 10);
+          gfx.fillCircle(cx + 4 * sf, cy - 16 * sf, 6 * sf);
+          gfx.fillRect(cx - 2 * sf, cy - 10 * sf, 8 * sf, 18 * sf);
+          gfx.fillRect(cx - 5 * sf, cy + 8 * sf, 5 * sf, 15 * sf);
+          gfx.fillRect(cx + 2 * sf, cy + 8 * sf, 5 * sf, 15 * sf);
+          gfx.fillRect(cx + 6 * sf, cy - 6 * sf, 22 * sf, 6 * sf);
         } else {
           // Left-facing silhouette
-          // Head
-          gfx.fillCircle(cx - 6, cy - 28, 9);
-          // Torso & Bat
-          gfx.fillRect(cx - 10, cy - 18, 12, 28);
-          // Legs
-          gfx.fillRect(cx - 12, cy + 10, 8, 26);
-          gfx.fillRect(cx, cy + 10, 8, 26);
-          // Bat held horizontally
-          gfx.fillRect(cx - 44, cy - 12, 34, 10);
+          gfx.fillCircle(cx - 4 * sf, cy - 16 * sf, 6 * sf);
+          gfx.fillRect(cx - 6 * sf, cy - 10 * sf, 8 * sf, 18 * sf);
+          gfx.fillRect(cx - 7 * sf, cy + 8 * sf, 5 * sf, 15 * sf);
+          gfx.fillRect(cx, cy + 8 * sf, 5 * sf, 15 * sf);
+          gfx.fillRect(cx - 28 * sf, cy - 6 * sf, 22 * sf, 6 * sf);
         }
-        gfx.restore();
       };
 
-      drawGlassBubble(leftGfx, leftX, leftY, false);
+      drawGlassBubble(leftGfx, leftX, touchY, false);
 
-      const leftZone = this.scene.add.zone(leftX, leftY, 150, 150).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
+      const leftZone = this.scene.add.zone(leftX, touchY, zoneSize, zoneSize).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
       leftZone.on('pointerdown', () => {
         if (!this.isControlsDisabled) {
           this.setControlsState(true);
@@ -367,12 +341,10 @@ export class CricketHUDManager {
       leftZone.on('pointerout', () => leftGfx.setAlpha(this.isControlsDisabled ? 0.6 : 1));
 
       // ── Right Stick Cricket Circular Button ──
-      const rightX = GAME_W - 125;
-      const rightY = GAME_H - 200;
       const rightGfx = this.scene.add.graphics().setDepth(depth);
-      drawGlassBubble(rightGfx, rightX, rightY, true);
+      drawGlassBubble(rightGfx, rightX, touchY, true);
 
-      const rightZone = this.scene.add.zone(rightX, rightY, 150, 150).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
+      const rightZone = this.scene.add.zone(rightX, touchY, zoneSize, zoneSize).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
       rightZone.on('pointerdown', () => {
         if (!this.isControlsDisabled) {
           this.setControlsState(true);
@@ -395,34 +367,33 @@ export class CricketHUDManager {
       pauseGfx.fillRoundedRect(GAME_W - 50, 26, 8, 24, 2);
       pauseGfx.fillRoundedRect(GAME_W - 36, 26, 8, 24, 2);
 
-      if (this.instructionBanner) this.controlElements.push(this.instructionBanner);
       if (this.ballCounterText) this.controlElements.push(this.ballCounterText);
       this.controlElements.push(
         leftGfx, leftZone, rightGfx, rightZone, pauseGfx
       );
     } else {
       // BOWL CONTROLS
-      const bowlBtnY = GAME_H - 32;
+      const bowlBtnY = GAME_H - 68;
       const types = [
-        { id: 'fast', label: 'Fast ⚡', color: 0xf43f5e, outline: 0xbe123c, xOffset: -180 },
+        { id: 'fast', label: 'Fast ⚡', color: 0xf43f5e, outline: 0xbe123c, xOffset: -85 },
         { id: 'slow', label: 'Slow 🐢', color: 0x3b82f6, outline: 0x1d4ed8, xOffset: 0 },
-        { id: 'spin', label: 'Spin 🌪️', color: 0xeab308, outline: 0xca8a04, xOffset: 180 }
+        { id: 'spin', label: 'Spin 🌪️', color: 0xeab308, outline: 0xca8a04, xOffset: 85 }
       ] as const;
 
       types.forEach(t => {
         const cx = CENTER_X + t.xOffset;
         const bg = this.scene.add.graphics();
         bg.fillStyle(t.color, 1);
-        bg.fillCircle(cx, bowlBtnY, 30);
-        bg.lineStyle(3, t.outline, 1);
-        bg.strokeCircle(cx, bowlBtnY, 30);
+        bg.fillCircle(cx, bowlBtnY, 23);
+        bg.lineStyle(2.5, t.outline, 1);
+        bg.strokeCircle(cx, bowlBtnY, 23);
         bg.setDepth(depth + 10);
 
         const text = this.scene.add.text(cx, bowlBtnY, t.label, {
-          fontSize: "15px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+          fontSize: "12px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
         }).setOrigin(0.5).setDepth(depth + 11);
 
-        const zone = this.scene.add.zone(cx, bowlBtnY, 65, 65).setInteractive({ useHandCursor: true }).setDepth(depth + 12);
+        const zone = this.scene.add.zone(cx, bowlBtnY, 52, 52).setInteractive({ useHandCursor: true }).setDepth(depth + 12);
         zone.on('pointerdown', () => {
           if (!this.isControlsDisabled) {
             this.setControlsState(true);

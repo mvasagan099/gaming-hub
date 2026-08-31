@@ -48,6 +48,7 @@ const MAP_WIDTH = SNAKE_WORMS_VISUAL_CONFIG.mapWidth; // 2000
 const MAP_HEIGHT = SNAKE_WORMS_VISUAL_CONFIG.mapHeight; // 2000
 const BASE_SPEED = 220;
 const SEG_DISTANCE = 11;
+const GAME_ZOOM = 0.90; // 10% zoom out
 
 const DIR_ANGLES: Record<SnakeWormDirection, number> = {
   right: 0,
@@ -273,10 +274,14 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
   const updatePointer = (clientX: number, clientY: number) => {
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const scaleX = CANVAS_WIDTH / rect.width;
-    const scaleY = CANVAS_HEIGHT / rect.height;
-    inputRef.current.mouseX = (clientX - rect.left) * scaleX;
-    inputRef.current.mouseY = (clientY - rect.top) * scaleY;
+    if (!rect.width || !rect.height) return;
+    const s = Math.max(rect.width / CANVAS_WIDTH, rect.height / CANVAS_HEIGHT);
+    const renderedW = CANVAS_WIDTH * s;
+    const renderedH = CANVAS_HEIGHT * s;
+    const offsetX = (rect.width - renderedW) / 2;
+    const offsetY = (rect.height - renderedH) / 2;
+    inputRef.current.mouseX = (clientX - rect.left - offsetX) / s;
+    inputRef.current.mouseY = (clientY - rect.top - offsetY) / s;
     inputRef.current.hasPointer = true;
   };
 
@@ -308,8 +313,8 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
       // ── Process Mouse / Touch Steering in Multiplayer ──
       if (driverRef.current && me && me.status === 'active' && me.body[0] && inputRef.current.hasPointer) {
-        const screenHeadX = me.body[0].x - gameStateRef.current.camera.x;
-        const screenHeadY = me.body[0].y - gameStateRef.current.camera.y;
+        const screenHeadX = CANVAS_WIDTH / 2 + (me.body[0].x - (gameStateRef.current.camera.x + CANVAS_WIDTH / 2)) * GAME_ZOOM;
+        const screenHeadY = CANVAS_HEIGHT / 2 + (me.body[0].y - (gameStateRef.current.camera.y + CANVAS_HEIGHT / 2)) * GAME_ZOOM;
         const dx = inputRef.current.mouseX - screenHeadX;
         const dy = inputRef.current.mouseY - screenHeadY;
 
@@ -378,7 +383,13 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
       cam.x += (targetCamX - cam.x) * 6.5 * dt;
       cam.y += (targetCamY - cam.y) * 6.5 * dt;
 
+      ctx.fillStyle = '#05070e';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
       ctx.save();
+      ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+      ctx.scale(GAME_ZOOM, GAME_ZOOM);
+      ctx.translate(-CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2);
       ctx.translate(-cam.x, -cam.y);
 
       // Draw 3D Arena
@@ -433,8 +444,8 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     // 1. Player Steering
     if (player && !player.dead && !gameOver) {
       if (inputRef.current.hasPointer) {
-        const screenHeadX = player.head.x - state.camera.x;
-        const screenHeadY = player.head.y - state.camera.y;
+        const screenHeadX = CANVAS_WIDTH / 2 + (player.head.x - (state.camera.x + CANVAS_WIDTH / 2)) * GAME_ZOOM;
+        const screenHeadY = CANVAS_HEIGHT / 2 + (player.head.y - (state.camera.y + CANVAS_HEIGHT / 2)) * GAME_ZOOM;
         const dx = inputRef.current.mouseX - screenHeadX;
         const dy = inputRef.current.mouseY - screenHeadY;
 
@@ -605,7 +616,13 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
       state.camera.y += (targetCamY - state.camera.y) * 7.5 * dt;
     }
 
+    ctx.fillStyle = '#05070e';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
     ctx.save();
+    ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+    ctx.scale(GAME_ZOOM, GAME_ZOOM);
+    ctx.translate(-CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2);
     ctx.translate(-state.camera.x, -state.camera.y);
 
     // Draw 3D Arena
@@ -646,51 +663,51 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
   return (
     <GameWrapper title="Snake vs Worms 3D" gameId="snake-vs-worms" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-6 w-full max-w-6xl relative mx-auto h-full p-2 lg:p-4 select-none overflow-y-auto">
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-0 lg:gap-6 w-full max-w-6xl relative mx-auto h-full p-0 lg:p-4 select-none overflow-hidden lg:overflow-y-auto">
         
         {/* CENTER 3D ARENA CONTAINER */}
-        <div className="relative flex flex-col items-center justify-center w-full max-w-[min(94vw,72dvh,900px)] shrink-0">
+        <div className="relative flex flex-col items-center justify-center w-full h-full lg:h-auto flex-1 lg:flex-initial lg:max-w-[min(94vw,72dvh,900px)] shrink-0 overflow-hidden">
           
           {/* TOP MODERN ARCADE HUD */}
-          <div className="w-full grid grid-cols-2 sm:flex items-center justify-between gap-2 sm:gap-3 mb-2.5 px-1">
+          <div className="absolute top-2 left-2 right-2 z-20 pointer-events-none lg:pointer-events-auto lg:relative lg:top-auto lg:left-auto lg:right-auto w-auto lg:w-full grid grid-cols-2 sm:grid-cols-4 lg:flex items-center justify-between gap-1.5 sm:gap-2 lg:gap-3 lg:mb-2.5 px-1">
             
             {/* Score & Length Pill */}
-            <div className="p-2 sm:p-2.5 bg-slate-900/90 border border-emerald-500/40 rounded-2xl flex items-center justify-between shadow-lg">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
-                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase">Mass</span>
+            <div className="p-1.5 sm:p-2.5 bg-slate-900/80 lg:bg-slate-900/90 backdrop-blur-md border border-emerald-500/40 rounded-xl sm:rounded-2xl flex items-center justify-between shadow-lg pointer-events-auto">
+              <div className="flex items-center gap-1 sm:gap-2">
+                <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
+                <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase">Mass</span>
               </div>
-              <span className="text-xs sm:text-base font-black font-mono text-white">{score.toLocaleString()}</span>
+              <span className="text-[11px] sm:text-base font-black font-mono text-white ml-1">{score.toLocaleString()}</span>
             </div>
 
             {/* Length Pill */}
-            <div className="p-2 sm:p-2.5 px-3 bg-slate-900/90 border border-indigo-500/40 rounded-2xl flex items-center justify-between sm:justify-center gap-2 shadow-lg">
-              <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400 shrink-0" />
+            <div className="p-1.5 sm:p-2.5 px-2 sm:px-3 bg-slate-900/80 lg:bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-xl sm:rounded-2xl flex items-center justify-between sm:justify-center gap-1.5 shadow-lg pointer-events-auto">
+              <Zap className="w-3 h-3 sm:w-4 sm:h-4 text-indigo-400 shrink-0" />
               <div className="text-right sm:text-center">
-                <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase block">Length</span>
-                <span className="text-[10px] sm:text-xs font-black text-indigo-400">{length} Segs</span>
+                <span className="text-[7px] sm:text-[9px] font-bold text-slate-400 uppercase block">Length</span>
+                <span className="text-[9px] sm:text-xs font-black text-indigo-400">{length} Segs</span>
               </div>
             </div>
 
             {/* Kills Pill */}
-            <div className="p-2 sm:p-2.5 px-3 bg-slate-900/90 border border-rose-500/40 rounded-2xl flex items-center justify-between sm:justify-center gap-2 shadow-lg">
-              <Swords className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400 shrink-0" />
+            <div className="p-1.5 sm:p-2.5 px-2 sm:px-3 bg-slate-900/80 lg:bg-slate-900/90 backdrop-blur-md border border-rose-500/40 rounded-xl sm:rounded-2xl flex items-center justify-between sm:justify-center gap-1.5 shadow-lg pointer-events-auto">
+              <Swords className="w-3 h-3 sm:w-4 sm:h-4 text-rose-400 shrink-0" />
               <div className="text-right sm:text-center">
-                <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase block">Kills</span>
-                <span className="text-[10px] sm:text-xs font-black text-rose-400">{kills} Slain</span>
+                <span className="text-[7px] sm:text-[9px] font-bold text-slate-400 uppercase block">Kills</span>
+                <span className="text-[9px] sm:text-xs font-black text-rose-400">{kills} Slain</span>
               </div>
             </div>
 
             {/* Boost Energy Bar */}
-            <div className="p-2 sm:p-2.5 bg-slate-900/90 border border-amber-500/40 rounded-2xl flex flex-col justify-center shadow-lg">
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-1.5">
+            <div className="p-1.5 sm:p-2.5 bg-slate-900/80 lg:bg-slate-900/90 backdrop-blur-md border border-amber-500/40 rounded-xl sm:rounded-2xl flex flex-col justify-center shadow-lg pointer-events-auto">
+              <div className="flex items-center justify-between mb-0.5 sm:mb-1">
+                <div className="flex items-center gap-1">
                   <Flame className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 shrink-0" />
-                  <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase">Boost</span>
+                  <span className="text-[7px] sm:text-[9px] font-bold text-slate-400 uppercase">Boost</span>
                 </div>
-                <span className="text-[9px] sm:text-[10px] font-black font-mono text-amber-400">{Math.round(boostEnergy)}%</span>
+                <span className="text-[8px] sm:text-[10px] font-black font-mono text-amber-400">{Math.round(boostEnergy)}%</span>
               </div>
-              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div className="w-full h-1 sm:h-1.5 bg-slate-800 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all duration-75 rounded-full"
                   style={{ width: `${boostEnergy}%` }}
@@ -701,15 +718,50 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
           </div>
 
           {/* MAIN 3D CANVAS ARENA */}
-          <div className="relative w-full aspect-[900/600] bg-[#070b14] rounded-3xl overflow-hidden border-2 border-indigo-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center">
+          <div className="relative w-full h-full flex-1 lg:flex-initial lg:h-auto lg:aspect-[900/600] bg-[#070b14] rounded-none lg:rounded-3xl overflow-hidden border-0 lg:border-2 lg:border-indigo-500/30 shadow-none lg:shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center">
             <canvas
               ref={canvasRef}
               width={CANVAS_WIDTH}
               height={CANVAS_HEIGHT}
               onMouseMove={handleMouseMove}
+              onMouseDown={(e) => updatePointer(e.clientX, e.clientY)}
+              onTouchStart={(e) => {
+                if (e.touches[0]) updatePointer(e.touches[0].clientX, e.touches[0].clientY);
+              }}
               onTouchMove={handleTouchMove}
-              className="w-full h-full object-contain cursor-crosshair"
+              className="w-full h-full object-cover lg:object-contain cursor-crosshair touch-none"
             />
+
+            {/* Mobile Boost Touch Button */}
+            <button
+              type="button"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                inputRef.current.isBoosting = true;
+                if (mode === 'multiplayer' && driverRef.current) {
+                  driverRef.current.sendBoostStart();
+                }
+              }}
+              onPointerUp={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                inputRef.current.isBoosting = false;
+                if (mode === 'multiplayer' && driverRef.current) {
+                  driverRef.current.sendBoostStop();
+                }
+              }}
+              onPointerLeave={() => {
+                inputRef.current.isBoosting = false;
+                if (mode === 'multiplayer' && driverRef.current) {
+                  driverRef.current.sendBoostStop();
+                }
+              }}
+              className="lg:hidden absolute bottom-6 right-6 z-20 w-16 h-16 rounded-full bg-gradient-to-tr from-amber-500/80 to-rose-500/80 active:from-amber-600 active:to-rose-600 border-2 border-white/40 shadow-2xl backdrop-blur-md flex flex-col items-center justify-center text-white active:scale-95 transition-transform select-none touch-none"
+            >
+              <Flame className="w-6 h-6 text-amber-200 animate-pulse" />
+              <span className="text-[9px] font-black tracking-widest uppercase">Boost</span>
+            </button>
 
             {/* Glassmorphic Overlays */}
             <SnakeVsWormsOverlays

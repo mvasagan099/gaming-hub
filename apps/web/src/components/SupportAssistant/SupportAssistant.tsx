@@ -90,6 +90,9 @@ export function SupportAssistant() {
     exit: { opacity: 0, y: 20, scale: 0.95 },
   };
 
+  const isGamePage = location.pathname.startsWith('/game');
+  if (isGamePage) return null;
+
   return (
     <>
       {/* Floating Action Button */}

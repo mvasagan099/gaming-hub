@@ -3,9 +3,6 @@ import type { GameAction } from "../types";
 
 export const CRICKET_OVERS = {
   "1-over": 1,
-  "2-overs": 2,
-  "5-overs": 5,
-  "10-overs": 10,
 } as const;
 
 export type CricketMatchType = keyof typeof CRICKET_OVERS;

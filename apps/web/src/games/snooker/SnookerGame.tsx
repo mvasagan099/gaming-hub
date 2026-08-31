@@ -793,11 +793,11 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
           />
         )}
 
-        {/* Main Snooker Arena & Tactical Control Dock */}
-        <div className="w-full flex-1 flex flex-col lg:flex-row items-center justify-center gap-3 sm:gap-4 lg:gap-5 max-w-7xl px-1 sm:px-2 my-auto overflow-y-auto lg:overflow-visible">
+        {/* Main Snooker Arena */}
+        <div className="w-full flex-1 flex items-center justify-center max-w-7xl px-1 sm:px-2 my-auto overflow-hidden">
           {/* Snooker Table Main Canvas Container */}
           <div className="relative flex-1 flex items-center justify-center w-full max-w-5xl">
-            <div className={`relative ${isRotated ? 'aspect-[1/2] max-h-[min(52vh,480px)] w-auto' : 'aspect-[2/1] w-full max-w-5xl'} rounded-3xl p-1 bg-gradient-to-b from-amber-700/30 via-slate-900/60 to-slate-950/80 shadow-[0_25px_60px_rgba(0,0,0,0.9)] border border-slate-700/60 flex items-center justify-center overflow-hidden`}>
+            <div className={`relative ${isRotated ? 'aspect-[1/2] max-h-[min(65vh,580px)] w-auto' : 'aspect-[2/1] w-full max-w-5xl'} rounded-3xl p-1 bg-gradient-to-b from-amber-700/30 via-slate-900/60 to-slate-950/80 shadow-[0_25px_60px_rgba(0,0,0,0.9)] border border-slate-700/60 flex items-center justify-center overflow-hidden`}>
               <canvas
                 ref={canvasRef}
                 width={isRotated ? 480 : 960}
@@ -842,42 +842,9 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
               )}
             </div>
           </div>
-
-          {/* Right Tactical Dock (Controls + Multiplayer Match Status) */}
-          <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 sm:gap-3 w-full lg:w-56 shrink-0 z-20 justify-center items-stretch sm:items-center lg:items-stretch">
-            {mode === "multiplayer" && (
-              <div className="hidden xl:block w-full">
-                <MultiplayerMatchPanel compact />
-              </div>
-            )}
-
-            {/* Tactical Control Deck */}
-            <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 rounded-3xl p-2 sm:p-3.5 shadow-2xl flex flex-row lg:flex-col gap-2 sm:gap-3.5 items-center justify-around w-full max-w-lg lg:max-w-none">
-              <SnookerPowerControl
-                power={cuePower}
-                setPower={setCuePower}
-                disabled={isSimulating}
-              />
-              <SnookerSpinControl
-                spinX={spinX}
-                spinY={spinY}
-                setSpin={(x, y) => {
-                  setSpinX(x);
-                  setSpinY(y);
-                }}
-              />
-              <button
-                onClick={handleDirectShoot}
-                disabled={isSimulating || cueBallInHand || !isMyTurn}
-                className="py-2 sm:py-3 px-3.5 sm:px-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 hover:brightness-110 disabled:opacity-40 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/25 transition-all uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] shrink-0"
-              >
-                STRIKE
-              </button>
-            </div>
-          </div>
         </div>
 
-        {/* Centered Multiplayer Match Panel Modal for Mobile */}
+        {/* Centered Multiplayer Match Panel Modal */}
         {mode === "multiplayer" && showMobilePanel && (
           <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="relative w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col animate-in fade-in zoom-in-95">
@@ -885,7 +852,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
                 <span className="text-xs font-black uppercase text-amber-400">Match Details & Chat</span>
                 <button
                   onClick={() => setShowMobilePanel(false)}
-                  className="px-2.5 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold"
+                  className="px-2.5 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold cursor-pointer"
                 >
                   Close
                 </button>

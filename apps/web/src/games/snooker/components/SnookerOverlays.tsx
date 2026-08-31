@@ -29,8 +29,8 @@ interface SnookerHUDProps {
   lastFoul: string | null;
   foulPoints: number;
   mode: "ai" | "multiplayer";
-  cameraMode: "3d" | "2d";
-  setCameraMode: React.Dispatch<React.SetStateAction<"3d" | "2d">>;
+  cameraMode?: "3d" | "2d";
+  setCameraMode?: React.Dispatch<React.SetStateAction<"3d" | "2d">>;
   onBack: () => void;
   soundEnabled: boolean;
   setSoundEnabled: (v: boolean) => void;
@@ -67,7 +67,7 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
   lastFoul,
   foulPoints,
   mode,
-  cameraMode,
+  cameraMode = "3d",
   setCameraMode,
   onBack,
   soundEnabled,
@@ -134,15 +134,6 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
                 <span>{isRotated ? "Vertical" : "Horizontal"}</span>
               </button>
             )}
-
-            <button
-              onClick={() => setCameraMode((prev) => (prev === "3d" ? "2d" : "3d"))}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 active:scale-95"
-              title="Toggle 2D / 3D Perspective"
-            >
-              {cameraMode === "3d" ? <Video className="w-3.5 h-3.5 text-amber-400" /> : <Eye className="w-3.5 h-3.5 text-sky-400" />}
-              <span>{cameraMode === "3d" ? "3D" : "2D"}</span>
-            </button>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -193,15 +184,6 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
                 <span>{isRotated ? "Vertical Table" : "Horizontal Table"}</span>
               </button>
             )}
-
-            <button
-              onClick={() => setCameraMode((prev) => (prev === "3d" ? "2d" : "3d"))}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 hover:scale-105 active:scale-95"
-              title="Toggle 2D / 3D Perspective"
-            >
-              {cameraMode === "3d" ? <Video className="w-3.5 h-3.5 text-amber-400" /> : <Eye className="w-3.5 h-3.5 text-sky-400" />}
-              <span>{cameraMode === "3d" ? "3D View" : "2D Top"}</span>
-            </button>
           </div>
 
           {/* Player 1 Card */}
@@ -306,8 +288,18 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
             </div>
           </div>
 
-          {/* Desktop Audio Toggle (Hidden on mobile) */}
-          <div className="hidden md:flex items-center">
+          {/* Desktop Audio & Details Toggle (Hidden on mobile) */}
+          <div className="hidden md:flex items-center gap-2">
+            {showMobileMatchPanelButton && onOpenMobileMatchPanel && (
+              <button
+                onClick={onOpenMobileMatchPanel}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/40 text-indigo-300 transition-all text-xs font-semibold border border-indigo-500/40 hover:scale-105 active:scale-95"
+                title="Match Details & Chat"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Details</span>
+              </button>
+            )}
             <button
               onClick={() => setSoundEnabled(!soundEnabled)}
               className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs border border-slate-700/60 hover:scale-105 active:scale-95"

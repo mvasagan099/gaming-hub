@@ -112,8 +112,8 @@ export class CricketEngine extends MultiplayerGameEngine<CricketState, CricketAc
       now: options?.now,
     });
 
-    this.matchType = options?.matchType ?? "5-overs";
-    this.totalOvers = CRICKET_OVERS[this.matchType];
+    this.matchType = options?.matchType ?? "1-over";
+    this.totalOvers = CRICKET_OVERS[this.matchType] ?? 1;
   }
 
   protected getInitialSeat(): number {

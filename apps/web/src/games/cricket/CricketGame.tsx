@@ -35,7 +35,7 @@ const LiveScoreboard: React.FC<LiveScoreboardProps> = ({ remoteState, mySeat, na
   const wkts1 = s.team1Wickets ?? 0;
   const score2 = s.team2Score ?? 0;
   const wkts2 = s.team2Wickets ?? 0;
-  const overs = `${s.currentOver ?? 0}.${s.currentBall ?? 0}/${s.totalOvers ?? 5}`;
+  const overs = `${s.currentOver ?? 0}.${s.currentBall ?? 0}/${s.totalOvers ?? 1}`;
   const target = s.target ?? null;
   const rr = (() => {
     const ballsBowled = (s.currentOver ?? 0) * 6 + (s.currentBall ?? 0);
@@ -261,7 +261,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
   const wkts1 = remoteState?.team1Wickets ?? 0;
   const score2 = remoteState?.team2Score ?? 0;
   const wkts2 = remoteState?.team2Wickets ?? 0;
-  const oversStr = `${remoteState?.currentOver ?? 0}.${remoteState?.currentBall ?? 0}/${remoteState?.totalOvers ?? 5}`;
+  const oversStr = `${remoteState?.currentOver ?? 0}.${remoteState?.currentBall ?? 0}/${remoteState?.totalOvers ?? 1}`;
   const targetVal = remoteState?.target ?? null;
   const runRateVal = (() => {
     const ballsBowled = ((remoteState?.currentOver ?? 0) * 6) + (remoteState?.currentBall ?? 0);
@@ -322,33 +322,17 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
 
   return (
     <GameWrapper title="Cricket World Premier League" gameId="cricket" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="flex flex-col xl:flex-row items-center xl:items-start justify-center gap-4 xl:gap-6 w-full max-w-7xl mx-auto relative z-10 p-1.5 sm:p-2 overflow-hidden xl:overflow-y-auto">
+      <div className="relative h-full w-full flex flex-col xl:flex-row items-center xl:items-start justify-center gap-0 xl:gap-6 max-w-7xl mx-auto z-10 p-0 select-none overflow-hidden xl:overflow-y-auto">
 
         {/* ── AI: Role picker ── */}
         {!isMultiplayer && !playerRole && (
           <div className="flex flex-col items-center justify-center w-full max-w-xl mx-auto p-10 bg-slate-900/70 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-[0_8px_40px_rgba(0,0,0,0.5)]">
-            <h2 className="text-4xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-500 text-center mb-10">
+            <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-500 text-center mb-2">
               Match Setup
             </h2>
-
-            <div className="mb-10 w-full flex flex-col items-center">
-              <h3 className="text-xs font-black text-slate-400 mb-4 uppercase tracking-widest">Select Format</h3>
-              <div className="flex gap-3">
-                {[1, 3, 5].map(overs => (
-                  <button
-                    key={overs}
-                    onClick={() => setMatchOvers(overs)}
-                    className={`px-7 py-3 rounded-2xl font-black transition-all duration-300 border-2 text-sm ${
-                      matchOvers === overs
-                        ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.3)] scale-105'
-                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:border-white/20'
-                    }`}
-                  >
-                    {overs} Over{overs > 1 ? 's' : ''}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center mb-8">
+              Quick 1-Over Blitz Match
+            </p>
 
             <div className="flex flex-col sm:flex-row gap-5 w-full justify-center">
               {[
@@ -388,71 +372,71 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
         {(playerRole || (isMultiplayer && matchStarted)) && (
           <>
             {/* Phaser canvas + Mobile Top HUD */}
-            <div className="flex flex-col items-center flex-shrink-0 w-full xl:w-auto">
+            <div className="flex flex-col items-center justify-center flex-1 min-h-0 w-full h-full">
               {/* ═══ MOBILE TOP LIVE SCOREBOARD BAR (< xl) ═══ */}
               {isMultiplayer && remoteState && (
-                <div className="xl:hidden w-full max-w-[min(94vw,65dvh,924px)] bg-[#0d1322]/95 backdrop-blur-xl border border-slate-800/90 rounded-2xl p-2 sm:p-2.5 shadow-xl mb-2 select-none">
+                <div className="xl:hidden w-full max-w-lg bg-[#0d1322]/95 backdrop-blur-xl border border-slate-800/90 rounded-xl p-1.5 shadow-xl mb-1 select-none shrink-0">
                   {/* Turn indicator pill */}
                   {actorLabel && (
-                    <div className={`flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl font-extrabold text-[10px] uppercase tracking-wider border mb-1.5 transition-all ${
+                    <div className={`flex items-center justify-center gap-1.5 px-2.5 py-0.5 rounded-lg font-extrabold text-[9px] uppercase tracking-wider border mb-1 transition-all ${
                       isMyActor
                         ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/40'
                         : 'bg-slate-900/90 text-slate-400 border-slate-800'
                     }`}>
-                      <span className={`w-2 h-2 rounded-full ${isMyActor ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500 animate-pulse'}`} />
+                      <span className={`w-1.5 h-1.5 rounded-full ${isMyActor ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500 animate-pulse'}`} />
                       <span>{actorLabel}</span>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+                  <div className="flex items-center justify-between gap-1.5">
                     {/* Team 1 */}
-                    <div className={`flex-1 flex items-center gap-2 p-1.5 sm:p-2 rounded-xl border transition-all ${
+                    <div className={`flex-1 flex items-center gap-1.5 p-1 rounded-lg border transition-all ${
                       mySeat === 0 ? 'border-amber-500/40 bg-amber-950/20' : 'border-slate-800 bg-slate-900/60'
                     }`}>
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-black text-[10px] text-amber-300 shrink-0">
+                      <div className="w-6 h-6 rounded bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-black text-[9px] text-amber-300 shrink-0">
                         {mySeat === 0 ? 'YOU' : 'T1'}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                        <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider truncate">
                           {player1Name} {mySeat === 0 && <span className="text-amber-400 font-black">•</span>}
                         </div>
-                        <div className="text-base sm:text-lg font-black font-mono text-white leading-none mt-0.5">
-                          {score1}<span className="text-slate-400 text-xs font-bold">/{wkts1}</span>
+                        <div className="text-sm font-black font-mono text-white leading-none mt-0.5">
+                          {score1}<span className="text-slate-400 text-[10px] font-bold">/{wkts1}</span>
                         </div>
                       </div>
                     </div>
 
                     {/* Center Match Stats & Details Toggle */}
                     <div className="flex flex-col items-center justify-center px-1 shrink-0">
-                      <div className="flex items-center gap-1 text-[9px] font-mono text-slate-300 font-bold">
+                      <div className="flex items-center gap-0.5 text-[8px] font-mono text-slate-300 font-bold">
                         <span className="text-slate-400">OV:</span> <span className="text-white font-black">{oversStr}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-[8px] font-bold mt-0.5">
+                      <div className="flex items-center gap-1 text-[8px] font-bold">
                         <span className="text-amber-400 font-mono">RR {runRateVal}</span>
                         {targetVal != null && <span className="text-sky-400 font-mono">TGT {targetVal}</span>}
                       </div>
                       <button
                         onClick={() => setShowMobilePanel(true)}
-                        className="mt-1 text-[9px] font-bold text-indigo-400 hover:text-indigo-300 underline flex items-center gap-0.5 cursor-pointer"
+                        className="text-[8px] font-bold text-indigo-400 hover:text-indigo-300 underline flex items-center gap-0.5 cursor-pointer"
                         title="Open Match Details & Chat"
                       >
-                        <Users className="w-3 h-3" /> Details
+                        <Users className="w-2.5 h-2.5" /> Details
                       </button>
                     </div>
 
                     {/* Team 2 */}
-                    <div className={`flex-1 flex items-center justify-end gap-2 p-1.5 sm:p-2 rounded-xl border transition-all ${
+                    <div className={`flex-1 flex items-center justify-end gap-1.5 p-1 rounded-lg border transition-all ${
                       mySeat === 1 ? 'border-sky-500/40 bg-sky-950/20' : 'border-slate-800 bg-slate-900/60'
                     }`}>
                       <div className="min-w-0 flex-1 text-right">
-                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                        <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider truncate">
                           {player2Name} {mySeat === 1 && <span className="text-sky-400 font-black">•</span>}
                         </div>
-                        <div className="text-base sm:text-lg font-black font-mono text-white leading-none mt-0.5">
-                          {score2}<span className="text-slate-400 text-xs font-bold">/{wkts2}</span>
+                        <div className="text-sm font-black font-mono text-white leading-none mt-0.5">
+                          {score2}<span className="text-slate-400 text-[10px] font-bold">/{wkts2}</span>
                         </div>
                       </div>
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-sky-500/20 border border-sky-500/40 flex items-center justify-center font-black text-[10px] text-sky-300 shrink-0">
+                      <div className="w-6 h-6 rounded bg-sky-500/20 border border-sky-500/40 flex items-center justify-center font-black text-[9px] text-sky-300 shrink-0">
                         {mySeat === 1 ? 'YOU' : 'T2'}
                       </div>
                     </div>

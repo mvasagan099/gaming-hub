@@ -331,26 +331,7 @@ export class CricketScene extends Phaser.Scene {
     }
 
     // ── 4. Floodlight Towers ──────────────────────────────────────────────────
-    const drawFloodlightTower = (tx: number, headY: number, coneTargX: number, coneTargY: number) => {
-      // Volumetric light cone (outer, softer)
-      g.fillGradientStyle(0xfffacd, 0xfffacd, 0xfffacd, 0xfffacd, 0.10, 0.10, 0, 0);
-      g.beginPath();
-      g.moveTo(tx - 25, headY + 5);
-      g.lineTo(tx + 25, headY + 5);
-      g.lineTo(coneTargX + 210, coneTargY);
-      g.lineTo(coneTargX - 210, coneTargY);
-      g.closePath();
-      g.fillPath();
-      // Inner, brighter cone
-      g.fillGradientStyle(0xffffff, 0xffffff, 0xffffff, 0xffffff, 0.06, 0.06, 0, 0);
-      g.beginPath();
-      g.moveTo(tx - 10, headY + 5);
-      g.lineTo(tx + 10, headY + 5);
-      g.lineTo(coneTargX + 90, coneTargY);
-      g.lineTo(coneTargX - 90, coneTargY);
-      g.closePath();
-      g.fillPath();
-
+    const drawFloodlightTower = (tx: number, headY: number) => {
       // Tower mast
       const mastBot = HORIZON_Y - 5;
       const mastTop = headY + 12;
@@ -401,10 +382,10 @@ export class CricketScene extends Phaser.Scene {
     };
 
     // 4 towers: far-left, near-left, near-right, far-right
-    drawFloodlightTower(55, 18, CENTER_X * 0.45, HORIZON_Y + 280);
-    drawFloodlightTower(200, 8, CENTER_X * 0.6, HORIZON_Y + 320);
-    drawFloodlightTower(GAME_W - 200, 8, CENTER_X * 1.4, HORIZON_Y + 320);
-    drawFloodlightTower(GAME_W - 55, 18, CENTER_X * 1.55, HORIZON_Y + 280);
+    drawFloodlightTower(55, 18);
+    drawFloodlightTower(200, 8);
+    drawFloodlightTower(GAME_W - 200, 8);
+    drawFloodlightTower(GAME_W - 55, 18);
 
     // ── 5. Electronic Scoreboard (left stand section) ─────────────────────────
     const sbX = 70, sbY = HORIZON_Y - standH + 10, sbW = 172, sbH = 55;
@@ -504,22 +485,6 @@ export class CricketScene extends Phaser.Scene {
     g.lineTo(pitchMidX - PITCH_BOT_W / 2, PITCH_BOT_Y);
     g.closePath();
     g.fillPath();
-
-    // Roller Compaction Grain Lines
-    g.fillStyle(0xbfa07a, 0.25);
-    const pSteps = 7;
-    for (let s = 1; s < pSteps; s++) {
-      const fx = s / pSteps;
-      const topX = (pitchMidX - PITCH_TOP_W / 2) + PITCH_TOP_W * fx;
-      const botX = (pitchMidX - PITCH_BOT_W / 2) + PITCH_BOT_W * fx;
-      g.beginPath();
-      g.moveTo(topX - 1.5, PITCH_TOP_Y);
-      g.lineTo(topX + 1.5, PITCH_TOP_Y);
-      g.lineTo(botX + 3, PITCH_BOT_Y);
-      g.lineTo(botX - 3, PITCH_BOT_Y);
-      g.closePath();
-      g.fillPath();
-    }
 
     // ── 11. Regulation White Chalk Crease Markings ─────────────────────────────
     // TOP END (Bowler's Creases):
@@ -1038,9 +1003,9 @@ export class CricketScene extends Phaser.Scene {
 
   private drawStumpsOn(gfx: Phaser.GameObjects.Graphics, near: boolean) {
     gfx.clear();
-    const h = near ? 115 : 36;
-    const gap = near ? 22 : 10;
-    const sw = near ? 9 : 3.5;
+    const h = near ? 80 : 28;
+    const gap = near ? 20 : 8.5;
+    const sw = near ? 8 : 3.2;
 
     for (let s = -1; s <= 1; s++) {
       const sx = s * gap;
@@ -1064,14 +1029,9 @@ export class CricketScene extends Phaser.Scene {
       gfx.fillStyle(0x71717a, 0.55);
       gfx.fillRect(sx - sw / 2 + sw * 0.45, -h + 2, 1.5, h - 4);
 
-      // Red Competition Bands (Stick Cricket style)
-      gfx.fillStyle(0xdc2626, 1);
-      gfx.fillRect(sx - sw / 2, -Math.floor(h * 0.72), sw, near ? 14 : 5);
-      gfx.fillRect(sx - sw / 2, -Math.floor(h * 0.32), sw, near ? 7 : 3);
-
       // Black Crown Spigot Cap
       gfx.fillStyle(0x0a0a0a, 1);
-      gfx.fillRoundedRect(sx - sw / 2, -h, sw, near ? 5 : 2, { tl: 2, tr: 2, bl: 0, br: 0 });
+      gfx.fillRoundedRect(sx - sw / 2, -h - (near ? 2 : 1), sw, near ? 4 : 2, { tl: 2, tr: 2, bl: 0, br: 0 });
     }
   }
 
@@ -1083,27 +1043,28 @@ export class CricketScene extends Phaser.Scene {
 
   private redrawBails() {
     const isBatting = this.role === 'batting';
-    const nearH = 115;
-    const farH = 36;
-    const bailsY = isBatting ? 665 - nearH : 200 - farH;
+    const nearH = 80;
+    const farH = 28;
+    const gap = isBatting ? 20 : 8.5;
+    const bailW = isBatting ? 22 : 9.5;
+    const bailH = isBatting ? 4 : 2;
+    // Exactly on top of the stumps
+    const bailsY = isBatting ? (665 - nearH - bailH + 1) : (200 - farH - bailH + 1);
     const bailsX = CENTER_X;
-    const gap = isBatting ? 22 : 10;
-    const bailW = isBatting ? 24 : 11;
-    const bailH = isBatting ? 5 : 2.5;
 
     this.bail1.clear();
     this.bail1.setPosition(bailsX, bailsY);
     this.bail1.fillStyle(0x18181b, 1);
-    this.bail1.fillRoundedRect(-gap / 2 - bailW / 2, 0, bailW, bailH, 1.5);
-    this.bail1.fillStyle(0xdc2626, 0.9);
-    this.bail1.fillRect(-gap / 2 - bailW / 2 + 2, 1, bailW - 4, bailH - 2);
+    this.bail1.fillRoundedRect(-gap / 2 - bailW / 2, 0, bailW, bailH, 1);
+    this.bail1.fillStyle(0xdc2626, 1);
+    this.bail1.fillRect(-gap / 2 - bailW / 2 + 2, 0.5, bailW - 4, bailH - 1);
 
     this.bail2.clear();
     this.bail2.setPosition(bailsX, bailsY);
     this.bail2.fillStyle(0x18181b, 1);
-    this.bail2.fillRoundedRect(gap / 2 - bailW / 2, 0, bailW, bailH, 1.5);
-    this.bail2.fillStyle(0xdc2626, 0.9);
-    this.bail2.fillRect(gap / 2 - bailW / 2 + 2, 1, bailW - 4, bailH - 2);
+    this.bail2.fillRoundedRect(gap / 2 - bailW / 2, 0, bailW, bailH, 1);
+    this.bail2.fillStyle(0xdc2626, 1);
+    this.bail2.fillRect(gap / 2 - bailW / 2 + 2, 0.5, bailW - 4, bailH - 1);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1144,8 +1105,7 @@ export class CricketScene extends Phaser.Scene {
       this.bat.setPosition(CENTER_X - 4, 550).setScale(this.getBatScale(575)).setDepth(12).setVisible(false).setAngle(-30);
       this.batsmanStumps.setPosition(CENTER_X, 665).setScale(1).setAngle(0).setDepth(12);
       this.bowlerStumps.setPosition(CENTER_X, 200).setScale(1).setAngle(0).setDepth(5);
-      this.bail1.setPosition(CENTER_X, 665 - 115).setScale(1).setAngle(0);
-      this.bail2.setPosition(CENTER_X, 665 - 115).setScale(1).setAngle(0);
+      this.redrawBails();
       this.startBatsmanIdleAnimation();
     } else {
       // Bowling view: Prominent foreground players and clearly visible far batsman & keeper
@@ -1569,10 +1529,11 @@ export class CricketScene extends Phaser.Scene {
 
     // Reset visuals
     this.bat.setAngle(-30).setVisible(false);
-    const bailsY = this.role === 'bowling' ? PITCH_TOP_Y - 24 : PITCH_BOT_Y - 78;
-    this.bail1.setPosition(CENTER_X, bailsY).setAngle(0).setAlpha(1);
-    this.bail2.setPosition(CENTER_X, bailsY).setAngle(0).setAlpha(1);
-    this.batsmanStumps.setAngle(0).setPosition(CENTER_X, this.role === 'bowling' ? PITCH_TOP_Y : PITCH_BOT_Y);
+    this.redrawBails();
+    this.bail1.setAngle(0).setAlpha(1);
+    this.bail2.setAngle(0).setAlpha(1);
+    this.batsmanStumps.setAngle(0).setPosition(CENTER_X, this.role === 'bowling' ? 200 : 665);
+    this.bowlerStumps.setAngle(0).setPosition(CENTER_X, this.role === 'bowling' ? 665 : 200);
     this.ball.setVisible(false);
     this.ballShadow.setVisible(false);
 
@@ -2491,39 +2452,10 @@ export class CricketScene extends Phaser.Scene {
         localStorage.setItem('cricket_best_score', this.bestScore.toString());
       }
 
-      const depth = 50;
-
-      this.time.delayedCall(2000, () => {
-        const bg = this.add.graphics();
-        bg.fillStyle(0x000000, 0.7);
-        bg.fillRect(0, 0, GAME_W, GAME_H);
-        bg.setDepth(depth);
-
-        const msg = this.role === 'batting'
-          ? (isWin ? "TARGET REACHED! YOU WIN!" : "INNINGS OVER! YOU LOSE!")
-          : (isWin ? "TARGET DEFENDED! YOU WIN!" : "TARGET REACHED! YOU LOSE!");
-
-        this.add.text(CENTER_X, CENTER_Y - 50, msg, {
-          fontSize: "36px", color: isWin ? "#34d399" : "#f43f5e", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
-        }).setOrigin(0.5).setDepth(depth + 1);
-
-        this.add.text(CENTER_X, CENTER_Y + 20, `Final Score: ${this.runs}/${this.wickets}`, {
-          fontSize: "24px", color: "#ffffff", fontFamily: "Outfit, sans-serif"
-        }).setOrigin(0.5).setDepth(depth + 1);
-
-        const btnBg = this.add.graphics();
-        btnBg.fillStyle(0xf59e0b, 1);
-        btnBg.fillRoundedRect(CENTER_X - 100, CENTER_Y + 80, 200, 50, 8);
-        btnBg.setDepth(depth + 1);
-
-        this.add.text(CENTER_X, CENTER_Y + 105, "FINISH", {
-          fontSize: "20px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
-        }).setOrigin(0.5).setDepth(depth + 2);
-
-        const btnZone = this.add.zone(CENTER_X, CENTER_Y + 105, 200, 50).setInteractive({ useHandCursor: true }).setDepth(depth + 3);
-        btnZone.once('pointerdown', () => {
-          if (this.onGameOver) this.onGameOver(this.runs, this.wickets, isWin);
-        });
+      this.time.delayedCall(1200, () => {
+        if (this.onGameOver) {
+          this.onGameOver(this.runs, this.wickets, isWin);
+        }
       });
 
       return true;
