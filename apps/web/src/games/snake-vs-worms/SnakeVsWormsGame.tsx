@@ -303,6 +303,11 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     animTimeRef.current += dt;
     const animTime = animTimeRef.current;
 
+    const rect = canvas.getBoundingClientRect();
+    const isPortrait = rect.width > 0 && rect.height > 0 && rect.width < rect.height;
+    // Mobile portrait view: zoom out (0.50) so field is spacious and snakes are normal sized
+    const currentZoom = isPortrait ? 0.50 : 0.90;
+
     // ──────────────────────────────────────────────────────────────────────────
     // 1. MULTIPLAYER RENDERING MODE
     // ──────────────────────────────────────────────────────────────────────────
@@ -313,8 +318,8 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
       // ── Process Mouse / Touch Steering in Multiplayer ──
       if (driverRef.current && me && me.status === 'active' && me.body[0] && inputRef.current.hasPointer) {
-        const screenHeadX = CANVAS_WIDTH / 2 + (me.body[0].x - (gameStateRef.current.camera.x + CANVAS_WIDTH / 2)) * GAME_ZOOM;
-        const screenHeadY = CANVAS_HEIGHT / 2 + (me.body[0].y - (gameStateRef.current.camera.y + CANVAS_HEIGHT / 2)) * GAME_ZOOM;
+        const screenHeadX = CANVAS_WIDTH / 2 + (me.body[0].x - (gameStateRef.current.camera.x + CANVAS_WIDTH / 2)) * currentZoom;
+        const screenHeadY = CANVAS_HEIGHT / 2 + (me.body[0].y - (gameStateRef.current.camera.y + CANVAS_HEIGHT / 2)) * currentZoom;
         const dx = inputRef.current.mouseX - screenHeadX;
         const dy = inputRef.current.mouseY - screenHeadY;
 
@@ -388,7 +393,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
       ctx.save();
       ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-      ctx.scale(GAME_ZOOM, GAME_ZOOM);
+      ctx.scale(currentZoom, currentZoom);
       ctx.translate(-CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2);
       ctx.translate(-cam.x, -cam.y);
 
@@ -431,7 +436,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
         color: p.seat === 0 ? '#10b981' : '#3b82f6',
         dead: p.status === 'eliminated',
       }));
-      SnakeVsWorms3DRenderer.drawRadar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, radarPlayers);
+      SnakeVsWorms3DRenderer.drawRadar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, radarPlayers, MAP_WIDTH, MAP_HEIGHT, isPortrait);
       return;
     }
 
@@ -444,8 +449,8 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     // 1. Player Steering
     if (player && !player.dead && !gameOver) {
       if (inputRef.current.hasPointer) {
-        const screenHeadX = CANVAS_WIDTH / 2 + (player.head.x - (state.camera.x + CANVAS_WIDTH / 2)) * GAME_ZOOM;
-        const screenHeadY = CANVAS_HEIGHT / 2 + (player.head.y - (state.camera.y + CANVAS_HEIGHT / 2)) * GAME_ZOOM;
+        const screenHeadX = CANVAS_WIDTH / 2 + (player.head.x - (state.camera.x + CANVAS_WIDTH / 2)) * currentZoom;
+        const screenHeadY = CANVAS_HEIGHT / 2 + (player.head.y - (state.camera.y + CANVAS_HEIGHT / 2)) * currentZoom;
         const dx = inputRef.current.mouseX - screenHeadX;
         const dy = inputRef.current.mouseY - screenHeadY;
 
@@ -621,7 +626,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
     ctx.save();
     ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-    ctx.scale(GAME_ZOOM, GAME_ZOOM);
+    ctx.scale(currentZoom, currentZoom);
     ctx.translate(-CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2);
     ctx.translate(-state.camera.x, -state.camera.y);
 
@@ -658,7 +663,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
       color: s.isPlayer ? '#10b981' : '#ef4444',
       dead: s.dead,
     }));
-    SnakeVsWorms3DRenderer.drawRadar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, radarSnakes);
+    SnakeVsWorms3DRenderer.drawRadar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, radarSnakes, MAP_WIDTH, MAP_HEIGHT, isPortrait);
   }, true);
 
   return (

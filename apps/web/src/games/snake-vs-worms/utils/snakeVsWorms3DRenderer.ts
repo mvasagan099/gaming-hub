@@ -312,10 +312,11 @@ export class SnakeVsWorms3DRenderer {
     canvasH: number,
     players: Array<{ x: number; y: number; isMe: boolean; color: string; dead: boolean }>,
     mapW = SNAKE_WORMS_VISUAL_CONFIG.mapWidth,
-    mapH = SNAKE_WORMS_VISUAL_CONFIG.mapHeight
+    mapH = SNAKE_WORMS_VISUAL_CONFIG.mapHeight,
+    radarAlignLeft = false
   ): void {
-    const size = 110;
-    const rx = canvasW - size - 18;
+    const size = 95;
+    const rx = radarAlignLeft ? 18 : canvasW - size - 18;
     const ry = canvasH - size - 18;
     const scale = size / mapW;
 
