@@ -39,6 +39,8 @@ import { adminGamesRoutes } from "./routes/adminGames";
 import { adminAntiCheatRoutes } from "./routes/adminAntiCheat";
 import { matchmakingRoutes } from "./routes/matchmaking";
 import { adminTournamentTiersRoutes } from "./routes/adminTournamentTiers";
+import { appVersionRoutes } from "./routes/appVersion";
+import { adminAppVersionRoutes } from "./routes/adminAppVersion";
 import { isFeatureEnabled } from "./services/featureFlags";
 import { instrument } from "./services/metrics";
 
@@ -77,7 +79,7 @@ export function buildApp() {
     origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN.split(","),
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Authorization", "Content-Type", "X-Internal-Key", "X-Requested-With"],
+    allowedHeaders: ["Authorization", "Content-Type", "X-Internal-Key", "X-Requested-With", "X-App-Version", "X-App-Platform"],
   });
 
   void app.register(rateLimit, {
@@ -105,7 +107,10 @@ export function buildApp() {
       url.startsWith("/api/health/") ||
       url === "/api/features/flags" ||
       url.startsWith("/api/auth/") ||
-      url.startsWith("/api/admin/")
+      url.startsWith("/api/admin/") ||
+      // Version config must always be readable (even under maintenance) so the
+      // Android gate can evaluate before the user does anything.
+      url === "/api/app/version-config"
     ) {
       return;
     }
@@ -154,6 +159,8 @@ export function buildApp() {
   void app.register(adminAntiCheatRoutes);
   void app.register(matchmakingRoutes);
   void app.register(adminTournamentTiersRoutes);
+  void app.register(appVersionRoutes);
+  void app.register(adminAppVersionRoutes);
 
   return app;
 }

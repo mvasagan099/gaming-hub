@@ -25,6 +25,7 @@ import {
   Search,
   ChevronRight,
   Bell,
+  Smartphone,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useTheme } from '../contexts/ThemeProvider';
@@ -70,6 +71,7 @@ const NAV_GROUPS = [
       { path: '/admin/automation', label: 'Automation', icon: Cpu },
       { path: '/admin/audit', label: 'Audit Logs', icon: History },
       { path: '/admin/settings', label: 'Settings', icon: Settings },
+      { path: '/admin/app-version', label: 'App Version', icon: Smartphone },
     ],
   },
 ];

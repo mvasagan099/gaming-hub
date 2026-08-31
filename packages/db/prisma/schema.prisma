@@ -2181,3 +2181,23 @@ model ScheduledNotification {
 
   @@index([status, scheduledAt])
 }
+
+/// Singleton config for Android app version enforcement.
+/// An admin can configure the minimum supported version; any Android client
+/// below that version receives a hard lock screen until they update.
+model AppVersionConfig {
+  id                      String   @id @default(cuid())
+  /// Latest released Android version string (e.g. "1.2.0"). Informational — shown on the update screen.
+  latestVersion           String   @default("1.0")
+  /// Minimum version still allowed to use the app. Android clients below this → full hard lock.
+  minimumSupportedVersion String   @default("1.0")
+  /// Direct APK / Play Store URL opened when the user taps "UPDATE NOW".
+  downloadUrl             String   @default("https://play.google.com/store/apps/details?id=com.gaminghub.app")
+  /// Message shown on the hard-lock update screen.
+  updateMessage           String   @default("A new version of Gaming Hub is required. Please update to continue playing.")
+  /// When true, force the update prompt (even for users at or above minimumSupportedVersion).
+  forceUpdate             Boolean  @default(false)
+  updatedAt               DateTime @updatedAt
+  /// Admin user ID who last changed the config.
+  updatedBy               String?
+}

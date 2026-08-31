@@ -9,6 +9,9 @@ import { ThemeProvider, useTheme, type Theme } from './contexts/ThemeProvider';
 import { AppErrorBoundary } from './components/ErrorBoundary';
 import CommandPalette from './components/CommandPalette';
 import { initCapacitorServices } from './services/native/capacitorAppService';
+import { useAppVersionStore } from './store/appVersionStore';
+import { UpdateRequiredScreen } from './components/UpdateRequiredScreen';
+import { FullPageLoader } from './components/auth/ProtectedRoute';
 
 /**
  * Applies the admin-configured site theme (settings → general.theme) the first
@@ -60,10 +63,17 @@ export function App() {
   const setRecoverySession = useAuthStore((s) => s.setRecoverySession);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
 
+  // Version gate state — must be read before rendering any routes
+  const versionStatus = useAppVersionStore((s) => s.status);
+  const checkVersion = useAppVersionStore((s) => s.check);
+
   useEffect(() => {
     void initCapacitorServices();
     loadSettings();
-  }, [loadSettings]);
+    // Run the Android version check immediately on mount.
+    // On web this is an instant no-op returning 'ok'.
+    void checkVersion();
+  }, [loadSettings, checkVersion]);
 
   useEffect(() => {
     let active = true;
@@ -148,9 +158,19 @@ export function App() {
     <ThemeProvider defaultTheme="dark" storageKey="gaming-hub-theme">
       <SiteThemeSync />
       <AppErrorBoundary>
-        <RouterProvider router={router} />
-        <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
-        <CommandPalette />
+        {/* Android version gate: hard-locked state renders ONLY the update screen.
+            Web browsers always pass through (versionStatus is immediately 'ok'). */}
+        {versionStatus === 'hard-locked' ? (
+          <UpdateRequiredScreen />
+        ) : versionStatus === 'checking' ? (
+          <FullPageLoader />
+        ) : (
+          <>
+            <RouterProvider router={router} />
+            <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+            <CommandPalette />
+          </>
+        )}
       </AppErrorBoundary>
     </ThemeProvider>
   );

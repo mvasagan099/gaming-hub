@@ -6,6 +6,7 @@ import { isNativePlatform } from './platform';
 import { router } from '../../router';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../supabase';
+import { useAppVersionStore } from '../../store/appVersionStore';
 
 let isInitialized = false;
 
@@ -80,6 +81,13 @@ export async function initCapacitorServices(): Promise<void> {
 
   // 5. Deep Linking & App Links (Password reset, auth redirects, etc.)
   CapApp.addListener('appUrlOpen', (data) => {
+    // Block all deep links when the app is hard-locked due to an outdated version.
+    // This prevents any navigation from bypassing the update required screen.
+    if (useAppVersionStore.getState().status === 'hard-locked') {
+      void CapApp.minimizeApp();
+      return;
+    }
+
     try {
       const url = new URL(data.url);
       const pathname = url.pathname;

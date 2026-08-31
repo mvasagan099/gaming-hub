@@ -83,6 +83,7 @@ export const ERROR_CODES = [
   "DISPUTE_RESOLVED",
   "DISPUTE_UNAUTHORIZED",
   "CONFLICT",
+  "APP_UPDATE_REQUIRED",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

@@ -59,6 +59,7 @@ const AdminSupportPage = lazy(() => import("../pages/admin/AdminSupportPage").th
 const AdminRolesPage = lazy(() => import("../pages/admin/AdminRolesPage").then((m) => ({ default: m.AdminRolesPage })));
 const AdminKycPage = lazy(() => import("../pages/admin/AdminKycPage").then((m) => ({ default: m.AdminKycPage })));
 const AdminGamesPage = lazy(() => import("../pages/admin/AdminGamesPage").then((m) => ({ default: m.AdminGamesPage })));
+const AdminAppVersionPage = lazy(() => import("../pages/admin/AdminAppVersionPage").then((m) => ({ default: m.AdminAppVersionPage })));
 
 const SuspensePage = ({ children }: { children: ReactNode }) => (
   <Suspense
@@ -153,6 +154,7 @@ export const router = createBrowserRouter([
           { path: "support", element: <SuspensePage><AdminSupportPage /></SuspensePage> },
           { path: "audit", element: <SuspensePage><AdminAuditPage /></SuspensePage> },
           { path: "settings", element: <SuspensePage><AdminSettingsPage /></SuspensePage> },
+          { path: "app-version", element: <SuspensePage><AdminAppVersionPage /></SuspensePage> },
         ],
       },
     ],

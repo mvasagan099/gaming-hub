@@ -1,5 +1,5 @@
 import { useAuthStore } from "../../store/authStore";
-import { isNativePlatform } from "../native/platform";
+import { isNativePlatform, getPlatform } from "../native/platform";
 
 function getApiUrl(): string {
   const envUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000/api";
@@ -41,7 +41,21 @@ async function request<T>(path: string, init: RequestInit, tokenOverride?: strin
   }
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
+  // Inject Android version headers so the server can enforce version requirements.
+  // Only sent from native Android builds; web browsers never include these headers.
+  if (isNativePlatform() && getPlatform() === "android") {
+    headers.set("X-App-Platform", "android");
+    // Read the cached installed version from the appVersionStore to avoid calling
+    // Device.getInfo() on every request. The store is populated during app init.
+    const { useAppVersionStore } = await import("../../store/appVersionStore");
+    const installedVersion = useAppVersionStore.getState().installedVersion;
+    if (installedVersion) {
+      headers.set("X-App-Version", installedVersion);
+    }
+  }
+
   const response = await fetch(`${API_URL}${path}`, { ...init, headers });
+
 
   if (!response.ok) {
     let body: ApiErrorBody = {};

@@ -25,4 +25,4 @@ export * from "./achievement";
 export * from "./security";
 export * from "./history";
 export * from "./matchmaking";
-
+export * from "./appVersion";

@@ -885,6 +885,16 @@ export const adminApi = {
   toggleFeatureFlag: (key: string, enabled: boolean) =>
     apiClient.patch(`/admin/features/${encodeURIComponent(key)}`, { enabled }),
 
+  getAppVersionConfig: () =>
+    apiClient.get<import('@gaming-hub/shared').AppVersionConfig>('/admin/app/version-config'),
+  updateAppVersionConfig: (payload: {
+    latestVersion: string;
+    minimumSupportedVersion: string;
+    downloadUrl: string;
+    updateMessage: string;
+    forceUpdate: boolean;
+  }) => apiClient.put<import('@gaming-hub/shared').AppVersionConfig>('/admin/app/version-config', payload),
+
   auditLogs: (page = 1, pageSize = 50, category?: string) => {
     const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (category) qs.set('category', category);
