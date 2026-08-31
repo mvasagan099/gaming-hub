@@ -241,41 +241,14 @@ export interface PracticeRewardResult {
 
 export async function claimPracticeReward(
   userId: string,
-  gameId: string,
+  _gameId: string,
 ): Promise<PracticeRewardResult> {
-  const gameSettings = await getCategorySettings("game");
-
-  if (!gameSettings.practiceModeEnabled) {
-    throw new AppError("FEATURE_DISABLED", "Practice mode is currently disabled", 403);
-  }
-
-  const now = new Date();
-  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-
-  const daily = await prisma.transaction.aggregate({
-    where: { userId, referenceType: "PRACTICE", createdAt: { gte: todayStart } },
-    _sum: { amount: true },
-  });
-  const earned = daily._sum.amount ?? 0;
-
-  if (earned >= gameSettings.practiceDailyLimit) {
-    return {
-      claimed: false,
-      amount: 0,
-      balance: (await getWallet(userId)).balance,
-      remainingToday: 0,
-    };
-  }
-
-  const wallet = await prisma.$transaction(async (tx) => {
-    return applyTransaction(tx, userId, gameSettings.practiceRewardAmount, "PRACTICE", null, { gameId });
-  });
-
+  const wallet = await getWallet(userId);
   return {
-    claimed: true,
-    amount: gameSettings.practiceRewardAmount,
+    claimed: false,
+    amount: 0,
     balance: wallet.balance,
-    remainingToday: Math.max(0, gameSettings.practiceDailyLimit - earned - gameSettings.practiceRewardAmount),
+    remainingToday: 0,
   };
 }
 

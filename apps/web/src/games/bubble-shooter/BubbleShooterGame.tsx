@@ -1,6 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GameWrapper } from '../../components/GameWrapper';
-import { claimPracticeReward } from '../../services/api/practiceReward';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
@@ -168,7 +167,6 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   const [gameOver, setGameOver] = useState(false);
   const [win, setWin] = useState(false);
   const [lose, setLose] = useState(false);
-  const [rewardClaimed, setRewardClaimed] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [showMobileMatchModal, setShowMobileMatchModal] = useState(false);
 
@@ -892,13 +890,6 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
     nextBubbleRef.current = getNextBubble();
   };
 
-  useEffect(() => {
-    if (win && !rewardClaimed && !isMultiplayer) {
-      void claimPracticeReward('bubble-shooter');
-      setRewardClaimed(true);
-    }
-  }, [win, rewardClaimed, isMultiplayer]);
-
   const handleReplay = () => {
     if (isMultiplayer) {
       void useMultiplayerStore.getState().rematch();
@@ -935,11 +926,11 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   const oppName = oppPlayer ? (namesBySeat[oppPlayer.seat] ?? oppPlayer.name) : 'Opponent';
 
   return (
-    <GameWrapper title="Bubble Shooter 3D" gameId="bubble-shooter" mode={mode} stake={stake} onBack={onBack} isFullscreen>
+    <GameWrapper title="Bubble Shooter 3D" gameId="bubble-shooter" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={gameOver || win || lose}>
       <div className="flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-6 w-full max-w-6xl relative mx-auto h-full p-1.5 sm:p-2 lg:p-4 select-none overflow-hidden lg:overflow-y-auto">
         
         {/* CENTER PLAYFIELD CONTAINER */}
-        <div className="relative flex flex-col items-center justify-center w-full max-w-[min(92vw,calc(100vh-130px),380px)] shrink-0">
+        <div className="relative flex flex-col items-center justify-center w-full max-w-[min(92vw,calc((100dvh-7rem)*0.66),480px)] shrink-0">
           
           {/* ═══ LIVE MULTIPLAYER SCOREBOARD CARD ═══ */}
           {isMultiplayer ? (

@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import type { MoveHistoryEntry } from "../managers/GameManager";
-import type ParticleManager from "../managers/ParticleManager";
-import { claimPracticeReward } from "../../../../services/api/practiceReward";
+import type { ParticleManager } from "../effects/ParticleManager";
 import { ANIM, animDuration, prefersReducedMotion } from "../constants";
 
 export interface WinnerPopupOptions {
@@ -162,9 +161,8 @@ export default class WinnerPopup {
 
       if (isHuman) {
         this.trophyText.setText("🏆");
-        this.titleText.setText("YOU WON! (+50 Coins)");
+        this.titleText.setText("YOU WON!");
         this.titleText.setColor("#4ade80");
-        void claimPracticeReward("snake-ladder");
         this.particles?.winFireworks();
       } else {
         this.trophyText.setText("🤖");

@@ -81,7 +81,7 @@ export const LudoPhaserGame: React.FC<LudoPhaserGameProps> = ({
       className={`relative mx-auto w-full ${
         isPortrait
           ? "max-w-[min(98vw,720px)] aspect-[720/1080] max-h-[calc(100dvh-5.5rem)]"
-          : "max-w-[min(94vw,70dvh,860px)] aspect-[1024/800]"
+          : "max-w-[min(96vw,calc((100dvh-5rem)*1.28),1280px)] aspect-[1024/800] max-h-[calc(100dvh-4.5rem)]"
       } h-auto bg-[#070b14] rounded-3xl border border-slate-800/80 shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden flex justify-center items-center backdrop-blur-md`}
     >
       {/* Subtle ambient lighting flares behind the board */}

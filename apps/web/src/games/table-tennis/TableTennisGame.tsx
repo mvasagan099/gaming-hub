@@ -3,13 +3,12 @@ import { GameWrapper } from '../../components/GameWrapper';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
 import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
-import { claimPracticeReward } from '../../services/api/practiceReward';
 import TableTennisMultiplayerDriver from './TableTennisMultiplayerDriver';
 import type { TableTennisState } from '@gaming-hub/game-engine';
 import { TABLE_TENNIS_VISUAL_CONFIG, type CameraState } from './constants/tableTennisVisualConfig';
 import { TableTennis3DRenderer } from './utils/tableTennis3DRenderer';
 import { TableTennisOverlays } from './components/TableTennisOverlays';
-import { Timer, Users, X } from 'lucide-react';
+import { Timer, Users, X, LogOut } from 'lucide-react';
 
 interface TableTennisProps {
   mode: 'ai' | 'multiplayer';
@@ -71,7 +70,6 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
   const [pointAnimation, setPointAnimation] = useState<{ winner: number; reason: string } | null>(null);
   const [remainingTime, setRemainingTime] = useState(180);
   const [endReason, setEndReason] = useState<string | null>(null);
-  const [rewardClaimed, setRewardClaimed] = useState(false);
   const [rallyCount, setRallyCount] = useState(0);
   const rallyCountRef = useRef(0);
   const matchStartedAtMsRef = useRef<number | null>(null);
@@ -123,7 +121,10 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
   }, [gameState]);
 
   const spawnParticles = useCallback((x: number, y: number, color: string, count = 12, speedMult = 1) => {
-    const proj = TableTennis3DRenderer.project(x, y, 10);
+    const isP2 = mode === 'multiplayer' && mySeat === 1;
+    const rx = isP2 ? LOGICAL_WIDTH - x : x;
+    const ry = isP2 ? LOGICAL_HEIGHT - y : y;
+    const proj = TableTennis3DRenderer.project(rx, ry, 10);
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = Math.random() * 4 * speedMult;
@@ -137,7 +138,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         color,
       });
     }
-  }, []);
+  }, [mode, mySeat]);
 
   // Multiplayer Driver Lifecycle
   useEffect(() => {
@@ -218,7 +219,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       });
 
       driver.setOnPointScored((winnerSeat: number, reason: string) => {
-        spawnParticles(ballRef.current.x, ballRef.current.y, winnerSeat === 0 ? '#f43f5e' : '#3b82f6', 20, 1.5);
+        spawnParticles(ballRef.current.x, ballRef.current.y, winnerSeat === mySeat ? '#10b981' : '#f43f5e', 20, 1.5);
         setPointAnimation({ winner: winnerSeat, reason });
         setTimeout(() => setPointAnimation(null), 1400);
       });
@@ -371,16 +372,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
     ballRef.current.inPlay = false;
     rallyCountRef.current = 0;
     setRallyCount(0);
-    setRewardClaimed(false);
   }, []);
-
-  // Practice Reward Claim
-  useEffect(() => {
-    if (winner === 1 && !rewardClaimed && mode !== 'multiplayer') {
-      void claimPracticeReward('table-tennis');
-      setRewardClaimed(true);
-    }
-  }, [winner, rewardClaimed, mode]);
 
   // ─── 60 FPS Game Loop ───────────────────────────────────────────────────────
   useGameLoop((dt) => {
@@ -405,8 +397,9 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         p1.vy = (p1.targetY - p1.y);
         p1.y += (p1.targetY - p1.y) * 0.4;
       } else if (mySeat === 1) {
-        if (keys.up || keys.w) p2TargetYRef.current -= paddleSpeed;
-        if (keys.down || keys.s) p2TargetYRef.current += paddleSpeed;
+        // In Player 2's inverted camera, moving left on screen increases targetY
+        if (keys.up || keys.w) p2TargetYRef.current += paddleSpeed;
+        if (keys.down || keys.s) p2TargetYRef.current -= paddleSpeed;
         p2TargetYRef.current = Math.max(0, Math.min(LOGICAL_HEIGHT - PADDLE_HEIGHT, p2TargetYRef.current));
         p2.vy = (p2TargetYRef.current - p2.y);
         p2.y += (p2TargetYRef.current - p2.y) * 0.4;
@@ -528,19 +521,43 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       cameraState = 'BALL_FOLLOW';
     }
 
-    // ── 3D Perspective Render ──
+    // ── 3D Perspective Render (Flip to Near Side for Player 2) ──
+    const isP2View = mode === 'multiplayer' && mySeat === 1;
+
+    const nearY = isP2View ? (LOGICAL_HEIGHT - PADDLE_HEIGHT) - p2.y : p1.y;
+    const nearVy = isP2View ? -p2.vy : p1.vy;
+    const farY = isP2View ? (LOGICAL_HEIGHT - PADDLE_HEIGHT) - p1.y : p2.y;
+    const farVy = isP2View ? -p1.vy : p2.vy;
+
+    const renderBall = isP2View
+      ? {
+          x: LOGICAL_WIDTH - ball.x,
+          y: LOGICAL_HEIGHT - ball.y,
+          vx: -ball.vx,
+          vy: -ball.vy,
+          speed: ball.speed,
+          inPlay: ball.inPlay,
+        }
+      : ball;
+
+    const renderTrail = isP2View
+      ? trailRef.current.map((t) => ({ x: LOGICAL_WIDTH - t.x, y: LOGICAL_HEIGHT - t.y }))
+      : trailRef.current;
+
     TableTennis3DRenderer.renderScene(
       ctx,
-      p1.y,
-      p1.vy,
-      p2.y,
-      p2.vy,
-      ball,
-      trailRef.current,
+      nearY,
+      nearVy,
+      farY,
+      farVy,
+      renderBall,
+      renderTrail,
       particlesRef.current,
       cameraState,
       dt,
-      isPortrait
+      isPortrait,
+      isP2View ? 'blue' : 'red',
+      isP2View ? 'red' : 'blue'
     );
   }, true);
 
@@ -568,7 +585,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       if (mySeat === 0) {
         p1Ref.current.targetY = clampedY;
       } else if (mySeat === 1) {
-        p2TargetYRef.current = clampedY;
+        // Player 2's screen left-to-right u maps to (LOGICAL_HEIGHT - PADDLE_HEIGHT) - clampedY in logical coordinates
+        p2TargetYRef.current = (LOGICAL_HEIGHT - PADDLE_HEIGHT) - clampedY;
       }
     } else {
       p1Ref.current.targetY = clampedY;
@@ -594,35 +612,49 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
   };
 
   return (
-    <GameWrapper title="Table Tennis 3D Pro" gameId="table-tennis" mode={mode} stake={stake} onBack={onBack} isFullscreen>
+    <GameWrapper title="Table Tennis 3D Pro" gameId="table-tennis" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={gameState === 'gameover'}>
       <div className="flex flex-col lg:flex-row items-center justify-center gap-0 lg:gap-4 w-full max-w-6xl relative mx-auto h-full p-0 lg:p-3 select-none overflow-hidden lg:overflow-y-auto">
         
         {/* CENTER 3D COURT CONTAINER */}
-        <div className="relative flex flex-col items-center justify-center w-full h-full lg:h-auto flex-1 lg:flex-initial lg:max-w-[min(94vw,75dvh,840px)] shrink-0 overflow-hidden">
+        <div className="relative flex flex-col items-center justify-center w-full h-full lg:h-auto flex-1 lg:flex-initial lg:max-w-[min(96vw,calc((100dvh-7rem)*1.54),1200px)] shrink-0 overflow-hidden">
           
           {/* TOP BROADCAST TOURNAMENT SCOREBOARD HUD */}
           <div className="absolute top-2 left-2 right-2 z-20 pointer-events-none lg:pointer-events-auto lg:relative lg:top-auto lg:left-auto lg:right-auto w-auto lg:w-full bg-slate-950/80 lg:bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 rounded-xl sm:rounded-2xl p-1.5 sm:p-2.5 lg:mb-2.5 flex items-center justify-between shadow-2xl gap-1.5 sm:gap-2">
             
-            {/* Player 1 Card (Red / Foreground) */}
+            {/* Left Card: Always LOCAL PLAYER (Foreground / Near side) */}
             <div className="flex items-center gap-1.5 sm:gap-3">
-              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-gradient-to-br from-rose-500/20 to-rose-600/30 border border-rose-500/50 flex items-center justify-center font-black text-[11px] sm:text-xs text-rose-400 shrink-0">
-                P1
+              <div className={`w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl border flex items-center justify-center font-black text-[11px] sm:text-xs shrink-0 ${
+                mySeat === 1
+                  ? 'bg-gradient-to-br from-sky-500/20 to-sky-600/30 border-sky-500/50 text-sky-400'
+                  : 'bg-gradient-to-br from-rose-500/20 to-rose-600/30 border-rose-500/50 text-rose-400'
+              }`}>
+                {mySeat === 1 ? 'P2' : 'P1'}
               </div>
               <div>
                 <div className="flex items-center gap-1 sm:gap-2">
                   <span className="text-[11px] sm:text-sm font-black text-slate-100 uppercase tracking-wide truncate max-w-[65px] sm:max-w-[150px]">
-                    {p1Name}
+                    {mySeat === 1 ? p2Name : p1Name}
                   </span>
-                  {p1Sets > 0 && (
-                    <span className="px-1 py-0.5 rounded bg-rose-500/20 text-[8px] sm:text-[10px] font-black text-rose-400 border border-rose-500/30">
-                      {p1Sets}S
+                  {(mySeat === 1 ? p2Sets : p1Sets) > 0 && (
+                    <span className={`px-1 py-0.5 rounded text-[8px] sm:text-[10px] font-black border ${
+                      mySeat === 1
+                        ? 'bg-sky-500/20 text-sky-400 border-sky-500/30'
+                        : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                    }`}>
+                      {(mySeat === 1 ? p2Sets : p1Sets)}S
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-1 sm:gap-1.5 mt-0.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${currentServer === 1 ? 'bg-rose-400 animate-pulse' : 'bg-slate-600'}`} />
-                  <span className="text-[8px] sm:text-[10px] font-bold uppercase tracking-wider text-rose-400/90">
-                    {currentServer === 1 ? '● Serve' : 'Ready'}
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    (mySeat === 1 ? currentServer === 2 : currentServer === 1)
+                      ? (mySeat === 1 ? 'bg-sky-400 animate-pulse' : 'bg-rose-400 animate-pulse')
+                      : 'bg-slate-600'
+                  }`} />
+                  <span className={`text-[8px] sm:text-[10px] font-bold uppercase tracking-wider ${
+                    mySeat === 1 ? 'text-sky-400/90' : 'text-rose-400/90'
+                  }`}>
+                    {(mySeat === 1 ? currentServer === 2 : currentServer === 1) ? '● Serve' : 'Ready'}
                   </span>
                 </div>
               </div>
@@ -630,8 +662,10 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
             {/* Large Center Score Board & Match Timer */}
             <div className="flex items-center gap-1.5 sm:gap-4 bg-slate-900/90 px-2 sm:px-6 py-0.5 sm:py-1 rounded-lg sm:rounded-xl border border-slate-800 shadow-inner shrink-0 pointer-events-auto">
-              <span className="text-lg sm:text-3xl font-black font-mono tracking-tight text-rose-400">
-                {String(p1Score).padStart(2, '0')}
+              <span className={`text-lg sm:text-3xl font-black font-mono tracking-tight ${
+                mySeat === 1 ? 'text-sky-400' : 'text-rose-400'
+              }`}>
+                {String(mySeat === 1 ? p2Score : p1Score).padStart(2, '0')}
               </span>
               <div className="flex flex-col items-center px-0.5 sm:px-1">
                 <div className="flex items-center gap-1 text-slate-400">
@@ -642,10 +676,12 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
                 </div>
                 <span className="text-[10px] sm:text-xs font-black text-slate-600 leading-none">:</span>
               </div>
-              <span className="text-lg sm:text-3xl font-black font-mono tracking-tight text-sky-400">
-                {String(p2Score).padStart(2, '0')}
+              <span className={`text-lg sm:text-3xl font-black font-mono tracking-tight ${
+                mySeat === 1 ? 'text-rose-400' : 'text-sky-400'
+              }`}>
+                {String(mySeat === 1 ? p1Score : p2Score).padStart(2, '0')}
               </span>
-              {mode === 'multiplayer' && (
+              {mode === 'multiplayer' ? (
                 <button
                   onClick={() => setShowMobilePanel(true)}
                   className="xl:hidden p-1 sm:p-2 rounded-lg sm:rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/50 text-indigo-300 flex items-center gap-1 text-[9px] sm:text-[10px] font-bold shadow-lg transition-all active:scale-95 cursor-pointer ml-1 sm:ml-2"
@@ -654,31 +690,54 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
                   <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   <span className="hidden sm:inline">Details</span>
                 </button>
+              ) : (
+                <button
+                  onClick={onBack}
+                  className="p-1 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl bg-rose-600/20 hover:bg-rose-600 border border-rose-500/40 text-rose-300 hover:text-white flex items-center gap-1 text-[9px] sm:text-[10px] font-bold shadow-lg transition-all active:scale-95 cursor-pointer ml-1 sm:ml-2"
+                  title="Exit Game"
+                >
+                  <LogOut className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  <span className="hidden sm:inline">Exit</span>
+                </button>
               )}
             </div>
 
-            {/* Player 2 Card (Blue / Background) */}
+            {/* Right Card: Always OPPONENT (Background / Far side) */}
             <div className="flex items-center gap-1.5 sm:gap-3 text-right">
               <div>
                 <div className="flex items-center justify-end gap-1 sm:gap-2">
-                  {p2Sets > 0 && (
-                    <span className="px-1 py-0.5 rounded bg-sky-500/20 text-[8px] sm:text-[10px] font-black text-sky-400 border border-sky-500/30">
-                      {p2Sets}S
+                  {(mySeat === 1 ? p1Sets : p2Sets) > 0 && (
+                    <span className={`px-1 py-0.5 rounded text-[8px] sm:text-[10px] font-black border ${
+                      mySeat === 1
+                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                        : 'bg-sky-500/20 text-sky-400 border-sky-500/30'
+                    }`}>
+                      {(mySeat === 1 ? p1Sets : p2Sets)}S
                     </span>
                   )}
                   <span className="text-[11px] sm:text-sm font-black text-slate-100 uppercase tracking-wide truncate max-w-[65px] sm:max-w-[150px]">
-                    {p2Name}
+                    {mySeat === 1 ? p1Name : p2Name}
                   </span>
                 </div>
                 <div className="flex items-center justify-end gap-1 sm:gap-1.5 mt-0.5">
-                  <span className="text-[8px] sm:text-[10px] font-bold uppercase tracking-wider text-sky-400/90">
-                    {currentServer === 2 ? '● Serve' : 'Ready'}
+                  <span className={`text-[8px] sm:text-[10px] font-bold uppercase tracking-wider ${
+                    mySeat === 1 ? 'text-rose-400/90' : 'text-sky-400/90'
+                  }`}>
+                    {(mySeat === 1 ? currentServer === 1 : currentServer === 2) ? '● Serve' : 'Ready'}
                   </span>
-                  <span className={`w-1.5 h-1.5 rounded-full ${currentServer === 2 ? 'bg-sky-400 animate-pulse' : 'bg-slate-600'}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    (mySeat === 1 ? currentServer === 1 : currentServer === 2)
+                      ? (mySeat === 1 ? 'bg-rose-400 animate-pulse' : 'bg-sky-400 animate-pulse')
+                      : 'bg-slate-600'
+                  }`} />
                 </div>
               </div>
-              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-gradient-to-br from-sky-500/20 to-sky-600/30 border border-sky-500/50 flex items-center justify-center font-black text-[11px] sm:text-xs text-sky-400 shrink-0">
-                P2
+              <div className={`w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl border flex items-center justify-center font-black text-[11px] sm:text-xs shrink-0 ${
+                mySeat === 1
+                  ? 'bg-gradient-to-br from-rose-500/20 to-rose-600/30 border-rose-500/50 text-rose-400'
+                  : 'bg-gradient-to-br from-sky-500/20 to-sky-600/30 border-sky-500/50 text-sky-400'
+              }`}>
+                {mySeat === 1 ? 'P1' : 'P2'}
               </div>
             </div>
 

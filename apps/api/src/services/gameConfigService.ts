@@ -295,6 +295,17 @@ export class GameConfigService {
     const isDraw = winnerIds.length === 0;
     const totalPot = snapshot.entryFee * playerCount;
 
+    // Practice / Free match with 0 entry fee: strictly 0 pot, 0 prize, 0 refund
+    if (snapshot.entryFee === 0 || totalPot === 0) {
+      return {
+        totalPot: 0,
+        prizePool: 0,
+        winnerPayout: 0,
+        refundPerPlayer: 0,
+        isDraw,
+      };
+    }
+
     if (isDraw) {
       if (snapshot.drawPolicy === "REFUND_ENTRY") {
         return {

@@ -19,6 +19,7 @@ import { useAuthStore } from "../../store/authStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useMe } from "../../services/api/useMe";
 import { Skeleton } from "../Skeleton";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 
 interface NavbarProps {
   onLogoClick?: () => void;
@@ -34,6 +35,7 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
   const { me, loading } = useMe();
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const siteName = settings?.general?.siteName || "Gaming Hub";
@@ -63,7 +65,7 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
   }, [userMenuOpen]);
 
   const handleSignOut = async () => {
-    setUserMenuOpen(false);
+    setShowLogoutConfirm(false);
     await signOut();
     navigate("/");
   };
@@ -294,7 +296,8 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
                       <button
                         type="button"
                         onClick={() => {
-                          void handleSignOut();
+                          setUserMenuOpen(false);
+                          setShowLogoutConfirm(true);
                         }}
                         className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors text-left group cursor-pointer"
                         role="menuitem"
@@ -317,6 +320,19 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
           )}
         </div>
       </div>
+
+      {/* Logout Confirmation Safety Dialog */}
+      <ConfirmDialog
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        title="Logout?"
+        message="Are you sure you want to log out?"
+        confirmText="Logout"
+        cancelText="Cancel"
+        variant="danger"
+        icon="logout"
+        onConfirm={handleSignOut}
+      />
     </header>
   );
 }

@@ -75,7 +75,7 @@ export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, 
   }
 
   return (
-    <GameWrapper title="Chess Master" gameId="chess" mode={initialMode} stake={stake} onBack={onBack}>
+    <GameWrapper title="Chess Master" gameId="chess" mode={initialMode} stake={stake} onBack={onBack} isGameOver={true}>
       <div className="flex flex-col md:flex-row items-center justify-center w-full max-w-3xl mx-auto gap-5">
         {/* Main Panel */}
         <div className="relative flex flex-col items-center justify-center w-full max-w-sm p-6 glass-panel rounded-3xl border border-amber-500/30 shadow-[0_15px_40px_rgba(0,0,0,0.1)] dark:shadow-[0_15px_40px_rgba(0,0,0,0.6)] bg-white/95 dark:bg-gradient-to-b dark:from-slate-900/90 dark:via-slate-950/95 dark:to-slate-950">

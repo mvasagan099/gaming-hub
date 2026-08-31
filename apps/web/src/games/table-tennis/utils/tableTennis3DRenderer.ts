@@ -116,7 +116,9 @@ export class TableTennis3DRenderer {
     particles: Array<{ x: number; y: number; color: string; life: number; maxLife: number }>,
     cameraState: CameraState = 'RALLY',
     dt = 0.016,
-    isPortrait = false
+    isPortrait = false,
+    nearColor: 'red' | 'blue' = 'red',
+    farColor: 'red' | 'blue' = 'blue'
   ): void {
     this.isPortraitMode = isPortrait;
     const cfg = TABLE_TENNIS_VISUAL_CONFIG;
@@ -148,7 +150,7 @@ export class TableTennis3DRenderer {
 
     // ── 4. Far Opponent Paddle & Hand (Drawn Behind Net) ──
     const p2CenterY = p2Y + cfg.paddleHeight / 2;
-    this.drawFarPaddle(ctx, 580, p2CenterY, p2Vy);
+    this.drawFarPaddle(ctx, 580, p2CenterY, p2Vy, farColor);
 
     // ── 5. Horizontal 3D Woven Net ──
     this.renderHorizontalNet(ctx, cfg);
@@ -158,7 +160,7 @@ export class TableTennis3DRenderer {
 
     // ── 7. Near Player Paddle & Forearm (Foreground) ──
     const p1CenterY = p1Y + cfg.paddleHeight / 2;
-    this.drawNearPaddle(ctx, 20, p1CenterY, p1Vy, ball);
+    this.drawNearPaddle(ctx, 20, p1CenterY, p1Vy, ball, nearColor);
 
     // ── 8. Particle Sparks & Hit Effects ──
     this.renderParticles(ctx, particles);
@@ -793,7 +795,8 @@ export class TableTennis3DRenderer {
     lx: number,
     ly: number,
     vy: number,
-    ball: { x: number; y: number; vx: number; vy: number; inPlay: boolean }
+    ball: { x: number; y: number; vx: number; vy: number; inPlay: boolean },
+    color: 'red' | 'blue' = 'red'
   ): void {
     const { paddles } = TABLE_TENNIS_VISUAL_CONFIG;
     const { x, y, scale } = this.project(lx, ly, 15);
@@ -874,7 +877,7 @@ export class TableTennis3DRenderer {
     ctx.ellipse(0, 0, bladeR + 1.6, bladeR * 1.15 + 1.6, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // ── 5. Red Tournament Rubber Face (Player 1) ──
+    // ── 5. Tournament Rubber Face (Red for P1, Blue for P2) ──
     const rubberGrad = ctx.createRadialGradient(
       -bladeR * 0.3,
       -bladeR * 0.3,
@@ -883,17 +886,24 @@ export class TableTennis3DRenderer {
       0,
       bladeR * 1.1
     );
-    rubberGrad.addColorStop(0, paddles.p1RubberTop);
-    rubberGrad.addColorStop(0.4, paddles.p1RubberMid);
-    rubberGrad.addColorStop(0.8, paddles.p1RubberDark);
-    rubberGrad.addColorStop(1, paddles.p1Rim);
+    if (color === 'blue') {
+      rubberGrad.addColorStop(0, paddles.p2RubberTop);
+      rubberGrad.addColorStop(0.4, paddles.p2RubberMid);
+      rubberGrad.addColorStop(0.8, paddles.p2RubberDark);
+      rubberGrad.addColorStop(1, paddles.p2Rim);
+    } else {
+      rubberGrad.addColorStop(0, paddles.p1RubberTop);
+      rubberGrad.addColorStop(0.4, paddles.p1RubberMid);
+      rubberGrad.addColorStop(0.8, paddles.p1RubberDark);
+      rubberGrad.addColorStop(1, paddles.p1Rim);
+    }
     ctx.fillStyle = rubberGrad;
     ctx.beginPath();
     ctx.ellipse(0, 0, bladeR, bladeR * 1.15, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Rubber Edge Rim Border
-    ctx.strokeStyle = paddles.p1Rim;
+    ctx.strokeStyle = color === 'blue' ? paddles.p2Rim : paddles.p1Rim;
     ctx.lineWidth = 2.4 * s;
     ctx.stroke();
 
@@ -923,7 +933,8 @@ export class TableTennis3DRenderer {
     ctx: CanvasRenderingContext2D,
     lx: number,
     ly: number,
-    vy: number
+    vy: number,
+    color: 'red' | 'blue' = 'blue'
   ): void {
     const { paddles } = TABLE_TENNIS_VISUAL_CONFIG;
     const { x, y, scale } = this.project(lx, ly, 12);
@@ -960,7 +971,7 @@ export class TableTennis3DRenderer {
     ctx.roundRect(-handleW / 2, handleY, handleW, handleH, 3 * s);
     ctx.fill();
 
-    // ── 4. Blue Tournament Rubber Face (Player 2) ──
+    // ── 4. Tournament Rubber Face (Blue for P2, Red for P1) ──
     const bladeR = 20 * s;
     ctx.fillStyle = paddles.woodBlade;
     ctx.beginPath();
@@ -975,17 +986,24 @@ export class TableTennis3DRenderer {
       0,
       bladeR * 1.1
     );
-    rubberGrad.addColorStop(0, paddles.p2RubberTop);
-    rubberGrad.addColorStop(0.4, paddles.p2RubberMid);
-    rubberGrad.addColorStop(0.8, paddles.p2RubberDark);
-    rubberGrad.addColorStop(1, paddles.p2Rim);
+    if (color === 'red') {
+      rubberGrad.addColorStop(0, paddles.p1RubberTop);
+      rubberGrad.addColorStop(0.4, paddles.p1RubberMid);
+      rubberGrad.addColorStop(0.8, paddles.p1RubberDark);
+      rubberGrad.addColorStop(1, paddles.p1Rim);
+    } else {
+      rubberGrad.addColorStop(0, paddles.p2RubberTop);
+      rubberGrad.addColorStop(0.4, paddles.p2RubberMid);
+      rubberGrad.addColorStop(0.8, paddles.p2RubberDark);
+      rubberGrad.addColorStop(1, paddles.p2Rim);
+    }
     ctx.fillStyle = rubberGrad;
     ctx.beginPath();
     ctx.ellipse(0, 0, bladeR, bladeR * 1.15, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Rim Border
-    ctx.strokeStyle = paddles.p2Rim;
+    ctx.strokeStyle = color === 'red' ? paddles.p1Rim : paddles.p2Rim;
     ctx.lineWidth = 1.6 * s;
     ctx.stroke();
 

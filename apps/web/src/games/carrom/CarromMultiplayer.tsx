@@ -1663,7 +1663,7 @@ const CarromMultiplayer: React.FC<Props> = ({
         <div className="flex-1 flex flex-col items-center justify-center min-w-0 max-h-full py-1">
           {/* Dynamic Responsive Canvas Wrapper */}
           <div
-            className="relative shadow-[0_25px_70px_rgba(0,0,0,0.85)] rounded-[24px] sm:rounded-[32px] p-1 bg-slate-900/60 border border-slate-800 flex-shrink-0 w-[min(94vw,calc(100vh-230px),480px)] lg:w-[min(calc(100vh-170px),calc(100vw-420px),720px)] aspect-square"
+            className="relative shadow-[0_25px_70px_rgba(0,0,0,0.85)] rounded-[24px] sm:rounded-[32px] p-1 bg-slate-900/60 border border-slate-800 flex-shrink-0 w-[min(94vw,calc(100vh-230px),480px)] lg:w-[min(calc(100dvh-130px),calc(100vw-360px),820px)] aspect-square"
           >
             <canvas
               ref={canvasRef}

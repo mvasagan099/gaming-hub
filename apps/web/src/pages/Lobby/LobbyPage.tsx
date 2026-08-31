@@ -36,6 +36,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useMe } from "../../services/api/useMe";
 import { usePublicProfile } from "../../services/api/usePublicProfile";
 import { RoomChat } from "./RoomChat";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 
 const SEAT_COLORS = [
   { ring: "border-rose-500", text: "text-rose-400", bg: "bg-rose-500", glow: "shadow-rose-500/20", badge: "bg-rose-500/20 text-rose-300" },
@@ -228,6 +229,7 @@ export const LobbyPage: React.FC = () => {
   const [joinCode, setJoinCode] = useState("");
   const [signingIn, setSigningIn] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const session = useAuthStore((s) => s.session);
   const userId = useAuthStore((s) => s.user?.id ?? null);
@@ -662,8 +664,8 @@ export const LobbyPage: React.FC = () => {
             </button>
             {session && (
               <button
-                onClick={() => void handleSignOut()}
-                className="mt-6 flex items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-rose-400 transition-colors"
+                onClick={() => setShowLogoutConfirm(true)}
+                className="mt-6 flex items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5" /> Sign out
               </button>
@@ -891,6 +893,19 @@ export const LobbyPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Logout Confirmation Safety Dialog */}
+      <ConfirmDialog
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        title="Logout?"
+        message="Are you sure you want to log out?"
+        confirmText="Logout"
+        cancelText="Cancel"
+        variant="danger"
+        icon="logout"
+        onConfirm={handleSignOut}
+      />
     </div>
   );
 };

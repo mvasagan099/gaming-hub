@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import Phaser from "phaser";
 import { FruitEvents } from "../phaser/events/FruitEvents";
 import { Trophy, Shield, XCircle, RotateCcw, Sparkles, Flame, Zap, Award, LogOut, Loader2 } from "lucide-react";
-import { claimPracticeReward } from "../../../services/api/practiceReward";
 import { useMultiplayerStore, type WinnerInfo } from "../../../store/multiplayerStore";
 import type { FruitStats } from "../phaser/types/fruit.types";
 import type { FruitNinjaState } from "@gaming-hub/game-engine";
@@ -23,7 +22,6 @@ export const FruitNinjaOverlays: React.FC<FruitNinjaOverlaysProps> = ({
   const [localStats, setLocalStats] = useState<FruitStats | null>(null);
   const [localEndReason, setLocalEndReason] = useState<string | null>(null);
   const [isLocalGameOver, setIsLocalGameOver] = useState(false);
-  const [hasRewarded, setHasRewarded] = useState(false);
 
   // Multiplayer store hooks
   const mySeat = useMultiplayerStore((s) => s.mySeat);
@@ -52,11 +50,6 @@ export const FruitNinjaOverlays: React.FC<FruitNinjaOverlaysProps> = ({
             setLocalEndReason(payload.endReason);
           }
           setIsLocalGameOver(true);
-
-          if (!isMultiplayer && stats.score > 0 && !hasRewarded) {
-            setHasRewarded(true);
-            void claimPracticeReward("fruit-ninja");
-          }
         };
 
         scene.events.on(FruitEvents.GAME_OVER, handleGameOver);

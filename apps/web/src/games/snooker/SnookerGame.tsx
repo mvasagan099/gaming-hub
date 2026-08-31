@@ -443,6 +443,8 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
       return;
     }
 
+    const isTouch = e.pointerType === 'touch';
+
     setIsAiming(true);
     const dx = clickX - cueBall.x;
     const dy = clickY - cueBall.y;
@@ -453,7 +455,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
       originX: clickX,
       originY: clickY,
       targetAngle: angle,
-      isPulling: true,
+      isPulling: !isTouch, // On mobile touch, dragging is strictly for aiming; shot is fired via STRIKE button
       hasPulled: false,
     };
 
@@ -470,22 +472,36 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     const cueBall = balls.find((b) => b.type === "cue");
     if (!cueBall || cueBall.pocketed || cueBallInHand) return;
 
-    // If mouse button is held down, pull back to charge power
+    const isTouch = e.pointerType === 'touch';
+
+    if (isTouch) {
+      // Mobile Touchscreen: Dragging anywhere smoothly rotates aim towards touch point (aim only)
+      const newAngle = Math.atan2(clickY - cueBall.y, clickX - cueBall.x);
+      setAimAngle(newAngle);
+      dragRef.current.targetAngle = newAngle;
+
+      if (mode === "multiplayer" && driverRef.current) {
+        driverRef.current.sendAim(newAngle, cuePower);
+      }
+      return;
+    }
+
+    // Desktop PC: Pull-back power drag, mouse hover aim
+    const targetAngle = dragRef.current.targetAngle ?? aimAngle;
+    const backX = -Math.cos(targetAngle);
+    const backY = -Math.sin(targetAngle);
+
     if (dragRef.current.isPulling) {
       const deltaX = clickX - dragRef.current.originX;
       const deltaY = clickY - dragRef.current.originY;
 
-      // Vector pointing backward from cue ball away from target
-      const targetAngle = dragRef.current.targetAngle;
-      const backX = -Math.cos(targetAngle);
-      const backY = -Math.sin(targetAngle);
-
       // Project drag displacement onto reverse aim vector
       const pullDist = deltaX * backX + deltaY * backY;
 
-      if (pullDist > 10) {
+      if (pullDist > 12) {
+        // User is pulling back the cue to charge power
         dragRef.current.hasPulled = true;
-        const rawPower = Math.min(1, Math.max(0, (pullDist - 10) / 130));
+        const rawPower = Math.min(1, Math.max(0, (pullDist - 12) / 120));
         const power = Math.max(0.05, Math.pow(rawPower, 1.1));
         setCuePower(power);
 
@@ -515,7 +531,9 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     if (!isAiming) return;
     setIsAiming(false);
 
-    if (dragRef.current.isPulling) {
+    const isTouch = e.pointerType === 'touch';
+
+    if (!isTouch && dragRef.current.isPulling) {
       const shouldShoot = dragRef.current.hasPulled && cuePower >= 0.05;
       dragRef.current.isPulling = false;
       dragRef.current.hasPulled = false;
@@ -523,6 +541,9 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
       if (shouldShoot) {
         executeShotWithAnimation(cuePower);
       }
+    } else {
+      dragRef.current.isPulling = false;
+      dragRef.current.hasPulled = false;
     }
   };
 
@@ -743,7 +764,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
   const showColorPicker = isMyTurn && !isSimulating && (frameStatus === "COLOR_PHASE" || frameStatus === "FREE_BALL");
 
   return (
-    <GameWrapper title="Snooker 3D" gameId="snooker" mode={mode} stake={stake} onBack={onBack} isFullscreen>
+    <GameWrapper title="Snooker 3D" gameId="snooker" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={frameStatus === "MATCH_END"}>
       <div className="relative h-full w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-between p-2 sm:p-3 select-none overflow-hidden">
         {/* Top Snooker Championship Broadcast HUD */}
         <SnookerHUD
@@ -796,8 +817,8 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
         {/* Main Snooker Arena */}
         <div className="w-full flex-1 flex items-center justify-center max-w-7xl px-1 sm:px-2 my-auto overflow-hidden">
           {/* Snooker Table Main Canvas Container */}
-          <div className="relative flex-1 flex items-center justify-center w-full max-w-5xl">
-            <div className={`relative ${isRotated ? 'aspect-[1/2] max-h-[min(65vh,580px)] w-auto' : 'aspect-[2/1] w-full max-w-5xl'} rounded-3xl p-1 bg-gradient-to-b from-amber-700/30 via-slate-900/60 to-slate-950/80 shadow-[0_25px_60px_rgba(0,0,0,0.9)] border border-slate-700/60 flex items-center justify-center overflow-hidden`}>
+          <div className="relative flex-1 flex items-center justify-center w-full max-w-[min(92vw,calc((100dvh-9.5rem)*2),1260px)]">
+            <div className={`relative ${isRotated ? 'aspect-[1/2] max-h-[min(65vh,580px)] w-auto' : 'aspect-[2/1] w-full max-w-[min(92vw,calc((100dvh-9.5rem)*2),1260px)] max-h-[calc(100dvh-9.5rem)]'} rounded-3xl p-1 bg-gradient-to-b from-amber-700/30 via-slate-900/60 to-slate-950/80 shadow-[0_25px_60px_rgba(0,0,0,0.9)] border border-slate-700/60 flex items-center justify-center overflow-hidden`}>
               <canvas
                 ref={canvasRef}
                 width={isRotated ? 480 : 960}
@@ -861,6 +882,73 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
                 <MultiplayerMatchPanel />
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ═══ MOBILE TOUCH CONTROLS BAR (Aim Adjust + Power Slider + Strike) ═══ */}
+        {isMyTurn && !isSimulating && !cueBallInHand && (
+          <div className="flex sm:hidden items-center justify-between gap-2 w-full max-w-sm px-3 py-2 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl z-20 shrink-0">
+            {/* Fine-tune Aim buttons */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const newAngle = aimAngle - 0.02;
+                  setAimAngle(newAngle);
+                  if (mode === "multiplayer" && driverRef.current) driverRef.current.sendAim(newAngle, cuePower);
+                }}
+                className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 active:bg-indigo-600 text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer shadow-sm active:scale-95"
+                title="Fine-tune Aim Left"
+                aria-label="Fine-tune Aim Left"
+              >
+                ◀
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const newAngle = aimAngle + 0.02;
+                  setAimAngle(newAngle);
+                  if (mode === "multiplayer" && driverRef.current) driverRef.current.sendAim(newAngle, cuePower);
+                }}
+                className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 active:bg-indigo-600 text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer shadow-sm active:scale-95"
+                title="Fine-tune Aim Right"
+                aria-label="Fine-tune Aim Right"
+              >
+                ▶
+              </button>
+            </div>
+
+            {/* Power Slider */}
+            <div className="flex-1 flex flex-col px-1.5 min-w-0">
+              <div className="flex justify-between items-center text-[8px] font-bold text-slate-400">
+                <span>POWER</span>
+                <span className="font-mono text-amber-400 font-black">{Math.round(cuePower * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min="0.05"
+                max="1"
+                step="0.01"
+                value={cuePower}
+                onChange={(e) => {
+                  const p = parseFloat(e.target.value);
+                  setCuePower(p);
+                  if (mode === "multiplayer" && driverRef.current) driverRef.current.sendAim(aimAngle, p);
+                }}
+                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                aria-label="Cue Shot Power"
+              />
+            </div>
+
+            {/* Strike Button */}
+            <button
+              type="button"
+              onClick={() => handleDirectShoot()}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer flex items-center gap-1 shrink-0"
+              aria-label="Strike Cue Ball"
+            >
+              ⚡ STRIKE
+            </button>
           </div>
         )}
 

@@ -157,7 +157,7 @@ export const Home: React.FC = () => {
     if (mode === 'multiplayer') {
       navigate(`/lobby/${gameId}`, { state: { mode, stake } });
     } else {
-      navigate(`/games/${gameId}`, { state: { mode, stake } });
+      navigate(`/games/${gameId}`, { state: { mode, stake: 0 } });
     }
   };
 

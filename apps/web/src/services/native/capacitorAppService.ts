@@ -9,6 +9,22 @@ import { supabase } from '../supabase';
 
 let isInitialized = false;
 
+type BackButtonHandler = () => boolean;
+const backButtonHandlers: BackButtonHandler[] = [];
+
+/**
+ * Registers a custom handler for the Android hardware Back button.
+ * Returns an unregister cleanup function.
+ * If the handler returns `true`, default back navigation is prevented.
+ */
+export function registerBackButtonHandler(handler: BackButtonHandler): () => void {
+  backButtonHandlers.push(handler);
+  return () => {
+    const idx = backButtonHandlers.indexOf(handler);
+    if (idx !== -1) backButtonHandlers.splice(idx, 1);
+  };
+}
+
 /**
  * Initializes native Capacitor services (Back Button, Deep Linking, Status Bar, Splash Screen).
  * Safely no-ops in standard web browsers.
@@ -42,6 +58,14 @@ export async function initCapacitorServices(): Promise<void> {
 
   // 4. Android Hardware Back Button Handling
   CapApp.addListener('backButton', ({ canGoBack }) => {
+    // If a custom handler intercepts the back button (e.g., active game exit confirmation dialog)
+    if (backButtonHandlers.length > 0) {
+      const topHandler = backButtonHandlers[backButtonHandlers.length - 1];
+      if (topHandler && topHandler()) {
+        return;
+      }
+    }
+
     const currentPath = window.location.pathname;
     const rootPaths = ['/', '/login', '/signup', '/2fa'];
 

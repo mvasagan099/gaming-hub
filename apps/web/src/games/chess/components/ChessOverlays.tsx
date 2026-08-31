@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import Phaser from "phaser";
 import { ChessEvents } from "../phaser/events/ChessEvents";
 import { Trophy, Shield, XCircle, RotateCcw, Flag, Handshake, Sparkles, Swords } from "lucide-react";
-import { claimPracticeReward } from "../../../services/api/practiceReward";
 import { useMultiplayerStore } from "../../../store/multiplayerStore";
 
 interface ChessOverlaysProps {
@@ -21,7 +20,6 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
   const [gameOverMsg, setGameOverMsg] = useState<string | null>(null);
   const [mpResult, setMpResult] = useState<MpResult | null>(null);
   const [promotionData, setPromotionData] = useState<{ from: string; to: string } | null>(null);
-  const [hasRewarded, setHasRewarded] = useState(false);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
   const [showMatchIntro, setShowMatchIntro] = useState(true);
 
@@ -59,13 +57,6 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
           }
 
           setGameOverMsg(msg);
-
-          if (msg.includes("White Wins") && !hasRewarded) {
-            setHasRewarded(true);
-            setTimeout(() => {
-              void claimPracticeReward("chess");
-            }, 1000);
-          }
         });
 
         scene.events.on(ChessEvents.PROMOTION_NEEDED, (from: string, to: string) => {
@@ -77,7 +68,7 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
     return () => {
       clearInterval(timer);
     };
-  }, [game, hasRewarded]);
+  }, [game]);
 
   const handlePromotion = (pieceType: "q" | "r" | "b" | "n") => {
     if (!game || !promotionData) return;

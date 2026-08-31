@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { CricketState } from '@gaming-hub/game-engine';
 import { GameWrapper } from '../../components/GameWrapper';
-import { claimPracticeReward } from '../../services/api/practiceReward';
 import { CricketPhaserGame } from './CricketPhaserGame';
 import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
@@ -203,9 +202,6 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
     setFinalWickets(wickets);
     setIsWin(won);
     setAiGameOver(true);
-    if (won) {
-      setTimeout(() => void claimPracticeReward('cricket'), 1000);
-    }
   }, []);
 
   const handleGameEvent = useCallback((type: string, data?: Record<string, unknown>) => {
@@ -292,7 +288,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
 
   if (isMultiplayer && !matchStarted) {
     return (
-      <GameWrapper title="Cricket World Premier League" gameId="cricket" mode={mode} stake={stake} onBack={onBack} isFullscreen>
+      <GameWrapper title="Cricket World Premier League" gameId="cricket" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={true}>
         <div className="flex flex-col items-center justify-center w-full max-w-xl mx-auto gap-8 relative z-10">
           <div className="flex flex-col items-center justify-center w-full p-10 bg-slate-900/70 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-[0_8px_40px_rgba(0,0,0,0.5)] text-center">
             {/* Ambient glow */}
@@ -321,12 +317,12 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
   // ── Main game render ───────────────────────────────────────────────────────
 
   return (
-    <GameWrapper title="Cricket World Premier League" gameId="cricket" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="relative h-full w-full flex flex-col xl:flex-row items-center xl:items-start justify-center gap-0 xl:gap-6 max-w-7xl mx-auto z-10 p-0 select-none overflow-hidden xl:overflow-y-auto">
+    <GameWrapper title="Cricket World Premier League" gameId="cricket" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={matchFinished || (!isMultiplayer && !playerRole)}>
+      <div className="relative h-full w-full flex flex-col xl:flex-row items-center justify-center gap-0 xl:gap-6 max-w-7xl mx-auto z-10 p-0 select-none overflow-hidden xl:overflow-y-auto my-auto">
 
         {/* ── AI: Role picker ── */}
         {!isMultiplayer && !playerRole && (
-          <div className="flex flex-col items-center justify-center w-full max-w-xl mx-auto p-10 bg-slate-900/70 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-[0_8px_40px_rgba(0,0,0,0.5)]">
+          <div className="flex flex-col items-center justify-center w-full max-w-xl mx-auto my-auto p-6 sm:p-10 bg-slate-900/85 backdrop-blur-2xl rounded-[2.5rem] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.7)] animate-in fade-in zoom-in-95 duration-200">
             <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-500 text-center mb-2">
               Match Setup
             </h2>

@@ -158,7 +158,7 @@ export const FruitNinjaPhaserGame: React.FC<FruitNinjaPhaserProps> = ({
       className={`relative ${
         isMobilePortrait
           ? "w-[100dvh] h-[100dvw] flex-shrink-0 z-40"
-          : "mx-auto w-full max-w-[min(94vw,70dvh,960px)] aspect-[8/5] h-auto rounded-3xl border border-amber-500/20 shadow-[0_20px_50px_rgba(0,0,0,0.85)]"
+          : "mx-auto w-full max-w-[min(96vw,calc((100dvh-5rem)*1.6),1280px)] aspect-[8/5] max-h-[calc(100dvh-4.5rem)] h-auto rounded-3xl border border-amber-500/20 shadow-[0_20px_50px_rgba(0,0,0,0.85)]"
       } bg-gradient-to-b from-[#070b14] via-[#090f1d] to-[#070b14] overflow-hidden flex justify-center items-center select-none touch-none`}
     >
       {/* Ambient background glow flares */}

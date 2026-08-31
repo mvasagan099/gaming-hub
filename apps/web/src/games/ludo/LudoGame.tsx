@@ -125,7 +125,7 @@ export const LudoGame: React.FC<LudoGameProps> = ({ mode: initialMode, stake, on
   }
 
   return (
-    <GameWrapper title="Ludo Champion" gameId="ludo" mode={initialMode} stake={stake} onBack={onBack}>
+    <GameWrapper title="Ludo Champion" gameId="ludo" mode={initialMode} stake={stake} onBack={onBack} isGameOver={true}>
       <div className="flex flex-col lg:flex-row gap-6 w-full max-w-5xl mx-auto items-start justify-center">
         {/* Setup Card */}
         <div className="relative flex flex-col items-center justify-center w-full max-w-sm mx-auto p-6 glass-panel rounded-3xl border border-amber-500/30 shadow-[0_15px_40px_rgba(0,0,0,0.1)] dark:shadow-[0_15px_40px_rgba(0,0,0,0.6)] bg-white/95 dark:bg-gradient-to-b dark:from-slate-900/90 dark:via-slate-950/95 dark:to-slate-950">

@@ -1,6 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GameWrapper } from '../../components/GameWrapper';
-import { claimPracticeReward } from '../../services/api/practiceReward';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
 import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
@@ -65,7 +64,6 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
   const [boostEnergy, setBoostEnergy] = useState(100);
   const [gameOver, setGameOver] = useState(false);
   const [isWin, setIsWin] = useState(false);
-  const [rewardClaimed, setRewardClaimed] = useState(false);
 
   // Multiplayer state
   const [multiplayerState, setMultiplayerState] = useState<SnakeVsWormsState | null>(null);
@@ -177,14 +175,6 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
   useEffect(() => {
     initGame();
   }, [initGame]);
-
-  // Practice Reward
-  useEffect(() => {
-    if (gameOver && (kills >= 3 || isWin) && !rewardClaimed && mode !== 'multiplayer') {
-      setRewardClaimed(true);
-      void claimPracticeReward('snake-vs-worms');
-    }
-  }, [gameOver, kills, isWin, rewardClaimed, mode]);
 
   // Multiplayer Driver Lifecycle
   useEffect(() => {
@@ -667,11 +657,11 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
   }, true);
 
   return (
-    <GameWrapper title="Snake vs Worms 3D" gameId="snake-vs-worms" mode={mode} stake={stake} onBack={onBack} isFullscreen>
+    <GameWrapper title="Snake vs Worms 3D" gameId="snake-vs-worms" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={gameOver}>
       <div className="flex flex-col lg:flex-row items-center justify-center gap-0 lg:gap-6 w-full max-w-6xl relative mx-auto h-full p-0 lg:p-4 select-none overflow-hidden lg:overflow-y-auto">
         
         {/* CENTER 3D ARENA CONTAINER */}
-        <div className="relative flex flex-col items-center justify-center w-full h-full lg:h-auto flex-1 lg:flex-initial lg:max-w-[min(94vw,72dvh,900px)] shrink-0 overflow-hidden">
+        <div className="relative flex flex-col items-center justify-center w-full h-full lg:h-auto flex-1 lg:flex-initial lg:max-w-[min(96vw,calc((100dvh-7rem)*1.5),1280px)] shrink-0 overflow-hidden">
           
           {/* TOP MODERN ARCADE HUD */}
           <div className="absolute top-2 left-2 right-2 z-20 pointer-events-none lg:pointer-events-auto lg:relative lg:top-auto lg:left-auto lg:right-auto w-auto lg:w-full grid grid-cols-2 sm:grid-cols-4 lg:flex items-center justify-between gap-1.5 sm:gap-2 lg:gap-3 lg:mb-2.5 px-1">

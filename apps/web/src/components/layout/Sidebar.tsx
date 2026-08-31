@@ -1,6 +1,7 @@
-import { Home, Trophy, User, Settings, Wallet, Gift, Ticket, Megaphone, MessageCircle, Swords, LifeBuoy, Bell, Users, Medal, X, Gamepad2 } from "lucide-react";
+import { Home, Trophy, User, Settings, Wallet, Gift, Ticket, Megaphone, MessageCircle, Swords, LifeBuoy, Bell, Users, Medal, X, Gamepad2, Sun, Moon } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useFeatureFlagsStore } from "../../store/featureFlagsStore";
+import { useTheme } from "../../contexts/ThemeProvider";
 
 const menus = [
   { name: "Home", icon: Home, path: "/", flag: null },
@@ -27,6 +28,13 @@ interface SidebarProps {
 
 export default function Sidebar({ isExpanded, isMobileOpen = false, onCloseMobile }: SidebarProps) {
   const flags = useFeatureFlagsStore((s) => s.flags);
+  const { setTheme, effectiveTheme } = useTheme();
+
+  const toggleTheme = () => {
+    const nextTheme = effectiveTheme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+  };
+
   const visibleMenus = menus.filter((menu) =>
     menu.flag ? (flags ? flags[menu.flag] !== false : true) : true,
   );
@@ -54,6 +62,37 @@ export default function Sidebar({ isExpanded, isMobileOpen = false, onCloseMobil
             </NavLink>
           ))}
         </nav>
+
+        {/* Desktop Theme Change Button */}
+        <div className={`p-2 border-t border-slate-200 dark:border-slate-800 shrink-0 ${isExpanded ? 'px-3' : 'px-2'}`}>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className={`w-full flex items-center rounded-xl p-3 transition-all duration-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium cursor-pointer ${
+              isExpanded ? 'gap-3 justify-between' : 'justify-center'
+            }`}
+            title={!isExpanded ? `Switch to ${effectiveTheme === 'dark' ? 'Light' : 'Dark'} Mode` : undefined}
+            aria-label={`Switch to ${effectiveTheme === 'dark' ? 'Light' : 'Dark'} Mode`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              {effectiveTheme === 'dark' ? (
+                <Sun size={20} className="shrink-0 text-amber-400" />
+              ) : (
+                <Moon size={20} className="shrink-0 text-indigo-500" />
+              )}
+              {isExpanded && (
+                <span className="text-xs font-semibold truncate">
+                  {effectiveTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                </span>
+              )}
+            </div>
+            {isExpanded && (
+              <div className={`w-8 h-4 rounded-full transition-colors flex items-center px-0.5 shrink-0 ${effectiveTheme === 'dark' ? 'bg-slate-700 justify-end' : 'bg-indigo-500 justify-start'}`}>
+                <div className="w-3 h-3 rounded-full bg-white shadow-sm" />
+              </div>
+            )}
+          </button>
+        </div>
       </aside>
 
       {/* ── 2. Mobile Slide-Over Drawer Modal ─────────────────────────────── */}
@@ -85,7 +124,7 @@ export default function Sidebar({ isExpanded, isMobileOpen = false, onCloseMobil
             </div>
 
             {/* Menu List */}
-            <nav className="flex-1 overflow-y-auto p-3 space-y-1 pb-10">
+            <nav className="flex-1 overflow-y-auto p-3 space-y-1 pb-4">
               {visibleMenus.map((menu) => (
                 <NavLink
                   key={menu.path}
@@ -104,6 +143,28 @@ export default function Sidebar({ isExpanded, isMobileOpen = false, onCloseMobil
                 </NavLink>
               ))}
             </nav>
+
+            {/* Mobile Theme Change Button */}
+            <div className="p-3 border-t border-slate-200 dark:border-slate-800 shrink-0 bg-slate-50/60 dark:bg-slate-900/60">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="w-full flex items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-bold transition-all bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 cursor-pointer shadow-sm active:scale-[0.98]"
+                aria-label={`Switch to ${effectiveTheme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              >
+                <div className="flex items-center gap-2.5">
+                  {effectiveTheme === 'dark' ? (
+                    <Sun size={18} className="text-amber-400 shrink-0" />
+                  ) : (
+                    <Moon size={18} className="text-indigo-500 shrink-0" />
+                  )}
+                  <span>{effectiveTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+                </div>
+                <div className={`w-8 h-4 rounded-full transition-colors flex items-center px-0.5 shrink-0 ${effectiveTheme === 'dark' ? 'bg-slate-700 justify-end' : 'bg-indigo-500 justify-start'}`}>
+                  <div className="w-3 h-3 rounded-full bg-white shadow-sm" />
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       )}

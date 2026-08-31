@@ -37,6 +37,7 @@ import type { BlockedUser, LoginSession } from "@gaming-hub/shared";
 import { Skeleton, SkeletonCircle, SkeletonText } from "../../components/Skeleton";
 import { MatchHistoryView } from "../../components/MatchHistory/MatchHistoryView";
 import { MyTournamentsView } from "../../components/tournaments/MyTournamentsView";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 
 type ProfileTab = "profile" | "tournaments" | "security" | "activity" | "history" | "stats";
 
@@ -47,6 +48,7 @@ export const ProfilePage: React.FC = () => {
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
   const { me, loading, reload } = useMe();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
     if (tabFromUrl && ["profile", "tournaments", "security", "activity", "history", "stats"].includes(tabFromUrl)) {
@@ -882,8 +884,8 @@ export const ProfilePage: React.FC = () => {
 
           <div className="text-center pt-4">
             <button
-              onClick={() => void handleSignOut()}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-rose-600/10 hover:bg-rose-600 text-rose-500 hover:text-white font-black text-xs uppercase tracking-wider transition-colors border border-rose-500/30"
+              onClick={() => setShowLogoutConfirm(true)}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-rose-600/10 hover:bg-rose-600 text-rose-500 hover:text-white font-black text-xs uppercase tracking-wider transition-colors border border-rose-500/30 cursor-pointer"
             >
               <LogOut className="w-4 h-4" /> Sign Out
             </button>
@@ -991,6 +993,19 @@ export const ProfilePage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Logout Confirmation Safety Dialog */}
+      <ConfirmDialog
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        title="Logout?"
+        message="Are you sure you want to log out?"
+        confirmText="Logout"
+        cancelText="Cancel"
+        variant="danger"
+        icon="logout"
+        onConfirm={handleSignOut}
+      />
     </div>
   );
 };

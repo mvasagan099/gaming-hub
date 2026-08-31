@@ -32,6 +32,7 @@ import { useUIStore } from '../store/uiStore';
 import { useAuthStore } from '../store/authStore';
 import { ACCENTS, ACCENT_SWATCHES, useTheme, type Accent, type Contrast } from '../contexts/ThemeProvider';
 import { cn } from '../lib/utils';
+import { ConfirmDialog } from './ui/ConfirmDialog';
 
 interface PaletteItem {
   id: string;
@@ -53,6 +54,7 @@ export default function CommandPalette() {
   const reduceMotion = useReducedMotion();
 
   const [query, setQuery] = useState('');
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -221,7 +223,7 @@ export default function CommandPalette() {
               icon: <LogOut className={ICON_CLS} />,
               onSelect: () => {
                 setPaletteOpen(false);
-                void signOut().then(() => go('/'));
+                setShowLogoutConfirm(true);
               },
             },
           ]
@@ -326,8 +328,9 @@ export default function CommandPalette() {
   };
 
   return (
-    <AnimatePresence>
-      {paletteOpen && (
+    <>
+      <AnimatePresence>
+        {paletteOpen && (
         <div className="fixed inset-0 z-[100] flex items-start justify-center px-4 pt-20 sm:pt-28">
           <motion.button
             aria-label="Close search"
@@ -428,5 +431,22 @@ export default function CommandPalette() {
         </div>
       )}
     </AnimatePresence>
+
+      {/* Logout Confirmation Safety Dialog */}
+      <ConfirmDialog
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        title="Logout?"
+        message="Are you sure you want to log out?"
+        confirmText="Logout"
+        cancelText="Cancel"
+        variant="danger"
+        icon="logout"
+        onConfirm={async () => {
+          await signOut();
+          void router.navigate('/');
+        }}
+      />
+    </>
   );
 }

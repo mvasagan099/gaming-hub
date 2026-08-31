@@ -20,7 +20,7 @@ export const GamePage: React.FC = () => {
 
   const state = location.state as { mode?: 'ai' | 'multiplayer'; stake?: number } | null;
   const mode = state?.mode || 'ai';
-  const stake = state?.stake || 100;
+  const stake = state?.stake !== undefined ? state.stake : (mode === 'multiplayer' ? 100 : 0);
 
   const room = useMultiplayerStore((s) => s.room);
 

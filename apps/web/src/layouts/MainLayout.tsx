@@ -70,7 +70,7 @@ export default function MainLayout() {
           onCloseMobile={() => setIsMobileDrawerOpen(false)}
         />
 
-        <main className={`flex-1 min-w-0 ${isGamePage ? "overflow-hidden" : "overflow-y-auto"}`}>
+        <main className="flex-1 min-w-0 overflow-y-auto custom-scrollbar">
           <div className="min-h-full w-full min-w-0 p-3 sm:p-4 pb-40 md:pb-12 flex flex-col">
             {!hideChrome && <PageHeader />}
             <AnimatedOutlet />

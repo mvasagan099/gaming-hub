@@ -60,7 +60,7 @@ export const FruitNinjaGame: React.FC<FruitNinjaProps> = ({ mode: initialMode, s
   }
 
   return (
-    <GameWrapper title="Fruit Ninja Blade" gameId="fruit-ninja" mode={initialMode} stake={stake} onBack={onBack}>
+    <GameWrapper title="Fruit Ninja Blade" gameId="fruit-ninja" mode={initialMode} stake={stake} onBack={onBack} isGameOver={true}>
       <div className="flex flex-col lg:flex-row gap-6 w-full max-w-4xl mx-auto items-center justify-center my-4">
         <div className="relative flex flex-col items-center justify-center w-full max-w-md mx-auto p-7 glass-panel rounded-3xl border border-amber-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.8)] bg-white/95 dark:bg-gradient-to-b dark:from-slate-900/90 dark:via-slate-950 dark:to-slate-950">
           {/* Header Crown */}

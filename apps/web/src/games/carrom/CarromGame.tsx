@@ -2,7 +2,6 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GameWrapper } from '../../components/GameWrapper';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
-import { claimPracticeReward } from '../../services/api/practiceReward';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
 import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
@@ -219,7 +218,6 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
   
   const [gameOver, setGameOver] = useState(false);
   const [showRules, setShowRules] = useState(true);
-  const [rewardClaimed, setRewardClaimed] = useState(false);
   const [isTurnActive, setIsTurnActive] = useState(false);
   const [currentPlayer, setCurrentPlayer] = useState<'player' | 'ai'>('player');
   const [aiThinking, setAiThinking] = useState(false);
@@ -632,16 +630,6 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
     }, 1500);
     return () => clearTimeout(timer);
   }, [currentPlayer, isTurnActive, gameOver, showRules, mode]);
-
-  useEffect(() => {
-    if (gameOver || mode === 'multiplayer') return;
-    if (gameOver || score.white >= 9 || score.black >= 9) return;
-    const rules = rulesRef.current;
-    if (rules.queenStatus === 'covered' && (score.white >= 9 || score.black >= 9) && !rewardClaimed) {
-      setRewardClaimed(true);
-      if (score.white >= 9) setTimeout(() => void claimPracticeReward('carrom'), 1000);
-    }
-  }, [gameOver, score, rewardClaimed, uiTrigger, mode]);
 
   useEffect(() => {
     if (gameOver || isTurnActive || showRules) return;
@@ -1507,8 +1495,8 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
     : pocketedWhiteCount >= 9;
 
   return (
-    <GameWrapper title="Real Carrom 3D" gameId="carrom" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 lg:gap-8 w-full max-w-6xl relative h-full overflow-y-auto lg:overflow-y-visible py-4 px-2 custom-scrollbar">
+    <GameWrapper title="Real Carrom 3D" gameId="carrom" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={gameOver}>
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-6 lg:gap-8 w-full max-w-6xl relative h-full my-auto overflow-y-auto lg:overflow-y-visible py-4 px-2 custom-scrollbar">
         
         {gameOver && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in rounded-3xl">
@@ -1662,7 +1650,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
           </div>
         </div>
 
-        <div className="flex flex-col items-center gap-2 w-full max-w-[min(94vw,50dvh,420px)]">
+        <div className="flex flex-col items-center gap-2 w-full max-w-[min(94vw,calc(100dvh-10rem),760px)]">
           <div className="relative w-full aspect-square">
             <canvas
               ref={canvasRef}

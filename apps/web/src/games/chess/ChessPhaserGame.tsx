@@ -101,7 +101,7 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
           {/* Phaser canvas mount */}
           <div
             ref={containerRef}
-            className="w-full max-w-[min(94vw,48dvh,540px)] aspect-square rounded-2xl overflow-hidden shadow-2xl"
+            className="w-full max-w-[min(94vw,calc(100dvh-8rem),760px)] aspect-square rounded-2xl overflow-hidden shadow-2xl"
             style={{
               perspective: "1400px",
             }}
