@@ -8,6 +8,7 @@ import { useSettingsStore } from './store/settingsStore';
 import { ThemeProvider, useTheme, type Theme } from './contexts/ThemeProvider';
 import { AppErrorBoundary } from './components/ErrorBoundary';
 import CommandPalette from './components/CommandPalette';
+import { initCapacitorServices } from './services/native/capacitorAppService';
 
 /**
  * Applies the admin-configured site theme (settings → general.theme) the first
@@ -60,6 +61,7 @@ export function App() {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
 
   useEffect(() => {
+    void initCapacitorServices();
     loadSettings();
   }, [loadSettings]);
 

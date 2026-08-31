@@ -88,6 +88,15 @@ export const FRUIT_NINJA_VISUAL_CONFIG = {
     ],
   },
 
+  // Spawning & Difficulty progression
+  spawning: {
+    maxActiveFruits: 5,
+    baseSpawnDelayMs: 1600,   // Base wave interval (1.6s)
+    minSpawnDelayMs: 950,     // Minimum wave interval (0.95s)
+    burstDelayMs: 220,        // Stagger between fruits in same wave
+    minSpawnSpacingX: 110,    // Minimum horizontal space between simultaneous launches
+  },
+
   // Reduced motion scaling
   reducedMotionScale: 0.35,
 } as const;

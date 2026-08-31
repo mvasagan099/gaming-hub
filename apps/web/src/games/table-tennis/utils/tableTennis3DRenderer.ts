@@ -12,6 +12,7 @@ export interface CameraTransform {
 }
 
 export class TableTennis3DRenderer {
+  private static isPortraitMode = false;
   private static currentCamera: CameraTransform = { zoom: 1.0, offsetX: 0, offsetY: 0 };
   private static ballSpinAngle = 0;
 
@@ -54,7 +55,14 @@ export class TableTennis3DRenderer {
    * to 3D End-to-End perspective screen coordinates.
    */
   static project(lx: number, ly: number, lz = 0): { x: number; y: number; scale: number; tableY: number } {
-    const { corners } = TABLE_TENNIS_VISUAL_CONFIG.table;
+    const corners = this.isPortraitMode
+      ? {
+          topLeft:     { x: 135, y: 220 }, // Far Left
+          topRight:    { x: 345, y: 220 }, // Far Right
+          bottomRight: { x: 435, y: 640 }, // Near Right
+          bottomLeft:  { x: 45,  y: 640 }, // Near Left
+        }
+      : TABLE_TENNIS_VISUAL_CONFIG.table.corners;
     const { logicalWidth, logicalHeight } = TABLE_TENNIS_VISUAL_CONFIG;
 
     // u ∈ [0, 1] across table width (left to right)
@@ -74,7 +82,7 @@ export class TableTennis3DRenderer {
     const y = tableY - lz; // Lift with Z height
 
     // Perspective scale (objects in foreground at v=1 appear larger)
-    const scale = 0.65 + v * 0.70;
+    const scale = (this.isPortraitMode ? 0.48 : 0.65) + v * (this.isPortraitMode ? 0.42 : 0.70);
 
     return { x, y, scale, tableY };
   }
@@ -107,11 +115,13 @@ export class TableTennis3DRenderer {
     trail: Array<{ x: number; y: number }>,
     particles: Array<{ x: number; y: number; color: string; life: number; maxLife: number }>,
     cameraState: CameraState = 'RALLY',
-    dt = 0.016
+    dt = 0.016,
+    isPortrait = false
   ): void {
+    this.isPortraitMode = isPortrait;
     const cfg = TABLE_TENNIS_VISUAL_CONFIG;
-    const w = cfg.canvasWidth;
-    const h = cfg.canvasHeight;
+    const w = isPortrait ? 480 : cfg.canvasWidth;
+    const h = isPortrait ? 800 : cfg.canvasHeight;
 
     // Update ball rotational spin angle
     if (ball.inPlay) {
@@ -157,7 +167,7 @@ export class TableTennis3DRenderer {
   }
 
   private static cachedArenaCanvas: HTMLCanvasElement | null = null;
-  private static cachedArenaSize = { w: 0, h: 0 };
+  private static cachedArenaSize = { w: 0, h: 0, isPortrait: false };
 
   /**
    * Generates and caches a high-detail realistic tournament arena background
@@ -165,7 +175,12 @@ export class TableTennis3DRenderer {
    * staggered butt joints, baseboard molding, and arena LED ribbon banner.
    */
   private static getArenaBackgroundCanvas(w: number, h: number): HTMLCanvasElement {
-    if (this.cachedArenaCanvas && this.cachedArenaSize.w === w && this.cachedArenaSize.h === h) {
+    if (
+      this.cachedArenaCanvas &&
+      this.cachedArenaSize.w === w &&
+      this.cachedArenaSize.h === h &&
+      this.cachedArenaSize.isPortrait === this.isPortraitMode
+    ) {
       return this.cachedArenaCanvas;
     }
 
@@ -175,9 +190,9 @@ export class TableTennis3DRenderer {
     const ctx = canvas.getContext('2d');
     if (!ctx) return canvas;
 
-    const horizonY = 195;
+    const horizonY = this.isPortraitMode ? 225 : 195;
     const vpX = w / 2;
-    const vpY = 55; // Vanishing point for floor perspective
+    const vpY = this.isPortraitMode ? 70 : 55; // Vanishing point for floor perspective
 
     // ── 1. Stadium Backdrop Wall ──
     const wallGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
@@ -199,8 +214,8 @@ export class TableTennis3DRenderer {
     }
 
     // Horizontal Arena LED / Banner Ribbon Strip
-    const bannerY = horizonY - 45;
-    const bannerH = 26;
+    const bannerY = horizonY - (this.isPortraitMode ? 40 : 45);
+    const bannerH = this.isPortraitMode ? 22 : 26;
     const bannerGrad = ctx.createLinearGradient(0, bannerY, 0, bannerY + bannerH);
     bannerGrad.addColorStop(0, '#091524');
     bannerGrad.addColorStop(0.5, '#1b3453');
@@ -215,7 +230,11 @@ export class TableTennis3DRenderer {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
     ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('• WORLD TABLE TENNIS CHAMPIONSHIP • ITTF PRO ARENA •', w / 2, bannerY + 17);
+    ctx.fillText(
+      this.isPortraitMode ? '• WORLD TABLE TENNIS • ITTF ARENA •' : '• WORLD TABLE TENNIS CHAMPIONSHIP • ITTF PRO ARENA •',
+      w / 2,
+      bannerY + (this.isPortraitMode ? 15 : 17)
+    );
 
     // ── 2. Arena Baseboard Molding & Transition Trim ──
     const trimY = horizonY - 6;
@@ -367,7 +386,7 @@ export class TableTennis3DRenderer {
     ctx.fillRect(0, 0, w, h);
 
     this.cachedArenaCanvas = canvas;
-    this.cachedArenaSize = { w, h };
+    this.cachedArenaSize = { w, h, isPortrait: this.isPortraitMode };
     return canvas;
   }
 
@@ -401,7 +420,15 @@ export class TableTennis3DRenderer {
    * Renders the table understructure, tubular steel legs, and floor contact shadow.
    */
   private static renderTableUnderstructure(ctx: CanvasRenderingContext2D, cfg: typeof TABLE_TENNIS_VISUAL_CONFIG): void {
-    const { corners, thickness } = cfg.table;
+    const corners = this.isPortraitMode
+      ? {
+          topLeft:     { x: 135, y: 220 },
+          topRight:    { x: 345, y: 220 },
+          bottomRight: { x: 435, y: 640 },
+          bottomLeft:  { x: 45,  y: 640 },
+        }
+      : cfg.table.corners;
+    const thickness = cfg.table.thickness;
 
     // 1. Floor Contact Drop Shadow
     ctx.save();
@@ -469,7 +496,15 @@ export class TableTennis3DRenderer {
    * Renders the 3D wooden table apron and competition matte blue playing surface with crisp white markings.
    */
   private static renderTableSurface(ctx: CanvasRenderingContext2D, cfg: typeof TABLE_TENNIS_VISUAL_CONFIG): void {
-    const { corners, thickness } = cfg.table;
+    const corners = this.isPortraitMode
+      ? {
+          topLeft:     { x: 135, y: 220 },
+          topRight:    { x: 345, y: 220 },
+          bottomRight: { x: 435, y: 640 },
+          bottomLeft:  { x: 45,  y: 640 },
+        }
+      : cfg.table.corners;
+    const thickness = cfg.table.thickness;
 
     // ── 1. Front Edge Apron (Thickness facing the camera) ──
     const frontApronGrad = ctx.createLinearGradient(0, corners.bottomLeft.y, 0, corners.bottomLeft.y + thickness);

@@ -1,7 +1,11 @@
 import { useAuthStore } from "../../store/authStore";
+import { isNativePlatform } from "../native/platform";
 
 function getApiUrl(): string {
   const envUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000/api";
+  if (isNativePlatform()) {
+    return envUrl;
+  }
   if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
     return envUrl.replace("localhost", window.location.hostname).replace("127.0.0.1", window.location.hostname);
   }

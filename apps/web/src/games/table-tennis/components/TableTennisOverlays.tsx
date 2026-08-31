@@ -48,7 +48,7 @@ export const TableTennisOverlays: React.FC<TableTennisOverlaysProps> = ({
     <>
       {/* ── 1. Floating Rally Counter (Appears during long rallies >= 4) ── */}
       {rallyCount >= 4 && !isGameOver && !isServing && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 pointer-events-none z-20 animate-in fade-in zoom-in-95 duration-200">
+        <div className="absolute top-16 lg:top-4 left-1/2 -translate-x-1/2 pointer-events-none z-20 animate-in fade-in zoom-in-95 duration-200">
           <div className="bg-slate-900/85 border border-sky-500/50 backdrop-blur-md px-4 py-1 rounded-full shadow-[0_0_20px_rgba(14,165,233,0.3)] flex items-center gap-1.5">
             <Zap className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
             <span className="text-xs font-black text-sky-300 uppercase tracking-widest font-mono">
@@ -60,7 +60,7 @@ export const TableTennisOverlays: React.FC<TableTennisOverlaysProps> = ({
 
       {/* ── 2. Match Point / Deuce Floating Badges ── */}
       {isMatchPoint && !isGameOver && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 pointer-events-none z-20 animate-in fade-in duration-200">
+        <div className="absolute top-16 lg:top-4 left-1/2 -translate-x-1/2 pointer-events-none z-20 animate-in fade-in duration-200">
           <div className="bg-amber-500/20 border border-amber-500/60 backdrop-blur-md px-4 py-1 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.35)] flex items-center gap-1.5">
             <Flame className="w-3.5 h-3.5 text-amber-400 animate-bounce" />
             <span className="text-xs font-black text-amber-400 uppercase tracking-widest">Match Point!</span>
@@ -69,7 +69,7 @@ export const TableTennisOverlays: React.FC<TableTennisOverlaysProps> = ({
       )}
 
       {isDeuce && !isGameOver && !isMatchPoint && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 pointer-events-none z-20 animate-in fade-in duration-200">
+        <div className="absolute top-16 lg:top-4 left-1/2 -translate-x-1/2 pointer-events-none z-20 animate-in fade-in duration-200">
           <div className="bg-purple-500/20 border border-purple-500/60 backdrop-blur-md px-4 py-1 rounded-full flex items-center gap-1.5 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
             <Zap className="w-3.5 h-3.5 text-purple-400" />
             <span className="text-xs font-black text-purple-300 uppercase tracking-widest">Deuce (Win by 2)</span>
@@ -79,7 +79,7 @@ export const TableTennisOverlays: React.FC<TableTennisOverlaysProps> = ({
 
       {/* ── 3. Point Scored Alert Banner ── */}
       {pointAnimation && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 pointer-events-none z-30 animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute top-20 lg:top-14 left-1/2 -translate-x-1/2 pointer-events-none z-30 animate-in fade-in zoom-in-95 duration-150">
           <div className="bg-slate-900/90 border-2 border-emerald-500/60 backdrop-blur-md px-5 py-2 rounded-2xl shadow-[0_0_25px_rgba(16,185,129,0.35)] flex items-center gap-2">
             <Zap className="w-4 h-4 text-emerald-400 animate-pulse" />
             <p className="text-xs font-black text-emerald-300 uppercase tracking-wider">
@@ -91,7 +91,7 @@ export const TableTennisOverlays: React.FC<TableTennisOverlaysProps> = ({
 
       {/* ── 4. Compact Premium Serve Indicator (Non-intrusive bottom pill) ── */}
       {isServing && !isGameOver && (
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 pointer-events-none z-20 animate-in fade-in duration-200">
+        <div className="absolute bottom-8 lg:bottom-5 left-1/2 -translate-x-1/2 pointer-events-none z-20 animate-in fade-in duration-200">
           <div className={`px-4 py-1.5 rounded-full backdrop-blur-md border shadow-lg flex items-center gap-2 ${
             isMyServe
               ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300 shadow-emerald-500/20'
@@ -103,7 +103,7 @@ export const TableTennisOverlays: React.FC<TableTennisOverlaysProps> = ({
             </span>
             {isMyServe && (
               <span className="text-[10px] text-emerald-400/90 font-bold tracking-tight pl-1">
-                (Click or Space)
+                (Tap or Click)
               </span>
             )}
           </div>

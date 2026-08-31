@@ -32,8 +32,8 @@ export const FruitNinjaGame: React.FC<FruitNinjaProps> = ({ mode: initialMode, s
   if (isGameStarted) {
     return (
       <GameWrapper title="Fruit Ninja Blade" gameId="fruit-ninja" mode={initialMode} stake={stake} onBack={isMultiplayer ? onBack : resetGame} isFullscreen>
-        <div className="flex flex-col lg:flex-row items-center justify-center gap-4 sm:gap-6 w-full max-w-6xl h-full my-auto">
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 sm:gap-4 w-full my-auto">
+        <div className="flex flex-col lg:flex-row items-center justify-center gap-0 lg:gap-6 w-full max-w-6xl h-full my-auto overflow-hidden select-none">
+          <div className="flex-1 flex flex-col items-center justify-center gap-0 lg:gap-4 w-full h-full lg:h-auto my-auto overflow-hidden">
             <FruitNinjaPhaserGame
               mode={activePlayMode}
               isMultiplayer={isMultiplayer}
@@ -43,7 +43,7 @@ export const FruitNinjaGame: React.FC<FruitNinjaProps> = ({ mode: initialMode, s
             {!isMultiplayer && (
               <button
                 onClick={resetGame}
-                className="px-6 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-black text-rose-400 text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                className="hidden lg:flex px-6 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-black text-rose-400 text-xs tracking-wider uppercase items-center gap-2 shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer"
               >
                 <RefreshCcw className="w-4 h-4" /> Reset Match
               </button>

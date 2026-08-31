@@ -11,6 +11,7 @@ import type { FruitDef } from "../types/fruit.types";
 import FruitNinjaMultiplayerDriver from "../managers/FruitNinjaMultiplayerDriver";
 import { useMultiplayerStore, type WinnerInfo } from "../../../../store/multiplayerStore";
 import type { FruitNinjaState } from "@gaming-hub/game-engine";
+import { FRUIT_NINJA_VISUAL_CONFIG } from "../constants/fruitNinjaVisualConfig";
 
 export default class FruitNinjaScene extends Phaser.Scene {
   private texturesMgr!: TextureManager;
@@ -28,10 +29,22 @@ export default class FruitNinjaScene extends Phaser.Scene {
   private mode!: string;
   private lives = 3;
   private spawnEvent?: Phaser.Time.TimerEvent;
+  private pendingBurstTimers: Phaser.Time.TimerEvent[] = [];
   private matchTimerEvent?: Phaser.Time.TimerEvent;
   private matchTimeLeft = 60;
   private gameOver = false;
   private isStarted = false;
+
+  private clearAllSpawnTimers(): void {
+    if (this.spawnEvent) {
+      this.spawnEvent.destroy();
+      this.spawnEvent = undefined;
+    }
+    for (const t of this.pendingBurstTimers) {
+      t.destroy();
+    }
+    this.pendingBurstTimers = [];
+  }
 
   // Combo tracking
   private lastSliceTime = 0;
@@ -112,7 +125,7 @@ export default class FruitNinjaScene extends Phaser.Scene {
     }
 
     this.events.once("shutdown", () => {
-      if (this.spawnEvent) this.spawnEvent.destroy();
+      this.clearAllSpawnTimers();
       if (this.matchTimerEvent) this.matchTimerEvent.destroy();
     });
 
@@ -184,6 +197,7 @@ export default class FruitNinjaScene extends Phaser.Scene {
     // 8. Start with Cinematic 3-2-1 SLICE intro
     this.hud.playStartIntro(() => {
       this.isStarted = true;
+      this.fruitManager.spawnFruit(1);
       this.scheduleNextSpawn();
       this.startTimer();
     });
@@ -235,24 +249,37 @@ export default class FruitNinjaScene extends Phaser.Scene {
     // 3. Warm Central Spotlight Vignette (Makes all fruit colors burst with contrast)
     const haloGfx = this.add.graphics().setDepth(1);
     haloGfx.fillStyle(0x854d0e, 0.18);
-    haloGfx.fillCircle(w / 2, h / 2, 280);
+    // Plank seams (vertical dojo floorboards)
+    const plankCount = Math.max(6, Math.round(w / 80));
+    const plankWidth = w / plankCount;
+    g.lineStyle(1.5, 0x0f0703, 0.45);
+    for (let i = 1; i < plankCount; i++) {
+      g.beginPath();
+      g.moveTo(i * plankWidth, 0);
+      g.lineTo(i * plankWidth, h);
+      g.strokePath();
+    }
 
-    haloGfx.fillStyle(0xd97706, 0.10);
-    haloGfx.fillCircle(w / 2, h / 2, 180);
-
-    // 4. Subtle Outer Vignette Border
-    g.lineStyle(1.5, 0x000000, 0.4);
-    g.strokeRect(0, 0, w, h);
+    // Dojo center spotlight / subtle dojo crest ring
+    const centerX = w / 2;
+    const centerY = h / 2;
+    g.fillStyle(0xd97706, 0.04);
+    g.fillCircle(centerX, centerY, Math.min(w, h) * 0.42);
+    g.fillStyle(0xd97706, 0.025);
+    g.fillCircle(centerX, centerY, Math.min(w, h) * 0.65);
   }
 
   private startTimer(): void {
-    if (this.matchTimerEvent) this.matchTimerEvent.destroy();
+    if (this.matchTimerEvent) {
+      this.matchTimerEvent.destroy();
+    }
     this.matchTimerEvent = this.time.addEvent({
       delay: 1000,
       callback: () => {
         if (this.gameOver || !this.isStarted) return;
         this.matchTimeLeft--;
         this.hud.updateTimer(this.matchTimeLeft);
+
         if (this.matchTimeLeft <= 0) {
           this.triggerGameOver();
         }
@@ -264,22 +291,59 @@ export default class FruitNinjaScene extends Phaser.Scene {
   private scheduleNextSpawn(): void {
     if (this.gameOver || !this.isStarted) return;
 
+    if (this.spawnEvent) {
+      this.spawnEvent.destroy();
+      this.spawnEvent = undefined;
+    }
+
     const score = this.scoreManager.getScore();
-    const delay = Math.max(380, 1050 - score * 4.5);
-    const maxFruits = Math.min(5, 1 + Math.floor(score / 60));
-    const minFruits = Math.max(1, Math.floor(maxFruits / 2));
-    const spawnCount = Phaser.Math.Between(minFruits, maxFruits);
-    const velMult = Math.min(1.35, 1 + score / 550);
+    const { spawning } = FRUIT_NINJA_VISUAL_CONFIG;
+
+    // Controlled interval: starts at 1600ms, gradually scales to min 950ms based on score
+    const delay = Math.max(spawning.minSpawnDelayMs, spawning.baseSpawnDelayMs - score * 2.2);
+
+    // Difficulty curve for burst count:
+    // Score 0 - 59: 1 fruit per wave
+    // Score 60 - 149: 1 to 2 fruits per wave
+    // Score 150+: 2 to 3 fruits per wave (capped at 3)
+    let maxWaveFruits = 1;
+    if (score >= 150) {
+      maxWaveFruits = 3;
+    } else if (score >= 60) {
+      maxWaveFruits = 2;
+    }
+    const minWaveFruits = Math.max(1, maxWaveFruits - 1);
+    const waveCount = Phaser.Math.Between(minWaveFruits, maxWaveFruits);
+    const velMult = Math.min(1.25, 1 + score / 800);
 
     this.spawnEvent = this.time.delayedCall(delay, () => {
       if (this.gameOver || !this.isStarted) return;
 
-      for (let i = 0; i < spawnCount; i++) {
-        this.time.delayedCall(i * 140, () => {
-          if (!this.gameOver && this.isStarted) {
-            this.fruitManager.spawnFruit(velMult);
-          }
-        });
+      const currentActive = this.fruitManager.getActiveFruitCount();
+      const availableSlots = Math.max(0, spawning.maxActiveFruits - currentActive);
+      const actualSpawnCount = Math.min(waveCount, availableSlots);
+
+      if (actualSpawnCount > 0) {
+        const spawnPositions = this.fruitManager.getSpacedSpawnPositions(
+          actualSpawnCount,
+          spawning.minSpawnSpacingX
+        );
+
+        // First fruit spawns immediately
+        this.fruitManager.spawnFruitAt(spawnPositions[0], velMult);
+
+        // Stagger remaining fruits in the wave
+        for (let i = 1; i < actualSpawnCount; i++) {
+          const posX = spawnPositions[i];
+          const timer = this.time.delayedCall(i * spawning.burstDelayMs, () => {
+            if (!this.gameOver && this.isStarted) {
+              if (this.fruitManager.getActiveFruitCount() < spawning.maxActiveFruits) {
+                this.fruitManager.spawnFruitAt(posX, velMult);
+              }
+            }
+          });
+          this.pendingBurstTimers.push(timer);
+        }
       }
 
       this.scheduleNextSpawn();
@@ -315,8 +379,11 @@ export default class FruitNinjaScene extends Phaser.Scene {
     this.comboCount = 0;
     this.lastSliceTime = 0;
 
-    if (this.spawnEvent) this.spawnEvent.destroy();
-    if (this.matchTimerEvent) this.matchTimerEvent.destroy();
+    this.clearAllSpawnTimers();
+    if (this.matchTimerEvent) {
+      this.matchTimerEvent.destroy();
+      this.matchTimerEvent = undefined;
+    }
 
     this.scoreManager.reset();
     this.fruitManager.clearAll();
@@ -328,6 +395,7 @@ export default class FruitNinjaScene extends Phaser.Scene {
 
     this.hud.playStartIntro(() => {
       this.isStarted = true;
+      this.fruitManager.spawnFruit(1);
       this.scheduleNextSpawn();
       this.startTimer();
     });
@@ -339,8 +407,11 @@ export default class FruitNinjaScene extends Phaser.Scene {
     }
     this.gameOver = true;
 
-    if (this.spawnEvent) this.spawnEvent.destroy();
-    if (this.matchTimerEvent) this.matchTimerEvent.destroy();
+    this.clearAllSpawnTimers();
+    if (this.matchTimerEvent) {
+      this.matchTimerEvent.destroy();
+      this.matchTimerEvent = undefined;
+    }
 
     this.sliceManager.clear();
     this.fruitManager.clearAll();
@@ -353,6 +424,16 @@ export default class FruitNinjaScene extends Phaser.Scene {
       winner: winner ?? useMultiplayerStore.getState().winner,
       endReason,
     });
+  }
+
+  public startCustomSlice(x: number, y: number): void {
+    if (this.gameOver) return;
+    this.sliceManager.startSlicePoint(x, y);
+  }
+
+  public handleCustomSlice(x: number, y: number): void {
+    if (this.gameOver) return;
+    this.sliceManager.addSlicePoint(x, y);
   }
 }
 export { FruitNinjaScene };

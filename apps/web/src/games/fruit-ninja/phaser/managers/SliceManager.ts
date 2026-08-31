@@ -39,10 +39,12 @@ export class SliceManager {
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
+    if (this.scene.registry.get("isMobilePortrait")) return;
     this.points = [{ x: pointer.x, y: pointer.y, time: this.scene.time.now }];
   }
 
   private onPointerMove(pointer: Phaser.Input.Pointer): void {
+    if (this.scene.registry.get("isMobilePortrait")) return;
     if (!pointer.isDown) return;
 
     const now = this.scene.time.now;
@@ -57,7 +59,22 @@ export class SliceManager {
     this.checkSliceCollisions();
   }
 
+  public startSlicePoint(x: number, y: number): void {
+    this.points = [{ x, y, time: this.scene.time.now }];
+  }
+
+  public addSlicePoint(x: number, y: number): void {
+    const now = this.scene.time.now;
+    const currentPoint: TrailPoint = { x, y, time: now };
+    this.points.push(currentPoint);
+    if (this.points.length > FRUIT_NINJA_VISUAL_CONFIG.trail.maxPoints) {
+      this.points.shift();
+    }
+    this.checkSliceCollisions();
+  }
+
   private onPointerUp(): void {
+    if (this.scene.registry.get("isMobilePortrait")) return;
     // Smoothly clear tail
   }
 

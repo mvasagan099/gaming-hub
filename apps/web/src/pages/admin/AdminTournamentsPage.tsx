@@ -241,12 +241,12 @@ export function AdminTournamentsPage() {
   const loadIntegrityAlerts = async () => {
     setIsAlertsLoading(true);
     try {
-      const res = await adminApi.tournamentIntegrityAlerts({
-        status: alertFilterStatus !== 'ALL' ? alertFilterStatus : undefined,
-        severity: alertFilterSeverity !== 'ALL' ? alertFilterSeverity : undefined,
-        issueType: alertFilterIssueType !== 'ALL' ? alertFilterIssueType : undefined,
-        gameId: analyticsGame !== 'ALL' ? analyticsGame : undefined,
-      });
+      const queryParams: Record<string, string> = {};
+      if (alertFilterStatus !== 'ALL') queryParams.status = alertFilterStatus;
+      if (alertFilterSeverity !== 'ALL') queryParams.severity = alertFilterSeverity;
+      if (alertFilterIssueType !== 'ALL') queryParams.issueType = alertFilterIssueType;
+      if (analyticsGame !== 'ALL') queryParams.gameId = analyticsGame;
+      const res = await adminApi.tournamentIntegrityAlerts(queryParams);
       setAlertsList(res.items || []);
       setAlertsStats({
         total: res.total || 0,

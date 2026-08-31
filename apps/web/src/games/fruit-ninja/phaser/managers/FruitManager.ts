@@ -34,10 +34,52 @@ export class FruitManager {
     this.halvesGroup = this.scene.physics.add.group();
   }
 
+  getActiveFruitCount(): number {
+    return this.activeFruits.size;
+  }
+
+  /**
+   * Generates horizontally spaced spawn X coordinates for simultaneous bursts.
+   */
+  getSpacedSpawnPositions(count: number, minSpacing: number): number[] {
+    const w = this.scene.scale.width;
+    const minX = 90;
+    const maxX = w - 90;
+    const availableWidth = maxX - minX;
+
+    if (count <= 1) {
+      return [Phaser.Math.Between(minX, maxX)];
+    }
+
+    const segment = availableWidth / count;
+    const positions: number[] = [];
+
+    for (let i = 0; i < count; i++) {
+      const segMin = minX + i * segment + 15;
+      const segMax = minX + (i + 1) * segment - 15;
+      const posX = Phaser.Math.Between(Math.round(segMin), Math.round(segMax));
+      positions.push(posX);
+    }
+
+    return positions;
+  }
+
   /**
    * Spawns a random fruit or bomb and launches it upward in a natural parabolic arc.
    */
   spawnFruit(velocityMultiplier = 1): void {
+    this.spawnFruitAt(undefined, velocityMultiplier);
+  }
+
+  /**
+   * Spawns a fruit or bomb at an explicit horizontal coordinate with velocity scaling.
+   */
+  spawnFruitAt(posX?: number, velocityMultiplier = 1): void {
+    // Hard guard: never exceed maxActiveFruits
+    if (this.activeFruits.size >= FRUIT_NINJA_VISUAL_CONFIG.spawning.maxActiveFruits) {
+      return;
+    }
+
     const w = this.scene.scale.width;
     const h = this.scene.scale.height;
 
@@ -51,7 +93,7 @@ export class FruitManager {
     }
 
     const def = FRUIT_DEFS[type];
-    const x = Phaser.Math.Between(80, w - 80);
+    const x = posX !== undefined ? Math.max(80, Math.min(w - 80, posX)) : Phaser.Math.Between(80, w - 80);
     const y = h + 45;
 
     // Create interactive physics sprite
@@ -59,13 +101,22 @@ export class FruitManager {
     sprite.setCircle(def.radius, (140 - def.radius * 2) / 2, (140 - def.radius * 2) / 2);
     sprite.setDepth(20);
 
-    // Parabolic trajectory calculations
-    const targetX = w / 2 + Phaser.Math.Between(-180, 180);
+    // Parabolic trajectory calculations with bounded apex safely below top edge
+    const minApexY = Math.max(110, Math.round(h * 0.20)); // At least 110px below top HUD
+    const maxApexY = Math.max(170, Math.round(h * 0.42)); // Lower arc boundary
+    const targetApexY = Phaser.Math.Between(minApexY, maxApexY);
+    const riseDistance = y - targetApexY;
     const gravity = FRUIT_NINJA_VISUAL_CONFIG.gravity;
-    const flightTime = FRUIT_NINJA_VISUAL_CONFIG.baseFlightTime / velocityMultiplier;
 
-    const vx = (targetX - x) / flightTime;
-    const vy = (-gravity * (flightTime * 0.5) - Phaser.Math.Between(30, 90)) * velocityMultiplier;
+    // Exact vertical velocity needed to peak at targetApexY without overshooting
+    const vy = -Math.sqrt(2 * gravity * riseDistance);
+
+    // Time to reach peak and full natural flight duration
+    const timeToApex = Math.abs(vy) / gravity;
+    const totalFlightTime = timeToApex * 2;
+
+    const targetX = w / 2 + Phaser.Math.Between(-180, 180);
+    const vx = (targetX - x) / totalFlightTime;
 
     sprite.setVelocity(vx, vy);
     sprite.setAngularVelocity(Phaser.Math.Between(

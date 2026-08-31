@@ -31,12 +31,31 @@ interface Particle {
 
 const CANVAS_WIDTH = TABLE_TENNIS_VISUAL_CONFIG.canvasWidth; // 800
 const CANVAS_HEIGHT = TABLE_TENNIS_VISUAL_CONFIG.canvasHeight; // 520
+const PORTRAIT_CANVAS_WIDTH = 480;
+const PORTRAIT_CANVAS_HEIGHT = 800;
 const LOGICAL_WIDTH = TABLE_TENNIS_VISUAL_CONFIG.logicalWidth; // 600
 const LOGICAL_HEIGHT = TABLE_TENNIS_VISUAL_CONFIG.logicalHeight; // 400
 const PADDLE_HEIGHT = TABLE_TENNIS_VISUAL_CONFIG.paddleHeight; // 80
 
 export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBack }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const [isPortrait, setIsPortrait] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 1024 && window.innerHeight > window.innerWidth;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsPortrait(window.innerWidth < 1024 && window.innerHeight > window.innerWidth);
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
 
   const [gameState, setGameState] = useState<GameState>('serving');
   const [p1Score, setP1Score] = useState(0);
@@ -520,7 +539,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       trailRef.current,
       particlesRef.current,
       cameraState,
-      dt
+      dt,
+      isPortrait
     );
   }, true);
 
@@ -528,11 +548,18 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
   const handlePointerMove = (clientX: number) => {
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const canvasX = (clientX - rect.left) * (CANVAS_WIDTH / rect.width);
+    if (!rect.width || !rect.height) return;
 
-    // Near table baseline extends from x=125 to x=675 across table width (400 logical units)
-    const baselineLeft = 125;
-    const baselineRight = 675;
+    const canvasW = isPortrait ? PORTRAIT_CANVAS_WIDTH : CANVAS_WIDTH;
+    const canvasH = isPortrait ? PORTRAIT_CANVAS_HEIGHT : CANVAS_HEIGHT;
+    const baselineLeft = isPortrait ? 45 : 125;
+    const baselineRight = isPortrait ? 435 : 675;
+
+    const scale = Math.min(rect.width / canvasW, rect.height / canvasH);
+    const renderedW = canvasW * scale;
+    const offsetX = (rect.width - renderedW) / 2;
+    const canvasX = (clientX - rect.left - offsetX) / scale;
+
     const u = Math.max(0, Math.min(1, (canvasX - baselineLeft) / (baselineRight - baselineLeft)));
     const targetPaddlePos = u * (LOGICAL_HEIGHT - PADDLE_HEIGHT);
     const clampedY = Math.max(0, Math.min(LOGICAL_HEIGHT - PADDLE_HEIGHT, targetPaddlePos));
@@ -568,33 +595,33 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
   return (
     <GameWrapper title="Table Tennis 3D Pro" gameId="table-tennis" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="flex flex-col lg:flex-row items-center justify-center gap-4 w-full max-w-6xl relative mx-auto h-full p-2 lg:p-3 select-none overflow-y-auto">
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-0 lg:gap-4 w-full max-w-6xl relative mx-auto h-full p-0 lg:p-3 select-none overflow-hidden lg:overflow-y-auto">
         
         {/* CENTER 3D COURT CONTAINER */}
-        <div className="relative flex flex-col items-center justify-center w-full max-w-[min(94vw,75dvh,840px)] shrink-0">
+        <div className="relative flex flex-col items-center justify-center w-full h-full lg:h-auto flex-1 lg:flex-initial lg:max-w-[min(94vw,75dvh,840px)] shrink-0 overflow-hidden">
           
           {/* TOP BROADCAST TOURNAMENT SCOREBOARD HUD */}
-          <div className="w-full bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-2 sm:p-2.5 mb-2.5 flex items-center justify-between shadow-2xl gap-2">
+          <div className="absolute top-2 left-2 right-2 z-20 pointer-events-none lg:pointer-events-auto lg:relative lg:top-auto lg:left-auto lg:right-auto w-auto lg:w-full bg-slate-950/80 lg:bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 rounded-xl sm:rounded-2xl p-1.5 sm:p-2.5 lg:mb-2.5 flex items-center justify-between shadow-2xl gap-1.5 sm:gap-2">
             
             {/* Player 1 Card (Red / Foreground) */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-rose-500/20 to-rose-600/30 border border-rose-500/50 flex items-center justify-center font-black text-xs text-rose-400 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-3">
+              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-gradient-to-br from-rose-500/20 to-rose-600/30 border border-rose-500/50 flex items-center justify-center font-black text-[11px] sm:text-xs text-rose-400 shrink-0">
                 P1
               </div>
               <div>
                 <div className="flex items-center gap-1 sm:gap-2">
-                  <span className="text-xs sm:text-sm font-black text-slate-100 uppercase tracking-wide truncate max-w-[75px] sm:max-w-[150px]">
+                  <span className="text-[11px] sm:text-sm font-black text-slate-100 uppercase tracking-wide truncate max-w-[65px] sm:max-w-[150px]">
                     {p1Name}
                   </span>
                   {p1Sets > 0 && (
-                    <span className="px-1 py-0.5 rounded bg-rose-500/20 text-[9px] sm:text-[10px] font-black text-rose-400 border border-rose-500/30">
+                    <span className="px-1 py-0.5 rounded bg-rose-500/20 text-[8px] sm:text-[10px] font-black text-rose-400 border border-rose-500/30">
                       {p1Sets}S
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="flex items-center gap-1 sm:gap-1.5 mt-0.5">
                   <span className={`w-1.5 h-1.5 rounded-full ${currentServer === 1 ? 'bg-rose-400 animate-pulse' : 'bg-slate-600'}`} />
-                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-rose-400/90">
+                  <span className="text-[8px] sm:text-[10px] font-bold uppercase tracking-wider text-rose-400/90">
                     {currentServer === 1 ? '● Serve' : 'Ready'}
                   </span>
                 </div>
@@ -602,55 +629,55 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
             </div>
 
             {/* Large Center Score Board & Match Timer */}
-            <div className="flex items-center gap-2 sm:gap-4 bg-slate-900/90 px-3 sm:px-6 py-1 rounded-xl border border-slate-800 shadow-inner shrink-0">
-              <span className="text-xl sm:text-3xl font-black font-mono tracking-tight text-rose-400">
+            <div className="flex items-center gap-1.5 sm:gap-4 bg-slate-900/90 px-2 sm:px-6 py-0.5 sm:py-1 rounded-lg sm:rounded-xl border border-slate-800 shadow-inner shrink-0 pointer-events-auto">
+              <span className="text-lg sm:text-3xl font-black font-mono tracking-tight text-rose-400">
                 {String(p1Score).padStart(2, '0')}
               </span>
               <div className="flex flex-col items-center px-0.5 sm:px-1">
                 <div className="flex items-center gap-1 text-slate-400">
-                  <Timer className={`w-3 h-3 ${remainingTime <= 30 ? 'text-rose-400 animate-pulse' : 'text-slate-400'}`} />
-                  <span className={`text-[9px] sm:text-[10px] font-black font-mono ${remainingTime <= 30 ? 'text-rose-400 animate-pulse' : 'text-slate-400'}`}>
+                  <Timer className={`w-2.5 h-2.5 sm:w-3 sm:h-3 ${remainingTime <= 30 ? 'text-rose-400 animate-pulse' : 'text-slate-400'}`} />
+                  <span className={`text-[8px] sm:text-[10px] font-black font-mono ${remainingTime <= 30 ? 'text-rose-400 animate-pulse' : 'text-slate-400'}`}>
                     {Math.floor(remainingTime / 60).toString().padStart(2, '0')}:{(remainingTime % 60).toString().padStart(2, '0')}
                   </span>
                 </div>
-                <span className="text-xs font-black text-slate-600">:</span>
+                <span className="text-[10px] sm:text-xs font-black text-slate-600 leading-none">:</span>
               </div>
-              <span className="text-xl sm:text-3xl font-black font-mono tracking-tight text-sky-400">
+              <span className="text-lg sm:text-3xl font-black font-mono tracking-tight text-sky-400">
                 {String(p2Score).padStart(2, '0')}
               </span>
               {mode === 'multiplayer' && (
                 <button
                   onClick={() => setShowMobilePanel(true)}
-                  className="xl:hidden p-1.5 sm:p-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/50 text-indigo-300 flex items-center gap-1 text-[10px] font-bold shadow-lg transition-all active:scale-95 cursor-pointer ml-1 sm:ml-2"
+                  className="xl:hidden p-1 sm:p-2 rounded-lg sm:rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/50 text-indigo-300 flex items-center gap-1 text-[9px] sm:text-[10px] font-bold shadow-lg transition-all active:scale-95 cursor-pointer ml-1 sm:ml-2"
                   title="Match Details & Chat"
                 >
-                  <Users className="w-3.5 h-3.5" />
+                  <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   <span className="hidden sm:inline">Details</span>
                 </button>
               )}
             </div>
 
             {/* Player 2 Card (Blue / Background) */}
-            <div className="flex items-center gap-2 sm:gap-3 text-right">
+            <div className="flex items-center gap-1.5 sm:gap-3 text-right">
               <div>
                 <div className="flex items-center justify-end gap-1 sm:gap-2">
                   {p2Sets > 0 && (
-                    <span className="px-1 py-0.5 rounded bg-sky-500/20 text-[9px] sm:text-[10px] font-black text-sky-400 border border-sky-500/30">
+                    <span className="px-1 py-0.5 rounded bg-sky-500/20 text-[8px] sm:text-[10px] font-black text-sky-400 border border-sky-500/30">
                       {p2Sets}S
                     </span>
                   )}
-                  <span className="text-xs sm:text-sm font-black text-slate-100 uppercase tracking-wide truncate max-w-[75px] sm:max-w-[150px]">
+                  <span className="text-[11px] sm:text-sm font-black text-slate-100 uppercase tracking-wide truncate max-w-[65px] sm:max-w-[150px]">
                     {p2Name}
                   </span>
                 </div>
-                <div className="flex items-center justify-end gap-1.5 mt-0.5">
-                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-sky-400/90">
+                <div className="flex items-center justify-end gap-1 sm:gap-1.5 mt-0.5">
+                  <span className="text-[8px] sm:text-[10px] font-bold uppercase tracking-wider text-sky-400/90">
                     {currentServer === 2 ? '● Serve' : 'Ready'}
                   </span>
                   <span className={`w-1.5 h-1.5 rounded-full ${currentServer === 2 ? 'bg-sky-400 animate-pulse' : 'bg-slate-600'}`} />
                 </div>
               </div>
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-sky-500/20 to-sky-600/30 border border-sky-500/50 flex items-center justify-center font-black text-xs text-sky-400 shrink-0">
+              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-gradient-to-br from-sky-500/20 to-sky-600/30 border border-sky-500/50 flex items-center justify-center font-black text-[11px] sm:text-xs text-sky-400 shrink-0">
                 P2
               </div>
             </div>
@@ -658,15 +685,19 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
           </div>
 
           {/* MAIN 3D TABLE TENNIS CANVAS */}
-          <div className="relative w-full aspect-[800/520] bg-[#070b14] rounded-3xl overflow-hidden border-2 border-indigo-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center">
+          <div className="relative w-full h-full flex-1 lg:flex-initial lg:aspect-[800/520] bg-[#070b14] rounded-none lg:rounded-3xl overflow-hidden border-0 lg:border-2 lg:border-indigo-500/30 shadow-none lg:shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex justify-center items-center">
             <canvas
               ref={canvasRef}
-              width={CANVAS_WIDTH}
-              height={CANVAS_HEIGHT}
+              width={isPortrait ? PORTRAIT_CANVAS_WIDTH : CANVAS_WIDTH}
+              height={isPortrait ? PORTRAIT_CANVAS_HEIGHT : CANVAS_HEIGHT}
               onMouseMove={handleMouseMove}
+              onMouseDown={(e) => handlePointerMove(e.clientX)}
+              onTouchStart={(e) => {
+                if (e.touches[0]) handlePointerMove(e.touches[0].clientX);
+              }}
               onTouchMove={handleTouchMove}
               onClick={handleCanvasClick}
-              className="w-full h-full object-contain cursor-crosshair"
+              className="w-full h-full object-contain cursor-crosshair touch-none"
             />
 
             {/* Broadcast Overlays */}

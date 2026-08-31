@@ -95,14 +95,14 @@ export const FruitNinjaOverlays: React.FC<FruitNinjaOverlaysProps> = ({
     const subtitle = stats.score > 100 ? "Incredible Slicing!" : "Great Effort!";
 
     return (
-      <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-300 select-none overflow-y-auto">
+      <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-300 select-none overflow-y-auto">
         <div className={`pointer-events-none absolute w-96 h-96 rounded-full blur-3xl opacity-40 ${
           isWin ? "bg-amber-500" : "bg-rose-600"
         }`} />
 
         <div className={`
-          relative flex flex-col items-center w-full max-w-sm p-5 sm:p-6 my-auto
-          bg-slate-900/98 backdrop-blur-2xl max-h-[90vh] overflow-y-auto custom-scrollbar
+          relative flex flex-col items-center w-full max-w-sm sm:max-w-md p-4 sm:p-6 my-auto
+          bg-slate-900/98 backdrop-blur-2xl max-h-[92vh] overflow-y-auto custom-scrollbar
           border-2 rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)]
           transform animate-in zoom-in-95 duration-200
           ${isWin ? "border-amber-500/60 shadow-amber-500/20" : "border-rose-500/60 shadow-rose-500/20"}
@@ -270,14 +270,14 @@ export const FruitNinjaOverlays: React.FC<FruitNinjaOverlaysProps> = ({
   const stats = localStats || { score: myScore, combosCount: 0, slicedCount: 0, bombsHit: 0, missedCount: 0 };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-300 select-none overflow-y-auto">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-300 select-none overflow-y-auto">
       <div className={`pointer-events-none absolute w-96 h-96 rounded-full blur-3xl opacity-40 ${
         isWin ? "bg-amber-500" : isDraw ? "bg-sky-500" : "bg-rose-600"
       }`} />
 
       <div className={`
-        relative flex flex-col items-center w-full max-w-sm p-5 sm:p-6 my-auto
-        bg-slate-900/98 backdrop-blur-2xl max-h-[90vh] overflow-y-auto custom-scrollbar
+        relative flex flex-col items-center w-full max-w-sm sm:max-w-md p-4 sm:p-6 my-auto
+        bg-slate-900/98 backdrop-blur-2xl max-h-[92vh] overflow-y-auto custom-scrollbar
         border-2 rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)]
         transform animate-in zoom-in-95 duration-200
         ${isWin ? "border-amber-500/60 shadow-amber-500/20" : isDraw ? "border-sky-500/60 shadow-sky-500/20" : "border-rose-500/60 shadow-rose-500/20"}

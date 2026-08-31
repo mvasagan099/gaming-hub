@@ -18,9 +18,13 @@ import {
 } from "@gaming-hub/shared";
 import { createTypedSocket, type RematchUpdate, type TypedSocket } from "@gaming-hub/socket";
 import { useAuthStore } from "./authStore";
+import { isNativePlatform } from "../services/native/platform";
 
 function getSocketUrl(): string {
   const envUrl = (import.meta.env.VITE_SOCKET_URL as string | undefined) || "http://localhost:4001";
+  if (isNativePlatform()) {
+    return envUrl;
+  }
   if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
     return envUrl.replace("localhost", window.location.hostname).replace("127.0.0.1", window.location.hostname);
   }

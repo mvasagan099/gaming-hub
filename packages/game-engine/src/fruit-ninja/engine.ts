@@ -188,17 +188,28 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
   private processSpawns(state: FruitNinjaState, now: number, events: EngineEvent[]): void {
     const leading = Math.max(state.scores[0] ?? 0, state.scores[1] ?? 0);
 
-    // Dynamic difficulty driven by the leading score (same curve as the solo game).
-    const delay = Math.max(400, 1100 - leading * 5);
+    // Dynamic difficulty driven by the leading score (controlled curve).
+    const delay = Math.max(950, 1600 - leading * 2.2);
     if (state.lastWaveAtMs !== null && now - state.lastWaveAtMs < delay) return;
     state.lastWaveAtMs = now;
 
-    const maxFruits = Math.min(6, 1 + Math.floor(leading / 50));
-    const minFruits = Math.max(1, Math.floor(maxFruits / 2));
-    const count = this.randomInt(minFruits, maxFruits);
+    // Enforce max active targets limit of 5
+    const currentActive = state.targets.filter((t) => !t.sliced).length + state.spawnQueue.length;
+    const maxActive = 5;
+    if (currentActive >= maxActive) return;
+
+    let maxWaveFruits = 1;
+    if (leading >= 150) {
+      maxWaveFruits = 3;
+    } else if (leading >= 60) {
+      maxWaveFruits = 2;
+    }
+    const minWaveFruits = Math.max(1, maxWaveFruits - 1);
+    const availableSlots = Math.max(0, maxActive - currentActive);
+    const count = Math.min(availableSlots, this.randomInt(minWaveFruits, maxWaveFruits));
 
     for (let i = 0; i < count; i++) {
-      state.spawnQueue.push({ type: this.pickTargetType(), spawnTime: now + i * 150 });
+      state.spawnQueue.push({ type: this.pickTargetType(), spawnTime: now + i * 220 });
     }
   }
 
