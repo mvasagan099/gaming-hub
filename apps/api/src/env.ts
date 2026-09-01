@@ -20,6 +20,9 @@ const envSchema = z.object({
   SMTP_SECURE: z.enum(["true", "false"]).optional().transform((v) => v === "true"),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  // EMAIL_FROM is the canonical sender address used for all email providers.
+  // SMTP_FROM is kept for backward compatibility and used as a fallback.
+  EMAIL_FROM: z.string().optional(),
   SMTP_FROM: z.string().optional().default("noreply@gaminghub.com"),
   SENDGRID_API_KEY: z.string().optional(),
   SENDGRID_FROM: z.string().optional(),
@@ -41,7 +44,7 @@ const envSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["EMAIL_PROVIDER"],
-      message: "EMAIL_PROVIDER must be explicitly configured as 'sendgrid' or 'smtp' in production. 'mock' email transport is forbidden in production.",
+      message: "EMAIL_PROVIDER must be explicitly configured as 'sendgrid', 'smtp', or 'ses' in production. 'mock' email transport is forbidden in production.",
     });
   }
 
@@ -54,12 +57,21 @@ const envSchema = z.object({
     });
   }
 
-  if (data.NODE_ENV === "production" && data.EMAIL_PROVIDER === "smtp" && !data.SMTP_HOST) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["SMTP_HOST"],
-      message: "SMTP_HOST is required when EMAIL_PROVIDER is 'smtp' in production",
-    });
+  if (data.NODE_ENV === "production" && data.EMAIL_PROVIDER === "smtp") {
+    const missingSmtp: string[] = [];
+    if (!data.SMTP_HOST) missingSmtp.push("SMTP_HOST");
+    if (!data.SMTP_USER) missingSmtp.push("SMTP_USER");
+    if (!data.SMTP_PASS) missingSmtp.push("SMTP_PASS");
+    // EMAIL_FROM is required; SMTP_FROM is accepted as a legacy alias
+    if (!data.EMAIL_FROM && !data.SMTP_FROM) missingSmtp.push("EMAIL_FROM");
+
+    for (const field of missingSmtp) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [field],
+        message: `${field} is required when EMAIL_PROVIDER is 'smtp' in production`,
+      });
+    }
   }
 
   // 3. Validate CORS_ORIGIN in production (must not be wildcard "*")

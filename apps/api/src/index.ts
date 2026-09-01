@@ -1,6 +1,7 @@
 import { buildApp } from "./app";
 import { env } from "./env";
 import { prisma } from "@gaming-hub/db"; // API Server Entrypoint
+import { verifySmtpConnection } from "./services/emailTransport";
 
 const SCHEDULE_INTERVAL_MS = 15 * 60 * 1000;
 const TOURNAMENT_SCHEDULER_INTERVAL_MS = 15 * 1000; // 15 seconds for tournament recovery
@@ -11,6 +12,15 @@ async function main() {
   try {
     await prisma.$connect();
     app.log.info("Database connected");
+
+    // Non-fatal SMTP connection check on startup when EMAIL_PROVIDER=smtp.
+    // Logs success or a warning but never crashes the API (req 15).
+    if (env.EMAIL_PROVIDER === "smtp") {
+      void verifySmtpConnection({
+        info: (msg) => app.log.info(msg),
+        warn: (msg) => app.log.warn(msg),
+      });
+    }
 
     // Perform crash-safe tournament state recovery & resume immediately on startup
     void import("./services/tournamentRecoveryService")

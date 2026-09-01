@@ -1,6 +1,7 @@
 import { prisma } from "@gaming-hub/db";
 import { broadcastAdminAnalytics } from "./socketBridge";
 import { env } from "../env";
+import { sendSmtpEmail, getFromAddress } from "./emailTransport";
 
 // ============================================================================
 // 1. Types & Enums
@@ -526,7 +527,7 @@ export class TournamentEmailService {
       return;
     }
 
-    // 2. SMTP Transport
+    // 2. SMTP Transport (reusable singleton transporter)
     if (env.EMAIL_PROVIDER === "smtp" || env.SMTP_HOST) {
       const host = env.SMTP_HOST;
       if (!host) {
@@ -534,16 +535,7 @@ export class TournamentEmailService {
       }
 
       try {
-        const nodemailer = await import("nodemailer");
-        const transporter = nodemailer.createTransport({
-          host,
-          port: env.SMTP_PORT ?? 587,
-          secure: env.SMTP_SECURE ?? false,
-          auth: env.SMTP_USER && env.SMTP_PASS ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
-        });
-
-        await transporter.sendMail({
-          from: env.SMTP_FROM || '"Gaming Hub" <noreply@gaminghub.com>',
+        await sendSmtpEmail({
           to: record.email,
           subject: record.subject,
           text: record.textBody,
@@ -551,6 +543,7 @@ export class TournamentEmailService {
         });
         return;
       } catch (err: any) {
+        // err.message from sendSmtpEmail is already sanitized (no credentials)
         throw new Error(`SMTP Transport error: ${err?.message || String(err)}`);
       }
     }
