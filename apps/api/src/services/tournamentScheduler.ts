@@ -94,16 +94,18 @@ async function closeExpiredRegistrations(): Promise<number> {
   let processed = 0;
   for (const t of expired) {
     try {
+      // Re-verify current database state to prevent race conditions with concurrent recovery tasks
+      const current = await prisma.tournament.findUnique({
+        where: { id: t.id },
+        select: { status: true },
+      });
+
+      if (!current || current.status !== "REGISTRATION_OPEN") {
+        continue;
+      }
+
       const playerCount = t._count.players;
       const minRequired = t.minPlayers ?? 2;
-
-      // Close registration first
-      await transitionTournamentStatus(t.id, "REGISTRATION_CLOSED", null);
-      auditEvent("TOURNAMENT_SCHEDULER_REGISTRATION_CLOSED", {
-        playerCount,
-        minPlayers: minRequired,
-        maxPlayers: t.maxPlayers,
-      }, t.id);
 
       // Evaluate minimum players requirement
       if (playerCount < minRequired) {
@@ -115,6 +117,14 @@ async function closeExpiredRegistrations(): Promise<number> {
           minPlayers: minRequired,
         }, t.id);
       } else {
+        // Close registration
+        await transitionTournamentStatus(t.id, "REGISTRATION_CLOSED", null);
+        auditEvent("TOURNAMENT_SCHEDULER_REGISTRATION_CLOSED", {
+          playerCount,
+          minPlayers: minRequired,
+          maxPlayers: t.maxPlayers,
+        }, t.id);
+
         // Minimum reached -> Ready to start when scheduled
         if (t.startTime && t.startTime <= now) {
           await startTournament(t.id, null);
