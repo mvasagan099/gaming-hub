@@ -6,6 +6,7 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https',
+    url: 'https://gaming-hub-frontend.onrender.com',
     cleartext: false,
   },
   plugins: {
