@@ -35,8 +35,7 @@ services:
   migrate:
     build:
       context: .
-      args:
-        SERVICE: api
+      dockerfile: Dockerfile.api
     container_name: gaming-hub-migrate
     command:
       - sh
@@ -52,8 +51,7 @@ services:
   api:
     build:
       context: .
-      args:
-        SERVICE: api
+      dockerfile: Dockerfile.api
     container_name: gaming-hub-api
     restart: unless-stopped
     environment:
@@ -80,8 +78,7 @@ services:
   socket:
     build:
       context: .
-      args:
-        SERVICE: socket-server
+      dockerfile: Dockerfile.socket
     container_name: gaming-hub-socket
     restart: unless-stopped
     environment:
