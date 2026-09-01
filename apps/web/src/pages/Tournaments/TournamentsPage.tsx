@@ -145,6 +145,9 @@ export function TournamentsPage() {
       if (tournamentsRes.status === 'fulfilled') {
         setItems(tournamentsRes.value.items);
         setTotal(tournamentsRes.value.total);
+      } else {
+        const reason = tournamentsRes.reason;
+        setError(reason instanceof Error ? reason.message : 'Failed to load tournaments');
       }
       if (tiersRes.status === 'fulfilled' && tiersRes.value?.items?.length) {
         setBackendTiers(tiersRes.value.items);

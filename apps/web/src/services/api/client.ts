@@ -6,7 +6,13 @@ function getApiUrl(): string {
   if (isNativePlatform()) {
     return envUrl;
   }
-  if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+  // Only adapt host for LAN testing if envUrl points to localhost/127.0.0.1
+  if (
+    typeof window !== "undefined" &&
+    (envUrl.includes("localhost") || envUrl.includes("127.0.0.1")) &&
+    window.location.hostname !== "localhost" &&
+    window.location.hostname !== "127.0.0.1"
+  ) {
     return envUrl.replace("localhost", window.location.hostname).replace("127.0.0.1", window.location.hostname);
   }
   return envUrl;
