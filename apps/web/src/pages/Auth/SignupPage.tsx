@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { COUNTRIES, CURRENCIES, countryToCurrency } from "@gaming-hub/shared";
 import { supabase } from "../../services/supabase";
+import { getAuthRedirectUrl } from "../../lib/authUtils";
 import { AuthLayout } from "./AuthLayout";
 import { useSettingsStore } from "../../store/settingsStore";
 
@@ -147,7 +148,7 @@ export function SignupPage() {
             currency: form.currency,
             referred_by: form.referredBy.trim() || null,
           },
-          emailRedirectTo: window.location.origin,
+          emailRedirectTo: getAuthRedirectUrl("/auth/callback"),
         },
       });
       if (error) throw error;

@@ -85,6 +85,8 @@ export function App() {
       return (
         hash.includes('type=recovery') ||
         search.includes('type=recovery') ||
+        search.includes('next=%2Freset-password') ||
+        search.includes('next=/reset-password') ||
         (pathname === '/reset-password' && (search.includes('code=') || hash.includes('access_token') || hash.includes('type=recovery')))
       );
     };

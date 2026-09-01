@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Mail, Loader2, MailCheck } from "lucide-react";
 import { supabase } from "../../services/supabase";
+import { getAuthRedirectUrl } from "../../lib/authUtils";
 import { AuthLayout } from "./AuthLayout";
 
 export function ForgotPasswordPage() {
@@ -19,8 +20,8 @@ export function ForgotPasswordPage() {
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: getAuthRedirectUrl("/auth/callback?next=/reset-password"),
       });
       if (error) throw error;
       setSent(true);

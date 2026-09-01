@@ -29,6 +29,7 @@ import {
   type RoomFull,
   type PublicProfile,
 } from "@gaming-hub/shared";
+import { getAuthRedirectUrl } from "../../lib/authUtils";
 import { supabase } from "../../services/supabase";
 import { useAuthStore } from "../../store/authStore";
 import { useMultiplayerStore } from "../../store/multiplayerStore";
@@ -341,7 +342,7 @@ export const LobbyPage: React.FC = () => {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: window.location.origin },
+        options: { emailRedirectTo: getAuthRedirectUrl("/auth/callback") },
       });
       if (error) throw error;
       toast.success("Magic link sent — check your inbox");

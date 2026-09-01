@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { LogIn, Mail, Lock, Sparkles, Loader2, Wrench, AlertTriangle } from "lucide-react";
 import { supabase } from "../../services/supabase";
+import { getAuthRedirectUrl } from "../../lib/authUtils";
 import { apiClient } from "../../services/api/client";
 import { AuthLayout } from "./AuthLayout";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -39,8 +40,8 @@ export function LoginPage() {
     try {
       if (useMagicLink) {
         const { error } = await supabase.auth.signInWithOtp({
-          email,
-          options: { emailRedirectTo: window.location.origin },
+          email: email.trim(),
+          options: { emailRedirectTo: getAuthRedirectUrl("/auth/callback") },
         });
         if (error) throw error;
         toast.success("Magic link sent — check your inbox");

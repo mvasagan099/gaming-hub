@@ -73,13 +73,25 @@ export function ResetPasswordPage() {
         setHasValidToken(true);
       } else if (recoverySession) {
         setHasValidToken(true);
-      } else if (!hash && !search && !session) {
+      } else if (session) {
+        // Fallback: If user arrived with an active session on /reset-password, treat as recovery
+        setIsPasswordRecovery(true);
+        setRecoverySession(session);
+        setHasValidToken(true);
+      } else if (!hash && !search) {
         // Direct navigation with no tokens/session
         setHasValidToken(false);
       }
     }
 
     void checkAuthContext();
+
+    // Fallback: If after 3.5 seconds hasValidToken is still unconfirmed and no session exists, mark invalid
+    const fallbackTimer = setTimeout(() => {
+      if (mounted && hasValidToken === null && !useAuthStore.getState().recoverySession && !useAuthStore.getState().session) {
+        setHasValidToken(false);
+      }
+    }, 3500);
 
     // Also subscribe to auth state changes to capture PASSWORD_RECOVERY or SIGNED_IN events
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -95,6 +107,7 @@ export function ResetPasswordPage() {
 
     return () => {
       mounted = false;
+      clearTimeout(fallbackTimer);
       subscription.unsubscribe();
     };
   }, [isPasswordRecovery, recoverySession, setIsPasswordRecovery, setRecoverySession]);

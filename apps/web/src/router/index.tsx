@@ -35,6 +35,7 @@ const LoginPage = lazy(() => import("../pages/Auth/LoginPage").then((m) => ({ de
 const SignupPage = lazy(() => import("../pages/Auth/SignupPage").then((m) => ({ default: m.SignupPage })));
 const ForgotPasswordPage = lazy(() => import("../pages/Auth/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import("../pages/Auth/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
+const AuthCallbackPage = lazy(() => import("../pages/Auth/AuthCallbackPage").then((m) => ({ default: m.AuthCallbackPage })));
 const TwoFactorPage = lazy(() => import("../pages/Auth/TwoFactorPage").then((m) => ({ default: m.TwoFactorPage })));
 const KycPage = lazy(() => import("../pages/Kyc/KycPage").then((m) => ({ default: m.KycPage })));
 const KycVerifyPage = lazy(() => import("../pages/Kyc/KycVerifyPage").then((m) => ({ default: m.KycVerifyPage })));
@@ -74,6 +75,11 @@ const SuspensePage = ({ children }: { children: ReactNode }) => (
 );
 
 export const router = createBrowserRouter([
+  {
+    path: "/auth/callback",
+    element: <SuspensePage><AuthCallbackPage /></SuspensePage>,
+    errorElement: <ErrorPage />,
+  },
   {
     path: "/reset-password",
     element: <SuspensePage><ResetPasswordPage /></SuspensePage>,
