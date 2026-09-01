@@ -10,7 +10,9 @@ export type RateLimitCategory =
   | "PUBLIC_API"
   | "SOCKET_CONNECT"
   | "REFERRAL"
-  | "SEARCH";
+  | "SEARCH"
+  // NEW-3: dedicated category for 2FA login attempt lockout
+  | "TWO_FA";
 
 export interface RateLimitConfig {
   maxRequests: number;
@@ -44,6 +46,8 @@ export class RateLimitService {
     SOCKET_CONNECT: { maxRequests: 10, windowSeconds: 60 },
     REFERRAL: { maxRequests: 10, windowSeconds: 60 },
     SEARCH: { maxRequests: 40, windowSeconds: 60 },
+    // 5 failures per 15 minutes — aligns with the 2FA lockout policy.
+    TWO_FA: { maxRequests: 5, windowSeconds: 15 * 60 },
   };
 
   // In-memory sliding window cache: key -> timestamp[]

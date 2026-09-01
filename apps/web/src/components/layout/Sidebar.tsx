@@ -109,10 +109,12 @@ export default function Sidebar({ isExpanded, isMobileOpen = false, onCloseMobil
             {/* Drawer Header */}
             <div className="flex items-center justify-between px-4 py-4 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-accent-500/20 text-accent-500 flex items-center justify-center">
-                  <Gamepad2 className="w-5 h-5" />
-                </div>
-                <span className="font-black text-sm text-slate-900 dark:text-white">Navigation</span>
+                <img
+                  src="/logo.png"
+                  alt="Gaming Hub"
+                  className="w-8 h-8 rounded-xl object-contain shadow-sm"
+                />
+                <span className="font-black text-sm text-slate-900 dark:text-white">Gaming Hub</span>
               </div>
               <button
                 onClick={onCloseMobile}

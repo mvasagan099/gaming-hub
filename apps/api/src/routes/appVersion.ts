@@ -12,7 +12,10 @@ import { prisma } from "@gaming-hub/db";
 export async function appVersionRoutes(app: FastifyInstance) {
   app.get("/api/app/version-config", async () => {
     const config = await prisma.appVersionConfig.findFirst({
-      orderBy: { updatedAt: "asc" },
+      // Backlog fix: desc ensures the most recently updated record wins (only
+      // matters if multiple rows somehow exist; with the singleton ID upsert
+      // there is always exactly one row).
+      orderBy: { updatedAt: "desc" },
     });
 
     if (!config) {

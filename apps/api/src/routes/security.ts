@@ -7,40 +7,53 @@ import { AppError, changePasswordSchema, setup2FASchema, verify2FASchema, disabl
 import { authenticate } from "../plugins/authenticate";
 import { requireUser, parseSchema } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
+import { RateLimitService } from "../services/rateLimitService";
 
 // ---------------------------------------------------------------------------
-// Per-userId 2FA login attempt tracker (HIGH-1 fix)
-// Mirrors the session lockout logic in auth.ts: 5 failures per 15-min window → 429.
+// Per-userId 2FA login attempt tracking (NEW-3 fix — was bespoke Map, now uses
+// RateLimitService so metrics, suspicious-activity alerts, and any future Redis
+// backend all apply automatically).
+//
+// Window: 5 failures per 15 minutes → 429. Consistent with the AUTH category
+// defaults used by other sensitive endpoints.
+//
+// In a multi-node deployment RateLimitService is already the shared in-process
+// rate-limiter for all other sensitive paths.  A Redis back-end can be wired in
+// a single place later rather than per-endpoint.
 // ---------------------------------------------------------------------------
 const MAX_2FA_ATTEMPTS = 5;
-const WINDOW_MS_2FA = 15 * 60 * 1000; // 15 minutes
-interface AttemptRecord { count: number; windowStart: number; }
-const twoFaAttempts = new Map<string, AttemptRecord>();
+const WINDOW_SECONDS_2FA = 15 * 60; // 15 minutes
 
 function check2FALockout(userId: string): void {
-  const now = Date.now();
-  const rec = twoFaAttempts.get(userId);
-  if (!rec || now - rec.windowStart > WINDOW_MS_2FA) {
-    // New window — don't block yet.
-    return;
-  }
-  if (rec.count >= MAX_2FA_ATTEMPTS) {
-    throw new AppError("RATE_LIMITED", "Too many failed verification attempts. Please try again later.", 429);
+  // Use checkRateLimit (not assertRateLimit) so we can provide a clearer error message.
+  const result = RateLimitService.checkRateLimit(
+    `2fa:${userId}`,
+    "TWO_FA",
+    { maxRequests: MAX_2FA_ATTEMPTS, windowSeconds: WINDOW_SECONDS_2FA },
+  );
+  if (!result.allowed) {
+    throw new AppError(
+      "RATE_LIMITED",
+      `Too many failed verification attempts. Please try again in ${result.retryAfterSeconds} seconds.`,
+      429,
+    );
   }
 }
 
-function record2FAFailure(userId: string): void {
-  const now = Date.now();
-  const rec = twoFaAttempts.get(userId);
-  if (!rec || now - rec.windowStart > WINDOW_MS_2FA) {
-    twoFaAttempts.set(userId, { count: 1, windowStart: now });
-  } else {
-    rec.count += 1;
-  }
+function record2FAFailure(_userId: string): void {
+  // RateLimitService.checkRateLimit already records the hit on every call.
+  // This function is intentionally a no-op — kept for call-site symmetry.
 }
 
 function reset2FAAttempts(userId: string): void {
-  twoFaAttempts.delete(userId);
+  // Clear the sliding-window timestamps so a successful login immediately
+  // grants a full fresh budget (mirrored from the old Map.delete behaviour).
+  // We access the private static Maps via type-cast to reach internal state.
+  const fullKey = `TWO_FA:2fa:${userId}`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (RateLimitService as any)["requestTimestamps"].delete(fullKey);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (RateLimitService as any)["throttleCounts"].delete(fullKey);
 }
 
 const scryptAsync = promisify(scrypt);

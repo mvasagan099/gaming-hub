@@ -25,7 +25,10 @@ async function getVersionConfig(): Promise<VersionCacheEntry> {
   }
   try {
     const config = await prisma.appVersionConfig.findFirst({
-      orderBy: { updatedAt: "asc" },
+      // Cosmetic fix (backlog): use desc so that if multiple rows exist the most
+      // recently updated record wins. With a singleton there is only ever one row
+      // but the intent should be clear to future maintainers.
+      orderBy: { updatedAt: "desc" },
       select: { minimumSupportedVersion: true, forceUpdate: true },
     });
     const entry: VersionCacheEntry = {
@@ -108,7 +111,21 @@ export async function authenticate(request: FastifyRequest, _reply: FastifyReply
       versionConfig.minimumSupportedVersion,
     );
 
-    if (isBelowMinimum || versionConfig.forceUpdate) {
+    if (isBelowMinimum) {
+      // NEW-1 fix: forceUpdate is an AND condition with isBelowMinimum, not OR.
+      //
+      // Previous (buggy):   if (isBelowMinimum || versionConfig.forceUpdate)
+      //   → enabling forceUpdate locked out ALL Android users regardless of version.
+      //
+      // Correct behaviour (aligned with the shared-type docstring):
+      //   - isBelowMinimum → hard-lock on the server (this block).
+      //   - forceUpdate    → hint sent in the public /api/app/version-config response
+      //                      for the client to show a soft "please update" prompt,
+      //                      even when the installed version is still above minimum.
+      //
+      // If the intent is ever to add a true "lock everyone out regardless of version"
+      // escape-hatch, a separate `forceUpdateAll: boolean` field should be added to
+      // AppVersionConfig with distinct admin UI labelling.
       throw new AppError(
         "APP_UPDATE_REQUIRED",
         `This version of the app is no longer supported. Please update to version ${versionConfig.minimumSupportedVersion} or later.`,

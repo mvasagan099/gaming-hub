@@ -105,9 +105,11 @@ export function AdminLayout() {
         {/* Brand Header */}
         <div className="h-16 flex items-center justify-between px-5 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Gaming Hub"
+              className="w-9 h-9 rounded-xl object-contain shadow-md shadow-indigo-500/20"
+            />
             <div>
               <h1 className="text-sm font-black tracking-tight text-slate-900 dark:text-white leading-none">
                 Gaming Hub

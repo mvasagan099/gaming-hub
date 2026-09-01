@@ -127,30 +127,28 @@ export function UpdateRequiredScreen() {
         {/* Icon */}
         <div
           style={{
-            width: '80px',
-            height: '80px',
+            width: '88px',
+            height: '88px',
             borderRadius: '24px',
-            background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+            background: 'linear-gradient(135deg, rgba(79,70,229,0.3) 0%, rgba(124,58,237,0.3) 100%)',
+            border: '1px solid rgba(99,102,241,0.4)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             boxShadow: '0 8px 32px rgba(99,102,241,0.4)',
+            overflow: 'hidden',
           }}
           aria-hidden="true"
         >
-          <svg
-            width="40"
-            height="40"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M12 2L12 16M12 2L8 6M12 2L16 6" />
-            <path d="M3 20H21" />
-          </svg>
+          <img
+            src="/logo.png"
+            alt="Gaming Hub"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+            }}
+          />
         </div>
 
         {/* Heading */}

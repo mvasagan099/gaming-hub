@@ -93,11 +93,15 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
             className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
             aria-label={`${siteName} home`}
           >
-            {logoUrl ? (
-              <img src={logoUrl} alt={siteName} className="w-7 h-7 object-cover rounded-lg" />
-            ) : (
-              <Gamepad2 className="w-7 h-7 text-accent-500 shrink-0" />
-            )}
+            <img
+              src={logoUrl || "/logo.png"}
+              alt={siteName}
+              className="w-8 h-8 object-contain rounded-xl shadow-sm"
+              onError={(e) => {
+                // Fallback if image fails
+                (e.currentTarget as HTMLElement).style.display = 'none';
+              }}
+            />
             <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight truncate max-w-[130px] sm:max-w-none">
               {siteName}
             </h1>

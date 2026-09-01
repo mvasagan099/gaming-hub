@@ -29,7 +29,8 @@ export async function adminAppVersionRoutes(app: FastifyInstance) {
       await requirePermission(request, "admin:settings:view", prisma);
 
       const config = await prisma.appVersionConfig.findFirst({
-        orderBy: { updatedAt: "asc" },
+        // Backlog fix: desc ensures the most recently updated record wins.
+        orderBy: { updatedAt: "desc" },
       });
 
       if (!config) {

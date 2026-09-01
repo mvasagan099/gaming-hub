@@ -87,13 +87,12 @@ export async function walletRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/wallet/practice-reward", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
-    const user = requireUser(request);
-    await assertFeatureEnabled("games.practice", "Practice mode");
-    const { gameId } = parseSchema(practiceRewardSchema, request.body);
-    if (!isGameId(gameId)) {
-      throw new AppError("VALIDATION_ERROR", "Unknown game", 400);
-    }
-    return claimPracticeReward(user.id, gameId);
+    requireUser(request);
+    // Backlog fix: claimPracticeReward is dead code (always returns claimed=false, amount=0).
+    // Return 410 Gone so callers know the feature is intentionally disabled, rather than
+    // silently returning a 200 OK that looks like a successful claim with nothing awarded.
+    // Re-enable by implementing the reward logic in services/wallet.ts and removing this block.
+    throw new AppError("FEATURE_DISABLED", "Practice rewards are not currently available.", 410);
   });
 
   // ---- Withdrawal OTP -----------------------------------------------------
