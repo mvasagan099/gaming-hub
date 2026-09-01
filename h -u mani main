@@ -1,0 +1,11 @@
+*   [33m7017f9e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Merge remote-tracking branch 'mani/main'
+[31m|[m[32m\[m  
+[31m|[m * [33mf319a63[m[33m ([m[1;31mmani/main[m[33m, [m[1;31mmani/HEAD[m[33m)[m feat: add TournamentsPage and API client to support competitive bracket system
+[31m|[m * [33m72086c6[m feat: implement tournament scheduler service to automate lifecycle transitions, match recovery, and registration management
+[31m|[m * [33m3f06ec0[m feat: initialize Android application resources and configure Capacitor build dependencies
+[31m|[m * [33m001ad2c[m feat: implement environment configuration schema and tournament email notification service
+[31m|[m * [33m1109278[m feat: export core multiplayer framework, managers, and gameplay utilities in index entry point
+[31m|[m * [33mebf8b9f[m feat: implement site settings management service and initialize API application structure
+[31m|[m * [33me06fa17[m feat: configure ESM build pipelines, integrate Prisma client, and containerize API and socket services
+[31m|[m * [33m21dc606[m feat: add multiplayer package to Docker build process and production image copy
+[31m|[m * [33meeef9a3[m feat: initialize database package and configure tsup build pipelines for api and socket-server apps
