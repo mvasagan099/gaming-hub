@@ -11,7 +11,9 @@ import {
 } from "@gaming-hub/shared";
 import { z } from "zod";
 
-// In-memory anti-cheat security events buffer for the API
+// In-memory anti-cheat security events buffer (fast read layer).
+// MEDIUM-2 fix: events are also persisted to the SecurityEvent DB table so they
+// survive server restarts, crashes, and rolling deployments.
 const securityEventsBuffer: SecurityEventRecord[] = [];
 
 export function recordApiSecurityEvent(event: Omit<SecurityEventRecord, "id" | "timestamp">): SecurityEventRecord {
@@ -24,6 +26,25 @@ export function recordApiSecurityEvent(event: Omit<SecurityEventRecord, "id" | "
   if (securityEventsBuffer.length > 5000) {
     securityEventsBuffer.pop();
   }
+
+  // MEDIUM-2: persist to DB asynchronously (fire-and-forget with error logging).
+  prisma.securityEvent.create({
+    data: {
+      id: record.id,
+      matchId: record.matchId ?? null,
+      roomId: record.roomId ?? null,
+      userId: record.userId,
+      gameId: record.gameId ?? null,
+      eventType: record.eventType,
+      severity: record.severity,
+      details: (record.details ?? {}) as object,
+      actionTaken: record.actionTaken,
+      timestamp: BigInt(record.timestamp),
+    },
+  }).catch((err: unknown) => {
+    console.error("[antiCheat] Failed to persist SecurityEvent to DB:", err);
+  });
+
   return record;
 }
 
@@ -59,30 +80,30 @@ export async function adminAntiCheatRoutes(app: FastifyInstance) {
   );
 
   // Summary statistics for anti-cheat dashboard
+  // MEDIUM-2: stats are now read from DB for accuracy across restarts.
   app.get(
     "/api/admin/security/anti-cheat/stats",
     { preHandler: authenticate },
     async (request) => {
       await requirePermission(request, "admin:games:view", prisma);
-      const totalEvents = securityEventsBuffer.length;
-      const bySeverity: Record<SecuritySeverity, number> = {
-        LOW: 0,
-        MEDIUM: 0,
-        HIGH: 0,
-        CRITICAL: 0,
-      };
-      const byEventType: Partial<Record<SecurityEventType, number>> = {};
 
-      for (const ev of securityEventsBuffer) {
-        bySeverity[ev.severity] = (bySeverity[ev.severity] ?? 0) + 1;
-        byEventType[ev.eventType] = (byEventType[ev.eventType] ?? 0) + 1;
+      const [totalEvents, bySeverityRows, byEventTypeRows] = await Promise.all([
+        prisma.securityEvent.count(),
+        prisma.securityEvent.groupBy({ by: ["severity"], _count: { _all: true } }),
+        prisma.securityEvent.groupBy({ by: ["eventType"], _count: { _all: true } }),
+      ]);
+
+      const bySeverity: Record<SecuritySeverity, number> = { LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0 };
+      for (const row of bySeverityRows) {
+        bySeverity[row.severity as SecuritySeverity] = row._count._all;
       }
 
-      return {
-        totalEvents,
-        bySeverity,
-        byEventType,
-      };
+      const byEventType: Partial<Record<SecurityEventType, number>> = {};
+      for (const row of byEventTypeRows) {
+        byEventType[row.eventType as SecurityEventType] = row._count._all;
+      }
+
+      return { totalEvents, bySeverity, byEventType };
     },
   );
 
@@ -91,6 +112,9 @@ export async function adminAntiCheatRoutes(app: FastifyInstance) {
     "/api/admin/security/anti-cheat/events",
     { preHandler: authenticate },
     async (request) => {
+      // MEDIUM-1 fix: gate on admin permission, consistent with the two GET routes above.
+      await requirePermission(request, "admin:games:view", prisma);
+
       const bodySchema = z.object({
         matchId: z.string().optional(),
         roomId: z.string().optional(),

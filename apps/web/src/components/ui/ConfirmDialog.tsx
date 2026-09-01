@@ -98,7 +98,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
           <Button
             type="button"
-            variant={variant === 'danger' ? 'destructive' : 'primary'}
+            variant={variant === 'danger' ? 'danger' : 'primary'}
             onClick={() => void handleConfirm()}
             disabled={isBusy}
             className={cn(

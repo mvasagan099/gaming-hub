@@ -1,14 +1,23 @@
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.SUPABASE_URL || "https://placeholder.supabase.co";
+// MEDIUM-3 fix: no silent placeholder fallback — missing key in production is caught
+// at startup by the Zod env schema in env.ts. In development the anon key is acceptable.
 const supabaseKey =
-  process.env.SUPABASE_SECRET_KEY ||
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_SECRET_KEY ||
   process.env.SUPABASE_PUBLISHABLE_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
-  "placeholder-key";
+  process.env.SUPABASE_ANON_KEY;
 
-export const supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
+if (!supabaseKey) {
+  // Emit a clear warning in development so engineers notice immediately.
+  console.warn(
+    "⚠️  [supabaseStorage] No Supabase key found. KYC document storage will fail. " +
+    "Set SUPABASE_SERVICE_ROLE_KEY in your environment."
+  );
+}
+
+export const supabaseAdmin = createClient(supabaseUrl, supabaseKey ?? "", {
   auth: { persistSession: false },
 });
 

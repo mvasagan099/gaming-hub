@@ -6,6 +6,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   SUPABASE_URL: z.string().url("SUPABASE_URL must be a valid URL"),
+  // MEDIUM-3 fix: require the service role key so KYC storage can't silently fail.
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   INTERNAL_API_KEY: z.string().min(8, "INTERNAL_API_KEY must be at least 8 characters"),
   CORS_ORIGIN: z.string().default("*"),
   RATE_LIMIT_MAX: z.coerce.number().default(300),
@@ -86,6 +88,15 @@ const envSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["INTERNAL_API_KEY"],
       message: "INTERNAL_API_KEY must be at least 16 characters in production for security",
+    });
+  }
+
+  // 6. MEDIUM-3 fix: require SUPABASE_SERVICE_ROLE_KEY in production for KYC storage.
+  if (data.NODE_ENV === "production" && !data.SUPABASE_SERVICE_ROLE_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["SUPABASE_SERVICE_ROLE_KEY"],
+      message: "SUPABASE_SERVICE_ROLE_KEY is required in production. KYC document storage will not work without it.",
     });
   }
 });

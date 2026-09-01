@@ -62,7 +62,7 @@ export const FruitNinjaOverlays: React.FC<FruitNinjaOverlaysProps> = ({
         scene.events.off(FruitEvents.GAME_OVER);
       }
     };
-  }, [game, isMultiplayer, hasRewarded]);
+  }, [game, isMultiplayer]);
 
   // Reset overlay when a multiplayer rematch starts
   useEffect(() => {

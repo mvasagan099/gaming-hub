@@ -136,20 +136,6 @@ export async function adminRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/api/admin/users/:id/wallet", { preHandler: authenticate }, async (request) => {
-    const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
-    const { id } = routeParams(request);
-    const { amount, reason } = parseSchema(walletAdjustSchema, request.body);
-    const { AdminWalletService } = await import("../services/adminWalletService");
-
-    return AdminWalletService.adjustWallet({
-      adminId: admin.id,
-      targetUserId: id,
-      amount,
-      reason,
-    });
-  });
-
   // ---- Admin Financial Dashboard -------------------------------------------
   app.get("/api/admin/finance/summary", { preHandler: authenticate }, async (request) => {
     await requirePermission(request, "admin:wallet:view", prisma);

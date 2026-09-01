@@ -2201,3 +2201,26 @@ model AppVersionConfig {
   /// Admin user ID who last changed the config.
   updatedBy               String?
 }
+
+/// MEDIUM-2 fix: Durable store for anti-cheat security events.
+/// The in-memory buffer in adminAntiCheat.ts is now backed by this table so
+/// events survive server restarts, crashes, and rolling deployments.
+model SecurityEvent {
+  id           String   @id @default(cuid())
+  matchId      String?
+  roomId       String?
+  userId       String
+  gameId       String?
+  eventType    String
+  severity     String
+  details      Json     @default("{}")
+  actionTaken  String   @default("LOG")
+  /// Unix millisecond timestamp (preserved from the in-memory record format).
+  timestamp    BigInt
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([severity, createdAt])
+  @@index([eventType, createdAt])
+  @@index([matchId])
+}

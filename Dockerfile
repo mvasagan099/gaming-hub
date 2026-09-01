@@ -32,6 +32,9 @@ RUN npm run build -w @gaming-hub/api && npm run build -w @gaming-hub/socket-serv
 # ---- runtime ----
 FROM base AS runner
 ENV NODE_ENV=production
+# HIGH-2 fix: run as non-root user to limit blast radius if compromised.
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 --ingroup nodejs nodeapp
 ARG SERVICE=api
 ENV SERVICE=${SERVICE}
 COPY --from=build /app/node_modules ./node_modules
@@ -39,5 +42,6 @@ COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/packages/db ./packages/db
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/socket-server/dist ./apps/socket-server/dist
+USER nodeapp
 EXPOSE 4000
 CMD ["sh", "-c", "node apps/$SERVICE/dist/index.js"]

@@ -1476,7 +1476,6 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
   const handleReplay = () => {
     setScore({ white: 0, black: 0 });
     setGameOver(false);
-    setRewardClaimed(false);
     setStrikerPos(0);
     setStrikerPhase('positioning');
     setDragState('idle');

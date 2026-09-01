@@ -39,7 +39,7 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
   const [isExiting, setIsExiting] = useState(false);
 
   const room = useMultiplayerStore((s) => s.room);
-  const isMatchFinished = isGameOver || room?.status === 'finished';
+  const isMatchFinished = isGameOver || room?.status === 'ended';
   const startRef = useRef<number>(Date.now());
 
   // Intercept exit action

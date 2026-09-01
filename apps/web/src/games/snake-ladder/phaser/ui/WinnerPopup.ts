@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { MoveHistoryEntry } from "../managers/GameManager";
-import type { ParticleManager } from "../effects/ParticleManager";
+import type { ParticleManager } from "../managers/ParticleManager";
 import { ANIM, animDuration, prefersReducedMotion } from "../constants";
 
 export interface WinnerPopupOptions {

@@ -901,7 +901,6 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
     setGameOver(false);
     setWin(false);
     setLose(false);
-    setRewardClaimed(false);
     movingBubbleRef.current = null;
     fallingBubblesRef.current = [];
     particlesRef.current = [];

@@ -169,7 +169,6 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     setBoostEnergy(100);
     setGameOver(false);
     setIsWin(false);
-    setRewardClaimed(false);
   }, [mode]);
 
   useEffect(() => {

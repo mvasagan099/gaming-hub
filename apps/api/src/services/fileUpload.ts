@@ -2,6 +2,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { createWriteStream, existsSync, mkdirSync, unlinkSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { readFile } from "node:fs/promises";
+// MEDIUM-4 fix: magic-byte inspection to detect actual file type regardless of declared MIME.
+import { fileTypeFromBuffer } from "file-type";
 
 export interface FileUploadConfig {
   uploadDir: string;
@@ -41,11 +43,12 @@ export interface FileValidationResult {
   error?: string;
 }
 
-export function validateFile(
+// MEDIUM-4: validateFile is now async to allow magic-byte detection.
+export async function validateFile(
   buffer: Buffer,
   mimeType: string,
   fileName: string,
-): FileValidationResult {
+): Promise<FileValidationResult> {
   if (!uploadConfig.allowedMimeTypes.includes(mimeType)) {
     return {
       valid: false,
@@ -67,6 +70,23 @@ export function validateFile(
     return {
       valid: false,
       error: `Invalid file extension. Allowed: ${allowedExts.join(", ")}`,
+    };
+  }
+
+  // MEDIUM-4: inspect the actual file magic bytes and compare against the declared MIME type.
+  const detected = await fileTypeFromBuffer(buffer);
+  // PDFs are sometimes detected as "application/pdf" or have mime "application/pdf".
+  // fileTypeFromBuffer returns undefined for plain text — reject those too.
+  if (!detected) {
+    return {
+      valid: false,
+      error: "File content could not be identified. Only JPEG, PNG, WebP and PDF are accepted.",
+    };
+  }
+  if (detected.mime !== mimeType) {
+    return {
+      valid: false,
+      error: `File content (${detected.mime}) does not match declared type (${mimeType}). Upload rejected.`,
     };
   }
 
@@ -99,7 +119,7 @@ export async function saveUploadedFile(
 ): Promise<UploadedFile> {
   ensureUploadDir();
 
-  const validation = validateFile(buffer, mimeType, originalName);
+  const validation = await validateFile(buffer, mimeType, originalName);
   if (!validation.valid) {
     throw new Error(validation.error);
   }
