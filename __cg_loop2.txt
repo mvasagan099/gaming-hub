@@ -1,0 +1,81 @@
+1000:     ctx.restore();
+1001: 
+1002:     ctx.strokeStyle = dark;
+1003:     ctx.lineWidth = 1.8;
+1004:     ctx.strokeRect(sm + 1, sm + 1, width - sm * 2 - 2, height - sm * 2 - 2);
+1005: 
+1006:     const pocketR = 13;
+1007:     const pocketHole = 16;
+1008:     const pc = sm + 14;
+1009:     const pocketPos = [
+1010:       { x: pc, y: pc },
+1011:       { x: width - pc, y: pc },
+1012:       { x: pc, y: height - pc },
+1013:       { x: width - pc, y: height - pc },
+1014:     ];
+1015:     pocketPos.forEach((p) => {
+1016:       ctx.fillStyle = '#0d0804';
+1017:       ctx.beginPath();
+1018:       ctx.arc(p.x, p.y, pocketHole, 0, Math.PI * 2);
+1019:       ctx.fill();
+1020: 
+1021:       ctx.strokeStyle = '#e0d8c8';
+1022:       ctx.lineWidth = 3;
+1023:       ctx.beginPath();
+1024:       ctx.arc(p.x, p.y, pocketR, 0, Math.PI * 2);
+1025:       ctx.stroke();
+1026:     });
+1027: 
+1028:     const capsuleOffset = 62;
+1029:     const capsuleHalf = 8;
+1030:     const capStart = 86;
+1031:     const capEnd = 314;
+1032:     const capRedR = 9;
+1033: 
+1034:     const drawCapsule = (ax: number, ay: number, bx: number, by: number, isVert: boolean) => {
+1035:       ctx.strokeStyle = dark;
+1036:       ctx.fillStyle = bgColor;
+1037: 
+1038:       ctx.beginPath();
+1039:       if (!isVert) {
+1040:         ctx.rect(ax, ay - capsuleHalf, bx - ax, capsuleHalf * 2);
+1041:       } else {
+1042:         ctx.rect(ax - capsuleHalf, ay, capsuleHalf * 2, by - ay);
+1043:       }
+1044:       ctx.fill();
+1045: 
+1046:       ctx.lineWidth = 2.5;
+1047:       ctx.beginPath();
+1048:       if (!isVert) {
+1049:         ctx.moveTo(ax, ay - capsuleHalf);
+1050:         ctx.lineTo(bx, ay - capsuleHalf);
+1051:       } else {
+1052:         ctx.moveTo(ax - capsuleHalf, ay);
+1053:         ctx.lineTo(ax - capsuleHalf, by);
+1054:       }
+1055:       ctx.stroke();
+1056: 
+1057:       ctx.lineWidth = 1.2;
+1058:       ctx.beginPath();
+1059:       if (!isVert) {
+1060:         ctx.moveTo(ax, ay + capsuleHalf);
+1061:         ctx.lineTo(bx, ay + capsuleHalf);
+1062:       } else {
+1063:         ctx.moveTo(ax + capsuleHalf, ay);
+1064:         ctx.lineTo(ax + capsuleHalf, by);
+1065:       }
+1066:       ctx.stroke();
+1067: 
+1068:       ctx.lineWidth = 1.5;
+1069:       ctx.beginPath();
+1070:       if (!isVert) {
+1071:         ctx.arc(ax, ay, capsuleHalf, -Math.PI / 2, Math.PI / 2, true);
+1072:         ctx.arc(bx, ay, capsuleHalf, Math.PI / 2, -Math.PI / 2, true);
+1073:       } else {
+1074:         ctx.arc(ax, ay, capsuleHalf, -Math.PI, 0, true);
+1075:         ctx.arc(ax, by, capsuleHalf, 0, Math.PI, true);
+1076:       }
+1077:       ctx.stroke();
+1078: 
+1079:       [[ax, ay], [bx, by]].forEach(([rcx, rcy]) => {
+1080:         ctx.fillStyle = redColor;

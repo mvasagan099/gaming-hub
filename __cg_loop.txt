@@ -1,0 +1,121 @@
+880:           striker.y = nextPlayer === 'player' ? STRIKER_START_Y : 62;
+881:           striker.vx = 0;
+882:           striker.vy = 0;
+883:         }
+884:         setStrikerPhase('positioning');
+885:         setTimeLeft(60);
+886:       }
+887:     } else if (mode === 'multiplayer') {
+888:       if (isTurnActive) {
+889:         turnActiveFramesRef.current++;
+890:       } else {
+891:         turnActiveFramesRef.current = 0;
+892:       }
+893: 
+894:       // Wait at least 10 frames after turn started before allowing turn-end.
+895:       // This prevents the edge case where setIsTurnActive(true) and !anyMoving
+896:       // coincide on the same frame before coins have received velocity.
+897:       const hasEnoughFrames = turnActiveFramesRef.current >= 10;
+898: 
+899:       if (isTurnActive && !anyMoving && hasEnoughFrames) {
+900:         setIsTurnActive(false);
+901:         turnActiveFramesRef.current = 0;
+902: 
+903:         const stateToApply = pendingServerStateRef.current || driverRef.current?.lastState;
+904:         if (stateToApply) {
+905:           pendingServerStateRef.current = null;
+906: 
+907:           // Apply server state (scores, coin positions, pocketed flags, striker reset)
+908:           applyServerState(stateToApply);
+909: 
+910:           // *** SINGLE AUTHORITATIVE TURN UPDATE ***
+911:           // This is the ONLY place in multiplayer that updates currentPlayer and strikerPhase.
+912:           // We derive them directly from the server state once animation has completely stopped.
+913:           const mySeatNow = mySeatRef.current ?? useMultiplayerStore.getState().mySeat ?? 0;
+914:           const isMyTurnNow = stateToApply.currentSeat === mySeatNow;
+915: 
+916:           console.log('[CarromGame] TURN END - mySeat:', mySeatNow,
+917:             '| serverCurrentSeat:', stateToApply.currentSeat,
+918:             '| isMyTurn:', isMyTurnNow,
+919:             '| strikerPlacementPhase:', stateToApply.strikerPlacementPhase);
+920: 
+921:           setCurrentPlayer(isMyTurnNow ? 'player' : 'ai');
+922:           setStrikerPhase(stateToApply.strikerPlacementPhase ? 'positioning' : 'aiming');
+923:           setStrikerPos(0);
+924: 
+925:           // Reconcile pocketed coins with server ground-truth once motion has ceased
+926:           for (const localCoin of coinsRef.current) {
+927:             if (localCoin.type === 'striker') continue;
+928:             const serverCoin = stateToApply.coins?.find((c: any) => c.id === localCoin.id);
+929:             if (serverCoin && serverCoin.pocketed) {
+930:               localCoin.active = false;
+931:               localCoin.vx = 0;
+932:               localCoin.vy = 0;
+933:             }
+934:           }
+935:         }
+936:       }
+937:     }
+938: 
+939: 
+940:     renderBoard(ctx, coins, dragState, dragStart, currentAim, strikerPhase, currentPlayer, isTurnActive, gameOver, strikerPos, mySeatRef.current);
+941: 
+942:   }, true);
+943: 
+944:   const renderBoard = useCallback((
+945:     ctx: CanvasRenderingContext2D,
+946:     coins: LocalCoin[],
+947:     dragState: string,
+948:     dragStart: { x: number; y: number },
+949:     currentAim: { x: number; y: number },
+950:     strikerPhase: string,
+951:     currentPlayer: string,
+952:     isTurnActive: boolean,
+953:     gameOver: boolean,
+954:     strikerPos: number,
+955:     mySeatParam: number | null
+956:   ) => {
+957:     ctx.clearRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
+958: 
+959:     const width = BOARD_WIDTH;
+960:     const height = BOARD_HEIGHT;
+961:     const cx = width / 2;
+962:     const cy = height / 2;
+963:     const dark = '#1a1008';
+964:     const redColor = '#cc1a1a';
+965:     const bgColor = '#f5dba0';
+966: 
+967:     const frameRadius = 24;
+968:     const frameColor = '#2e1806';
+969: 
+970:     ctx.fillStyle = frameColor;
+971:     ctx.beginPath();
+972:     ctx.moveTo(frameRadius, 0);
+973:     ctx.lineTo(width - frameRadius, 0);
+974:     ctx.quadraticCurveTo(width, 0, width, frameRadius);
+975:     ctx.lineTo(width, height - frameRadius);
+976:     ctx.quadraticCurveTo(width, height, width - frameRadius, height);
+977:     ctx.lineTo(frameRadius, height);
+978:     ctx.quadraticCurveTo(0, height, 0, height - frameRadius);
+979:     ctx.lineTo(0, frameRadius);
+980:     ctx.quadraticCurveTo(0, 0, frameRadius, 0);
+981:     ctx.closePath();
+982:     ctx.fill();
+983: 
+984:     const sm = 18;
+985: 
+986:     ctx.fillStyle = bgColor;
+987:     ctx.fillRect(sm, sm, width - sm * 2, height - sm * 2);
+988: 
+989:     ctx.save();
+990:     ctx.rect(sm, sm, width - sm * 2, height - sm * 2);
+991:     ctx.clip();
+992:     ctx.strokeStyle = 'rgba(180, 120, 40, 0.07)';
+993:     ctx.lineWidth = 1.5;
+994:     for (let gy = sm + 6; gy < height - sm; gy += 8) {
+995:       ctx.beginPath();
+996:       ctx.moveTo(sm, gy);
+997:       ctx.lineTo(width - sm, gy);
+998:       ctx.stroke();
+999:     }
+1000:     ctx.restore();

@@ -1,0 +1,36 @@
+{
+  "name": "@gaming-hub/multiplayer",
+  "version": "1.0.0",
+  "description": "Shared multiplayer framework for Gaming Hub",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm && tsc --emitDeclarationOnly --outDir dist",
+    "dev": "tsup src/index.ts --format cjs,esm --watch",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@gaming-hub/db": "*",
+    "@gaming-hub/game-engine": "*",
+    "@gaming-hub/shared": "*",
+    "@gaming-hub/socket": "*",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "tsup": "^8.1.0",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.10"
+  }
+}

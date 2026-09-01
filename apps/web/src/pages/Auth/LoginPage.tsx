@@ -1,0 +1,190 @@
+import { useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { LogIn, Mail, Lock, Sparkles, Loader2, Wrench, AlertTriangle } from "lucide-react";
+import { supabase } from "../../services/supabase";
+import { apiClient } from "../../services/api/client";
+import { AuthLayout } from "./AuthLayout";
+import { useSettingsStore } from "../../store/settingsStore";
+
+export function LoginPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: { pathname?: string; state?: unknown } } | null)?.from;
+  const settings = useSettingsStore((s) => s.settings);
+
+  const isSessionRevoked = new URLSearchParams(location.search).get("reason") === "session_revoked";
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [useMagicLink, setUseMagicLink] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const maintenanceEnabled = settings?.general?.maintenanceEnabled ?? false;
+  const maintenanceMessage = settings?.general?.maintenanceMessage ?? "";
+
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      toast.error("Enter your email");
+      return;
+    }
+    if (!useMagicLink && !password) {
+      toast.error("Enter your password");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      if (useMagicLink) {
+        const { error } = await supabase.auth.signInWithOtp({
+          email,
+          options: { emailRedirectTo: window.location.origin },
+        });
+        if (error) throw error;
+        toast.success("Magic link sent — check your inbox");
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session) {
+        toast.success("Welcome back!");
+        navigate(from?.pathname ?? "/", { replace: true, state: from?.state });
+        return;
+      }
+      
+      const result = await apiClient.post<{ status: string; userId?: string }>("/auth/session", { token: session.access_token }, session.access_token);
+      
+      if (result.status === "2fa_required" && result.userId) {
+        toast.success("2FA required");
+        navigate("/2fa", { replace: true, state: { userId: result.userId } });
+        return;
+      }
+
+      // If user is Admin, redirect to Admin Dashboard by default
+      try {
+        const meData = await apiClient.get<{ user: { role: string } }>("/auth/me");
+        if (meData?.user?.role === "ADMIN") {
+          toast.success("Welcome Admin!");
+          navigate("/admin", { replace: true });
+          return;
+        }
+      } catch {
+        // Fallback to default redirect
+      }
+
+      toast.success("Welcome back!");
+      navigate(from?.pathname ?? "/", { replace: true, state: from?.state });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not sign in";
+      toast.error(message);
+      if (/invalid login credentials/i.test(message)) {
+        setUseMagicLink(true);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (maintenanceEnabled) {
+    return (
+      <AuthLayout
+        title="Under Maintenance"
+        subtitle="We're working hard to improve the experience"
+      >
+        <div className="text-center space-y-4 py-2">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+            <Wrench className="w-7 h-7 text-amber-400" />
+          </div>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            {maintenanceMessage || "We are performing scheduled maintenance. Please check back soon."}
+          </p>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  return (
+    <AuthLayout
+      title="Welcome back"
+      subtitle="Log in to access your profile, wallet and matches"
+    >
+      <div className="space-y-4">
+        {isSessionRevoked && (
+          <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-3 shadow-sm">
+            <AlertTriangle className="w-5 h-5 shrink-0 text-amber-500 mt-0.5" />
+            <div>
+              <p className="font-bold text-sm text-slate-900 dark:text-white">Your account was signed in on another device.</p>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">Please sign in again to continue on this device.</p>
+            </div>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="relative">
+            <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+            <input
+              type="email"
+              autoComplete="email"
+              placeholder="Email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-white rounded-xl pl-10 pr-4 py-3 border border-slate-300 dark:border-slate-800 focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+
+          {!useMagicLink && (
+            <div className="relative">
+              <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+              <input
+                type="password"
+                autoComplete="current-password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-white rounded-xl pl-10 pr-4 py-3 border border-slate-300 dark:border-slate-800 focus:outline-none focus:border-indigo-500 transition-colors"
+              />
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2"
+          >
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+            {submitting ? "Signing in…" : useMagicLink ? "Send magic link" : "LOG IN"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setUseMagicLink((v) => !v)}
+            className="w-full flex items-center justify-center gap-2 text-xs font-bold text-indigo-500 hover:text-indigo-400 transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            {useMagicLink ? "Use email & password instead" : "Send me a magic link instead"}
+          </button>
+        </form>
+
+        <div className="pt-5 mt-5 border-t border-slate-200 dark:border-slate-800 space-y-2 text-center">
+          <div className="flex items-center justify-center gap-4 text-xs font-bold">
+            <Link to="/forgot-password" className="text-slate-500 dark:text-slate-400 hover:text-indigo-400 transition-colors">
+              Forgot password?
+            </Link>
+            <span className="text-slate-300 dark:text-slate-700">•</span>
+            <Link to="/signup" className="text-indigo-500 hover:text-indigo-400 transition-colors">
+              Create an account
+            </Link>
+          </div>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500">
+            Multiplayer matches are tied to your account — sign in to play online.
+          </p>
+        </div>
+      </div>
+    </AuthLayout>
+  );
+}

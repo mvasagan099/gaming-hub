@@ -1,0 +1,317 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap');
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens (Tailwind v4 theme) — default accent: indigo.
+   The accent scale is redefined at runtime via html[data-accent="..."] so that
+   bg-accent-500, text-accent-300, ring-accent-500 etc. follow the active accent. */
+@theme {
+  --font-sans: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+
+  --color-accent-50: #eef2ff;
+  --color-accent-100: #e0e7ff;
+  --color-accent-200: #c7d2fe;
+  --color-accent-300: #a5b4fc;
+  --color-accent-400: #818cf8;
+  --color-accent-500: #6366f1;
+  --color-accent-600: #4f46e5;
+  --color-accent-700: #4338ca;
+  --color-accent-800: #3730a3;
+  --color-accent-900: #312e81;
+
+  --color-border: var(--color-border, #e2e8f0);
+  --color-card: var(--color-card, #ffffff);
+  --color-muted: var(--color-muted, #f8fafc);
+  --color-muted-foreground: var(--color-muted-foreground, #64748b);
+  --color-primary: var(--color-primary, #4f46e5);
+  --color-primary-foreground: var(--color-primary-foreground, #ffffff);
+
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+}
+
+:root {
+  --color-border: #e2e8f0;
+  --color-card: #ffffff;
+  --color-muted: #f8fafc;
+  --color-muted-foreground: #64748b;
+  --color-primary: #4f46e5;
+  --color-primary-foreground: #ffffff;
+}
+
+.dark {
+  --color-border: #1e293b;
+  --color-card: #0f172a;
+  --color-muted: #1e293b;
+  --color-muted-foreground: #94a3b8;
+  --color-primary: #6366f1;
+  --color-primary-foreground: #ffffff;
+}
+
+html[data-accent="violet"] {
+  --color-accent-50: #f5f3ff;
+  --color-accent-100: #ede9fe;
+  --color-accent-200: #ddd6fe;
+  --color-accent-300: #c4b5fd;
+  --color-accent-400: #a78bfa;
+  --color-accent-500: #8b5cf6;
+  --color-accent-600: #7c3aed;
+  --color-accent-700: #6d28d9;
+  --color-accent-800: #5b21b6;
+  --color-accent-900: #4c1d95;
+}
+
+html[data-accent="emerald"] {
+  --color-accent-50: #ecfdf5;
+  --color-accent-100: #d1fae5;
+  --color-accent-200: #a7f3d0;
+  --color-accent-300: #6ee7b7;
+  --color-accent-400: #34d399;
+  --color-accent-500: #10b981;
+  --color-accent-600: #059669;
+  --color-accent-700: #047857;
+  --color-accent-800: #065f46;
+  --color-accent-900: #064e3b;
+}
+
+html[data-accent="amber"] {
+  --color-accent-50: #fffbeb;
+  --color-accent-100: #fef3c7;
+  --color-accent-200: #fde68a;
+  --color-accent-300: #fcd34d;
+  --color-accent-400: #fbbf24;
+  --color-accent-500: #f59e0b;
+  --color-accent-600: #d97706;
+  --color-accent-700: #b45309;
+  --color-accent-800: #92400e;
+  --color-accent-900: #78350f;
+}
+
+html[data-accent="rose"] {
+  --color-accent-50: #fff1f2;
+  --color-accent-100: #ffe4e6;
+  --color-accent-200: #fecdd3;
+  --color-accent-300: #fda4af;
+  --color-accent-400: #fb7185;
+  --color-accent-500: #f43f5e;
+  --color-accent-600: #e11d48;
+  --color-accent-700: #be123c;
+  --color-accent-800: #9f1239;
+  --color-accent-900: #881337;
+}
+
+html[data-accent="cyan"] {
+  --color-accent-50: #ecfeff;
+  --color-accent-100: #cffafe;
+  --color-accent-200: #a5f3fc;
+  --color-accent-300: #67e8f9;
+  --color-accent-400: #22d3ee;
+  --color-accent-500: #06b6d4;
+  --color-accent-600: #0891b2;
+  --color-accent-700: #0e7490;
+  --color-accent-800: #155e75;
+  --color-accent-900: #164e63;
+}
+
+/* Custom brand accent: shades are derived from --custom-accent (a 6-digit hex
+   set by the site settings → general.primaryColor admin configuration). */
+html[data-accent="custom"] {
+  --color-accent-500: var(--custom-accent, #6366f1);
+  --color-accent-600: color-mix(in srgb, var(--color-accent-500) 82%, black);
+  --color-accent-700: color-mix(in srgb, var(--color-accent-500) 64%, black);
+  --color-accent-800: color-mix(in srgb, var(--color-accent-500) 46%, black);
+  --color-accent-900: color-mix(in srgb, var(--color-accent-500) 28%, black);
+  --color-accent-400: color-mix(in srgb, var(--color-accent-500) 82%, white);
+  --color-accent-300: color-mix(in srgb, var(--color-accent-500) 64%, white);
+  --color-accent-200: color-mix(in srgb, var(--color-accent-500) 46%, white);
+  --color-accent-100: color-mix(in srgb, var(--color-accent-500) 28%, white);
+  --color-accent-50: color-mix(in srgb, var(--color-accent-500) 14%, white);
+}
+
+body {
+  margin: 0;
+  font-family: 'Outfit', sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+html.dark body {
+  background-color: #0b0f19;
+  color: #f8fafc;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+html.dark ::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+html.dark .glass-panel {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glow-purple {
+  box-shadow: 0 0 25px rgba(99, 102, 241, 0.35);
+}
+
+.glow-gold {
+  box-shadow: 0 0 25px rgba(245, 158, 11, 0.35);
+}
+
+@keyframes emojiFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-90px) scale(1.3);
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    scroll-behavior: smooth;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent-500) 30%, transparent);
+  }
+}
+
+/* High contrast mode */
+html[data-contrast="high"] body {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+html.dark[data-contrast="high"] body {
+  background-color: #000000;
+  color: #ffffff;
+}
+
+html[data-contrast="high"] .glass-panel {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+html.dark[data-contrast="high"] .glass-panel {
+  background: rgba(2, 6, 23, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+html[data-contrast="high"] *:focus-visible {
+  outline-width: 3px;
+  outline-offset: 1px;
+}
+
+/* Safe Area Inset Support & Responsive Layout Helpers */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+.safe-top {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+.safe-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+.safe-left {
+  padding-left: max(0.5rem, env(safe-area-inset-left));
+}
+.safe-right {
+  padding-right: max(0.5rem, env(safe-area-inset-right));
+}
+
+/* Touch-friendly Minimum Target */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Scrollbar hiding utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Fluid Typography Utilities */
+.text-fluid-title {
+  font-size: clamp(1.25rem, 4vw, 2.5rem);
+  line-height: 1.15;
+}
+
+.text-fluid-hero {
+  font-size: clamp(1.5rem, 5vw, 3.25rem);
+  line-height: 1.1;
+}
+
+.text-fluid-score {
+  font-size: clamp(1.5rem, 3.5vw, 2.75rem);
+  line-height: 1;
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

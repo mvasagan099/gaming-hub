@@ -1,0 +1,124 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gaming-hub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gaming
+      POSTGRES_PASSWORD: gaming
+      POSTGRES_DB: gaming_hub
+    ports:
+      - "5540:5432"
+    volumes:
+      - gaming_hub_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gaming -d gaming_hub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: gaming-hub-redis
+    restart: unless-stopped
+    ports:
+      - "56379:6379"
+    volumes:
+      - gaming_hub_redisdata:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: gaming-hub-migrate
+    command:
+      - sh
+      - -c
+      - npx prisma db push --schema packages/db/prisma/schema.prisma --skip-generate --accept-data-loss
+    environment:
+      DATABASE_URL: postgresql://gaming:gaming@postgres:5432/gaming_hub
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: gaming-hub-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://gaming:gaming@postgres:5432/gaming_hub
+      SUPABASE_URL: ${SUPABASE_URL:-http://localhost:54321}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-gaming-hub-internal-dev-key}
+      CORS_ORIGIN: http://localhost:8080
+      REQUIRE_EMAIL_VERIFICATION: "true"
+      BODY_LIMIT: "262144"
+      LOG_LEVEL: info
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/health/live >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  socket:
+    build:
+      context: .
+      dockerfile: Dockerfile.socket
+    container_name: gaming-hub-socket
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4001
+      DATABASE_URL: postgresql://gaming:gaming@postgres:5432/gaming_hub
+      SUPABASE_URL: ${SUPABASE_URL:-http://localhost:54321}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-gaming-hub-internal-dev-key}
+      API_URL: http://api:4000
+      CORS_ORIGIN: http://localhost:8080
+      REDIS_URL: redis://redis:6379
+      REQUIRE_EMAIL_VERIFICATION: "true"
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4001/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: /api
+    container_name: gaming-hub-web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+      socket:
+        condition: service_started
+
+volumes:
+  gaming_hub_pgdata:
+  gaming_hub_redisdata:

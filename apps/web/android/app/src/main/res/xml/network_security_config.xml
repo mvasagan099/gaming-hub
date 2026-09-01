@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network Security Configuration for Gaming Hub (release)
+  =========================================================
+  - cleartextTrafficPermitted="false"  →  Blocks all plain-text HTTP on Android 7+
+                                          (redundant with usesCleartextTraffic="false" in
+                                          the manifest, but defence-in-depth).
+  - <trust-anchors> with system only   →  User-installed CA certificates (e.g. Burp Suite
+                                          proxy CAs) are NOT trusted. This makes MITM via
+                                          certificate injection significantly harder.
+
+  NOTE: Do NOT add <debug-overrides> that re-enable user CAs here.
+        Developers should use the debug build variant with its own security config if
+        they need to proxy traffic during development.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <!-- Trust system-installed CAs only; reject user-installed CAs -->
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

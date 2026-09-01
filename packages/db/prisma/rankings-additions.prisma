@@ -1,0 +1,404 @@
+// Phase 12: Competitive Rankings & Multiplayer Polish Database Additions
+// Run: npx prisma migrate dev --name add_competitive_rankings
+
+// ============================================================================
+// COMPETITIVE RANKING SYSTEM
+// ============================================================================
+
+enum RankTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+  DIAMOND
+  MASTER
+  GRANDMASTER
+  LEGEND
+}
+
+enum SeasonStatus {
+  UPCOMING
+  ACTIVE
+  ENDED
+}
+
+model CompetitiveRank {
+  id              String      @id @default(uuid())
+  userId          String
+  gameId          String
+  seasonId        String?
+  
+  // ELO/MMR Rating
+  mmr             Int         @default(1000)
+  rating          Int         @default(1000) // Displayed rating with decay
+  peakRating      Int         @default(1000)
+  
+  // Rank Information
+  tier            RankTier    @default(BRONZE)
+  tierProgress    Int         @default(0) // 0-100 progress within tier
+  stars           Int         @default(0) // Stars within tier (visual only)
+  
+  // Placement & Promotion
+  placementMatches Int        @default(0)
+  placementComplete Boolean   @default(false)
+  promotionMatches  Int       @default(0) // Wins needed for promotion
+  demotionProtection Boolean  @default(false) // Protected from demotion for X games
+  
+  // Statistics
+  gamesPlayed     Int         @default(0)
+  wins            Int         @default(0)
+  losses          Int         @default(0)
+  draws           Int         @default(0)
+  winStreak       Int         @default(0)
+  longestWinStreak Int       @default(0)
+  
+  // Position
+  globalRank      Int?
+  regionalRank    Int?
+  countryRank     Int?
+  
+  // Rating History
+  lastMatchAt     DateTime?
+  ratingUpdatedAt DateTime    @default(now())
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  season          Season?     @relation(fields: [seasonId], references: [id])
+  history         RatingHistory[]
+  
+  @@unique([userId, gameId, seasonId])
+  @@index([gameId, mmr(sort: Desc)])
+  @@index([gameId, rating(sort: Desc)])
+  @@index([gameId, tier])
+}
+
+model Season {
+  id              String        @id @default(uuid())
+  gameId          String
+  name            String
+  startDate       DateTime
+  endDate         DateTime
+  status          SeasonStatus  @default(UPCOMING)
+  
+  // Rewards
+  rewards         Json          @default("{}")
+  
+  createdAt       DateTime      @default(now())
+  
+  ranks           CompetitiveRank[]
+  history         RatingHistory[]
+  
+  @@unique([gameId, startDate])
+  @@index([gameId, status])
+}
+
+model RatingHistory {
+  id              String   @id @default(uuid())
+  rankId          String
+  seasonId        String?
+  matchId         String?
+  
+  // Rating Changes
+  ratingBefore    Int
+  ratingAfter     Int
+  ratingChange    Int
+  mmrBefore       Int
+  mmrAfter        Int
+  mmrChange       Int
+  
+  // Tier Changes
+  tierBefore      RankTier
+  tierAfter       RankTier
+  tierProgressBefore Int
+  tierProgressAfter Int
+  
+  // Match Details
+  opponentRating  Int?
+  result          String // "win", "loss", "draw"
+  gameId          String
+  
+  createdAt       DateTime @default(now())
+  
+  rank            CompetitiveRank @relation(fields: [rankId], references: [id], onDelete: Cascade)
+  season          Season? @relation(fields: [seasonId], references: [id])
+  
+  @@index([rankId, createdAt(sort: Desc)])
+  @@index([matchId])
+}
+
+// ============================================================================
+// ENHANCED PLAYER STATISTICS
+// ============================================================================
+
+model PlayerGameStats {
+  id                  String    @id @default(uuid())
+  userId              String
+  gameId              String
+  
+  // Match Statistics
+  totalMatches        Int       @default(0)
+  rankedMatches       Int       @default(0)
+  casualMatches       Int       @default(0)
+  
+  // Win/Loss/Draw
+  wins                Int       @default(0)
+  losses              Int       @default(0)
+  draws               Int       @default(0)
+  winRate             Float     @default(0)
+  
+  // Streaks
+  currentWinStreak    Int       @default(0)
+  longestWinStreak    Int       @default(0)
+  currentLossStreak   Int       @default(0)
+  longestLossStreak   Int       @default(0)
+  
+  // Performance
+  averageMatchDuration Int      @default(0) // seconds
+  fastestWin          Int?      // seconds
+  bestPerformance     Json?     // Best game performance metrics
+  
+  // Time Played
+  totalTimePlayed     Int       @default(0) // seconds
+  rankedTimePlayed    Int       @default(0)
+  casualTimePlayed    Int       @default(0)
+  
+  // Recent Performance
+  lastTenMatches      Json      @default("[]") // Array of recent match outcomes
+  lastTwentyMatches   Json      @default("[]")
+  
+  // Timestamps
+  lastMatchAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, gameId])
+  @@index([gameId, winRate(sort: Desc)])
+  @@index([gameId, totalMatches(sort: Desc)])
+}
+
+// ============================================================================
+// FAIR PLAY & MODERATION
+// ============================================================================
+
+enum PenaltyType {
+  AFK_WARNING
+  AFK_PENALTY
+  RAGE_QUIT
+  DISCONNECT_TIMEOUT
+  CHEATING
+  ABUSE
+  SPAMMING
+  UNSPORTSMANLIKE_CONDUCT
+}
+
+enum PenaltyStatus {
+  ACTIVE
+  EXPIRED
+  APPEALED
+  REVOKED
+}
+
+model PlayerPenalty {
+  id              String        @id @default(uuid())
+  userId          String
+  matchId        String?
+  
+  // Penalty Details
+  type            PenaltyType
+  severity        Int           @default(1) // 1-5 scale
+  status          PenaltyStatus @default(ACTIVE)
+  
+  // Duration
+  duration        Int           @default(0) // minutes, 0 = permanent
+  startedAt       DateTime      @default(now())
+  expiresAt       DateTime?
+  
+  // Impact
+  coinsPenalty    Int           @default(0)
+  xpPenalty       Int           @default(0)
+  ratingPenalty   Int           @default(0)
+  
+  // Detection
+  detectionMethod String        @default("automatic") // automatic, manual, report
+  detectionData   Json?
+  
+  // Appeals
+  appealedAt      DateTime?
+  appealReason    String?
+  appealResolvedAt DateTime?
+  appealStatus    String?
+  
+  // Admin
+  issuedBy        String?       // Admin ID if manual
+  reason          String
+  notes           String?
+  
+  createdAt       DateTime      @default(now())
+  
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, status, expiresAt])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([matchId])
+}
+
+model PlayerReputation {
+  id              String    @id @default(uuid())
+  userId          String    @unique
+  
+  // Reputation Score
+  score           Float     @default(100.0) // 0-100
+  tier            String    @default("Good") // Excellent, Good, Neutral, Poor, Toxic
+  
+  // Behavior Metrics
+  reportsReceived Int       @default(0)
+  reportsValidated Int      @default(0)
+  complimentsReceived Int   @default(0)
+  
+  // Fair Play
+  afkCount        Int       @default(0)
+  rageQuitCount   Int       @default(0)
+  sportsmanshipScore Float  @default(100.0) // Based on opponent ratings
+  
+  // Game History
+  gamesCompleted  Int       @default(0)
+  gamesAbandoned  Int       @default(0)
+  completionRate  Float     @default(100.0)
+  
+  // Time-based Decay
+  monthlyScore    Float     @default(100.0)
+  weeklyScore     Float     @default(100.0)
+  
+  // Timestamps
+  lastUpdated     DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([score(sort: Desc)])
+}
+
+model PlayerReport {
+  id              String    @id @default(uuid())
+  reporterId      String
+  reportedUserId  String
+  matchId        String?
+  
+  // Report Details
+  reason          String
+  category        String    // cheating, abuse, afk, etc.
+  description     String?
+  evidence        Json?     // Screenshots, replays, etc.
+  
+  // Status
+  status          String    @default("pending") // pending, reviewing, resolved, dismissed
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  resolution      String?
+  action          String?   // The action taken
+  
+  // Match Context
+  contextData     Json?     // Additional context from the match
+  
+  createdAt       DateTime  @default(now())
+  
+  reporter        User      @relation("ReportedBy", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser    User      @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  
+  @@index([status, createdAt(sort: Desc)])
+  @@index([reportedUserId, status])
+}
+
+// ============================================================================
+// ENHANCED MATCH DATA
+// ============================================================================
+
+model MatchStatistics {
+  id              String    @id @default(uuid())
+  matchId         String    @unique
+  
+  // Duration
+  durationSeconds Int       @default(0)
+  startedAt       DateTime  @default(now())
+  endedAt         DateTime?
+  
+  // Network Quality
+  averagePing     Json      @default("{}") // Per player
+  packetLoss      Json      @default("{}")
+  reconnections   Int       @default(0)
+  
+  // Game Events
+  totalMoves      Int       @default(0)
+  illegalMoveAttempts Int   @default(0)
+  timeoutCount    Int       @default(0)
+  drawOffers      Int       @default(0)
+  rematchRequests Int       @default(0)
+  
+  // Player Performance (per player)
+  performanceData Json      @default("{}")
+  
+  // Fair Play
+  suspiciousActivity Json   @default("[]")
+  afkWarnings     Int       @default(0)
+  
+  // Viewer Stats
+  spectatorPeak   Int       @default(0)
+  spectatorMinutes Int      @default(0)
+  
+  // Rewards
+  coinsAwarded    Json      @default("{}")
+  xpAwarded       Json      @default("{}")
+  ratingChanges   Json      @default("{}")
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  match           Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================================
+// NOTIFICATIONS & EVENTS
+// ============================================================================
+
+enum GameNotificationType {
+  MATCH_FOUND
+  MATCH_STARTING
+  MATCH_ENDED
+  RANK_CHANGED
+  ACHIEVEMENT_UNLOCKED
+  SEASON_REWARD
+  FRIEND_ONLINE
+  TOURNAMENT_STARTING
+  PENALTY_RECEIVED
+  APPEAL_RESOLVED
+}
+
+model GameNotification {
+  id          String              @id @default(uuid())
+  userId      String
+  type        GameNotificationType
+  
+  // Content
+  title       String
+  body        String
+  data        Json?
+  
+  // Delivery
+  readAt      DateTime?
+  dismissedAt DateTime?
+  actionUrl   String?
+  
+  // Expiry
+  expiresAt   DateTime?
+  
+  createdAt   DateTime            @default(now())
+  
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, readAt])
+  @@index([userId, createdAt(sort: Desc)])
+}

@@ -1,0 +1,20 @@
+export function checkWinCondition(
+  coins: CarromCoin[],
+  _players: { seat: number; color: CoinType; score: number; queenPocketed: boolean; queenCovered: boolean }[],
+): { winner: number | null; isDraw: boolean } {
+  const queenRemaining = coins.some(c => !c.pocketed && c.type === "queen");
+  const whiteCoinsRemaining = coins.filter(c => !c.pocketed && c.type === "white").length;
+  const blackCoinsRemaining = coins.filter(c => !c.pocketed && c.type === "black").length;
+
+  // Seat 0 plays WHITE (9 white coins). When all White coins are pocketed & Queen is off board -> Seat 0 wins!
+  if (whiteCoinsRemaining === 0 && !queenRemaining) {
+    return { winner: 0, isDraw: false };
+  }
+
+  // Seat 1 plays BLACK (9 black coins). When all Black coins are pocketed & Queen is off board -> Seat 1 wins!
+  if (blackCoinsRemaining === 0 && !queenRemaining) {
+    return { winner: 1, isDraw: false };
+  }
+
+  return { winner: null, isDraw: false };
+}

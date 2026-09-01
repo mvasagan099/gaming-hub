@@ -1,0 +1,91 @@
+470:                let overlap = false;
+471:                for (const c of coins) {
+472:                   if (c.type === 'striker' || !c.active) continue;
+473:                   if (Math.hypot(testX - c.x, 70 - c.y) < striker.radius + c.radius) {
+474:                      overlap = true;
+475:                      break;
+476:                   }
+477:                }
+478:                if (!overlap) {
+479:                   aiX = testX;
+480:                   valid = true;
+481:                   break;
+482:                }
+483:             }
+484:             if (valid) break;
+485:          }
+486: 
+487:          striker.x = aiX;
+488:          striker.y = 70;
+489:          
+490:          setTimeout(() => {
+491:            const shootAngle = Math.atan2(impactY - striker.y, impactX - striker.x);
+492:            striker.vx = Math.cos(shootAngle) * SHOT_MAX_SPEED;
+493:            striker.vy = Math.sin(shootAngle) * SHOT_MAX_SPEED;
+494:            setIsTurnActive(true);
+495:            setTimeLeft(60);
+496:            setAiThinking(false);
+497:          }, 1500); 
+498:       }
+499:     }, 1500);
+500:     return () => clearTimeout(timer);
+501:   }, [currentPlayer, isTurnActive, gameOver, showRules, mode]);
+502: 
+503:   useEffect(() => {
+504:     if (gameOver || mode === 'multiplayer') return;
+505:     if (gameOver || score.white >= 9 || score.black >= 9) return;
+506:     const rules = rulesRef.current;
+507:     if (rules.queenStatus === 'covered' && (score.white >= 9 || score.black >= 9) && !rewardClaimed) {
+508:       setRewardClaimed(true);
+509:       if (score.white >= 9) setTimeout(() => void claimPracticeReward('carrom'), 1000);
+510:     }
+511:   }, [gameOver, score, rewardClaimed, uiTrigger, mode]);
+512: 
+513:   useEffect(() => {
+514:     if (gameOver || mode === 'multiplayer') return;
+515:     if (gameOver || isTurnActive || showRules || currentPlayer === 'ai') {
+516:       return;
+517:     }
+518: 
+519:     const timer = setInterval(() => {
+520:       setTimeLeft((prev) => {
+521:         if (prev <= 1) {
+522:           clearInterval(timer);
+523:           toast.error('Time is up! Opponent\'s turn.', { id: 'timeout-toast' });
+524:           setCurrentPlayer('ai');
+525:           setDragState('idle');
+526:           
+527:           const striker = coinsRef.current.find(c => c.type === 'striker');
+528:           if (striker) {
+529:             striker.x = BOARD_WIDTH / 2;
+530:             striker.y = 70;
+531:             striker.vx = 0;
+532:             striker.vy = 0;
+533:           }
+534:           return 60;
+535:         }
+536:         return prev - 1;
+537:       });
+538:     }, 1000);
+539: 
+540:     return () => clearInterval(timer);
+541:   }, [gameOver, isTurnActive, showRules, currentPlayer, mode]);
+542: 
+543:   useGameLoop((dt) => {
+544:     const canvas = canvasRef.current;
+545:     if (!canvas) return;
+546:     const ctx = canvas.getContext('2d');
+547:     if (!ctx) return;
+548:     
+549:     let anyMoving = false;
+550:     const coins = coinsRef.current;
+551: 
+552:     // Run client physics only during active animation (isTurnActive) or in AI mode.
+553:     // In multiplayer idle state, positions come exclusively from the server.
+554:     if (mode === 'ai' || isTurnActive) {
+555:       // Fixed 12 sub-steps per frame step (1/12 step size) matching server physics exactly
+556:       const maxSubSteps = 12;
+557:       const stepFactor = 1 / maxSubSteps; // 1/12
+558: 
+559:       const innerMin = BORDER_SIZE;
+560:       const innerMax = BOARD_WIDTH - BORDER_SIZE;

@@ -1,0 +1,101 @@
+260:               scale: 1.0,
+261:               opacity: 1.0,
+262:             };
+263:             localCoin.vx = 0;
+264:             localCoin.vy = 0;
+265:           }
+266:         }
+267:       }
+268: 
+269:       // Reset striker for current turn
+270:       const isMyTurn = state.currentSeat === currentSeat;
+271:       const striker = coinsRef.current.find(c => c.type === 'striker');
+272:       if (striker) {
+273:         striker.x = BOARD_WIDTH / 2;
+274:         striker.y = isMyTurn ? STRIKER_START_Y : 62;
+275:         striker.vx = 0;
+276:         striker.vy = 0;
+277:         striker.active = !state.striker?.pocketed;
+278:       }
+279:       setStrikerPos(0);
+280:     }
+281: 
+282:     const myPlayer = state.players.find(p => p.seat === currentSeat);
+283:     const opponentPlayer = state.players.find(p => p.seat !== currentSeat);
+284:     setScore({
+285:       white: currentSeat === 0 ? (myPlayer?.score ?? 0) : (opponentPlayer?.score ?? 0),
+286:       black: currentSeat === 1 ? (myPlayer?.score ?? 0) : (opponentPlayer?.score ?? 0)
+287:     });
+288: 
+289:     // NOTE: applyServerState is called in TWO situations:
+290:     //   1. When no animation is running (state update arrives outside a shot)
+291:     //   2. At the END of the game-loop when animation finishes
+292:     // In case 2 the caller already sets currentPlayer/strikerPhase AFTER this call,
+293:     // so setting them here is also safe — the caller will immediately overwrite with
+294:     // identical values derived from the same state.
+295:     const isMyTurn = state.currentSeat === currentSeat;
+296:     setCurrentPlayer(isMyTurn ? 'player' : 'ai');
+297:     setStrikerPhase(state.strikerPlacementPhase ? 'positioning' : 'aiming');
+298: 
+299:     if (state.finished) setGameOver(true);
+300:     setUiTrigger(t => t + 1);
+301:   }, []);
+302: 
+303:   // Stable driver identity: only re-create when the seat assignment changes.
+304:   // Room updates (timers, readiness, etc.) must NOT tear down the driver.
+305:   useEffect(() => {
+306:     if (mode !== 'multiplayer') return;
+307:     // Wait until we have a valid seat assignment
+308:     if (mySeat == null) return;
+309: 
+310:     mySeatRef.current = mySeat;
+311: 
+312:     // Stop any existing driver before creating a new one
+313:     if (driverRef.current) {
+314:       driverRef.current.stop();
+315:       driverRef.current = null;
+316:     }
+317: 
+318:     const names = (room?.players ?? [])
+319:       .slice()
+320:       .sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0))
+321:       .map(p => p.displayName || `Player ${(p.seat ?? 0) + 1}`);
+322: 
+323:     const driver = new CarromMultiplayerDriver(mySeat, names);
+324:     driverRef.current = driver;
+325: 
+326:     driver.setOnStateUpdate((state) => {
+327:       const currentSeat = mySeatRef.current;
+328:       const lastAction = state.lastAction as { type?: string; angle?: number; power?: number } | null;
+329:       const lastActionAt = state.lastActionAtMs ?? null;
+330: 
+331:       console.log('[CarromGame] STATE UPDATE - mySeat:', currentSeat,
+332:         '| serverCurrentSeat:', state.currentSeat,
+333:         '| lastActionSeat:', state.lastActionSeat,
+334:         '| strikerPlacementPhase:', state.strikerPlacementPhase);
+335: 
+336:       const isNewStrike =
+337:         lastAction?.type === 'strike' &&
+338:         lastActionAt !== null &&
+339:         lastActionAt !== lastAnimatedActionAtRef.current;
+340: 
+341:       if (isNewStrike) {
+342:         lastAnimatedActionAtRef.current = lastActionAt;
+343:         pendingServerStateRef.current = state;
+344: 
+345:         if (state.lastActionSeat !== currentSeat) {
+346:           // Opponent shot — animate using only striker velocity; let collision physics
+347:           // naturally scatter the coins (no manual seeding to avoid double-velocity).
+348:           const angle = lastAction.angle ?? 0;
+349:           const power = lastAction.power ?? 1;
+350: 
+351:           const CLIENT_MAX_SPEED = SHOT_MAX_SPEED;
+352:           const forceMagnitude = power * CLIENT_MAX_SPEED;
+353: 
+354:           // Seat 1 sees the board rotated 180°, so flip the angle
+355:           const localAngle = currentSeat === 1 ? angle + Math.PI : angle;
+356: 
+357:           const striker = coinsRef.current.find(c => c.type === 'striker');
+358:           if (striker) {
+359:             striker.vx = Math.cos(localAngle) * forceMagnitude;
+360:             striker.vy = Math.sin(localAngle) * forceMagnitude;

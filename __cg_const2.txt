@@ -1,0 +1,120 @@
+41: const BOARD_WIDTH = 400;
+42: const BOARD_HEIGHT = 400;
+43: // Wall bounce boundary — slightly inside the visual frame so coins naturally settle
+44: // and can reach the pocket holes at x/y ≈ 32
+45: const BORDER_SIZE = 22;
+46: const POCKET_RADIUS = 20;
+47: const POCKETS = [
+48:   { x: 30, y: 30 },
+49:   { x: BOARD_WIDTH - 30, y: 30 },
+50:   { x: 30, y: BOARD_HEIGHT - 30 },
+51:   { x: BOARD_WIDTH - 30, y: BOARD_HEIGHT - 30 },
+52: ];
+53: 
+54: const STRIKER_START_X = BOARD_WIDTH / 2;
+55: const STRIKER_START_Y = BOARD_HEIGHT - 62;
+56: // Realistic carrom speed: full-power shot at ~18 canvas-px/frame (≈1080 px/s at 60fps)
+57: // This produces a satisfying 0.8-2 second shot duration with proper friction decay
+58: const SHOT_MAX_SPEED = 18;
+59: // Trail history: stores last N positions per coin for motion-blur effect
+60: const TRAIL_LENGTH = 6;
+61: 
+62: function mapServerToLocal(
+63:   x: number,
+64:   y: number,
+65:   vx: number,
+66:   vy: number,
+67:   mySeat: number | null
+68: ): { x: number; y: number; vx: number; vy: number } {
+69:   const scale = BOARD_WIDTH / 600;
+70:   if (mySeat === 1) {
+71:     return {
+72:       x: (600 - x) * scale,
+73:       y: (600 - y) * scale,
+74:       vx: -vx * scale,
+75:       vy: -vy * scale,
+76:     };
+77:   }
+78:   return {
+79:     x: x * scale,
+80:     y: y * scale,
+81:     vx: vx * scale,
+82:     vy: vy * scale,
+83:   };
+84: }
+85: 
+86: function createInitialCoins(): LocalCoin[] {
+87:   const coins: LocalCoin[] = [];
+88:   const cx = BOARD_WIDTH / 2;
+89:   const cy = BOARD_HEIGHT / 2;
+90:   const radius = 20;
+91: 
+92:   coins.push({ id: 'striker', type: 'striker', x: STRIKER_START_X, y: STRIKER_START_Y, vx: 0, vy: 0, radius: 11, mass: 2.5, color: '#0284c7', active: true, angle: 0, trail: [] });
+93: 
+94:   const types: CoinType[] = [
+95:     "queen",
+96:     "white", "white", "white", "white", "white", "white",
+97:     "white", "white", "white",
+98:     "black", "black", "black", "black", "black", "black", "black", "black", "black",
+99:   ];
+100: 
+101:   const positions: { x: number; y: number }[] = [{ x: cx, y: cy }];
+102:   
+103:   for (let i = 0; i < 6; i++) {
+104:     const angle = (i * Math.PI * 2) / 6;
+105:     positions.push({ x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius });
+106:   }
+107:   
+108:   for (let i = 0; i < 12; i++) {
+109:     const angle = (i * Math.PI * 2) / 12;
+110:     positions.push({ x: cx + Math.cos(angle) * radius * 2, y: cy + Math.sin(angle) * radius * 2 });
+111:   }
+112: 
+113:   for (let i = 0; i < positions.length && i < types.length; i++) {
+114:     const type = types[i];
+115:     coins.push({
+116:       id: `coin-${i}`,
+117:       type: type ?? 'white',
+118:       x: positions[i].x,
+119:       y: positions[i].y,
+120:       vx: 0,
+121:       vy: 0,
+122:       radius: type === 'queen' ? 10 : 9,
+123:       mass: 1,
+124:       color: type === 'queen' ? '#dc2626' : type === 'white' ? '#ffffff' : '#09090b',
+125:       active: true
+126:     });
+127:   }
+128: 
+129:   return coins;
+130: }
+131: 
+132: export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
+133:   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+134:   const [score, setScore] = useState({ white: 0, black: 0 });
+135:   
+136:   const [dragState, setDragState] = useState<'idle' | 'dragging_striker' | 'dragging'>('idle');
+137:   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+138:   const [currentAim, setCurrentAim] = useState({ x: 0, y: 0 });
+139:   const [strikerPos, setStrikerPos] = useState(0);
+140:   const [strikerPhase, setStrikerPhase] = useState<'positioning' | 'aiming'>('positioning');
+141:   const [timeLeft, setTimeLeft] = useState(60);
+142:   
+143:   const [gameOver, setGameOver] = useState(false);
+144:   const [showRules, setShowRules] = useState(true);
+145:   const [rewardClaimed, setRewardClaimed] = useState(false);
+146:   const [isTurnActive, setIsTurnActive] = useState(false);
+147:   const [currentPlayer, setCurrentPlayer] = useState<'player' | 'ai'>('player');
+148:   const [aiThinking, setAiThinking] = useState(false);
+149:   const [uiTrigger, setUiTrigger] = useState(0);
+150:   
+151:   const coinsRef = useRef<LocalCoin[]>(createInitialCoins());
+152:   const rulesRef = useRef({
+153:     queenStatus: 'unpocketed' as 'unpocketed' | 'pocketed_needs_cover' | 'covered',
+154:     queenPocketedBy: null as 'player' | 'ai' | null,
+155:     dueOwed: { white: 0, black: 0 }
+156:   });
+157:   const turnScoreRef = useRef({ white: 0, black: 0, queen: false, foul: false });
+158:   const floatingPopsRef = useRef<Array<{ id: number; text: string; color: string; x: number; y: number; opacity: number; scale: number }>>([]);
+159:   const pocketRipplesRef = useRef<Array<{ id: number; x: number; y: number; radius: number; maxRadius: number; opacity: number; color: string }>>([]);
+160: 

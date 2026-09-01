@@ -1,0 +1,111 @@
+360:             striker.vy = Math.sin(localAngle) * forceMagnitude;
+361:           }
+362: 
+363:           setIsTurnActive(true);
+364:         } else {
+365:           // Local player shot: local animation already in progress
+366:           setIsTurnActive(true);
+367:         }
+368:         return;
+369:       }
+370: 
+371:       if (isTurnActiveRef.current) {
+372:         pendingServerStateRef.current = state;
+373:         return;
+374:       }
+375: 
+376:       applyServerState(state);
+377:     });
+378: 
+379:     driver.setOnCoinPocketed(() => {
+380:       // Do not hide coins prematurely on socket event arrival.
+381:       // Allow client physics to roll the coin naturally into the hole.
+382:       confetti();
+383:     });
+384: 
+385:     driver.setOnStrikerPlaced((x, y, seat) => {
+386:       // Only move the visual striker position — do NOT change strikerPhase here.
+387:       // strikerPhase is updated exclusively by applyServerState (from server state.strikerPlacementPhase).
+388:       // Changing it here causes a race: opponent's place-striker event fires on our client
+389:       // and incorrectly switches us to 'aiming' while it's still the opponent's turn.
+390:       const currentSeat = mySeatRef.current;
+391:       const striker = coinsRef.current.find(c => c.type === 'striker');
+392:       if (striker && seat === currentSeat) {
+393:         // Only reposition locally if it was OUR striker placement (server-confirmed).
+394:         const pos = mapServerToLocal(x, y, 0, 0, currentSeat);
+395:         striker.x = pos.x;
+396:         striker.y = pos.y;
+397:       }
+398:     });
+399: 
+400:     driver.setOnFoul((reason) => {
+401:       toast.error(`Foul: ${reason}`, { id: 'foul' });
+402:     });
+403: 
+404:     driver.setOnWin((winnerSeat) => {
+405:       setGameOver(true);
+406:       if (winnerSeat === mySeatRef.current) confetti({ particleCount: 100 });
+407:     });
+408: 
+409:     // setOnTurnChange is intentionally NOT registered here.
+410:     // Reason: the 'turn-end' event fires in the SAME socket message as the strike state,
+411:     // which arrives while the animation is still playing. If we call setCurrentPlayer here
+412:     // the turn indicator flips immediately (while the striker is mid-air) and then the
+413:     // game-loop end-of-animation also tries to set it — causing a race.
+414:     // The ONLY authoritative turn update in multiplayer is inside the game-loop when
+415:     // isTurnActive && !anyMoving, where applyServerState is called with the latest
+416:     // server state (pendingServerStateRef || driver.lastState).
+417:     driver.setOnTurnChange((_nextSeat) => { /* handled in game-loop */ });
+418: 
+419:     driver.start();
+420: 
+421:     return () => {
+422:       driver.stop();
+423:       driverRef.current = null;
+424:     };
+425:   // eslint-disable-next-line react-hooks/exhaustive-deps
+426:   }, [mode, mySeat, applyServerState]); // ← intentionally excludes `room` to avoid restarting on room updates
+427: 
+428: 
+429:   useEffect(() => {
+430:     if (gameOver || mode === 'multiplayer') return;
+431:     
+432:     if (gameOver || isTurnActive || showRules || currentPlayer !== 'ai') return;
+433:     
+434:     setAiThinking(true);
+435:     const timer = setTimeout(() => {
+436:       const coins = coinsRef.current;
+437:       const blacks = coins.filter(c => c.type === 'black' && c.active);
+438:       const striker = coins.find(c => c.type === 'striker');
+439:       
+440:       if (!striker || blacks.length === 0) return;
+441: 
+442:       let bestTarget = blacks[0];
+443:       let bestPocket = POCKETS[0];
+444:       let minPenalty = Infinity;
+445:       
+446:       for (const b of blacks) {
+447:          for (const p of POCKETS) {
+448:            const dist = Math.hypot(b.x - p.x, b.y - p.y);
+449:            if (dist < minPenalty) {
+450:              minPenalty = dist;
+451:              bestTarget = b;
+452:              bestPocket = p;
+453:            }
+454:          }
+455:       }
+456: 
+457:       if (bestTarget && bestPocket) {
+458:          const aimAngle = Math.atan2(bestPocket.y - bestTarget.y, bestPocket.x - bestTarget.x);
+459:          const impactX = bestTarget.x - Math.cos(aimAngle) * 23; 
+460:          const impactY = bestTarget.y - Math.sin(aimAngle) * 23;
+461:          
+462:          let aiX = Math.max(85, Math.min(315, impactX));
+463:          
+464:          let valid = false;
+465:          for (let offset = 0; offset <= 115; offset += 5) {
+466:             for (const sign of [1, -1]) {
+467:                const testX = aiX + offset * sign;
+468:                if (testX < 85 || testX > 315) continue;
+469:                
+470:                let overlap = false;
