@@ -103,6 +103,8 @@ export function buildApp() {
   app.addHook("onRequest", async (request) => {
     const { url } = request;
     if (
+      url === "/health" ||
+      url.startsWith("/health/") ||
       url === "/api/health" ||
       url.startsWith("/api/health/") ||
       url === "/api/features/flags" ||

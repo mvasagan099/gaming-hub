@@ -21,7 +21,18 @@ let cacheExpiresAt = 0;
 export async function getSettings(): Promise<SiteSettings> {
   if (cache && Date.now() < cacheExpiresAt) return cache;
 
-  const rows = await prisma.siteSetting.findMany();
+  let rows: Array<{ key: string; value: unknown }> = [];
+  try {
+    rows = (await prisma.siteSetting.findMany()) as any;
+  } catch (error) {
+    // If DB is unreachable or migration has not yet run, fall back safely to SITE_SETTINGS_DEFAULTS
+    const out = {} as Record<string, unknown>;
+    for (const category of Object.keys(SETTINGS_CATEGORIES) as SettingsCategoryName[]) {
+      out[category] = SITE_SETTINGS_DEFAULTS[category];
+    }
+    return out as SiteSettings;
+  }
+
   const merged = structuredClone(SITE_SETTINGS_DEFAULTS) as Record<string, Record<string, unknown>>;
 
   for (const row of rows) {
