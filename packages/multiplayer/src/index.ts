@@ -40,16 +40,6 @@ export type {
 // Types
 export * from "./types";
 
-// Client
-export { MultiplayerClient } from "./client/MultiplayerClient";
-export type {
-  MultiplayerClientConfig,
-  ConnectionState,
-  GameStateListener,
-  RoomUpdateListener,
-  GameOverListener,
-} from "./client/MultiplayerClient";
-
 // Utils
 export { EventEmitter } from "./utils/EventEmitter";
 export { StateValidator } from "./utils/StateValidator";
