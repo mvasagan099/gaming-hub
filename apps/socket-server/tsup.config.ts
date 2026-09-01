@@ -6,7 +6,7 @@ export default defineConfig({
   target: "node22",
   sourcemap: true,
   clean: true,
-  noExternal: [/@gaming-hub\/(shared|game-engine|socket)/],
+  noExternal: [/@gaming-hub\/(shared|game-engine|socket|multiplayer|db)/],
   external: [
     "@prisma/client",
     "@prisma/client/runtime/*",
