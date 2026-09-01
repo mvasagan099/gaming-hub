@@ -85,6 +85,21 @@ export async function adminAppVersionRoutes(app: FastifyInstance) {
         );
       }
 
+      // SECURITY: Restrict downloadUrl to safe schemes only.
+      // Zod .url() already validates format, but it accepts any scheme including
+      // javascript:, data:, file:, etc.  We explicitly allow only https:// and
+      // market:// (Google Play Store deep link) to prevent URI injection.
+      const parsedUrl = (() => {
+        try { return new URL(body.downloadUrl); } catch { return null; }
+      })();
+      if (!parsedUrl || (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "market:")) {
+        throw new AppError(
+          "VALIDATION_ERROR",
+          `Invalid downloadUrl: only https:// and market:// schemes are permitted`,
+          422,
+        );
+      }
+
       const config = await prisma.appVersionConfig.upsert({
         where: { id: APP_VERSION_CONFIG_ID },
         create: {

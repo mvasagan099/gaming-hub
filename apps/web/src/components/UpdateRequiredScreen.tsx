@@ -45,14 +45,35 @@ export function UpdateRequiredScreen() {
 
   const handleUpdateNow = async () => {
     try {
+      // SECURITY: Validate URL scheme before opening.
+      // Only allow https: and market: (Google Play Store deep link).
+      // Reject javascript:, data:, file:, content:, or any other scheme
+      // that could be injected via a tampered admin config or API response.
+      const sanitized = (() => {
+        try {
+          const parsed = new URL(downloadUrl);
+          if (parsed.protocol === 'https:' || parsed.protocol === 'market:') {
+            return parsed.href;
+          }
+        } catch {
+          // URL parse failure — fall through to default
+        }
+        // Fallback to Play Store if URL is unsafe or unparseable
+        return 'https://play.google.com/store/apps/details?id=com.gaminghub.app';
+      })();
+
       if (isNativePlatform()) {
-        await Browser.open({ url: downloadUrl });
+        await Browser.open({ url: sanitized });
       } else {
-        window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+        window.open(sanitized, '_blank', 'noopener,noreferrer');
       }
     } catch {
       // Fallback to window.open if Browser plugin fails
-      window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+      window.open(
+        'https://play.google.com/store/apps/details?id=com.gaminghub.app',
+        '_blank',
+        'noopener,noreferrer',
+      );
     }
   };
 

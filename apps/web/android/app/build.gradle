@@ -31,8 +31,17 @@ android {
             if (System.getenv("RELEASE_STORE_FILE") != null) {
                 signingConfig signingConfigs.release
             }
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // SECURITY: Disable debug flag for production. This prevents ADB attachment
+            // and Chrome DevTools remote debugging of the Capacitor WebView.
+            debuggable false
+
+            // SECURITY: Enable R8 code shrinking and obfuscation.
+            // R8 renames classes/methods, removes dead code, and merges classes — making
+            // the native layer meaningfully harder to reverse-engineer.
+            // Keep rules in proguard-rules.pro preserve Capacitor plugin bridges.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
