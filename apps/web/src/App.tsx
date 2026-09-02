@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom';
 import { router } from './router';
 import { supabase } from './services/supabase';
 import { useAuthStore } from './store/authStore';
+import { logAuthError } from './lib/authErrors';
 import { useSettingsStore } from './store/settingsStore';
 import { ThemeProvider, useTheme, type Theme } from './contexts/ThemeProvider';
 import { AppErrorBoundary } from './components/ErrorBoundary';
@@ -91,19 +92,28 @@ export function App() {
       );
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!active) return;
-      if (isRecoveryTarget()) {
-        setIsPasswordRecovery(true);
-        setRecoverySession(session);
-        setSession(null);
-        setUser(null);
-      } else {
-        setSession(session);
-        setUser(session?.user ?? null);
-      }
-      setLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (!active) return;
+        if (isRecoveryTarget()) {
+          setIsPasswordRecovery(true);
+          setRecoverySession(session);
+          setSession(null);
+          setUser(null);
+        } else {
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
+      })
+      .catch((err) => {
+        logAuthError('RestoreSession', err);
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
 
     const {
       data: { subscription },

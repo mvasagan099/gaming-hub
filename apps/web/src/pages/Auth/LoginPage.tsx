@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { LogIn, Mail, Lock, Sparkles, Loader2, Wrench, AlertTriangle } from "lucide-react";
 import { supabase } from "../../services/supabase";
 import { getAuthRedirectUrl } from "../../lib/authUtils";
+import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
 import { apiClient } from "../../services/api/client";
 import { AuthLayout } from "./AuthLayout";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -43,13 +44,24 @@ export function LoginPage() {
           email: email.trim(),
           options: { emailRedirectTo: getAuthRedirectUrl("/auth/callback") },
         });
-        if (error) throw error;
+        if (error) {
+          logAuthError("LoginMagicLink", error);
+          toast.error(getAuthErrorMessage(error));
+          return;
+        }
         toast.success("Magic link sent — check your inbox");
         return;
       }
 
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) {
+        logAuthError("LoginPassword", error);
+        toast.error(getAuthErrorMessage(error));
+        if (/invalid login credentials/i.test(error.message) || error.message.toLowerCase().includes("invalid_credentials")) {
+          setUseMagicLink(true);
+        }
+        return;
+      }
       
       const session = (await supabase.auth.getSession()).data.session;
       if (!session) {
@@ -81,9 +93,9 @@ export function LoginPage() {
       toast.success("Welcome back!");
       navigate(from?.pathname ?? "/", { replace: true, state: from?.state });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not sign in";
-      toast.error(message);
-      if (/invalid login credentials/i.test(message)) {
+      logAuthError("Login", err);
+      toast.error(getAuthErrorMessage(err));
+      if (err instanceof Error && /invalid login credentials/i.test(err.message)) {
         setUseMagicLink(true);
       }
     } finally {

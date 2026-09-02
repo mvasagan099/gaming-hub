@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import { ShieldCheck, Loader2 } from "lucide-react";
 import { twoFactorApi } from "../../services/api/twoFactor";
+import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
 import { AuthLayout } from "./AuthLayout";
 
 export function TwoFactorPage() {
@@ -31,8 +32,8 @@ export function TwoFactorPage() {
       toast.success("Welcome back!");
       navigate("/", { replace: true });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Invalid verification code";
-      toast.error(message);
+      logAuthError("TwoFactorVerify", err);
+      toast.error(getAuthErrorMessage(err));
     } finally {
       setSubmitting(false);
     }

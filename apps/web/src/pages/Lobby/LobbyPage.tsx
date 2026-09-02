@@ -30,6 +30,7 @@ import {
   type PublicProfile,
 } from "@gaming-hub/shared";
 import { getAuthRedirectUrl } from "../../lib/authUtils";
+import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
 import { supabase } from "../../services/supabase";
 import { useAuthStore } from "../../store/authStore";
 import { useMultiplayerStore } from "../../store/multiplayerStore";
@@ -335,7 +336,7 @@ export const LobbyPage: React.FC = () => {
   const handleSignIn = async () => {
     const email = authEmail.trim();
     if (!email) {
-      toast.error("Enter your email to sign in");
+      toast.error("Please enter a valid email address.");
       return;
     }
     setSigningIn(true);
@@ -344,10 +345,15 @@ export const LobbyPage: React.FC = () => {
         email,
         options: { emailRedirectTo: getAuthRedirectUrl("/auth/callback") },
       });
-      if (error) throw error;
+      if (error) {
+        logAuthError("LobbySignInWithOtp", error);
+        toast.error(getAuthErrorMessage(error));
+        return;
+      }
       toast.success("Magic link sent — check your inbox");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not send sign-in link");
+      logAuthError("LobbySignInWithOtp", err);
+      toast.error(getAuthErrorMessage(err));
     } finally {
       setSigningIn(false);
     }

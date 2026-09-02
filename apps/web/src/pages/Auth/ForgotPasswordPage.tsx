@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { Mail, Loader2, MailCheck } from "lucide-react";
 import { supabase } from "../../services/supabase";
 import { getAuthRedirectUrl } from "../../lib/authUtils";
+import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
 import { AuthLayout } from "./AuthLayout";
 
 export function ForgotPasswordPage() {
@@ -13,20 +14,27 @@ export function ForgotPasswordPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) {
-      toast.error("Enter your email");
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      toast.error("Please enter a valid email address.");
       return;
     }
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
         redirectTo: getAuthRedirectUrl("/auth/callback?next=/reset-password"),
       });
-      if (error) throw error;
+      if (error) {
+        logAuthError("ForgotPassword", error);
+        toast.error(getAuthErrorMessage(error));
+        return;
+      }
       setSent(true);
+      toast.success("If an account exists for this email, a password reset link has been sent.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not send reset link");
+      logAuthError("ForgotPassword", err);
+      toast.error(getAuthErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -43,8 +51,7 @@ export function ForgotPasswordPage() {
             <MailCheck className="w-7 h-7 text-emerald-400" />
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            We emailed a password reset link to <span className="font-bold">{email}</span>. It expires
-            shortly — use it soon.
+            If an account exists for <span className="font-bold">{email}</span>, a password reset link has been sent. It expires shortly.
           </p>
           <Link
             to="/login"

@@ -31,6 +31,7 @@ import {
 import toast from "react-hot-toast";
 import { useAuthStore } from "../../store/authStore";
 import { useMe } from "../../services/api/useMe";
+import { getAuthErrorMessage } from "../../lib/authErrors";
 import { apiClient } from "../../services/api/client";
 import { messagesApi, sessionsApi, securityApi } from "../../services/api/enterprise";
 import type { BlockedUser, LoginSession } from "@gaming-hub/shared";
@@ -117,13 +118,14 @@ export const ProfilePage: React.FC = () => {
   }, [me]);
 
   const loadSessions = async () => {
+    if (useAuthStore.getState().isLoading || !useAuthStore.getState().session) return;
     setSessionsLoading(true);
     try {
       const list = await sessionsApi.list();
       setSessions(list || []);
-    } catch {
+    } catch (err) {
       setSessions([]);
-      toast.error("Failed to load sessions");
+      toast.error(getAuthErrorMessage(err));
     } finally {
       setSessionsLoading(false);
     }

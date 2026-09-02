@@ -19,6 +19,7 @@ import {
 import { COUNTRIES, CURRENCIES, countryToCurrency } from "@gaming-hub/shared";
 import { supabase } from "../../services/supabase";
 import { getAuthRedirectUrl } from "../../lib/authUtils";
+import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
 import { AuthLayout } from "./AuthLayout";
 import { useSettingsStore } from "../../store/settingsStore";
 
@@ -151,7 +152,11 @@ export function SignupPage() {
           emailRedirectTo: getAuthRedirectUrl("/auth/callback"),
         },
       });
-      if (error) throw error;
+      if (error) {
+        logAuthError("Signup", error);
+        toast.error(getAuthErrorMessage(error));
+        return;
+      }
 
       if (data.session) {
         toast.success("Account created — welcome!");
@@ -159,10 +164,50 @@ export function SignupPage() {
         return;
       }
       setConfirmationSent(true);
+      toast.success("Account created. Please check your email to confirm your account.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create account");
+      logAuthError("Signup", err);
+      toast.error(getAuthErrorMessage(err));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  const handleResendConfirmation = async () => {
+    if (resending || resendCooldown > 0) return;
+    setResending(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: form.email.trim(),
+        options: {
+          emailRedirectTo: getAuthRedirectUrl("/auth/callback"),
+        },
+      });
+      if (error) {
+        logAuthError("ResendSignupConfirmation", error);
+        toast.error(getAuthErrorMessage(error));
+        return;
+      }
+      toast.success("Confirmation email sent. Please check your inbox and spam folder.");
+      setResendCooldown(60);
+      const timer = setInterval(() => {
+        setResendCooldown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (err) {
+      logAuthError("ResendSignupConfirmation", err);
+      toast.error(getAuthErrorMessage(err));
+    } finally {
+      setResending(false);
     }
   };
 
@@ -208,12 +253,22 @@ export function SignupPage() {
             We sent a confirmation link to <span className="font-bold">{form.email}</span>. Click it to
             finish creating your account, then sign in.
           </p>
-          <Link
-            to="/login"
-            className="inline-block px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold transition-colors"
-          >
-            Go to sign in
-          </Link>
+          <div className="flex flex-col gap-2 pt-2">
+            <button
+              type="button"
+              onClick={handleResendConfirmation}
+              disabled={resending || resendCooldown > 0}
+              className="px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold transition-colors disabled:opacity-50"
+            >
+              {resending ? "Resending…" : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend confirmation email"}
+            </button>
+            <Link
+              to="/login"
+              className="inline-block px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold transition-colors"
+            >
+              Go to sign in
+            </Link>
+          </div>
         </div>
       </AuthLayout>
     );

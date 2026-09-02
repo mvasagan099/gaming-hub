@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { Lock, Loader2, KeyRound, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { supabase } from "../../services/supabase";
 import { useAuthStore } from "../../store/authStore";
+import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
 import { AuthLayout } from "./AuthLayout";
 import { FullPageLoader } from "../../components/auth/ProtectedRoute";
 
@@ -130,7 +131,11 @@ export function ResetPasswordPage() {
     setSubmitting(true);
     try {
       const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
+      if (error) {
+        logAuthError("ResetPassword", error);
+        toast.error(getAuthErrorMessage(error));
+        return;
+      }
 
       // Invalidate recovery authorization and clear all session state
       await supabase.auth.signOut();
@@ -139,11 +144,11 @@ export function ResetPasswordPage() {
       useAuthStore.getState().setIsPasswordRecovery(false);
       useAuthStore.getState().setRecoverySession(null);
 
-      toast.success("Password reset successful. Please log in with your new password.");
+      toast.success("Password updated successfully. You can now sign in.");
       navigate("/login", { replace: true });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Could not update password";
-      toast.error(msg);
+      logAuthError("ResetPassword", err);
+      toast.error(getAuthErrorMessage(err));
     } finally {
       setSubmitting(false);
     }

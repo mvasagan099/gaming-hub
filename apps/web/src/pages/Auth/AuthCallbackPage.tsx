@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { supabase } from "../../services/supabase";
 import { useAuthStore } from "../../store/authStore";
+import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
 import { AuthLayout } from "./AuthLayout";
 
 /**
@@ -140,8 +141,8 @@ export function AuthCallbackPage() {
         }, 4000);
       } catch (err) {
         if (mounted) {
-          const msg = err instanceof Error ? err.message : "Authentication failed";
-          setErrorMsg(msg);
+          logAuthError("AuthCallback", err);
+          setErrorMsg(getAuthErrorMessage(err));
         }
       }
     }

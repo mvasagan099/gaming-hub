@@ -22,6 +22,9 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: 'system', label: 'System (follow device)' },
 ];
 
+import { useAuthStore } from '../../store/authStore';
+import { getAuthErrorMessage } from '../../lib/authErrors';
+
 function useStoredPreference(key: string, defaultValue: boolean) {
   const [value, setValue] = useState<boolean>(
     () => (localStorage.getItem(key) === null ? defaultValue : localStorage.getItem(key) === '1')
@@ -163,18 +166,25 @@ function SessionsCard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const isAuthLoading = useAuthStore((s) => s.isLoading);
+  const hasSession = Boolean(useAuthStore((s) => s.session));
 
   const load = useCallback(async () => {
+    if (isAuthLoading) return;
+    if (!hasSession) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       setSessions(await sessionsApi.list());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load sessions');
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAuthLoading, hasSession]);
 
   useEffect(() => {
     void load();
