@@ -35,5 +35,8 @@
     "tsup": {
       "esbuild": "0.28.1"
     }
+  },
+  "dependencies": {
+    "@capacitor/ios": "^8.5.1"
   }
 }
