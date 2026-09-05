@@ -192,14 +192,26 @@ export class SnookerCueRenderer {
     const backX = -Math.cos(angle);
     const backY = -Math.sin(angle);
 
-    // Carrom pull distance calculation
+    // Carrom / Snooker pull distance calculation
     const baseOffset = r + 6 * scale;
-    const maxPull = 70 * scale;
+    const maxPull = 55 * scale;
     const pullDistance = baseOffset + power * maxPull * (1 - strikeProgress);
 
-    const cueLength = 320 * scale;
-    const tipRadius = 2.5 * scale;
-    const buttRadius = 5.5 * scale;
+    // Distance from cue ball to visible canvas boundary (including 80px canvas padding outside table)
+    const pad = 80 * scale;
+    let distToBoundary = 9999;
+    if (backX < -0.001) distToBoundary = Math.min(distToBoundary, (rawCx + pad - 6 * scale) / -backX);
+    else if (backX > 0.001) distToBoundary = Math.min(distToBoundary, (tableWidth + pad - 6 * scale - rawCx) / backX);
+
+    if (backY < -0.001) distToBoundary = Math.min(distToBoundary, (rawCy + pad - 6 * scale) / -backY);
+    else if (backY > 0.001) distToBoundary = Math.min(distToBoundary, (tableHeight + pad - 6 * scale - rawCy) / backY);
+
+    const defaultCueLength = 260 * scale;
+    const maxAvailable = Math.max(130 * scale, distToBoundary - pullDistance);
+    const cueLength = Math.min(defaultCueLength, maxAvailable);
+
+    const tipRadius = 2.4 * scale;
+    const buttRadius = 5.2 * scale;
 
     const rawTipX = rawCx + backX * pullDistance;
     const rawTipY = rawCy + backY * pullDistance;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Trophy, RefreshCw, ArrowLeft, Clock, AlertTriangle, Sparkles, Volume2, VolumeX, Flame, Check, Video, Eye, RotateCw, Users } from "lucide-react";
 import type { SnookerPlayer, SnookerBall, SnookerTarget, SnookerFrameStatus, SnookerBallType, SnookerFrameHistoryItem } from "@gaming-hub/game-engine";
 
@@ -409,6 +409,117 @@ export const ColorPickerModal: React.FC<ColorPickerModalProps> = ({
             <span className="text-[10px] opacity-85 font-mono">+{c.pts} PTS</span>
           </button>
         ))}
+      </div>
+    </div>
+  );
+};
+
+interface SnookerMobilePowerMeterProps {
+  power: number;
+  setPower: (p: number) => void;
+  onShoot: (p: number) => void;
+  disabled?: boolean;
+}
+
+export const SnookerMobilePowerMeter: React.FC<SnookerMobilePowerMeterProps> = ({
+  power,
+  setPower,
+  onShoot,
+  disabled = false,
+}) => {
+  const isDraggingRef = useRef(false);
+  const meterRef = useRef<HTMLDivElement | null>(null);
+
+  const calculatePower = (clientY: number) => {
+    if (!meterRef.current) return 0.05;
+    const rect = meterRef.current.getBoundingClientRect();
+    // Top is 0.05 (low power), Bottom is 1.0 (max power)
+    const ratio = (clientY - rect.top) / rect.height;
+    return Math.min(1.0, Math.max(0.05, ratio));
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+    isDraggingRef.current = true;
+    const p = calculatePower(e.clientY);
+    setPower(p);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (disabled || !isDraggingRef.current) return;
+    const p = calculatePower(e.clientY);
+    setPower(p);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (disabled || !isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+    const p = calculatePower(e.clientY);
+    setPower(p);
+    if (p >= 0.05) {
+      onShoot(p);
+    }
+  };
+
+  // Percentage height fill from top down
+  const fillPct = Math.max(5, Math.min(100, Math.round(power * 100)));
+
+  return (
+    <div
+      ref={meterRef}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      className={`w-6 sm:w-7 h-[min(36vh,250px)] bg-slate-950/95 rounded-xl border transition-all ${
+        disabled
+          ? "border-slate-800 opacity-40 cursor-not-allowed"
+          : "border-slate-700/80 hover:border-amber-400 shadow-[0_0_15px_rgba(0,0,0,0.8)] cursor-pointer active:scale-95"
+      } flex flex-col items-center justify-between p-0.5 relative select-none touch-none overflow-hidden`}
+      title="Drag down to set Shot Power and release to Strike"
+      aria-label="Mobile Shot Power Level Meter"
+    >
+      {/* Background Level Meter with Segmented Rainbow Gradient */}
+      <div className="absolute inset-0.5 rounded-lg bg-slate-900/90 overflow-hidden flex flex-col justify-start">
+        {/* Dynamic Power Fill Bar (Top to Bottom) */}
+        <div
+          className="w-full transition-[height] duration-75 ease-out relative shadow-[0_0_10px_rgba(245,158,11,0.5)]"
+          style={{
+            height: `${fillPct}%`,
+            background: "linear-gradient(to bottom, #10b981 0%, #84cc16 30%, #eab308 60%, #f97316 80%, #ef4444 100%)",
+          }}
+        >
+          {/* Active Tip Glow Indicator */}
+          <div className="absolute bottom-0 inset-x-0 h-1 bg-white shadow-[0_0_6px_#ffffff] rounded-full" />
+        </div>
+
+        {/* Segmented Tick Overlay (10 Ticks) */}
+        <div className="absolute inset-0 flex flex-col justify-between py-1 px-0.5 pointer-events-none opacity-40">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div
+              key={i}
+              className={`w-full h-[1px] ${i % 3 === 0 ? "bg-white/80 h-[1.5px]" : "bg-black/60"}`}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Top Header: Power % Badge */}
+      <div className="z-10 bg-slate-950/90 backdrop-blur-md px-1 py-0.5 rounded border border-slate-700/80 shadow-sm mt-0.5">
+        <span className="text-[8px] font-mono font-black text-amber-400">
+          {Math.round(power * 100)}%
+        </span>
+      </div>
+
+      {/* Bottom Label */}
+      <div className="z-10 text-[7px] font-black tracking-widest text-slate-300 uppercase py-0.5">
+        PWR
       </div>
     </div>
   );

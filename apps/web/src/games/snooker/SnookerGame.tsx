@@ -22,6 +22,7 @@ import { Snooker3DCamera } from "./rendering/Snooker3DCamera";
 import {
   SnookerHUD,
   SnookerPowerControl,
+  SnookerMobilePowerMeter,
   SnookerSpinControl,
   SnookerGameOverModal,
   ColorPickerModal,
@@ -357,6 +358,8 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     return () => clearTimeout(aiTimeout);
   }, [currentSeat, mode, isSimulating, frameStatus, playKeyframes, syncAuthoritativeState]);
 
+  const TABLE_PAD = 70;
+
   // Canvas Touch & Mouse Pointer Coordinates (with Rotation & 3D Unprojection)
   const getPointerCoords = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -364,20 +367,23 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     const rect = canvas.getBoundingClientRect();
 
     if (isRotated) {
-      // Screen space on canvas element (0 to rect.width, 0 to rect.height)
-      const normX = (e.clientX - rect.left) * (480 / rect.width);
-      const normY = (e.clientY - rect.top) * (960 / rect.height);
+      // Screen space on canvas element (0 to 480 + 2*TABLE_PAD, 0 to 960 + 2*TABLE_PAD)
+      const normX = (e.clientX - rect.left) * ((480 + TABLE_PAD * 2) / rect.width);
+      const normY = (e.clientY - rect.top) * ((960 + TABLE_PAD * 2) / rect.height);
+
+      const tableNormX = normX - TABLE_PAD;
+      const tableNormY = normY - TABLE_PAD;
 
       // Inverse of: X' = y, Y' = 960 - x
       // Therefore: x = 960 - Y', y = X'
-      const clickX = 960 - normY;
-      const clickY = normX;
+      const clickX = 960 - tableNormY;
+      const clickY = tableNormX;
       return { clickX, clickY };
     } else {
-      const scale = SNOOKER_TABLE_WIDTH / rect.width;
-      const rawX = (e.clientX - rect.left) * scale;
-      const rawY = (e.clientY - rect.top) * scale;
-      const unproj = Snooker3DCamera.unproject(rawX, rawY, rect.width * scale, (rect.width / 2) * scale, cameraMode === "3d");
+      const scale = (SNOOKER_TABLE_WIDTH + TABLE_PAD * 2) / rect.width;
+      const rawX = (e.clientX - rect.left) * scale - TABLE_PAD;
+      const rawY = (e.clientY - rect.top) * scale - TABLE_PAD;
+      const unproj = Snooker3DCamera.unproject(rawX, rawY, SNOOKER_TABLE_WIDTH, SNOOKER_TABLE_HEIGHT, cameraMode === "3d");
       return { clickX: unproj.x, clickY: unproj.y };
     }
   };
@@ -443,7 +449,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
       return;
     }
 
-    const isTouch = e.pointerType === 'touch';
+    const isTouchOrMobile = isRotated || e.pointerType === 'touch' || (typeof window !== "undefined" && window.innerWidth < 768);
 
     setIsAiming(true);
     const dx = clickX - cueBall.x;
@@ -455,7 +461,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
       originX: clickX,
       originY: clickY,
       targetAngle: angle,
-      isPulling: !isTouch, // On mobile touch, dragging is strictly for aiming; shot is fired via STRIKE button
+      isPulling: !isTouchOrMobile, // On mobile, touching/dragging on the board is strictly for aiming; shot is fired via the power meter
       hasPulled: false,
     };
 
@@ -472,10 +478,10 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     const cueBall = balls.find((b) => b.type === "cue");
     if (!cueBall || cueBall.pocketed || cueBallInHand) return;
 
-    const isTouch = e.pointerType === 'touch';
+    const isTouchOrMobile = isRotated || e.pointerType === 'touch' || (typeof window !== "undefined" && window.innerWidth < 768);
 
-    if (isTouch) {
-      // Mobile Touchscreen: Dragging anywhere smoothly rotates aim towards touch point (aim only)
+    if (isTouchOrMobile) {
+      // Mobile View: Dragging anywhere on the board strictly aims towards touch position
       const newAngle = Math.atan2(clickY - cueBall.y, clickX - cueBall.x);
       setAimAngle(newAngle);
       dragRef.current.targetAngle = newAngle;
@@ -531,9 +537,9 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     if (!isAiming) return;
     setIsAiming(false);
 
-    const isTouch = e.pointerType === 'touch';
+    const isTouchOrMobile = isRotated || e.pointerType === 'touch' || (typeof window !== "undefined" && window.innerWidth < 768);
 
-    if (!isTouch && dragRef.current.isPulling) {
+    if (!isTouchOrMobile && dragRef.current.isPulling) {
       const shouldShoot = dragRef.current.hasPulled && cuePower >= 0.05;
       dragRef.current.isPulling = false;
       dragRef.current.hasPulled = false;
@@ -696,9 +702,9 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
       ctx.clearRect(0, 0, w, h);
 
       if (curIsRotated) {
-        // Vertical Rotated Table Rendering (90 deg Counterclockwise)
+        // Vertical Rotated Table Rendering (90 deg Counterclockwise) with TABLE_PAD margin
         ctx.save();
-        ctx.translate(0, h);
+        ctx.translate(TABLE_PAD, TABLE_PAD + 960);
         ctx.rotate(-Math.PI / 2);
 
         // 1. Draw 3D Snooker Table (Baulk line, D, spots, pockets)
@@ -728,8 +734,11 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 
         ctx.restore();
       } else {
-        // Standard Horizontal Landscape Table Rendering
-        SnookerTableRenderer.drawTable(ctx, w, h, is3D);
+        // Standard Horizontal Landscape Table Rendering with TABLE_PAD margin
+        ctx.save();
+        ctx.translate(TABLE_PAD, TABLE_PAD);
+
+        SnookerTableRenderer.drawTable(ctx, 960, 480, is3D);
 
         // Draw Balls
         const cueBall = curBalls.find((b) => b.type === "cue");
@@ -737,7 +746,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 
         for (const b of curBalls) {
           const isTargetOn = legalTypes.includes(b.type);
-          SnookerBallRenderer.drawBall(ctx, b, w, isTargetOn, is3D, h);
+          SnookerBallRenderer.drawBall(ctx, b, 960, isTargetOn, is3D, 480);
         }
 
         // Draw Cue Stick and Laser Aim Guide
@@ -749,9 +758,11 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
           (!curIsSimulating || curStrikeProgress > 0);
 
         if (shouldDrawCue) {
-          SnookerCueRenderer.drawAimGuide(ctx, cueBall, curBalls, curAimAngle, w, is3D, h);
-          SnookerCueRenderer.drawCue(ctx, cueBall, curAimAngle, curCuePower, w, curStrikeProgress, is3D, h);
+          SnookerCueRenderer.drawAimGuide(ctx, cueBall, curBalls, curAimAngle, 960, is3D, 480);
+          SnookerCueRenderer.drawCue(ctx, cueBall, curAimAngle, curCuePower, 960, curStrikeProgress, is3D, 480);
         }
+
+        ctx.restore();
       }
 
       animId = requestAnimationFrame(render);
@@ -816,23 +827,24 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 
         {/* Main Snooker Arena */}
         <div className="w-full flex-1 flex items-center justify-center max-w-7xl px-1 sm:px-2 my-auto overflow-hidden">
-          {/* Snooker Table Main Canvas Container */}
-          <div className="relative flex-1 flex items-center justify-center w-full max-w-[min(92vw,calc((100dvh-9.5rem)*2),1260px)]">
-            <div className={`relative ${isRotated ? 'aspect-[1/2] max-h-[min(65vh,580px)] w-auto' : 'aspect-[2/1] w-full max-w-[min(92vw,calc((100dvh-9.5rem)*2),1260px)] max-h-[calc(100dvh-9.5rem)]'} rounded-3xl p-1 bg-gradient-to-b from-amber-700/30 via-slate-900/60 to-slate-950/80 shadow-[0_25px_60px_rgba(0,0,0,0.9)] border border-slate-700/60 flex items-center justify-center overflow-hidden`}>
+          {/* Snooker Table Container & Mobile Side Power Slider */}
+          <div className="relative flex items-center justify-center gap-1.5 sm:gap-4 w-full max-w-[min(98vw,calc((100dvh-9.5rem)*2),1340px)]">
+            {/* Snooker Table Main Canvas Container */}
+            <div className={`relative ${isRotated ? 'aspect-[620/1100] max-h-[min(68vh,620px)] w-auto' : 'aspect-[1100/620] w-full max-w-[min(94vw,calc((100dvh-9.5rem)*2),1300px)] max-h-[calc(100dvh-9.5rem)]'} flex items-center justify-center`}>
               <canvas
                 ref={canvasRef}
-                width={isRotated ? 480 : 960}
-                height={isRotated ? 960 : 480}
+                width={isRotated ? 480 + TABLE_PAD * 2 : 960 + TABLE_PAD * 2}
+                height={isRotated ? 960 + TABLE_PAD * 2 : 480 + TABLE_PAD * 2}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
                 onContextMenu={(e) => e.preventDefault()}
-                className="w-full h-full rounded-[22px] cursor-crosshair touch-none select-none block"
+                className="w-full h-full cursor-crosshair touch-none select-none block"
               />
 
-              {/* Floating Pull-Back Power Meter Overlay inside Table */}
-              {isAiming && isMyTurn && !isSimulating && dragRef.current.isPulling && (
+              {/* Floating Pull-Back Power Meter Overlay inside Table (PC Landscape ONLY) */}
+              {!isRotated && isAiming && isMyTurn && !isSimulating && dragRef.current.isPulling && (
                 <div className="absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 px-3.5 sm:px-6 py-1.5 sm:py-2.5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] flex flex-col items-center gap-1 sm:gap-1.5 animate-in fade-in zoom-in-95 pointer-events-none z-30">
                   <div className="flex items-center gap-2 sm:gap-3">
                     <span className="text-[9px] sm:text-[10px] font-black tracking-widest text-slate-400 uppercase">
@@ -862,6 +874,25 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Mobile Vertical Shot Power Level Meter (Side Drag Level & Release to Strike) */}
+            {isRotated && (
+              <div className="flex flex-col items-center justify-center shrink-0 animate-in fade-in slide-in-from-right-2">
+                <SnookerMobilePowerMeter
+                  power={cuePower}
+                  setPower={(p) => {
+                    setCuePower(p);
+                    if (mode === "multiplayer" && driverRef.current) driverRef.current.sendAim(aimAngle, p);
+                  }}
+                  onShoot={(p) => {
+                    if (isMyTurn && !isSimulating && !cueBallInHand) {
+                      executeShotWithAnimation(p);
+                    }
+                  }}
+                  disabled={!isMyTurn || isSimulating || cueBallInHand}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -885,11 +916,12 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
           </div>
         )}
 
-        {/* ═══ MOBILE TOUCH CONTROLS BAR (Aim Adjust + Power Slider + Strike) ═══ */}
+        {/* ═══ MOBILE BOTTOM CONTROLS BAR (Fine Aim Adjust + Spin & Quick Strike) ═══ */}
         {isMyTurn && !isSimulating && !cueBallInHand && (
-          <div className="flex sm:hidden items-center justify-between gap-2 w-full max-w-sm px-3 py-2 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl z-20 shrink-0">
+          <div className="flex sm:hidden items-center justify-between gap-2.5 w-full max-w-sm px-3.5 py-2 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl z-20 shrink-0">
             {/* Fine-tune Aim buttons */}
             <div className="flex items-center gap-1">
+              <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5">Aim:</span>
               <button
                 type="button"
                 onClick={() => {
@@ -897,7 +929,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
                   setAimAngle(newAngle);
                   if (mode === "multiplayer" && driverRef.current) driverRef.current.sendAim(newAngle, cuePower);
                 }}
-                className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 active:bg-indigo-600 text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer shadow-sm active:scale-95"
+                className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 active:bg-indigo-600 text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer shadow-sm active:scale-95"
                 title="Fine-tune Aim Left"
                 aria-label="Fine-tune Aim Left"
               >
@@ -910,7 +942,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
                   setAimAngle(newAngle);
                   if (mode === "multiplayer" && driverRef.current) driverRef.current.sendAim(newAngle, cuePower);
                 }}
-                className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 active:bg-indigo-600 text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer shadow-sm active:scale-95"
+                className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 active:bg-indigo-600 text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer shadow-sm active:scale-95"
                 title="Fine-tune Aim Right"
                 aria-label="Fine-tune Aim Right"
               >
@@ -918,45 +950,43 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
               </button>
             </div>
 
-            {/* Power Slider */}
-            <div className="flex-1 flex flex-col px-1.5 min-w-0">
-              <div className="flex justify-between items-center text-[8px] font-bold text-slate-400">
-                <span>POWER</span>
-                <span className="font-mono text-amber-400 font-black">{Math.round(cuePower * 100)}%</span>
+            {/* Cue Spin Status Indicator */}
+            <div
+              onClick={() => {
+                setSpinX(0);
+                setSpinY(0);
+              }}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800/80 border border-slate-700 cursor-pointer active:scale-95"
+              title="Reset Cue Ball Spin"
+            >
+              <div className="relative w-5 h-5 rounded-full bg-gradient-to-tr from-slate-200 to-white border border-slate-400 shadow-inner flex items-center justify-center">
+                <div
+                  className="w-1 h-1 rounded-full bg-rose-500 shadow-sm transition-all"
+                  style={{
+                    transform: `translate(${spinX * 6}px, ${spinY * 6}px)`,
+                  }}
+                />
               </div>
-              <input
-                type="range"
-                min="0.05"
-                max="1"
-                step="0.01"
-                value={cuePower}
-                onChange={(e) => {
-                  const p = parseFloat(e.target.value);
-                  setCuePower(p);
-                  if (mode === "multiplayer" && driverRef.current) driverRef.current.sendAim(aimAngle, p);
-                }}
-                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
-                aria-label="Cue Shot Power"
-              />
+              <span className="text-[9px] font-bold text-slate-300">Spin</span>
             </div>
 
-            {/* Strike Button */}
+            {/* Strike Action Button */}
             <button
               type="button"
               onClick={() => handleDirectShoot()}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer flex items-center gap-1 shrink-0"
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer flex items-center gap-1 shrink-0"
               aria-label="Strike Cue Ball"
             >
-              ⚡ STRIKE
+              ⚡ SHOOT
             </button>
           </div>
         )}
 
-        {/* Bottom Control Helpers */}
+        {/* Bottom Control Helpers (Desktop PC View) */}
         <div className="hidden sm:flex text-[11px] text-slate-500 font-medium items-center gap-4 sm:gap-6 pb-1">
           <span>● Drag cloth to Aim</span>
-          <span>● Pull back cue or use Power Slider</span>
-          <span>● Release pointer or tap Strike</span>
+          <span>● Pull back cue to charge Shot Level</span>
+          <span>● Release mouse to Strike</span>
         </div>
 
         {/* Frame / Match Over Modal */}
