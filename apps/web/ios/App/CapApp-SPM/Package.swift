@@ -12,12 +12,12 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.5.1"),
-        .package(name: "CapacitorApp", path: "..\..\..\..\..\node_modules\@capacitor\app"),
-        .package(name: "CapacitorBrowser", path: "..\..\..\..\..\node_modules\@capacitor\browser"),
-        .package(name: "CapacitorDevice", path: "..\..\..\..\..\node_modules\@capacitor\device"),
-        .package(name: "CapacitorKeyboard", path: "..\..\..\..\..\node_modules\@capacitor\keyboard"),
-        .package(name: "CapacitorSplashScreen", path: "..\..\..\..\..\node_modules\@capacitor\splash-screen"),
-        .package(name: "CapacitorStatusBar", path: "..\..\..\..\..\node_modules\@capacitor\status-bar")
+        .package(name: "CapacitorApp", path: "../../../../../node_modules/@capacitor/app"),
+        .package(name: "CapacitorBrowser", path: "../../../../../node_modules/@capacitor/browser"),
+        .package(name: "CapacitorDevice", path: "../../../../../node_modules/@capacitor/device"),
+        .package(name: "CapacitorKeyboard", path: "../../../../../node_modules/@capacitor/keyboard"),
+        .package(name: "CapacitorSplashScreen", path: "../../../../../node_modules/@capacitor/splash-screen"),
+        .package(name: "CapacitorStatusBar", path: "../../../../../node_modules/@capacitor/status-bar")
     ],
     targets: [
         .target(
