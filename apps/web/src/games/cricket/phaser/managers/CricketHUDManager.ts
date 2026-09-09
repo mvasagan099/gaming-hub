@@ -128,13 +128,13 @@ export class CricketHUDManager {
     }).setOrigin(0.5).setDepth(depth + 1);
 
     // Run rate (only meaningful for a live multiplayer match)
-    this.runRateText = this.scene.add.text(GAME_W - 85, 68, "RR: 0.0", {
+    this.runRateText = this.scene.add.text(GAME_W - 91, 68, "RR: 0.0", {
       fontSize: "12px", color: "#fbbf24", fontStyle: "bold", fontFamily: "Outfit, sans-serif", stroke: "#000000", strokeThickness: 2
     }).setOrigin(0.5).setDepth(depth + 1).setVisible(this.mode === "multiplayer");
 
     // Over History Strip (Sleek compact boxes under TARGET box on the top-left)
     const stripY = 68;
-    const startX = 16;
+    const startX = 26;
     for (let i = 0; i < 6; i++) {
       const bx = startX + i * 22;
       
@@ -163,24 +163,24 @@ export class CricketHUDManager {
     // Target Box (Top Left)
     const targetBg = this.scene.add.graphics();
     targetBg.fillGradientStyle(0x0f172a, 0x0f172a, 0x1e293b, 0x1e293b, 0.85);
-    targetBg.fillRoundedRect(16, 14, 130, 48, 8);
+    targetBg.fillRoundedRect(26, 14, 130, 48, 8);
     targetBg.lineStyle(1.5, 0xfbbf24, 0.5);
-    targetBg.strokeRoundedRect(16, 14, 130, 48, 8);
+    targetBg.strokeRoundedRect(26, 14, 130, 48, 8);
     targetBg.setDepth(depth);
 
-    this.targetText = this.scene.add.text(81, 38, "TARGET: --", {
+    this.targetText = this.scene.add.text(91, 38, "TARGET: --", {
       fontSize: "16px", color: "#fbbf24", fontStyle: "900", fontFamily: "Outfit, sans-serif"
     }).setOrigin(0.5).setDepth(depth + 1);
 
     // Balls Box (Top Right)
     const ballsBg = this.scene.add.graphics();
     ballsBg.fillGradientStyle(0x0f172a, 0x0f172a, 0x1e293b, 0x1e293b, 0.85);
-    ballsBg.fillRoundedRect(GAME_W - 146, 14, 130, 48, 8);
+    ballsBg.fillRoundedRect(GAME_W - 156, 14, 130, 48, 8);
     ballsBg.lineStyle(1.5, 0x60a5fa, 0.5);
-    ballsBg.strokeRoundedRect(GAME_W - 146, 14, 130, 48, 8);
+    ballsBg.strokeRoundedRect(GAME_W - 156, 14, 130, 48, 8);
     ballsBg.setDepth(depth);
 
-    this.ballsText = this.scene.add.text(GAME_W - 81, 38, "BALLS: 0/0", {
+    this.ballsText = this.scene.add.text(GAME_W - 91, 38, "BALLS: 0/0", {
       fontSize: "16px", color: "#60a5fa", fontStyle: "900", fontFamily: "Outfit, sans-serif"
     }).setOrigin(0.5).setDepth(depth + 1);
   }
@@ -373,11 +373,11 @@ export class CricketHUDManager {
       );
     } else {
       // BOWL CONTROLS
-      const bowlBtnY = GAME_H - 68;
+      const bowlBtnY = GAME_H - 38;
       const types = [
-        { id: 'fast', label: 'Fast ⚡', color: 0xf43f5e, outline: 0xbe123c, xOffset: -85 },
+        { id: 'fast', label: 'Fast ⚡', color: 0xf43f5e, outline: 0xbe123c, xOffset: -100 },
         { id: 'slow', label: 'Slow 🐢', color: 0x3b82f6, outline: 0x1d4ed8, xOffset: 0 },
-        { id: 'spin', label: 'Spin 🌪️', color: 0xeab308, outline: 0xca8a04, xOffset: 85 }
+        { id: 'spin', label: 'Spin 🌪️', color: 0xeab308, outline: 0xca8a04, xOffset: 100 }
       ] as const;
 
       types.forEach(t => {

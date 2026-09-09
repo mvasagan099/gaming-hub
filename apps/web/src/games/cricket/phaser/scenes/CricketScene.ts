@@ -601,7 +601,7 @@ export class CricketScene extends Phaser.Scene {
     g.fillCircle(3, 3, 3);
     g.generateTexture('tex_dust', 6, 6);
 
-    // ── 4. High-Definition Realistic Fielder Sprite (120×180) ──
+    // ── 4. High-Definition Realistic Fielder Sprite Suite (140×200) ──
     const fielderCanvas = document.createElement('canvas');
     CricketPlayerRenderer.renderFielder(fielderCanvas);
     if (this.textures.exists('tex_fielder')) {
@@ -609,14 +609,41 @@ export class CricketScene extends Phaser.Scene {
     }
     this.textures.addCanvas('tex_fielder', fielderCanvas);
 
-    // ── 5. High-Definition Realistic Fast Bowler Animation Frames (160×260) ──
+    const fielderFrames: { key: string; render: (canvas: HTMLCanvasElement) => void }[] = [
+      { key: 'tex_fielder_run_1', render: CricketPlayerRenderer.renderFielderRun1.bind(CricketPlayerRenderer) },
+      { key: 'tex_fielder_run_2', render: CricketPlayerRenderer.renderFielderRun2.bind(CricketPlayerRenderer) },
+      { key: 'tex_fielder_pick', render: CricketPlayerRenderer.renderFielderPick.bind(CricketPlayerRenderer) },
+      { key: 'tex_fielder_throw', render: CricketPlayerRenderer.renderFielderThrow.bind(CricketPlayerRenderer) },
+    ];
+    for (const frame of fielderFrames) {
+      const c = document.createElement('canvas');
+      frame.render(c);
+      if (this.textures.exists(frame.key)) {
+        this.textures.remove(frame.key);
+      }
+      this.textures.addCanvas(frame.key, c);
+    }
+
+    // ── 5. High-Definition Realistic Fast Bowler Animation Frames (180×280) ──
     const bowlerFrames: { key: string; render: (canvas: HTMLCanvasElement) => void }[] = [
       { key: 'tex_bowler', render: CricketPlayerRenderer.renderBowlerIdle.bind(CricketPlayerRenderer) },
       { key: 'tex_bowler_idle', render: CricketPlayerRenderer.renderBowlerIdle.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_prep', render: CricketPlayerRenderer.renderBowlerPrep.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_run_1', render: CricketPlayerRenderer.renderBowlerRun1.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_run_2', render: CricketPlayerRenderer.renderBowlerRun2.bind(CricketPlayerRenderer) },
       { key: 'tex_bowler_stride', render: CricketPlayerRenderer.renderBowlerStride.bind(CricketPlayerRenderer) },
       { key: 'tex_bowler_gather', render: CricketPlayerRenderer.renderBowlerGather.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_plant', render: CricketPlayerRenderer.renderBowlerPlant.bind(CricketPlayerRenderer) },
       { key: 'tex_bowler_release', render: CricketPlayerRenderer.renderBowlerRelease.bind(CricketPlayerRenderer) },
       { key: 'tex_bowler_followthrough', render: CricketPlayerRenderer.renderBowlerFollowthrough.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_followthrough_2', render: CricketPlayerRenderer.renderBowlerFollowthrough2.bind(CricketPlayerRenderer) },
+      // Rear Perspective (Bowling View)
+      { key: 'tex_bowler_rear_idle', render: CricketPlayerRenderer.renderBowlerRearIdle.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_rear_stride_1', render: CricketPlayerRenderer.renderBowlerRearStride1.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_rear_stride_2', render: CricketPlayerRenderer.renderBowlerRearStride2.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_rear_gather', render: CricketPlayerRenderer.renderBowlerRearGather.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_rear_release', render: CricketPlayerRenderer.renderBowlerRearRelease.bind(CricketPlayerRenderer) },
+      { key: 'tex_bowler_rear_follow', render: CricketPlayerRenderer.renderBowlerRearFollow.bind(CricketPlayerRenderer) },
     ];
 
     for (const frame of bowlerFrames) {
@@ -653,6 +680,8 @@ export class CricketScene extends Phaser.Scene {
       { key: 'tex_batsman_run_away_2', render: CricketPlayerRenderer.renderBatsmanRunAway2.bind(CricketPlayerRenderer) },
       { key: 'tex_batsman_run_towards_1', render: CricketPlayerRenderer.renderBatsmanRunTowards1.bind(CricketPlayerRenderer) },
       { key: 'tex_batsman_run_towards_2', render: CricketPlayerRenderer.renderBatsmanRunTowards2.bind(CricketPlayerRenderer) },
+      { key: 'tex_batsman_slide_away', render: CricketPlayerRenderer.renderBatsmanSlideAway.bind(CricketPlayerRenderer) },
+      { key: 'tex_batsman_slide_towards', render: CricketPlayerRenderer.renderBatsmanSlideTowards.bind(CricketPlayerRenderer) },
       { key: 'tex_batsman_celebrate', render: CricketPlayerRenderer.renderBatsmanCelebrate.bind(CricketPlayerRenderer) },
     ];
 
@@ -665,13 +694,21 @@ export class CricketScene extends Phaser.Scene {
       this.textures.addCanvas(frame.key, btCanvas);
     }
 
-    // ── 6b. Realistic Non-Striker Sprite (160×260) ──
+    // ── 6b. Realistic Non-Striker Sprite (Front View for Batting Role, 180×280) ──
     const nonStrikerCanvas = document.createElement('canvas');
     CricketPlayerRenderer.renderNonStriker(nonStrikerCanvas);
     if (this.textures.exists('tex_non_striker')) {
       this.textures.remove('tex_non_striker');
     }
     this.textures.addCanvas('tex_non_striker', nonStrikerCanvas);
+
+    // ── 6c. Realistic Non-Striker Rear Sprite (Rear View for Bowling Role, 180×280) ──
+    const nonStrikerRearCanvas = document.createElement('canvas');
+    CricketPlayerRenderer.renderNonStrikerRear(nonStrikerRearCanvas);
+    if (this.textures.exists('tex_non_striker_rear')) {
+      this.textures.remove('tex_non_striker_rear');
+    }
+    this.textures.addCanvas('tex_non_striker_rear', nonStrikerRearCanvas);
 
     // ── 7. Cricket Bat Sprite (20×110) ───────────────────────────────────────
     g.clear();
@@ -815,16 +852,16 @@ export class CricketScene extends Phaser.Scene {
    */
   private getPlayerScale(type: 'batsman' | 'bowler' | 'non_striker' | 'keeper' | 'fielder', y: number): { x: number; y: number } {
     const progress = Phaser.Math.Clamp((y - PITCH_TOP_Y) / (PITCH_BOT_Y - PITCH_TOP_Y), 0, 1);
-    // Human height on screen ranges smoothly from 98px (far horizon) to 210px (foreground) — 40% bigger
-    const targetHumanHeight = (70 + progress * (150 - 70)) * 1.4;
+    // Human height on screen ranges smoothly from 98px (far horizon) to 210px (foreground)
+    const targetHumanHeight = (70 + progress * (150 - 70)) * 1.35;
 
-    let texHeight = 180;
+    let texHeight = 200;
     if (type === 'batsman') texHeight = 300;
-    else if (type === 'bowler' || type === 'non_striker') texHeight = 260;
-    else if (type === 'keeper' || type === 'fielder') texHeight = 180;
+    else if (type === 'bowler' || type === 'non_striker') texHeight = 280;
+    else if (type === 'keeper' || type === 'fielder') texHeight = 200;
 
     const scaleY = targetHumanHeight / texHeight;
-    const scaleX = scaleY * 1.35; // 35% wider build to make players thicker & athletic
+    const scaleX = scaleY; // Authentic 1:1 human proportions without artificial distortion
 
     return { x: scaleX, y: scaleY };
   }
@@ -837,8 +874,7 @@ export class CricketScene extends Phaser.Scene {
 
   private getBatScale(y: number): number {
     const progress = Phaser.Math.Clamp((y - PITCH_TOP_Y) / (PITCH_BOT_Y - PITCH_TOP_Y), 0, 1);
-    // Bat height on screen ranges smoothly from ~36px (far) to ~73px (foreground) — 40% bigger
-    const targetBatLength = (26 + progress * (52 - 26)) * 1.4;
+    const targetBatLength = (26 + progress * (52 - 26)) * 1.35;
     return targetBatLength / 106;
   }
 
@@ -872,37 +908,37 @@ export class CricketScene extends Phaser.Scene {
     }
 
     if (this.role === 'batting') {
-      this.bowlerRestX = CENTER_X;
-      this.bowlerRestY = 200;
+      this.bowlerRestX = CENTER_X + 28;
+      this.bowlerRestY = 175;
       this.bowler = this.add.sprite(this.bowlerRestX, this.bowlerRestY, 'tex_bowler_idle').setOrigin(0.5, 1).setDepth(9);
-      this.setPlayerScale(this.bowler, 'bowler', 200);
+      this.setPlayerScale(this.bowler, 'bowler', 175);
 
-      this.nonStriker = this.add.sprite(CENTER_X - 45, 204, 'tex_non_striker').setOrigin(0.5, 1).setDepth(9);
+      this.nonStriker = this.add.sprite(CENTER_X - 52, 204, 'tex_non_striker').setOrigin(0.5, 1).setDepth(9);
       this.setPlayerScale(this.nonStriker, 'non_striker', 204);
 
-      this.keeper = this.add.sprite(CENTER_X, 675, 'tex_fielder').setOrigin(0.5, 1).setDepth(11).setVisible(false);
-      this.setPlayerScale(this.keeper, 'keeper', 675);
+      this.keeper = this.add.sprite(CENTER_X, 690, 'tex_fielder').setOrigin(0.5, 1).setDepth(11).setVisible(false);
+      this.setPlayerScale(this.keeper, 'keeper', 690);
 
-      this.batsman = this.add.sprite(CENTER_X - 45, 575, 'tex_batsman_stance').setOrigin(0.5, 1).setDepth(11);
+      this.batsman = this.add.sprite(CENTER_X - 22, 575, 'tex_batsman_stance').setOrigin(0.5, 1).setDepth(11);
       this.setPlayerScale(this.batsman, 'batsman', 575);
 
       this.bat = this.add.sprite(CENTER_X - 4, 550, 'tex_bat')
         .setOrigin(0.5, 0).setScale(this.getBatScale(575)).setAngle(-30).setDepth(12).setVisible(false);
       this.startBatsmanIdleAnimation();
     } else {
-      // Bowling view: Prominent foreground players and clearly visible far batsman & keeper
-      this.bowlerRestX = CENTER_X - 60;
-      this.bowlerRestY = 650;
-      this.bowler = this.add.sprite(this.bowlerRestX, this.bowlerRestY, 'tex_bowler_idle').setOrigin(0.5, 1).setDepth(11);
-      this.setPlayerScale(this.bowler, 'bowler', 650);
+      // Bowling view: Bowler in foreground facing up-pitch; batsman at far crease
+      this.bowlerRestX = CENTER_X - 65;
+      this.bowlerRestY = 640;
+      this.bowler = this.add.sprite(this.bowlerRestX, this.bowlerRestY, 'tex_bowler_rear_idle').setOrigin(0.5, 1).setDepth(11);
+      this.setPlayerScale(this.bowler, 'bowler', 640);
 
-      this.nonStriker = this.add.sprite(CENTER_X + 80, 650, 'tex_non_striker').setOrigin(0.5, 1).setDepth(10);
-      this.setPlayerScale(this.nonStriker, 'non_striker', 650);
+      this.nonStriker = this.add.sprite(CENTER_X + 65, 640, 'tex_non_striker_rear').setOrigin(0.5, 1).setDepth(10);
+      this.setPlayerScale(this.nonStriker, 'non_striker', 640);
 
       this.keeper = this.add.sprite(CENTER_X, 185, 'tex_fielder').setOrigin(0.5, 1).setDepth(4);
       this.setPlayerScale(this.keeper, 'keeper', 185);
 
-      this.batsman = this.add.sprite(CENTER_X - 16, 215, 'tex_batsman_stance').setOrigin(0.5, 1).setDepth(7);
+      this.batsman = this.add.sprite(CENTER_X - 14, 215, 'tex_batsman_stance').setOrigin(0.5, 1).setDepth(7);
       this.setPlayerScale(this.batsman, 'batsman', 215);
 
       this.bat = this.add.sprite(CENTER_X - 4, 195, 'tex_bat')
@@ -968,20 +1004,26 @@ export class CricketScene extends Phaser.Scene {
     if (!this.batsman || !this.batsman.active || this.role !== 'batting') return;
 
     this.batsman.setTexture('tex_batsman_stance');
-    let tapCycle = 0;
+    let state = 0;
 
     this.batsmanIdleTimer = this.time.addEvent({
-      delay: 1400,
+      delay: 380,
       loop: true,
       callback: () => {
         if (!this.batsman || !this.batsman.active || this.isBowling || this.isHit || this.isRunning || this.role !== 'batting') return;
-        tapCycle++;
-        if (tapCycle % 3 === 0) {
+        state = (state + 1) % 4;
+        if (state === 0) {
+          this.batsman.setTexture('tex_batsman_stance');
+          this.batsman.setY(575);
+        } else if (state === 1) {
           this.batsman.setTexture('tex_batsman_tap');
-          this.time.delayedCall(180, () => {
-            if (!this.batsman || !this.batsman.active || this.isBowling || this.isHit || this.isRunning || this.role !== 'batting') return;
-            this.batsman.setTexture('tex_batsman_stance');
-          });
+          this.batsman.setY(576); // Rhythmic bat tap + knee flex
+        } else if (state === 2) {
+          this.batsman.setTexture('tex_batsman_stance');
+          this.batsman.setY(575);
+        } else if (state === 3) {
+          this.batsman.setTexture('tex_batsman_backlift');
+          this.batsman.setY(574); // Ready backlift trigger posture
         }
       }
     });
@@ -1088,18 +1130,18 @@ export class CricketScene extends Phaser.Scene {
 
   private repositionForRole() {
     if (this.role === "batting") {
-      this.bowlerRestX = CENTER_X;
-      this.bowlerRestY = 200;
+      this.bowlerRestX = CENTER_X + 28;
+      this.bowlerRestY = 175;
       this.bowler.setPosition(this.bowlerRestX, this.bowlerRestY).setTexture('tex_bowler_idle').setOrigin(0.5, 1).setDepth(9);
-      this.setPlayerScale(this.bowler, 'bowler', 200);
+      this.setPlayerScale(this.bowler, 'bowler', 175);
 
-      this.nonStriker.setPosition(CENTER_X - 45, 204).setTexture('tex_non_striker').setOrigin(0.5, 1).setDepth(9);
+      this.nonStriker.setPosition(CENTER_X - 52, 204).setTexture('tex_non_striker').setOrigin(0.5, 1).setDepth(9);
       this.setPlayerScale(this.nonStriker, 'non_striker', 204);
 
-      this.keeper.setPosition(CENTER_X, 675).setOrigin(0.5, 1).setDepth(11).setVisible(false);
-      this.setPlayerScale(this.keeper, 'keeper', 675);
+      this.keeper.setPosition(CENTER_X, 690).setOrigin(0.5, 1).setDepth(11).setVisible(false);
+      this.setPlayerScale(this.keeper, 'keeper', 690);
 
-      this.batsman.setPosition(CENTER_X - 45, 575).setOrigin(0.5, 1).setTexture('tex_batsman_stance').setDepth(11);
+      this.batsman.setPosition(CENTER_X - 22, 575).setOrigin(0.5, 1).setTexture('tex_batsman_stance').setDepth(11);
       this.setPlayerScale(this.batsman, 'batsman', 575);
 
       this.bat.setPosition(CENTER_X - 4, 550).setScale(this.getBatScale(575)).setDepth(12).setVisible(false).setAngle(-30);
@@ -1108,19 +1150,19 @@ export class CricketScene extends Phaser.Scene {
       this.redrawBails();
       this.startBatsmanIdleAnimation();
     } else {
-      // Bowling view: Prominent foreground players and clearly visible far batsman & keeper
-      this.bowlerRestX = CENTER_X - 60;
-      this.bowlerRestY = 650;
-      this.bowler.setPosition(this.bowlerRestX, this.bowlerRestY).setTexture('tex_bowler_idle').setOrigin(0.5, 1).setDepth(11);
-      this.setPlayerScale(this.bowler, 'bowler', 650);
+      // Bowling view: Bowler in foreground facing up-pitch; batsman at far crease
+      this.bowlerRestX = CENTER_X - 65;
+      this.bowlerRestY = 640;
+      this.bowler.setPosition(this.bowlerRestX, this.bowlerRestY).setTexture('tex_bowler_rear_idle').setOrigin(0.5, 1).setDepth(11);
+      this.setPlayerScale(this.bowler, 'bowler', 640);
 
-      this.nonStriker.setPosition(CENTER_X + 80, 650).setOrigin(0.5, 1).setDepth(10);
-      this.setPlayerScale(this.nonStriker, 'non_striker', 650);
+      this.nonStriker.setPosition(CENTER_X + 65, 640).setTexture('tex_non_striker_rear').setOrigin(0.5, 1).setDepth(10);
+      this.setPlayerScale(this.nonStriker, 'non_striker', 640);
 
       this.keeper.setPosition(CENTER_X, 185).setOrigin(0.5, 1).setDepth(4);
       this.setPlayerScale(this.keeper, 'keeper', 185);
 
-      this.batsman.setPosition(CENTER_X - 16, 215).setOrigin(0.5, 1).setTexture('tex_batsman_stance').setDepth(7);
+      this.batsman.setPosition(CENTER_X - 14, 215).setOrigin(0.5, 1).setTexture('tex_batsman_stance').setDepth(7);
       this.setPlayerScale(this.batsman, 'batsman', 215);
 
       this.bat.setPosition(CENTER_X - 4, 195).setScale(this.getBatScale(215)).setDepth(8).setVisible(false).setAngle(-30);
@@ -1510,7 +1552,7 @@ export class CricketScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // BOWLING — WITH RUN-UP ANIMATION
+  // BOWLING — WITH AUTHENTIC MULTI-STAGE DELIVERY SEQUENCE
   // ─────────────────────────────────────────────────────────────────────────────
 
   private executeBowl(type: CricketDelivery, powerMultiplier: number = 1.0) {
@@ -1540,11 +1582,16 @@ export class CricketScene extends Phaser.Scene {
     this.deliveryType = type;
     const mult = 0.5 + powerMultiplier;
 
-    // Delivery release point (bowler's bowling hand at crease)
-    const releaseX = this.role === 'bowling' ? this.bowlerRestX + 30 : CENTER_X;
-    const releaseY = this.role === 'bowling' ? 620 : 200;
-    const targetStumpY = this.role === 'bowling' ? 200 : 665;
-    const targetStumpX = CENTER_X + (Math.random() - 0.5) * 6; // Target directly onto the stumps
+    // Delivery release point & destination calculations
+    const isBatting = this.role === 'batting';
+    const bowlerScale = this.getPlayerScale('bowler', this.bowlerRestY);
+    const handOffsetX = (isBatting ? 14 : 12) * bowlerScale.x;
+    const handOffsetY = 65 * bowlerScale.y;
+
+    const approxReleaseX = isBatting ? (this.bowlerRestX + handOffsetX) : (this.bowlerRestX + handOffsetX);
+    const approxReleaseY = isBatting ? (PITCH_TOP_Y + 12) : 620;
+    const targetStumpY = isBatting ? 665 : 200;
+    const targetStumpX = CENTER_X + (Math.random() - 0.5) * 6; // Target stumps
 
     let speed = 700;
     if (type === 'fast') speed = 700 + Math.random() * 120;
@@ -1555,11 +1602,10 @@ export class CricketScene extends Phaser.Scene {
     else speed = 420 + Math.random() * 70; // spin
 
     const finalSpeed = speed * mult;
-    const distY = Math.abs(targetStumpY - releaseY);
+    const distY = Math.abs(targetStumpY - approxReleaseY);
     const timeToStumps = distY / finalSpeed;
-    const baseVx = (targetStumpX - releaseX) / timeToStumps;
-
-    const velY = this.role === 'bowling' ? -finalSpeed : finalSpeed;
+    const baseVx = (targetStumpX - approxReleaseX) / timeToStumps;
+    const velY = isBatting ? finalSpeed : -finalSpeed;
 
     this.swingAccel = 0;
     this.spinTurned = false;
@@ -1592,43 +1638,47 @@ export class CricketScene extends Phaser.Scene {
       // spin
       this.spinDirection = Math.random() > 0.5 ? 1 : -1;
       const prePitchTargetX = targetStumpX - this.spinDirection * 18;
-      const prePitchVx = (prePitchTargetX - releaseX) / timeToStumps;
+      const prePitchVx = (prePitchTargetX - approxReleaseX) / timeToStumps;
       this.ballVelocity = { x: prePitchVx, y: velY };
       this.ballVelocityZ = 100 * mult;
       this.hud.updateStatus("Spin! Turning towards the stumps!", "#fde047");
     }
 
-    // Animate the run-up, then start ball physics
-    this.animateBowlerRunup(() => {
-      // Set ball start position at bowler's release hand
-      this.ballDepth = releaseY;
+    // Animate complete bowler sequence, then release ball
+    this.animateBowlerRunup(type, (actualReleaseX: number, actualReleaseY: number) => {
+      // Set ball start position exactly at bowler's release hand
+      this.ballDepth = actualReleaseY;
       this.ballHeight = 60;
-      this.ballVelocityZ = type === 'fast' ? -100 * mult :
-                           type === 'bouncer' ? 450 * mult :
-                           type === 'slow' ? 280 * mult :
-                           type === 'yorker' ? -220 * mult : 100 * mult;
+      this.spinTurned = false;
 
-      this.ball.setPosition(releaseX, this.ballDepth - this.ballHeight);
-      const startScale = this.initialBallScale;
+      const releaseFrac = Phaser.Math.Clamp((actualReleaseY - 200) / (640 - 200), 0, 1);
+      const startScale = Phaser.Math.Linear(0.12, 0.28, releaseFrac);
+      this.initialBallScale = startScale;
       this.ball.setScale(startScale);
       this.ball.setVisible(true);
 
-      this.ballShadow.setPosition(releaseX, this.ballDepth);
+      this.ballShadow.setPosition(actualReleaseX, this.ballDepth);
       this.ballShadow.setScale(startScale);
       this.ballShadow.setVisible(true);
 
-      // Setup trail emitters
+      // Release spark burst
+      this.dustEmitter.emitParticleAt(actualReleaseX, actualReleaseY - 10, 4);
+
+      // Tailored motion trail by delivery type
       this.trailEmitter.stop();
       if (type === 'fast' || type === 'yorker' || type === 'bouncer') {
-        const tint = type === 'bouncer' ? 0xff0000 : type === 'yorker' ? 0xffa500 : 0xff4500;
+        const tint = type === 'bouncer' ? 0xef4444 : type === 'yorker' ? 0xf59e0b : 0xff4500;
         this.trailEmitter.setConfig({
           tint,
-          lifespan: type === 'fast' ? 200 : 150,
-          scale: { start: type === 'bouncer' ? 1.2 : 1, end: 0 }
+          lifespan: type === 'fast' ? 220 : 180,
+          scale: { start: type === 'bouncer' ? 1.3 : 1.1, end: 0 }
         });
         this.trailEmitter.start();
       } else if (type === 'swing') {
-        this.trailEmitter.setConfig({ tint: 0x9333ea, lifespan: 200, scale: { start: 1, end: 0 } });
+        this.trailEmitter.setConfig({ tint: 0xa855f7, lifespan: 220, scale: { start: 1.1, end: 0 } });
+        this.trailEmitter.start();
+      } else if (type === 'spin') {
+        this.trailEmitter.setConfig({ tint: 0x10b981, lifespan: 200, scale: { start: 0.95, end: 0 } });
         this.trailEmitter.start();
       }
 
@@ -1636,69 +1686,104 @@ export class CricketScene extends Phaser.Scene {
     });
   }
 
-  private animateBowlerRunup(onRelease: () => void) {
+  private animateBowlerRunup(type: CricketDelivery, onRelease: (releaseX: number, releaseY: number) => void) {
     const isBatting = this.role === 'batting';
     const runupDir = isBatting ? 1 : -1; // +1 = down (toward batsman), -1 = up
-    const approachDist = isBatting ? 24 : 18;
-    const jumpDist = isBatting ? 12 : 9;
     const baseScale = this.getPlayerScale('bowler', this.bowlerRestY);
 
-    // ── Phase 1: Fast Approach / Stride ──
+    // Tempo multiplier: Fast deliveries have aggressive run-up, spin has measured approach
+    const tempo = type === 'fast' || type === 'yorker' || type === 'bouncer' ? 0.85 :
+                  type === 'slow' ? 1.15 : 1.0;
+
+    // ── Stage 1: Preparation / Weight Rock ──
     if (this.batsman && this.batsman.active) {
       this.stopBatsmanIdleAnimation();
       this.batsman.setTexture('tex_batsman_backlift');
     }
-    this.bowler.setTexture('tex_bowler_stride');
+    this.bowler.setTexture(isBatting ? 'tex_bowler_prep' : 'tex_bowler_rear_stride_1');
+
     this.tweens.add({
       targets: this.bowler,
-      y: this.bowlerRestY + runupDir * approachDist,
-      x: this.bowlerRestX + (Math.random() - 0.5) * 4,
-      duration: 220,
-      ease: 'Quad.easeIn',
+      y: this.bowlerRestY - runupDir * 4,
+      duration: Math.round(140 * tempo),
+      ease: 'Quad.easeOut',
       onComplete: () => {
-        // ── Phase 2: High Airborne Gather Leap & Coil ──
-        this.bowler.setTexture('tex_bowler_gather');
+        // ── Stage 2: Sprint Approach Stride 1 ──
+        this.bowler.setTexture(isBatting ? 'tex_bowler_run_1' : 'tex_bowler_rear_stride_1');
         this.tweens.add({
           targets: this.bowler,
-          y: this.bowlerRestY + runupDir * (approachDist + jumpDist),
-          scaleY: baseScale.y * 1.05,
-          scaleX: baseScale.x * 1.02,
-          duration: 160,
-          ease: 'Quad.easeOut',
+          y: this.bowlerRestY + runupDir * 16,
+          x: this.bowlerRestX + (Math.random() - 0.5) * 3,
+          duration: Math.round(160 * tempo),
+          ease: 'Quad.easeIn',
           onComplete: () => {
-            // ── Phase 3: 12 O'Clock High Delivery Release ──
-            this.bowler.setTexture('tex_bowler_release');
-            this.bowler.setScale(baseScale.x, baseScale.y);
+            // ── Stage 3: Sprint Approach Stride 2 ──
+            this.bowler.setTexture(isBatting ? 'tex_bowler_run_2' : 'tex_bowler_rear_stride_2');
+            this.tweens.add({
+              targets: this.bowler,
+              y: this.bowlerRestY + runupDir * 32,
+              duration: Math.round(150 * tempo),
+              ease: 'Linear',
+              onComplete: () => {
+                // ── Stage 4: High Airborne Gather Leap ──
+                this.bowler.setTexture(isBatting ? 'tex_bowler_gather' : 'tex_bowler_rear_gather');
+                this.tweens.add({
+                  targets: this.bowler,
+                  y: this.bowlerRestY + runupDir * 44,
+                  scaleY: baseScale.y * 1.04,
+                  duration: Math.round(170 * tempo),
+                  ease: 'Quad.easeOut',
+                  onComplete: () => {
+                    // ── Stage 5: Front Foot Crease Plant ──
+                    this.bowler.setTexture(isBatting ? 'tex_bowler_plant' : 'tex_bowler_rear_release');
+                    this.bowler.setScale(baseScale.x, baseScale.y);
+                    this.dustEmitter.emitParticleAt(this.bowler.x, this.bowler.y, 4);
 
-            // Release ball at apex of bowling arc!
-            onRelease();
+                    this.time.delayedCall(Math.round(110 * tempo), () => {
+                      // ── Stage 6: 12 O'Clock Vertical Overarm Delivery Release ──
+                      this.bowler.setTexture(isBatting ? 'tex_bowler_release' : 'tex_bowler_rear_release');
 
-            // ── Phase 4: Follow-Through & Deceleration ──
-            this.time.delayedCall(80, () => {
-              if (!this.bowler.active) return;
-              this.bowler.setTexture('tex_bowler_followthrough');
-              this.tweens.add({
-                targets: this.bowler,
-                y: this.bowlerRestY + runupDir * (approachDist + jumpDist + 4),
-                x: this.bowlerRestX + (isBatting ? 4 : 8),
-                duration: 280,
-                ease: 'Sine.easeOut',
-                onComplete: () => {
-                  // Settle smoothly back to idle stance
-                  this.tweens.add({
-                    targets: this.bowler,
-                    y: this.bowlerRestY,
-                    x: this.bowlerRestX,
-                    duration: 320,
-                    ease: 'Sine.easeOut',
-                    onComplete: () => {
-                      if (this.bowler.active) {
-                        this.bowler.setTexture('tex_bowler_idle');
-                      }
-                    }
-                  });
-                }
-              });
+                      // Calculate exact release coordinates at bowler's overhead hand
+                      const handOffsetX = (isBatting ? 26 : 28) * baseScale.x;
+                      const handOffsetY = 255 * baseScale.y;
+                      const releaseX = this.bowler.x + handOffsetX;
+                      const releaseY = this.bowler.y - handOffsetY;
+
+                      // Release ball at apex!
+                      onRelease(releaseX, releaseY);
+
+                      // ── Stage 7: Immediate Follow-Through & Deceleration ──
+                      this.time.delayedCall(Math.round(80 * tempo), () => {
+                        if (!this.bowler.active) return;
+                        this.bowler.setTexture(isBatting ? 'tex_bowler_followthrough' : 'tex_bowler_rear_follow');
+                        this.tweens.add({
+                          targets: this.bowler,
+                          y: this.bowlerRestY + runupDir * 48,
+                          x: this.bowlerRestX + (isBatting ? 4 : 8),
+                          duration: 200,
+                          ease: 'Sine.easeOut',
+                          onComplete: () => {
+                            // Stage 8: Secondary Follow-Through & Recovery
+                            this.bowler.setTexture(isBatting ? 'tex_bowler_followthrough_2' : 'tex_bowler_rear_idle');
+                            this.tweens.add({
+                              targets: this.bowler,
+                              y: this.bowlerRestY,
+                              x: this.bowlerRestX,
+                              duration: 300,
+                              ease: 'Sine.easeOut',
+                              onComplete: () => {
+                                if (this.bowler.active) {
+                                  this.bowler.setTexture(isBatting ? 'tex_bowler_idle' : 'tex_bowler_rear_idle');
+                                }
+                              }
+                            });
+                          }
+                        });
+                      });
+                    });
+                  }
+                });
+              }
             });
           }
         });
@@ -1787,6 +1872,19 @@ export class CricketScene extends Phaser.Scene {
       this.audioManager.playHit(shotPower);
       this.audioManager.playCrowdRoar();
 
+      // Emit bat-ball impact sparks
+      if (this.dustEmitter) {
+        this.dustEmitter.emitParticleAt(this.ball.x, this.ball.y, isSix ? 20 : 14);
+      }
+      this.tweens.add({
+        targets: this.batsman,
+        x: this.batsman.x + (direction === 'left' ? -4 : (direction === 'right' ? 4 : -2)),
+        duration: 35,
+        yoyo: true,
+        repeat: 2,
+        ease: 'Sine.easeInOut'
+      });
+
       this.bat.setTint(0xffffff);
       this.bat.setTintFill();
       this.time.delayedCall(100, () => this.bat.clearTint());
@@ -1819,6 +1917,19 @@ export class CricketScene extends Phaser.Scene {
         shotAngle = baseAngle + angleMod + (Math.random() - 0.5) * 0.6;
         this.ballVelocityZ = (isLofted ? 200 : 50) + Math.random() * 100;
         this.audioManager.playHit(shotPower);
+
+        if (this.dustEmitter) {
+          this.dustEmitter.emitParticleAt(this.ball.x, this.ball.y, 8);
+        }
+        this.cameras.main.shake(120, 0.006);
+        this.tweens.add({
+          targets: this.batsman,
+          x: this.batsman.x + (direction === 'left' ? -3 : 3),
+          duration: 35,
+          yoyo: true,
+          repeat: 1,
+          ease: 'Sine.easeInOut'
+        });
       }
     } else if (totalDiff <= 140) {
       if (this.hasSteppedOut) {
@@ -1836,6 +1947,10 @@ export class CricketScene extends Phaser.Scene {
         shotAngle = baseAngle + angleMod + (Math.random() - 0.5);
         this.ballVelocityZ = 20;
         this.audioManager.playHit(50);
+        this.batsman.setTexture('tex_batsman_defend');
+        if (this.dustEmitter) {
+          this.dustEmitter.emitParticleAt(this.ball.x, this.ball.y, 4);
+        }
       }
     } else {
       if (this.hasSteppedOut) {
@@ -1919,61 +2034,124 @@ export class CricketScene extends Phaser.Scene {
               this.crowdReact('mild');
             }
 
+            const initialFielderX = closestFielder.x;
+            const initialFielderY = closestFielder.y;
+            const runDirectionX = destX < initialFielderX ? -1 : 1;
+            let lastDustTime = 0;
+
             this.tweens.add({
               targets: closestFielder,
               x: destX,
               y: destY,
               duration: chaseDuration,
+              ease: 'Quad.easeOut',
+              onUpdate: (tween) => {
+                const p = tween.progress;
+                // Alternating sprint strides every 110ms
+                const step = Math.floor(p * chaseDuration / 110);
+                closestFielder.setTexture(step % 2 === 0 ? 'tex_fielder_run_1' : 'tex_fielder_run_2');
+
+                // Dynamic 3D depth perspective scaling
+                const scale = this.getPlayerScale('fielder', closestFielder.y);
+                closestFielder.setScale(scale.x * runDirectionX, scale.y);
+                closestFielder.setDepth(closestFielder.y > CENTER_Y ? 10 : 8);
+
+                // Emitted turf dust particles while sprinting
+                const now = Date.now();
+                if (now - lastDustTime > 180) {
+                  lastDustTime = now;
+                  this.dustEmitter.emitParticleAt(closestFielder.x, closestFielder.y, 2);
+                }
+              },
               onComplete: () => {
-                this.ballVelocity = { x: 0, y: 0 };
-                this.ballVelocityZ = 0;
-                this.ballDepth = closestFielder.y;
-                this.ballHeight = 20;
-                this.ballShadow.setPosition(closestFielder.x, closestFielder.y);
-                this.ball.setPosition(closestFielder.x, closestFielder.y - 20);
-                this.trailEmitter.stop();
+                // Scoop/field the ball cleanly from the grass
+                closestFielder.setTexture('tex_fielder_pick');
+                this.dustEmitter.emitParticleAt(closestFielder.x, closestFielder.y, 4);
 
-                this.trailEmitter.setConfig({ tint: 0xffffff, lifespan: 200, scale: { start: 0.8, end: 0 } });
-                this.trailEmitter.start();
+                this.time.delayedCall(160, () => {
+                  if (!closestFielder.active) return;
+                  // Cock back into overarm throw posture towards stumps
+                  closestFielder.setTexture('tex_fielder_throw');
+                  const throwDirectionX = targetX < closestFielder.x ? -1 : 1;
+                  const curScale = this.getPlayerScale('fielder', closestFielder.y);
+                  closestFielder.setScale(curScale.x * throwDirectionX, curScale.y);
 
-                this.tweens.add({
-                  targets: this,
-                  ballHeight: 80,
-                  duration: throwDuration / 2,
-                  yoyo: true,
-                  ease: 'Sine.easeOut'
-                });
+                  this.ballVelocity = { x: 0, y: 0 };
+                  this.ballVelocityZ = 0;
+                  this.ballDepth = closestFielder.y;
+                  this.ballHeight = 20;
+                  this.ballShadow.setPosition(closestFielder.x, closestFielder.y);
+                  this.ball.setPosition(closestFielder.x, closestFielder.y - 20);
+                  this.trailEmitter.stop();
 
-                this.tweens.add({
-                  targets: this,
-                  ballDepth: targetY,
-                  duration: throwDuration,
-                  ease: 'Linear',
-                  onUpdate: () => {
-                    this.ballShadow.setPosition(this.ball.x, this.ballDepth);
-                    this.ball.setPosition(this.ball.x, this.ballDepth - this.ballHeight);
-                    this.trailEmitter.particleX = this.ball.x;
-                    this.trailEmitter.particleY = this.ball.y;
-                  },
-                  onComplete: () => {
-                    this.trailEmitter.stop();
-                    this.commitRuns(calculatedRuns);
+                  this.trailEmitter.setConfig({ tint: 0xffffff, lifespan: 200, scale: { start: 0.8, end: 0 } });
+                  this.trailEmitter.start();
 
+                  this.tweens.add({
+                    targets: this,
+                    ballHeight: 80,
+                    duration: throwDuration / 2,
+                    yoyo: true,
+                    ease: 'Sine.easeOut'
+                  });
+
+                  this.tweens.add({
+                    targets: this,
+                    ballDepth: targetY,
+                    duration: throwDuration,
+                    ease: 'Linear',
+                    onUpdate: () => {
+                      this.ballShadow.setPosition(this.ball.x, this.ballDepth);
+                      this.ball.setPosition(this.ball.x, this.ballDepth - this.ballHeight);
+                      this.trailEmitter.particleX = this.ball.x;
+                      this.trailEmitter.particleY = this.ball.y;
+                    },
+                    onComplete: () => {
+                      this.trailEmitter.stop();
+                      this.commitRuns(calculatedRuns);
+                    }
+                  });
+
+                  this.tweens.add({
+                    targets: this.ball,
+                    x: targetX,
+                    scale: this.initialBallScale,
+                    duration: throwDuration,
+                    ease: 'Linear'
+                  });
+
+                  // Return back to original fielding mark
+                  const startX = closestFielder.getData('startX') || initialFielderX;
+                  const startY = closestFielder.getData('startY') || initialFielderY;
+                  const returnDist = Phaser.Math.Distance.Between(closestFielder.x, closestFielder.y, startX, startY);
+                  const returnDuration = Math.max(700, returnDist * 3.5);
+                  const returnDirX = startX < closestFielder.x ? -1 : 1;
+
+                  this.time.delayedCall(220, () => {
+                    if (!closestFielder.active) return;
                     this.tweens.add({
                       targets: closestFielder,
-                      x: closestFielder.getData('startX') || closestFielder.x,
-                      y: closestFielder.getData('startY') || closestFielder.y,
-                      duration: 2000
+                      x: startX,
+                      y: startY,
+                      duration: returnDuration,
+                      ease: 'Linear',
+                      onUpdate: (tween) => {
+                        const p = tween.progress;
+                        const step = Math.floor(p * returnDuration / 120);
+                        closestFielder.setTexture(step % 2 === 0 ? 'tex_fielder_run_1' : 'tex_fielder_run_2');
+                        const s = this.getPlayerScale('fielder', closestFielder.y);
+                        closestFielder.setScale(s.x * returnDirX, s.y);
+                        closestFielder.setDepth(closestFielder.y > CENTER_Y ? 10 : 8);
+                      },
+                      onComplete: () => {
+                        // Reset to standing ready guard posture
+                        closestFielder.setTexture('tex_fielder');
+                        const finalScale = this.getPlayerScale('fielder', startY);
+                        closestFielder.setScale(finalScale.x, finalScale.y);
+                        closestFielder.setDepth(startY > CENTER_Y ? 10 : 8);
+                      }
                     });
-                  }
-                });
-
-                this.tweens.add({
-                  targets: this.ball,
-                  x: targetX,
-                  scale: this.initialBallScale,
-                  duration: throwDuration,
-                  ease: 'Linear'
+                  });
                 });
               }
             });
@@ -2156,22 +2334,24 @@ export class CricketScene extends Phaser.Scene {
     const isBatsmanRunningUp = this.batsman.y > CENTER_Y;
     const isNonStrikerRunningUp = this.nonStriker.y > CENTER_Y;
 
+    // Accurate grounded crease coordinates:
+    // Bowler's end crease: Y=204
+    // Striker's popping crease: Y=575
     const batsmanTargetY = isBatsmanRunningUp ? 204 : 575;
-    const batsmanTargetX = isBatsmanRunningUp ? CENTER_X - 18 : CENTER_X - 45;
+    const batsmanTargetX = isBatsmanRunningUp ? CENTER_X - 52 : CENTER_X - 22;
     const batsmanTargetScale = this.getPlayerScale('batsman', batsmanTargetY);
 
-    const nonStrikerTargetY = isNonStrikerRunningUp ? 204 : 575;
-    const nonStrikerTargetX = isNonStrikerRunningUp ? CENTER_X + 22 : CENTER_X + 46;
+    const nonStrikerTargetY = isNonStrikerRunningUp ? 204 : (this.role === 'bowling' ? 640 : 580);
+    const nonStrikerTargetX = isNonStrikerRunningUp ? CENTER_X + 45 : (this.role === 'bowling' ? CENTER_X + 65 : CENTER_X + 50);
     const nonStrikerTargetScale = this.getPlayerScale('non_striker', nonStrikerTargetY);
 
     // Running Stride Cycle Animation
     let runStep = 0;
     const runCycleEvent = this.time.addEvent({
-      delay: 140,
-      repeat: 6,
+      delay: 130,
+      repeat: 5,
       callback: () => {
         runStep++;
-        // Choose forward/away stride textures based on real run direction
         const bTex = isBatsmanRunningUp
           ? (runStep % 2 === 0 ? 'tex_batsman_run_away_1' : 'tex_batsman_run_away_2')
           : (runStep % 2 === 0 ? 'tex_batsman_run_towards_1' : 'tex_batsman_run_towards_2');
@@ -2182,6 +2362,15 @@ export class CricketScene extends Phaser.Scene {
 
         if (this.batsman.active) this.batsman.setTexture(bTex);
         if (this.nonStriker.active) this.nonStriker.setTexture(nsTex);
+      }
+    });
+
+    // Bat slide phase near crease arrival (~580ms into the 850ms run)
+    this.time.delayedCall(580, () => {
+      if (!this.batsman.active) return;
+      this.batsman.setTexture(isBatsmanRunningUp ? 'tex_batsman_slide_away' : 'tex_batsman_slide_towards');
+      if (this.dustEmitter) {
+        this.dustEmitter.emitParticleAt(batsmanTargetX, batsmanTargetY, 6);
       }
     });
 
@@ -2206,13 +2395,26 @@ export class CricketScene extends Phaser.Scene {
       onComplete: () => {
         runCycleEvent.remove();
         if (currentRun < runs) {
-          // Slide/grounding turn pause before taking next run
-          this.time.delayedCall(100, () => {
-            this.autoRunBatsmen(runs, currentRun + 1);
+          // Crease turn: brief swivel & dust puff before starting next run
+          if (this.dustEmitter) {
+            this.dustEmitter.emitParticleAt(this.batsman.x, this.batsman.y, 4);
+          }
+          this.tweens.add({
+            targets: this.batsman,
+            scaleX: -batsmanTargetScale.x,
+            duration: 90,
+            yoyo: true,
+            ease: 'Sine.easeInOut',
+            onComplete: () => {
+              this.autoRunBatsmen(runs, currentRun + 1);
+            }
           });
         } else {
-          this.isRunning = false;
-          this.resetBatsmenPositions();
+          // Completed all runs: hold slide briefly, then settle into guard
+          this.time.delayedCall(160, () => {
+            this.isRunning = false;
+            this.resetBatsmenPositions();
+          });
         }
       }
     });
@@ -2221,23 +2423,23 @@ export class CricketScene extends Phaser.Scene {
   private resetBatsmenPositions() {
     this.stopBatsmanIdleAnimation();
     if (this.role === 'batting') {
-      this.batsman.setPosition(CENTER_X - 45, 575).setOrigin(0.5, 1).setTexture('tex_batsman_stance');
+      this.batsman.setPosition(CENTER_X - 22, 575).setOrigin(0.5, 1).setTexture('tex_batsman_stance');
       this.setPlayerScale(this.batsman, 'batsman', 575);
 
-      this.bat.setPosition(CENTER_X - 4, 550).setScale(this.getBatScale(575));
+      this.bat.setPosition(CENTER_X - 22, 575).setScale(this.getBatScale(575));
 
-      this.nonStriker.setPosition(CENTER_X - 45, 204).setTexture('tex_non_striker').setOrigin(0.5, 1);
+      this.nonStriker.setPosition(CENTER_X - 52, 204).setTexture('tex_non_striker').setOrigin(0.5, 1);
       this.setPlayerScale(this.nonStriker, 'non_striker', 204);
 
       this.startBatsmanIdleAnimation();
     } else {
-      this.batsman.setPosition(CENTER_X - 16, 215).setOrigin(0.5, 1).setTexture('tex_batsman_stance');
+      this.batsman.setPosition(CENTER_X - 14, 215).setOrigin(0.5, 1).setTexture('tex_batsman_stance');
       this.setPlayerScale(this.batsman, 'batsman', 215);
 
-      this.bat.setPosition(CENTER_X - 4, 195).setScale(this.getBatScale(215));
+      this.bat.setPosition(CENTER_X - 14, 215).setScale(this.getBatScale(215));
 
-      this.nonStriker.setPosition(CENTER_X + 80, 650).setOrigin(0.5, 1).setTexture('tex_non_striker');
-      this.setPlayerScale(this.nonStriker, 'non_striker', 650);
+      this.nonStriker.setPosition(CENTER_X + 65, 640).setOrigin(0.5, 1).setTexture('tex_non_striker_rear');
+      this.setPlayerScale(this.nonStriker, 'non_striker', 640);
 
       this.batsman.setTexture('tex_batsman_stance');
     }
@@ -2592,19 +2794,35 @@ export class CricketScene extends Phaser.Scene {
       this.ball.x += this.ballVelocity.x * dt;
       this.ballDepth += this.ballVelocity.y * dt;
 
-      // Vertical physics (bounce)
+      // Dynamic Perspective Scale based on depth (prevents ball size varying erratically)
+      const depthFrac = Phaser.Math.Clamp((this.ballDepth - 200) / (640 - 200), 0, 1);
+      const currentBallScale = Phaser.Math.Linear(0.12, 0.28, depthFrac);
+      this.ball.setScale(currentBallScale);
+      this.ballShadow.setScale(currentBallScale);
+
+      // Keep ball strictly inside pitch corridor bounds
+      const pitchHalfW = Phaser.Math.Linear(40, 250, depthFrac);
+      this.ball.x = Phaser.Math.Clamp(this.ball.x, CENTER_X - pitchHalfW + 10, CENTER_X + pitchHalfW - 10);
+
+      // Vertical physics (Single Pitch / Bounce)
       this.ballVelocityZ -= this.gravity * dt;
       this.ballHeight += this.ballVelocityZ * dt;
 
       if (this.ballHeight < 0) {
         this.ballHeight = 0;
-        this.ballVelocityZ = Math.abs(this.ballVelocityZ) * 0.6;
-        if (this.deliveryType === 'spin' && !this.spinTurned) {
+        if (!this.spinTurned) {
           this.spinTurned = true;
-          this.ballVelocity.x += this.spinDirection * 120;
+          // One single pitch bounce: dust puff + spin turn
+          this.dustEmitter.emitParticleAt(this.ball.x, this.ballDepth, 5);
+          if (this.deliveryType === 'spin') {
+            this.ballVelocity.x += this.spinDirection * 120;
+          }
+          // Upward velocity after the single pitch bounce
+          this.ballVelocityZ = Math.min(220, Math.abs(this.ballVelocityZ) * 0.5);
+        } else {
+          // Prevent multiple bounces on pitch
+          this.ballVelocityZ = 0;
         }
-        // Bounce dust + flash
-        this.dustEmitter.emitParticleAt(this.ball.x, this.ballDepth, 5);
       }
 
       this.ballShadow.setPosition(this.ball.x, this.ballDepth);

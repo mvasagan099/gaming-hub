@@ -48,46 +48,8 @@ const EVENT_CONFIG: Record<string, { label: string; icon: string; bg: string; te
   wicket: { label: 'WICKET!',       icon: '⚡', bg: 'from-rose-700 to-pink-600',    text: 'text-white', glow: 'shadow-rose-500/60'    },
 };
 
-export const CricketEventBanner: React.FC<EventBannerProps> = ({ event }) => {
-  const [visible, setVisible] = useState(false);
-  const [currentEvent, setCurrentEvent] = useState<{ type: string; runs?: number } | null>(null);
-
-  useEffect(() => {
-    if (!event) return;
-    setCurrentEvent(event);
-    setVisible(true);
-
-    const t = setTimeout(() => setVisible(false), 2200);
-    return () => clearTimeout(t);
-  }, [event]);
-
-  if (!visible || !currentEvent) return null;
-
-  const cfg = EVENT_CONFIG[currentEvent.type];
-  if (!cfg) return null;
-
-  return (
-    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-[24%] sm:top-[22%] z-40 max-w-[92vw]">
-      <div className={`
-        flex flex-col items-center gap-1
-        animate-in slide-in-from-top-4 fade-in zoom-in-90 duration-300
-        px-5 py-2 sm:px-7 sm:py-2.5 rounded-2xl border border-white/25
-        bg-gradient-to-r ${cfg.bg}
-        shadow-[0_8px_32px_rgba(0,0,0,0.6)] ${cfg.glow}
-        select-none
-      `}>
-        <div className="flex items-center gap-2 sm:gap-2.5">
-          <span className="text-xl sm:text-2xl leading-none">{cfg.icon}</span>
-          <span className={`text-lg sm:text-2xl font-black tracking-widest uppercase ${cfg.text} drop-shadow-lg`}>
-            {cfg.label}
-          </span>
-          {currentEvent.runs && currentEvent.type !== 'wicket' && (
-            <span className="text-lg sm:text-2xl font-black text-white/90">{currentEvent.runs}</span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+export const CricketEventBanner: React.FC<EventBannerProps> = () => {
+  return null;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -108,7 +70,7 @@ interface BroadcastScorebarProps {
 export const BroadcastScorebar: React.FC<BroadcastScorebarProps> = ({
   score, wickets, overs, target, runRate, reqRunRate, teamName = 'BATTING', inning = 1,
 }) => (
-  <div className="pointer-events-none absolute bottom-4 left-4 z-30 select-none hidden sm:block">
+  <div className="pointer-events-none select-none hidden sm:block">
     <div className="
       flex flex-col min-w-[200px]
       bg-slate-950/92 backdrop-blur-md
@@ -185,23 +147,23 @@ export const OverTracker: React.FC<OverTrackerProps> = ({ overHistory }) => {
   while (balls.length < 6) balls.push('');
 
   return (
-    <div className="pointer-events-none absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 z-30 select-none max-w-[94vw]">
+    <div className="pointer-events-none select-none">
       <div className="
-        flex flex-col items-center gap-1 sm:gap-1.5
-        bg-slate-950/88 backdrop-blur-sm
+        flex flex-col items-start gap-0.5 sm:gap-1.5
+        bg-slate-950/92 backdrop-blur-md
         border border-slate-700/60 rounded-xl
-        px-3 sm:px-4 py-1.5 sm:py-2.5 shadow-[0_4px_20px_rgba(0,0,0,0.7)]
+        px-2 sm:px-4 py-1 sm:py-2 shadow-[0_4px_20px_rgba(0,0,0,0.7)]
       ">
-        <span className="text-[7px] sm:text-[8px] font-bold text-slate-500 uppercase tracking-[0.15em]">
+        <span className="text-[7px] sm:text-[8px] font-bold text-slate-400 uppercase tracking-[0.15em]">
           This Over
         </span>
-        <div className="flex items-center gap-1 sm:gap-1.5">
+        <div className="flex items-center gap-0.5 sm:gap-1.5">
           {balls.map((ball, i) => (
             <div
               key={i}
               className={`
-                w-6 h-6 sm:w-7 sm:h-7 rounded-full border flex items-center justify-center
-                text-[9px] sm:text-[10px] font-bold transition-all
+                w-5 h-5 sm:w-7 sm:h-7 rounded-full border flex items-center justify-center
+                text-[8px] sm:text-[10px] font-bold transition-all
                 ${ball ? BALL_STYLES[ball] ?? 'bg-slate-700 text-slate-300 border-slate-600'
                        : 'bg-slate-900 border-slate-800'}
               `}
@@ -299,9 +261,12 @@ export const CricketOverlays: React.FC<CricketOverlaysProps> = ({
         <GraphicsQualityBar quality={currentQuality} onQualityChange={handleQualityChange} />
       )}
 
-      {/* ── Broadcast HUD (always visible during play) ─────────────────────── */}
+      {/* ── Broadcast HUD & Over Tracker (bottom-left) ─────────────────────── */}
       {showBroadcastHUD && !isGameOver && !isInningsBreak && (
-        <>
+        <div className="pointer-events-none absolute bottom-2 sm:bottom-4 left-2 sm:left-4 z-30 select-none flex flex-col items-start gap-1.5 sm:gap-2 max-w-[94vw]">
+          {overHistory && overHistory.length > 0 && (
+            <OverTracker overHistory={overHistory} />
+          )}
           <BroadcastScorebar
             score={liveScore ?? 0}
             wickets={liveWickets ?? 0}
@@ -312,10 +277,7 @@ export const CricketOverlays: React.FC<CricketOverlaysProps> = ({
             teamName={teamName}
             inning={inning}
           />
-          {overHistory && overHistory.length > 0 && (
-            <OverTracker overHistory={overHistory} />
-          )}
-        </>
+        </div>
       )}
 
       {/* ── Event Banner ───────────────────────────────────────────────────── */}
