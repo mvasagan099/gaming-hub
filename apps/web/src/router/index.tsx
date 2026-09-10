@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import { lazy, Suspense, type ReactNode } from "react";
 import MainLayout from "../layouts/MainLayout";
 import { AdminLayout } from "../layouts/AdminLayout";
@@ -19,7 +19,6 @@ const LeaderboardPage = lazy(() => import("../components/LeaderboardView").then(
 const SettingsPage = lazy(() => import("../pages/Settings/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const WalletPage = lazy(() => import("../pages/Wallet/WalletPage").then((m) => ({ default: m.WalletPage })));
 const ReferralsPage = lazy(() => import("../pages/Referrals/ReferralsPage").then((m) => ({ default: m.ReferralsPage })));
-const CouponsPage = lazy(() => import("../pages/Coupons/CouponsPage").then((m) => ({ default: m.CouponsPage })));
 const AnnouncementsPage = lazy(() => import("../pages/Announcements/AnnouncementsPage").then((m) => ({ default: m.AnnouncementsPage })));
 const TicketsPage = lazy(() => import("../pages/Tickets/TicketsPage").then((m) => ({ default: m.TicketsPage })));
 const MessagesPage = lazy(() => import("../pages/Messages/MessagesPage").then((m) => ({ default: m.MessagesPage })));
@@ -111,7 +110,7 @@ export const router = createBrowserRouter([
           { path: "wallet", element: <SuspensePage><WalletPage /></SuspensePage> },
           { path: "settings", element: <SuspensePage><SettingsPage /></SuspensePage> },
           { path: "referrals", element: <SuspensePage><FeatureGate flag="social.referrals"><ReferralsPage /></FeatureGate></SuspensePage> },
-          { path: "coupons", element: <SuspensePage><FeatureGate flag="content.coupons"><CouponsPage /></FeatureGate></SuspensePage> },
+          { path: "coupons", element: <Navigate to="/wallet" replace /> },
           { path: "announcements", element: <SuspensePage><FeatureGate flag="content.announcements"><AnnouncementsPage /></FeatureGate></SuspensePage> },
           { path: "tickets", element: <SuspensePage><FeatureGate flag="support.tickets"><TicketsPage /></FeatureGate></SuspensePage> },
           { path: "messages", element: <SuspensePage><FeatureGate flag="social.messaging"><MessagesPage /></FeatureGate></SuspensePage> },

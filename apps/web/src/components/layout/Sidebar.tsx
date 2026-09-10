@@ -1,4 +1,4 @@
-import { Home, Trophy, User, Settings, Wallet, Gift, Ticket, Megaphone, MessageCircle, Swords, LifeBuoy, Bell, Users, Medal, X, Gamepad2, Sun, Moon } from "lucide-react";
+import { Home, Trophy, User, Settings, Wallet, Gift, Megaphone, MessageCircle, Swords, LifeBuoy, Bell, Users, Medal, X, Gamepad2, Sun, Moon } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useFeatureFlagsStore } from "../../store/featureFlagsStore";
 import { useTheme } from "../../contexts/ThemeProvider";
@@ -15,7 +15,6 @@ const menus = [
   { name: "Notifications", icon: Bell, path: "/notifications", flag: null },
   { name: "Announcements", icon: Megaphone, path: "/announcements", flag: "content.announcements" },
   { name: "Referrals", icon: Gift, path: "/referrals", flag: "social.referrals" },
-  { name: "Coupons", icon: Ticket, path: "/coupons", flag: "content.coupons" },
   { name: "Support", icon: LifeBuoy, path: "/tickets", flag: "support.tickets" },
   { name: "Settings", icon: Settings, path: "/settings", flag: null },
 ];

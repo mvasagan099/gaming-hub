@@ -545,16 +545,6 @@ export function WalletPage() {
                   {redeeming ? "Redeeming..." : "Redeem Code"}
                 </button>
               </div>
-
-              <div className="pt-2">
-                <Link
-                  to="/coupons"
-                  onClick={() => setDepositOpen(false)}
-                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  Need a coupon? Buy one here →
-                </Link>
-              </div>
             </div>
           </div>
         </div>

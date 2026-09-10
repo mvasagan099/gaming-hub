@@ -121,7 +121,7 @@ function getActionRoute(n: AppNotification): string | null {
     case "REFERRAL":
       return "/referrals";
     case "COUPON":
-      return "/coupons";
+      return "/wallet";
     case "WALLET":
       return "/wallet";
     case "MESSAGE":

@@ -19,7 +19,6 @@ import {
   Wallet,
   Trophy,
   Gift,
-  Ticket,
   LifeBuoy,
   MessageCircle,
   Users,
@@ -842,7 +841,6 @@ export const ProfilePage: React.FC = () => {
               <MenuLink to="/notifications" icon={<Bell className="w-4 h-4" />} label="Notifications" />
               <MenuLink to="/announcements" icon={<Megaphone className="w-4 h-4" />} label="Announcements" />
               <MenuLink to="/referrals" icon={<Gift className="w-4 h-4" />} label="Referrals" />
-              <MenuLink to="/coupons" icon={<Ticket className="w-4 h-4" />} label="Coupons" />
               <MenuLink to="/tickets" icon={<LifeBuoy className="w-4 h-4" />} label="Support" />
             </div>
           </div>

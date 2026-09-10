@@ -20,7 +20,6 @@ import {
   MessageCircle,
   Megaphone,
   Gift,
-  Ticket as TicketIcon,
   LifeBuoy,
   Users,
   Bell,
@@ -161,14 +160,6 @@ export default function CommandPalette() {
         group: 'Navigate',
         icon: <Gift className={ICON_CLS} />,
         onSelect: () => (session ? go('/referrals') : go('/login')),
-      },
-      {
-        id: 'nav-coupons',
-        label: 'Coupons',
-        keywords: 'coupons promo codes redeem',
-        group: 'Navigate',
-        icon: <TicketIcon className={ICON_CLS} />,
-        onSelect: () => (session ? go('/coupons') : go('/login')),
       },
       {
         id: 'nav-support',
