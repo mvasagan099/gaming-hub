@@ -204,17 +204,47 @@ export class EconomyManager extends EventEmitter {
     source: string
   ): Promise<{ newBalance: number }> {
     const actualAmount = Math.floor(amount * this.coinMultiplier);
-    
-    const profile = await prisma.profile.update({
-      where: { userId },
-      data: {
-        coins: { increment: actualAmount },
-      },
+    if (actualAmount <= 0) {
+      const wallet = await prisma.wallet.findUnique({ where: { userId } });
+      return { newBalance: wallet?.balance ?? 0 };
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.wallet.upsert({
+        where: { userId },
+        create: { userId, balance: 2500 + actualAmount },
+        update: { balance: { increment: actualAmount } },
+      });
+
+      const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
+      const balanceAfter = wallet.balance;
+      const balanceBefore = balanceAfter - actualAmount;
+
+      await tx.profile.updateMany({
+        where: { userId },
+        data: { coins: balanceAfter },
+      });
+
+      await tx.transaction.create({
+        data: {
+          userId,
+          type: "CREDIT",
+          amount: actualAmount,
+          balanceBefore,
+          balanceAfter,
+          walletType: "MAIN",
+          referenceType: "REWARD_CREDIT",
+          referenceId: null,
+          meta: { source, reason: "economy_award", description: `Awarded ${actualAmount} coins from ${source}` },
+        },
+      });
+
+      return wallet;
     });
 
     await this.logEconomyAction(userId, "coins_gain", actualAmount, source);
 
-    return { newBalance: profile.coins };
+    return { newBalance: updated.balance };
   }
 
   /**
@@ -225,24 +255,56 @@ export class EconomyManager extends EventEmitter {
     amount: number,
     reason: string
   ): Promise<{ success: boolean; newBalance: number }> {
-    const profile = await prisma.profile.findUnique({
-      where: { userId },
-    });
-
-    if (!profile || profile.coins < amount) {
-      return { success: false, newBalance: profile?.coins ?? 0 };
+    if (amount <= 0) {
+      const wallet = await prisma.wallet.findUnique({ where: { userId } });
+      return { success: true, newBalance: wallet?.balance ?? 0 };
     }
 
-    const updated = await prisma.profile.update({
-      where: { userId },
-      data: {
-        coins: { decrement: amount },
-      },
-    });
+    try {
+      const updated = await prisma.$transaction(async (tx) => {
+        const result = await tx.wallet.updateMany({
+          where: { userId, balance: { gte: amount } },
+          data: { balance: { decrement: amount } },
+        });
 
-    await this.logEconomyAction(userId, "coins_spend", -amount, reason);
+        if (result.count === 0) {
+          const exists = await tx.wallet.findUnique({ where: { userId } });
+          throw new Error(exists ? "INSUFFICIENT_BALANCE" : "WALLET_NOT_FOUND");
+        }
 
-    return { success: true, newBalance: updated.coins };
+        const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
+        const balanceAfter = wallet.balance;
+        const balanceBefore = balanceAfter + amount;
+
+        await tx.profile.updateMany({
+          where: { userId },
+          data: { coins: balanceAfter },
+        });
+
+        await tx.transaction.create({
+          data: {
+            userId,
+            type: "DEBIT",
+            amount,
+            balanceBefore,
+            balanceAfter,
+            walletType: "MAIN",
+            referenceType: "WITHDRAWAL",
+            referenceId: null,
+            meta: { reason, subType: "ECONOMY_SPEND", description: `Spent ${amount} coins: ${reason}` },
+          },
+        });
+
+        return wallet;
+      });
+
+      await this.logEconomyAction(userId, "coins_spend", -amount, reason);
+
+      return { success: true, newBalance: updated.balance };
+    } catch {
+      const wallet = await prisma.wallet.findUnique({ where: { userId } });
+      return { success: false, newBalance: wallet?.balance ?? 0 };
+    }
   }
 
   /**

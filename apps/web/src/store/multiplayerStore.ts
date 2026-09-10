@@ -18,6 +18,8 @@ import {
 } from "@gaming-hub/shared";
 import { createTypedSocket, type RematchUpdate, type TypedSocket } from "@gaming-hub/socket";
 import { useAuthStore } from "./authStore";
+import { useWalletStore } from "./walletStore";
+import { notifyWalletChanged } from "../services/api/practiceReward";
 import { isNativePlatform } from "../services/native/platform";
 
 function getSocketUrl(): string {
@@ -230,6 +232,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
       socket.on("connect", () => {
         set({ status: "connected", error: null, matchmaking: { ...IDLE_MATCHMAKING } });
+        // Refresh authoritative wallet balance upon connect / reconnect to catch any settlements during outage
+        void useWalletStore.getState().fetchWallet();
         // A transient disconnect while queued should resume the queue.
         const requeue = get().pendingRequeue;
         if (requeue) {
@@ -464,6 +468,21 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           matchTimeExpired: true,
           matchTimerWarning: null,
         });
+      });
+
+      // ── Live Authoritative Wallet & Settlement Sync ──
+      socket.on("wallet:updated" as any, (payload: any) => {
+        console.log("[MultiplayerStore] wallet:updated received:", payload);
+        if (payload && typeof payload.balance === "number") {
+          useWalletStore.getState().setAuthoritativeBalance(payload);
+          notifyWalletChanged();
+        }
+      });
+
+      socket.on("game:settlement-completed" as any, (payload: any) => {
+        console.log("[MultiplayerStore] game:settlement-completed received:", payload);
+        void useWalletStore.getState().fetchWallet();
+        notifyWalletChanged();
       });
 
       // ── Centralized Real-Time Event System ──

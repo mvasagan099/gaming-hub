@@ -253,6 +253,9 @@ export class UniversalMatchFinalizer {
             matchId,
             resultType,
             coinsWon: winnerPayout,
+            isDraw,
+            refundPerPlayer: isDraw ? room.stake : 0,
+            payouts: settlement?.result?.payouts ?? [],
           });
 
           GameEventBus.broadcastEvent(

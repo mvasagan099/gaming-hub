@@ -17,6 +17,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "../../contexts/ThemeProvider";
 import { useAuthStore } from "../../store/authStore";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useWalletStore } from "../../store/walletStore";
 import { useMe } from "../../services/api/useMe";
 import { Skeleton } from "../Skeleton";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
@@ -33,6 +34,8 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
   const signOut = useAuthStore((s) => s.signOut);
   const settings = useSettingsStore((s) => s.settings);
   const { me, loading } = useMe();
+  const walletBalance = useWalletStore((s) => s.balance);
+  const isWalletLoaded = useWalletStore((s) => !s.isStale || s.lastUpdated !== null);
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -40,6 +43,12 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
 
   const siteName = settings?.general?.siteName || "Gaming Hub";
   const logoUrl = settings?.general?.logoUrl || "";
+
+  useEffect(() => {
+    if (me?.wallet && !isWalletLoaded) {
+      useWalletStore.getState().setAuthoritativeBalance({ balance: me.wallet.balance });
+    }
+  }, [me?.wallet, isWalletLoaded]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
@@ -158,7 +167,11 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
               >
                 <span className="text-xs font-semibold text-amber-500">🪙</span>
                 <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                  {me.wallet ? me.wallet.balance.toLocaleString() : "…"}
+                  {isWalletLoaded
+                    ? walletBalance.toLocaleString()
+                    : me.wallet
+                      ? me.wallet.balance.toLocaleString()
+                      : "…"}
                 </span>
               </button>
 

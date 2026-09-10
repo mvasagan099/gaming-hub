@@ -183,6 +183,13 @@ export async function applyTransaction(
   const balanceAfter = wallet[field];
   const balanceBefore = balanceAfter - amount;
 
+  if (walletType === "MAIN") {
+    await tx.profile.updateMany({
+      where: { userId },
+      data: { coins: balanceAfter },
+    });
+  }
+
   const transactionMeta = {
     balanceBefore,
     balanceAfter,
@@ -195,6 +202,7 @@ export async function applyTransaction(
       userId,
       type: (isDebit ? "DEBIT" : "CREDIT") as TransactionType,
       amount: Math.abs(amount),
+      balanceBefore,
       balanceAfter,
       walletType,
       referenceType,

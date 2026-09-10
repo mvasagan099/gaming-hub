@@ -7,6 +7,7 @@ import { router } from '../../router';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../supabase';
 import { useAppVersionStore } from '../../store/appVersionStore';
+import { useWalletStore } from '../../store/walletStore';
 
 let isInitialized = false;
 
@@ -134,6 +135,8 @@ export async function initCapacitorServices(): Promise<void> {
           useAuthStore.getState().setUser(session?.user ?? null);
         }
       });
+      // Refresh authoritative wallet balance to catch any offline or background settlements
+      void useWalletStore.getState().fetchWallet();
     }
   });
 }

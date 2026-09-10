@@ -194,19 +194,29 @@ export class WalletHistoryService {
     let totalWinnings = 0;
     let totalEntryFees = 0;
     let totalRefunds = 0;
+    let totalDeposited = 0;
+    let totalWithdrawn = 0;
+    let totalSpent = 0;
+    let totalWon = 0;
 
     for (const t of transactions) {
       if (t.type === "CREDIT") {
         totalCredits += t.amount;
         if (t.referenceType === "MATCH_PAYOUT" || t.referenceType === "TOURNAMENT_PRIZE") {
           totalWinnings += t.amount;
+          totalWon += t.amount;
         } else if (t.referenceType === "WAGER_REFUND") {
           totalRefunds += t.amount;
+        } else if (t.referenceType === "DEPOSIT" || t.referenceType === "COUPON" || t.referenceType === "BONUS") {
+          totalDeposited += t.amount;
         }
       } else if (t.type === "DEBIT") {
         totalDebits += t.amount;
         if (t.referenceType === "MATCH_WAGER" || t.referenceType === "TOURNAMENT_ENTRY") {
           totalEntryFees += t.amount;
+          totalSpent += t.amount;
+        } else if (t.referenceType === "WITHDRAWAL") {
+          totalWithdrawn += t.amount;
         }
       }
     }
@@ -222,6 +232,10 @@ export class WalletHistoryService {
       totalWinnings,
       totalEntryFees,
       totalRefunds,
+      totalDeposited,
+      totalWithdrawn,
+      totalSpent,
+      totalWon,
       transactionCount: transactions.length,
     };
   }

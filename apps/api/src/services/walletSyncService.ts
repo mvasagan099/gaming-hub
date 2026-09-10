@@ -1,5 +1,6 @@
 import { prisma } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
+import { notifyUserSocket } from "./socketBridge";
 
 export interface WalletSyncPayload {
   userId: string;
@@ -57,7 +58,10 @@ export class WalletSyncService {
       updatedAt: new Date().toISOString(),
     };
 
-    // Notify registered in-process listeners / socket bridges
+    // Forward to user's live socket connections via the socket bridge
+    void notifyUserSocket(fullPayload.userId, "wallet:updated", fullPayload as unknown as Record<string, unknown>);
+
+    // Notify registered in-process listeners / test observers
     for (const listener of this.listeners) {
       try {
         listener(fullPayload);

@@ -35,6 +35,7 @@ import { supabase } from "../../services/supabase";
 import { useAuthStore } from "../../store/authStore";
 import { useMultiplayerStore } from "../../store/multiplayerStore";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useWalletStore } from "../../store/walletStore";
 import { useMe } from "../../services/api/useMe";
 import { usePublicProfile } from "../../services/api/usePublicProfile";
 import { RoomChat } from "./RoomChat";
@@ -421,7 +422,9 @@ export const LobbyPage: React.FC = () => {
   const allReady = participants.length >= (def.minPlayers ?? 2) && participants.every((p) => p.isReady);
   const canStart = isHost && room?.status === "waiting" && allReady;
   const stakeTiers = [def.defaultStake, def.defaultStake * 2, def.defaultStake * 5, def.defaultStake * 10];
-  const balance = me?.wallet?.balance;
+  const walletStoreBalance = useWalletStore((s) => s.balance);
+  const isWalletLoaded = useWalletStore((s) => !s.isStale || s.lastUpdated !== null);
+  const balance = isWalletLoaded ? walletStoreBalance : (me?.wallet?.balance ?? null);
 
   const statusChip = (() => {
     switch (socketStatus) {

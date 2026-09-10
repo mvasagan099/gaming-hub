@@ -126,20 +126,36 @@ export class MonetizationManager extends EventEmitter {
       }
     }
 
-    // Check currency
-    if (item.currency === "coins" && profile.coins < finalPrice) {
-      return { success: false, error: "Insufficient coins" };
-    }
-
     if (item.currency === "gems" && profile.gems < finalPrice) {
       return { success: false, error: "Insufficient gems" };
     }
 
     // Deduct currency
     if (item.currency === "coins") {
-      await prisma.profile.update({
+      const result = await prisma.wallet.updateMany({
+        where: { userId, balance: { gte: finalPrice } },
+        data: { balance: { decrement: finalPrice } },
+      });
+      if (result.count === 0) {
+        return { success: false, error: "Insufficient coins" };
+      }
+      const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId } });
+      await prisma.profile.updateMany({
         where: { userId },
-        data: { coins: { decrement: finalPrice } },
+        data: { coins: wallet.balance },
+      });
+      await prisma.transaction.create({
+        data: {
+          userId,
+          type: "DEBIT",
+          amount: finalPrice,
+          balanceBefore: wallet.balance + finalPrice,
+          balanceAfter: wallet.balance,
+          walletType: "MAIN",
+          referenceType: "WITHDRAWAL",
+          referenceId: item.id,
+          meta: { itemId: item.id, itemName: item.name, currency: "coins", subType: "ITEM_PURCHASE" },
+        },
       });
     } else if (item.currency === "gems") {
       await prisma.profile.update({
@@ -337,10 +353,31 @@ export class MonetizationManager extends EventEmitter {
     // Apply instant rewards
     for (const reward of plan.rewards) {
       if (reward.type === "coins") {
-        await prisma.profile.update({
-          where: { userId },
-          data: { coins: { increment: reward.amount ?? 0 } },
-        });
+        const amt = reward.amount ?? 0;
+        if (amt > 0) {
+          await prisma.wallet.updateMany({
+            where: { userId },
+            data: { balance: { increment: amt } },
+          });
+          const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId } });
+          await prisma.profile.updateMany({
+            where: { userId },
+            data: { coins: wallet.balance },
+          });
+          await prisma.transaction.create({
+            data: {
+              userId,
+              type: "CREDIT",
+              amount: amt,
+              balanceBefore: wallet.balance - amt,
+              balanceAfter: wallet.balance,
+              walletType: "MAIN",
+              referenceType: "BONUS",
+              referenceId: plan.id,
+              meta: { subscriptionId: plan.id, planName: plan.name },
+            },
+          });
+        }
       } else if (reward.type === "gems") {
         await prisma.profile.update({
           where: { userId },

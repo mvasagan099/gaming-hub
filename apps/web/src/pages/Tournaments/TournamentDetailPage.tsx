@@ -41,6 +41,8 @@ import {
 } from '@gaming-hub/shared';
 import { tournamentsApi } from '../../services/api/enterprise';
 import { usePlayerTournamentStore } from '../../store/playerTournamentStore';
+import { useWalletStore } from '../../store/walletStore';
+import { notifyWalletChanged } from '../../services/api/practiceReward';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -226,6 +228,8 @@ export function TournamentDetailPage() {
       const res = await tournamentsApi.register(id);
       await store.fetchAll(id);
       setShowJoinModal(false);
+      void useWalletStore.getState().fetchWallet();
+      notifyWalletChanged();
 
       const gameName = gameById.get((detail?.gameId ?? '') as any)?.name ?? detail?.gameId ?? 'Match';
       setRegistrationSuccessData({

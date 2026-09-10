@@ -917,7 +917,7 @@ export class CricketPlayerRenderer {
     p: {
       shadowX?: number; shadowY?: number; shadowRx?: number;
       headX: number; headY: number; headTilt?: number;
-      shoulderX: number; shoulderY: number; torsoLean?: number;
+      shoulderX: number; shoulderY: number; torsoLean?: number; torsoW?: number; torsoH?: number;
       waistX?: number; waistY?: number;
       lHipX: number; lHipY: number; lKneeX: number; lKneeY: number; lAnkleX: number; lAnkleY: number; lShoeX: number; lShoeY: number;
       rHipX: number; rHipY: number; rKneeX: number; rKneeY: number; rAnkleX: number; rAnkleY: number; rShoeX: number; rShoeY: number;

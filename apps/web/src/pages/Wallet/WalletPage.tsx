@@ -25,6 +25,7 @@ import type {
 import { apiClient, ApiError } from "../../services/api/client";
 import { walletApi, couponsApi, type WalletSummary } from "../../services/api/enterprise";
 import { notifyWalletChanged } from "../../services/api/practiceReward";
+import { useWalletStore } from "../../store/walletStore";
 import { Skeleton } from "../../components/Skeleton";
 import { EmptyState } from "../../components/EmptyState";
 import { Button } from "../../components/ui/Button";
@@ -112,6 +113,7 @@ export function WalletPage() {
       toast.success(`🎉 Code REDEEMED! +🪙 ${res.value.toLocaleString()} Coins added to your wallet!`);
       setCouponCode("");
       setDepositOpen(false);
+      void useWalletStore.getState().fetchWallet();
       notifyWalletChanged();
       void loadData();
     } catch (err) {
@@ -139,12 +141,26 @@ export function WalletPage() {
       setTransferAmount("");
       setVerificationCode("");
       setWithdrawOpen(false);
+      void useWalletStore.getState().fetchWallet();
       notifyWalletChanged();
       void loadData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to complete transfer");
     } finally {
       setTransferring(false);
+    }
+  };
+
+  const handleRequestOtp = async () => {
+    try {
+      const res = await walletApi.requestOtp();
+      if (res.debugCode) {
+        toast.success(`Verification code sent! (Dev code: ${res.debugCode})`);
+      } else {
+        toast.success("Verification OTP code sent to your email!");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send verification code");
     }
   };
 
@@ -170,10 +186,10 @@ export function WalletPage() {
   };
 
   const currentBalance = wallet?.balance ?? 0;
-  const totalDeposited = summary?.totalDeposited ?? 157047.00;
-  const totalWithdrawn = summary?.totalWithdrawn ?? 53037.85;
-  const totalSpent = summary?.totalSpent ?? 59.15;
-  const totalWon = summary?.totalWon ?? 10000.00;
+  const totalDeposited = summary?.totalDeposited ?? 0;
+  const totalWithdrawn = summary?.totalWithdrawn ?? 0;
+  const totalSpent = summary?.totalSpent ?? 0;
+  const totalWon = summary?.totalWon ?? 0;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 py-8 space-y-8">
@@ -633,7 +649,7 @@ export function WalletPage() {
                     Verification Code (2FA or Email)
                   </label>
                   <button
-                    onClick={() => toast.success("Verification OTP code sent to your email!")}
+                    onClick={handleRequestOtp}
                     className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
                   >
                     Send Code via Email

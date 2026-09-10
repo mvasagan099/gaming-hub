@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { apiClient } from "../services/api/client";
+import { notifyWalletChanged } from "../services/api/practiceReward";
 
 export interface WalletState {
   balance: number;
@@ -48,6 +49,7 @@ export const useWalletStore = create<WalletState>((set, get) => {
           lastUpdated: new Date().toISOString(),
           isStale: false,
         });
+        notifyWalletChanged();
       }
     };
   }
@@ -94,6 +96,7 @@ export const useWalletStore = create<WalletState>((set, get) => {
             lockedBalance: wallet.lockedBalance,
           });
         }
+        notifyWalletChanged();
       } catch (err: any) {
         set({
           isLoading: false,
@@ -120,6 +123,7 @@ export const useWalletStore = create<WalletState>((set, get) => {
           ...payload,
         });
       }
+      notifyWalletChanged();
     },
 
     resetWallet: () => {

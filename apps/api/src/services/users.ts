@@ -191,6 +191,14 @@ export async function getAuthenticatedUserData(user: User) {
     prisma.appNotification.count({ where: { userId: user.id, readAt: null } }),
   ]);
 
+  if (wallet && profile && profile.coins !== wallet.balance) {
+    profile.coins = wallet.balance;
+    void prisma.profile.update({
+      where: { userId: user.id },
+      data: { coins: wallet.balance },
+    }).catch(() => undefined);
+  }
+
   return {
     user: {
       id: user.id,

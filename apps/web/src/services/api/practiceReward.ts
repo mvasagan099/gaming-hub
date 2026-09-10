@@ -11,7 +11,9 @@ export interface PracticeRewardResult {
 }
 
 export function notifyWalletChanged(): void {
-  window.dispatchEvent(new CustomEvent(WALLET_CHANGED_EVENT));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(WALLET_CHANGED_EVENT));
+  }
 }
 
 const rewardCooldowns = new Map<string, number>();
