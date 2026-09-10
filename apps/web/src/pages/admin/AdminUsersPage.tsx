@@ -9,6 +9,7 @@ import {
   Eye,
   XCircle,
   Loader2,
+  Coins,
 } from 'lucide-react';
 import { apiClient } from '../../services/api/client';
 import { adminApi } from '../../services/api/enterprise';
@@ -222,7 +223,10 @@ export function AdminUsersPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 font-extrabold text-slate-900 dark:text-white">
-                      🪙 {user.coins.toLocaleString()}
+                      <span className="flex items-center gap-1.5">
+                        <Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        {user.coins.toLocaleString()}
+                      </span>
                     </td>
                     <td className="px-6 py-4 font-bold text-slate-700 dark:text-slate-300">
                       Lvl {user.level}
@@ -286,7 +290,7 @@ export function AdminUsersPage() {
           <div className="w-full max-w-md rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4">
             <h2 className="text-lg font-black text-slate-900 dark:text-white">Adjust Wallet Balance</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              User: <span className="font-bold text-slate-900 dark:text-white">{selectedUser.displayName}</span> (Current: 🪙 {selectedUser.coins.toLocaleString()})
+              User: <span className="font-bold text-slate-900 dark:text-white">{selectedUser.displayName}</span> (Current: <Coins className="w-3.5 h-3.5 text-amber-400 inline-block align-middle mr-1" />{selectedUser.coins.toLocaleString()})
             </p>
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Amount (Positive to Add, Negative to Deduct)</label>
@@ -430,11 +434,11 @@ export function AdminUsersPage() {
                   <Section title="Wallet Balances">
                     <StatGrid
                       items={[
-                        { label: 'Main', value: `🪙 ${detail.wallet.balance.toLocaleString()}` },
-                        { label: 'Bonus', value: `🪙 ${detail.wallet.bonusBalance.toLocaleString()}` },
-                        { label: 'Locked', value: `🪙 ${detail.wallet.lockedBalance.toLocaleString()}` },
-                        { label: 'Reward', value: `🪙 ${detail.wallet.rewardBalance.toLocaleString()}` },
-                        { label: 'Cashback', value: `🪙 ${detail.wallet.cashbackBalance.toLocaleString()}` },
+                        { label: 'Main', value: <span className="flex items-center gap-1.5"><Coins className="w-3.5 h-3.5 text-amber-400" /> {detail.wallet.balance.toLocaleString()}</span> },
+                        { label: 'Bonus', value: <span className="flex items-center gap-1.5"><Coins className="w-3.5 h-3.5 text-amber-400" /> {detail.wallet.bonusBalance.toLocaleString()}</span> },
+                        { label: 'Locked', value: <span className="flex items-center gap-1.5"><Coins className="w-3.5 h-3.5 text-amber-400" /> {detail.wallet.lockedBalance.toLocaleString()}</span> },
+                        { label: 'Reward', value: <span className="flex items-center gap-1.5"><Coins className="w-3.5 h-3.5 text-amber-400" /> {detail.wallet.rewardBalance.toLocaleString()}</span> },
+                        { label: 'Cashback', value: <span className="flex items-center gap-1.5"><Coins className="w-3.5 h-3.5 text-amber-400" /> {detail.wallet.cashbackBalance.toLocaleString()}</span> },
                       ]}
                     />
                   </Section>
@@ -493,13 +497,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function StatGrid({ items }: { items: Array<{ label: string; value: string }> }) {
+function StatGrid({ items }: { items: Array<{ label: string; value: React.ReactNode }> }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {items.map((item) => (
         <div key={item.label} className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
           <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">{item.label}</p>
-          <p className="mt-1 text-sm font-black text-slate-900 dark:text-white">{item.value}</p>
+          <div className="mt-1 text-sm font-black text-slate-900 dark:text-white">{item.value}</div>
         </div>
       ))}
     </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Copy, Gift, Trophy, Users } from 'lucide-react';
+import { Copy, Gift, Trophy, Users, Coins } from 'lucide-react';
 import { referralsApi } from '../../services/api/enterprise';
 import type { Referral, ReferralLeaderboardEntry, ReferralSummary } from '@gaming-hub/shared';
 import { Skeleton } from '../../components/Skeleton';
@@ -113,7 +113,10 @@ export const ReferralsPage: React.FC = () => {
                   <p className="text-[10px] uppercase tracking-wider text-emerald-100">Pending</p>
                 </div>
                 <div className="rounded-2xl bg-white/10 p-3">
-                  <p className="text-2xl font-black">🪙 {summary.totalCommission.toLocaleString()}</p>
+                  <p className="text-2xl font-black flex items-center gap-1.5">
+                    <Coins className="w-5 h-5 text-amber-300" />
+                    {summary.totalCommission.toLocaleString()}
+                  </p>
                   <p className="text-[10px] uppercase tracking-wider text-emerald-100">Earned</p>
                 </div>
               </div>
@@ -165,7 +168,9 @@ export const ReferralsPage: React.FC = () => {
                       <span className={`rounded-full px-2 py-1 text-xs ${r.status === 'REWARDED' ? 'bg-emerald-500/10 text-emerald-600' : r.status === 'COMPLETED' ? 'bg-blue-500/10 text-blue-600' : 'bg-slate-500/10 text-slate-600'}`}>
                         {r.status}
                       </span>
-                      <span className="text-xs font-bold text-emerald-500">🪙 {r.commission}</span>
+                      <span className="text-xs font-bold text-emerald-500 flex items-center gap-1">
+                        <Coins className="w-3.5 h-3.5 text-amber-400 inline-block" /> {r.commission}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -194,7 +199,9 @@ export const ReferralsPage: React.FC = () => {
                       <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
                         {entry.referralCount} invites
                       </span>
-                      <span className="text-xs font-bold text-emerald-500">🪙 {entry.commission}</span>
+                      <span className="text-xs font-bold text-emerald-500 flex items-center gap-1">
+                        <Coins className="w-3.5 h-3.5 text-amber-400 inline-block" /> {entry.commission}
+                      </span>
                     </li>
                   ))}
                 </ul>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Swords, X, ShieldAlert, Clock, Trophy, Loader2 } from 'lucide-react';
+import { Swords, X, ShieldAlert, Clock, Trophy, Loader2, Coins } from 'lucide-react';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { getGameDefinition, type GameId } from '@gaming-hub/shared';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -125,8 +125,8 @@ export const MatchmakingSearchModal: React.FC = () => {
 
         {/* Info Badges */}
         <div className="relative z-10 mt-3 flex flex-wrap items-center justify-center gap-2 text-xs">
-          <span className="rounded-full bg-amber-50 dark:bg-slate-800/80 border border-amber-200 dark:border-slate-700 px-3 py-1 font-bold text-amber-700 dark:text-amber-400">
-            🪙 {matchmaking.stake ?? 0} Coins Entry
+          <span className="rounded-full bg-amber-50 dark:bg-slate-800/80 border border-amber-200 dark:border-slate-700 px-3 py-1 font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+            <Coins className="w-3.5 h-3.5 text-amber-400" /> {matchmaking.stake ?? 0} Coins Entry
           </span>
           {matchmaking.position > 0 && (
             <span className="rounded-full bg-indigo-50 dark:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/30 px-3 py-1 font-bold text-indigo-700 dark:text-indigo-300">

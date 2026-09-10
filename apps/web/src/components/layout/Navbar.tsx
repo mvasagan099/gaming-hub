@@ -12,6 +12,7 @@ import {
   User,
   ChevronDown,
   Lock,
+  Coins,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "../../contexts/ThemeProvider";
@@ -165,7 +166,7 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
                 className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 hover:border-amber-500/50 transition-colors"
                 title="Wallet"
               >
-                <span className="text-xs font-semibold text-amber-500">🪙</span>
+                <Coins className="w-3.5 h-3.5 text-amber-500" />
                 <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
                   {isWalletLoaded
                     ? walletBalance.toLocaleString()
@@ -236,7 +237,7 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
                       <div className="mt-2.5 flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/50 text-xs">
                         <span className="text-slate-500 dark:text-slate-400 font-medium">Balance</span>
                         <span className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                          <span>🪙</span>
+                          <Coins className="w-3.5 h-3.5 text-amber-500" />
                           <span>{me.wallet ? me.wallet.balance.toLocaleString() : "0"} coins</span>
                         </span>
                       </div>

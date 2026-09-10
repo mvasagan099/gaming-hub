@@ -155,7 +155,7 @@ export class NotificationService {
     return this.createNotification({
       userId,
       type: "WALLET",
-      title: isCredit ? "🪙 Admin Credit" : "🪙 Admin Debit",
+      title: isCredit ? "Admin Credit" : "Admin Debit",
       body: isCredit
         ? `An administrator credited ${amount} coins to your wallet. Reason: ${reason}`
         : `An administrator debited ${amount} coins from your wallet. Reason: ${reason}`,

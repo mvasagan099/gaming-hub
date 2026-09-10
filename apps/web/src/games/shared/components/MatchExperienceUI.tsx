@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Crown, Swords, Zap, Trophy, TrendingUp, TrendingDown, Sparkles, X } from "lucide-react";
+import { Crown, Swords, Zap, Trophy, TrendingUp, TrendingDown, Sparkles, X, Coins } from "lucide-react";
 import confetti from "canvas-confetti";
 import type { RankTier } from "@gaming-hub/db";
 import { useMultiplayerStore } from "../../../store/multiplayerStore";
@@ -129,8 +129,8 @@ export function MatchFoundModal({
               <div className="flex items-center justify-center gap-2">
                 <Zap className="w-4 h-4 text-amber-400" />
                 <span className="text-slate-300 text-sm">Entry Stake:</span>
-                <span className="text-lg font-black text-amber-400">
-                  🪙 {stake}
+                <span className="text-lg font-black text-amber-400 flex items-center gap-1">
+                  <Coins className="w-4 h-4 text-amber-400 shrink-0" /> {stake}
                 </span>
               </div>
             </motion.div>

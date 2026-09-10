@@ -86,15 +86,15 @@ export function EntryFeeConfirmationModal({
         <div className="bg-neutral-950/70 border border-neutral-800 rounded-xl p-4 mb-5 text-left space-y-2.5">
           <div className="flex justify-between items-center text-sm">
             <span className="text-neutral-400">Entry Fee:</span>
-            <span className="font-bold text-amber-400 flex items-center gap-1">
-              🪙 {entryFee.toLocaleString()} Coins
+            <span className="font-bold text-amber-400 flex items-center gap-1.5">
+              <Coins className="w-4 h-4 text-amber-400" /> {entryFee.toLocaleString()} Coins
             </span>
           </div>
 
           <div className="flex justify-between items-center text-sm">
             <span className="text-neutral-400">Current Balance:</span>
-            <span className="font-semibold text-neutral-200">
-              🪙 {currentBalance.toLocaleString()} Coins
+            <span className="font-semibold text-neutral-200 flex items-center gap-1.5">
+              <Coins className="w-4 h-4 text-amber-400" /> {currentBalance.toLocaleString()} Coins
             </span>
           </div>
 
@@ -114,8 +114,8 @@ export function EntryFeeConfirmationModal({
 
           <div className="pt-2 border-t border-neutral-800/80 flex justify-between items-center text-sm font-semibold">
             <span className="text-neutral-300">Balance After Entry:</span>
-            <span className="text-emerald-400 font-bold">
-              🪙 {balanceAfter.toLocaleString()} Coins
+            <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+              <Coins className="w-4 h-4 text-amber-400" /> {balanceAfter.toLocaleString()} Coins
             </span>
           </div>
         </div>

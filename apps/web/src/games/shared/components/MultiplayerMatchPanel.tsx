@@ -11,6 +11,7 @@ import {
   Eye,
   Timer,
   AlertTriangle,
+  Coins,
 } from "lucide-react";
 import type { RoomPlayer, PublicProfile } from "@gaming-hub/shared";
 import { useMultiplayerStore } from "../../../store/multiplayerStore";
@@ -506,8 +507,8 @@ export function MultiplayerMatchPanel({
         <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-800 text-[9px] text-slate-500">
           <TrendingUp className="w-3 h-3 text-indigo-400" />
           Win to earn{" "}
-          <span className="text-amber-400 font-bold">
-            🪙 {Math.round(room.stake * 1.8)}
+          <span className="text-amber-400 font-bold inline-flex items-center gap-1">
+            <Coins className="w-3 h-3 text-amber-400 inline-block" /> {Math.round(room.stake * 1.8)}
           </span>{" "}
           &amp; XP
         </div>

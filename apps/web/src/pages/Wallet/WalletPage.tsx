@@ -110,7 +110,7 @@ export function WalletPage() {
     setRedeeming(true);
     try {
       const res = await couponsApi.redeem(couponCode.trim());
-      toast.success(`🎉 Code REDEEMED! +🪙 ${res.value.toLocaleString()} Coins added to your wallet!`);
+      toast.success(`🎉 Code REDEEMED! +${res.value.toLocaleString()} Coins added to your wallet!`);
       setCouponCode("");
       setDepositOpen(false);
       void useWalletStore.getState().fetchWallet();
@@ -137,7 +137,7 @@ export function WalletPage() {
     setTransferring(true);
     try {
       const res = await walletApi.transfer(amt, verificationCode.trim() || undefined);
-      toast.success(`✓ Successfully transferred 🪙 ${amt.toLocaleString()} Coins to Coupon Wallet! (Ref: ${res.transactionId})`);
+      toast.success(`✓ Successfully transferred ${amt.toLocaleString()} Coins to Coupon Wallet! (Ref: ${res.transactionId})`);
       setTransferAmount("");
       setVerificationCode("");
       setWithdrawOpen(false);
@@ -327,7 +327,7 @@ export function WalletPage() {
         ) : txs && txs.items.length === 0 ? (
           <div className="p-8">
             <EmptyState
-              icon={<Coins size={28} />}
+              icon={<Coins size={28} className="text-amber-500" />}
               title="No transactions found"
               description="Play multiplayer matches, enter tournaments, or claim practice rewards to see your transaction log."
               action={
@@ -383,12 +383,14 @@ export function WalletPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 font-black">
-                          <span className={isCredit ? "text-emerald-500" : "text-rose-500"}>
-                            {isCredit ? "+" : "-"}{t.amount.toLocaleString()} 🪙
+                          <span className={`flex items-center gap-1.5 ${isCredit ? "text-emerald-500" : "text-rose-500"}`}>
+                            {isCredit ? "+" : "-"}{t.amount.toLocaleString()} <Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                           </span>
                         </td>
                         <td className="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">
-                          <div className="text-xs">🪙 {t.balanceAfter.toLocaleString()}</div>
+                          <div className="text-xs flex items-center gap-1.5">
+                            <Coins className="w-3 h-3 text-amber-400 shrink-0" /> {t.balanceAfter.toLocaleString()}
+                          </div>
                           <div className="text-[10px] text-slate-400 font-normal">Balance after</div>
                         </td>
                         <td className="px-6 py-4">
@@ -443,8 +445,8 @@ export function WalletPage() {
                       </div>
 
                       <div className="text-right">
-                        <div className={`font-black text-sm ${isCredit ? "text-emerald-500" : "text-rose-500"}`}>
-                          {isCredit ? "+" : "-"}{t.amount.toLocaleString()} 🪙
+                        <div className={`font-black text-sm flex items-center justify-end gap-1 ${isCredit ? "text-emerald-500" : "text-rose-500"}`}>
+                          {isCredit ? "+" : "-"}{t.amount.toLocaleString()} <Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                         </div>
                         <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold uppercase border ${
                           status === "REFUNDED"
@@ -620,10 +622,10 @@ export function WalletPage() {
               {/* Amount field */}
               <div>
                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">
-                  Amount to Transfer (Min 🪙50)
+                  Amount to Transfer (Min 50 Coins)
                 </label>
                 <div className="relative flex items-center">
-                  <span className="absolute left-4 text-amber-500 font-bold text-lg">🪙</span>
+                  <Coins className="absolute left-4 text-amber-500 w-5 h-5 pointer-events-none" />
                   <input
                     type="number"
                     value={transferAmount}

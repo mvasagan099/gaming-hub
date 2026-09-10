@@ -13,6 +13,7 @@ import {
   Zap,
   Shield,
   Loader2,
+  Coins,
 } from 'lucide-react';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { useAuthStore } from '../../store/authStore';
@@ -153,7 +154,10 @@ export const UniversalMatchRoom: React.FC<UniversalMatchRoomProps> = ({
             {mode !== 'tournament' && (
               <div className="flex items-center gap-1.5 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 font-bold text-amber-300">
                 <Zap className="size-3.5 text-amber-400" />
-                <span>🪙 {room?.stake ?? def.defaultStake}</span>
+                <span className="flex items-center gap-1">
+                  <Coins className="size-3.5 text-amber-400" />
+                  {room?.stake ?? def.defaultStake}
+                </span>
               </div>
             )}
           </div>

@@ -19,6 +19,7 @@ import {
   Medal,
   Crown,
   Layers,
+  Coins,
 } from 'lucide-react';
 import { GAME_DEFINITIONS, type PlayerTournamentCareerStats } from '@gaming-hub/shared';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
@@ -159,7 +160,10 @@ export function MyTournamentsView() {
             </div>
             <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/40 p-3 text-center">
               <div className="text-xs font-bold text-amber-600 dark:text-amber-400">Total Prizes</div>
-              <div className="mt-1 text-xl font-black text-amber-600 dark:text-amber-400 font-mono">🪙 {careerStats.totalPrizesWon.toLocaleString()}</div>
+              <div className="mt-1 text-xl font-black text-amber-600 dark:text-amber-400 font-mono flex items-center justify-center gap-1.5">
+                <Coins className="w-4 h-4 text-amber-500" />
+                {careerStats.totalPrizesWon.toLocaleString()}
+              </div>
             </div>
           </div>
 

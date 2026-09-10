@@ -3,7 +3,7 @@ import { GameWrapper } from "../../components/GameWrapper";
 import { FruitNinjaPhaserGame } from "./FruitNinjaPhaserGame";
 import { useMultiplayerStore } from "../../store/multiplayerStore";
 import { MultiplayerMatchPanel } from "../shared/components/MultiplayerMatchPanel";
-import { Trophy, RefreshCcw, Shield, Zap, Sparkles, Flame } from "lucide-react";
+import { Trophy, RefreshCcw, Shield, Zap, Sparkles, Flame, Coins } from "lucide-react";
 
 interface FruitNinjaProps {
   mode: "ai" | "multiplayer";
@@ -123,8 +123,8 @@ export const FruitNinjaGame: React.FC<FruitNinjaProps> = ({ mode: initialMode, s
           <div className="w-full mt-5 pt-4 border-t border-slate-200 dark:border-slate-800">
             <div className="flex justify-between items-center mb-4">
               <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Entry Fee</span>
-              <span className="text-base font-black text-amber-500 dark:text-amber-400 flex items-center gap-1">
-                🪙 {stake} <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Coins</span>
+              <span className="text-base font-black text-amber-500 dark:text-amber-400 flex items-center gap-1.5">
+                <Coins className="w-4 h-4 text-amber-400 shrink-0" /> {stake} <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Coins</span>
               </span>
             </div>
 

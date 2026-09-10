@@ -106,7 +106,7 @@ export class WalletHistoryService {
 
       // Human-readable titles & descriptions
       let title = "Wallet Transaction";
-      let icon = "🪙";
+      let icon = "💰";
 
       switch (t.referenceType) {
         case "MATCH_WAGER":

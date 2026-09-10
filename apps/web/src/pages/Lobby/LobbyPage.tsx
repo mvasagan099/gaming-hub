@@ -18,6 +18,7 @@ import {
   Wifi,
   WifiOff,
   Zap,
+  Coins,
 } from "lucide-react";
 import {
   CHESS_GAME_MODES,
@@ -468,7 +469,9 @@ export const LobbyPage: React.FC = () => {
           {session && (
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold">
               <span className="text-slate-500 dark:text-slate-400">Coins:</span>
-              <span className="text-amber-400 font-extrabold">🪙 {balance ?? "…"}</span>
+              <span className="text-amber-400 font-extrabold flex items-center gap-1">
+                <Coins className="w-3.5 h-3.5 text-amber-400" /> {balance ?? "…"}
+              </span>
             </div>
           )}
           <div
@@ -537,7 +540,8 @@ export const LobbyPage: React.FC = () => {
                         : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
                     }`}
                   >
-                    🪙 {val}
+                    <Coins className={`w-3.5 h-3.5 inline-block mr-1 ${stake === val ? "text-black" : "text-amber-400"}`} />
+                    {val}
                   </button>
                 ))}
               </div>
@@ -706,7 +710,9 @@ export const LobbyPage: React.FC = () => {
           </div>
           <h3 className="relative z-10 text-lg font-black text-slate-900 dark:text-white">Finding opponents…</h3>
           <p className="relative z-10 text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-1">
-            <span className="block">{def.name} · 🪙 {matchmaking.stake ?? stake} stake{matchmaking.settings?.playerCount ? ` · ${matchmaking.settings.playerCount} players` : ""}</span>
+            <span className="block inline-flex items-center gap-1 justify-center">
+              {def.name} · <Coins className="w-3.5 h-3.5 text-amber-400 inline-block" /> {matchmaking.stake ?? stake} stake{matchmaking.settings?.playerCount ? ` · ${matchmaking.settings.playerCount} players` : ""}
+            </span>
             {matchmaking.position > 0 && <span className="block">Queue position: #{matchmaking.position}</span>}
             {secondsRemaining > 0 && (
               <span className="block font-semibold text-amber-400">Auto-cancels in {secondsRemaining}s</span>
@@ -741,7 +747,6 @@ export const LobbyPage: React.FC = () => {
                   <button
                     onClick={() => void copyCode()}
                     className="mt-1 flex items-center gap-2 text-2xl font-black font-mono tracking-[0.3em] text-indigo-400 hover:text-indigo-300 transition-colors"
-                    title="Copy room code"
                   >
                     {room.code} <Copy className="w-4 h-4 opacity-60" />
                   </button>
@@ -750,8 +755,8 @@ export const LobbyPage: React.FC = () => {
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Stake / Prize
                   </p>
-                  <p className="mt-1 text-sm font-extrabold text-amber-400">
-                    🪙 {room.stake} → {Math.round(room.stake * 1.8)}
+                  <p className="mt-1 text-sm font-extrabold text-amber-400 flex items-center justify-end gap-1">
+                    <Coins className="w-3.5 h-3.5 text-amber-400" /> {room.stake} → {Math.round(room.stake * 1.8)}
                   </p>
                 </div>
                 <div className="text-right">

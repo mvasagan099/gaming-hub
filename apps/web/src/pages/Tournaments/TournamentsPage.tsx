@@ -16,6 +16,7 @@ import {
   ArrowRight,
   CheckCircle2,
   AlertCircle,
+  Coins,
 } from 'lucide-react';
 import {
   GAME_DEFINITIONS,
@@ -278,16 +279,16 @@ export function TournamentsPage() {
                           {tier.name}
                         </span>
                       </div>
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${vis.badgeBgClass}`}>
-                        🪙 {tier.entryFee}
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border flex items-center gap-1 ${vis.badgeBgClass}`}>
+                        <Coins className="w-3 h-3 text-amber-400 shrink-0" /> {tier.entryFee}
                       </span>
                     </div>
 
                     <div className="mt-2.5 space-y-1">
                       <div className="flex items-baseline justify-between text-xs">
                         <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Prize Pool</span>
-                        <span className="font-extrabold text-amber-600 dark:text-amber-400">
-                          🪙 {tier.prizePool.toLocaleString()}
+                        <span className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <Coins className="w-3 h-3 text-amber-400 shrink-0" /> {tier.prizePool.toLocaleString()}
                         </span>
                       </div>
                       <div className="flex items-baseline justify-between text-xs">
@@ -559,16 +560,16 @@ function TournamentLobbyCard({
           {/* Prize Pool */}
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/70 p-2.5">
             <p className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-500 tracking-wider">Prize Pool</p>
-            <p className="text-lg font-black text-amber-600 dark:text-amber-400 tracking-tight">
-              🪙 {t.prizePool.toLocaleString()}
+            <p className="text-lg font-black text-amber-600 dark:text-amber-400 tracking-tight flex items-center gap-1.5">
+              <Coins className="w-4 h-4 text-amber-500 shrink-0" /> {t.prizePool.toLocaleString()}
             </p>
           </div>
 
           {/* Entry Fee */}
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/70 p-2.5">
             <p className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-500 tracking-wider">Entry Fee</p>
-            <p className="text-lg font-black text-slate-900 dark:text-slate-200">
-              🪙 {t.entryFee.toLocaleString()}
+            <p className="text-lg font-black text-slate-900 dark:text-slate-200 flex items-center gap-1.5">
+              <Coins className="w-4 h-4 text-amber-400 shrink-0" /> {t.entryFee.toLocaleString()}
             </p>
           </div>
         </div>

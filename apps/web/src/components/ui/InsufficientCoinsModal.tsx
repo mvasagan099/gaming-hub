@@ -58,7 +58,7 @@ export function InsufficientCoinsModal({
 
         {/* Coin Icon Header */}
         <div className="mx-auto w-16 h-16 rounded-full bg-gradient-to-tr from-amber-500/20 to-yellow-500/10 border border-amber-500/40 flex items-center justify-center mb-4 text-amber-400 shadow-lg shadow-amber-500/10">
-          <Coins className="w-8 h-8 animate-pulse" />
+          <Coins className="w-8 h-8 animate-pulse text-amber-500" />
         </div>
 
         <h3
@@ -75,14 +75,14 @@ export function InsufficientCoinsModal({
         <div className="bg-neutral-950/70 border border-neutral-800 rounded-xl p-4 mb-6 text-left space-y-3">
           <div className="flex justify-between items-center text-sm">
             <span className="text-neutral-400">Entry Fee:</span>
-            <span className="font-semibold text-neutral-200">
-              🪙 {requiredCoins.toLocaleString()} Coins
+            <span className="font-semibold text-neutral-200 flex items-center gap-1.5">
+              <Coins className="w-4 h-4 text-amber-400" /> {requiredCoins.toLocaleString()} Coins
             </span>
           </div>
           <div className="flex justify-between items-center text-sm">
             <span className="text-neutral-400">Your Balance:</span>
-            <span className="font-semibold text-neutral-200">
-              🪙 {currentBalance.toLocaleString()} Coins
+            <span className="font-semibold text-neutral-200 flex items-center gap-1.5">
+              <Coins className="w-4 h-4 text-amber-400" /> {currentBalance.toLocaleString()} Coins
             </span>
           </div>
           <div className="pt-2 border-t border-neutral-800/80 flex justify-between items-center text-sm font-bold">

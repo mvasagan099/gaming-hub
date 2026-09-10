@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { GameMetadata, GameId } from '../types';
-import { Bot, Swords, Trophy, Loader2 } from 'lucide-react';
+import { Bot, Swords, Trophy, Loader2, Coins } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
@@ -127,7 +127,8 @@ export const MatchSetupModal: React.FC<GameModalProps> = ({ game, onClose, onSta
                       : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
-                  🪙 {val}
+                  <Coins className={`size-3.5 inline-block mr-1 ${stake === val ? 'text-black' : 'text-amber-400'}`} />
+                  {val}
                 </button>
               ))}
             </div>

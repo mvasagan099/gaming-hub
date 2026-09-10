@@ -10,11 +10,11 @@ import { EmptyState } from '../../components/EmptyState';
 
 const TIERS = [
   { code: 'all', name: 'All Tiers', icon: '🏆', color: 'text-amber-400' },
-  { code: 'mini', name: 'Mini (5🪙)', icon: '🟢', color: 'text-emerald-400' },
-  { code: 'basic', name: 'Basic (10🪙)', icon: '🔵', color: 'text-blue-400' },
-  { code: 'standard', name: 'Standard (25🪙)', icon: '🟣', color: 'text-purple-400' },
-  { code: 'premium', name: 'Premium (50🪙)', icon: '🟠', color: 'text-amber-400' },
-  { code: 'pro', name: 'Pro (100🪙)', icon: '🔴', color: 'text-rose-400' },
+  { code: 'mini', name: 'Mini (5 Coins)', icon: '🟢', color: 'text-emerald-400' },
+  { code: 'basic', name: 'Basic (10 Coins)', icon: '🔵', color: 'text-blue-400' },
+  { code: 'standard', name: 'Standard (25 Coins)', icon: '🟣', color: 'text-purple-400' },
+  { code: 'premium', name: 'Premium (50 Coins)', icon: '🟠', color: 'text-amber-400' },
+  { code: 'pro', name: 'Pro (100 Coins)', icon: '🔴', color: 'text-rose-400' },
 ];
 
 function RankBadge({ rank }: { rank: number }) {
@@ -237,8 +237,8 @@ export function TournamentLeaderboardPage() {
                       <div className="mt-1 text-[11px] text-slate-400">
                         🏆 {entry.tournamentsWon} Won · {entry.tournamentsPlayed} Played
                       </div>
-                      <div className="mt-1 text-[10px] font-mono text-emerald-400">
-                        🪙 {entry.totalPrizesWon?.toLocaleString() ?? 0}
+                      <div className="mt-1 text-[10px] font-mono text-emerald-400 flex items-center justify-center gap-1">
+                        <Coins className="w-3 h-3 text-amber-400 inline-block" /> {entry.totalPrizesWon?.toLocaleString() ?? 0}
                       </div>
                     </CardContent>
                   </Card>
@@ -271,7 +271,9 @@ export function TournamentLeaderboardPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-mono font-black text-amber-500">{entry.points} pts</p>
-                      <p className="text-[11px] font-mono text-emerald-400">🪙 {entry.totalPrizesWon?.toLocaleString() ?? 0}</p>
+                      <p className="text-[11px] font-mono text-emerald-400 flex items-center justify-end gap-1">
+                        <Coins className="w-3 h-3 text-amber-400 inline-block" /> {entry.totalPrizesWon?.toLocaleString() ?? 0}
+                      </p>
                     </div>
                   </div>
                 ))}

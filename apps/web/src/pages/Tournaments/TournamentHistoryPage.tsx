@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trophy, History, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trophy, History, ChevronLeft, ChevronRight, Coins } from 'lucide-react';
 import { GAME_DEFINITIONS } from '@gaming-hub/shared';
 import type { TournamentHistoryEntry } from '@gaming-hub/shared';
 import { tournamentsApi } from '../../services/api/enterprise';
@@ -73,7 +73,10 @@ export function TournamentHistoryPage() {
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <p className="text-2xl font-black text-emerald-500">🪙 {stats.totalPrizesWon.toLocaleString()}</p>
+              <p className="text-2xl font-black text-emerald-500 flex items-center justify-center gap-1.5">
+                <Coins className="w-5 h-5 text-amber-400" />
+                {stats.totalPrizesWon.toLocaleString()}
+              </p>
               <p className="text-[10px] font-semibold uppercase text-slate-500">Prizes Won</p>
             </CardContent>
           </Card>

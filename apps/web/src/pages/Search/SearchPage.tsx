@@ -13,6 +13,7 @@ import {
   X,
   Sparkles,
   ChevronRight,
+  Coins,
 } from 'lucide-react';
 import { searchApi } from '../../services/api/enterprise';
 import { GAME_DEFINITIONS } from '@gaming-hub/shared';
@@ -370,8 +371,8 @@ export const SearchPage: React.FC = () => {
                         </p>
                       </div>
                       <div className="text-right">
-                        <span className="text-xs font-bold text-amber-500 block">
-                          🪙 {t.prizePool.toLocaleString()}
+                        <span className="text-xs font-bold text-amber-500 flex items-center justify-end gap-1">
+                          <Coins className="w-3.5 h-3.5 text-amber-400" /> {t.prizePool.toLocaleString()}
                         </span>
                         <span className="text-[10px] font-semibold text-slate-400 uppercase">
                           {t.status}
@@ -493,7 +494,9 @@ export const SearchPage: React.FC = () => {
                       <p className="text-sm font-bold text-slate-900 dark:text-white">{c.title}</p>
                       <p className="text-xs text-slate-500">{c.code}</p>
                     </div>
-                    <span className="text-xs font-bold text-emerald-500">🪙 {c.value}</span>
+                    <span className="text-xs font-bold text-emerald-500 flex items-center gap-1">
+                      <Coins className="w-3.5 h-3.5 text-amber-400" /> {c.value}
+                    </span>
                   </li>
                 ))}
               </ul>

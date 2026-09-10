@@ -522,7 +522,7 @@ export async function transferToCouponWallet(
     userId,
     "WALLET",
     "Transfer Successful",
-    `🪙 ${amount.toLocaleString()} Coins have been transferred to your Coupon Wallet.`,
+    `${amount.toLocaleString()} Coins have been transferred to your Coupon Wallet.`,
     { transactionId, amount },
   );
 

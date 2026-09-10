@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { GameId } from '../types';
-import { ArrowLeft, Copy, Check, Eye, Timer, Volume2, VolumeX, X, Zap, Users, Globe, Lock } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Eye, Timer, Volume2, VolumeX, X, Zap, Users, Globe, Lock, Coins } from 'lucide-react';
 import { useMultiplayerStore } from '../store/multiplayerStore';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { registerBackButtonHandler } from '../services/native/capacitorAppService';
@@ -157,7 +157,9 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
               {/* Stake */}
               <div className="flex items-center gap-1 px-1.5 sm:px-2.5 py-1 rounded-lg bg-amber-900/30 border border-amber-700/30 shrink-0">
                 <Zap className="w-3 h-3 text-amber-400 shrink-0" />
-                <span className="text-[10px] font-black text-amber-300 font-mono">🪙 {stake}</span>
+                <span className="text-[10px] font-black text-amber-300 font-mono flex items-center gap-1">
+                  <Coins className="w-3 h-3 text-amber-400" /> {stake}
+                </span>
               </div>
 
               {/* Sound toggle */}
@@ -255,7 +257,7 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
           <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold">
             <span className="text-slate-500 dark:text-slate-400">Prize:</span>
             <span className="text-amber-500 dark:text-amber-400 flex items-center gap-1 font-extrabold">
-              🪙 {stake * 1.8}
+              <Coins className="w-3.5 h-3.5 text-amber-400" /> {stake * 1.8}
             </span>
           </div>
 

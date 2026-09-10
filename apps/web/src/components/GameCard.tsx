@@ -69,7 +69,7 @@ export const GameCard: React.FC<GameCardProps> = ({ game, onPlay }) => {
             <Swords className="w-3.5 h-3.5 text-accent-400" /> {game.players}
           </span>
           <span className="flex items-center gap-1 font-semibold text-amber-400">
-            <Coins className="w-3.5 h-3.5" /> Entry: {game.minEntryFee}
+            <Coins className="w-3.5 h-3.5 text-amber-400" /> Entry: {game.minEntryFee}
           </span>
         </div>
 

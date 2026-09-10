@@ -1,3 +1,4 @@
+import { CoinIcon } from "../../components/ui/CoinIcon";
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -534,7 +535,7 @@ export function AdminTournamentsPage() {
         type: 'SETTLEMENT',
         title: isPaid ? 'Prize Settled' : 'Settlement Failed',
         timestamp: data.timestamp || new Date().toISOString(),
-        details: `Tournament #${data.tournamentId.slice(-6)} ${data.amount ? `(${data.amount}🪙)` : ''}`,
+        details: `Tournament #${data.tournamentId.slice(-6)} ${data.amount ? `(${data.amount} Coins)` : ''}`,
         variant: isPaid ? 'success' : 'danger',
       };
       setRealTimeEvents((prev) => [eventItem, ...prev].slice(0, 20));
@@ -587,7 +588,7 @@ export function AdminTournamentsPage() {
         type: 'REFUND',
         title: `Refund Processed (${data.status})`,
         timestamp: data.timestamp || new Date().toISOString(),
-        details: `Tournament #${data.tournamentId.slice(-6)} ${data.amount ? `(${data.amount}🪙)` : ''}`,
+        details: `Tournament #${data.tournamentId.slice(-6)} ${data.amount ? `(${data.amount} Coins)` : ''}`,
         variant: data.status === 'COMPLETED' ? 'warning' : 'danger',
       };
       setRealTimeEvents((prev) => [eventItem, ...prev].slice(0, 20));
@@ -1254,10 +1255,10 @@ export function AdminTournamentsPage() {
                             <span className="font-semibold text-slate-200">{formatGame(t.gameId)}</span>
                           </td>
                           <td className="px-4 py-3.5 text-right font-mono font-bold text-amber-400">
-                            {t.entryFee ? `🪙 ${t.entryFee}` : 'Free'}
+                            {t.entryFee ? <span className="inline-flex items-center gap-1"><CoinIcon className="w-3.5 h-3.5 text-amber-400" />{t.entryFee}</span> : 'Free'}
                           </td>
                           <td className="px-4 py-3.5 text-right font-mono font-black text-emerald-400">
-                            🪙 {t.prizePool.toLocaleString()}
+                            <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.prizePool.toLocaleString()}
                           </td>
                           <td className="px-4 py-3.5 text-center font-mono">
                             <span className="text-white font-bold">{t.players?.length ?? 0}</span>
@@ -1421,11 +1422,11 @@ export function AdminTournamentsPage() {
                   className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none"
                 >
                   <option value="ALL">All 5 Tiers</option>
-                  <option value="mini">🟢 Mini (5🪙)</option>
-                  <option value="basic">🔵 Basic (10🪙)</option>
-                  <option value="standard">🟣 Standard (25🪙)</option>
-                  <option value="premium">🟠 Premium (50🪙)</option>
-                  <option value="pro">🔴 Pro (100🪙)</option>
+                  <option value="mini">🟢 Mini (5 Coins)</option>
+                  <option value="basic">🔵 Basic (10 Coins)</option>
+                  <option value="standard">🟣 Standard (25 Coins)</option>
+                  <option value="premium">🟠 Premium (50 Coins)</option>
+                  <option value="pro">🔴 Pro (100 Coins)</option>
                 </select>
               </div>
 
@@ -2286,7 +2287,7 @@ export function AdminTournamentsPage() {
                       { id: 'VOLUME', label: '🏟️ Volume' },
                       { id: 'REGISTRATIONS', label: '👥 Registrations' },
                       { id: 'COMPLETION', label: '🏁 Completion %' },
-                      { id: 'COLLECTION', label: '🪙 Collection' },
+                      { id: 'COLLECTION', label: 'Coins Collection' },
                       { id: 'PRIZES', label: '🏆 Prize Distribution' },
                     ].map((tab) => (
                       <button
@@ -2443,11 +2444,11 @@ export function AdminTournamentsPage() {
                       <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-black text-white">🪙 Total Entry-Fee Collection Trend</span>
+                            <span className="text-sm font-black text-white">Total Entry-Fee Collection Trend</span>
                             <span className="text-xs text-slate-400">(Coins Deposited per Day)</span>
                           </div>
                           <div className="text-xs font-mono font-bold text-amber-400">
-                            Total: 🪙 {analyticsData.trends.reduce((acc, curr) => acc + curr.entryCollection, 0).toLocaleString()}
+                            Total: <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.trends.reduce((acc, curr) => acc + curr.entryCollection, 0).toLocaleString()}
                           </div>
                         </div>
 
@@ -2460,12 +2461,12 @@ export function AdminTournamentsPage() {
                               return (
                                 <div key={idx} className="flex-1 min-w-[28px] max-w-[48px] flex flex-col items-center gap-1 group relative">
                                   <div className="text-[9px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    🪙{t.entryCollection}
+                                    <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.entryCollection}
                                   </div>
                                   <div
                                     style={{ height: `${heightPct}%` }}
                                     className="w-full rounded-t-md bg-amber-500 hover:bg-amber-400 transition-all cursor-pointer shadow"
-                                    title={`${t.label}: 🪙 ${t.entryCollection.toLocaleString()} collected`}
+                                    title={`${t.label}: ${t.entryCollection.toLocaleString()} Coins collected`}
                                   />
                                   <div className="text-[9px] font-mono text-slate-500 truncate w-full text-center">
                                     {t.label.slice(-5)}
@@ -2487,7 +2488,7 @@ export function AdminTournamentsPage() {
                             <span className="text-xs text-slate-400">(Coins Distributed to Winners)</span>
                           </div>
                           <div className="text-xs font-mono font-bold text-purple-400">
-                            Total: 🪙 {analyticsData.trends.reduce((acc, curr) => acc + curr.prizeDistribution, 0).toLocaleString()}
+                            Total: <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.trends.reduce((acc, curr) => acc + curr.prizeDistribution, 0).toLocaleString()}
                           </div>
                         </div>
 
@@ -2500,12 +2501,12 @@ export function AdminTournamentsPage() {
                               return (
                                 <div key={idx} className="flex-1 min-w-[28px] max-w-[48px] flex flex-col items-center gap-1 group relative">
                                   <div className="text-[9px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    🪙{t.prizeDistribution}
+                                    <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.prizeDistribution}
                                   </div>
                                   <div
                                     style={{ height: `${heightPct}%` }}
                                     className="w-full rounded-t-md bg-purple-500 hover:bg-purple-400 transition-all cursor-pointer shadow"
-                                    title={`${t.label}: 🪙 ${t.prizeDistribution.toLocaleString()} distributed`}
+                                    title={`${t.label}: ${t.prizeDistribution.toLocaleString()} Coins distributed`}
                                   />
                                   <div className="text-[9px] font-mono text-slate-500 truncate w-full text-center">
                                     {t.label.slice(-5)}
@@ -2584,7 +2585,7 @@ export function AdminTournamentsPage() {
                         </div>
                         <div className="text-right">
                           <span className="px-2 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold">
-                            🪙 {t.entryFee}
+                            <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.entryFee}
                           </span>
                         </div>
                       </div>
@@ -2638,7 +2639,7 @@ export function AdminTournamentsPage() {
                               <span className="uppercase text-[10px] font-black text-amber-400">{t.tierCode}</span>
                               <span>{t.tierName}</span>
                             </td>
-                            <td className="py-2.5 px-3 text-center text-amber-400 font-bold">🪙 {t.entryFee}</td>
+                            <td className="py-2.5 px-3 text-center text-amber-400 font-bold"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.entryFee}</td>
                             <td className="py-2.5 px-3 text-center text-white font-bold">{t.tournamentsCount}</td>
                             <td className="py-2.5 px-3 text-center text-indigo-300 font-bold">{t.registrationsCount}</td>
                             <td className="py-2.5 px-3 text-center text-sky-400 font-bold">{t.averageRegistrations}</td>
@@ -2653,7 +2654,7 @@ export function AdminTournamentsPage() {
                               </span>
                             </td>
                             <td className="py-2.5 px-4 text-right font-bold text-amber-400">
-                              🪙 {t.entryFeesCollected.toLocaleString()}
+                              <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.entryFeesCollected.toLocaleString()}
                             </td>
                           </tr>
                         ))}
@@ -2680,28 +2681,28 @@ export function AdminTournamentsPage() {
                   <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
                     <span className="text-[11px] font-bold text-slate-400 uppercase">Entry Fees Collected</span>
                     <div className="text-xl font-black text-white font-mono mt-1">
-                      🪙 {analyticsData.overview.totalEntryCollection.toLocaleString()}
+                      <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.overview.totalEntryCollection.toLocaleString()}
                     </div>
                   </div>
 
                   <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
                     <span className="text-[11px] font-bold text-slate-400 uppercase">Configured Prize Pool</span>
                     <div className="text-xl font-black text-amber-300 font-mono mt-1">
-                      🪙 {analyticsData.overview.configuredPrizePool.toLocaleString()}
+                      <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.overview.configuredPrizePool.toLocaleString()}
                     </div>
                   </div>
 
                   <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
                     <span className="text-[11px] font-bold text-slate-400 uppercase">Prizes Distributed</span>
                     <div className="text-xl font-black text-emerald-400 font-mono mt-1">
-                      🪙 {analyticsData.overview.actualPrizeDistributed.toLocaleString()}
+                      <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.overview.actualPrizeDistributed.toLocaleString()}
                     </div>
                   </div>
 
                   <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
                     <span className="text-[11px] font-bold text-slate-400 uppercase">Total Refunds Issued</span>
                     <div className="text-xl font-black text-rose-400 font-mono mt-1">
-                      🪙 {analyticsData.overview.totalRefunds.toLocaleString()}
+                      <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.overview.totalRefunds.toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -2747,7 +2748,7 @@ export function AdminTournamentsPage() {
                     <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3">
                       <div className="text-[10px] font-bold text-amber-400 uppercase">🥇 1st Place (50%)</div>
                       <div className="text-sm sm:text-base font-black text-white font-mono mt-1">
-                        🪙 {analyticsData.prizeDistribution.summary.firstPlaceAmount.toLocaleString()}
+                        <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.prizeDistribution.summary.firstPlaceAmount.toLocaleString()}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">
                         {analyticsData.prizeDistribution.summary.firstPlaceCount} winners
@@ -2757,7 +2758,7 @@ export function AdminTournamentsPage() {
                     <div className="rounded-2xl bg-slate-800/50 border border-slate-700/60 p-3">
                       <div className="text-[10px] font-bold text-slate-300 uppercase">🥈 2nd Place (25%)</div>
                       <div className="text-sm sm:text-base font-black text-white font-mono mt-1">
-                        🪙 {analyticsData.prizeDistribution.summary.secondPlaceAmount.toLocaleString()}
+                        <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.prizeDistribution.summary.secondPlaceAmount.toLocaleString()}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">
                         {analyticsData.prizeDistribution.summary.secondPlaceCount} winners
@@ -2767,7 +2768,7 @@ export function AdminTournamentsPage() {
                     <div className="rounded-2xl bg-amber-900/20 border border-amber-800/40 p-3">
                       <div className="text-[10px] font-bold text-amber-600 uppercase">🥉 3rd Place (15%)</div>
                       <div className="text-sm sm:text-base font-black text-white font-mono mt-1">
-                        🪙 {analyticsData.prizeDistribution.summary.thirdPlaceAmount.toLocaleString()}
+                        <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.prizeDistribution.summary.thirdPlaceAmount.toLocaleString()}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">
                         {analyticsData.prizeDistribution.summary.thirdPlaceCount} winners
@@ -2777,7 +2778,7 @@ export function AdminTournamentsPage() {
                     <div className="rounded-2xl bg-indigo-950/30 border border-indigo-800/40 p-3">
                       <div className="text-[10px] font-bold text-indigo-400 uppercase">4️⃣ 4th Place (10%)</div>
                       <div className="text-sm sm:text-base font-black text-white font-mono mt-1">
-                        🪙 {analyticsData.prizeDistribution.summary.fourthPlaceAmount.toLocaleString()}
+                        <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.prizeDistribution.summary.fourthPlaceAmount.toLocaleString()}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">
                         {analyticsData.prizeDistribution.summary.fourthPlaceCount} winners
@@ -2787,17 +2788,17 @@ export function AdminTournamentsPage() {
                     <div className="rounded-2xl bg-emerald-950/30 border border-emerald-800/40 p-3 sm:col-span-2">
                       <div className="text-[10px] font-bold text-emerald-400 uppercase">Total Distributed</div>
                       <div className="text-sm sm:text-base font-black text-emerald-400 font-mono mt-1">
-                        🪙 {analyticsData.prizeDistribution.summary.totalDistributed.toLocaleString()}
+                        <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.prizeDistribution.summary.totalDistributed.toLocaleString()}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">
-                        of 🪙 {analyticsData.prizeDistribution.summary.totalConfiguredPool.toLocaleString()} pool
+                        of <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.prizeDistribution.summary.totalConfiguredPool.toLocaleString()} pool
                       </div>
                     </div>
 
                     <div className="rounded-2xl bg-amber-950/30 border border-amber-800/40 p-3">
                       <div className="text-[10px] font-bold text-amber-400 uppercase">Pending Settlements</div>
                       <div className="text-sm sm:text-base font-black text-amber-400 font-mono mt-1">
-                        🪙 {analyticsData.prizeDistribution.summary.pendingSettlementsAmount.toLocaleString()}
+                        <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.prizeDistribution.summary.pendingSettlementsAmount.toLocaleString()}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">
                         {analyticsData.prizeDistribution.summary.pendingSettlementsCount} pending
@@ -2811,7 +2812,7 @@ export function AdminTournamentsPage() {
                     }`}>
                       <div className="text-[10px] font-bold text-rose-400 uppercase">Failed Settlements</div>
                       <div className="text-sm sm:text-base font-black text-rose-400 font-mono mt-1">
-                        🪙 {analyticsData.prizeDistribution.summary.failedSettlementsAmount.toLocaleString()}
+                        <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.prizeDistribution.summary.failedSettlementsAmount.toLocaleString()}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">
                         {analyticsData.prizeDistribution.summary.failedSettlementsCount} failed
@@ -2846,14 +2847,14 @@ export function AdminTournamentsPage() {
                                   <span>{g.gameName}</span>
                                 </td>
                                 <td className="py-2.5 px-3 text-center text-slate-300">{g.tournamentsCount}</td>
-                                <td className="py-2.5 px-3 text-right font-bold text-slate-200">🪙 {g.totalConfiguredPool.toLocaleString()}</td>
-                                <td className="py-2.5 px-3 text-right font-bold text-emerald-400">🪙 {g.totalDistributed.toLocaleString()}</td>
-                                <td className="py-2.5 px-3 text-right text-amber-400">🪙 {g.firstPlaceAmount.toLocaleString()}</td>
-                                <td className="py-2.5 px-3 text-right text-slate-300">🪙 {g.secondPlaceAmount.toLocaleString()}</td>
-                                <td className="py-2.5 px-3 text-right text-amber-600">🪙 {g.thirdPlaceAmount.toLocaleString()}</td>
-                                <td className="py-2.5 px-3 text-right text-indigo-400">🪙 {g.fourthPlaceAmount.toLocaleString()}</td>
-                                <td className="py-2.5 px-3 text-right text-amber-400">{g.pendingSettlementsCount > 0 ? `🪙 ${g.pendingSettlementsAmount.toLocaleString()}` : '—'}</td>
-                                <td className="py-2.5 px-3 text-right text-rose-400">{g.failedSettlementsCount > 0 ? `🪙 ${g.failedSettlementsAmount.toLocaleString()}` : '—'}</td>
+                                <td className="py-2.5 px-3 text-right font-bold text-slate-200"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{g.totalConfiguredPool.toLocaleString()}</td>
+                                <td className="py-2.5 px-3 text-right font-bold text-emerald-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{g.totalDistributed.toLocaleString()}</td>
+                                <td className="py-2.5 px-3 text-right text-amber-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{g.firstPlaceAmount.toLocaleString()}</td>
+                                <td className="py-2.5 px-3 text-right text-slate-300"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{g.secondPlaceAmount.toLocaleString()}</td>
+                                <td className="py-2.5 px-3 text-right text-amber-600"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{g.thirdPlaceAmount.toLocaleString()}</td>
+                                <td className="py-2.5 px-3 text-right text-indigo-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{g.fourthPlaceAmount.toLocaleString()}</td>
+                                <td className="py-2.5 px-3 text-right text-amber-400">{g.pendingSettlementsCount > 0 ? <span className="inline-flex items-center gap-1 justify-end"><CoinIcon className="w-3.5 h-3.5 text-amber-400" />{g.pendingSettlementsAmount.toLocaleString()}</span> : '—'}</td>
+                                <td className="py-2.5 px-3 text-right text-rose-400">{g.failedSettlementsCount > 0 ? <span className="inline-flex items-center gap-1 justify-end"><CoinIcon className="w-3.5 h-3.5 text-amber-400" />{g.failedSettlementsAmount.toLocaleString()}</span> : '—'}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -2883,16 +2884,16 @@ export function AdminTournamentsPage() {
                                 <td className="py-2.5 px-4 font-sans font-bold text-slate-200">
                                   {t.tierName}
                                 </td>
-                                <td className="py-2.5 px-3 text-center text-amber-400 font-bold">{t.entryFee}🪙</td>
+                                <td className="py-2.5 px-3 text-center text-amber-400 font-bold"><><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.entryFee}</></td>
                                 <td className="py-2.5 px-3 text-center text-slate-300">{t.tournamentsCount}</td>
-                                <td className="py-2.5 px-3 text-right font-bold text-slate-200">🪙 {t.totalConfiguredPool.toLocaleString()}</td>
-                                <td className="py-2.5 px-3 text-right font-bold text-emerald-400">🪙 {t.totalDistributed.toLocaleString()}</td>
-                                <td className="py-2.5 px-3 text-right text-amber-400">🪙 {t.firstPlaceAmount.toLocaleString()}</td>
-                                <td className="py-2.5 px-3 text-right text-slate-300">🪙 {t.secondPlaceAmount.toLocaleString()}</td>
-                                <td className="py-2.5 px-3 text-right text-amber-600">🪙 {t.thirdPlaceAmount.toLocaleString()}</td>
-                                <td className="py-2.5 px-3 text-right text-indigo-400">🪙 {t.fourthPlaceAmount.toLocaleString()}</td>
-                                <td className="py-2.5 px-3 text-right text-amber-400">{t.pendingSettlementsCount > 0 ? `🪙 ${t.pendingSettlementsAmount.toLocaleString()}` : '—'}</td>
-                                <td className="py-2.5 px-3 text-right text-rose-400">{t.failedSettlementsCount > 0 ? `🪙 ${t.failedSettlementsAmount.toLocaleString()}` : '—'}</td>
+                                <td className="py-2.5 px-3 text-right font-bold text-slate-200"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.totalConfiguredPool.toLocaleString()}</td>
+                                <td className="py-2.5 px-3 text-right font-bold text-emerald-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.totalDistributed.toLocaleString()}</td>
+                                <td className="py-2.5 px-3 text-right text-amber-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.firstPlaceAmount.toLocaleString()}</td>
+                                <td className="py-2.5 px-3 text-right text-slate-300"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.secondPlaceAmount.toLocaleString()}</td>
+                                <td className="py-2.5 px-3 text-right text-amber-600"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.thirdPlaceAmount.toLocaleString()}</td>
+                                <td className="py-2.5 px-3 text-right text-indigo-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.fourthPlaceAmount.toLocaleString()}</td>
+                                <td className="py-2.5 px-3 text-right text-amber-400">{t.pendingSettlementsCount > 0 ? <span className="inline-flex items-center gap-1 justify-end"><CoinIcon className="w-3.5 h-3.5 text-amber-400" />{t.pendingSettlementsAmount.toLocaleString()}</span> : '—'}</td>
+                                <td className="py-2.5 px-3 text-right text-rose-400">{t.failedSettlementsCount > 0 ? <span className="inline-flex items-center gap-1 justify-end"><CoinIcon className="w-3.5 h-3.5 text-amber-400" />{t.failedSettlementsAmount.toLocaleString()}</span> : '—'}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -2929,14 +2930,14 @@ export function AdminTournamentsPage() {
                                     {d.label} <span className="text-[10px] text-slate-500 font-normal">({d.date})</span>
                                   </td>
                                   <td className="py-2.5 px-3 text-center text-slate-300">{d.tournamentsCount}</td>
-                                  <td className="py-2.5 px-3 text-right font-bold text-slate-200">🪙 {d.totalConfiguredPool.toLocaleString()}</td>
-                                  <td className="py-2.5 px-3 text-right font-bold text-emerald-400">🪙 {d.totalDistributed.toLocaleString()}</td>
-                                  <td className="py-2.5 px-3 text-right text-amber-400">🪙 {d.firstPlaceAmount.toLocaleString()}</td>
-                                  <td className="py-2.5 px-3 text-right text-slate-300">🪙 {d.secondPlaceAmount.toLocaleString()}</td>
-                                  <td className="py-2.5 px-3 text-right text-amber-600">🪙 {d.thirdPlaceAmount.toLocaleString()}</td>
-                                  <td className="py-2.5 px-3 text-right text-indigo-400">🪙 {d.fourthPlaceAmount.toLocaleString()}</td>
-                                  <td className="py-2.5 px-3 text-right text-amber-400">{d.pendingSettlementsCount > 0 ? `🪙 ${d.pendingSettlementsAmount.toLocaleString()}` : '—'}</td>
-                                  <td className="py-2.5 px-3 text-right text-rose-400">{d.failedSettlementsCount > 0 ? `🪙 ${d.failedSettlementsAmount.toLocaleString()}` : '—'}</td>
+                                  <td className="py-2.5 px-3 text-right font-bold text-slate-200"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{d.totalConfiguredPool.toLocaleString()}</td>
+                                  <td className="py-2.5 px-3 text-right font-bold text-emerald-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{d.totalDistributed.toLocaleString()}</td>
+                                  <td className="py-2.5 px-3 text-right text-amber-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{d.firstPlaceAmount.toLocaleString()}</td>
+                                  <td className="py-2.5 px-3 text-right text-slate-300"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{d.secondPlaceAmount.toLocaleString()}</td>
+                                  <td className="py-2.5 px-3 text-right text-amber-600"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{d.thirdPlaceAmount.toLocaleString()}</td>
+                                  <td className="py-2.5 px-3 text-right text-indigo-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{d.fourthPlaceAmount.toLocaleString()}</td>
+                                  <td className="py-2.5 px-3 text-right text-amber-400">{d.pendingSettlementsCount > 0 ? <span className="inline-flex items-center gap-1 justify-end"><CoinIcon className="w-3.5 h-3.5 text-amber-400" />{d.pendingSettlementsAmount.toLocaleString()}</span> : '—'}</td>
+                                  <td className="py-2.5 px-3 text-right text-rose-400">{d.failedSettlementsCount > 0 ? <span className="inline-flex items-center gap-1 justify-end"><CoinIcon className="w-3.5 h-3.5 text-amber-400" />{d.failedSettlementsAmount.toLocaleString()}</span> : '—'}</td>
                                 </tr>
                               ))
                             )}
@@ -3022,7 +3023,7 @@ export function AdminTournamentsPage() {
                   <div className="rounded-2xl bg-slate-950/60 border border-slate-800 p-4 col-span-2 sm:col-span-1">
                     <div className="text-[11px] font-bold text-slate-400 uppercase">Total Refunded Coins</div>
                     <div className="text-xl font-black text-rose-400 font-mono mt-1">
-                      🪙 {analyticsData.refundAnalytics.summary.totalRefundedCoins.toLocaleString()}
+                      <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.refundAnalytics.summary.totalRefundedCoins.toLocaleString()}
                     </div>
                     <div className="text-[10px] text-slate-500 mt-0.5">Actual credited amount</div>
                   </div>
@@ -3055,7 +3056,7 @@ export function AdminTournamentsPage() {
                               <td className="py-2.5 px-3 text-center text-amber-400">{g.pendingRefundsCount > 0 ? g.pendingRefundsCount : '—'}</td>
                               <td className="py-2.5 px-3 text-center text-rose-400">{g.failedRefundsCount > 0 ? g.failedRefundsCount : '—'}</td>
                               <td className="py-2.5 px-4 text-right font-bold text-rose-400">
-                                🪙 {g.totalRefundedCoins.toLocaleString()}
+                                <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{g.totalRefundedCoins.toLocaleString()}
                               </td>
                             </tr>
                           ))}
@@ -3082,13 +3083,13 @@ export function AdminTournamentsPage() {
                               <td className="py-2.5 px-4 font-sans font-bold text-slate-200">
                                 {t.tierName}
                               </td>
-                              <td className="py-2.5 px-3 text-center text-amber-400 font-bold">{t.entryFee}🪙</td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-bold"><><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.entryFee}</></td>
                               <td className="py-2.5 px-3 text-center text-slate-300">{t.refundRequestsCount}</td>
                               <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{t.successfulRefundsCount}</td>
                               <td className="py-2.5 px-3 text-center text-amber-400">{t.pendingRefundsCount > 0 ? t.pendingRefundsCount : '—'}</td>
                               <td className="py-2.5 px-3 text-center text-rose-400">{t.failedRefundsCount > 0 ? t.failedRefundsCount : '—'}</td>
                               <td className="py-2.5 px-4 text-right font-bold text-rose-400">
-                                🪙 {t.totalRefundedCoins.toLocaleString()}
+                                <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.totalRefundedCoins.toLocaleString()}
                               </td>
                             </tr>
                           ))}
@@ -3126,7 +3127,7 @@ export function AdminTournamentsPage() {
                                 <td className="py-2.5 px-3 text-center text-amber-400">{d.pendingRefundsCount > 0 ? d.pendingRefundsCount : '—'}</td>
                                 <td className="py-2.5 px-3 text-center text-rose-400">{d.failedRefundsCount > 0 ? d.failedRefundsCount : '—'}</td>
                                 <td className="py-2.5 px-4 text-right font-bold text-rose-400">
-                                  🪙 {d.totalRefundedCoins.toLocaleString()}
+                                  <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{d.totalRefundedCoins.toLocaleString()}
                                 </td>
                               </tr>
                             ))
@@ -3161,7 +3162,7 @@ export function AdminTournamentsPage() {
                                 <td className="py-2 px-4 text-slate-400">#{r.id.slice(-8)}</td>
                                 <td className="py-2 px-3 font-sans font-bold text-slate-200">{r.tournamentTitle}</td>
                                 <td className="py-2 px-3 font-sans text-slate-300">{r.username}</td>
-                                <td className="py-2 px-3 text-right font-bold text-rose-400">🪙 {r.amount.toLocaleString()}</td>
+                                <td className="py-2 px-3 text-right font-bold text-rose-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{r.amount.toLocaleString()}</td>
                                 <td className="py-2 px-3 text-center">
                                   <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
                                     r.status === 'SUCCESS'
@@ -3237,7 +3238,7 @@ export function AdminTournamentsPage() {
                           {analyticsData.settlementAnalytics.summary.failedSettlements} Failed Prize Settlements Require Attention
                         </div>
                         <div className="text-xs text-rose-300/80">
-                          🪙 {analyticsData.settlementAnalytics.summary.totalFailedAmount.toLocaleString()} in failed prize payouts detected across completed tournaments.
+                          <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.settlementAnalytics.summary.totalFailedAmount.toLocaleString()} in failed prize payouts detected across completed tournaments.
                         </div>
                       </div>
                     </div>
@@ -3266,7 +3267,7 @@ export function AdminTournamentsPage() {
                       {analyticsData.settlementAnalytics.summary.creditedSettlements}
                     </div>
                     <div className="text-[10px] text-emerald-500 font-mono mt-0.5">
-                      🪙 {analyticsData.settlementAnalytics.summary.totalSettledAmount.toLocaleString()}
+                      <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.settlementAnalytics.summary.totalSettledAmount.toLocaleString()}
                     </div>
                   </div>
 
@@ -3276,7 +3277,7 @@ export function AdminTournamentsPage() {
                       {analyticsData.settlementAnalytics.summary.pendingSettlements}
                     </div>
                     <div className="text-[10px] text-amber-500 font-mono mt-0.5">
-                      🪙 {analyticsData.settlementAnalytics.summary.totalPendingAmount.toLocaleString()}
+                      <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.settlementAnalytics.summary.totalPendingAmount.toLocaleString()}
                     </div>
                   </div>
 
@@ -3286,7 +3287,7 @@ export function AdminTournamentsPage() {
                       {analyticsData.settlementAnalytics.summary.failedSettlements}
                     </div>
                     <div className="text-[10px] text-rose-400 font-mono mt-0.5">
-                      🪙 {analyticsData.settlementAnalytics.summary.totalFailedAmount.toLocaleString()}
+                      <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.settlementAnalytics.summary.totalFailedAmount.toLocaleString()}
                     </div>
                   </div>
 
@@ -3328,7 +3329,7 @@ export function AdminTournamentsPage() {
                               <td className="py-2.5 px-3 text-center text-rose-400">{g.failedSettlements > 0 ? g.failedSettlements : '—'}</td>
                               <td className="py-2.5 px-3 text-center text-purple-400">{g.partiallySettledTournaments > 0 ? g.partiallySettledTournaments : '—'}</td>
                               <td className="py-2.5 px-4 text-right font-bold text-emerald-400">
-                                🪙 {g.totalSettledAmount.toLocaleString()}
+                                <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{g.totalSettledAmount.toLocaleString()}
                               </td>
                             </tr>
                           ))}
@@ -3354,14 +3355,14 @@ export function AdminTournamentsPage() {
                           {analyticsData.settlementAnalytics.byTier.map((t) => (
                             <tr key={t.tierCode} className="hover:bg-slate-800/40 transition-colors">
                               <td className="py-2.5 px-4 font-sans font-bold text-slate-200">{t.tierName}</td>
-                              <td className="py-2.5 px-3 text-center text-amber-400 font-bold">{t.entryFee}🪙</td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-bold"><><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.entryFee}</></td>
                               <td className="py-2.5 px-3 text-center text-slate-300">{t.totalSettlements}</td>
                               <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{t.creditedSettlements}</td>
                               <td className="py-2.5 px-3 text-center text-amber-400">{t.pendingSettlements > 0 ? t.pendingSettlements : '—'}</td>
                               <td className="py-2.5 px-3 text-center text-rose-400">{t.failedSettlements > 0 ? t.failedSettlements : '—'}</td>
                               <td className="py-2.5 px-3 text-center text-purple-400">{t.partiallySettledTournaments > 0 ? t.partiallySettledTournaments : '—'}</td>
                               <td className="py-2.5 px-4 text-right font-bold text-emerald-400">
-                                🪙 {t.totalSettledAmount.toLocaleString()}
+                                <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.totalSettledAmount.toLocaleString()}
                               </td>
                             </tr>
                           ))}
@@ -3399,7 +3400,7 @@ export function AdminTournamentsPage() {
                                 <td className="py-2.5 px-3 text-center text-amber-400">{d.pendingSettlements > 0 ? d.pendingSettlements : '—'}</td>
                                 <td className="py-2.5 px-3 text-center text-rose-400">{d.failedSettlements > 0 ? d.failedSettlements : '—'}</td>
                                 <td className="py-2.5 px-4 text-right font-bold text-emerald-400">
-                                  🪙 {d.totalSettledAmount.toLocaleString()}
+                                  <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{d.totalSettledAmount.toLocaleString()}
                                 </td>
                               </tr>
                             ))
@@ -3436,7 +3437,7 @@ export function AdminTournamentsPage() {
                                 <td className="py-2.5 px-3 font-sans font-bold text-slate-200">{r.tournamentTitle}</td>
                                 <td className="py-2.5 px-3 font-sans text-slate-300">{r.username}</td>
                                 <td className="py-2.5 px-3 text-center font-bold text-amber-400">Rank {r.rank}</td>
-                                <td className="py-2.5 px-3 text-right font-bold text-rose-400">🪙 {r.amount.toLocaleString()}</td>
+                                <td className="py-2.5 px-3 text-right font-bold text-rose-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{r.amount.toLocaleString()}</td>
                                 <td className="py-2.5 px-4 font-sans text-rose-300 text-[11px] truncate max-w-xs">{r.error || 'Payout transfer failed'}</td>
                                 <td className="py-2.5 px-3 text-center">
                                   <span className="inline-block px-2 py-0.5 rounded bg-rose-500 text-white text-[10px] font-black uppercase">
@@ -3481,7 +3482,7 @@ export function AdminTournamentsPage() {
                                 <td className="py-2 px-3 text-center font-bold text-amber-400">
                                   {r.rank === 1 ? '🥇 1st' : r.rank === 2 ? '🥈 2nd' : r.rank === 3 ? '🥉 3rd' : '4️⃣ 4th'}
                                 </td>
-                                <td className="py-2 px-3 text-right font-bold text-emerald-400">🪙 {r.amount.toLocaleString()}</td>
+                                <td className="py-2 px-3 text-right font-bold text-emerald-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{r.amount.toLocaleString()}</td>
                                 <td className="py-2 px-3 text-center">
                                   <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
                                     r.status === 'PAID'
@@ -3515,7 +3516,7 @@ export function AdminTournamentsPage() {
                     <div key={t.tierCode} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-sm text-white">{t.tierName}</span>
-                        <span className="text-xs font-mono text-amber-400 font-bold">{t.entryFee}🪙</span>
+                        <span className="text-xs font-mono text-amber-400 font-bold"><><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.entryFee}</></span>
                       </div>
                       <div className="space-y-1 text-xs text-slate-400">
                         <div className="flex justify-between">
@@ -3536,11 +3537,11 @@ export function AdminTournamentsPage() {
                         </div>
                         <div className="flex justify-between pt-1 border-t border-slate-800">
                           <span>Entries:</span>
-                          <span className="font-mono text-slate-200">🪙 {t.entryFeesCollected.toLocaleString()}</span>
+                          <span className="font-mono text-slate-200"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.entryFeesCollected.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Prizes:</span>
-                          <span className="font-mono text-emerald-400">🪙 {t.prizesDistributed.toLocaleString()}</span>
+                          <span className="font-mono text-emerald-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.prizesDistributed.toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
@@ -3588,13 +3589,13 @@ export function AdminTournamentsPage() {
                           <td className="py-3 px-4 text-center font-mono text-emerald-400 font-bold">{g.completedCount}</td>
                           <td className="py-3 px-4 text-center font-mono text-rose-400 font-bold">{g.cancelledCount}</td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-slate-200">
-                            🪙 {g.entryCollection.toLocaleString()}
+                            <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{g.entryCollection.toLocaleString()}
                           </td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-emerald-400">
-                            🪙 {g.prizesDistributed.toLocaleString()}
+                            <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{g.prizesDistributed.toLocaleString()}
                           </td>
                           <td className="py-3 px-4 text-right font-mono text-rose-400">
-                            🪙 {g.refunds.toLocaleString()}
+                            <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{g.refunds.toLocaleString()}
                           </td>
                           <td className="py-3 px-4 text-center font-mono font-bold">
                             <span className={g.completionRatePercent >= 70 ? 'text-emerald-400' : 'text-amber-400'}>
@@ -3662,11 +3663,11 @@ export function AdminTournamentsPage() {
                     <thead>
                       <tr className="border-b border-slate-800 bg-slate-950/60 text-[11px] font-bold text-slate-400 uppercase">
                         <th className="py-3 px-4">Game</th>
-                        <th className="py-3 px-4 text-center">🟢 Mini (5🪙)</th>
-                        <th className="py-3 px-4 text-center">🔵 Basic (10🪙)</th>
-                        <th className="py-3 px-4 text-center">🟣 Standard (25🪙)</th>
-                        <th className="py-3 px-4 text-center">🟠 Premium (50🪙)</th>
-                        <th className="py-3 px-4 text-center">🔴 Pro (100🪙)</th>
+                        <th className="py-3 px-4 text-center">🟢 Mini (5 Coins)</th>
+                        <th className="py-3 px-4 text-center">🔵 Basic (10 Coins)</th>
+                        <th className="py-3 px-4 text-center">🟣 Standard (25 Coins)</th>
+                        <th className="py-3 px-4 text-center">🟠 Premium (50 Coins)</th>
+                        <th className="py-3 px-4 text-center">🔴 Pro (100 Coins)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
@@ -3865,7 +3866,7 @@ export function AdminTournamentsPage() {
                                 <span className="uppercase text-[10px] font-black text-amber-400">{bt.tierCode}</span>
                                 <span>{bt.tierName}</span>
                               </td>
-                              <td className="py-2.5 px-3 text-center text-amber-400 font-mono font-bold">🪙 {bt.entryFee}</td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-mono font-bold"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{bt.entryFee}</td>
                               <td className="py-2.5 px-3 text-center text-sky-400 font-bold">{bt.activePlayers}</td>
                               <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{bt.newPlayers}</td>
                               <td className="py-2.5 px-3 text-center text-indigo-400 font-bold">{bt.returningPlayers}</td>
@@ -4021,7 +4022,7 @@ export function AdminTournamentsPage() {
                       </span>
                       <span>{analyticsData.topParticipation?.summary.topTier?.tierName || 'Standard'}</span>
                       <span className="text-xs text-slate-400 font-normal">
-                        (🪙 {analyticsData.topParticipation?.summary.topTier?.entryFee ?? 25})
+                        (<CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{analyticsData.topParticipation?.summary.topTier?.entryFee ?? 25})
                       </span>
                     </div>
                     <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between font-mono">
@@ -4097,7 +4098,7 @@ export function AdminTournamentsPage() {
                                       <span className="uppercase text-[10px] font-black text-amber-400">{t.tierCode}</span>
                                       <span>{t.tierName}</span>
                                     </div>
-                                    <div className="text-[10px] text-slate-500 font-mono">🪙 {t.entryFee} entry fee</div>
+                                    <div className="text-[10px] text-slate-500 font-mono"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.entryFee} entry fee</div>
                                   </div>
                                 </div>
                                 <div className="text-right font-mono">
@@ -4205,7 +4206,7 @@ export function AdminTournamentsPage() {
                                 <span className="uppercase text-[10px] font-black text-amber-400">{t.tierCode}</span>
                                 <span>{t.tierName}</span>
                               </td>
-                              <td className="py-2.5 px-3 text-center text-amber-400 font-bold">🪙 {t.entryFee}</td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-bold"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{t.entryFee}</td>
                               <td className="py-2.5 px-3 text-center text-slate-300 font-bold">{t.tournamentsCount}</td>
                               <td className="py-2.5 px-3 text-center text-indigo-300 font-bold">{t.totalRegistrations}</td>
                               <td className="py-2.5 px-4 text-right font-black text-white">{t.fillRatePercent}%</td>
@@ -4448,7 +4449,7 @@ export function AdminTournamentsPage() {
                                 <span className="uppercase text-[10px] font-black text-amber-400">{bt.tierCode}</span>
                                 <span>{bt.tierName}</span>
                               </td>
-                              <td className="py-2.5 px-3 text-center text-amber-400 font-mono font-bold">🪙 {bt.entryFee}</td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-mono font-bold"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{bt.entryFee}</td>
                               <td className="py-2.5 px-3 text-center text-slate-300 font-bold">{bt.tournamentsCount}</td>
                               <td className="py-2.5 px-3 text-center text-amber-400 font-bold">{bt.tournamentWins}</td>
                               <td className="py-2.5 px-3 text-center text-indigo-400 font-bold">{bt.top4Finishes}</td>
@@ -4733,7 +4734,7 @@ export function AdminTournamentsPage() {
                                 <span className="uppercase text-[10px] font-black text-amber-400">{bt.tierCode}</span>
                                 <span>{bt.tierName}</span>
                               </td>
-                              <td className="py-2.5 px-3 text-center text-amber-400 font-mono font-bold">🪙 {bt.entryFee}</td>
+                              <td className="py-2.5 px-3 text-center text-amber-400 font-mono font-bold"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{bt.entryFee}</td>
                               <td className="py-2.5 px-3 text-center text-slate-300 font-bold">{bt.tournamentsCount}</td>
                               <td className="py-2.5 px-3 text-center text-white font-bold">{bt.completedMatches}</td>
                               <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{bt.matchesWon}</td>
@@ -5435,11 +5436,11 @@ export function AdminTournamentsPage() {
                     className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
                   >
                     <option value="ALL">All 5 Tiers</option>
-                    <option value="mini">🟢 Mini (5🪙)</option>
-                    <option value="basic">🔵 Basic (10🪙)</option>
-                    <option value="standard">🟣 Standard (25🪙)</option>
-                    <option value="premium">🟠 Premium (50🪙)</option>
-                    <option value="pro">🔴 Pro (100🪙)</option>
+                    <option value="mini">🟢 Mini (5 Coins)</option>
+                    <option value="basic">🔵 Basic (10 Coins)</option>
+                    <option value="standard">🟣 Standard (25 Coins)</option>
+                    <option value="premium">🟠 Premium (50 Coins)</option>
+                    <option value="pro">🔴 Pro (100 Coins)</option>
                   </select>
                 </div>
 
@@ -5545,7 +5546,7 @@ export function AdminTournamentsPage() {
                                 </span>
                               ) : isCoinField && typeof val === 'number' ? (
                                 <span className="font-bold text-amber-300">
-                                  🪙 {val.toLocaleString()}
+                                  <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{val.toLocaleString()}
                                 </span>
                               ) : (
                                 <span>{val !== undefined && val !== null ? String(val) : '—'}</span>
@@ -5664,7 +5665,7 @@ export function AdminTournamentsPage() {
                         <p className="text-xs text-slate-300 font-semibold mt-1.5">{slot.gameName}</p>
                       </div>
                       <div className="text-right">
-                        <div className="text-xs font-mono font-black text-emerald-400">🪙 {slot.prizePool.toLocaleString()}</div>
+                        <div className="text-xs font-mono font-black text-emerald-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{slot.prizePool.toLocaleString()}</div>
                         <div className="text-[10px] text-slate-500 font-mono">Fee: {slot.entryFee}</div>
                       </div>
                     </div>
@@ -5724,7 +5725,7 @@ export function AdminTournamentsPage() {
                       <div className="space-y-2 text-xs">
                         <div className="flex justify-between text-slate-400">
                           <span>Entry Fee:</span>
-                          <span className="font-mono font-bold text-amber-400">🪙 {entryFee}</span>
+                          <span className="font-mono font-bold text-amber-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{entryFee}</span>
                         </div>
                         <div className="flex justify-between text-slate-400">
                           <span>Max Players:</span>
@@ -5732,7 +5733,7 @@ export function AdminTournamentsPage() {
                         </div>
                         <div className="flex justify-between text-slate-400">
                           <span>Prize Pool:</span>
-                          <span className="font-mono font-bold text-emerald-400">🪙 {prizePool.toLocaleString()}</span>
+                          <span className="font-mono font-bold text-emerald-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{prizePool.toLocaleString()}</span>
                         </div>
                       </div>
 
@@ -5741,19 +5742,19 @@ export function AdminTournamentsPage() {
                         <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Prize Distribution</span>
                         <div className="flex justify-between text-slate-300">
                           <span>1st (50%):</span>
-                          <span className="font-mono text-emerald-400">🪙 {prizes.p1.toLocaleString()}</span>
+                          <span className="font-mono text-emerald-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{prizes.p1.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between text-slate-300">
                           <span>2nd (25%):</span>
-                          <span className="font-mono text-slate-300">🪙 {prizes.p2.toLocaleString()}</span>
+                          <span className="font-mono text-slate-300"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{prizes.p2.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between text-slate-300">
                           <span>3rd (15%):</span>
-                          <span className="font-mono text-slate-300">🪙 {prizes.p3.toLocaleString()}</span>
+                          <span className="font-mono text-slate-300"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{prizes.p3.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between text-slate-300">
                           <span>4th (10%):</span>
-                          <span className="font-mono text-slate-300">🪙 {prizes.p4.toLocaleString()}</span>
+                          <span className="font-mono text-slate-300"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{prizes.p4.toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
@@ -5823,12 +5824,12 @@ export function AdminTournamentsPage() {
                       <span>{visual?.name || code}</span>
                     </span>
                     <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                      🪙 {tierConfig.entryFee}
+                      <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{tierConfig.entryFee}
                     </span>
                   </div>
                   <div className="text-[11px] font-mono text-slate-400 flex justify-between">
                     <span>Max: {tierConfig.maxPlayers} players</span>
-                    <span className="text-purple-300">Pool: 🪙{tierConfig.prizePool.toLocaleString()}</span>
+                    <span className="text-purple-300">Pool: <CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{tierConfig.prizePool.toLocaleString()}</span>
                   </div>
                   <div className="flex items-center gap-1 pt-1 border-t border-slate-800/80">
                     <button
@@ -5925,7 +5926,7 @@ export function AdminTournamentsPage() {
                               <div className="text-[10px] font-mono space-y-0.5 pt-0.5">
                                 <div className="flex justify-between items-center text-slate-400">
                                   <span>Fee:</span>
-                                  <span className="font-bold text-amber-400">🪙{tierConfig.entryFee}</span>
+                                  <span className="font-bold text-amber-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{tierConfig.entryFee}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-slate-400">
                                   <span>Max:</span>
@@ -5933,7 +5934,7 @@ export function AdminTournamentsPage() {
                                 </div>
                                 <div className="flex justify-between items-center text-slate-400">
                                   <span>Prize:</span>
-                                  <span className="font-bold text-purple-300">🪙{tierConfig.prizePool.toLocaleString()}</span>
+                                  <span className="font-bold text-purple-300"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{tierConfig.prizePool.toLocaleString()}</span>
                                 </div>
                               </div>
                             </div>
@@ -6045,19 +6046,19 @@ export function AdminTournamentsPage() {
               <span className="font-bold text-slate-400 block mb-1">Prize Distribution Preview (100%)</span>
               <div className="flex justify-between text-slate-300">
                 <span>1st (50%):</span>
-                <span className="font-mono font-bold text-emerald-400">🪙 {Math.round(editingTier.prizePool * 0.5).toLocaleString()}</span>
+                <span className="font-mono font-bold text-emerald-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{Math.round(editingTier.prizePool * 0.5).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-slate-300">
                 <span>2nd (25%):</span>
-                <span className="font-mono text-slate-300">🪙 {Math.round(editingTier.prizePool * 0.25).toLocaleString()}</span>
+                <span className="font-mono text-slate-300"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{Math.round(editingTier.prizePool * 0.25).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-slate-300">
                 <span>3rd (15%):</span>
-                <span className="font-mono text-slate-300">🪙 {Math.round(editingTier.prizePool * 0.15).toLocaleString()}</span>
+                <span className="font-mono text-slate-300"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{Math.round(editingTier.prizePool * 0.15).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-slate-300">
                 <span>4th (10%):</span>
-                <span className="font-mono text-slate-300">🪙 {Math.round(editingTier.prizePool * 0.1).toLocaleString()}</span>
+                <span className="font-mono text-slate-300"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{Math.round(editingTier.prizePool * 0.1).toLocaleString()}</span>
               </div>
             </div>
 
@@ -6171,19 +6172,19 @@ export function AdminTournamentsPage() {
               <span className="font-bold text-slate-400 block mb-1">Prize Distribution (50% / 25% / 15% / 10%)</span>
               <div className="flex justify-between text-slate-300">
                 <span>1st:</span>
-                <span className="font-mono font-bold text-emerald-400">🪙 {Math.round(form.prizePool * 0.5).toLocaleString()}</span>
+                <span className="font-mono font-bold text-emerald-400"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{Math.round(form.prizePool * 0.5).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-slate-300">
                 <span>2nd:</span>
-                <span className="font-mono text-slate-300">🪙 {Math.round(form.prizePool * 0.25).toLocaleString()}</span>
+                <span className="font-mono text-slate-300"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{Math.round(form.prizePool * 0.25).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-slate-300">
                 <span>3rd:</span>
-                <span className="font-mono text-slate-300">🪙 {Math.round(form.prizePool * 0.15).toLocaleString()}</span>
+                <span className="font-mono text-slate-300"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{Math.round(form.prizePool * 0.15).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-slate-300">
                 <span>4th:</span>
-                <span className="font-mono text-slate-300">🪙 {Math.round(form.prizePool * 0.1).toLocaleString()}</span>
+                <span className="font-mono text-slate-300"><CoinIcon className="w-3.5 h-3.5 text-amber-400 inline-block mr-1" />{Math.round(form.prizePool * 0.1).toLocaleString()}</span>
               </div>
             </div>
 
@@ -6298,11 +6299,11 @@ export function AdminTournamentsPage() {
                   className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-xs text-white"
                 >
                   <option value="ALL">All 5 Tiers</option>
-                  <option value="mini">🟢 Mini (5🪙)</option>
-                  <option value="basic">🔵 Basic (10🪙)</option>
-                  <option value="standard">🟣 Standard (25🪙)</option>
-                  <option value="premium">🟠 Premium (50🪙)</option>
-                  <option value="pro">🔴 Pro (100🪙)</option>
+                  <option value="mini">🟢 Mini (5 Coins)</option>
+                  <option value="basic">🔵 Basic (10 Coins)</option>
+                  <option value="standard">🟣 Standard (25 Coins)</option>
+                  <option value="premium">🟠 Premium (50 Coins)</option>
+                  <option value="pro">🔴 Pro (100 Coins)</option>
                 </select>
               </div>
 

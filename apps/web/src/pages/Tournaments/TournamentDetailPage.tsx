@@ -30,6 +30,7 @@ import {
   AlertCircle,
   AlertOctagon,
   Gift,
+  Coins,
 } from 'lucide-react';
 import {
   GAME_DEFINITIONS,
@@ -408,11 +409,15 @@ export function TournamentDetailPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
               <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-2.5 shadow-sm dark:shadow-none">
                 <p className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Prize Pool</p>
-                <p className="text-base font-black text-amber-600 dark:text-amber-400">🪙 {tourn.prizePool.toLocaleString()}</p>
+                <p className="text-base font-black text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                  <Coins className="w-4 h-4 text-amber-500 shrink-0" /> {tourn.prizePool.toLocaleString()}
+                </p>
               </div>
               <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-2.5 shadow-sm dark:shadow-none">
                 <p className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Entry Fee</p>
-                <p className="text-base font-black text-slate-900 dark:text-slate-200">🪙 {tourn.entryFee.toLocaleString()}</p>
+                <p className="text-base font-black text-slate-900 dark:text-slate-200 flex items-center gap-1.5">
+                  <Coins className="w-4 h-4 text-amber-400 shrink-0" /> {tourn.entryFee.toLocaleString()}
+                </p>
               </div>
               <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-2.5 shadow-sm dark:shadow-none">
                 <p className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Players</p>
@@ -629,8 +634,8 @@ export function TournamentDetailPage() {
               </div>
               <div className="mt-2">
                 <p className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">{p.label}</p>
-                <p className="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-0.5">
-                  🪙 {p.amount.toLocaleString()}
+                <p className="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-0.5 flex items-center gap-1.5">
+                  <Coins className="w-4 h-4 text-amber-400 shrink-0" /> {p.amount.toLocaleString()}
                 </p>
               </div>
             </div>
@@ -1185,7 +1190,9 @@ export function TournamentDetailPage() {
 
                             <td className="py-3 px-4 text-right font-mono font-bold">
                               {s.prizeAmount ? (
-                                <span className="text-amber-600 dark:text-amber-400">🪙 {s.prizeAmount.toLocaleString()}</span>
+                                <span className="text-amber-600 dark:text-amber-400 flex items-center justify-end gap-1">
+                                  <Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" /> {s.prizeAmount.toLocaleString()}
+                                </span>
                               ) : (
                                 <span className="text-slate-400 dark:text-slate-600">—</span>
                               )}
@@ -1302,11 +1309,15 @@ export function TournamentDetailPage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-slate-50 dark:bg-slate-900 p-3 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none">
               <p className="text-slate-500 dark:text-slate-400 font-medium">Entry Fee</p>
-              <p className="text-base font-black text-amber-600 dark:text-amber-400">🪙 {tourn.entryFee.toLocaleString()} Coins</p>
+              <p className="text-base font-black text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                <Coins className="w-4 h-4 text-amber-400 shrink-0" /> {tourn.entryFee.toLocaleString()} Coins
+              </p>
             </div>
             <div className="rounded-xl bg-slate-50 dark:bg-slate-900 p-3 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none">
               <p className="text-slate-500 dark:text-slate-400 font-medium">Prize Pool</p>
-              <p className="text-base font-black text-emerald-600 dark:text-emerald-400">🪙 {tourn.prizePool.toLocaleString()} Coins</p>
+              <p className="text-base font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <Coins className="w-4 h-4 text-amber-500 shrink-0" /> {tourn.prizePool.toLocaleString()} Coins
+              </p>
             </div>
           </div>
 
@@ -1314,16 +1325,20 @@ export function TournamentDetailPage() {
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 p-3.5 space-y-2.5 shadow-sm dark:shadow-none">
             <div className="flex justify-between text-slate-600 dark:text-slate-400">
               <span>Current Balance:</span>
-              <span className="font-bold text-slate-900 dark:text-slate-200">🪙 {(walletBalance ?? 0).toLocaleString()} Coins</span>
+              <span className="font-bold text-slate-900 dark:text-slate-200 flex items-center gap-1">
+                <Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" /> {(walletBalance ?? 0).toLocaleString()} Coins
+              </span>
             </div>
             <div className="flex justify-between text-slate-600 dark:text-slate-400">
               <span>Entry Fee:</span>
-              <span className="font-bold text-amber-600 dark:text-amber-400">🪙 {tourn.entryFee.toLocaleString()} Coins</span>
+              <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                <Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" /> {tourn.entryFee.toLocaleString()} Coins
+              </span>
             </div>
             <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between font-semibold">
               <span className="text-slate-700 dark:text-slate-300">Balance After Entry:</span>
-              <span className={`font-bold ${canAfford ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                🪙 {balanceAfterJoin.toLocaleString()} Coins
+              <span className={`font-bold flex items-center gap-1 ${canAfford ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                <Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" /> {balanceAfterJoin.toLocaleString()} Coins
               </span>
             </div>
           </div>
@@ -1409,7 +1424,9 @@ export function TournamentDetailPage() {
               </div>
               <div className="flex justify-between border-t border-slate-200 dark:border-slate-800 pt-2 font-semibold">
                 <span className="text-slate-600 dark:text-slate-300">Prize Pool:</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">🪙 {tourn.prizePool.toLocaleString()} coins</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <Coins className="w-4 h-4 text-amber-500 shrink-0" /> {tourn.prizePool.toLocaleString()} coins
+                </span>
               </div>
             </div>
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Swords, Trophy, Sparkles, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Swords, Trophy, Sparkles, ArrowRight, ShieldCheck, Coins } from 'lucide-react';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { useAuthStore } from '../../store/authStore';
 import { getGameDefinition } from '@gaming-hub/shared';
@@ -62,8 +62,8 @@ export const MatchFoundModal: React.FC = () => {
         <h3 className="relative z-10 text-2xl font-black text-slate-900 dark:text-white flex items-center justify-center gap-2">
           <span>{def.icon}</span> {def.name}
         </h3>
-        <p className="relative z-10 text-xs text-slate-500 dark:text-slate-400 mt-1">
-          🪙 {matchFound.entryFee} Entry Fee · 🏆 {prizePool > 0 ? `${prizePool} Coins Prize` : 'Practice'}
+        <p className="relative z-10 text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center justify-center gap-1.5">
+          <span className="inline-flex items-center gap-1"><Coins className="size-3.5 text-amber-400 inline-block" /> {matchFound.entryFee} Entry Fee</span> · 🏆 {prizePool > 0 ? `${prizePool} Coins Prize` : 'Practice'}
         </p>
 
         {/* VS Layout */}

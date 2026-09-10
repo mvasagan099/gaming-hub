@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { Coins } from 'lucide-react';
 import { GameWrapper } from '../../components/GameWrapper';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
@@ -1510,7 +1511,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
               
               {isPlayerWinner && mode === 'ai' && (
                 <div className="bg-emerald-950/50 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 mb-6">
-                  🪙 +50 Coins Added!
+                  <Coins className="w-4 h-4 text-amber-400 shrink-0" /> +50 Coins Added!
                 </div>
               )}
 

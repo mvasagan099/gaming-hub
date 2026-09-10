@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Ticket as TicketIcon, Gift, Sparkles } from 'lucide-react';
+import { Ticket as TicketIcon, Gift, Sparkles, Coins } from 'lucide-react';
 import { couponsApi } from '../../services/api/enterprise';
 import type { CouponRedemption } from '@gaming-hub/shared';
 import { Skeleton } from '../../components/Skeleton';
@@ -64,7 +64,9 @@ export const CouponsPage: React.FC = () => {
         {redeemed ? (
           <div className="mt-3 rounded-xl bg-white/15 p-4">
             <p className="text-lg font-black">🎉 {redeemed.code} redeemed!</p>
-            <p className="text-sm text-violet-100">🪙 {redeemed.value.toLocaleString()} added to your wallet.</p>
+            <p className="text-sm text-violet-100 flex items-center gap-1.5">
+              <Coins className="w-4 h-4 text-amber-300 inline-block" /> {redeemed.value.toLocaleString()} added to your wallet.
+            </p>
           </div>
         ) : (
           <div className="mt-3 flex gap-2">
@@ -113,7 +115,9 @@ export const CouponsPage: React.FC = () => {
                     {r.coupon.code} · {new Date(r.createdAt).toLocaleDateString()}
                   </p>
                 </div>
-                <span className="text-sm font-black text-emerald-500">+🪙 {r.value.toLocaleString()}</span>
+                <span className="text-sm font-black text-emerald-500 flex items-center gap-1">
+                  +<Coins className="w-3.5 h-3.5 text-amber-400 inline-block" /> {r.value.toLocaleString()}
+                </span>
               </li>
             ))}
           </ul>
