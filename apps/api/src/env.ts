@@ -1,4 +1,17 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "node:path";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
+
+// Load local .env first
+dotenv.config();
+
+// Fallback to monorepo root .env if running from apps/api
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const rootEnvPath = path.resolve(currentDir, "../../../.env");
+if (fs.existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath });
+}
 import { z } from "zod";
 
 const envSchema = z.object({

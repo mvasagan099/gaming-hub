@@ -12,6 +12,7 @@ export default defineConfig({
       "@gaming-hub/game-engine": path.resolve(import.meta.dirname, "../../packages/game-engine/src/index.ts"),
     },
   },
+  envDir: "../../",
   server: {
     port: 5173,
     host: true,

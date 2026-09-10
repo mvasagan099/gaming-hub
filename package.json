@@ -8,6 +8,7 @@
     "packages/*"
   ],
   "scripts": {
+    "predev": "npm run db:generate && npm run build -w @gaming-hub/multiplayer",
     "dev": "concurrently -n web,api,socket -c cyan,magenta,yellow \"npm run dev -w @gaming-hub/web\" \"npm run dev -w @gaming-hub/api\" \"npm run dev -w @gaming-hub/socket-server\"",
     "dev:web": "npm run dev -w @gaming-hub/web",
     "dev:api": "npm run dev -w @gaming-hub/api",
