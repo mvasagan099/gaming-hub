@@ -136,8 +136,8 @@ export function WalletPage() {
     }
     setTransferring(true);
     try {
-      await walletApi.transfer(amt);
-      toast.success(`✓ Successfully transferred 🪙 ${amt.toLocaleString()} Coins to Coupon Wallet!`);
+      const res = await walletApi.transfer(amt, verificationCode.trim() || undefined);
+      toast.success(`✓ Successfully transferred 🪙 ${amt.toLocaleString()} Coins to Coupon Wallet! (Ref: ${res.transactionId})`);
       setTransferAmount("");
       setVerificationCode("");
       setWithdrawOpen(false);

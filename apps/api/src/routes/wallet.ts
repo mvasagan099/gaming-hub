@@ -5,7 +5,15 @@ import type { WalletRequestKind, WalletRequestStatus } from "@gaming-hub/shared"
 import { authenticate } from "../plugins/authenticate";
 import { parseSchema, requireUser, routeParams, queryParams, queryString } from "../lib/http";
 import { assertFeatureEnabled } from "../services/featureFlags";
-import { claimPracticeReward, getWallet, getWalletSummary, transferToCouponWallet, listTransactions } from "../services/wallet";
+import {
+  claimPracticeReward,
+  getWallet,
+  getWalletSummary,
+  transferToCouponWallet,
+  listTransactions,
+  reconcileUnconfirmedTransfer,
+  reconcileAllUnconfirmedTransfers,
+} from "../services/wallet";
 import {
   cancelWalletRequest,
   createDepositRequest,
@@ -21,6 +29,7 @@ const practiceRewardSchema = z.object({
 
 const transferSchema = z.object({
   amount: z.number().min(50),
+  otp: z.string().trim().optional(),
 });
 
 const depositSchema = z.object({
@@ -53,8 +62,28 @@ export async function walletRoutes(app: FastifyInstance) {
 
   app.post("/api/wallet/transfer", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
     const user = requireUser(request);
-    const { amount } = parseSchema(transferSchema, request.body);
-    return transferToCouponWallet(user.id, amount);
+    const { amount, otp } = parseSchema(transferSchema, request.body);
+    return transferToCouponWallet(user.id, amount, otp);
+  });
+
+  app.post("/api/wallet/withdraw", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
+    const user = requireUser(request);
+    const { amount, otp } = parseSchema(transferSchema, request.body);
+    return transferToCouponWallet(user.id, amount, otp);
+  });
+
+  app.post("/api/wallet/reconcile/:transactionId", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
+    requireUser(request);
+    const { transactionId } = routeParams(request);
+    return reconcileUnconfirmedTransfer(transactionId);
+  });
+
+  app.post("/api/wallet/reconcile-all", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
+    const user = requireUser(request);
+    if (user.role !== "ADMIN") {
+      throw new AppError("FORBIDDEN", "Admin access required", 403);
+    }
+    return reconcileAllUnconfirmedTransfers();
   });
 
   app.get("/api/wallet/transactions", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {

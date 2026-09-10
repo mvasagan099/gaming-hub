@@ -537,8 +537,10 @@ export const referralsApi = {
 // ---------------------------------------------------------------------------
 
 export const couponsApi = {
+  verify: (code: string) =>
+    apiClient.post<{ success: boolean; couponId: string; amount: number; currency: string; status: string }>('/coupons/verify', { code }),
   redeem: (code: string) =>
-    apiClient.post<{ ok: boolean; value: number; code: string }>('/coupons/redeem', { code }),
+    apiClient.post<{ ok: boolean; success: boolean; value: number; code: string; message: string }>('/coupons/redeem', { code }),
   redemptions: (page = 1, pageSize = 20) =>
     apiClient.get<Page<CouponRedemption>>(`/coupons/redemptions?page=${page}&pageSize=${pageSize}`),
 };
@@ -824,7 +826,10 @@ export interface WalletSummary {
 
 export const walletApi = {
   summary: () => apiClient.get<WalletSummary>('/wallet/summary'),
-  transfer: (amount: number) => apiClient.post<{ ok: boolean; transferredAmount: number; newBalance: number }>('/wallet/transfer', { amount }),
+  transfer: (amount: number, otp?: string) =>
+    apiClient.post<{ ok: boolean; success: boolean; transactionId: string; transferredAmount: number; newBalance: number }>('/wallet/transfer', { amount, otp }),
+  withdraw: (amount: number, otp?: string) =>
+    apiClient.post<{ ok: boolean; success: boolean; transactionId: string; transferredAmount: number; newBalance: number }>('/wallet/withdraw', { amount, otp }),
   transactions: (page: number, pageSize: number, walletType?: WalletBalanceType, referenceType?: TransactionReferenceType) => {
     const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (walletType) qs.set('walletType', walletType);

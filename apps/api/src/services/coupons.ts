@@ -4,6 +4,7 @@ import type { CouponStatus, CouponDiscountType } from "@gaming-hub/shared";
 import { applyTransaction } from "./wallet";
 import { createNotification } from "./notifications";
 import { audit } from "./audit";
+import { CouponVaultService } from "./couponVaultService";
 
 export interface CreateCouponInput {
   code: string;
@@ -152,44 +153,131 @@ function computeValue(coupon: { discountType: CouponDiscountType; discountValue:
 }
 
 /**
- * Redeems a coupon, crediting the bonus wallet. Validates active status, date
- * window, global usage cap, and per-user uniqueness. Rewards are settings- and
- * feature-flag-gated by the caller.
+ * Verifies a coupon code against CouponVault.
  */
-export async function redeemCoupon(userId: string, code: string) {
-  const coupon = await getCoupon(code);
+export async function verifyCoupon(code: string, userId: string) {
+  return CouponVaultService.verifyCoupon(code, userId);
+}
 
-  if (coupon.status !== "ACTIVE") {
-    throw new AppError("COUPON_INVALID", "This coupon is not active", 400);
-  }
-  const now = new Date();
-  if (now < coupon.validFrom || now > coupon.validUntil) {
-    throw new AppError("COUPON_EXPIRED", "This coupon has expired", 400);
-  }
-  if (coupon.usedCount >= coupon.maxUses) {
-    throw new AppError("COUPON_MAX_USES_REACHED", "This coupon has reached its usage limit", 400);
+/**
+ * Redeems a coupon using CouponVault as the central authority.
+ * Flow:
+ * 1. Verify coupon validity with CouponVault.
+ * 2. Guard against local duplicate redemption.
+ * 3. Atomically redeem on CouponVault FIRST (CouponVault locks with SELECT ... FOR UPDATE).
+ * 4. Credit Gaming Hub MAIN wallet balance via applyTransaction ("COUPON").
+ * 5. Record local redemption and transaction ledger.
+ * 6. Emit real-time wallet synchronization event.
+ */
+export async function redeemCoupon(
+  userId: string,
+  code: string,
+  metaParams?: { ipAddress?: string; device?: string },
+) {
+  const codeUpper = code.trim().toUpperCase();
+
+  // STEP 1: Verify coupon exists and is valid on CouponVault
+  const verifyData = await CouponVaultService.verifyCoupon(codeUpper, userId);
+  const amount = Number(verifyData.amount);
+  const couponId = verifyData.couponId;
+
+  if (!amount || amount <= 0) {
+    throw new AppError("COUPON_INVALID", "This coupon has no value", 400);
   }
 
+  // Check if already redeemed locally by this user
   const alreadyUsed = await prisma.couponRedemption.findUnique({
-    where: { couponId_userId: { couponId: coupon.id, userId } },
+    where: { couponId_userId: { couponId, userId } },
   });
   if (alreadyUsed) {
     throw new AppError("COUPON_ALREADY_USED", "You have already used this coupon", 400);
   }
 
-  const value = computeValue(coupon);
-  if (value <= 0) {
-    throw new AppError("COUPON_INVALID", "This coupon has no value", 400);
+  // STEP 2: Atomically redeem on CouponVault FIRST.
+  const walletTransactionId = `CPN-${couponId}`;
+  await CouponVaultService.redeemCoupon({
+    couponId,
+    userId,
+    walletTransactionId,
+    ipAddress: metaParams?.ipAddress,
+    device: metaParams?.device,
+  });
+
+  // STEP 3: Credit Gaming Hub MAIN wallet locally inside a transaction
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Upsert shadow coupon record to fulfill relational integrity and history
+      await tx.coupon.upsert({
+        where: { code: codeUpper },
+        update: { usedCount: { increment: 1 } },
+        create: {
+          id: couponId,
+          code: codeUpper,
+          title: "CouponVault Promotion",
+          discountType: "FIXED",
+          discountValue: amount,
+          maxUses: 1,
+          usedCount: 1,
+          validFrom: new Date(Date.now() - 3600000),
+          validUntil: new Date(Date.now() + 86400000 * 365),
+          status: "ACTIVE",
+        },
+      });
+
+      // Record redemption (unique constraint on [couponId, userId] guarantees single credit)
+      await tx.couponRedemption.create({
+        data: {
+          couponId,
+          userId,
+          value: amount,
+        },
+      });
+
+      // Credit MAIN wallet balance so winnings from gameplay are withdrawable
+      await applyTransaction(
+        tx,
+        userId,
+        amount,
+        "COUPON",
+        couponId,
+        {
+          code: codeUpper,
+          couponId,
+          provider: "COUPONVAULT",
+          source: "COUPONVAULT",
+          walletTransactionId,
+        },
+        "MAIN",
+      );
+    });
+  } catch (err: any) {
+    // Unique constraint violation means coupon was already credited locally (race condition safety)
+    if (err?.code === "P2002" || err?.message?.includes("unique")) {
+      console.warn("WARN: Duplicate coupon credit caught by unique constraint", { userId, couponId, codeUpper });
+      return { ok: true, success: true, value: amount, code: codeUpper, message: "Coupon already redeemed — balance is up to date." };
+    }
+    console.error("CRITICAL: Coupon redeemed on CouponVault but local wallet credit failed", { userId, couponId, err });
+    throw new AppError("COUPON_CREDIT_FAILED", "Redemption recorded but wallet credit failed. Please contact support with reference: " + walletTransactionId, 500);
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.coupon.update({
-      where: { id: coupon.id },
-      data: { usedCount: { increment: 1 } },
+  // STEP 4: Real-time wallet synchronization
+  try {
+    const { WalletSyncService } = await import("./walletSyncService");
+    const { getWallet } = await import("./wallet");
+    const updatedWallet = await getWallet(userId);
+    WalletSyncService.emitWalletUpdate({
+      userId,
+      balance: updatedWallet.balance,
+      bonusBalance: updatedWallet.bonusBalance,
+      lockedBalance: updatedWallet.lockedBalance,
+      rewardBalance: updatedWallet.rewardBalance,
+      cashbackBalance: updatedWallet.cashbackBalance,
+      type: "CREDIT",
+      amount,
     });
-    await tx.couponRedemption.create({ data: { couponId: coupon.id, userId, value } });
-    await applyTransaction(tx, userId, value, "COUPON", coupon.id, { code: coupon.code }, "BONUS");
-  });
+  } catch (syncErr) {
+    console.warn("Wallet sync event emission failed:", syncErr);
+  }
 
   audit({
     actorType: "user",
@@ -197,15 +285,21 @@ export async function redeemCoupon(userId: string, code: string) {
     action: "coupon.redeemed",
     category: "wallet",
     targetType: "coupon",
-    targetId: coupon.id,
-    meta: { code: coupon.code, value },
+    targetId: couponId,
+    meta: { code: codeUpper, value: amount, provider: "COUPONVAULT" },
   });
 
-  await createNotification(userId, "COUPON", `Coupon redeemed: ${coupon.code}`,
-    `You received ${value} bonus coins`, { couponId: coupon.id, value });
+  await createNotification(
+    userId,
+    "COUPON",
+    `Coupon redeemed: ${codeUpper}`,
+    `You received ${amount} coins in your main wallet`,
+    { couponId, value: amount },
+  );
 
-  return { ok: true, value, code: coupon.code };
+  return { ok: true, success: true, value: amount, code: codeUpper, message: "Coupon redeemed successfully" };
 }
+
 
 export async function listMyRedemptions(userId: string, page: number, pageSize: number) {
   const [items, total] = await Promise.all([
