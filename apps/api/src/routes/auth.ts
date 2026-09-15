@@ -3,6 +3,7 @@ import { decodeJwt } from "jose";
 import { AppError } from "@gaming-hub/shared";
 import { authSessionSchema } from "@gaming-hub/shared";
 import { prisma } from "@gaming-hub/db";
+import { verify as verifyOtp, NobleCryptoPlugin, ScureBase32Plugin } from "otplib";
 import { env } from "../env";
 import { verifyAccessToken } from "../auth/supabase";
 import { ensureUser, getAuthenticatedUserData } from "../services/users";
@@ -10,7 +11,7 @@ import { authenticate } from "../plugins/authenticate";
 import { requireUser } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
 import { getCategorySettings } from "../services/settings";
-import { recordLoginSession } from "../services/sessions";
+import { recordLoginSession, hashToken } from "../services/sessions";
 
 // Failed sign-in lockout: more than this many failed session exchanges for an
 // email within the window rejects further attempts, even with a valid token.
@@ -159,6 +160,80 @@ export async function authRoutes(app: FastifyInstance) {
         meta: { email: verified.email },
       });
       return { status: "ok" };
+    },
+  );
+
+  // ─── C-02: POST /api/auth/2fa/verify ──────────────────────────────────────
+  // Called by the frontend after receiving { status: "2fa_required" } from
+  // /api/auth/session.  Verifies the TOTP token and stamps mfaVerifiedAt on the
+  // current LoginSession so backend middleware can confirm 2FA completion.
+  app.post(
+    "/api/auth/2fa/verify",
+    { preHandler: authenticate, config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
+    async (request) => {
+      const user = requireUser(request);
+      const { token: totpToken } = (request.body as { token?: unknown });
+      if (typeof totpToken !== "string" || !totpToken.trim()) {
+        throw new AppError("VALIDATION_ERROR", "TOTP token is required", 400);
+      }
+
+      const profile = await prisma.profile.findUnique({
+        where: { userId: user.id },
+        select: { twoFactorEnabled: true, twoFactorSecret: true },
+      });
+
+      if (!profile?.twoFactorEnabled || !profile.twoFactorSecret) {
+        throw new AppError("NOT_FOUND", "2FA is not enabled for this account", 400);
+      }
+
+      // Re-use the otplib verify pattern from security.ts
+      const cryptoPlugin = new NobleCryptoPlugin();
+      const base32Plugin = new ScureBase32Plugin();
+      let isValid = false;
+      try {
+        const result = await verifyOtp({
+          token: totpToken.trim(),
+          secret: profile.twoFactorSecret,
+          crypto: cryptoPlugin,
+          base32: base32Plugin,
+          epochTolerance: 30,
+        });
+        isValid = result.valid;
+      } catch {
+        isValid = false;
+      }
+
+      if (!isValid) {
+        auditFromRequest(request, {
+          actorType: "user",
+          actorId: user.id,
+          action: "auth.2fa.failed",
+          category: "auth",
+          targetType: "user",
+          targetId: user.id,
+        });
+        throw new AppError("UNAUTHORIZED", "Invalid 2FA token", 401);
+      }
+
+      // Stamp the active session so requireMfa middleware will pass
+      const authHeader = request.headers.authorization as string;
+      const rawToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+      const tokenHash = hashToken(rawToken);
+      await prisma.loginSession.updateMany({
+        where: { tokenHash },
+        data: { mfaVerifiedAt: new Date() },
+      });
+
+      auditFromRequest(request, {
+        actorType: "user",
+        actorId: user.id,
+        action: "auth.2fa.verified",
+        category: "auth",
+        targetType: "user",
+        targetId: user.id,
+      });
+
+      return { status: "ok", mfaVerified: true };
     },
   );
 }

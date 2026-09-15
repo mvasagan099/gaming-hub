@@ -381,7 +381,7 @@ model Profile {
   gender      String?
   currency    String?   @default("USD")
   referredBy  String?
-  coins       Int       @default(2500)
+  coins       Int       @default(0)
   gems        Int       @default(45)
   xp          Int       @default(0)
   level       Int       @default(1)
@@ -624,7 +624,7 @@ model MatchmakingQueue {
 
 model Wallet {
   userId          String   @id
-  balance         Int      @default(2500)
+  balance         Int      @default(0)
   bonusBalance    Int      @default(0)
   lockedBalance   Int      @default(0)
   rewardBalance   Int      @default(0)
@@ -1517,6 +1517,9 @@ model LoginSession {
   expiresAt  DateTime
   revokedAt  DateTime?
   createdAt  DateTime  @default(now())
+  /// C-02: Set when a 2FA-enabled user successfully verifies their TOTP code.
+  /// Sensitive endpoints (wallet, games) must check this via the requireMfa middleware.
+  mfaVerifiedAt  DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

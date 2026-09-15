@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import DOMPurify from "dompurify";
 import {
   Search,
   ChevronDown,
@@ -432,7 +433,7 @@ export function SupportPanel() {
                               "prose prose-sm max-w-none pt-3",
                               effectiveTheme === "dark" ? "prose-invert" : ""
                             )}
-                            dangerouslySetInnerHTML={{ __html: article.content }}
+                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content, { USE_PROFILES: { html: true }, FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed'], FORBID_ATTR: ['onerror', 'onload', 'onclick'] }) }}
                           />
                           {article.quickAction && (
                             <button
@@ -607,7 +608,7 @@ export function SupportPanel() {
                       "mt-1 line-clamp-2 text-xs",
                       effectiveTheme === "dark" ? "text-slate-400" : "text-slate-500"
                     )}
-                    dangerouslySetInnerHTML={{ __html: article.content.slice(0, 150) + "..." }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content.slice(0, 150) + "...", { USE_PROFILES: { html: true }, FORBID_TAGS: ['script', 'style', 'iframe'] }) }}
                   />
                 </div>
               </button>
@@ -668,7 +669,7 @@ export function SupportPanel() {
               "prose prose-sm max-w-none",
               effectiveTheme === "dark" ? "prose-invert" : ""
             )}
-            dangerouslySetInnerHTML={{ __html: selectedArticle.content }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedArticle.content, { USE_PROFILES: { html: true }, FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed'], FORBID_ATTR: ['onerror', 'onload', 'onclick'] }) }}
           />
 
           {selectedArticle.quickAction && (

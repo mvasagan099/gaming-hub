@@ -2,14 +2,13 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { AppError, clampPagination, isGameId } from "@gaming-hub/shared";
 import type { WalletRequestKind, WalletRequestStatus } from "@gaming-hub/shared";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, requireMfa } from "../plugins/authenticate";
 import { parseSchema, requireUser, routeParams, queryParams, queryString } from "../lib/http";
 import { assertFeatureEnabled } from "../services/featureFlags";
 import {
   claimPracticeReward,
   getWallet,
   getWalletSummary,
-  transferToCouponWallet,
   listTransactions,
   reconcileUnconfirmedTransfer,
   reconcileAllUnconfirmedTransfers,
@@ -27,10 +26,8 @@ const practiceRewardSchema = z.object({
   gameId: z.string().min(1).max(40),
 });
 
-const transferSchema = z.object({
-  amount: z.number().min(50),
-  otp: z.string().trim().optional(),
-});
+// C-03: transferSchema removed — /transfer and /withdraw now delegate to
+// createWithdrawalRequest() which enforces KYC, mandatory OTP, and limits.
 
 const depositSchema = z.object({
   amount: z.number().int().min(1),
@@ -60,16 +57,22 @@ export async function walletRoutes(app: FastifyInstance) {
     return WalletHistoryService.getUserWalletSummary(user.id);
   });
 
-  app.post("/api/wallet/transfer", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
+  // C-03 fix: /transfer and /withdraw now delegate to the same createWithdrawalRequest
+  // flow used by /withdrawals, which enforces KYC status, mandatory OTP, min/max amounts,
+  // and daily/monthly limits.  Both endpoints are also gated by the payments.withdrawals
+  // feature flag so they can be disabled in production with a single config change.
+  app.post("/api/wallet/transfer", { preHandler: [authenticate, requireMfa], config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request) => {
     const user = requireUser(request);
-    const { amount, otp } = parseSchema(transferSchema, request.body);
-    return transferToCouponWallet(user.id, amount, otp);
+    await assertFeatureEnabled("payments.withdrawals", "Withdrawals");
+    const { amount, otp } = parseSchema(withdrawalSchema, request.body);
+    return createWithdrawalRequest(user.id, amount, otp);
   });
 
-  app.post("/api/wallet/withdraw", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
+  app.post("/api/wallet/withdraw", { preHandler: [authenticate, requireMfa], config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request) => {
     const user = requireUser(request);
-    const { amount, otp } = parseSchema(transferSchema, request.body);
-    return transferToCouponWallet(user.id, amount, otp);
+    await assertFeatureEnabled("payments.withdrawals", "Withdrawals");
+    const { amount, otp } = parseSchema(withdrawalSchema, request.body);
+    return createWithdrawalRequest(user.id, amount, otp);
   });
 
   app.post("/api/wallet/reconcile/:transactionId", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
@@ -144,7 +147,7 @@ export async function walletRoutes(app: FastifyInstance) {
     return createDepositRequest(user.id, amount, method);
   });
 
-  app.post("/api/wallet/withdrawals", { preHandler: authenticate, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request) => {
+  app.post("/api/wallet/withdrawals", { preHandler: [authenticate, requireMfa], config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request) => {
     const user = requireUser(request);
     await assertFeatureEnabled("payments.withdrawals", "Withdrawals");
     const { amount, otp } = parseSchema(withdrawalSchema, request.body);

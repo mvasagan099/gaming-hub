@@ -8,7 +8,7 @@ import {
   COUNTRY_DOCUMENTS,
   AppError,
 } from "@gaming-hub/shared";
-import { FileUploadService } from "./fileUpload";
+import { FileUploadService, validateFile } from "./fileUpload";
 import { SupabaseStorageService } from "./supabaseStorage";
 
 function calculateExpiryDate(): Date | null {
@@ -166,6 +166,13 @@ export async function uploadKycDocument(data: UploadDocumentInput) {
   let mimeType = data.mimeType;
   let fileHash = "";
 
+  // H-05 fix: run magic-byte + MIME + extension validation BEFORE uploading to
+  // any storage backend. A failed validation throws and no upload occurs.
+  const validation = await validateFile(data.fileBuffer, data.mimeType, data.fileName);
+  if (!validation.valid) {
+    throw new AppError("VALIDATION_ERROR", validation.error ?? "File validation failed", 400);
+  }
+
   try {
     const supabaseRes = await SupabaseStorageService.upload(
       data.userId,
@@ -180,6 +187,9 @@ export async function uploadKycDocument(data: UploadDocumentInput) {
     fileUrl = supabaseRes.filePath;
     fileSize = supabaseRes.fileSize;
   } catch (err) {
+    // H-05 fix: Supabase upload failure is a real error; fall back to local
+    // disk storage only as a last resort, and log the Supabase error clearly.
+    console.error("[KYC] Supabase upload failed, falling back to local storage:", err);
     const uploaded = await FileUploadService.save(
       data.userId,
       data.fileBuffer,

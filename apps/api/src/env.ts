@@ -54,6 +54,11 @@ const envSchema = z.object({
   // CouponVault Integration Configuration
   COUPON_API_URL: z.string().url().optional().default("http://127.0.0.1:4000/api/v1"),
   COUPON_API_KEY: z.string().default("dev-fallback-key-123"),
+  // M-07 fix: constrain how many X-Forwarded-For hops are trusted.
+  // Set to 0 if there is no reverse proxy (direct deployment), 1 for a single
+  // load balancer / Nginx / Cloudflare, or higher for multi-hop setups.
+  // Unconditionally trusting all hops (trustProxy: true) allows IP spoofing.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
 }).superRefine((data, ctx) => {
   // 1. Prevent mock email provider from being used in production
   if (data.NODE_ENV === "production" && (!data.EMAIL_PROVIDER || data.EMAIL_PROVIDER === "mock")) {

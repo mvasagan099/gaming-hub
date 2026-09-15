@@ -52,7 +52,7 @@ export function buildApp() {
         ? { transport: { target: "pino-pretty", options: { colorize: true } } }
         : {}),
     },
-    trustProxy: true,
+    // M-07 fix: trust only the configured number of upstream proxy hops instead of all.\n    // Set TRUST_PROXY_HOPS=0 for direct deployments, 1 for a single load balancer, etc.\n    trustProxy: env.TRUST_PROXY_HOPS,
     // Reject oversized JSON payloads (defense against body abuse). The API has
     // no file-upload surface yet; raise via env.BODY_LIMIT when one is added.
     bodyLimit: env.BODY_LIMIT,

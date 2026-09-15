@@ -327,7 +327,7 @@ export async function transferToCouponWallet(
     throw new AppError("INSUFFICIENT_BALANCE", "Insufficient balance for transfer", 400);
   }
 
-  const transactionId = `TRF-${userId.substring(0, 8)}-${Date.now()}`;
+  const transactionId = `TRF-${userId.substring(0, 8)}-${crypto.randomUUID().replace(/-/g, "").substring(0, 12)}`;
   const userEmail = (user.email || `${user.username.toLowerCase()}@gaminghub.com`).toLowerCase().trim();
 
   // 1. Atomically deduct balance and create PENDING records inside a transaction

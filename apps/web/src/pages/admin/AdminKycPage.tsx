@@ -29,6 +29,8 @@ export function AdminKycPage() {
   const [reviewNotes, setReviewNotes] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // H-03 fix: blob URL map so tokens never appear in document URLs
+  const [docBlobUrls, setDocBlobUrls] = useState<Record<string, string>>({});
 
   const loadRequests = async () => {
     setIsLoading(true);
@@ -48,6 +50,46 @@ export function AdminKycPage() {
       setIsLoading(false);
     }
   };
+
+  // H-03 fix: when a KYC request is selected, fetch all non-Supabase documents
+  // using the Authorization header and create object URLs from the blobs.
+  useEffect(() => {
+    // Revoke previous blob URLs to avoid memory leaks
+    Object.values(docBlobUrls).forEach((url) => URL.revokeObjectURL(url));
+    setDocBlobUrls({});
+
+    if (!selectedRequest?.documents?.length) return;
+    const token = useAuthStore.getState().session?.access_token;
+    if (!token) return;
+
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:4000/api';
+
+    selectedRequest.documents.forEach(async (doc) => {
+      const rawUrl = doc.fileUrl;
+      const isFullUrl = rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'));
+      // Supabase public/signed URLs don't need our token — use them directly
+      if (isFullUrl) {
+        setDocBlobUrls((prev) => ({ ...prev, [doc.id]: rawUrl }));
+        return;
+      }
+      // For API-proxied documents, fetch with Authorization header
+      const fetchUrl = rawUrl?.startsWith('/')
+        ? `${apiBase.replace(/\/api$/, '')}${rawUrl}`
+        : `${apiBase}/admin/kyc/document/${doc.id}/view`;
+      try {
+        const res = await fetch(fetchUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        setDocBlobUrls((prev) => ({ ...prev, [doc.id]: objectUrl }));
+      } catch {
+        // silently skip — the image will just be absent
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRequest?.id]);
 
   useEffect(() => {
     void loadRequests();
@@ -286,15 +328,8 @@ export function AdminKycPage() {
                       return map;
                     }, new Map<string, typeof selectedRequest.documents[0]>()).values()
                   ).map((doc) => {
-                    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:4000/api';
-                    const rawUrl = doc.fileUrl;
-                    const isFullUrl = rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'));
-                    const token = useAuthStore.getState().session?.access_token;
-                    const viewUrl = isFullUrl
-                      ? rawUrl
-                      : rawUrl && rawUrl.startsWith('/')
-                        ? `${apiBase.replace(/\/api$/, '')}${rawUrl}${token ? `?token=${token}` : ''}`
-                        : `${apiBase}/admin/kyc/document/${doc.id}/view${token ? `?token=${token}` : ''}`;
+                    // H-03 fix: use blob URL (fetched with Authorization header) or direct Supabase URL
+                    const viewUrl = docBlobUrls[doc.id] ?? null;
                     const isImg = !doc.mimeType || doc.mimeType.startsWith('image/') || !!doc.fileName?.match(/\.(jpg|jpeg|png|webp)$/i) || !!doc.isSelfie;
                     return (
                       <div
