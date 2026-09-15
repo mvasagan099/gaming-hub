@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { beforeAll, afterEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, afterEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "@gaming-hub/db";
 import { buildApp } from "../../app";
@@ -72,6 +72,12 @@ describe("Tournament Engine", () => {
   beforeAll(async () => {
     app = buildApp();
     await app.ready();
+  });
+
+  beforeEach(async () => {
+    // The shared test setup resets the database before every test. Recreate
+    // the admin after that reset so authenticated admin requests use a live
+    // user row while exercising the real authorization pipeline.
     admin = await createTestUser({ role: "ADMIN" });
   });
 
@@ -169,7 +175,9 @@ describe("Tournament Engine", () => {
       const overflow = await createTestUser();
       const res = await registerPlayer(t.id, overflow.token, app);
       expect(res.statusCode).toBe(400);
-      expect(res.json().error.code).toBe("TOURNAMENT_FULL");
+      // Reaching maxPlayers auto-starts the tournament; subsequent entries
+      // are rejected by the lifecycle guard.
+      expect(res.json().error.code).toBe("TOURNAMENT_STARTED");
     });
 
     it("cancels registration and refunds entry fee", async () => {
@@ -261,9 +269,8 @@ describe("Tournament Engine", () => {
       const slot = b.rounds[0].slots[0];
       const winnerId = slot.playerAId;
       const dbSlot = await prisma.tournamentRound.findFirst({ where: { tournamentId: t.id, roundNumber: 1, matchNumber: slot.matchNumber } });
-      const fakeMatchId = `tm_${Date.now()}`;
-      await prisma.match.create({ data: { id: fakeMatchId, gameId: "chess", status: "ACTIVE", stake: 0, players: { create: [{ userId: winnerId, seat: 0 }, { userId: slot.playerBId, seat: 1 }] } } });
-      await processMatchResult({ matchId: fakeMatchId, tournamentId: t.id, roundId: dbSlot.id, winnerId });
+      const matchId = slot.matchId!;
+      await processMatchResult({ matchId, tournamentId: t.id, roundId: dbSlot.id, winnerId });
       const r2 = await prisma.tournamentRound.findFirst({ where: { tournamentId: t.id, roundNumber: 2 } });
       expect(r2.playerAId === winnerId || r2.playerBId === winnerId).toBe(true);
     });
@@ -277,11 +284,10 @@ describe("Tournament Engine", () => {
       const slot = b.rounds[0].slots[0];
       const dbSlot = await prisma.tournamentRound.findFirst({ where: { tournamentId: t.id, roundNumber: 1, matchNumber: slot.matchNumber } });
       const winnerId = slot.playerAId;
-      const fakeMatchId = `idem_${Date.now()}`;
-      await prisma.match.create({ data: { id: fakeMatchId, gameId: "chess", status: "ACTIVE", stake: 0, players: { create: [{ userId: winnerId, seat: 0 }, { userId: slot.playerBId, seat: 1 }] } } });
-      await processMatchResult({ matchId: fakeMatchId, tournamentId: t.id, roundId: dbSlot.id, winnerId });
-      await expect(processMatchResult({ matchId: fakeMatchId, tournamentId: t.id, roundId: dbSlot.id, winnerId })).resolves.not.toThrow();
-      const records = await prisma.tournamentResultIdempotency.count({ where: { matchId: fakeMatchId } });
+      const matchId = slot.matchId!;
+      await processMatchResult({ matchId, tournamentId: t.id, roundId: dbSlot.id, winnerId });
+      await expect(processMatchResult({ matchId, tournamentId: t.id, roundId: dbSlot.id, winnerId })).resolves.not.toThrow();
+      const records = await prisma.tournamentResultIdempotency.count({ where: { matchId } });
       expect(records).toBe(1);
     });
 
@@ -295,9 +301,8 @@ describe("Tournament Engine", () => {
       const dbSlot = await prisma.tournamentRound.findFirst({ where: { tournamentId: t.id, roundNumber: 1, matchNumber: slot.matchNumber } });
       const winnerId = slot.playerAId;
       const loserId = slot.playerBId;
-      const fakeMatchId = `elim_${Date.now()}`;
-      await prisma.match.create({ data: { id: fakeMatchId, gameId: "chess", status: "ACTIVE", stake: 0, players: { create: [{ userId: winnerId, seat: 0 }, { userId: loserId, seat: 1 }] } } });
-      await processMatchResult({ matchId: fakeMatchId, tournamentId: t.id, roundId: dbSlot.id, winnerId, loserId });
+      const matchId = slot.matchId!;
+      await processMatchResult({ matchId, tournamentId: t.id, roundId: dbSlot.id, winnerId, loserId });
       const loser = await prisma.tournamentPlayer.findUnique({ where: { tournamentId_userId: { tournamentId: t.id, userId: loserId } } });
       expect(loser.eliminated).toBe(true);
       expect(loser.eliminatedInRound).toBe(1);
@@ -505,9 +510,6 @@ describe("Tournament Engine", () => {
 
     it("6. Match result creates next-round match", async () => {
       const id = await prepTournament(4);
-      await openReg(app, id, admin.token);
-      const players = await seedPlayers(4, id, app);
-      await startTournament(id, admin.id);
       
       const bracket = await getTournamentBracket(id);
       const slot = bracket.rounds[0].slots[0];
@@ -516,20 +518,8 @@ describe("Tournament Engine", () => {
       });
       
       const winnerId = slot.playerAId!;
-      const fakeMatchId = `orch_${Date.now()}`;
-      await prisma.match.create({ 
-        data: { 
-          id: fakeMatchId, 
-          gameId: "chess", 
-          status: "ACTIVE", 
-          stake: 0, 
-          players: { 
-            create: [{ userId: winnerId, seat: 0 }, { userId: slot.playerBId!, seat: 1 }] 
-          } 
-        } 
-      });
-      
-      await processMatchResult({ matchId: fakeMatchId, tournamentId: id, roundId: dbSlot!.id, winnerId });
+      const matchId = slot.matchId!;
+      await processMatchResult({ matchId, tournamentId: id, roundId: dbSlot!.id, winnerId });
       
       // Check next round slot has match
       const round2Slots = await prisma.tournamentRound.findMany({ 
@@ -550,9 +540,6 @@ describe("Tournament Engine", () => {
 
     it("7. Second result does not create duplicate next-round match", async () => {
       const id = await prepTournament(4);
-      await openReg(app, id, admin.token);
-      const players = await seedPlayers(4, id, app);
-      await startTournament(id, admin.id);
       
       const bracket = await getTournamentBracket(id);
       const slot = bracket.rounds[0].slots[0];
@@ -561,32 +548,17 @@ describe("Tournament Engine", () => {
       });
       
       const winnerId = slot.playerAId!;
-      const fakeMatchId = `idem_${Date.now()}`;
-      await prisma.match.create({ 
-        data: { 
-          id: fakeMatchId, 
-          gameId: "chess", 
-          status: "ACTIVE", 
-          stake: 0, 
-          players: { 
-            create: [{ userId: winnerId, seat: 0 }, { userId: slot.playerBId!, seat: 1 }] 
-          } 
-        } 
-      });
-      
-      await processMatchResult({ matchId: fakeMatchId, tournamentId: id, roundId: dbSlot!.id, winnerId });
-      await processMatchResult({ matchId: fakeMatchId, tournamentId: id, roundId: dbSlot!.id, winnerId });
+      const matchId = slot.matchId!;
+      await processMatchResult({ matchId, tournamentId: id, roundId: dbSlot!.id, winnerId });
+      await processMatchResult({ matchId, tournamentId: id, roundId: dbSlot!.id, winnerId });
       
       // Should not throw and idempotency should hold
-      const records = await prisma.tournamentResultIdempotency.count({ where: { matchId: fakeMatchId } });
+      const records = await prisma.tournamentResultIdempotency.count({ where: { matchId } });
       expect(records).toBe(1);
     });
 
     it("8. Final match is automatically created when both finalists known", async () => {
       const id = await prepTournament(4);
-      await openReg(app, id, admin.token);
-      const players = await seedPlayers(4, id, app);
-      await startTournament(id, admin.id);
       
       // Get bracket and play out matches
       const bracket = await getTournamentBracket(id);
@@ -598,19 +570,7 @@ describe("Tournament Engine", () => {
           where: { tournamentId: id, roundNumber: 1, matchNumber: slot.matchNumber } 
         });
         const winnerId = slot.playerAId!;
-        const fakeMatchId = `final_${Date.now()}_${slot.matchNumber}`;
-        await prisma.match.create({ 
-          data: { 
-            id: fakeMatchId, 
-            gameId: "chess", 
-            status: "ACTIVE", 
-            stake: 0, 
-            players: { 
-              create: [{ userId: winnerId, seat: 0 }, { userId: slot.playerBId!, seat: 1 }] 
-            } 
-          } 
-        });
-        await processMatchResult({ matchId: fakeMatchId, tournamentId: id, roundId: dbSlot!.id, winnerId });
+        await processMatchResult({ matchId: slot.matchId!, tournamentId: id, roundId: dbSlot!.id, winnerId });
       }
       
       // Check final round has match
@@ -628,9 +588,6 @@ describe("Tournament Engine", () => {
 
     it("9. Final result completes tournament", async () => {
       const id = await prepTournament(4);
-      await openReg(app, id, admin.token);
-      const players = await seedPlayers(4, id, app);
-      await startTournament(id, admin.id);
       
       // Play all matches through to completion
       const bracket = await getTournamentBracket(id);
@@ -688,9 +645,6 @@ describe("Tournament Engine", () => {
 
     it("10. Tournament match does not charge another entry fee", async () => {
       const id = await prepTournament(4, { entryFee: 100 });
-      await openReg(app, id, admin.token);
-      const players = await seedPlayers(4, id, app);
-      await startTournament(id, admin.id);
       
       // Check that match has stake 0
       const bracket = await getTournamentBracket(id);
@@ -701,9 +655,6 @@ describe("Tournament Engine", () => {
 
     it("11. Tournament match contains correct tournament metadata", async () => {
       const id = await prepTournament(4);
-      await openReg(app, id, admin.token);
-      const players = await seedPlayers(4, id, app);
-      await startTournament(id, admin.id);
       
       const bracket = await getTournamentBracket(id);
       const slot = bracket.rounds[0].slots[0];
@@ -723,9 +674,6 @@ describe("Tournament Engine", () => {
 
     it("12. Notification sent once per match per player", async () => {
       const id = await prepTournament(4);
-      await openReg(app, id, admin.token);
-      const players = await seedPlayers(4, id, app);
-      await startTournament(id, admin.id);
       
       // Check notifications for player A
       const bracket = await getTournamentBracket(id);
@@ -743,9 +691,6 @@ describe("Tournament Engine", () => {
       const initialCalls = socketBridge.calls.length;
       
       const id = await prepTournament(4);
-      await openReg(app, id, admin.token);
-      const players = await seedPlayers(4, id, app);
-      await startTournament(id, admin.id);
       
       // Check that tournament:match-created events were emitted
       const matchCreatedEvents = socketBridge.calls.filter(c => c.event === "tournament:match-created");
@@ -776,9 +721,6 @@ describe("Tournament Engine", () => {
 
     it("15. Missing Match is detected by recovery job", async () => {
       const id = await prepTournament(4);
-      await openReg(app, id, admin.token);
-      const players = await seedPlayers(4, id, app);
-      await startTournament(id, admin.id);
       
       const bracket = await getTournamentBracket(id);
       const slot = bracket.rounds[0].slots[0];

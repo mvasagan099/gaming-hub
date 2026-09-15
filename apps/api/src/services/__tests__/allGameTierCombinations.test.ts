@@ -24,7 +24,7 @@
  *   - Game rules are unchanged
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { prisma } from "@gaming-hub/db";
 import {
   GAME_IDS,
@@ -571,9 +571,32 @@ describe("SUITE 8 — System Invariants", () => {
 describe("SUITE 9 — Hourly Scheduler: 50 slots per hour + idempotency", () => {
   let scheduleHourlyTournaments: () => Promise<import("../hourlyTournamentScheduler").HourlyScheduleResult>;
 
+  async function seedSchedulerTiers() {
+    for (const tier of DEFAULT_TOURNAMENT_TIERS) {
+      await prisma.tournamentTier.upsert({
+        where: { code: tier.code },
+        update: { isActive: true },
+        create: {
+          name: tier.name,
+          code: tier.code,
+          entryFee: tier.entryFee,
+          maxPlayers: tier.maxPlayers,
+          prizePool: tier.prizePool,
+          prizeDistribution: tier.prizeDistribution as any,
+          sortOrder: tier.sortOrder,
+          isActive: true,
+        },
+      });
+    }
+  }
+
   beforeAll(async () => {
     const mod = await import("../hourlyTournamentScheduler");
     scheduleHourlyTournaments = mod.scheduleHourlyTournaments;
+  });
+
+  beforeEach(async () => {
+    await seedSchedulerTiers();
   });
 
   it("first run creates exactly 50 tournaments (10 games × 5 active tiers)", async () => {
@@ -603,6 +626,7 @@ describe("SUITE 9 — Hourly Scheduler: 50 slots per hour + idempotency", () => 
   }, 30000);
 
   it("second run is fully idempotent — creates 0 new tournaments", async () => {
+    await scheduleHourlyTournaments();
     const result = await scheduleHourlyTournaments();
     // All 50 slots already exist → every attempt is skipped, none created
     expect(result.created).toBe(0);
@@ -611,6 +635,7 @@ describe("SUITE 9 — Hourly Scheduler: 50 slots per hour + idempotency", () => 
   }, 15000);
 
   it("all 5 tiers have exactly 10 game slots in the DB for the current hour", async () => {
+    await scheduleHourlyTournaments();
     const now = new Date();
     const currentSlot = new Date(now);
     currentSlot.setUTCMinutes(0, 0, 0);
@@ -639,4 +664,3 @@ describe("SUITE 9 — Hourly Scheduler: 50 slots per hour + idempotency", () => 
     }
   }, 10000);
 });
-

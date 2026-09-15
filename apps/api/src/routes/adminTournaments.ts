@@ -70,7 +70,7 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
   // ------------------------------------------------------------------
   // Get single tournament detail (admin)
   // ------------------------------------------------------------------
-  app.get("/api/admin/tournaments/:id", { preHandler: authenticate }, async (request) => {
+  app.get("/api/admin/tournaments/:id([0-9a-fA-F-]{36})", { preHandler: authenticate }, async (request) => {
     await requirePermission(request, "admin:tournaments:view", prisma);
     const { id } = routeParams(request);
     const tournament = await prisma.tournament.findUnique({

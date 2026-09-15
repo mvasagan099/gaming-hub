@@ -38,6 +38,7 @@ import {
   getAdminTournamentBracketDetails,
   assignManualSeeds,
 } from "../services/tournamentEngine";
+import { getTournamentHealth, reconcileTournament } from "../services/tournamentScheduler";
 import {
   assignTicket,
   getTicket,
@@ -362,6 +363,23 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
       targetId: tournament.id,
     });
     return tournament;
+  });
+
+  app.get("/api/admin/tournaments/:id/health", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view");
+    return getTournamentHealth(routeParams(request).id);
+  });
+
+  app.post("/api/admin/tournaments/:id/reconcile", { preHandler: authenticate }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage");
+    const id = routeParams(request).id;
+    const result = await reconcileTournament(id);
+    auditFromRequest(request, {
+      actorType: "user", actorId: admin.id, action: "admin.tournament.reconciled",
+      category: "admin", targetType: "tournament", targetId: id,
+      meta: { repaired: result.repaired.length, warnings: result.warnings.length, errors: result.errors.length },
+    });
+    return result;
   });
 
   app.patch("/api/admin/tournaments/:id", { preHandler: authenticate }, async (request) => {

@@ -321,7 +321,7 @@ Accounts intentionally left unchanged: 3
 Frontend/mobile secret scan: PASS (0 matches)
 Game-engine regression: PASS (317/317)
 Multiplayer regression: PASS (90/90)
-API full regression: FAIL (isolated run exposed existing tournament/scheduler/wallet test failures; not deployment-safe)
+API regression: PARTIAL (tier combinations 98/98 and wallet routes 9/9 pass; tournament suite 53/61 remains failing in legacy orchestration assertions)
 TypeScript: PASS
 Build: PASS
 Dependency audit: PASS WITH ACCEPTED DEV-ONLY EXCEPTIONS
@@ -329,6 +329,6 @@ Dependency audit: PASS WITH ACCEPTED DEV-ONLY EXCEPTIONS
 
 ### Final Verdict
 
-The required security suite and financial concurrency checks pass on PostgreSQL. The complete API regression run is still failing in pre-existing tournament/scheduler/wallet suites (including 3 failures in `allGameTierCombinations.test.ts`, 54 in `routes/__tests__/tournaments.test.ts`, and 11 in `walletRequests.test.ts`). Those failures must be resolved before release; no production deployment was performed.
+The required security suite and financial concurrency checks pass on PostgreSQL. Regression fixes repaired the per-test admin lifecycle, scheduler tier seeding, zero-start wallet expectations, CouponVault test isolation, and admin health/reconcile route exposure. The tournament suite still has 8 failures in legacy orchestration assertions (synthetic match IDs, concurrent match creation assumptions, and final-round setup), so release remains blocked; no production deployment was performed.
 
 # **NOT PRODUCTION READY**
