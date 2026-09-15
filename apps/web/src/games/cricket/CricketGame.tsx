@@ -158,7 +158,10 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
   // ── Broadcast HUD state ───────────────────────────────────────────────────
   const [gameEvent, setGameEvent] = useState<{ type: string; runs?: number } | null>(null);
   const [overHistory, setOverHistory] = useState<string[]>([]);
-  const eventCounterRef = useRef(0);
+  const eventTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (eventTimerRef.current) clearTimeout(eventTimerRef.current);
+  }, []);
 
   const gameState = useMultiplayerStore((s) => s.gameState);
   const winner = useMultiplayerStore((s) => s.winner);
@@ -205,8 +208,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
   }, []);
 
   const handleGameEvent = useCallback((type: string, data?: Record<string, unknown>) => {
-    // Trigger re-render with new event (uses counter to force re-trigger on same event type)
-    eventCounterRef.current += 1;
+    if (eventTimerRef.current) clearTimeout(eventTimerRef.current);
     const runs = data?.runs as number | undefined;
     setGameEvent({ type, runs });
 
@@ -217,7 +219,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
     else if (type === 'runs' && runs != null) setOverHistory(prev => [...prev.slice(-5), String(runs)]);
 
     // Clear banner after 2.5s
-    setTimeout(() => setGameEvent(null), 2500);
+    eventTimerRef.current = setTimeout(() => setGameEvent(null), 2500);
   }, []);
 
   const handleReplay = () => {

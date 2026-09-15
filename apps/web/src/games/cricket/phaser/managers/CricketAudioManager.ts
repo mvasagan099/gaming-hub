@@ -2,6 +2,7 @@ export class CricketAudioManager {
   private ctx: AudioContext | null = null;
   private ambientOsc: OscillatorNode | null = null;
   private ambientGain: GainNode | null = null;
+  private noiseBuffers = new Map<number, AudioBuffer>();
 
   constructor() {
     // We defer AudioContext creation until a user interaction usually, 
@@ -23,6 +24,8 @@ export class CricketAudioManager {
 
   private createNoiseBuffer(duration: number): AudioBuffer | null {
     if (!this.ctx) return null;
+    const cached = this.noiseBuffers.get(duration);
+    if (cached) return cached;
     const sampleRate = this.ctx.sampleRate;
     const bufferSize = sampleRate * duration;
     const buffer = this.ctx.createBuffer(1, bufferSize, sampleRate);
@@ -30,6 +33,7 @@ export class CricketAudioManager {
     for (let i = 0; i < bufferSize; i++) {
       data[i] = Math.random() * 2 - 1;
     }
+    this.noiseBuffers.set(duration, buffer);
     return buffer;
   }
 
@@ -39,7 +43,8 @@ export class CricketAudioManager {
 
     // Power ranges roughly from 0 (miss/edge) to 1500 (six)
     const isBoundary = power >= 1000;
-    const duration = isBoundary ? 0.2 : 0.1;
+    const strength = Math.max(0.05, Math.min(1, power / 1500));
+    const duration = isBoundary ? 0.11 : 0.065;
     
     // Noise burst
     const noiseBuffer = this.createNoiseBuffer(duration);
@@ -49,11 +54,12 @@ export class CricketAudioManager {
 
     const noiseFilter = ctx.createBiquadFilter();
     noiseFilter.type = 'bandpass';
-    noiseFilter.frequency.value = isBoundary ? 800 : 400; // Higher freq for louder crack
-    noiseFilter.Q.value = 1;
+    noiseFilter.frequency.value = 1400 + strength * 1800;
+    noiseFilter.Q.value = 0.7;
 
     const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(isBoundary ? 1 : 0.5, ctx.currentTime);
+    noiseGain.gain.setValueAtTime(0.001, ctx.currentTime);
+    noiseGain.gain.linearRampToValueAtTime(0.16 + strength * 0.30, ctx.currentTime + 0.001);
     noiseGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
 
     noiseSrc.connect(noiseFilter);
@@ -63,11 +69,11 @@ export class CricketAudioManager {
     // Oscillator for the wood "tock" sound
     const osc = ctx.createOscillator();
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(isBoundary ? 300 : 150, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + duration);
+    osc.frequency.setValueAtTime(420 + strength * 300, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + duration);
 
     const oscGain = ctx.createGain();
-    oscGain.gain.setValueAtTime(isBoundary ? 1 : 0.6, ctx.currentTime);
+    oscGain.gain.setValueAtTime(0.12 + strength * 0.20, ctx.currentTime);
     oscGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
 
     osc.connect(oscGain);
@@ -76,6 +82,8 @@ export class CricketAudioManager {
     noiseSrc.start();
     osc.start();
     osc.stop(ctx.currentTime + duration);
+    noiseSrc.onended = () => { noiseSrc.disconnect(); noiseFilter.disconnect(); noiseGain.disconnect(); };
+    osc.onended = () => { osc.disconnect(); oscGain.disconnect(); };
   }
 
   public playCrowdRoar() {
@@ -249,6 +257,7 @@ export class CricketAudioManager {
   }
 
   public destroy() {
+    this.noiseBuffers.clear();
     this.stopAmbient();
     if (this.ctx && this.ctx.state !== 'closed') {
       this.ctx.close();

@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Cricket visual verification</title>
+<style>body{margin:0;background:#101826;color:white;font:14px Arial}nav{padding:8px}button{padding:9px;margin-right:8px}#game{width:924px;height:680px}output{display:block;padding:8px}</style></head>
+<body><nav><button id="six">Six contact</button><button id="wicket">Bowled wicket</button><button id="catch">Close catch</button><button id="watch">Watch recorded replay</button></nav><output id="status">Loading</output><div id="game"></div>
+<script type="module">
+import Phaser from 'phaser';
+import { CricketScene } from '/src/games/cricket/phaser/scenes/CricketScene.ts';
+let scene;
+const game = new Phaser.Game({type:Phaser.AUTO,width:924,height:680,parent:'game',backgroundColor:'#090d16',scene:[],callbacks:{postBoot(game){game.scene.add('CricketScene',CricketScene,true,{mode:'ai',role:'batting',overs:20});scene=game.scene.getScene('CricketScene');}}});
+function prepare(){scene.time.removeAllEvents();scene.tweens.killTweensOf(scene.ball);scene.resultVisual?.stop();scene.replay.beginDelivery();Object.assign(scene,{wickets:0,balls:0,runs:0,isBowling:true,isHit:false,bowlerRunupActive:false,ballTweenOwned:false,playerHasSwung:false,hasSteppedOut:false,ballDepth:575,ballHeight:30,ballVelocity:{x:0,y:700},ballVelocityZ:0});scene.ball.setPosition(462,545).setVisible(true);scene.ballShadow.setVisible(true);scene.resetBatsmenPositions();}
+document.querySelector('#six').onclick=()=>{prepare();scene.hitShot(false,'up');};
+document.querySelector('#wicket').onclick=()=>{prepare();scene.handleWicket();};
+document.querySelector('#catch').onclick=()=>{prepare();scene.onRemoteBallResult({type:'ball-result',wicket:true,comment:'Close catch taken'});};
+document.querySelector('#watch').onclick=()=>scene.replay.play();
+setInterval(()=>{if(scene?.replay)document.querySelector('#status').textContent=JSON.stringify({runs:scene.runs,wickets:scene.wickets,frames:scene.replay.clip.length,replay:scene.replay.playhead!==null,label:scene.replay.label,ballVisible:scene.ball.visible,alpha:scene.batsman.alpha,scrollX:scene.cameras.main.scrollX,scrollY:scene.cameras.main.scrollY});},100);
+</script></body></html>

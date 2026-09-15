@@ -19,6 +19,7 @@ export class CricketHUDManager {
   private runsText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private runIndicatorText!: Phaser.GameObjects.Text;
+  private timingText?: Phaser.GameObjects.Text;
   private bestScoreText!: Phaser.GameObjects.Text;
   private inningsText!: Phaser.GameObjects.Text;
   private wicketsText!: Phaser.GameObjects.Text;
@@ -60,6 +61,19 @@ export class CricketHUDManager {
     this.runIndicatorText = this.scene.add.text(GAME_W - 20, GAME_H - 20, "", {
       font: "bold 48px Arial", color: "#fbbf24", stroke: "#000000", strokeThickness: 6
     }).setOrigin(1, 1).setDepth(30).setAlpha(0);
+  }
+
+  public showTiming(label: 'EARLY' | 'PERFECT' | 'GOOD' | 'LATE') {
+    if (!this.timingText) {
+      this.timingText = this.scene.add.text(CENTER_X, 365, '', {
+        font: 'bold 24px Arial', stroke: '#090d16', strokeThickness: 5,
+      }).setOrigin(0.5).setDepth(40);
+    }
+    this.scene.tweens.killTweensOf(this.timingText);
+    this.timingText.setText(label).setY(365).setAlpha(1).setScale(0.95)
+      .setColor(label === 'PERFECT' ? '#34d399' : label === 'GOOD' ? '#93c5fd' : '#fbbf24');
+    this.scene.tweens.add({ targets: this.timingText, scale: 1, duration: 90, ease: 'Sine.easeOut' });
+    this.scene.tweens.add({ targets: this.timingText, alpha: 0, y: 350, delay: 650, duration: 220 });
   }
 
   public showRunIndicator(runs: number) {
@@ -250,13 +264,9 @@ export class CricketHUDManager {
         if (this.powerBarIndicator) {
           const yPos = barY + (barHeight - 4) * (1 - this.currentPower);
 
-          this.powerBarIndicator.clear();
-          this.powerBarIndicator.fillStyle(0xffffff, 1);
-          this.powerBarIndicator.fillRoundedRect(barX - 4, yPos, barWidth + 8, 4, 2);
-
-          glow.clear();
-          glow.fillStyle(0xffffff, 0.45);
-          glow.fillCircle(barX + barWidth / 2, yPos + 2, 8);
+          // Geometry is static; translate it instead of rebuilding it every frame.
+          this.powerBarIndicator.setY(yPos - barY);
+          glow.setY(yPos - barY);
         }
       }
     });

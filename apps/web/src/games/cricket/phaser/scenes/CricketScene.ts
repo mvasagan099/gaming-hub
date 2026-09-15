@@ -5,6 +5,11 @@ import { CricketAudioManager } from "../managers/CricketAudioManager";
 import { useMultiplayerStore } from "../../../../store/multiplayerStore";
 import CricketMultiplayerDriver from "../managers/CricketMultiplayerDriver";
 import { CricketPlayerRenderer } from "../renderers/cricketPlayerRenderer";
+import { CricketPlayerBaker } from "../renderers/CricketPlayerBaker";
+import { CricketImpactManager } from "../managers/CricketImpactManager";
+import { CricketReplayManager } from "../managers/CricketReplayManager";
+
+import { simulationSteps, shotDrag, planeCrossing, contactDistance, shotBufferDelay, predictShot } from "../physics/ballMotion";
 
 const GAME_W = 924;
 const GAME_H = 680;
@@ -21,6 +26,10 @@ const PITCH_BOT_Y = 680;
 export class CricketScene extends Phaser.Scene {
   private hud!: CricketHUDManager;
   private audioManager!: CricketAudioManager;
+  private impact!: CricketImpactManager;
+  private replay!: CricketReplayManager;
+  private replayActors: Phaser.GameObjects.Sprite[] = [];
+  private resultVisual?: Phaser.Tweens.Tween;
 
   // Players & Objects
   private bowler!: Phaser.GameObjects.Sprite;
@@ -87,6 +96,9 @@ export class CricketScene extends Phaser.Scene {
 
   // ── NEW visual state ─────────────────────────────────────────────────────
   private ballAngle = 0;
+  private ballTweenOwned = false;
+  private bufferedShot: { direction: 'left' | 'right' | 'up' | 'straight'; remaining: number } | null = null;
+  private poseLayers = new Map<Phaser.GameObjects.Sprite, Phaser.GameObjects.Sprite>();
   private bowlerRunupActive = false;
   private crowdSprites: Phaser.GameObjects.Sprite[] = [];
   private bowlerRestX = CENTER_X;
@@ -154,8 +166,13 @@ export class CricketScene extends Phaser.Scene {
 
     this.audioManager = new CricketAudioManager();
     this.audioManager.playAmbientMurmur();
+    this.impact = new CricketImpactManager(this);
+    this.replay = new CricketReplayManager(this);
+    this.replayActors = [...this.fielders, this.bowler, this.nonStriker, this.keeper, this.batsman, this.bat, this.ball];
 
     this.events.once('shutdown', () => {
+      this.bufferedShot = null;
+      this.poseLayers.clear();
       if (this.unsubscribe) {
         this.unsubscribe();
         this.unsubscribe = undefined;
@@ -202,40 +219,52 @@ export class CricketScene extends Phaser.Scene {
 
     // Keyboard shortcuts
     if (this.input.keyboard) {
-      this.input.keyboard.on('keydown-SPACE', () => {
+      this.input.keyboard.on('keydown-SPACE', (event: KeyboardEvent) => {
+        if (event.repeat) return;
         if (this.role === 'batting') this.hitShot(false, 'up');
       });
-      this.input.keyboard.on('keydown-UP', () => {
+      this.input.keyboard.on('keydown-UP', (event: KeyboardEvent) => {
+        if (event.repeat) return;
         if (this.role === 'batting') this.hitShot(false, 'up');
       });
-      this.input.keyboard.on('keydown-W', () => {
+      this.input.keyboard.on('keydown-W', (event: KeyboardEvent) => {
+        if (event.repeat) return;
         if (this.role === 'batting') this.hitShot(false, 'up');
       });
-      this.input.keyboard.on('keydown-DOWN', () => {
+      this.input.keyboard.on('keydown-DOWN', (event: KeyboardEvent) => {
+        if (event.repeat) return;
         if (this.role === 'batting') this.hitShot(false, 'straight');
       });
-      this.input.keyboard.on('keydown-S', () => {
+      this.input.keyboard.on('keydown-S', (event: KeyboardEvent) => {
+        if (event.repeat) return;
         if (this.role === 'batting') this.hitShot(false, 'straight');
       });
-      this.input.keyboard.on('keydown-LEFT', () => {
+      this.input.keyboard.on('keydown-LEFT', (event: KeyboardEvent) => {
+        if (event.repeat) return;
         if (this.role === 'batting') this.hitShot(false, 'left');
       });
-      this.input.keyboard.on('keydown-A', () => {
+      this.input.keyboard.on('keydown-A', (event: KeyboardEvent) => {
+        if (event.repeat) return;
         if (this.role === 'batting') this.hitShot(false, 'left');
       });
-      this.input.keyboard.on('keydown-RIGHT', () => {
+      this.input.keyboard.on('keydown-RIGHT', (event: KeyboardEvent) => {
+        if (event.repeat) return;
         if (this.role === 'batting') this.hitShot(false, 'right');
       });
-      this.input.keyboard.on('keydown-D', () => {
+      this.input.keyboard.on('keydown-D', (event: KeyboardEvent) => {
+        if (event.repeat) return;
         if (this.role === 'batting') this.hitShot(false, 'right');
       });
-      this.input.keyboard.on('keydown-ONE', () => {
+      this.input.keyboard.on('keydown-ONE', (event: KeyboardEvent) => {
+        if (event.repeat) return;
         if (this.role === 'bowling') this.playerBowl('fast', this.hud.getCurrentPower());
       });
-      this.input.keyboard.on('keydown-TWO', () => {
+      this.input.keyboard.on('keydown-TWO', (event: KeyboardEvent) => {
+        if (event.repeat) return;
         if (this.role === 'bowling') this.playerBowl('slow', this.hud.getCurrentPower());
       });
-      this.input.keyboard.on('keydown-THREE', () => {
+      this.input.keyboard.on('keydown-THREE', (event: KeyboardEvent) => {
+        if (event.repeat) return;
         if (this.role === 'bowling') this.playerBowl('spin', this.hud.getCurrentPower());
       });
     }
@@ -794,6 +823,24 @@ export class CricketScene extends Phaser.Scene {
     g.generateTexture('tex_bounce_flash', 24, 24);
 
     g.destroy();
+    // Bake once at startup. Canvas-only devices retain the procedural fallback.
+    let baker: CricketPlayerBaker | undefined;
+    try {
+      baker = new CricketPlayerBaker();
+      for (const key of Object.keys(this.textures.list).filter(key => /^tex_(batsman|bowler|fielder|non_striker)/.test(key))) {
+        const source = this.textures.get(key).getSourceImage();
+        const canvas = document.createElement('canvas');
+        canvas.width = source.width;
+        canvas.height = source.height;
+        baker.render(canvas, key);
+        this.textures.remove(key);
+        this.textures.addCanvas(key, canvas);
+      }
+    } catch (error) {
+      console.warn('Cricket player rendering fallback:', error);
+    } finally {
+      baker?.destroy();
+    }
   }
 
   private drawCrowd() {
@@ -1344,11 +1391,23 @@ export class CricketScene extends Phaser.Scene {
 
     const runs = (ev.runs as number) ?? 0;
     const isWicket = Boolean(ev.wicket);
+    const caught = isWicket && /caught|catch/i.test(String(ev.comment ?? ''));
+
+    if (caught) {
+      this.ball.setVisible(true);
+      this.ballDepth = this.role === 'batting' ? 575 : 215;
+      this.ballHeight = 30;
+      this.ball.setPosition(CENTER_X, this.ballDepth - this.ballHeight);
+      this.animateCatch(this.role === 'batting' ? -Math.PI / 2 : Math.PI / 2, 500);
+      this.replay.request('CLOSE CATCH');
+    } else if (runs > 0) {
+      this.animateRemoteContact(runs);
+    }
 
     if (isWicket) {
       this.audioManager.playWicket();
       this.audioManager.playCrowdGroan();
-      this.playWicketAnimation();
+      if (!caught) this.playWicketAnimation();
       this.hud.updateStatus((ev.comment as string) || "OUT! Bowled him!", "#f43f5e");
       this.overHistory.push("W");
       this.emitGameEvent('wicket');
@@ -1532,7 +1591,7 @@ export class CricketScene extends Phaser.Scene {
   }
 
   private playerBowl(type: 'fast' | 'slow' | 'spin', power: number) {
-    if (this.isBowling || this.isHit || this.wickets >= 1 || this.balls >= this.maxBalls) return;
+    if (this.ballTweenOwned || this.isBowling || this.isHit || this.wickets >= 1 || this.balls >= this.maxBalls) return;
 
     this.hud.setControlsState(true);
 
@@ -1556,9 +1615,13 @@ export class CricketScene extends Phaser.Scene {
   // ─────────────────────────────────────────────────────────────────────────────
 
   private executeBowl(type: CricketDelivery, powerMultiplier: number = 1.0) {
+    this.resultVisual?.stop();
+    this.replay?.beginDelivery();
+    this.bufferedShot = null;
     this.tweens.killTweensOf(this.ball);
     this.tweens.killTweensOf(this.ballShadow);
     this.tweens.killTweensOf(this.bowler);
+    this.ballTweenOwned = false;
     this.isBowling = true;   // Prevent re-entry
     this.bowlerRunupActive = true;  // Pause ball physics
     this.isHit = false;
@@ -1795,10 +1858,20 @@ export class CricketScene extends Phaser.Scene {
   // BATTING — PRESERVED + IMPROVED ANIMATION
   // ─────────────────────────────────────────────────────────────────────────────
 
-  private hitShot(isAI = false, direction: 'left' | 'right' | 'up' | 'straight' = 'straight') {
-    if (!this.isBowling || this.isHit || this.wickets >= 1 || this.balls >= this.maxBalls) return;
+  private hitShot(isAI = false, direction: 'left' | 'right' | 'up' | 'straight' = 'straight', buffered = false) {
+    if (this.bowlerRunupActive || !this.isBowling || this.isHit || this.wickets >= 1 || this.balls >= this.maxBalls) return;
 
     if (!isAI && this.playerHasSwung) return;
+    if (!isAI && this.mode === 'multiplayer' && !this.multiplayerDriver?.canBat()) return;
+    if (!isAI && !buffered) {
+      if (this.bufferedShot) return;
+      const distance = contactDistance(this.ballDepth, this.role === 'bowling' ? 215 : 575, this.ballVelocity.y);
+      const delay = shotBufferDelay(distance, Math.abs(this.ballVelocity.y));
+      if (delay !== null) {
+        this.bufferedShot = { direction, remaining: delay };
+        return;
+      }
+    }
     if (!isAI) this.playerHasSwung = true;
 
     if (this.mode === 'multiplayer' && !isAI) {
@@ -1811,6 +1884,7 @@ export class CricketScene extends Phaser.Scene {
 
       this.playBatSwing(direction);
       const timing = this.computeTiming(direction);
+      this.hud.showTiming(timing === 'good' ? 'GOOD' : timing === 'early' ? 'EARLY' : 'LATE');
       this.hud.setControlsState(true);
       this.hud.updateStatus("Shot played! Waiting for result...", "#93c5fd");
       this.audioManager.playWhoosh();
@@ -1842,6 +1916,10 @@ export class CricketScene extends Phaser.Scene {
     if (isAI) {
       totalDiff += Math.random() * 60;
     }
+    if (!isAI) {
+      const early = contactDistance(this.ballDepth, sweetSpotY, this.ballVelocity.y) > 0;
+      this.hud.showTiming(totalDiff <= 35 ? 'PERFECT' : totalDiff <= 90 ? 'GOOD' : early ? 'EARLY' : 'LATE');
+    }
 
     let isOut = false;
     let runsAdded = 0;
@@ -1867,7 +1945,6 @@ export class CricketScene extends Phaser.Scene {
       shotAngle = baseAngle + angleMod + (Math.random() - 0.5) * 0.3;
       this.ballVelocityZ = isSix ? 800 : (isLofted ? 500 : 200);
 
-      this.cameras.main.shake(isSix ? 300 : 200, 0.015);
       this.createBalloons(runsAdded);
       this.audioManager.playHit(shotPower);
       this.audioManager.playCrowdRoar();
@@ -1921,7 +1998,6 @@ export class CricketScene extends Phaser.Scene {
         if (this.dustEmitter) {
           this.dustEmitter.emitParticleAt(this.ball.x, this.ball.y, 8);
         }
-        this.cameras.main.shake(120, 0.006);
         this.tweens.add({
           targets: this.batsman,
           x: this.batsman.x + (direction === 'left' ? -3 : 3),
@@ -1969,6 +2045,10 @@ export class CricketScene extends Phaser.Scene {
     }
 
     if (isOut) {
+      if (message.includes('CAUGHT')) {
+        this.animateCatch(shotAngle, shotPower);
+        this.replay.request('CLOSE CATCH');
+      }
       this.wickets++;
       this.addHistory('W');
       this.hud.updateStatus(message, colorStr);
@@ -1982,6 +2062,7 @@ export class CricketScene extends Phaser.Scene {
     }
 
     if (shotPower > 0) {
+      this.impact.play(shotPower, shotAngle, [this.batsman, this.ball], this.ball.x, this.ball.y, this.ballDepth);
       this.ballVelocity = {
         x: Math.cos(shotAngle) * shotPower,
         y: Math.sin(shotAngle) * shotPower
@@ -2036,20 +2117,34 @@ export class CricketScene extends Phaser.Scene {
 
             const initialFielderX = closestFielder.x;
             const initialFielderY = closestFielder.y;
-            const runDirectionX = destX < initialFielderX ? -1 : 1;
+            let runDirectionX = destX < initialFielderX ? -1 : 1;
             let lastDustTime = 0;
+            let strideDistance = 0;
+            let previousFielderX = initialFielderX;
+            let previousFielderY = initialFielderY;
+            const chase = { progress: 0 };
 
             this.tweens.add({
-              targets: closestFielder,
-              x: destX,
-              y: destY,
+              targets: chase,
+              progress: 1,
               duration: chaseDuration,
-              ease: 'Quad.easeOut',
-              onUpdate: (tween) => {
-                const p = tween.progress;
-                // Alternating sprint strides every 110ms
-                const step = Math.floor(p * chaseDuration / 110);
-                closestFielder.setTexture(step % 2 === 0 ? 'tex_fielder_run_1' : 'tex_fielder_run_2');
+              ease: 'Linear',
+              onUpdate: () => {
+                const p = chase.progress;
+                const intercept = predictShot(this.ball.x, this.ballDepth, this.ballHeight,
+                  this.ballVelocity.x, this.ballVelocity.y, this.ballVelocityZ,
+                  Math.min(0.5, (1 - p) * chaseDuration / 1000));
+                // Smooth acceleration and braking, ending at the actual ball.
+                const approach = p * p * p * (p * (p * 6 - 15) + 10);
+                closestFielder.x = Phaser.Math.Linear(initialFielderX, Phaser.Math.Clamp(intercept.x, 0, GAME_W), approach);
+                closestFielder.y = Phaser.Math.Linear(initialFielderY, Phaser.Math.Clamp(intercept.depth, HORIZON_Y, GAME_H), approach);
+                const movedX = closestFielder.x - previousFielderX;
+                strideDistance += Math.hypot(movedX, closestFielder.y - previousFielderY);
+                if (Math.abs(movedX) > 0.2) runDirectionX = Math.sign(movedX);
+                previousFielderX = closestFielder.x;
+                previousFielderY = closestFielder.y;
+                const step = Math.floor(strideDistance / 22);
+                this.blendPlayerPose(closestFielder, step % 2 === 0 ? 'tex_fielder_run_1' : 'tex_fielder_run_2');
 
                 // Dynamic 3D depth perspective scaling
                 const scale = this.getPlayerScale('fielder', closestFielder.y);
@@ -2057,25 +2152,34 @@ export class CricketScene extends Phaser.Scene {
                 closestFielder.setDepth(closestFielder.y > CENTER_Y ? 10 : 8);
 
                 // Emitted turf dust particles while sprinting
-                const now = Date.now();
+                const now = this.time.now;
                 if (now - lastDustTime > 180) {
                   lastDustTime = now;
                   this.dustEmitter.emitParticleAt(closestFielder.x, closestFielder.y, 2);
                 }
               },
               onComplete: () => {
-                // Scoop/field the ball cleanly from the grass
-                closestFielder.setTexture('tex_fielder_pick');
+                // The fielder owns the ball from pickup through release.
+                this.ballTweenOwned = true;
+                this.isHit = false;
+                this.isBowling = false;
+                this.ballVelocity = { x: 0, y: 0 };
+                this.ballVelocityZ = 0;
+                this.trailEmitter.stop();
+                this.blendPlayerPose(closestFielder, 'tex_fielder_pick');
                 this.dustEmitter.emitParticleAt(closestFielder.x, closestFielder.y, 4);
 
                 this.time.delayedCall(160, () => {
                   if (!closestFielder.active) return;
                   // Cock back into overarm throw posture towards stumps
-                  closestFielder.setTexture('tex_fielder_throw');
+                  this.blendPlayerPose(closestFielder, 'tex_fielder_throw');
                   const throwDirectionX = targetX < closestFielder.x ? -1 : 1;
                   const curScale = this.getPlayerScale('fielder', closestFielder.y);
                   closestFielder.setScale(curScale.x * throwDirectionX, curScale.y);
 
+                  // Return throw is owned by tweens, never by both motion systems.
+                  this.isHit = false;
+                  this.isBowling = false;
                   this.ballVelocity = { x: 0, y: 0 };
                   this.ballVelocityZ = 0;
                   this.ballDepth = closestFielder.y;
@@ -2165,6 +2269,79 @@ export class CricketScene extends Phaser.Scene {
   // BAT SWING — SHOT-SPECIFIC ANIMATIONS
   // ─────────────────────────────────────────────────────────────────────────────
 
+  private animateRemoteContact(runs: number) {
+    const start = this.role === 'batting' ? 575 : 215;
+    const end = this.role === 'batting' ? 190 : 650;
+    const angle = this.role === 'batting' ? -Math.PI / 2 : Math.PI / 2;
+    this.ballTweenOwned = true;
+    this.ballDepth = start;
+    this.ballHeight = 30;
+    this.ball.setPosition(CENTER_X, start - 30).setVisible(true);
+    this.ballShadow.setVisible(true);
+    this.playBatSwing(runs >= 6 ? 'up' : 'straight');
+    this.audioManager.playHit(runs >= 6 ? 1500 : runs >= 4 ? 1200 : 600);
+    this.impact.play(runs >= 6 ? 1500 : runs >= 4 ? 1200 : 600, angle,
+      [this.batsman, this.ball], this.ball.x, this.ball.y, this.ballDepth);
+    const flight = { t: 0 };
+    this.resultVisual = this.tweens.add({ targets: flight, t: 1, duration: 750,
+      onUpdate: () => {
+        this.ballDepth = Phaser.Math.Linear(start, end, flight.t);
+        this.ballHeight = 30 * (1 - flight.t) + Math.sin(flight.t * Math.PI) * (runs >= 6 ? 170 : 35);
+        this.ball.setY(this.ballDepth - this.ballHeight);
+        this.ballShadow.setPosition(this.ball.x, this.ballDepth);
+      },
+      onComplete: () => { this.ballTweenOwned = false; this.ball.setVisible(false); this.ballShadow.setVisible(false); },
+    });
+  }
+
+  private animateCatch(angle: number, power: number) {
+    const fielder = this.getClosestFielder(this.ball.x + Math.cos(angle) * 170, this.ballDepth + Math.sin(angle) * 170);
+    if (!fielder) return;
+    this.impact.play(power, angle, [this.batsman, this.ball], this.ball.x, this.ball.y, this.ballDepth);
+    this.ballTweenOwned = true;
+    this.isHit = false;
+    this.isBowling = false;
+    const startX = this.ball.x, startDepth = this.ballDepth, startHeight = this.ballHeight;
+    const targetHeight = fielder.displayHeight * 0.78;
+    const flight = { t: 0 };
+    this.resultVisual = this.tweens.add({ targets: flight, t: 1, duration: 520,
+      onUpdate: () => {
+        this.ballDepth = Phaser.Math.Linear(startDepth, fielder.y, flight.t);
+        this.ballHeight = Phaser.Math.Linear(startHeight, targetHeight, flight.t) + Math.sin(flight.t * Math.PI) * 90;
+        this.ball.setPosition(Phaser.Math.Linear(startX, fielder.x, flight.t), this.ballDepth - this.ballHeight);
+        this.ballShadow.setPosition(this.ball.x, this.ballDepth);
+        if (flight.t > 0.65) this.blendPlayerPose(fielder, 'tex_fielder_throw');
+      },
+      onComplete: () => {
+        this.ballTweenOwned = false;
+        this.ball.setVisible(false);
+        this.ballShadow.setVisible(false);
+        this.jumpCelebrate(fielder);
+      },
+    });
+  }
+
+  private blendPlayerPose(player: Phaser.GameObjects.Sprite, texture: string) {
+    if (player.texture.key === texture) return;
+    let layer = this.poseLayers.get(player);
+    if (!layer) {
+      layer = this.add.sprite(player.x, player.y, player.texture.key);
+      this.poseLayers.set(player, layer);
+    }
+    this.tweens.killTweensOf(layer);
+    layer.setTexture(player.texture.key).setOrigin(player.originX, player.originY)
+      .setPosition(player.x, player.y).setScale(player.scaleX, player.scaleY)
+      .setAngle(player.angle).setDepth(player.depth + 0.01).setAlpha(1).setVisible(player.visible);
+    player.setTexture(texture);
+    this.tweens.add({ targets: layer, alpha: 0, duration: 55, ease: 'Sine.easeOut',
+      onUpdate: () => {
+        layer.setPosition(player.x, player.y).setScale(player.scaleX, player.scaleY)
+          .setAngle(player.angle).setDepth(player.depth + 0.01).setVisible(player.visible && player.alpha > 0);
+      },
+      onComplete: () => layer.setVisible(false),
+    });
+  }
+
   private playBatSwing(direction: 'left' | 'right' | 'up' | 'straight') {
     this.stopBatsmanIdleAnimation();
 
@@ -2181,66 +2358,66 @@ export class CricketScene extends Phaser.Scene {
 
     if (direction === 'left') {
       // Cover Drive / Off Drive: Stride -> Impact -> High Elbow Follow-Through
-      this.batsman.setTexture('tex_batsman_drive_stride');
+      this.blendPlayerPose(this.batsman, 'tex_batsman_drive_stride');
       this.tweens.add({ targets: this.batsman, x: this.batsman.x - 14, duration: 140, yoyo: true, ease: 'Sine.easeOut' });
       this.time.delayedCall(110, () => {
-        if (!this.batsman.active) return;
-        this.batsman.setTexture('tex_batsman_drive_impact');
+        if (!this.batsman.active || this.isRunning) return;
+        this.blendPlayerPose(this.batsman, 'tex_batsman_drive_impact');
       });
       this.time.delayedCall(260, () => {
-        if (!this.batsman.active) return;
-        this.batsman.setTexture('tex_batsman_drive_follow');
+        if (!this.batsman.active || this.isRunning) return;
+        this.blendPlayerPose(this.batsman, 'tex_batsman_drive_follow');
       });
       this.time.delayedCall(620, () => {
-        if (!this.batsman.active) return;
+        if (!this.batsman.active || this.isRunning) return;
         this.batsman.setTexture('tex_batsman_stance');
         if (!this.isHit && !this.isRunning) this.startBatsmanIdleAnimation();
       });
     } else if (direction === 'right') {
       // Pull Shot / Cut: Back-Foot Prep -> Impact -> Swivel Follow-Through
-      this.batsman.setTexture('tex_batsman_pull_prep');
+      this.blendPlayerPose(this.batsman, 'tex_batsman_pull_prep');
       this.tweens.add({ targets: this.batsman, x: this.batsman.x + 10, duration: 120, yoyo: true, ease: 'Sine.easeOut' });
       this.time.delayedCall(90, () => {
-        if (!this.batsman.active) return;
-        this.batsman.setTexture('tex_batsman_pull_impact');
+        if (!this.batsman.active || this.isRunning) return;
+        this.blendPlayerPose(this.batsman, 'tex_batsman_pull_impact');
       });
       this.time.delayedCall(240, () => {
-        if (!this.batsman.active) return;
-        this.batsman.setTexture('tex_batsman_pull_follow');
+        if (!this.batsman.active || this.isRunning) return;
+        this.blendPlayerPose(this.batsman, 'tex_batsman_pull_follow');
       });
       this.time.delayedCall(600, () => {
-        if (!this.batsman.active) return;
+        if (!this.batsman.active || this.isRunning) return;
         this.batsman.setTexture('tex_batsman_stance');
         if (!this.isHit && !this.isRunning) this.startBatsmanIdleAnimation();
       });
     } else if (direction === 'up') {
       // Lofted Slog / Six: Deep Power Base -> Uppercut Impact -> Skyward Follow-Through
-      this.batsman.setTexture('tex_batsman_loft_prep');
+      this.blendPlayerPose(this.batsman, 'tex_batsman_loft_prep');
       const currentBatsmanScaleY = this.getPlayerScale('batsman', this.batsman.y).y;
       this.tweens.add({ targets: this.batsman, scaleY: currentBatsmanScaleY * 0.94, duration: 110, yoyo: true, ease: 'Sine.easeInOut' });
       this.time.delayedCall(100, () => {
-        if (!this.batsman.active) return;
-        this.batsman.setTexture('tex_batsman_loft_impact');
+        if (!this.batsman.active || this.isRunning) return;
+        this.blendPlayerPose(this.batsman, 'tex_batsman_loft_impact');
       });
       this.time.delayedCall(250, () => {
-        if (!this.batsman.active) return;
-        this.batsman.setTexture('tex_batsman_loft_follow');
+        if (!this.batsman.active || this.isRunning) return;
+        this.blendPlayerPose(this.batsman, 'tex_batsman_loft_follow');
       });
       this.time.delayedCall(680, () => {
-        if (!this.batsman.active) return;
+        if (!this.batsman.active || this.isRunning) return;
         this.batsman.setTexture('tex_batsman_stance');
         if (!this.isHit && !this.isRunning) this.startBatsmanIdleAnimation();
       });
     } else {
       // Straight Punch / Drive: Direct Impact -> High Vertical Follow-Through
-      this.batsman.setTexture('tex_batsman_straight_impact');
+      this.blendPlayerPose(this.batsman, 'tex_batsman_straight_impact');
       this.tweens.add({ targets: this.batsman, x: this.batsman.x - 6, duration: 120, yoyo: true, ease: 'Sine.easeInOut' });
       this.time.delayedCall(140, () => {
-        if (!this.batsman.active) return;
-        this.batsman.setTexture('tex_batsman_straight_follow');
+        if (!this.batsman.active || this.isRunning) return;
+        this.blendPlayerPose(this.batsman, 'tex_batsman_straight_follow');
       });
       this.time.delayedCall(540, () => {
-        if (!this.batsman.active) return;
+        if (!this.batsman.active || this.isRunning) return;
         this.batsman.setTexture('tex_batsman_stance');
         if (!this.isHit && !this.isRunning) this.startBatsmanIdleAnimation();
       });
@@ -2264,7 +2441,7 @@ export class CricketScene extends Phaser.Scene {
     if (this.hasSteppedOut) totalDiff *= 0.6;
 
     if (totalDiff <= 90) return 'good';
-    if (this.ballDepth < sweetSpotY) return 'early';
+    if (contactDistance(this.ballDepth, sweetSpotY, this.ballVelocity.y) > 0) return 'early';
     return 'late';
   }
 
@@ -2273,6 +2450,7 @@ export class CricketScene extends Phaser.Scene {
   // ─────────────────────────────────────────────────────────────────────────────
 
   private commitRuns(runs: number) {
+    this.ballTweenOwned = false;
     if (runs > 0) {
       const previousMilestone = Math.floor(this.runs / 50);
       this.runs += runs;
@@ -2327,12 +2505,16 @@ export class CricketScene extends Phaser.Scene {
     if (runs <= 0) return;
     this.stopBatsmanIdleAnimation();
     this.isRunning = true;
+    this.tweens.killTweensOf(this.batsman);
+    this.tweens.killTweensOf(this.nonStriker);
 
     // Check movement direction:
     // If player is at bottom (> CENTER_Y), they run UP (away from camera).
     // If player is at top (< CENTER_Y), they run DOWN (towards camera).
     const isBatsmanRunningUp = this.batsman.y > CENTER_Y;
     const isNonStrikerRunningUp = this.nonStriker.y > CENTER_Y;
+    this.blendPlayerPose(this.batsman, isBatsmanRunningUp ? 'tex_batsman_run_away_1' : 'tex_batsman_run_towards_1');
+    this.blendPlayerPose(this.nonStriker, isNonStrikerRunningUp ? 'tex_batsman_run_away_1' : 'tex_batsman_run_towards_1');
 
     // Accurate grounded crease coordinates:
     // Bowler's end crease: Y=204
@@ -2360,15 +2542,17 @@ export class CricketScene extends Phaser.Scene {
           ? (runStep % 2 === 0 ? 'tex_batsman_run_away_1' : 'tex_batsman_run_away_2')
           : (runStep % 2 === 0 ? 'tex_batsman_run_towards_1' : 'tex_batsman_run_towards_2');
 
-        if (this.batsman.active) this.batsman.setTexture(bTex);
-        if (this.nonStriker.active) this.nonStriker.setTexture(nsTex);
+        if (this.batsman.active) this.blendPlayerPose(this.batsman, bTex);
+        if (this.nonStriker.active) this.blendPlayerPose(this.nonStriker, nsTex);
       }
     });
 
     // Bat slide phase near crease arrival (~580ms into the 850ms run)
     this.time.delayedCall(580, () => {
       if (!this.batsman.active) return;
-      this.batsman.setTexture(isBatsmanRunningUp ? 'tex_batsman_slide_away' : 'tex_batsman_slide_towards');
+      runCycleEvent.remove();
+      this.blendPlayerPose(this.batsman, isBatsmanRunningUp ? 'tex_batsman_slide_away' : 'tex_batsman_slide_towards');
+      this.blendPlayerPose(this.nonStriker, isNonStrikerRunningUp ? 'tex_batsman_slide_away' : 'tex_batsman_slide_towards');
       if (this.dustEmitter) {
         this.dustEmitter.emitParticleAt(batsmanTargetX, batsmanTargetY, 6);
       }
@@ -2759,6 +2943,8 @@ export class CricketScene extends Phaser.Scene {
   // ─────────────────────────────────────────────────────────────────────────────
 
   private emitGameEvent(type: string, data?: Record<string, unknown>) {
+    if (type === 'six') this.replay?.request('SIX');
+    if (type === 'wicket') this.replay?.request('WICKET');
     this.game.events.emit('cricket:game_event', { type, ...data });
   }
 
@@ -2767,10 +2953,42 @@ export class CricketScene extends Phaser.Scene {
   // ─────────────────────────────────────────────────────────────────────────────
 
   update(time: number, delta: number) {
-    const dt = delta / 1000;
+    const { steps, dt } = simulationSteps(delta);
+    for (let step = 0; step < steps; step++) {
+      this.advanceBall(dt);
+      if (this.bufferedShot) {
+        if (!this.isBowling || this.isHit || this.bowlerRunupActive || this.ballTweenOwned) {
+          this.bufferedShot = null;
+        } else {
+          this.bufferedShot.remaining -= dt;
+          if (this.bufferedShot.remaining <= 0) {
+            const direction = this.bufferedShot.direction;
+            this.bufferedShot = null;
+            this.hitShot(false, direction, true);
+          }
+        }
+      }
+    }
+    if (this.ballShadow && this.ball) {
+      const scale = Phaser.Math.Linear(0.12, 0.28, Phaser.Math.Clamp((this.ballDepth - 200) / 440, 0, 1));
+      const spread = 1 + Math.min(2.5, this.ballHeight / 110);
+      this.ballShadow.setScale(scale * spread, scale * Math.sqrt(spread))
+        .setAlpha(Phaser.Math.Clamp(1 - this.ballHeight / 220, 0.20, 1));
+    }
+    this.replay?.update(delta, () => ({
+      poses: this.replayActors.map(actor => ({
+        texture: actor.texture.key, x: actor.x, y: actor.y, sx: actor.scaleX, sy: actor.scaleY,
+        angle: actor.angle, alpha: this.impact.alphaFor(actor), visible: actor.visible, ox: actor.originX, oy: actor.originY,
+      })),
+      ballX: this.ball.x, ballDepth: this.ballDepth, ballHeight: this.ballHeight,
+      bails: [this.bail1, this.bail2].map(bail => ({ x: bail.x, y: bail.y, angle: bail.angle, alpha: bail.alpha })),
+    }));
+  }
+
+  private advanceBall(dt: number) {
 
     // Skip ball physics during bowler run-up animation
-    if (this.bowlerRunupActive) return;
+    if (this.bowlerRunupActive || this.ballTweenOwned) return;
 
     // ── Seam rotation ──
     if ((this.isBowling || this.isHit) && this.ball.visible) {
@@ -2787,6 +3005,9 @@ export class CricketScene extends Phaser.Scene {
 
     // ── Ball physics ──
     if (this.isBowling && !this.isHit) {
+      const previousDepth = this.ballDepth;
+      const previousX = this.ball.x;
+      const previousHeight = this.ballHeight;
       if (this.deliveryType === 'swing') {
         this.ballVelocity.x += this.swingAccel * dt;
       }
@@ -2843,10 +3064,6 @@ export class CricketScene extends Phaser.Scene {
         }
       }
 
-      // Standard Small Cricket Ball Scale
-      this.ball.setScale(this.initialBallScale);
-      this.ballShadow.setScale(this.initialBallScale);
-
       // ── Physical 3D Stump Collision Check ──
       const isBatting = this.role === 'batting';
       const stumpX = CENTER_X;
@@ -2854,14 +3071,12 @@ export class CricketScene extends Phaser.Scene {
       const stumpMaxH = isBatting ? 120 : 40;
       const stumpW = isBatting ? 26 : 13;
 
-      const isCrossingStumpPlane = isBatting
-        ? (this.ballDepth >= 650 && this.ballDepth <= 675)
-        : (this.ballDepth <= 210 && this.ballDepth >= 195);
-
-      if (isCrossingStumpPlane && !this.isHit && this.isBowling) {
-        const hitsStumps = Math.abs(this.ball.x - stumpX) <= stumpW &&
-                           this.ballHeight <= stumpMaxH &&
-                           this.ballHeight >= 0;
+      const crossing = planeCrossing(previousDepth, this.ballDepth, stumpDepth);
+      if (crossing !== null && !this.isHit && this.isBowling) {
+        const impactX = Phaser.Math.Linear(previousX, this.ball.x, crossing);
+        const impactHeight = Phaser.Math.Linear(previousHeight, this.ballHeight, crossing);
+        const hitsStumps = Math.abs(impactX - stumpX) <= stumpW &&
+                           impactHeight <= stumpMaxH && impactHeight >= 0;
 
         if (hitsStumps) {
           this.isBowling = false;
@@ -2900,8 +3115,8 @@ export class CricketScene extends Phaser.Scene {
         }
       }
     } else if (this.isHit) {
-      const groundFriction = Math.pow(0.3, dt);
-      const airFriction = Math.pow(0.8, dt);
+      const groundFriction = shotDrag(0, dt);
+      const airFriction = shotDrag(10, dt);
 
       if (this.ballHeight <= 5) {
         this.ballVelocity.x *= groundFriction;
@@ -2919,8 +3134,9 @@ export class CricketScene extends Phaser.Scene {
 
       if (this.ballHeight < 0) {
         this.ballHeight = 0;
-        this.ballVelocityZ = Math.abs(this.ballVelocityZ) * 0.4;
-        this.dustEmitter.emitParticleAt(this.ball.x, this.ballDepth, 5);
+        const impactSpeed = Math.abs(this.ballVelocityZ);
+        this.ballVelocityZ = impactSpeed > 30 ? impactSpeed * 0.4 : 0;
+        if (impactSpeed > 60) this.dustEmitter.emitParticleAt(this.ball.x, this.ballDepth, 5);
       }
 
       this.ballShadow.setPosition(this.ball.x, this.ballDepth);
@@ -2929,23 +3145,24 @@ export class CricketScene extends Phaser.Scene {
       this.trailEmitter.particleY = this.ball.y;
 
       if (!this.tweens.isTweening(this.ball)) {
-        this.ball.setScale(this.initialBallScale);
-        this.ballShadow.setScale(this.initialBallScale);
+        const depthFrac = Phaser.Math.Clamp((this.ballDepth - 200) / 440, 0, 1);
+        const scale = Phaser.Math.Linear(0.12, 0.28, depthFrac);
+        this.ball.setScale(scale);
+        this.ballShadow.setScale(scale);
       }
 
-      this.ballVelocity.x *= 0.985;
-      this.ballVelocity.y *= 0.985;
-
-      if (Math.abs(this.ballVelocity.x) < 10 && Math.abs(this.ballVelocity.y) < 10) {
+      if (Math.abs(this.ballVelocity.x) < 10 && Math.abs(this.ballVelocity.y) < 10 &&
+          this.ballHeight === 0 && this.ballVelocityZ === 0) {
         this.ballVelocity = { x: 0, y: 0 };
         this.isHit = false;
         this.isBowling = false;
       }
 
-      if (this.ball.x < 0 || this.ball.x > GAME_W || this.ball.y < HORIZON_Y || this.ball.y > GAME_H) {
+      if (this.ball.x < 0 || this.ball.x > GAME_W || this.ballDepth < HORIZON_Y || this.ballDepth > GAME_H) {
         this.ballVelocity = { x: 0, y: 0 };
         this.ball.x = Phaser.Math.Clamp(this.ball.x, 0, GAME_W);
-        this.ball.y = Phaser.Math.Clamp(this.ball.y, HORIZON_Y, GAME_H);
+        this.ballDepth = Phaser.Math.Clamp(this.ballDepth, HORIZON_Y, GAME_H);
+        this.ball.setY(this.ballDepth - this.ballHeight);
         this.isHit = false;
         this.isBowling = false;
       }
