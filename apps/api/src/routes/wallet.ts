@@ -73,8 +73,12 @@ export async function walletRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/wallet/reconcile/:transactionId", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
-    requireUser(request);
+    const user = requireUser(request);
     const { transactionId } = routeParams(request);
+    const walletRequest = await getWalletRequest(transactionId);
+    if (walletRequest.userId !== user.id) {
+      throw new AppError("WALLET_REQUEST_NOT_FOUND", "Request not found", 404);
+    }
     return reconcileUnconfirmedTransfer(transactionId);
   });
 

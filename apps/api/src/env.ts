@@ -53,7 +53,7 @@ const envSchema = z.object({
     .transform((v) => (v === undefined ? undefined : v === "true")),
   // CouponVault Integration Configuration
   COUPON_API_URL: z.string().url().optional().default("http://127.0.0.1:4000/api/v1"),
-  COUPON_API_KEY: z.string().optional().default("e07857940255948c9ef500c7f3ba13ab4db2e1e80d1a50844db0adee3fad3233"),
+  COUPON_API_KEY: z.string().min(32),
 }).superRefine((data, ctx) => {
   // 1. Prevent mock email provider from being used in production
   if (data.NODE_ENV === "production" && (!data.EMAIL_PROVIDER || data.EMAIL_PROVIDER === "mock")) {

@@ -52,11 +52,10 @@ async function getVersionConfig(): Promise<VersionCacheEntry> {
 // ─── Main Authenticate Handler ─────────────────────────────────────────────────
 
 export async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
-  const header = request.headers.authorization;
-  const queryToken = (request.query as { token?: string })?.token;
+const header = request.headers.authorization;
   const token = header?.startsWith("Bearer ")
     ? header.slice("Bearer ".length).trim()
-    : queryToken;
+    : undefined;
 
   if (!token) {
     throw new AppError("UNAUTHORIZED", "Missing bearer token", 401);
@@ -138,11 +137,10 @@ export async function authenticate(request: FastifyRequest, _reply: FastifyReply
 }
 
 export async function optionalAuthenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
-  const header = request.headers.authorization;
-  const queryToken = (request.query as { token?: string })?.token;
+const header = request.headers.authorization;
   const token = header?.startsWith("Bearer ")
     ? header.slice("Bearer ".length).trim()
-    : queryToken;
+    : undefined;
 
   if (!token) return;
 
