@@ -35,6 +35,13 @@ export class CouponVaultService {
   private static getApiConfig() {
     const apiUrl = env.COUPON_API_URL || process.env.COUPON_API_URL || "http://127.0.0.1:4000/api/v1";
     const apiKey = env.COUPON_API_KEY || process.env.COUPON_API_KEY || "";
+    if (!apiKey) {
+      throw new AppError(
+        "COUPON_SERVICE_UNAVAILABLE",
+        "CouponVault integration is not configured. Please configure COUPON_API_KEY.",
+        503,
+      );
+    }
     return { apiUrl: apiUrl.replace(/\/+$/, ""), apiKey };
   }
 
