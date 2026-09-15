@@ -22,14 +22,23 @@ export default defineConfig({
       forks: { singleFork: true },
     },
     env: {
-      // Dedicated test database; created and pushed in globalSetup.
-      DATABASE_URL: (() => {
-        const dev = process.env.DATABASE_URL;
-        const url = new URL(dev);
-        const name = url.pathname.split("/").filter(Boolean).at(-1);
-        url.pathname = url.pathname.replace(/[^/]*$/, `${name}_test`);
-        return url.toString();
-      })(),
+      // Dedicated test database; created and pushed in globalSetup when DATABASE_URL is set.
+      ...(process.env.DATABASE_URL ? {
+        DATABASE_URL: (() => {
+          const dev = process.env.DATABASE_URL;
+          try {
+            const url = new URL(dev);
+            const name = url.pathname.split('/')
+              .filter(Boolean)
+              .at(-1);
+            url.pathname = url.pathname.replace(/[^/]*$/, `${name}_test`);
+            return url.toString();
+          } catch (e) {
+            // If invalid URL, fallback to original value.
+            return dev;
+          }
+        })(),
+      } : {}),
       LOG_LEVEL: "silent",
     },
   },

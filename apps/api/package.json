@@ -22,18 +22,21 @@
     "fastify": "^5.2.1",
     "file-type": "^22.0.2",
     "jose": "^6.0.8",
-    "otplib": "^13.4.1",
     "nodemailer": "^6.9.0",
+    "otplib": "^13.4.1",
     "pino": "^9.6.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@types/nodemailer": "^6.4.15",
     "@types/node": "^24.0.0",
+    "@types/nodemailer": "^6.4.15",
     "pino-pretty": "^13.0.0",
+    "strip-literal": "^3.1.0",
+    "tinyspy": "^4.0.6",
     "tsup": "^8.3.6",
     "tsx": "^4.19.3",
     "typescript": "~6.0.2",
+    "vite-node": "^3.2.4",
     "vitest": "^3.0.0"
   }
 }
