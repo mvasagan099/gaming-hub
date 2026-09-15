@@ -41,6 +41,7 @@ import { matchmakingRoutes } from "./routes/matchmaking";
 import { adminTournamentTiersRoutes } from "./routes/adminTournamentTiers";
 import { appVersionRoutes } from "./routes/appVersion";
 import { adminAppVersionRoutes } from "./routes/adminAppVersion";
+import { privacyRoutes } from "./routes/privacy";
 import { isFeatureEnabled } from "./services/featureFlags";
 import { instrument } from "./services/metrics";
 
@@ -163,6 +164,7 @@ export function buildApp() {
   void app.register(adminTournamentTiersRoutes);
   void app.register(appVersionRoutes);
   void app.register(adminAppVersionRoutes);
+  void app.register(privacyRoutes);
 
   return app;
 }

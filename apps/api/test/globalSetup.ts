@@ -11,6 +11,9 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   // globalSetup runs in its own process; load env explicitly.
   const dir = path.dirname(fileURLToPath(import.meta.url));
   loadDotenv({ path: path.join(dir, "..", ".env") });
+  if (!process.env.DATABASE_URL) {
+    loadDotenv({ path: path.join(dir, "..", "..", "..", ".env") });
+  }
 
   const devUrl = process.env.DATABASE_URL;
   if (!devUrl) throw new Error("DATABASE_URL is required for API tests");

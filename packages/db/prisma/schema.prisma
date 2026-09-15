@@ -312,6 +312,7 @@ model User {
   errorEvents        ErrorEvent[]
   announcementsRead  AnnouncementRead[]
   idempotencyRecords IdempotencyRecord[]
+  userPrivacy        UserPrivacy?
   
   // KYC Relations
   kycRequest         KycRequest?
@@ -412,6 +413,16 @@ model Profile {
 
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// M-05: Encrypted TOTP secret (AES-256-GCM). New enrollments use this field.
+  twoFactorSecretEncrypted  String?
+  /// Key version for rotation support (e.g., 1 = TOTP_ENCRYPTION_KEY_V1).
+  twoFactorSecretKeyVersion Int?
+  /// Timestamp set when the plaintext secret has been successfully encrypted.
+  totpEncryptedAt           DateTime?
+
+  /// Promotional balance migration marker (idempotency guard).
+  promoMigratedAt DateTime?
 
   @@index([referredBy])
 }
@@ -652,6 +663,10 @@ model WalletRequest {
   method     String?
   /// Free-form note supplied by the user when creating the request.
   note       String?
+  /// Unique external payment transfer identifier (e.g. CouponVault transfer UUID)
+  externalTransferId  String?             @unique
+  /// Timestamp when reconciliation or transfer processing claimed this request
+  processingStartedAt DateTime?
   adminId    String?
   adminNote  String?
   decidedAt  DateTime?
@@ -1393,11 +1408,26 @@ model CouponRedemption {
   value     Int
   createdAt DateTime @default(now())
 
+  /// Saga state machine fields (H-01 fix)
+  /// SHA-256 hash of the normalised coupon code (globally unique across all users).
+  couponCodeHash         String?   @unique
+  /// CouponVault's authoritative external transaction reference.
+  externalTxId          String?   @unique
+  /// Saga status: PENDING | EXTERNAL_CONFIRMED | COMPLETED | FAILED | NEEDS_RECONCILIATION
+  sagaStatus            String    @default("COMPLETED")
+  /// Safe failure description (no secrets).
+  failureReason         String?
+  /// Set when CouponVault confirmed the external redemption.
+  externalConfirmedAt   DateTime?
+  /// Set when the local wallet credit succeeded.
+  completedAt           DateTime?
+
   coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([couponId, userId])
   @@index([userId, createdAt])
+  @@index([sagaStatus, createdAt])
 }
 
 model Announcement {
@@ -1536,6 +1566,20 @@ model SearchHistory {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+model UserPrivacy {
+  userId               String   @id
+  profileVisibility    String   @default("EVERYONE")
+  showEmail            Boolean  @default(false)
+  showPhone            Boolean  @default(false)
+  showStats            Boolean  @default(true)
+  allowFriendRequests  Boolean  @default(true)
+  allowGameInvites     Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ErrorEvent {

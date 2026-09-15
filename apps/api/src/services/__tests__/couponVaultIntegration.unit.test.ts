@@ -302,8 +302,24 @@ describe("CouponVault Integration Unit Tests", () => {
         success: true,
       });
 
-      // Mock DB methods
+      // Mock DB methods for saga workflow
+      vi.spyOn(prisma.couponRedemption, "findFirst").mockResolvedValue(null);
       vi.spyOn(prisma.couponRedemption, "findUnique").mockResolvedValue(null);
+      vi.spyOn(prisma.couponRedemption, "create").mockResolvedValue({
+        id: "saga-1",
+        couponId: "cpn-vault-404",
+        userId: "user-redeem-test",
+        value: 1000,
+        couponCodeHash: "hash-mega1000",
+        externalTxId: "CPN-cpn-vault-404",
+        sagaStatus: "PENDING",
+        failureReason: null,
+        externalConfirmedAt: null,
+        completedAt: null,
+        createdAt: new Date(),
+      } as any);
+      vi.spyOn(prisma.couponRedemption, "update").mockResolvedValue({} as any);
+      vi.spyOn(prisma.coupon, "upsert").mockResolvedValue({ id: "cpn-vault-404" } as any);
 
       const mockTx = {
         coupon: {
@@ -311,6 +327,7 @@ describe("CouponVault Integration Unit Tests", () => {
         },
         couponRedemption: {
           create: vi.fn().mockResolvedValue({ id: "redemption-1", value: 1000 }),
+          update: vi.fn().mockResolvedValue({ id: "redemption-1", sagaStatus: "COMPLETED" }),
         },
         wallet: {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -373,22 +390,29 @@ describe("CouponVault Integration Unit Tests", () => {
         status: "ACTIVE",
       });
 
-      // Mock local DB returning already existing redemption
-      vi.spyOn(prisma.couponRedemption, "findUnique").mockResolvedValue({
+      // Mock local DB returning an already COMPLETED saga row via couponCodeHash lookup
+      vi.spyOn(prisma.couponRedemption, "findFirst").mockResolvedValue({
         id: "existing-redemption-id",
         couponId: "cpn-vault-dup",
         userId: "user-dup-test",
         value: 500,
         createdAt: new Date(),
+        couponCodeHash: "hash-of-dup500",
+        externalTxId: "CPN-cpn-vault-dup",
+        sagaStatus: "COMPLETED",
+        failureReason: null,
+        externalConfirmedAt: null,
+        completedAt: new Date(),
       });
 
       const redeemSpy = vi.spyOn(CouponVaultService, "redeemCoupon");
 
-      await expect(redeemCoupon("user-dup-test", "DUP500")).rejects.toThrow(
-        "You have already used this coupon",
-      );
+      // The saga returns idempotently for COMPLETED sagas
+      const result = await redeemCoupon("user-dup-test", "DUP500");
+      expect(result.ok).toBe(true);
+      expect(result.message).toContain("already redeemed");
 
-      // CouponVault redeem should NOT even be called
+      // CouponVault redeem should NOT be called for COMPLETED sagas
       expect(redeemSpy).not.toHaveBeenCalled();
     });
   });

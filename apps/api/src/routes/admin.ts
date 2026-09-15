@@ -7,7 +7,7 @@ import {
   SETTINGS_CATEGORIES,
   type SettingsCategoryName,
 } from "@gaming-hub/shared";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, requireMfa } from "../plugins/authenticate";
 import { requireUser, parseSchema, routeParams, queryParams, queryString } from "../lib/http";
 import { requirePermission } from "../lib/permissions";
 import { applyTransaction } from "../services/wallet";
@@ -122,7 +122,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return AdminWalletService.getUserWalletDetails(id);
   });
 
-  app.post("/api/admin/users/:id/wallet/adjust", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/users/:id/wallet/adjust", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
     const { id } = routeParams(request);
     const { amount, reason } = parseSchema(walletAdjustSchema, request.body);
@@ -359,7 +359,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return listWalletRequests({ userId, kind, status }, page, pageSize);
   });
 
-  app.post("/api/admin/wallet/requests/:id/approve", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/wallet/requests/:id/approve", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:wallet:requests:manage", prisma);
     const { id } = routeParams(request);
     const { note } = parseSchema(requestDecisionSchema, request.body ?? {});
@@ -376,7 +376,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return { ok: true, request: updated };
   });
 
-  app.post("/api/admin/wallet/requests/:id/reject", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/wallet/requests/:id/reject", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:wallet:requests:manage", prisma);
     const { id } = routeParams(request);
     const { reason } = parseSchema(requestRejectSchema, request.body);
@@ -393,7 +393,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return { ok: true, request: updated };
   });
 
-  app.post("/api/admin/users/:id/wallet/freeze", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/users/:id/wallet/freeze", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:wallet:requests:manage", prisma);
     const { id } = routeParams(request);
     const { reason } = parseSchema(freezeSchema, request.body);
@@ -410,7 +410,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return { ok: true, isFrozen: wallet.isFrozen };
   });
 
-  app.post("/api/admin/users/:id/wallet/unfreeze", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/users/:id/wallet/unfreeze", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:wallet:requests:manage", prisma);
     const { id } = routeParams(request);
     const wallet = await setWalletFrozen(admin.id, id, false);
@@ -425,7 +425,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return { ok: true, isFrozen: wallet.isFrozen };
   });
 
-  app.patch("/api/admin/users/:id/role", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/users/:id/role", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:users:manage", prisma);
     const { id } = routeParams(request);
     const { role, customRoleId } = parseSchema(roleChangeSchema, request.body);

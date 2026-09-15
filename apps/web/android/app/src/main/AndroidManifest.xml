@@ -29,8 +29,9 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="gaminghub.com" android:pathPrefix="/reset-password" />
-                <data android:scheme="https" android:host="gaminghub.com" android:pathPrefix="/login" />
+                <data android:scheme="https" android:host="gaminghub.com" android:path="/auth/callback" />
+                <data android:scheme="https" android:host="gaminghub.com" android:path="/reset-password" />
+                <data android:scheme="https" android:host="gaminghub.com" android:path="/verify-email" />
             </intent-filter>
 
             <!-- Custom Scheme Deep Linking -->
@@ -38,7 +39,11 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="com.gaminghub.app" />
+                <data android:scheme="com.gaminghub.app" android:host="auth" android:path="/callback" />
+                <data android:scheme="com.gaminghub.app" android:host="auth" android:path="/reset-password" />
+                <data android:scheme="com.gaminghub.app" android:host="auth" android:path="/verify-email" />
+                <data android:scheme="com.gaminghub.app" android:host="reset-password" android:path="/" />
+                <data android:scheme="com.gaminghub.app" android:host="verify-email" android:path="/" />
             </intent-filter>
 
         </activity>

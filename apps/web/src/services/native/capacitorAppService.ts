@@ -8,6 +8,7 @@ import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../supabase';
 import { useAppVersionStore } from '../../store/appVersionStore';
 import { useWalletStore } from '../../store/walletStore';
+import { parseAndValidateDeepLink } from '@gaming-hub/shared';
 
 let isInitialized = false;
 
@@ -89,39 +90,28 @@ export async function initCapacitorServices(): Promise<void> {
       return;
     }
 
-    try {
-      const url = new URL(data.url);
-      const pathname = url.pathname;
-      const search = url.search;
-      const hash = url.hash;
+    if (!data?.url) return;
 
-      // Handle Password Recovery deep links
-      if (
-        pathname === '/reset-password' ||
-        search.includes('type=recovery') ||
-        hash.includes('type=recovery')
-      ) {
-        // Enforce strict password recovery state: NEVER auto-log in
-        useAuthStore.getState().setIsPasswordRecovery(true);
-        useAuthStore.getState().setSession(null);
-        useAuthStore.getState().setUser(null);
+    const validated = parseAndValidateDeepLink(data.url);
+    if (!validated.valid || !validated.target) {
+      console.warn('[DeepLink] Rejected invalid or untrusted deep link');
+      return;
+    }
 
-        const target = `/reset-password${search}${hash}`;
-        void router.navigate(target, { replace: true });
-        return;
-      }
+    // Handle Password Recovery deep links
+    if (validated.isPasswordRecovery) {
+      // Enforce strict password recovery state: NEVER auto-log in
+      useAuthStore.getState().setIsPasswordRecovery(true);
+      useAuthStore.getState().setSession(null);
+      useAuthStore.getState().setUser(null);
 
-      // Handle other application routes
-      if (pathname && pathname !== '/') {
-        void router.navigate(`${pathname}${search}${hash}`);
-      }
-    } catch {
-      // If parsing fails, attempt relative path navigation
-      const slug = data.url.split('://')[1] || '';
-      if (slug) {
-        const path = slug.startsWith('/') ? slug : `/${slug}`;
-        void router.navigate(path);
-      }
+      void router.navigate(validated.target, { replace: true });
+      return;
+    }
+
+    // Handle other valid application routes
+    if (validated.target && validated.target !== '/') {
+      void router.navigate(validated.target);
     }
   });
 

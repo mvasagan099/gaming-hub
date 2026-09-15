@@ -58,7 +58,7 @@ export class CricketPlayerBaker {
     return mesh;
   }
 
-  render(canvas: HTMLCanvasElement, key: string) {
+  render(canvas: HTMLCanvasElement, key: string, view: 'batting' | 'bowling' = 'batting') {
     this.athlete.clear();
     const batting = /batsman|non_striker|keeper/.test(key);
     const running = key.includes('run');
@@ -69,17 +69,27 @@ export class CricketPlayerBaker {
     const gather = /gather|leap/.test(key);
     const swing = /drive|pull|loft|straight|defend|backlift|celebrate/.test(key);
     const follow = key.includes('follow');
+    const striker = key.includes('batsman') && !running;
+    const ready = striker && !swing;
+    const fieldReady = key.includes('fielder') && !running && !throwing && !pick;
+    const pull = key.includes('pull');
+    const loft = key.includes('loft');
+    const preparation = /prep|backlift|stride/.test(key);
     const phase = key.endsWith('_2') ? -1 : 1;
     const jersey = batting ? '#087eb8' : '#b51f38';
     const pants = batting ? '#0872a3' : '#223239';
     const skin = '#a76542';
     const root = this.athlete;
-    root.rotation.set(0, rear ? Math.PI - 0.15 : batting && !running ? 2.35 : -0.28, 0);
+    // Camera is behind the striker in batting view and behind the bowler
+    // in bowling view. Turn the body and gaze together for that viewpoint.
+    const strikerYaw = view === 'batting' ? Math.PI - 1.05 : 1.05;
+    root.rotation.set(0, rear ? Math.PI - 0.35 : striker ? strikerYaw : batting ? 0.45 : -0.28, 0);
     root.position.set(0, 0, 0);
 
     const torso = new THREE.Group();
-    torso.position.set(0, pick || slide ? 0.93 : 1.12, 0);
-    torso.rotation.x = pick ? 0.8 : running ? 0.17 : 0.07;
+    // Athletic proportions: shorter thighs, flexed knees and weight over the feet.
+    torso.position.set(0, pick || slide ? 0.73 : ready || fieldReady ? 0.87 : 0.97, 0);
+    torso.rotation.x = pick ? 0.8 : ready ? 0.22 : running || fieldReady ? 0.17 : 0.07;
     torso.rotation.z = swing ? (follow ? -0.22 : 0.14) : 0;
     root.add(torso);
     this.shape(torso, [0, 0.25, 0], [0.235, 0.33, 0.13], jersey);
@@ -101,7 +111,7 @@ export class CricketPlayerBaker {
 
     const head = new THREE.Group();
     head.position.set(0, 0.66, 0);
-    head.rotation.y = batting && !running ? -0.65 : 0;
+    head.rotation.y = striker ? (view === 'batting' ? 0.95 : -0.95) : 0;
     torso.add(head);
     this.limb(torso, [0, 0.5, 0], [0, 0.64, 0], 0.065, skin);
     this.shape(head, [0, 0.05, 0], [0.104, 0.14, 0.10], skin);
@@ -127,17 +137,17 @@ export class CricketPlayerBaker {
     for (const side of [-1, 1]) {
       const stride = running ? phase * side : 0;
       const hip: Point = [side * 0.105, torso.position.y + 0.015, 0];
-      const knee: Point = [side * (swing ? 0.20 : 0.12), 0.59 + (gather && side > 0 ? 0.24 : 0), stride * 0.22 + (pick ? 0.16 : 0)];
-      const ankle: Point = [side * (swing || slide ? 0.29 : 0.14), 0.105 + (stride > 0 ? 0.19 : 0), -stride * 0.28];
-      this.limb(root, hip, knee, 0.105, pants);
-      this.limb(root, knee, ankle, 0.074, pants);
+      const knee: Point = [side * (striker || fieldReady ? 0.20 : 0.14), 0.49 + (gather && side > 0 ? 0.24 : 0), stride * 0.22 + (ready || fieldReady || pick ? 0.16 : 0)];
+      const ankle: Point = [side * (striker || slide || fieldReady ? 0.28 : 0.18), 0.105 + (stride > 0 ? 0.19 : 0), -stride * 0.28];
+      this.limb(root, hip, knee, 0.118, pants);
+      this.limb(root, knee, ankle, 0.092, pants);
       this.shape(root, [ankle[0], ankle[1] - 0.025, ankle[2] + 0.035], [0.089, 0.055, 0.15], '#e5e9e8');
       this.shape(root, [ankle[0], ankle[1] - 0.057, ankle[2] + 0.035], [0.088, 0.015, 0.15], '#38424a');
       for (let i = 0; i < 3; i++) this.shape(root, [ankle[0], ankle[1] + 0.014, ankle[2] + i * 0.035], [0.05, 0.005, 0.006], '#75828b', true);
       if (batting) {
-        const pad = this.limb(root, [knee[0], knee[1] + 0.035, knee[2] + 0.074], [ankle[0], ankle[1] + 0.055, ankle[2] + 0.082], 0.09, '#168bbc');
+        const pad = this.limb(root, [knee[0], knee[1] + 0.035, knee[2] + 0.09], [ankle[0], ankle[1] + 0.055, ankle[2] + 0.10], 0.115, '#e8eee5');
         for (let i = -1; i <= 1; i++) {
-          const rib = new THREE.Mesh(this.box, this.material('#7fcef0'));
+          const rib = new THREE.Mesh(this.box, this.material('#c5d4d8'));
           rib.position.set(i * 0.38, 0, 0.88);
           rib.scale.set(0.09, 0.85, 0.08);
           pad.add(rib);
@@ -153,7 +163,12 @@ export class CricketPlayerBaker {
       let wrist: Point = [side * 0.24, 0.04, 0.16];
       if (batting && !running) {
         elbow = [side * 0.25, swing ? 0.38 : 0.20, 0.20];
-        wrist = [swing ? (follow ? -0.25 : 0.33) : 0.16, swing ? (follow ? 0.57 : 0.33) : 0.12, 0.37 + side * 0.03];
+        wrist = [swing ? (follow ? -0.25 : 0.33) : 0.20, (swing ? (follow ? 0.57 : 0.33) : -0.06) + side * 0.045, 0.37];
+        if (swing && !follow) {
+          const gripY = preparation ? 0.38 : pull ? 0.30 : loft ? 0.22 : -0.10;
+          wrist = [preparation ? 0.28 : 0.08, gripY + side * 0.045, preparation ? 0.20 : 0.48];
+          elbow = [side * 0.30, gripY + 0.17, 0.25];
+        }
       }
       if (running) {
         elbow = [side * 0.28, 0.23, phase * side * 0.18];
@@ -176,6 +191,8 @@ export class CricketPlayerBaker {
       const bat = new THREE.Group();
       bat.position.set(...rightWrist);
       bat.rotation.z = swing ? (follow ? -2.3 : -0.8) : running ? 0.8 : -0.12;
+      if (swing && !follow) bat.rotation.z = preparation ? -2.7 : pull ? -1.55 : loft ? -0.7 : -0.10;
+      bat.rotation.x = ready ? -0.16 : 0;
       torso.add(bat);
       this.limb(bat, [0, 0.07, 0], [0, -0.21, 0], 0.018, '#244ba2');
       this.shape(bat, [0, -0.47, 0], [0.103, 0.52, 0.045], '#e1bc79', true);

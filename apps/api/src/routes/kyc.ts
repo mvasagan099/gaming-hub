@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Multipart } from "@fastify/multipart";
 import { KycLevel, KycDocumentType, AppError, kycSubmitLevel1Schema } from "@gaming-hub/shared";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, requireMfa } from "../plugins/authenticate";
 import { requireUser, parseSchema } from "../lib/http";
 import { assertFeatureEnabled } from "../services/featureFlags";
 import KycService from "../services/kyc";
@@ -68,7 +68,7 @@ export async function kycRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/api/kyc/initiate", { preHandler: authenticate }, async (request) => {
+  app.post("/api/kyc/initiate", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const user = requireUser(request);
     await assertFeatureEnabled("support.kyc", "KYC verification");
     const data = parseSchema(kycSubmitLevel1Schema, request.body);
@@ -126,7 +126,7 @@ export async function kycRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/api/kyc/upload", { preHandler: authenticate }, async (request, reply) => {
+  app.post("/api/kyc/upload", { preHandler: [authenticate, requireMfa] }, async (request, reply) => {
     const user = requireUser(request);
     await assertFeatureEnabled("support.kyc", "KYC verification");
     
@@ -183,7 +183,7 @@ export async function kycRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/api/kyc/document/:documentId", { preHandler: authenticate }, async (request) => {
+  app.delete("/api/kyc/document/:documentId", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const user = requireUser(request);
     await assertFeatureEnabled("support.kyc", "KYC verification");
     const params = request.params as { documentId: string };
@@ -194,7 +194,7 @@ export async function kycRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post("/api/kyc/submit", { preHandler: authenticate }, async (request) => {
+  app.post("/api/kyc/submit", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const user = requireUser(request);
     await assertFeatureEnabled("support.kyc", "KYC verification");
     const body = request.body as { requestId: string };

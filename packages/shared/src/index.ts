@@ -26,3 +26,4 @@ export * from "./security";
 export * from "./history";
 export * from "./matchmaking";
 export * from "./appVersion";
+export * from "./deepLink";

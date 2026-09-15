@@ -832,7 +832,7 @@ export class CricketScene extends Phaser.Scene {
         const canvas = document.createElement('canvas');
         canvas.width = source.width;
         canvas.height = source.height;
-        baker.render(canvas, key);
+        baker.render(canvas, key, this.role);
         this.textures.remove(key);
         this.textures.addCanvas(key, canvas);
       }
@@ -1168,6 +1168,23 @@ export class CricketScene extends Phaser.Scene {
   private setRole(newRole: "batting" | "bowling") {
     if (this.role === newRole) return;
     this.role = newRole;
+    // Reorient the baked striker frames when the innings changes viewpoint.
+    // Refresh in place so live sprites keep their texture references.
+    let baker: CricketPlayerBaker | undefined;
+    try {
+      baker = new CricketPlayerBaker();
+      for (const key of Object.keys(this.textures.list).filter(key => /^tex_batsman/.test(key))) {
+        const texture = this.textures.get(key);
+        if (texture instanceof Phaser.Textures.CanvasTexture) {
+          baker.render(texture.getCanvas(), key, newRole);
+          texture.refresh();
+        }
+      }
+    } catch (error) {
+      console.warn('Cricket player viewpoint fallback:', error);
+    } finally {
+      baker?.destroy();
+    }
     this.hud.setRole(newRole);
     this.repositionForRole();
     this.redrawStumps();
@@ -2070,15 +2087,6 @@ export class CricketScene extends Phaser.Scene {
 
       if (runsAdded >= 4) {
         this.hud.updateStatus(message, colorStr);
-        if (runsAdded === 6) {
-          this.tweens.add({
-            targets: this.ball,
-            scale: this.role === 'bowling' ? 5 : 3,
-            duration: 300,
-            yoyo: true
-          });
-        }
-
         this.time.delayedCall(1000, () => {
           this.ballVelocity = { x: 0, y: 0 };
           this.commitRuns(runsAdded);

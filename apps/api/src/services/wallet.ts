@@ -25,7 +25,7 @@ const BALANCE_FIELD: Record<WalletBalanceType, keyof Pick<Wallet, "balance" | "b
  * bonus/locked/cashback balances once an admin turns those features off.
  */
 async function maskWalletBalances(wallet: Wallet): Promise<Wallet> {
-  const flags = await getFeatureFlags();
+  const flags = (await getFeatureFlags()) ?? {};
   return {
     ...wallet,
     bonusBalance: flags["payments.bonusWallet"] === false ? 0 : wallet.bonusBalance,
@@ -357,6 +357,8 @@ export async function transferToCouponWallet(
           status: "PENDING",
           method: "COUPONVAULT",
           note: transactionId,
+          externalTransferId: transactionId,
+          processingStartedAt: new Date(),
         },
       });
 
@@ -559,7 +561,14 @@ export async function reconcileUnconfirmedTransfer(transactionId: string): Promi
   message: string;
 }> {
   const walletRequest = await prisma.walletRequest.findFirst({
-    where: { note: transactionId, kind: "WITHDRAWAL", method: "COUPONVAULT" },
+    where: {
+      OR: [
+        { note: transactionId },
+        { externalTransferId: transactionId },
+      ],
+      kind: "WITHDRAWAL",
+      method: "COUPONVAULT",
+    },
   });
 
   if (!walletRequest) {
@@ -575,12 +584,58 @@ export async function reconcileUnconfirmedTransfer(transactionId: string): Promi
     };
   }
 
-  if (walletRequest.status === "REJECTED") {
+  if (walletRequest.status === "REJECTED" || walletRequest.status === "CANCELLED") {
     return {
       transactionId,
       reconciled: true,
       resolution: "REFUNDED",
       message: "Transaction already resolved and refunded.",
+    };
+  }
+
+  // ─── Atomic claim: prevent concurrent reconciliation races ───────────────
+  const STALE_CLAIM_MS = 2 * 60 * 1000; // 2 minutes stale recovery
+  const staleThreshold = new Date(Date.now() - STALE_CLAIM_MS);
+
+  const claimResult = await prisma.walletRequest.updateMany({
+    where: {
+      id: walletRequest.id,
+      status: "PENDING",
+      OR: [
+        { adminNote: { not: "PROCESSING" } },
+        { processingStartedAt: { lt: staleThreshold } },
+        { processingStartedAt: null },
+      ],
+    },
+    data: {
+      adminNote: "PROCESSING",
+      processingStartedAt: new Date(),
+    },
+  });
+
+  if (claimResult.count === 0) {
+    const current = await prisma.walletRequest.findUnique({ where: { id: walletRequest.id } });
+    if (current?.status === "APPROVED") {
+      return {
+        transactionId,
+        reconciled: true,
+        resolution: "COMPLETED",
+        message: "Transaction already confirmed and completed.",
+      };
+    }
+    if (current?.status === "REJECTED" || current?.status === "CANCELLED") {
+      return {
+        transactionId,
+        reconciled: true,
+        resolution: "REFUNDED",
+        message: "Transaction already resolved and refunded.",
+      };
+    }
+    return {
+      transactionId,
+      reconciled: false,
+      resolution: "HELD",
+      message: "Transfer is currently being processed by another worker. Kept in UNCONFIRMED_HOLD.",
     };
   }
 
@@ -596,6 +651,12 @@ export async function reconcileUnconfirmedTransfer(transactionId: string): Promi
       `[Reconciliation] CouponVault unreachable for transaction ${transactionId}, maintaining UNCONFIRMED_HOLD:`,
       err.message,
     );
+    // Release claim back to UNCONFIRMED_HOLD on network failure so it can be retried
+    await prisma.walletRequest.updateMany({
+      where: { id: walletRequest.id, status: "PENDING" },
+      data: { adminNote: "UNCONFIRMED_HOLD", processingStartedAt: null },
+    }).catch(() => {});
+
     return {
       transactionId,
       reconciled: false,
@@ -608,7 +669,7 @@ export async function reconcileUnconfirmedTransfer(transactionId: string): Promi
     // 1. CouponVault confirms success → Mark COMPLETED
     await prisma.$transaction(async (tx) => {
       await tx.walletRequest.updateMany({
-        where: { note: transactionId },
+        where: { id: walletRequest.id },
         data: { status: "APPROVED", adminNote: "RECONCILED_SUCCESS", decidedAt: new Date() },
       });
       await tx.transaction.updateMany({
@@ -646,7 +707,7 @@ export async function reconcileUnconfirmedTransfer(transactionId: string): Promi
         "MAIN",
       );
       await tx.walletRequest.updateMany({
-        where: { note: transactionId },
+        where: { id: walletRequest.id },
         data: { status: "REJECTED", adminNote: "RECONCILED_UNPROCESSED_REFUND", decidedAt: new Date() },
       });
       await tx.transaction.updateMany({

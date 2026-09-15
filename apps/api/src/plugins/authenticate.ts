@@ -156,11 +156,12 @@ const header = request.headers.authorization;
 
 // ─── C-02: requireMfa ────────────────────────────────────────────────────────
 /**
- * Pre-handler that enforces backend-level MFA completion.
+ * Pre-handler that enforces backend-level MFA completion AND freshness.
  *
  * Must be used AFTER `authenticate` (which sets `request.user`).
  * If the authenticated user has 2FA enabled, their active LoginSession must
- * have `mfaVerifiedAt` set (stamped by `POST /api/auth/2fa/verify`).
+ * have `mfaVerifiedAt` set within the last MFA_FRESHNESS_MINUTES minutes
+ * (stamped by `POST /api/auth/2fa/verify`).
  *
  * Users without 2FA enabled are allowed through without restriction so that
  * disabling 2FA is never a breaking change for those accounts.
@@ -168,7 +169,6 @@ const header = request.headers.authorization;
 export async function requireMfa(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   const user = request.user;
   if (!user) {
-    // authenticate must run first; this is a misconfigured route if user is missing
     throw new AppError("UNAUTHORIZED", "Authentication required", 401);
   }
 
@@ -181,7 +181,7 @@ export async function requireMfa(request: FastifyRequest, _reply: FastifyReply):
   // Users without 2FA are not gated by MFA
   if (!profile?.twoFactorEnabled) return;
 
-  // Retrieve the current session and verify mfaVerifiedAt is set
+  // Retrieve the current session
   const header = request.headers.authorization as string | undefined;
   const rawToken = header?.startsWith("Bearer ") ? header.slice(7).trim() : "";
   const tokenHash = hashToken(rawToken);
@@ -191,6 +191,18 @@ export async function requireMfa(request: FastifyRequest, _reply: FastifyReply):
     throw new AppError(
       "MFA_REQUIRED",
       "This action requires 2FA verification. Please complete 2FA at /api/auth/2fa/verify.",
+      403,
+    );
+  }
+
+  // Freshness check: mfaVerifiedAt must be within MFA_FRESHNESS_MINUTES
+  const freshnessMs = env.MFA_FRESHNESS_MINUTES * 60 * 1000;
+  const verifiedAgeMs = Date.now() - session.mfaVerifiedAt.getTime();
+  if (verifiedAgeMs > freshnessMs) {
+    throw new AppError(
+      "MFA_REQUIRED",
+      `Your 2FA session has expired (older than ${env.MFA_FRESHNESS_MINUTES} minutes). ` +
+        "Please re-verify at /api/auth/2fa/verify.",
       403,
     );
   }

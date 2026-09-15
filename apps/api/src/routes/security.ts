@@ -4,10 +4,11 @@ import type { FastifyInstance } from "fastify";
 import { generateSecret, generateURI, verify, NobleCryptoPlugin, ScureBase32Plugin } from "otplib";
 import { prisma } from "@gaming-hub/db";
 import { AppError, changePasswordSchema, setup2FASchema, verify2FASchema, disable2FASchema } from "@gaming-hub/shared";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, requireMfa } from "../plugins/authenticate";
 import { requireUser, parseSchema } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
 import { RateLimitService } from "../services/rateLimitService";
+import { encryptTotpSecret, loadTotpSecret, isTotpEncryptionConfigured } from "../lib/crypto";
 
 // ---------------------------------------------------------------------------
 // Per-userId 2FA login attempt tracking (NEW-3 fix — was bespoke Map, now uses
@@ -102,7 +103,7 @@ function getTOTPAuthUrl(userEmail: string, secret: string, issuer: string = "Gam
 }
 
 export async function securityRoutes(app: FastifyInstance) {
-  app.patch("/api/security/password", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/security/password", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const user = requireUser(request);
     const data = parseSchema(changePasswordSchema, request.body);
     
@@ -175,12 +176,20 @@ export async function securityRoutes(app: FastifyInstance) {
     const secret = generateTOTPSecret();
     const email = user.email ?? "user";
     const authUrl = getTOTPAuthUrl(email, secret);
-    
+
+    // M-05: Store encrypted if key is configured, plaintext fallback for dev.
+    const updateData: Record<string, unknown> = {};
+    if (isTotpEncryptionConfigured()) {
+      updateData.twoFactorSecretEncrypted = encryptTotpSecret(secret);
+      updateData.twoFactorSecretKeyVersion = (await import("../lib/crypto")).currentTotpKeyVersion();
+      updateData.twoFactorSecret = null; // clear plaintext
+    } else {
+      updateData.twoFactorSecret = secret; // dev fallback
+    }
+
     await prisma.profile.update({
       where: { userId: user.id },
-      data: {
-        twoFactorSecret: secret,
-      },
+      data: updateData,
     });
     
     await auditFromRequest(request, {
@@ -205,7 +214,7 @@ export async function securityRoutes(app: FastifyInstance) {
     
     const profile = await prisma.profile.findUnique({
       where: { userId: user.id },
-      select: { twoFactorEnabled: true, twoFactorSecret: true },
+      select: { twoFactorEnabled: true, twoFactorSecret: true, twoFactorSecretEncrypted: true, twoFactorSecretKeyVersion: true },
     });
     
     if (!profile) {
@@ -216,11 +225,16 @@ export async function securityRoutes(app: FastifyInstance) {
       throw new AppError("VALIDATION_ERROR", "2FA is already enabled", 400);
     }
     
-    if (!profile.twoFactorSecret) {
+    if (!profile.twoFactorSecret && !profile.twoFactorSecretEncrypted) {
       throw new AppError("VALIDATION_ERROR", "2FA setup not initiated. Call /setup first", 400);
     }
     
-    if (!(await verifyTOTP(data.token, profile.twoFactorSecret))) {
+    const secret = loadTotpSecret(
+      profile.twoFactorSecretEncrypted,
+      profile.twoFactorSecretKeyVersion,
+      profile.twoFactorSecret,
+    );
+    if (!(await verifyTOTP(data.token, secret))) {
       await auditFromRequest(request, {
         actorType: "user",
         actorId: user.id,
@@ -250,20 +264,25 @@ export async function securityRoutes(app: FastifyInstance) {
     return { ok: true, enabled: true };
   });
   
-  app.post("/api/security/2fa/disable", { preHandler: authenticate }, async (request) => {
+  app.post("/api/security/2fa/disable", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const user = requireUser(request);
     const data = parseSchema(disable2FASchema, request.body);
     
     const profile = await prisma.profile.findUnique({
       where: { userId: user.id },
-      select: { twoFactorEnabled: true, twoFactorSecret: true, passwordHash: true },
+      select: { twoFactorEnabled: true, twoFactorSecret: true, twoFactorSecretEncrypted: true, twoFactorSecretKeyVersion: true, passwordHash: true },
     });
     
     if (!profile?.twoFactorEnabled) {
-      throw new AppError("VALIDATION_ERROR", "2FA is not enabled", 400);
+      throw new AppError("VALIDATION_ERROR", "2FA is not enabled on this account", 400);
     }
     
-    if (!(await verifyTOTP(data.token, profile.twoFactorSecret!))) {
+    const secret = loadTotpSecret(
+      profile.twoFactorSecretEncrypted,
+      profile.twoFactorSecretKeyVersion,
+      profile.twoFactorSecret,
+    );
+    if (!(await verifyTOTP(data.token, secret))) {
       await auditFromRequest(request, {
         actorType: "user",
         actorId: user.id,
@@ -280,6 +299,8 @@ export async function securityRoutes(app: FastifyInstance) {
       where: { userId: user.id },
       data: {
         twoFactorSecret: null,
+        twoFactorSecretEncrypted: null,
+        twoFactorSecretKeyVersion: null,
         twoFactorEnabled: false,
       },
     });
@@ -312,14 +333,25 @@ export async function securityRoutes(app: FastifyInstance) {
 
       const profile = await prisma.profile.findUnique({
         where: { userId: data.userId },
-        select: { twoFactorSecret: true, twoFactorEnabled: true },
+        select: {
+          twoFactorSecret: true,
+          twoFactorSecretEncrypted: true,
+          twoFactorSecretKeyVersion: true,
+          twoFactorEnabled: true,
+        },
       });
 
-      if (!profile || !profile.twoFactorEnabled || !profile.twoFactorSecret) {
+      if (!profile || !profile.twoFactorEnabled || (!profile.twoFactorSecret && !profile.twoFactorSecretEncrypted)) {
         throw new AppError("VALIDATION_ERROR", "2FA is not enabled for this account", 400);
       }
 
-      if (!(await verifyTOTP(data.token, profile.twoFactorSecret))) {
+      const secret = loadTotpSecret(
+        profile.twoFactorSecretEncrypted,
+        profile.twoFactorSecretKeyVersion,
+        profile.twoFactorSecret,
+      );
+
+      if (!(await verifyTOTP(data.token, secret))) {
         // Record failure BEFORE auditing so an exception here doesn't skip the count.
         record2FAFailure(data.userId);
         await auditFromRequest(request, {

@@ -5,6 +5,8 @@ export class CricketReplayManager {
   private scene: Phaser.Scene;
   private history = new ReplayBuffer();
   private clip: ReplayFrame[] = [];
+  private playbackClip: ReplayFrame[] = [];
+  private clipLabel = '';
   private pending = 0;
   private capturedEvent = false;
   private clock = 0;
@@ -77,13 +79,14 @@ export class CricketReplayManager {
     if (this.pending && this.clock >= this.pending) {
       this.pending = 0;
       this.clip = this.history.clip();
+      this.clipLabel = this.label;
       this.watch.setText(`▶ WATCH ${this.label}`).setVisible(this.clip.length > 1);
       if (this.auto) this.play();
     }
     if (this.playhead === null) return;
     this.playhead += dt * 0.5;
-    const frame = replayBlend(this.clip, this.playhead);
-    if (!frame || this.playhead > this.clip[this.clip.length - 1].time) { this.stop(); return; }
+    const frame = replayBlend(this.playbackClip, this.playhead);
+    if (!frame || this.playhead > this.playbackClip[this.playbackClip.length - 1].time) { this.stop(); return; }
     const { from, to, mix } = frame;
     const lerp = Phaser.Math.Linear;
     from.poses.forEach((pose, index) => {
@@ -93,7 +96,8 @@ export class CricketReplayManager {
       actor.setTexture(mix < 0.5 ? pose.texture : end.texture).setOrigin(pose.ox, pose.oy)
         .setPosition(lerp(pose.x, end.x, mix), lerp(pose.y, end.y, mix))
         .setScale(lerp(pose.sx, end.sx, mix), lerp(pose.sy, end.sy, mix))
-        .setAngle(lerp(pose.angle, end.angle, mix)).setAlpha(lerp(pose.alpha, end.alpha, mix))
+        .setAngle(pose.angle + Phaser.Math.Angle.ShortestBetween(pose.angle, end.angle) * mix)
+        .setAlpha(lerp(pose.alpha, end.alpha, mix))
         .setVisible(mix < 0.5 ? pose.visible : end.visible);
     });
     from.bails.forEach((bail, index) => {
@@ -104,6 +108,7 @@ export class CricketReplayManager {
     const ballX = lerp(from.ballX, to.ballX, mix), depth = lerp(from.ballDepth, to.ballDepth, mix);
     const height = lerp(from.ballHeight, to.ballHeight, mix);
     this.shadow.setPosition(ballX, depth).setScale(0.7 + height / 160).setAlpha(Math.max(0.12, 0.6 - height / 220));
+    this.shadow.setVisible((mix < 0.5 ? from : to).poses.at(-1)?.visible ?? false);
     // Independent replay lens gently tracks the recorded ball, never the live camera.
     const zoom = 0.33;
     this.world.setScale(zoom).setPosition(4 - Phaser.Math.Clamp(ballX * zoom - 138, 0, 924 * zoom - 277),
@@ -112,9 +117,10 @@ export class CricketReplayManager {
 
   private play() {
     if (this.clip.length < 2) return;
-    this.playhead = this.clip[0].time;
-    this.title.setText(`${this.label} · REPLAY 0.5×`);
+    this.playbackClip = this.clip;
+    this.playhead = this.playbackClip[0].time;
+    this.title.setText(`${this.clipLabel} · REPLAY 0.5×`);
     this.panel.setVisible(true);
   }
-  private stop() { this.playhead = null; this.panel.setVisible(false); }
+  private stop() { this.playhead = null; this.playbackClip = []; this.panel.setVisible(false); }
 }

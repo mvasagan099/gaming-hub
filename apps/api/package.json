@@ -22,7 +22,7 @@
     "fastify": "^5.2.1",
     "file-type": "^22.0.2",
     "jose": "^6.0.8",
-    "nodemailer": "^6.9.0",
+    "nodemailer": "^10.0.10",
     "otplib": "^13.4.1",
     "pino": "^9.6.0",
     "zod": "^4.0.0"

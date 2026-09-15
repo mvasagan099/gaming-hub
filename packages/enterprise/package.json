@@ -75,17 +75,17 @@
   },
   "dependencies": {
     "@gaming-hub/db": "*",
-    "@gaming-hub/shared": "*",
     "@gaming-hub/multiplayer": "*",
-    "ioredis": "^5.4.1",
+    "@gaming-hub/shared": "*",
+    "bull-arena": "^4.2.0",
     "bullmq": "^5.0.0",
-    "openai": "^4.0.0",
-    "node-cron": "^3.0.3",
     "firebase-admin": "^12.0.0",
+    "ioredis": "^5.4.1",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^10.0.10",
+    "openai": "^4.0.0",
     "twilio": "^5.0.0",
-    "nodemailer": "^6.9.0",
-    "web-push": "^3.6.0",
-    "bull-arena": "^4.2.0"
+    "web-push": "^3.6.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",

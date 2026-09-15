@@ -12,6 +12,7 @@ import { requireUser } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
 import { getCategorySettings } from "../services/settings";
 import { recordLoginSession, hashToken } from "../services/sessions";
+import { loadTotpSecret } from "../lib/crypto";
 
 // Failed sign-in lockout: more than this many failed session exchanges for an
 // email within the window rejects further attempts, even with a valid token.
@@ -126,6 +127,13 @@ export async function authRoutes(app: FastifyInstance) {
 
       await ensureUser(verified.sub, verified.email, verified.userMetadata);
       
+      await recordLoginSession({
+        userId: verified.sub,
+        token,
+        ip: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+
       const profile = await prisma.profile.findUnique({
         where: { userId: verified.sub },
         select: { twoFactorEnabled: true },
@@ -144,12 +152,6 @@ export async function authRoutes(app: FastifyInstance) {
         return { status: "2fa_required", userId: verified.sub };
       }
       
-      await recordLoginSession({
-        userId: verified.sub,
-        token,
-        ip: request.ip,
-        userAgent: request.headers["user-agent"] ?? null,
-      });
       auditFromRequest(request, {
         actorType: "user",
         actorId: verified.sub,
@@ -179,21 +181,26 @@ export async function authRoutes(app: FastifyInstance) {
 
       const profile = await prisma.profile.findUnique({
         where: { userId: user.id },
-        select: { twoFactorEnabled: true, twoFactorSecret: true },
+        select: { twoFactorEnabled: true, twoFactorSecret: true, twoFactorSecretEncrypted: true, twoFactorSecretKeyVersion: true },
       });
 
-      if (!profile?.twoFactorEnabled || !profile.twoFactorSecret) {
+      if (!profile?.twoFactorEnabled || (!profile.twoFactorSecret && !profile.twoFactorSecretEncrypted)) {
         throw new AppError("NOT_FOUND", "2FA is not enabled for this account", 400);
       }
 
       // Re-use the otplib verify pattern from security.ts
       const cryptoPlugin = new NobleCryptoPlugin();
       const base32Plugin = new ScureBase32Plugin();
+      const totpSecret = loadTotpSecret(
+        profile.twoFactorSecretEncrypted,
+        profile.twoFactorSecretKeyVersion,
+        profile.twoFactorSecret,
+      );
       let isValid = false;
       try {
         const result = await verifyOtp({
           token: totpToken.trim(),
-          secret: profile.twoFactorSecret,
+          secret: totpSecret,
           crypto: cryptoPlugin,
           base32: base32Plugin,
           epochTolerance: 30,
@@ -219,9 +226,17 @@ export async function authRoutes(app: FastifyInstance) {
       const authHeader = request.headers.authorization as string;
       const rawToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
       const tokenHash = hashToken(rawToken);
-      await prisma.loginSession.updateMany({
+      const sessionTtlMs = 30 * 24 * 60 * 60 * 1000;
+      await prisma.loginSession.upsert({
         where: { tokenHash },
-        data: { mfaVerifiedAt: new Date() },
+        update: { mfaVerifiedAt: new Date(), isCurrent: true, revokedAt: null },
+        create: {
+          userId: user.id,
+          tokenHash,
+          mfaVerifiedAt: new Date(),
+          isCurrent: true,
+          expiresAt: new Date(Date.now() + sessionTtlMs),
+        },
       });
 
       auditFromRequest(request, {

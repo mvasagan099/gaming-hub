@@ -55,10 +55,16 @@ const envSchema = z.object({
   COUPON_API_URL: z.string().url().optional().default("http://127.0.0.1:4000/api/v1"),
   COUPON_API_KEY: z.string().default("dev-fallback-key-123"),
   // M-07 fix: constrain how many X-Forwarded-For hops are trusted.
-  // Set to 0 if there is no reverse proxy (direct deployment), 1 for a single
-  // load balancer / Nginx / Cloudflare, or higher for multi-hop setups.
-  // Unconditionally trusting all hops (trustProxy: true) allows IP spoofing.
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
+  // M-05: AES-256-GCM key for encrypting TOTP secrets at rest.
+  // Production: must be exactly 32 cryptographically random bytes, base64-encoded.
+  // Generate: node -e "require('crypto').randomBytes(32).toString('base64')" | pbcopy
+  TOTP_ENCRYPTION_KEY: z.string().optional(),
+  // Key version for safe rotation support (increment when rotating the key).
+  TOTP_ENCRYPTION_KEY_VERSION: z.coerce.number().int().min(1).default(1),
+  // C-02: How long (minutes) a completed MFA verification remains valid for
+  // high-risk operations. Default: 15 minutes.
+  MFA_FRESHNESS_MINUTES: z.coerce.number().int().min(1).default(15),
 }).superRefine((data, ctx) => {
   // 1. Prevent mock email provider from being used in production
   if (data.NODE_ENV === "production" && (!data.EMAIL_PROVIDER || data.EMAIL_PROVIDER === "mock")) {
@@ -131,6 +137,30 @@ const envSchema = z.object({
       path: ["SUPABASE_SERVICE_ROLE_KEY"],
       message: "SUPABASE_SERVICE_ROLE_KEY is required in production. KYC document storage will not work without it.",
     });
+  }
+
+  // 7. M-05: require TOTP_ENCRYPTION_KEY in production so secrets are never stored plaintext.
+  if (data.NODE_ENV === "production" && !data.TOTP_ENCRYPTION_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["TOTP_ENCRYPTION_KEY"],
+      message:
+        "TOTP_ENCRYPTION_KEY is required in production. " +
+        "Generate: node -e \"require('crypto').randomBytes(32).toString('base64')\" and set this env var.",
+    });
+  }
+
+  // 8. M-05: validate TOTP_ENCRYPTION_KEY length when provided (must decode to 32 bytes).
+  if (data.TOTP_ENCRYPTION_KEY) {
+    const keyBytes = Buffer.from(data.TOTP_ENCRYPTION_KEY, "base64");
+    if (keyBytes.length !== 32) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["TOTP_ENCRYPTION_KEY"],
+        message: `TOTP_ENCRYPTION_KEY must decode to exactly 32 bytes (got ${keyBytes.length}). ` +
+          "Generate: node -e \"require('crypto').randomBytes(32).toString('base64')\"",
+      });
+    }
   }
 });
 

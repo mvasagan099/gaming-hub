@@ -31,7 +31,8 @@ export default defineConfig({
             const name = url.pathname.split('/')
               .filter(Boolean)
               .at(-1);
-            url.pathname = url.pathname.replace(/[^/]*$/, `${name}_test`);
+            const base = name?.endsWith("_test") ? name : `${name}_test`;
+            url.pathname = url.pathname.replace(/[^/]*$/, base);
             return url.toString();
           } catch (e) {
             // If invalid URL, fallback to original value.
