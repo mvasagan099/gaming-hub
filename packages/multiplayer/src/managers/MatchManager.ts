@@ -300,11 +300,27 @@ export class MatchManager {
         return this.createErrorResult(null, validation.error ?? "Action rejected");
       }
       
+      // Pre-validate action with anti-cheat before mutating engine state
+      if (this.framework.config.enableAntiCheat) {
+        const preValidation = await this.framework.antiCheatManager.validatePreAction(
+          room!,
+          player,
+          action,
+        );
+        if (!preValidation.valid) {
+          return this.createErrorResult(
+            (room!.match!.engine as EngineInstance).serialize(),
+            preValidation.reason || "Action rejected",
+          );
+        }
+      }
+
       // Record activity
       this.framework.playerManager.recordActivity(playerId);
       
-      // Apply action to engine
+      // Snapshot previous state for rollback if downstream validation fails
       const engine = room!.match!.engine as EngineInstance;
+      const previousState = (engine as any).state ? structuredClone((engine as any).state) : null;
       const seat = player.seat as number;
       const result = engine.apply(action as { type: string }, seat);
       
@@ -318,6 +334,11 @@ export class MatchManager {
         );
         
         if (!validation.valid) {
+          // Authoritative rollback: restore pre-action engine state so state is never corrupted
+          if (previousState && typeof (engine as any).restoreState === "function") {
+            (engine as any).restoreState(previousState);
+          }
+
           this.framework.antiCheatManager.logSuspiciousEvent({
             playerId,
             roomId,

@@ -231,14 +231,40 @@ export class CouponVaultService {
       throw error;
     }
 
-    // 409 Conflict represents duplicate transaction (already processed successfully in CouponVault)
+    // 409 Conflict represents duplicate transaction - verify it actually matches this transactionId
     if (response.status === 409 || data?.code === "DUPLICATE_TRANSACTION") {
-      return {
-        success: true,
-        isDuplicate: true,
-        message: "Transaction already processed on CouponVault.",
-        data: data?.data,
-      };
+      const returnedTxId = data?.data?.transactionId || data?.transactionId;
+      if (returnedTxId === params.transactionId) {
+        return {
+          success: true,
+          isDuplicate: true,
+          message: "Transaction already processed on CouponVault.",
+          data: data?.data,
+        };
+      }
+
+      // If the response didn't explicitly match transactionId, verify with checkTransferStatus
+      try {
+        const statusCheck = await this.checkTransferStatus(params.transactionId);
+        if (statusCheck.processed && statusCheck.status === "SUCCESS") {
+          return {
+            success: true,
+            isDuplicate: true,
+            message: "Transaction verified as already processed on CouponVault.",
+            data: data?.data,
+          };
+        }
+      } catch (err) {
+        console.warn("[CouponVaultService.transferToCouponWallet] 409 status check failed:", err);
+      }
+
+      const error = new AppError(
+        "COUPON_TRANSFER_CONFLICT",
+        data?.message || "Transfer resulted in an unconfirmed conflict on CouponVault.",
+        409,
+      );
+      (error as any).isUncertain = true;
+      throw error;
     }
 
     if (!response.ok || !data?.success) {

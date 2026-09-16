@@ -9,7 +9,7 @@
  */
 
 const ALLOWED_SCHEMES = new Set(["com.gaminghub.app:", "https:"]);
-const HTTPS_HOSTS = new Set(["app.gaminghub.com", "gaminghub.com", "gaming-hub-frontend.onrender.com"]);
+const HTTPS_HOSTS = new Set(["app.gaminghub.com", "gaminghub.com"]);
 const CUSTOM_HOSTS = new Set(["auth", "reset-password", "verify-email"]);
 const ALLOWED_PATHS = new Set(["/auth/callback", "/auth/reset-password", "/auth/verify-email", "/reset-password", "/verify-email"]);
 
@@ -68,7 +68,7 @@ export function parseAndValidateDeepLink(rawUrl: string): DeepLinkValidationResu
     if (trimmed.startsWith("com.gaminghub.app:")) {
       try {
         const withoutScheme = trimmed.replace(/^com\.gaminghub\.app:\/*/, "/");
-        parsed = new URL(`https://gaming-hub-frontend.onrender.com${withoutScheme.startsWith("/") ? withoutScheme : `/${withoutScheme}`}`);
+        parsed = new URL(`https://app.gaminghub.com${withoutScheme.startsWith("/") ? withoutScheme : `/${withoutScheme}`}`);
       } catch {
         return { valid: false, reason: "Failed to parse deep link URL" };
       }

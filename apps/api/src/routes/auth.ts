@@ -44,26 +44,6 @@ export async function authRoutes(app: FastifyInstance) {
     async (request) => {
       const { token } = authSessionSchema.parse(request.body);
 
-      // The token is NOT yet verified here. decodeJwt only extracts the payload
-      // so failed attempts can be tied to an identity for lockout purposes.
-      let hintEmail: string | null = null;
-      try {
-        const payload = decodeJwt(token);
-        hintEmail = typeof payload.email === "string" ? payload.email : null;
-      } catch {
-        // Unparseable token: fall through to verification (will fail).
-      }
-
-      if (await isLockedOut(hintEmail)) {
-        auditFromRequest(request, {
-          actorType: "system",
-          action: "auth.session.rejected",
-          category: "auth",
-          meta: { reason: "locked_out", email: hintEmail },
-        });
-        throw new AppError("ACCOUNT_LOCKED", "Too many failed attempts, try again later", 429);
-      }
-
       let verified;
       try {
         verified = await verifyAccessToken(token);
@@ -72,9 +52,19 @@ export async function authRoutes(app: FastifyInstance) {
           actorType: "system",
           action: "auth.session.failed",
           category: "auth",
-          meta: { reason: "invalid_token", email: hintEmail },
+          meta: { reason: "invalid_token" },
         });
         throw new AppError("UNAUTHORIZED", "Invalid or expired token", 401);
+      }
+
+      if (await isLockedOut(verified.email)) {
+        auditFromRequest(request, {
+          actorType: "system",
+          action: "auth.session.rejected",
+          category: "auth",
+          meta: { reason: "locked_out", email: verified.email },
+        });
+        throw new AppError("ACCOUNT_LOCKED", "Too many failed attempts, try again later", 429);
       }
 
       const [general, authSettings] = await Promise.all([

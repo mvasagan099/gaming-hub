@@ -50,13 +50,30 @@ const envSchema = z.object({
     });
   }
 
-  // Prevent weak internal secret in production
-  if (data.NODE_ENV === "production" && data.INTERNAL_API_KEY.length < 16) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["INTERNAL_API_KEY"],
-      message: "INTERNAL_API_KEY must be at least 16 characters in production for security",
-    });
+  // Prevent weak or known dev internal secret in production
+  const DISALLOWED_DEV_KEYS = [
+    "gaming-hub-internal-dev-key",
+    "dev-internal-secret-key-12345",
+    "internal-secret-key-123",
+    "dev-fallback-key-123",
+    "generate-a-long-random-secret-min-16-chars",
+    "must-match-the-api-internal-key",
+  ];
+  if (data.NODE_ENV === "production") {
+    if (data.INTERNAL_API_KEY.length < 16) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["INTERNAL_API_KEY"],
+        message: "INTERNAL_API_KEY must be at least 16 characters in production for security",
+      });
+    }
+    if (DISALLOWED_DEV_KEYS.includes(data.INTERNAL_API_KEY)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["INTERNAL_API_KEY"],
+        message: "INTERNAL_API_KEY cannot use known development default keys in production",
+      });
+    }
   }
 });
 

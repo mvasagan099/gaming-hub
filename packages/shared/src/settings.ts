@@ -589,7 +589,7 @@ export const FEATURE_FLAG_GROUPS: Array<{
     label: "Payments & Wallet",
     description: "Deposits, withdrawals, and bonus wallets.",
     flags: [
-      { key: "payments.deposits", label: "Deposits", description: "Allow users to add funds.", default: true },
+      { key: "payments.deposits", label: "Deposits", description: "Allow users to add funds.", default: false },
       { key: "payments.withdrawals", label: "Withdrawals", description: "Allow users to cash out.", default: true },
       { key: "payments.bonusWallet", label: "Bonus wallet", description: "Enable the separate bonus balance.", default: true },
       { key: "payments.lockedWallet", label: "Locked wallet", description: "Enable locked/vesting balances.", default: true },

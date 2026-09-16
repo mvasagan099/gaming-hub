@@ -85,7 +85,7 @@ export async function walletRoutes(app: FastifyInstance) {
     return reconcileUnconfirmedTransfer(transactionId);
   });
 
-  app.post("/api/wallet/reconcile-all", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
+  app.post("/api/wallet/reconcile-all", { preHandler: [authenticate, requireMfa], config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
     const user = requireUser(request);
     if (user.role !== "ADMIN") {
       throw new AppError("FORBIDDEN", "Admin access required", 403);
@@ -140,11 +140,12 @@ export async function walletRoutes(app: FastifyInstance) {
 
   // ---- Deposit / withdrawal requests --------------------------------------
 
-  app.post("/api/wallet/deposits", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async (request) => {
-    const user = requireUser(request);
-    await assertFeatureEnabled("payments.deposits", "Deposits");
-    const { amount, method } = parseSchema(depositSchema, request.body);
-    return createDepositRequest(user.id, amount, method);
+  app.post("/api/wallet/deposits", { preHandler: authenticate, config: { rateLimit: WALLET_RATE_LIMIT } }, async () => {
+    throw new AppError(
+      "DEPOSITS_DISABLED",
+      "Direct deposits are disabled. Please fund your wallet using CouponVault coupons.",
+      403,
+    );
   });
 
   app.post("/api/wallet/withdrawals", { preHandler: [authenticate, requireMfa], config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request) => {

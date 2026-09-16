@@ -178,8 +178,18 @@ export async function requireMfa(request: FastifyRequest, _reply: FastifyReply):
     select: { twoFactorEnabled: true },
   });
 
-  // Users without 2FA are not gated by MFA
-  if (!profile?.twoFactorEnabled) return;
+  // For administrative or privileged users, MFA enrollment is strictly mandatory
+  if (!profile?.twoFactorEnabled) {
+    if (user.role === "ADMIN" || user.role === "MODERATOR") {
+      throw new AppError(
+        "MFA_ENROLLMENT_REQUIRED",
+        "Administrative operations require two-factor authentication (2FA) to be enabled on your account.",
+        403,
+      );
+    }
+    // Standard users without 2FA enabled are not gated on non-admin routes
+    return;
+  }
 
   // Retrieve the current session
   const header = request.headers.authorization as string | undefined;

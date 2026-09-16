@@ -115,4 +115,12 @@ export abstract class ServerGameEngine<S extends JsonObject, A extends GameActio
     this._state = result.state;
     return result;
   }
+
+  /**
+   * Restores the engine to a previous snapshot state.
+   * Used for transactional rollback when downstream anti-cheat or validation rejects an applied action.
+   */
+  restoreState(state: S): void {
+    this._state = structuredClone(state);
+  }
 }

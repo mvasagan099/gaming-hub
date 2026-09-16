@@ -351,7 +351,7 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     return adminListTournaments(page, pageSize, status);
   });
 
-  app.post("/api/admin/tournaments", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/tournaments", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage");
     const input = parseSchema(tournamentCreateSchema, request.body);
     const tournament = await createTournament(input, admin.id);
@@ -383,7 +383,7 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     return result;
   });
 
-  app.patch("/api/admin/tournaments/:id", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/tournaments/:id", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage");
     const { id } = routeParams(request);
     const input = parseSchema(tournamentPatchSchema, request.body);
@@ -391,7 +391,7 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     return tournament;
   });
 
-  app.patch("/api/admin/tournaments/:id/status", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/tournaments/:id/status", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage");
     const { id } = routeParams(request);
     const { status } = parseSchema(z.object({ status: z.enum(["UPCOMING", "LIVE", "ENDED", "CANCELLED"]) }), request.body);
@@ -408,7 +408,7 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     return { ok: true, status: tournament.status };
   });
 
-  app.delete("/api/admin/tournaments/:id", { preHandler: authenticate }, async (request) => {
+  app.delete("/api/admin/tournaments/:id", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage");
     const { id } = routeParams(request);
     await deleteTournament(id, admin.id);
@@ -421,7 +421,7 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     return getAdminTournamentBracketDetails(id);
   });
 
-  app.post("/api/admin/tournaments/:id/seeds", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/tournaments/:id/seeds", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage");
     const { id } = routeParams(request);
     const body = request.body as { assignments: { userId: string; seed: number }[] };
@@ -446,28 +446,28 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post("/api/admin/tournaments/:id/start", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/tournaments/:id/start", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage");
     const { id } = routeParams(request);
     await startTournament(id, admin.id);
     return { ok: true };
   });
 
-  app.post("/api/admin/tournaments/:id/pause", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/tournaments/:id/pause", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage");
     const { id } = routeParams(request);
     await transitionTournamentStatus(id, "PAUSED" as any, admin.id);
     return { ok: true };
   });
 
-  app.post("/api/admin/tournaments/:id/resume", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/tournaments/:id/resume", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage");
     const { id } = routeParams(request);
     await transitionTournamentStatus(id, "IN_PROGRESS" as any, admin.id);
     return { ok: true };
   });
 
-  app.post("/api/admin/tournaments/:id/cancel", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/tournaments/:id/cancel", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage");
     const { id } = routeParams(request);
     const { reason } = (request.body as any) ?? {};
@@ -491,7 +491,7 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
   });
 
   /** Emergency administrative match result override (audited & RBAC protected) */
-  app.post("/api/admin/tournaments/:id/override-result", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/tournaments/:id/override-result", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage");
     const { id } = routeParams(request);
     const body = request.body as { slotId: string; winnerId: string; reason: string };

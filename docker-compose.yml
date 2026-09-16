@@ -59,7 +59,7 @@ services:
       PORT: 4000
       DATABASE_URL: postgresql://gaming:gaming@postgres:5432/gaming_hub
       SUPABASE_URL: ${SUPABASE_URL:-http://localhost:54321}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-gaming-hub-internal-dev-key}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY must be set in environment}
       CORS_ORIGIN: http://localhost:8080
       REQUIRE_EMAIL_VERIFICATION: "true"
       BODY_LIMIT: "262144"
@@ -86,7 +86,7 @@ services:
       PORT: 4001
       DATABASE_URL: postgresql://gaming:gaming@postgres:5432/gaming_hub
       SUPABASE_URL: ${SUPABASE_URL:-http://localhost:54321}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-gaming-hub-internal-dev-key}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY must be set in environment}
       API_URL: http://api:4000
       CORS_ORIGIN: http://localhost:8080
       REDIS_URL: redis://redis:6379

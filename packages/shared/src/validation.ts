@@ -98,6 +98,7 @@ export const changePasswordSchema = z.object({
 
 export const setup2FASchema = z.object({
   enable: z.boolean(),
+  currentPassword: z.string().optional(),
 });
 
 export const verify2FASchema = z.object({

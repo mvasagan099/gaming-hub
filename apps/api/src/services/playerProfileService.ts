@@ -9,7 +9,7 @@ import {
   type RecentTournamentItem,
   type GameId,
 } from "@gaming-hub/shared";
-import { getPrivacySettings, updatePrivacySettings } from "./privacyService";
+import { getPrivacySettings, updatePrivacySettings, canViewProfile } from "./privacyService";
 
 export class PlayerProfileService {
   /**
@@ -38,12 +38,18 @@ export class PlayerProfileService {
 
     const isOwner = viewerId === userId;
     const privacy = await getPrivacySettings(userId);
-    const isPrivate = privacy.profileVisibility === "NOBODY";
+    const allowed =
+      isOwner ||
+      isAdmin ||
+      (viewerId
+        ? await canViewProfile(viewerId, userId)
+        : privacy.profileVisibility === "EVERYONE");
+    const isPrivate = privacy.profileVisibility !== "EVERYONE";
 
     const gameDefMap = new Map(GAME_DEFINITIONS.map((g) => [g.id, g]));
 
-    // If private profile and viewer is neither the owner nor an admin, return masked profile
-    if (isPrivate && !isOwner && !isAdmin) {
+    // If private profile / viewer not allowed, return masked profile
+    if (!allowed) {
       return {
         userId: user.id,
         username: user.username,
@@ -225,6 +231,8 @@ export class PlayerProfileService {
       unlockedAt: ua.unlockedAt.toISOString(),
     }));
 
+    const maskStats = !isOwner && !isAdmin && !privacy.showStats;
+
     return {
       userId: user.id,
       username: user.username,
@@ -238,16 +246,25 @@ export class PlayerProfileService {
       isOnline: user.isOnline,
       lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
       isPrivate,
-      gamesPlayed: totalGames,
-      wins: profileWins,
-      losses: profileLosses,
-      draws: profileDraws,
-      winRate: Math.round(overallWinRate * 10) / 10,
-      globalRating,
-      gameStats,
-      tournamentStats,
-      recentMatches,
-      recentTournaments,
+      gamesPlayed: maskStats ? 0 : totalGames,
+      wins: maskStats ? 0 : profileWins,
+      losses: maskStats ? 0 : profileLosses,
+      draws: maskStats ? 0 : profileDraws,
+      winRate: maskStats ? 0 : Math.round(overallWinRate * 10) / 10,
+      globalRating: maskStats ? 0 : globalRating,
+      gameStats: maskStats ? [] : gameStats,
+      tournamentStats: maskStats
+        ? {
+            tournamentsJoined: 0,
+            tournamentsCompleted: 0,
+            wins: 0,
+            podiums: 0,
+            bestRank: null,
+            totalMatches: 0,
+          }
+        : tournamentStats,
+      recentMatches: maskStats ? [] : recentMatches,
+      recentTournaments: maskStats ? [] : recentTournaments,
       achievements: {
         unlockedCount: unlockedAchievements.length,
         totalCount: totalAchievementsCount,

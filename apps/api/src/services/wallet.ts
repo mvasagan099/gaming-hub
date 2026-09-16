@@ -34,8 +34,8 @@ async function maskWalletBalances(wallet: Wallet): Promise<Wallet> {
   };
 }
 
-export async function getWallet(userId: string): Promise<Wallet> {
-  const wallet = await prisma.wallet.findUnique({ where: { userId } });
+export async function getWallet(userId: string, db: Prisma.TransactionClient | typeof prisma = prisma): Promise<Wallet> {
+  const wallet = await db.wallet.findUnique({ where: { userId } });
   if (!wallet) {
     throw new AppError("NOT_FOUND", "Wallet not found", 404);
   }
@@ -575,7 +575,11 @@ export async function reconcileUnconfirmedTransfer(transactionId: string): Promi
     throw new AppError("NOT_FOUND", `No wallet request found for transactionId: ${transactionId}`, 404);
   }
 
-  if (walletRequest.status === "APPROVED") {
+  if (
+    walletRequest.status === "APPROVED" &&
+    walletRequest.adminNote !== "UNCONFIRMED_HOLD" &&
+    walletRequest.adminNote !== "UNCONFIRMED_TIMEOUT"
+  ) {
     return {
       transactionId,
       reconciled: true,
@@ -600,7 +604,7 @@ export async function reconcileUnconfirmedTransfer(transactionId: string): Promi
   const claimResult = await prisma.walletRequest.updateMany({
     where: {
       id: walletRequest.id,
-      status: "PENDING",
+      adminNote: { in: ["UNCONFIRMED_HOLD", "UNCONFIRMED_TIMEOUT", "PROCESSING"] },
       OR: [
         { adminNote: { not: "PROCESSING" } },
         { processingStartedAt: { lt: staleThreshold } },
@@ -615,7 +619,11 @@ export async function reconcileUnconfirmedTransfer(transactionId: string): Promi
 
   if (claimResult.count === 0) {
     const current = await prisma.walletRequest.findUnique({ where: { id: walletRequest.id } });
-    if (current?.status === "APPROVED") {
+    if (
+      current?.status === "APPROVED" &&
+      current?.adminNote !== "UNCONFIRMED_HOLD" &&
+      current?.adminNote !== "UNCONFIRMED_TIMEOUT"
+    ) {
       return {
         transactionId,
         reconciled: true,
@@ -653,7 +661,7 @@ export async function reconcileUnconfirmedTransfer(transactionId: string): Promi
     );
     // Release claim back to UNCONFIRMED_HOLD on network failure so it can be retried
     await prisma.walletRequest.updateMany({
-      where: { id: walletRequest.id, status: "PENDING" },
+      where: { id: walletRequest.id },
       data: { adminNote: "UNCONFIRMED_HOLD", processingStartedAt: null },
     }).catch(() => {});
 
@@ -763,7 +771,6 @@ export async function reconcileAllUnconfirmedTransfers(): Promise<{
     where: {
       kind: "WITHDRAWAL",
       method: "COUPONVAULT",
-      status: "PENDING",
       adminNote: { in: ["UNCONFIRMED_HOLD", "UNCONFIRMED_TIMEOUT"] },
     },
     take: 50,

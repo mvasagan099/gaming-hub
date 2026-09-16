@@ -7,6 +7,8 @@ import { assertFeatureEnabled } from "../services/featureFlags";
 import { toPublicProfile } from "../services/users";
 import { checkAndUnlock } from "../services/achievements";
 
+import { getPrivacySettings } from "../services/privacyService";
+
 export async function friendsRoutes(app: FastifyInstance) {
   app.get("/api/friends", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
@@ -60,6 +62,11 @@ export async function friendsRoutes(app: FastifyInstance) {
     }
     if (target.id === user.id) {
       throw new AppError("VALIDATION_ERROR", "You cannot add yourself", 422);
+    }
+
+    const targetPrivacy = await getPrivacySettings(target.id);
+    if (!targetPrivacy.allowFriendRequests) {
+      throw new AppError("FRIEND_REQUESTS_DISABLED", "This user is not accepting friend requests", 403);
     }
 
     const existing = await prisma.friend.findFirst({

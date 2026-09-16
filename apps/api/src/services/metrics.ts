@@ -10,8 +10,10 @@ interface RouteStat {
 
 const startedAt = Date.now();
 const routes = new Map<string, RouteStat>();
-const durationsMs: number[] = [];
 const DURATION_BUCKETS_MS = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
+const durationBucketCounts: number[] = new Array(DURATION_BUCKETS_MS.length).fill(0);
+let durationCount = 0;
+let durationSumMs = 0;
 
 export function instrument(app: FastifyInstance): void {
   app.addHook("onResponse", async (request, reply) => {
@@ -26,7 +28,13 @@ export function instrument(app: FastifyInstance): void {
     stat.statuses.set(reply.statusCode, (stat.statuses.get(reply.statusCode) ?? 0) + 1);
     const elapsed = reply.elapsedTime;
     if (Number.isFinite(elapsed) && elapsed >= 0) {
-      durationsMs.push(elapsed);
+      durationCount += 1;
+      durationSumMs += elapsed;
+      for (let i = 0; i < DURATION_BUCKETS_MS.length; i++) {
+        if (elapsed <= DURATION_BUCKETS_MS[i]) {
+          durationBucketCounts[i] += 1;
+        }
+      }
     }
   });
 }
@@ -94,16 +102,13 @@ function render(): string {
     ),
   );
 
-  const buckets = [...DURATION_BUCKETS_MS];
-  const counts = buckets.map((b) => durationsMs.filter((d) => d <= b).length);
-  const sum = durationsMs.reduce((acc, d) => acc + d, 0);
-  const samples = counts.map(
+  const samples = durationBucketCounts.map(
     (count, i) =>
-      `http_request_duration_seconds_bucket{le="${(buckets[i] / 1000).toFixed(3)}"} ${count}`,
+      `http_request_duration_seconds_bucket{le="${(DURATION_BUCKETS_MS[i] / 1000).toFixed(3)}"} ${count}`,
   );
-  samples.push(`http_request_duration_seconds_bucket{le="+Inf"} ${durationsMs.length}`);
-  samples.push(`http_request_duration_seconds_sum ${(sum / 1000).toFixed(6)}`);
-  samples.push(`http_request_duration_seconds_count ${durationsMs.length}`);
+  samples.push(`http_request_duration_seconds_bucket{le="+Inf"} ${durationCount}`);
+  samples.push(`http_request_duration_seconds_sum ${(durationSumMs / 1000).toFixed(6)}`);
+  samples.push(`http_request_duration_seconds_count ${durationCount}`);
   out.push(renderMetric("http_request_duration_seconds", "HTTP request duration.", "histogram", samples));
 
   return out.join("\n");

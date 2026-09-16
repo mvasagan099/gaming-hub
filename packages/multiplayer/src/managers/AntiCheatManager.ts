@@ -128,6 +128,100 @@ export class AntiCheatManager {
   getFairPlayRiskScore(playerId: string): number {
     return this.playerRiskScores.get(playerId) ?? 0;
   }
+
+  /**
+   * Pre-validation executed BEFORE engine mutation.
+   * Checks match deadlines, stale state versions, rate limits, and action intervals.
+   */
+  async validatePreAction(
+    room: RoomRuntime,
+    player: PlayerRuntime,
+    action: GameAction,
+  ): Promise<ValidationResult> {
+    const now = Date.now();
+
+    // 1. Authoritative 10-Minute Hard Match Timer Protection
+    const MATCH_HARD_LIMIT_MS = 10 * 60 * 1000; // 10 minutes
+    if (room.match && room.match.startedAt) {
+      const elapsed = now - room.match.startedAt;
+      if (elapsed > MATCH_HARD_LIMIT_MS) {
+        this.logSuspiciousEvent({
+          playerId: player.id,
+          roomId: room.id,
+          eventType: "timeout_action",
+          details: { actionType: action.type, elapsedMs: elapsed },
+          timestamp: now,
+          severity: "high",
+        });
+        return {
+          valid: false,
+          reason: "Match deadline exceeded (10-minute limit)",
+          confidence: 1.0,
+        };
+      }
+    }
+
+    // 2. State Version Validation (Reject stale client updates)
+    const clientStateVersion = (action as any).stateVersion ?? (action as any).version;
+    if (typeof clientStateVersion === "number" && room.match) {
+      const currentVersion = room.match.turnNumber ?? 0;
+      if (clientStateVersion < currentVersion - 2 && currentVersion > 2) {
+        this.logSuspiciousEvent({
+          playerId: player.id,
+          roomId: room.id,
+          eventType: "stale_state_version",
+          details: { actionType: action.type, clientVersion: clientStateVersion, currentVersion },
+          timestamp: now,
+          severity: "low",
+        });
+        return {
+          valid: false,
+          reason: "Stale state version update ignored",
+          confidence: 0.9,
+        };
+      }
+    }
+
+    // Real-time continuous game inputs that can be sent frequently
+    if (
+      action.type === "paddle-move" ||
+      action.type === "direction" ||
+      action.type === "boost-start" ||
+      action.type === "boost-stop"
+    ) {
+      return { valid: true, confidence: 1.0 };
+    }
+
+    // Check action rate limiting
+    const rateCheck = this.checkActionRate(room, player.id, now);
+    if (!rateCheck.valid) {
+      this.logSuspiciousEvent({
+        playerId: player.id,
+        roomId: room.id,
+        eventType: "rate_limit_exceeded",
+        details: { actionType: action.type, rate: this.getActionRate(player.id) },
+        timestamp: now,
+        severity: "medium",
+      });
+      return rateCheck;
+    }
+
+    // Check for rapid successive actions (speed hack)
+    const intervalCheck = this.checkActionInterval(room, player.id, now);
+    if (!intervalCheck.valid) {
+      this.logSuspiciousEvent({
+        playerId: player.id,
+        roomId: room.id,
+        eventType: "rapid_actions",
+        details: { actionType: action.type },
+        timestamp: now,
+        severity: "high",
+      });
+      return intervalCheck;
+    }
+
+    return { valid: true, confidence: 1.0 };
+  }
   
   /**
    * Validate a player action.

@@ -69,7 +69,7 @@ describe("M-06: Capacitor Deep-Link Validation", () => {
 
   it("allows official domain for https universal links", () => {
     const result = parseAndValidateDeepLink(
-      "https://gaming-hub-frontend.onrender.com/reset-password?type=recovery&code=xyz"
+      "https://app.gaminghub.com/reset-password?type=recovery&code=xyz"
     );
     expect(result.valid).toBe(true);
     expect(result.isPasswordRecovery).toBe(true);

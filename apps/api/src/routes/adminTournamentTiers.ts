@@ -15,7 +15,7 @@ import { prisma } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
 import { DEFAULT_TOURNAMENT_TIERS, validatePrizeConfiguration } from "@gaming-hub/shared";
 import type { PrizeDistributionEntry } from "@gaming-hub/shared";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, requireMfa } from "../plugins/authenticate";
 import { parseSchema, routeParams, queryParams, queryString } from "../lib/http";
 import { requirePermission } from "../lib/permissions";
 import { auditFromRequest } from "../services/audit";
@@ -141,7 +141,7 @@ export async function adminTournamentTiersRoutes(app: FastifyInstance) {
   // ------------------------------------------------------------------
   // POST /api/admin/tournament-tiers  — Create tier
   // ------------------------------------------------------------------
-  app.post("/api/admin/tournament-tiers", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/tournament-tiers", { preHandler: [authenticate, requireMfa] }, async (request) => {
     await requirePermission(request, "admin:tournaments:manage", prisma);
     const body = parseSchema(tierBodySchema, request.body);
 
@@ -187,7 +187,7 @@ export async function adminTournamentTiersRoutes(app: FastifyInstance) {
   // ------------------------------------------------------------------
   // PUT /api/admin/tournament-tiers/:id  — Full update
   // ------------------------------------------------------------------
-  app.put("/api/admin/tournament-tiers/:id", { preHandler: authenticate }, async (request) => {
+  app.put("/api/admin/tournament-tiers/:id", { preHandler: [authenticate, requireMfa] }, async (request) => {
     await requirePermission(request, "admin:tournaments:manage", prisma);
     const { id } = routeParams(request);
     const body = parseSchema(tierBodySchema, request.body);
@@ -239,7 +239,7 @@ export async function adminTournamentTiersRoutes(app: FastifyInstance) {
   // ------------------------------------------------------------------
   // PATCH /api/admin/tournament-tiers/:id  — Partial update
   // ------------------------------------------------------------------
-  app.patch("/api/admin/tournament-tiers/:id", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/tournament-tiers/:id", { preHandler: [authenticate, requireMfa] }, async (request) => {
     await requirePermission(request, "admin:tournaments:manage", prisma);
     const { id } = routeParams(request);
     const body = parseSchema(updateTierBodySchema, request.body);
@@ -296,7 +296,7 @@ export async function adminTournamentTiersRoutes(app: FastifyInstance) {
   // ------------------------------------------------------------------
   // DELETE /api/admin/tournament-tiers/:id  — Deactivate (soft delete)
   // ------------------------------------------------------------------
-  app.delete("/api/admin/tournament-tiers/:id", { preHandler: authenticate }, async (request) => {
+  app.delete("/api/admin/tournament-tiers/:id", { preHandler: [authenticate, requireMfa] }, async (request) => {
     await requirePermission(request, "admin:tournaments:manage", prisma);
     const { id } = routeParams(request);
 
@@ -327,7 +327,7 @@ export async function adminTournamentTiersRoutes(app: FastifyInstance) {
   // ------------------------------------------------------------------
   app.post(
     "/api/admin/tournament-tiers/seed-defaults",
-    { preHandler: authenticate },
+    { preHandler: [authenticate, requireMfa] },
     async (request) => {
       await requirePermission(request, "admin:tournaments:manage", prisma);
 

@@ -172,6 +172,24 @@ export async function securityRoutes(app: FastifyInstance) {
     if (profile.twoFactorEnabled) {
       throw new AppError("VALIDATION_ERROR", "2FA is already enabled", 400);
     }
+
+    if (profile.passwordHash) {
+      if (!data.currentPassword) {
+        throw new AppError("VALIDATION_ERROR", "Current password is required to configure 2FA", 400);
+      }
+      if (!(await verifyPassword(data.currentPassword, profile.passwordHash))) {
+        await auditFromRequest(request, {
+          actorType: "user",
+          actorId: user.id,
+          action: "security.2fa.setup_failed",
+          category: "security",
+          targetType: "user",
+          targetId: user.id,
+          meta: { reason: "invalid_current_password" },
+        });
+        throw new AppError("VALIDATION_ERROR", "Current password is incorrect", 401);
+      }
+    }
     
     const secret = generateTOTPSecret();
     const email = user.email ?? "user";

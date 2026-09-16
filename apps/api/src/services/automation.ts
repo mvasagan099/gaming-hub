@@ -154,6 +154,22 @@ export async function runJob(jobName: string): Promise<{ ok: boolean; processed:
     throw new AppError("INVALID_ACTION", "This job is already running", 409);
   }
 
+  const lockKey = `job:${jobName}`;
+  let lockAcquired = false;
+
+  try {
+    const lockRows = await prisma.$queryRaw<Array<{ acquired: boolean }>>`
+      SELECT pg_try_advisory_lock(hashtext(${lockKey})) as acquired
+    `;
+    lockAcquired = lockRows[0]?.acquired ?? false;
+  } catch (err) {
+    console.warn(`[runJob] Failed to query PostgreSQL advisory lock for ${jobName}:`, err);
+  }
+
+  if (!lockAcquired) {
+    throw new AppError("INVALID_ACTION", "This job is already running on another instance", 409);
+  }
+
   RUNNING.add(jobName);
   const startedAt = new Date();
 
@@ -184,6 +200,13 @@ export async function runJob(jobName: string): Promise<{ ok: boolean; processed:
     throw error;
   } finally {
     RUNNING.delete(jobName);
+    if (lockAcquired) {
+      try {
+        await prisma.$queryRaw`SELECT pg_advisory_unlock(hashtext(${lockKey}))`;
+      } catch (err) {
+        console.warn(`[runJob] Failed to release PostgreSQL advisory lock for ${jobName}:`, err);
+      }
+    }
   }
 }
 

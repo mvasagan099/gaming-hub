@@ -95,7 +95,7 @@ export class AdminSecurityService {
    * 2. Verify Internal API Authorization Header
    */
   static verifyInternalAuth(internalKey?: string): boolean {
-    const expectedKey = env.INTERNAL_API_KEY || "internal-secret-key-123";
+    const expectedKey = env.INTERNAL_API_KEY;
     if (!internalKey || internalKey !== expectedKey) {
       throw new AppError("UNAUTHORIZED", "Invalid or missing internal service key", 401);
     }

@@ -82,6 +82,11 @@ export interface WalletOtpResult {
 export async function requestWithdrawalOtp(userId: string): Promise<WalletOtpResult> {
   await assertWalletNotFrozen(userId);
 
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, username: true },
+  });
+
   const settings = await getCategorySettings("wallet");
   const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
   const salt = randomBytes(16).toString("hex");
@@ -112,6 +117,24 @@ export async function requestWithdrawalOtp(userId: string): Promise<WalletOtpRes
     meta: { purpose: OTP_PURPOSE, expiresAt: expiresAt.toISOString() },
   });
 
+  // In production (or if user email is present and transport configured), dispatch via emailTransport
+  if (user?.email) {
+    try {
+      const { sendSmtpEmail } = await import("./emailTransport");
+      await sendSmtpEmail({
+        to: user.email,
+        subject: "Gaming Hub - Withdrawal Verification Code",
+        text: `Your withdrawal verification code is: ${code}. This code expires in ${settings.otpExpiryMinutes} minutes. If you did not initiate this withdrawal, please secure your account immediately.`,
+        html: `<p>Your withdrawal verification code is: <strong>${code}</strong></p><p>This code expires in ${settings.otpExpiryMinutes} minutes.</p><p>If you did not initiate this withdrawal, please secure your account immediately.</p>`,
+      });
+    } catch (mailErr: any) {
+      console.warn(`[requestWithdrawalOtp] Failed to send email to ${user.email}:`, mailErr?.message);
+      if (process.env.NODE_ENV === "production" && process.env.EMAIL_PROVIDER === "smtp") {
+        throw new AppError("EMAIL_DELIVERY_FAILED", "Failed to deliver withdrawal verification code to your email. Please try again later.", 502);
+      }
+    }
+  }
+
   const debugCode = process.env.NODE_ENV === "production" ? undefined : code;
   return { ok: true, expiresAt: expiresAt.toISOString(), debugCode };
 }
@@ -119,11 +142,17 @@ export async function requestWithdrawalOtp(userId: string): Promise<WalletOtpRes
 /**
  * Verifies and consumes the most recent unconsumed code. Throws on missing,
  * expired, or wrong codes and enforces an attempt budget.
+ * Uses atomic updateMany to prevent concurrent use races.
  */
-export async function verifyWalletOtp(userId: string, code: string): Promise<void> {
+export async function verifyWalletOtp(
+  userId: string,
+  code: string,
+  db?: Prisma.TransactionClient,
+): Promise<void> {
+  const client = db ?? prisma;
   const settings = await getCategorySettings("wallet");
 
-  const otp = await prisma.walletOtp.findFirst({
+  const otp = await client.walletOtp.findFirst({
     where: { userId, purpose: OTP_PURPOSE, consumedAt: null },
     orderBy: { createdAt: "desc" },
   });
@@ -146,17 +175,21 @@ export async function verifyWalletOtp(userId: string, code: string): Promise<voi
   const expected = Buffer.from(hash, "hex");
 
   if (candidate.length !== expected.length || !timingSafeEqual(candidate, expected)) {
-    await prisma.walletOtp.update({
+    await client.walletOtp.update({
       where: { id: otp.id },
       data: { attempts: { increment: 1 } },
     });
     throw new AppError("OTP_INVALID", "Invalid verification code", 400);
   }
 
-  await prisma.walletOtp.update({
-    where: { id: otp.id },
+  // Atomic consumption: only updates if consumedAt is still null
+  const consumed = await client.walletOtp.updateMany({
+    where: { id: otp.id, consumedAt: null },
     data: { attempts: { increment: 1 }, consumedAt: new Date() },
   });
+  if (consumed.count === 0) {
+    throw new AppError("OTP_ALREADY_USED", "Verification code has already been used", 400);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -196,43 +229,15 @@ function serializeRequest(r: {
 }
 
 export async function createDepositRequest(
-  userId: string,
-  amount: number,
-  method?: string,
+  _userId: string,
+  _amount: number,
+  _method?: string,
 ): Promise<WalletRequest> {
-  await assertWalletNotFrozen(userId);
-
-  const settings = await getCategorySettings("wallet");
-  if (amount < settings.minDeposit) {
-    throw new AppError(
-      "WALLET_LIMIT_EXCEEDED",
-      `Minimum deposit is ${settings.minDeposit}`,
-      400,
-    );
-  }
-  if (settings.maxDeposit > 0 && amount > settings.maxDeposit) {
-    throw new AppError(
-      "WALLET_LIMIT_EXCEEDED",
-      `Maximum deposit is ${settings.maxDeposit}`,
-      400,
-    );
-  }
-
-  const request = await prisma.walletRequest.create({
-    data: { userId, kind: "DEPOSIT", amount, method: method?.trim() || null },
-  });
-
-  audit({
-    actorType: "user",
-    actorId: userId,
-    action: "wallet.deposit.requested",
-    category: "wallet",
-    targetType: "walletRequest",
-    targetId: request.id,
-    meta: { amount, method: request.method },
-  });
-
-  return serializeRequest(request);
+  throw new AppError(
+    "DEPOSITS_DISABLED",
+    "Direct deposits are disabled. Please fund your wallet using CouponVault coupons.",
+    403,
+  );
 }
 
 export async function createWithdrawalRequest(
@@ -259,49 +264,6 @@ export async function createWithdrawalRequest(
     where: { level: kycRequest.level },
   }) : null;
 
-  if (withdrawalLimits) {
-    if (withdrawalLimits.singleWithdrawLimit === 0) {
-      throw new AppError(
-        "WITHDRAWAL_NOT_ALLOWED",
-        "Withdrawals are not allowed for your current KYC level",
-        403,
-      );
-    }
-
-    if (amount > withdrawalLimits.singleWithdrawLimit) {
-      throw new AppError(
-        "WITHDRAWAL_LIMIT_EXCEEDED",
-        `Withdrawal amount exceeds your limit of ${(withdrawalLimits.singleWithdrawLimit / 100).toFixed(2)}`,
-        400,
-      );
-    }
-
-    const todayStart = new Date(
-      Date.UTC(
-        new Date().getUTCFullYear(),
-        new Date().getUTCMonth(),
-        new Date().getUTCDate(),
-      ),
-    );
-    const { _sum } = await prisma.walletRequest.aggregate({
-      where: {
-        userId,
-        kind: "WITHDRAWAL",
-        status: { in: ["PENDING", "APPROVED"] },
-        createdAt: { gte: todayStart },
-      },
-      _sum: { amount: true },
-    });
-    
-    if ((_sum.amount ?? 0) + amount > withdrawalLimits.dailyLimit) {
-      throw new AppError(
-        "DAILY_WITHDRAWAL_LIMIT_EXCEEDED",
-        `Daily withdrawal limit of ${(withdrawalLimits.dailyLimit / 100).toFixed(2)} reached`,
-        400,
-      );
-    }
-  }
-
   const settings = await getCategorySettings("wallet");
   if (amount < settings.minWithdrawal) {
     throw new AppError(
@@ -318,56 +280,105 @@ export async function createWithdrawalRequest(
     );
   }
 
-  const pending = await prisma.walletRequest.count({
-    where: { userId, kind: "WITHDRAWAL", status: "PENDING" },
-  });
-  if (pending >= settings.maxPendingWithdrawalRequests) {
-    throw new AppError(
-      "WALLET_LIMIT_EXCEEDED",
-      `Too many pending withdrawal requests (max ${settings.maxPendingWithdrawalRequests})`,
-      400,
-    );
-  }
+  // Atomically serialize withdrawal policy checks, OTP consumption, and request insertion
+  // under a row-level lock on the user's wallet to prevent concurrent limit/balance races.
+  const request = await prisma.$transaction(async (tx) => {
+    await lockWalletRow(tx, userId);
 
-  await verifyWalletOtp(userId, otpCode);
+    if (withdrawalLimits) {
+      if (withdrawalLimits.singleWithdrawLimit === 0) {
+        throw new AppError(
+          "WITHDRAWAL_NOT_ALLOWED",
+          "Withdrawals are not allowed for your current KYC level",
+          403,
+        );
+      }
 
-  const wallet = await getWallet(userId);
-  const fee =
-    settings.withdrawalFeePercent > 0
-      ? Math.round((amount * settings.withdrawalFeePercent) / 100)
-      : 0;
-  if (wallet.balance < amount + fee) {
-    throw new AppError("INSUFFICIENT_BALANCE", "Insufficient balance", 400);
-  }
+      if (amount > withdrawalLimits.singleWithdrawLimit) {
+        throw new AppError(
+          "WITHDRAWAL_LIMIT_EXCEEDED",
+          `Withdrawal amount exceeds your limit of ${(withdrawalLimits.singleWithdrawLimit / 100).toFixed(2)}`,
+          400,
+        );
+      }
 
-  if (settings.dailyWithdrawalLimit > 0) {
-    const todayStart = new Date(
-      Date.UTC(
-        new Date().getUTCFullYear(),
-        new Date().getUTCMonth(),
-        new Date().getUTCDate(),
-      ),
-    );
-    const { _sum } = await prisma.walletRequest.aggregate({
-      where: {
-        userId,
-        kind: "WITHDRAWAL",
-        status: { in: ["PENDING", "APPROVED"] },
-        createdAt: { gte: todayStart },
-      },
-      _sum: { amount: true },
+      const todayStart = new Date(
+        Date.UTC(
+          new Date().getUTCFullYear(),
+          new Date().getUTCMonth(),
+          new Date().getUTCDate(),
+        ),
+      );
+      const { _sum } = await tx.walletRequest.aggregate({
+        where: {
+          userId,
+          kind: "WITHDRAWAL",
+          status: { in: ["PENDING", "APPROVED"] },
+          createdAt: { gte: todayStart },
+        },
+        _sum: { amount: true },
+      });
+
+      if ((_sum.amount ?? 0) + amount > withdrawalLimits.dailyLimit) {
+        throw new AppError(
+          "DAILY_WITHDRAWAL_LIMIT_EXCEEDED",
+          `Daily withdrawal limit of ${(withdrawalLimits.dailyLimit / 100).toFixed(2)} reached`,
+          400,
+        );
+      }
+    }
+
+    const pending = await tx.walletRequest.count({
+      where: { userId, kind: "WITHDRAWAL", status: "PENDING" },
     });
-    if ((_sum.amount ?? 0) + amount > settings.dailyWithdrawalLimit) {
+    if (pending >= settings.maxPendingWithdrawalRequests) {
       throw new AppError(
-        "DAILY_WITHDRAWAL_LIMIT_EXCEEDED",
-        `Daily withdrawal limit of ${settings.dailyWithdrawalLimit} reached`,
+        "WALLET_LIMIT_EXCEEDED",
+        `Too many pending withdrawal requests (max ${settings.maxPendingWithdrawalRequests})`,
         400,
       );
     }
-  }
 
-  const request = await prisma.walletRequest.create({
-    data: { userId, kind: "WITHDRAWAL", amount, fee },
+    await verifyWalletOtp(userId, otpCode, tx);
+
+    const wallet = await getWallet(userId, tx);
+    const fee =
+      settings.withdrawalFeePercent > 0
+        ? Math.round((amount * settings.withdrawalFeePercent) / 100)
+        : 0;
+    if (wallet.balance < amount + fee) {
+      throw new AppError("INSUFFICIENT_BALANCE", "Insufficient balance", 400);
+    }
+
+    if (settings.dailyWithdrawalLimit > 0) {
+      const todayStart = new Date(
+        Date.UTC(
+          new Date().getUTCFullYear(),
+          new Date().getUTCMonth(),
+          new Date().getUTCDate(),
+        ),
+      );
+      const { _sum } = await tx.walletRequest.aggregate({
+        where: {
+          userId,
+          kind: "WITHDRAWAL",
+          status: { in: ["PENDING", "APPROVED"] },
+          createdAt: { gte: todayStart },
+        },
+        _sum: { amount: true },
+      });
+      if ((_sum.amount ?? 0) + amount > settings.dailyWithdrawalLimit) {
+        throw new AppError(
+          "DAILY_WITHDRAWAL_LIMIT_EXCEEDED",
+          `Daily withdrawal limit of ${settings.dailyWithdrawalLimit} reached`,
+          400,
+        );
+      }
+    }
+
+    return tx.walletRequest.create({
+      data: { userId, kind: "WITHDRAWAL", amount, fee },
+    });
   });
 
   audit({
@@ -377,7 +388,7 @@ export async function createWithdrawalRequest(
     category: "wallet",
     targetType: "walletRequest",
     targetId: request.id,
-    meta: { amount, fee, kycLevel: kycRequest?.level ?? "STANDARD" },
+    meta: { amount, fee: request.fee, kycLevel: kycRequest?.level ?? "STANDARD" },
   });
 
   return serializeRequest(request);
@@ -460,14 +471,10 @@ export async function approveWalletRequest(
       await lockWalletRow(tx, request!.userId);
 
       if (request!.kind === "DEPOSIT") {
-        await applyTransaction(
-          tx,
-          request!.userId,
-          request!.amount,
-          "DEPOSIT",
-          request!.id,
-          { method: request!.method, approvedBy: adminId },
-          "MAIN",
+        throw new AppError(
+          "DEPOSITS_DISABLED",
+          "Direct deposit approvals are disabled; funding is handled via CouponVault coupons.",
+          403,
         );
       } else {
         const wallet = await tx.wallet.findUniqueOrThrow({
@@ -507,13 +514,18 @@ export async function approveWalletRequest(
         where: { userId: request!.userId },
       });
 
+      // Keep status as PENDING while the external CouponVault transfer is in flight.
+      // The status will only transition to APPROVED once CouponVault confirms completion.
       const updated = await tx.walletRequest.update({
         where: { id: requestId },
         data: {
-          status: "APPROVED",
+          status: "PENDING",
           adminId,
-          adminNote: adminNote?.trim() || null,
-          decidedAt: new Date(),
+          adminNote: "PROCESSING",
+          method: "COUPONVAULT",
+          note: requestId,
+          externalTransferId: requestId,
+          processingStartedAt: new Date(),
         },
       });
 
@@ -522,73 +534,96 @@ export async function approveWalletRequest(
     { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
   );
 
-  const kindLabel = result.updated.kind === "DEPOSIT" ? "Deposit" : "Withdrawal";
+  const account = await prisma.user.findUnique({ where: { id: result.updated.userId }, select: { email: true, username: true } });
+  const transactionId = result.updated.id;
 
-  // Withdrawals are sent to CouponVault only after the local debit commits.
-  // The request id is the durable external idempotency key, so retries cannot
-  // create a second transfer. A timeout remains held for reconciliation.
-  if (result.updated.kind === "WITHDRAWAL") {
-    const account = await prisma.user.findUnique({ where: { id: result.updated.userId }, select: { email: true, username: true } });
-    const transactionId = result.updated.id;
-    await prisma.walletRequest.update({ where: { id: transactionId }, data: { method: "COUPONVAULT", note: transactionId, externalTransferId: transactionId, adminNote: "PROCESSING" } });
-    try {
-      await CouponVaultService.transferToCouponWallet({
-        userId: result.updated.userId,
-        userEmail: (account?.email || `${account?.username || "user"}@gaminghub.com`).toLowerCase(),
+  try {
+    await CouponVaultService.transferToCouponWallet({
+      userId: result.updated.userId,
+      userEmail: (account?.email || `${account?.username || "user"}@gaminghub.com`).toLowerCase(),
+      amount: result.updated.amount,
+      transactionId,
+    });
+    const completed = await prisma.walletRequest.update({
+      where: { id: transactionId },
+      data: {
+        status: "APPROVED",
+        adminNote: adminNote?.trim() ? `COMPLETED: ${adminNote.trim()}` : "COMPLETED",
+        decidedAt: new Date(),
+      },
+    });
+    audit({
+      actorType: "user",
+      actorId: adminId,
+      action: "wallet.withdrawal.approved",
+      category: "wallet",
+      targetType: "walletRequest",
+      targetId: requestId,
+      meta: {
         amount: result.updated.amount,
-        transactionId,
+        fee: result.updated.fee,
+        userId: result.updated.userId,
+        balanceAfter: result.wallet.balance,
+        externalStatus: "COMPLETED",
+      },
+    });
+
+    await createNotification(
+      result.updated.userId,
+      "WALLET",
+      "Withdrawal Completed",
+      `Your withdrawal of ${result.updated.amount} has been processed to CouponVault.`,
+      { requestId: result.updated.id, amount: result.updated.amount },
+    );
+
+    return serializeRequest(completed);
+  } catch (error: any) {
+    if (error?.isTimeout || error?.isUncertain || error?.statusCode === 504) {
+      console.warn(`[approveWalletRequest] CouponVault timeout for ${transactionId}, marking UNCONFIRMED_HOLD`);
+      const held = await prisma.walletRequest.update({
+        where: { id: transactionId },
+        data: {
+          status: "PENDING",
+          adminNote: "UNCONFIRMED_HOLD",
+          processingStartedAt: new Date(),
+        },
       });
-      await prisma.walletRequest.update({ where: { id: transactionId }, data: { adminNote: "COMPLETED" } });
-    } catch (error: any) {
-      if (error?.isTimeout || error?.isUncertain || error?.statusCode === 504) {
-        await prisma.walletRequest.update({ where: { id: transactionId }, data: { adminNote: "UNCONFIRMED_HOLD", processingStartedAt: new Date() } });
-      } else {
-        await prisma.$transaction(async (tx) => {
-          await applyTransaction(tx, result.updated.userId, result.updated.amount + result.updated.fee, "REVERSAL", transactionId, { reason: error?.message || "CouponVault transfer failed", originalTransactionId: transactionId }, "MAIN");
-          await tx.walletRequest.update({ where: { id: transactionId }, data: { status: "REJECTED", adminNote: "REFUNDED", decidedAt: new Date() } });
+      audit({
+        actorType: "user",
+        actorId: adminId,
+        action: "wallet.withdrawal.timeout_held",
+        category: "wallet",
+        targetType: "walletRequest",
+        targetId: requestId,
+        meta: {
+          amount: result.updated.amount,
+          fee: result.updated.fee,
+          userId: result.updated.userId,
+          balanceAfter: result.wallet.balance,
+          externalStatus: "UNCONFIRMED_HOLD",
+          error: error?.message,
+        },
+      });
+      return serializeRequest(held);
+    } else {
+      await prisma.$transaction(async (tx) => {
+        await applyTransaction(
+          tx,
+          result.updated.userId,
+          result.updated.amount + result.updated.fee,
+          "REVERSAL",
+          transactionId,
+          { reason: error?.message || "CouponVault transfer failed", originalTransactionId: transactionId },
+          "MAIN",
+        );
+        await tx.walletRequest.update({
+          where: { id: transactionId },
+          data: { status: "REJECTED", adminNote: "REFUNDED", decidedAt: new Date() },
         });
-        throw new AppError("TRANSFER_FAILED", error?.message || "CouponVault transfer failed", 400);
-      }
+      });
+      throw new AppError("TRANSFER_FAILED", error?.message || "CouponVault transfer failed", 400);
     }
   }
-
-  audit({
-    actorType: "user",
-    actorId: adminId,
-    action: result.updated.kind === "DEPOSIT"
-      ? "wallet.deposit.approved"
-      : "wallet.withdrawal.approved",
-    category: "wallet",
-    targetType: "walletRequest",
-    targetId: requestId,
-    meta: {
-      amount: result.updated.amount,
-      fee: result.updated.fee,
-      userId: result.updated.userId,
-      balanceAfter: result.wallet.balance,
-    },
-  });
-
-  await createNotification(
-    result.updated.userId,
-    "WALLET",
-    `${kindLabel} approved`,
-    `${kindLabel} of ${result.updated.amount} coins approved${
-      result.updated.fee > 0 ? ` (fee ${result.updated.fee})` : ""
-    }`,
-    { requestId, kind: result.updated.kind, amount: result.updated.amount, status: "APPROVED" },
-  );
-
-  await notifyUserSocket(result.updated.userId, "wallet:updated", {
-    event: result.updated.kind === "DEPOSIT" ? "deposit-approved" : "withdrawal-approved",
-    requestId,
-    kind: result.updated.kind,
-    status: "APPROVED",
-    balance: result.wallet.balance,
-    message: `${kindLabel} approved`,
-  });
-
-  return serializeRequest(result.updated);
 }
 
 export async function rejectWalletRequest(

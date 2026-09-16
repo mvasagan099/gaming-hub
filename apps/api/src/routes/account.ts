@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, requireMfa } from "../plugins/authenticate";
 import { requireUser, routeParams } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
 import { hashToken, listSessions, revokeOtherSessions, revokeSession } from "../services/sessions";
@@ -121,7 +121,7 @@ export async function accountRoutes(app: FastifyInstance) {
   // option to restore (rollback) if required.
   app.delete(
     "/api/account",
-    { preHandler: authenticate, config: { rateLimit: DELETE_RATE_LIMIT } },
+    { preHandler: [authenticate, requireMfa], config: { rateLimit: DELETE_RATE_LIMIT } },
     async (request) => {
       const user = requireUser(request);
       const suffix = randomUUID().slice(0, 8);
@@ -147,6 +147,34 @@ export async function accountRoutes(app: FastifyInstance) {
             twoFactorSecretEncrypted: null, twoFactorSecretKeyVersion: null,
             totpEncryptedAt: null,
           },
+        });
+        const kycReq = await tx.kycRequest.findUnique({ where: { userId: user.id } });
+        if (kycReq) {
+          await tx.kycRequest.update({
+            where: { id: kycReq.id },
+            data: {
+              fullName: "ANONYMIZED",
+              mobileNumber: null,
+              streetAddress: null,
+              addressLine2: null,
+              city: null,
+              state: null,
+              postalCode: null,
+              dateOfBirth: null,
+            },
+          });
+          await tx.kycDocument.updateMany({
+            where: { requestId: kycReq.id },
+            data: {
+              documentNumber: "ANONYMIZED",
+              fileName: "ANONYMIZED",
+              fileUrl: "ANONYMIZED",
+            },
+          });
+        }
+        await tx.loginSession.updateMany({
+          where: { userId: user.id, revokedAt: null },
+          data: { revokedAt: deletedAt },
         });
       });
 
