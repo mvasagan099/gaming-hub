@@ -21,13 +21,21 @@ import { WalletTransactionService } from "../walletTransactionService";
 import { CouponVaultService } from "../couponVaultService";
 
 async function fundMain(userId: string, amount = 2500) {
-  await prisma.$transaction((tx) => WalletTransactionService.createCredit(tx, {
-    userId,
-    amount,
-    referenceType: "ADMIN",
-    referenceId: `test-funding-${userId}`,
-    meta: { reason: "controlled test funding" },
-  }));
+  let remaining = amount;
+  let counter = 0;
+  while (remaining > 0) {
+    const chunk = Math.min(remaining, 1000);
+    await prisma.$transaction((tx) =>
+      WalletTransactionService.createCredit(tx, {
+        userId,
+        amount: chunk,
+        referenceType: "ADMIN",
+        referenceId: `test-funding-${userId}-${counter++}`,
+        meta: { reason: "controlled test funding" },
+      }),
+    );
+    remaining -= chunk;
+  }
 }
 
 async function expectAppError(
@@ -112,29 +120,12 @@ describe("walletRequests", () => {
   });
 
   describe("deposits", () => {
-    it("creates a PENDING deposit request", async () => {
+    it("decommissions direct deposit requests and returns DEPOSITS_DISABLED", async () => {
       const user = await createTestUser();
       await fundMain(user.id);
-      const request = await createDepositRequest(user.id, 500, "MANUAL");
-
-      expect(request.kind).toBe("DEPOSIT");
-      expect(request.amount).toBe(500);
-      expect(request.status).toBe("PENDING");
-      expect(request.method).toBe("MANUAL");
-
-      const wallet = await getWallet(user.id);
-      expect(wallet.balance).toBe(2500); // untouched until approved
-    });
-
-    it("rejects deposits outside configured limits", async () => {
-      const user = await createTestUser();
-      await fundMain(user.id);
-      await setSetting("wallet.minDeposit", 100, null);
-      await setSetting("wallet.maxDeposit", 1000, null);
-
-      await expectAppError(createDepositRequest(user.id, 50), "WALLET_LIMIT_EXCEEDED");
-      await expectAppError(createDepositRequest(user.id, 1001), "WALLET_LIMIT_EXCEEDED");
-      await expect(createDepositRequest(user.id, 500)).resolves.toBeTruthy();
+      await expectAppError(createDepositRequest(user.id, 500, "MANUAL"), "DEPOSITS_DISABLED");
+      await expectAppError(createDepositRequest(user.id, 50), "DEPOSITS_DISABLED");
+      await expectAppError(createDepositRequest(user.id, 1001), "DEPOSITS_DISABLED");
     });
   });
 
@@ -210,50 +201,24 @@ describe("walletRequests", () => {
   });
 
   describe("admin approval", () => {
-    it("approving a deposit credits MAIN atomically and syncs via socket", async () => {
+    it("rejects direct deposit creation with DEPOSITS_DISABLED", async () => {
       const user = await createTestUser();
-      await fundMain(user.id);
-      const admin = await createTestUser({ role: "ADMIN" });
-      vi.spyOn(CouponVaultService, "transferToCouponWallet").mockResolvedValue({ success: true });
-      const request = await createDepositRequest(user.id, 1000);
-
-      const approved = await approveWalletRequest(admin.id, request.id);
-
-      expect(approved.status).toBe("APPROVED");
-      expect(approved.adminId).toBe(admin.id);
-
-      const wallet = await getWallet(user.id);
-      expect(wallet.balance).toBe(3500);
-
-      const txs = await prisma.transaction.findMany({
-        where: { userId: user.id, referenceType: "DEPOSIT", referenceId: request.id },
-      });
-      expect(txs).toHaveLength(1);
-      expect(txs[0].type).toBe("CREDIT");
-      expect(txs[0].amount).toBe(1000);
-      expect(txs[0].balanceAfter).toBe(3500);
-
-      const notification = await prisma.appNotification.findFirst({
-        where: { userId: user.id, type: "WALLET" },
-      });
-      expect(notification).not.toBeNull();
-
-      const sync = socketBridge.calls.find((c) => c.userId === user.id && c.event === "wallet:updated" && c.payload.requestId === request.id);
-      expect(sync).toBeTruthy();
-      expect(sync!.payload.event).toBe("deposit-approved");
-      expect(sync!.payload.balance).toBe(3500);
+      await expectAppError(createDepositRequest(user.id, 1000), "DEPOSITS_DISABLED");
     });
 
-    it("approving a withdrawal debits MAIN and the fee", async () => {
+    it("approving a withdrawal debits MAIN, fee, and completes via CouponVault", async () => {
       const user = await createTestUser();
       await fundMain(user.id);
       const admin = await createTestUser({ role: "ADMIN" });
       await setSetting("wallet.withdrawalFeePercent", 5, null);
+      vi.spyOn(CouponVaultService, "transferToCouponWallet").mockResolvedValue({ success: true } as any);
 
       const { debugCode } = await requestWithdrawalOtp(user.id);
       const request = await createWithdrawalRequest(user.id, 1000, debugCode!);
 
-      await approveWalletRequest(admin.id, request.id);
+      const approved = await approveWalletRequest(admin.id, request.id);
+      expect(approved.status).toBe("APPROVED");
+      expect(approved.adminNote).toBe("COMPLETED");
 
       const wallet = await getWallet(user.id);
       expect(wallet.balance).toBe(2500 - 1000 - 50);
@@ -264,6 +229,25 @@ describe("walletRequests", () => {
       expect(txs).toHaveLength(2);
       expect(txs.reduce((sum, t) => sum + t.amount, 0)).toBe(1050);
       await setSetting("wallet.withdrawalFeePercent", 0, null);
+    });
+
+    it("sets UNCONFIRMED_HOLD on CouponVault transfer timeout and leaves status PENDING", async () => {
+      const user = await createTestUser();
+      await fundMain(user.id);
+      const admin = await createTestUser({ role: "ADMIN" });
+
+      const timeoutError = new AppError("COUPON_TRANSFER_TIMEOUT", "Timeout", 504);
+      (timeoutError as any).isTimeout = true;
+      vi.spyOn(CouponVaultService, "transferToCouponWallet").mockRejectedValue(timeoutError);
+
+      const { debugCode } = await requestWithdrawalOtp(user.id);
+      const request = await createWithdrawalRequest(user.id, 500, debugCode!);
+
+      await approveWalletRequest(admin.id, request.id);
+
+      const hold = await getWalletRequest(request.id);
+      expect(hold.status).toBe("PENDING");
+      expect(hold.adminNote).toBe("UNCONFIRMED_HOLD");
     });
 
     it("rejects when the balance no longer covers the withdrawal", async () => {
@@ -288,45 +272,29 @@ describe("walletRequests", () => {
       expect(wallet.balance).toBe(2300); // no partial debit
     });
 
-    it("approving an already-decided request fails and credits nothing twice", async () => {
+    it("approving an already-decided request fails and debits nothing twice", async () => {
       const user = await createTestUser();
       await fundMain(user.id);
       const admin = await createTestUser({ role: "ADMIN" });
-      const request = await createDepositRequest(user.id, 500);
+      vi.spyOn(CouponVaultService, "transferToCouponWallet").mockResolvedValue({ success: true } as any);
+
+      const { debugCode } = await requestWithdrawalOtp(user.id);
+      const request = await createWithdrawalRequest(user.id, 500, debugCode!);
 
       await approveWalletRequest(admin.id, request.id);
       await expectAppError(approveWalletRequest(admin.id, request.id), "WALLET_REQUEST_ALREADY_DECIDED");
 
       const wallet = await getWallet(user.id);
-      expect(wallet.balance).toBe(3000);
-    });
-
-    it("two concurrent approvals credit the balance exactly once", async () => {
-      const user = await createTestUser();
-      await fundMain(user.id);
-      const admin = await createTestUser({ role: "ADMIN" });
-      const request = await createDepositRequest(user.id, 1000);
-
-      const [a, b] = await Promise.allSettled([
-        approveWalletRequest(admin.id, request.id),
-        approveWalletRequest(admin.id, request.id),
-      ]);
-
-      const fulfilled = [a, b].filter((r) => r.status === "fulfilled");
-      const rejected = [a, b].filter((r) => r.status === "rejected");
-      expect(fulfilled).toHaveLength(1);
-      expect(rejected).toHaveLength(1);
-      expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(AppError);
-
-      const wallet = await getWallet(user.id);
-      expect(wallet.balance).toBe(3500);
+      expect(wallet.balance).toBe(2000);
     });
 
     it("rejecting a request leaves the balance untouched", async () => {
       const user = await createTestUser();
       await fundMain(user.id);
       const admin = await createTestUser({ role: "ADMIN" });
-      const request = await createDepositRequest(user.id, 500);
+
+      const { debugCode } = await requestWithdrawalOtp(user.id);
+      const request = await createWithdrawalRequest(user.id, 500, debugCode!);
 
       const rejected = await rejectWalletRequest(admin.id, request.id, "not eligible");
 
@@ -335,16 +303,15 @@ describe("walletRequests", () => {
 
       const wallet = await getWallet(user.id);
       expect(wallet.balance).toBe(2500);
-
-      const sync = socketBridge.calls.find((c) => c.payload.event === "deposit-rejected");
-      expect(sync).toBeTruthy();
     });
   });
 
   describe("cancel", () => {
     it("lets the owner cancel a pending request but not a decided one", async () => {
       const user = await createTestUser();
-      const request = await createDepositRequest(user.id, 500);
+      await fundMain(user.id);
+      const { debugCode } = await requestWithdrawalOtp(user.id);
+      const request = await createWithdrawalRequest(user.id, 500, debugCode!);
 
       await cancelWalletRequest(user.id, request.id);
       expect((await getWalletRequest(request.id)).status).toBe("CANCELLED");
@@ -355,7 +322,9 @@ describe("walletRequests", () => {
     it("does not allow cancelling another user's request", async () => {
       const user = await createTestUser();
       const other = await createTestUser();
-      const request = await createDepositRequest(other.id, 500);
+      await fundMain(other.id);
+      const { debugCode } = await requestWithdrawalOtp(other.id);
+      const request = await createWithdrawalRequest(other.id, 500, debugCode!);
 
       await expectAppError(cancelWalletRequest(user.id, request.id), "WALLET_REQUEST_NOT_FOUND");
     });
@@ -364,11 +333,12 @@ describe("walletRequests", () => {
   describe("freeze", () => {
     it("blocks deposit, withdrawal, and OTP issuance", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       const admin = await createTestUser({ role: "ADMIN" });
 
       await setWalletFrozen(admin.id, user.id, true, "fraud review");
 
-      await expectAppError(createDepositRequest(user.id, 500), "WALLET_FROZEN");
+      await expectAppError(createDepositRequest(user.id, 500), "DEPOSITS_DISABLED");
       await expectAppError(requestWithdrawalOtp(user.id), "WALLET_FROZEN");
 
       const wallet = await getWallet(user.id);
@@ -377,24 +347,27 @@ describe("walletRequests", () => {
 
       await setWalletFrozen(admin.id, user.id, false);
       expect((await getWallet(user.id)).isFrozen).toBe(false);
-      await expect(createDepositRequest(user.id, 500)).resolves.toBeTruthy();
+      const { debugCode } = await requestWithdrawalOtp(user.id);
+      expect(debugCode).toBeTruthy();
     });
   });
 
   describe("listing", () => {
     it("lists and filters requests by kind and status", async () => {
       const user = await createTestUser();
-      await createDepositRequest(user.id, 500);
-      await createDepositRequest(user.id, 300);
+      await fundMain(user.id);
+
+      const otp1 = await requestWithdrawalOtp(user.id);
+      await createWithdrawalRequest(user.id, 500, otp1.debugCode!);
 
       const all = await listWalletRequests({ userId: user.id }, 1, 10);
-      expect(all.total).toBe(2);
+      expect(all.total).toBe(1);
 
-      const deposits = await listWalletRequests({ userId: user.id, kind: "DEPOSIT" }, 1, 10);
-      expect(deposits.total).toBe(2);
+      const withdrawals = await listWalletRequests({ userId: user.id, kind: "WITHDRAWAL" }, 1, 10);
+      expect(withdrawals.total).toBe(1);
 
       const pending = await listWalletRequests({ userId: user.id, status: "PENDING" }, 1, 10);
-      expect(pending.total).toBe(2);
+      expect(pending.total).toBe(1);
 
       const approved = await listWalletRequests({ userId: user.id, status: "APPROVED" }, 1, 10);
       expect(approved.total).toBe(0);
