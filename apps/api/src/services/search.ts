@@ -76,10 +76,10 @@ export class SearchService {
       },
     });
 
-    return users.map((u) => {
+    return Promise.all(users.map(async (u) => {
       const isOwner = requestingUserId === u.id;
       const isPrivate =
-        (PlayerProfileService.getProfilePrivacy(u.id) ||
+        (await PlayerProfileService.getProfilePrivacy(u.id) ||
           Boolean((u.profile as any)?.isPrivate)) &&
         !isOwner &&
         !isAdmin;
@@ -98,7 +98,7 @@ export class SearchService {
         globalRating: (u.profile as any)?.globalRating ?? 1200,
         createdAt: u.createdAt.toISOString(),
       };
-    });
+    }));
   }
 
   /**

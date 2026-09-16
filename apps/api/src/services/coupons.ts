@@ -191,6 +191,9 @@ export async function redeemCoupon(
   });
 
   if (existingSaga) {
+    if (existingSaga.userId !== userId) {
+      throw new AppError("COUPON_ALREADY_USED", "This coupon has already been redeemed.", 409);
+    }
     if (existingSaga.sagaStatus === "COMPLETED") {
       return {
         ok: true,
@@ -206,10 +209,6 @@ export async function redeemCoupon(
         existingSaga.failureReason ?? "Coupon redemption failed. Contact support.",
         500,
       );
-    }
-    if (existingSaga.userId !== userId) {
-      // Another user already redeemed this coupon code
-      throw new AppError("COUPON_ALREADY_USED", "This coupon has already been redeemed.", 409);
     }
     // Same user, PENDING or EXTERNAL_CONFIRMED — fall through to resume
   }
@@ -293,21 +292,14 @@ export async function redeemCoupon(
       });
     } catch (err: unknown) {
       const appErr = err as AppError;
-      // 409 from CouponVault = already redeemed externally. Check if it was us.
-      if (appErr.code === "COUPON_ALREADY_USED") {
-        // Allow resume — treat as EXTERNAL_CONFIRMED
-        await prisma.couponRedemption.update({
-          where: { id: sagaId },
-          data: { sagaStatus: "EXTERNAL_CONFIRMED", externalConfirmedAt: new Date() },
-        }).catch(() => {});
-      } else {
-        // Mark FAILED and propagate
-        await prisma.couponRedemption.update({
-          where: { id: sagaId },
-          data: { sagaStatus: "FAILED", failureReason: appErr.message ?? "CouponVault redemption failed" },
-        }).catch(() => {});
-        throw err;
-      }
+      // A 409 does not prove that the external redemption belongs to this
+      // user and transaction. Keep the saga failed unless CouponVault exposes
+      // an explicit ownership/idempotency proof (which this API does not).
+      await prisma.couponRedemption.update({
+        where: { id: sagaId },
+        data: { sagaStatus: "FAILED", failureReason: appErr.message ?? "CouponVault redemption failed" },
+      }).catch(() => {});
+      throw err;
     }
   }
 

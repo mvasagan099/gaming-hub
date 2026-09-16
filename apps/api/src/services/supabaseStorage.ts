@@ -87,6 +87,7 @@ export async function uploadKycToSupabase(
 
   if (error) {
     console.warn(`Supabase storage upload notice for ${fullPath}:`, error.message);
+    throw new Error(`KYC document upload failed: ${error.message}`);
   }
 
   return {

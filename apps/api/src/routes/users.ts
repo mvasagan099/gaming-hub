@@ -51,7 +51,7 @@ export async function usersRoutes(app: FastifyInstance) {
     const data = parseSchema(updateProfileSchema, request.body);
 
     if (data.isPrivate !== undefined) {
-      PlayerProfileService.setProfilePrivacy(user.id, data.isPrivate);
+      await PlayerProfileService.setProfilePrivacy(user.id, data.isPrivate);
     }
 
     const result = await updateUserProfile(user.id, data);
@@ -64,7 +64,7 @@ export async function usersRoutes(app: FastifyInstance) {
   app.patch("/api/users/me/privacy", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
     const { isPrivate } = parseSchema(privacyUpdateSchema, request.body);
-    const updated = PlayerProfileService.setProfilePrivacy(user.id, isPrivate);
+    const updated = await PlayerProfileService.setProfilePrivacy(user.id, isPrivate);
     return { isPrivate: updated };
   });
 

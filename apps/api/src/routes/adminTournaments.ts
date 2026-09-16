@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@gaming-hub/db";
 import { AppError, clampPagination, isGameId } from "@gaming-hub/shared";
 import type { TournamentStatus, TournamentFormat } from "@gaming-hub/shared";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, requireMfa } from "../plugins/authenticate";
 import { parseSchema, routeParams, queryParams, queryString } from "../lib/http";
 import { requirePermission } from "../lib/permissions";
 import { auditFromRequest } from "../services/audit";
@@ -322,7 +322,7 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
   });
 
   /** Retry failed tournament refunds (admin recovery) */
-  app.post("/api/admin/tournaments/:id/refunds/retry", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/tournaments/:id/refunds/retry", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
     const { id } = routeParams(request);
     const retrySchema = z.object({
@@ -351,7 +351,7 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
   });
 
   /** Force-settle (admin override) */
-  app.post("/api/admin/tournaments/:id/settle", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/tournaments/:id/settle", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
     const { id } = routeParams(request);
     await settleTournament(id);
@@ -406,7 +406,7 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
   // ------------------------------------------------------------------
   // Tournament reconciliation (manual trigger)
   // ------------------------------------------------------------------
-  app.post("/api/admin/tournaments/:id/reconcile", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/tournaments/:id/reconcile", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
     const { id } = routeParams(request);
     const result = await reconcileTournament(id);

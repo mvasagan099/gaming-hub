@@ -182,7 +182,14 @@ export async function getPublicProfileById(userId: string): Promise<PublicProfil
 
 export async function getAuthenticatedUserData(user: User) {
   const [profile, wallet, stats, unreadNotifications] = await Promise.all([
-    prisma.profile.findUnique({ where: { userId: user.id } }),
+    prisma.profile.findUnique({
+      where: { userId: user.id },
+      select: {
+        bio: true, country: true, currency: true, coins: true, gems: true,
+        xp: true, level: true, wins: true, losses: true, draws: true,
+        premium: true, vipLevel: true, twoFactorEnabled: true,
+      },
+    }),
     prisma.wallet.findUnique({ where: { userId: user.id } }),
     prisma.playerStatistic.findMany({
       where: { userId: user.id },

@@ -9,9 +9,7 @@ import {
   type RecentTournamentItem,
   type GameId,
 } from "@gaming-hub/shared";
-
-// In-memory privacy store fallback if not in schema
-const userPrivacyMap = new Map<string, boolean>();
+import { getPrivacySettings, updatePrivacySettings } from "./privacyService";
 
 export class PlayerProfileService {
   /**
@@ -39,7 +37,8 @@ export class PlayerProfileService {
     }
 
     const isOwner = viewerId === userId;
-    const isPrivate = userPrivacyMap.get(userId) ?? false;
+    const privacy = await getPrivacySettings(userId);
+    const isPrivate = privacy.profileVisibility === "NOBODY";
 
     const gameDefMap = new Map(GAME_DEFINITIONS.map((g) => [g.id, g]));
 
@@ -327,12 +326,13 @@ export class PlayerProfileService {
   /**
    * Update profile privacy setting.
    */
-  static setProfilePrivacy(userId: string, isPrivate: boolean): boolean {
-    userPrivacyMap.set(userId, isPrivate);
+  static async setProfilePrivacy(userId: string, isPrivate: boolean): Promise<boolean> {
+    await updatePrivacySettings(userId, { profileVisibility: isPrivate ? "NOBODY" : "EVERYONE" });
     return isPrivate;
   }
 
-  static getProfilePrivacy(userId: string): boolean {
-    return userPrivacyMap.get(userId) ?? false;
+  static async getProfilePrivacy(userId: string): Promise<boolean> {
+    const settings = await getPrivacySettings(userId);
+    return settings.profileVisibility === "NOBODY";
   }
 }

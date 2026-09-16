@@ -327,6 +327,20 @@ Build: PASS
 Dependency audit: PASS WITH ACCEPTED DEV-ONLY EXCEPTIONS
 ```
 
+### Source audit follow-up (2026-09-16)
+
+- Authenticated profile and account-export DTOs now use explicit safe field selections; password and TOTP secrets are excluded.
+- Account deletion now anonymizes profile contact, address, password, and TOTP material inside the same transaction.
+- KYC storage upload failures now throw so the service fallback/error path runs.
+- Production CouponVault configuration rejects the development key, localhost endpoints, and non-HTTPS URLs.
+- Docker migration uses `prisma migrate deploy`; destructive `db push --accept-data-loss` was removed.
+- Completed coupon ownership is checked before returning idempotent success; external 409 responses are never treated as proof of ownership.
+- Approved withdrawals now invoke the CouponVault transfer with the wallet-request ID as the external idempotency key; confirmed failures refund once and timeouts remain held for reconciliation.
+- Sensitive KYC, role, and tournament financial mutations require fresh MFA; read-only admin routes remain unchanged.
+- Public profile privacy now reads and writes the PostgreSQL `UserPrivacy` record; the in-memory privacy map was removed.
+
+End-to-end route tests and the full API aggregation still need to be rerun against the test database before release.
+
 ### Final Verdict
 
 The required security suite and financial concurrency checks pass on PostgreSQL. The tournament release blocker is closed: `routes/__tests__/tournaments.test.ts` passes 61/61 with real match relationships, corrected final-round setup, and database-backed concurrent slot locking. Full API aggregation is still pending completion; no production deployment was performed.

@@ -74,7 +74,13 @@ export async function accountRoutes(app: FastifyInstance) {
       const data = await prisma.user.findUnique({
         where: { id: user.id },
         include: {
-          profile: true,
+          profile: {
+            select: {
+              bio: true, country: true, currency: true, coins: true, gems: true,
+              xp: true, level: true, wins: true, losses: true, draws: true,
+              premium: true, vipLevel: true, twoFactorEnabled: true,
+            },
+          },
           wallet: true,
           walletTransactions: {
             orderBy: { createdAt: "desc" },
@@ -131,6 +137,15 @@ export async function accountRoutes(app: FastifyInstance) {
             displayName: "Deleted User",
             avatarUrl: null,
             isOnline: false,
+          },
+        });
+        await tx.profile.update({
+          where: { userId: user.id },
+          data: {
+            phone: null, dateOfBirth: null, streetAddress: null, city: null,
+            state: null, postcode: null, passwordHash: null, twoFactorSecret: null,
+            twoFactorSecretEncrypted: null, twoFactorSecretKeyVersion: null,
+            totpEncryptedAt: null,
           },
         });
       });

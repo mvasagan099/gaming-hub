@@ -11,6 +11,7 @@ import { audit } from "./audit";
 import { createNotification } from "./notifications";
 import { getCategorySettings } from "./settings";
 import { notifyUserSocket } from "./socketBridge";
+import { CouponVaultService } from "./couponVaultService";
 
 const OTP_PURPOSE = "WALLET_WITHDRAWAL";
 
@@ -522,6 +523,34 @@ export async function approveWalletRequest(
   );
 
   const kindLabel = result.updated.kind === "DEPOSIT" ? "Deposit" : "Withdrawal";
+
+  // Withdrawals are sent to CouponVault only after the local debit commits.
+  // The request id is the durable external idempotency key, so retries cannot
+  // create a second transfer. A timeout remains held for reconciliation.
+  if (result.updated.kind === "WITHDRAWAL") {
+    const account = await prisma.user.findUnique({ where: { id: result.updated.userId }, select: { email: true, username: true } });
+    const transactionId = result.updated.id;
+    await prisma.walletRequest.update({ where: { id: transactionId }, data: { method: "COUPONVAULT", note: transactionId, externalTransferId: transactionId, adminNote: "PROCESSING" } });
+    try {
+      await CouponVaultService.transferToCouponWallet({
+        userId: result.updated.userId,
+        userEmail: (account?.email || `${account?.username || "user"}@gaminghub.com`).toLowerCase(),
+        amount: result.updated.amount,
+        transactionId,
+      });
+      await prisma.walletRequest.update({ where: { id: transactionId }, data: { adminNote: "COMPLETED" } });
+    } catch (error: any) {
+      if (error?.isTimeout || error?.isUncertain || error?.statusCode === 504) {
+        await prisma.walletRequest.update({ where: { id: transactionId }, data: { adminNote: "UNCONFIRMED_HOLD", processingStartedAt: new Date() } });
+      } else {
+        await prisma.$transaction(async (tx) => {
+          await applyTransaction(tx, result.updated.userId, result.updated.amount + result.updated.fee, "REVERSAL", transactionId, { reason: error?.message || "CouponVault transfer failed", originalTransactionId: transactionId }, "MAIN");
+          await tx.walletRequest.update({ where: { id: transactionId }, data: { status: "REJECTED", adminNote: "REFUNDED", decidedAt: new Date() } });
+        });
+        throw new AppError("TRANSFER_FAILED", error?.message || "CouponVault transfer failed", 400);
+      }
+    }
+  }
 
   audit({
     actorType: "user",

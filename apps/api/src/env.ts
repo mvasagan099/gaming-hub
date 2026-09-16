@@ -110,6 +110,18 @@ const envSchema = z.object({
     });
   }
 
+  if (data.NODE_ENV === "production") {
+    if (data.COUPON_API_KEY === "dev-fallback-key-123") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["COUPON_API_KEY"], message: "COUPON_API_KEY must be configured in production" });
+    }
+    try {
+      const couponUrl = new URL(data.COUPON_API_URL);
+      if (couponUrl.protocol !== "https:" || ["localhost", "127.0.0.1", "::1"].includes(couponUrl.hostname)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["COUPON_API_URL"], message: "COUPON_API_URL must be a non-local HTTPS endpoint in production" });
+      }
+    } catch { /* URL validation is handled by the schema */ }
+  }
+
   // 4. Validate Redis URL format if specified
   if (data.REDIS_URL && data.REDIS_URL.trim().length > 0) {
     if (!data.REDIS_URL.startsWith("redis://") && !data.REDIS_URL.startsWith("rediss://")) {

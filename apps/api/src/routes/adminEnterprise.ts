@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { clampPagination, AppError } from "@gaming-hub/shared";
 import { authenticate } from "../plugins/authenticate";
+import { requireMfa } from "../plugins/authenticate";
 import { parseSchema, routeParams, queryParams, queryString } from "../lib/http";
 import { requirePermission } from "../lib/permissions";
 import { auditFromRequest } from "../services/audit";
@@ -370,7 +371,7 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     return getTournamentHealth(routeParams(request).id);
   });
 
-  app.post("/api/admin/tournaments/:id/reconcile", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/tournaments/:id/reconcile", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage");
     const id = routeParams(request).id;
     const result = await reconcileTournament(id);
@@ -474,7 +475,7 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post("/api/admin/tournaments/:id/settle", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/tournaments/:id/settle", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:tournaments:manage");
     const { id } = routeParams(request);
     await settleTournament(id);

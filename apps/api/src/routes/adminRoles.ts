@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@gaming-hub/db";
 import { AppError, ALL_PERMISSIONS, clampPagination, type Permission } from "@gaming-hub/shared";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, requireMfa } from "../plugins/authenticate";
 import { requirePermission } from "../lib/permissions";
 import { routeParams, parseSchema, queryParams, queryString } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
@@ -82,7 +82,7 @@ export async function adminRolesRoutes(app: FastifyInstance) {
     return ALL_PERMISSIONS;
   });
   
-  app.post("/api/admin/roles", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/roles", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:roles:create", prisma);
     const data = parseSchema(createRoleSchema, request.body);
     
@@ -150,7 +150,7 @@ export async function adminRolesRoutes(app: FastifyInstance) {
     };
   });
   
-  app.patch("/api/admin/roles/:id", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/roles/:id", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:roles:edit", prisma);
     const { id } = routeParams(request);
     const data = parseSchema(updateRoleSchema, request.body);
@@ -231,7 +231,7 @@ export async function adminRolesRoutes(app: FastifyInstance) {
     };
   });
   
-  app.delete("/api/admin/roles/:id", { preHandler: authenticate }, async (request) => {
+  app.delete("/api/admin/roles/:id", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:roles:delete", prisma);
     const { id } = routeParams(request);
     

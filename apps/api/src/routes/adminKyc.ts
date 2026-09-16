@@ -10,7 +10,7 @@ import {
   kycDocumentConfigSchema,
   AppError,
 } from "@gaming-hub/shared";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, requireMfa } from "../plugins/authenticate";
 import { requireUser, parseSchema, queryParams, queryString } from "../lib/http";
 import { requirePermission } from "../lib/permissions";
 import KycService from "../services/kyc";
@@ -169,7 +169,7 @@ export async function adminKycRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/api/admin/kyc/review/:requestId", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/kyc/review/:requestId", { preHandler: [authenticate, requireMfa] }, async (request) => {
     await requirePermission(request, "admin:kyc:review", prisma);
     const user = requireUser(request);
     const params = request.params as { requestId: string };
@@ -218,7 +218,7 @@ export async function adminKycRoutes(app: FastifyInstance) {
     return { ok: false, error: "Invalid action" };
   });
 
-  app.post("/api/admin/kyc/override/:requestId", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/kyc/override/:requestId", { preHandler: [authenticate, requireMfa] }, async (request) => {
     await requirePermission(request, "admin:kyc:override", prisma);
     const user = requireUser(request);
     const params = request.params as { requestId: string };
