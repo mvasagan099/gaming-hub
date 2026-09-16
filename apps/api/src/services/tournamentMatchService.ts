@@ -44,11 +44,12 @@ export class TournamentMatchService {
    * Only creates match when both players are assigned and slot is READY.
    */
   static async ensureTournamentRoundMatch(roundId: string): Promise<string | null> {
-    // First check if slot already has a match (fast path)
-    const slot = await prisma.tournamentRound.findUnique({
-      where: { id: roundId },
-      include: { tournament: true },
-    });
+    return (prisma.$transaction as any)(async (tx: typeof prisma) => {
+    // Serialize creation per bracket slot. The row lock closes the race
+    // between concurrent workers that both observe matchId = null.
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "TournamentRound" WHERE id = ${roundId} FOR UPDATE`;
+    if (locked.length === 0) throw new AppError("NOT_FOUND", "Tournament round slot not found", 404);
+    const slot = await tx.tournamentRound.findUnique({ where: { id: roundId }, include: { tournament: true } });
 
     if (!slot) {
       throw new AppError("NOT_FOUND", "Tournament round slot not found", 404);
@@ -84,18 +85,19 @@ export class TournamentMatchService {
     }
 
     // Update the tournament round with matchId and status
-    await prisma.tournamentRound.update({
+    await tx.tournamentRound.update({
       where: { id: roundId },
       data: { matchId, status: "IN_PROGRESS" },
     });
 
     // Increment tournament stateVersion for bracket updates
-    await prisma.tournament.update({
+    await tx.tournament.update({
       where: { id: slot.tournamentId },
       data: { stateVersion: { increment: 1 } },
     });
 
     return matchId;
+    }, { maxWait: 30_000, timeout: 30_000 });
   }
 
   /**
@@ -127,7 +129,7 @@ export class TournamentMatchService {
           tournamentRoundId: slot.id,
           tournamentMatchNumber: slot.matchNumber,
         }),
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(1_000),
       });
 
       const result = await response.json() as { ok: boolean; matchId?: string; error?: string };
