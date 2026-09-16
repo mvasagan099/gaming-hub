@@ -386,3 +386,84 @@ API aggregation pass #2: **NOT RUN**.
 Current tournament, tier-combination, game-engine, and multiplayer totals: **NOT CAPTURED in this run**.
 
 The previously verified security runs (52/52 twice), wallet routes (9/9), typecheck, build, and fresh migration remain unchanged. No production database was touched and no production deployment was performed.
+
+### Group B split evidence (2026-09-16)
+
+The original 17-file financial group was split into four deterministic, non-overlapping subgroups:
+
+- **B1 (6 files):** wallet route/history/notification/request/sync/transaction tests.
+- **B2 (2 files):** CouponVault unit and live integration tests.
+- **B3 (4 files):** financial concurrency, economy, idempotency, and reconciliation tests.
+- **B4 (5 files):** entry-fee, coin-workflow, insufficient-balance, and production-coin tests.
+
+The split reconciles exactly to the original Group B: **6 + 2 + 4 + 5 = 17 files; 0 duplicates; 0 missing**.
+
+Current execution evidence:
+
+- B1: **62 tests; 51 passed; 11 failed**. Failures are existing wallet-request fixture/expected-balance mismatches (the file reproduces the failures when run alone).
+- B2: **29 tests; 23 passed; 6 failed**. The subgroup completed within its bound; failures require separate test-fixture review.
+- B3/B4: not run after B1/B2 failed.
+
+No production logic was changed during this split. API aggregation passes remain incomplete and the final verdict remains **NOT PRODUCTION READY**.
+
+### Group B fixture correction (2026-09-16)
+
+B1 failures were classified as **fixture funding errors / legacy 2,500-default assumptions**, not production defects. The wallet-request tests now create an explicit MAIN credit through `WalletTransactionService.createCredit` before withdrawal and approval scenarios. This preserves the production rule that newly created wallets start at MAIN 0, bonus 0, and locked 0 while keeping assertions for exactly-once deductions and approvals meaningful.
+
+Post-change execution was initially blocked because the disposable PostgreSQL service at `localhost:5540` was unavailable. It has since been restored; B2 still has four test-mock failures, so B3/B4, API aggregation, and final regression totals remain pending.
+
+The 11 B1 failures captured before the fixture correction were:
+
+- Deposit pending: expected MAIN 2500, actual 0 (stale legacy default).
+- Withdrawal pending, daily-limit, concurrent-cap, fee, withdrawal approval, and insufficient-balance cases: `INSUFFICIENT_BALANCE` before a request could be created (missing MAIN funding).
+- Deposit approval: expected 3500, actual 1000; duplicate deposit approval: expected 3000, actual 500; concurrent deposit approval: expected 3500, actual 1000; rejected deposit: expected 2500, actual 0 (all legacy starting-balance assumptions).
+
+No CouponVault call occurred in these pre-request failures. The corrected fixtures use a ledger-backed 2500 MAIN credit; rerun evidence is pending database availability.
+
+### Final financial verification update (2026-09-16)
+
+- Local disposable database restored: `localhost:5540`, database `gaming_hub_test`, container-local credentials; no remote production host used.
+- Corrected B1: **6 files, 62/62 tests PASS**. New wallets remain zero-start; scenarios explicitly credit MAIN 2500 through the ledger.
+- B2 rerun: **2 files, 29 tests, 25 passed, 4 failed**. Remaining failures are confined to the legacy live-integration mock: concurrent-redemption accounting and reconciliation claim responses do not implement the current Prisma contract (`findUnique`/claim semantics). Unit tests and external HTTP failure/timeout behavior pass. No 409 safety behavior was weakened.
+- B3 and B4 were not run because B2 is not yet green, per the release gate.
+
+Group B and both full API aggregation passes remain incomplete. Final verdict remains **NOT PRODUCTION READY**.
+
+### Group B completion update (2026-09-16)
+
+- B1: **6 files, 62/62 PASS**.
+- B2: **2 files, 29/29 PASS** after test-only Prisma mock contract fixes.
+- B3: **4 files, 48/48 PASS** (concurrency, idempotency, reconciliation, and economy checks).
+- B4: **5 files, 62/62 PASS** after a test-only assertion update for the current full-tournament state message.
+- Group B aggregate: **17/17 files, 201/201 tests passed, 0 failed, 0 missing, 0 duplicates**.
+
+No production wallet/security logic was changed. Groups C–E, API aggregation passes, and current regression totals remain pending.
+
+### Remaining API release evidence (2026-09-16)
+
+- Group C was started against the disposable PostgreSQL database, but its large tournament/load workload did not produce a final summary within the execution window and was stopped before totals could be captured.
+- Groups D and E were not started because Group C did not complete with a valid result.
+- API aggregation pass #1 and pass #2 remain incomplete; no aggregate PASS claim is made.
+
+No production deployment occurred and the production database remains untouched.
+
+### Current Group C–E verification (2026-09-16)
+
+- Tournament route suite (independent): **1 file, 61/61 PASS**.
+- Group D (game/match/multiplayer slice): **12 files, 116/116 PASS, 0 failed, 0 skipped**.
+- Group E (admin/leaderboard/tier/remaining slice): **10 files, 179/179 PASS, 0 failed, 0 skipped**.
+- Group C full aggregate: **not captured**; the complete tournament/load set exceeded the execution window before emitting totals. Only the independent 61/61 route result above is current evidence.
+- API aggregation pass #1: **INCOMPLETE**; pass #2: **NOT RUN**.
+
+Because a complete 76-file aggregate and repeat pass are not available, the release verdict remains **NOT PRODUCTION READY**.
+
+### Group C deterministic split evidence (2026-09-16)
+
+Manifest: **23/23 Group C files assigned exactly once; 0 duplicates; 0 missing**.
+
+- C1: **4 files, 81/81 PASS**.
+- C2: **6 files, 176/176 PASS**.
+- C3: **4 files, 42 tests; 40 passed; 2 failed**. Failures are in load/recovery fixtures (bulk wallet foreign-key setup and notification user integrity), not proven production defects.
+- C4: **9 files; exceeded the 180-second bound before emitting totals**.
+
+Group C is incomplete, so Groups D/E were not rerun as part of this split and no API aggregation PASS is claimed.

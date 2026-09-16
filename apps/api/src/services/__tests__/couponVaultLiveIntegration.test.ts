@@ -131,14 +131,20 @@ vi.mock("@gaming-hub/db", () => ({
         return mockStore.transactions.find((t) => t.referenceId === where.referenceId) || null;
       }),
     },
-    walletRequest: {
+      walletRequest: {
+      findUnique: vi.fn().mockImplementation(async ({ where }: any) =>
+        mockStore.walletRequests.find((r) => r.id === where?.id) || null),
       create: vi.fn().mockImplementation(async ({ data }: any) => {
         const row = { id: `req-${Date.now()}`, ...data, createdAt: new Date() };
         mockStore.walletRequests.push(row);
         return row;
       }),
       findFirst: vi.fn().mockImplementation(async ({ where }: any) => {
-        return mockStore.walletRequests.find((r) => r.note === where.note) || null;
+        const ids = where?.OR ?? [];
+        return mockStore.walletRequests.find((r) =>
+          r.kind === where?.kind && r.method === where?.method &&
+          (r.note === where?.note || ids.some((x: any) => r.note === x.note || r.externalTransferId === x.externalTransferId)),
+        ) || null;
       }),
       findMany: vi.fn().mockImplementation(async ({ where }: any) => {
         return mockStore.walletRequests.filter((r) => {
@@ -150,7 +156,10 @@ vi.mock("@gaming-hub/db", () => ({
       updateMany: vi.fn().mockImplementation(async ({ where, data }: any) => {
         let count = 0;
         for (const req of mockStore.walletRequests) {
-          if (where.note && req.note === where.note) {
+          const matchesId = !where?.id || req.id === where.id;
+          const matchesStatus = !where?.status || req.status === where.status;
+          const matchesNote = !where?.note || req.note === where.note;
+          if (matchesId && matchesStatus && matchesNote) {
             Object.assign(req, data);
             count++;
           }
@@ -171,6 +180,13 @@ vi.mock("@gaming-hub/db", () => ({
       }),
     },
     couponRedemption: {
+      findFirst: vi.fn().mockImplementation(async ({ where }: any) =>
+        mockStore.redemptions.find((r) => r.couponCodeHash === where?.couponCodeHash) || null),
+      update: vi.fn().mockImplementation(async ({ where, data }: any) => {
+        const row = mockStore.redemptions.find((r) => r.id === where?.id);
+        if (row) Object.assign(row, data);
+        return row;
+      }),
       findUnique: vi.fn().mockImplementation(async ({ where }: any) => {
         if (where?.userId_couponId) {
           return mockStore.redemptions.find(
@@ -180,6 +196,9 @@ vi.mock("@gaming-hub/db", () => ({
         return null;
       }),
       create: vi.fn().mockImplementation(async ({ data }: any) => {
+        if (mockStore.redemptions.some((r) => r.couponCodeHash === data.couponCodeHash)) {
+          const e: any = new Error("Unique constraint failed on couponCodeHash"); e.code = "P2002"; throw e;
+        }
         mockStore.redemptions.push(data);
         return data;
       }),
@@ -228,6 +247,8 @@ vi.mock("@gaming-hub/db", () => ({
             }),
           },
           walletRequest: {
+            findUnique: vi.fn().mockImplementation(async ({ where }: any) =>
+              mockStore.walletRequests.find((r) => r.id === where?.id) || null),
             create: vi.fn().mockImplementation(async ({ data }: any) => {
               const row = { id: `req-${Date.now()}`, ...data, createdAt: new Date() };
               mockStore.walletRequests.push(row);
@@ -236,12 +257,20 @@ vi.mock("@gaming-hub/db", () => ({
             updateMany: vi.fn().mockImplementation(async ({ where, data }: any) => {
               let count = 0;
               for (const req of mockStore.walletRequests) {
-                if (where.note && req.note === where.note) {
+                const matchesId = !where?.id || req.id === where.id;
+                const matchesStatus = !where?.status || req.status === where.status;
+                const matchesNote = !where?.note || req.note === where.note;
+                if (matchesId && matchesStatus && matchesNote) {
                   Object.assign(req, data);
                   count++;
                 }
               }
               return { count };
+            }),
+            findFirst: vi.fn().mockImplementation(async ({ where }: any) => {
+              const ids = where?.OR ?? [];
+              return mockStore.walletRequests.find((r) => r.kind === where?.kind && r.method === where?.method &&
+                (r.note === where?.note || ids.some((x: any) => r.note === x.note || r.externalTransferId === x.externalTransferId))) || null;
             }),
           },
           coupon: {
@@ -257,6 +286,13 @@ vi.mock("@gaming-hub/db", () => ({
             }),
           },
           couponRedemption: {
+            findFirst: vi.fn().mockImplementation(async ({ where }: any) =>
+              mockStore.redemptions.find((r) => r.couponCodeHash === where?.couponCodeHash) || null),
+            update: vi.fn().mockImplementation(async ({ where, data }: any) => {
+              const row = mockStore.redemptions.find((r) => r.id === where?.id);
+              if (row) Object.assign(row, data);
+              return row;
+            }),
             findUnique: vi.fn().mockImplementation(async ({ where }: any) => {
               if (where?.userId_couponId) {
                 return mockStore.redemptions.find(
@@ -266,6 +302,9 @@ vi.mock("@gaming-hub/db", () => ({
               return null;
             }),
             create: vi.fn().mockImplementation(async ({ data }: any) => {
+              if (mockStore.redemptions.some((r) => r.couponCodeHash === data.couponCodeHash)) {
+                const e: any = new Error("Unique constraint failed on couponCodeHash"); e.code = "P2002"; throw e;
+              }
               mockStore.redemptions.push(data);
               return data;
             }),

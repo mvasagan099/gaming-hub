@@ -18,7 +18,7 @@ export default defineConfig({
     hookTimeout: 120_000,
     // Keep each test file in its own worker/module cache so mocked external
     // integration suites cannot contaminate real PostgreSQL suites.
-    fileParallelism: true,
+    fileParallelism: false,
     pool: "forks",
     poolOptions: {
       forks: { singleFork: false, maxForks: 1, minForks: 1 },

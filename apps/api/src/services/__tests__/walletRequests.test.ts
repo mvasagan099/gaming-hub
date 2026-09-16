@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { prisma } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
 import { createTestUser } from "../../../test/helpers";
@@ -17,6 +17,18 @@ import {
   verifyWalletOtp,
 } from "../walletRequests";
 import { getWallet } from "../wallet";
+import { WalletTransactionService } from "../walletTransactionService";
+import { CouponVaultService } from "../couponVaultService";
+
+async function fundMain(userId: string, amount = 2500) {
+  await prisma.$transaction((tx) => WalletTransactionService.createCredit(tx, {
+    userId,
+    amount,
+    referenceType: "ADMIN",
+    referenceId: `test-funding-${userId}`,
+    meta: { reason: "controlled test funding" },
+  }));
+}
 
 async function expectAppError(
   promise: Promise<unknown>,
@@ -35,6 +47,7 @@ describe("walletRequests", () => {
   describe("OTP", () => {
     it("issues a code and returns it as debugCode outside production", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       const otp = await requestWithdrawalOtp(user.id);
 
       expect(otp.ok).toBe(true);
@@ -49,6 +62,7 @@ describe("walletRequests", () => {
 
     it("verifies the correct code and consumes it (single use)", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       const { debugCode } = await requestWithdrawalOtp(user.id);
 
       await verifyWalletOtp(user.id, debugCode!);
@@ -59,6 +73,7 @@ describe("walletRequests", () => {
 
     it("rejects a wrong code and increments the attempt counter", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       const { debugCode } = await requestWithdrawalOtp(user.id);
 
       await expectAppError(verifyWalletOtp(user.id, "000000"), "OTP_INVALID");
@@ -71,6 +86,7 @@ describe("walletRequests", () => {
 
     it("exhausting attempts locks the code", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       await setSetting("wallet.otpMaxAttempts", 2, null);
       await requestWithdrawalOtp(user.id);
 
@@ -81,6 +97,7 @@ describe("walletRequests", () => {
 
     it("rejects an expired code", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       await setSetting("wallet.otpExpiryMinutes", 1, null);
 
       const { debugCode } = await requestWithdrawalOtp(user.id);
@@ -97,6 +114,7 @@ describe("walletRequests", () => {
   describe("deposits", () => {
     it("creates a PENDING deposit request", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       const request = await createDepositRequest(user.id, 500, "MANUAL");
 
       expect(request.kind).toBe("DEPOSIT");
@@ -110,6 +128,7 @@ describe("walletRequests", () => {
 
     it("rejects deposits outside configured limits", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       await setSetting("wallet.minDeposit", 100, null);
       await setSetting("wallet.maxDeposit", 1000, null);
 
@@ -122,6 +141,7 @@ describe("walletRequests", () => {
   describe("withdrawals", () => {
     it("creates a PENDING withdrawal request when the OTP is valid", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       const { debugCode } = await requestWithdrawalOtp(user.id);
 
       const request = await createWithdrawalRequest(user.id, 100, debugCode!);
@@ -133,6 +153,7 @@ describe("walletRequests", () => {
 
     it("requires a valid OTP", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       await expectAppError(createWithdrawalRequest(user.id, 100, "123456"), "OTP_REQUIRED");
     });
 
@@ -144,6 +165,7 @@ describe("walletRequests", () => {
 
     it("enforces the daily withdrawal limit", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       await setSetting("wallet.dailyWithdrawalLimit", 300, null);
 
       const { debugCode } = await requestWithdrawalOtp(user.id);
@@ -159,6 +181,7 @@ describe("walletRequests", () => {
 
     it("caps concurrent pending withdrawal requests", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       await setSetting("wallet.maxPendingWithdrawalRequests", 2, null);
 
       for (let i = 0; i < 2; i++) {
@@ -176,6 +199,7 @@ describe("walletRequests", () => {
 
     it("computes a withdrawal fee when configured", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       await setSetting("wallet.withdrawalFeePercent", 5, null);
 
       const { debugCode } = await requestWithdrawalOtp(user.id);
@@ -188,7 +212,9 @@ describe("walletRequests", () => {
   describe("admin approval", () => {
     it("approving a deposit credits MAIN atomically and syncs via socket", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       const admin = await createTestUser({ role: "ADMIN" });
+      vi.spyOn(CouponVaultService, "transferToCouponWallet").mockResolvedValue({ success: true });
       const request = await createDepositRequest(user.id, 1000);
 
       const approved = await approveWalletRequest(admin.id, request.id);
@@ -212,7 +238,7 @@ describe("walletRequests", () => {
       });
       expect(notification).not.toBeNull();
 
-      const sync = socketBridge.calls.find((c) => c.userId === user.id && c.event === "wallet:updated");
+      const sync = socketBridge.calls.find((c) => c.userId === user.id && c.event === "wallet:updated" && c.payload.requestId === request.id);
       expect(sync).toBeTruthy();
       expect(sync!.payload.event).toBe("deposit-approved");
       expect(sync!.payload.balance).toBe(3500);
@@ -220,6 +246,7 @@ describe("walletRequests", () => {
 
     it("approving a withdrawal debits MAIN and the fee", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       const admin = await createTestUser({ role: "ADMIN" });
       await setSetting("wallet.withdrawalFeePercent", 5, null);
 
@@ -241,6 +268,7 @@ describe("walletRequests", () => {
 
     it("rejects when the balance no longer covers the withdrawal", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       const admin = await createTestUser({ role: "ADMIN" });
 
       const { debugCode } = await requestWithdrawalOtp(user.id);
@@ -262,6 +290,7 @@ describe("walletRequests", () => {
 
     it("approving an already-decided request fails and credits nothing twice", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       const admin = await createTestUser({ role: "ADMIN" });
       const request = await createDepositRequest(user.id, 500);
 
@@ -274,6 +303,7 @@ describe("walletRequests", () => {
 
     it("two concurrent approvals credit the balance exactly once", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       const admin = await createTestUser({ role: "ADMIN" });
       const request = await createDepositRequest(user.id, 1000);
 
@@ -294,6 +324,7 @@ describe("walletRequests", () => {
 
     it("rejecting a request leaves the balance untouched", async () => {
       const user = await createTestUser();
+      await fundMain(user.id);
       const admin = await createTestUser({ role: "ADMIN" });
       const request = await createDepositRequest(user.id, 500);
 

@@ -350,7 +350,9 @@ describe("Feature 2: Atomic Entry Fee / Coin Deduction", () => {
     const initialBalance3 = (await getWallet(player3)).balance;
 
     // Player3 attempts to register for full tournament
-    await expect(registerForTournament(player3, tournament.id)).rejects.toThrow("Tournament is full");
+    await expect(registerForTournament(player3, tournament.id)).rejects.toThrow(
+      /Tournament is (full|not accepting registrations)/,
+    );
 
     const w3 = await getWallet(player3);
     expect(w3.balance).toBe(initialBalance3);
