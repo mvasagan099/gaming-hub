@@ -339,10 +339,50 @@ Dependency audit: PASS WITH ACCEPTED DEV-ONLY EXCEPTIONS
 - Sensitive KYC, role, and tournament financial mutations require fresh MFA; read-only admin routes remain unchanged.
 - Public profile privacy now reads and writes the PostgreSQL `UserPrivacy` record; the in-memory privacy map was removed.
 
-End-to-end route tests and the full API aggregation still need to be rerun against the test database before release.
+Verification update (2026-09-16):
+- Fresh disposable PostgreSQL migration: PASS (4/4 migrations; isolated `gaming_hub_release_test`; no production database used).
+- Tournament suite: PASS (61/61).
+- API typecheck: PASS; repository typecheck/build completed successfully.
+- Full API aggregation run #1: INCOMPLETE (runner window expired before a report was emitted); run #2 not executed.
+- Real route-level withdrawal, failure-refund, timeout-reconciliation, privacy persistence, and full security reruns remain unverified in this execution.
+
+Final verification run (2026-09-16):
+- Wallet route verification: 9/9 PASS (updated legacy amount/MAIN-wallet assertions; withdrawal route cases executed).
+- Security/financial verification selection: 43/52 in the combined selection (Prisma mock/module isolation failures); the financial, IDOR, and MFA subsets pass when run without the mocked integration module.
+- Full API run #1: FAIL/INCOMPLETE (no report emitted before runner timeout); run #2: NOT RUN.
+- Tournament/tier combined rerun: INCOMPLETE (runner window expired before report emission).
+- TypeScript/build: previously PASS; not promoted to a release gate after the failed verification run.
 
 ### Final Verdict
 
 The required security suite and financial concurrency checks pass on PostgreSQL. The tournament release blocker is closed: `routes/__tests__/tournaments.test.ts` passes 61/61 with real match relationships, corrected final-round setup, and database-backed concurrent slot locking. Full API aggregation is still pending completion; no production deployment was performed.
 
 # **NOT PRODUCTION READY**
+
+### Final test-harness stabilization (2026-09-16)
+
+- MFA fixture isolation: PASS. Fixed-token sessions are deleted before each lifecycle test; no production authentication logic changed.
+- Complete isolated security verification: PASS, 52/52. A repeat run also passed 52/52 with PostgreSQL.
+- Wallet route suite: PASS, 9/9.
+- Repository typecheck: PASS.
+- Repository build: PASS (multiplayer, web, API, and socket-server workspaces).
+- Fresh disposable migration: PASS (4/4 migrations on `gaming_hub_release_test`; production database untouched).
+- Full API aggregation: NOT VERIFIED. The monolithic runner exceeded its execution window before producing a result; deterministic regrouping was started but was interrupted before valid aggregate totals were emitted.
+- Tournament, tier, game-engine, and multiplayer release totals: NOT RE-VERIFIED in this final harness-only run; previously recorded green totals remain historical evidence only.
+
+Final verdict remains **NOT PRODUCTION READY** until the complete API aggregation is run twice from clean state and all required regression totals are captured in this report.
+
+### Final release evidence run (2026-09-16)
+
+Deterministic manifest validation: **76/76 API test files assigned exactly once; 0 duplicates; 0 missing**.
+
+| Pass | Group | Files | Tests | Passed | Failed | Skipped | Result |
+|---|---|---:|---:|---:|---:|---:|---|
+| 1 | A (auth/security/KYC) | 14 | 146 | 146 | 0 | 0 | PASS |
+| 1 | B (wallet/financial/CouponVault) | 17 | not emitted before 240s bound | — | — | — | TIMEOUT |
+
+API aggregation pass #1: **INCOMPLETE** (group B timed out; groups C–E were not run).
+API aggregation pass #2: **NOT RUN**.
+Current tournament, tier-combination, game-engine, and multiplayer totals: **NOT CAPTURED in this run**.
+
+The previously verified security runs (52/52 twice), wallet routes (9/9), typecheck, build, and fresh migration remain unchanged. No production database was touched and no production deployment was performed.

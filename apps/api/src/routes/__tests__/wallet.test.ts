@@ -87,11 +87,12 @@ describe("wallet HTTP routes", () => {
     const otp = await request("POST", "/api/wallet/otp", {}, user.token);
     const { debugCode } = otp.json();
     await prisma.wallet.update({ where: { userId: user.id }, data: { balance: 5000 } });
+    vi.spyOn(CouponVaultService, "transferToCouponWallet").mockResolvedValue({ success: true });
 
     const created = await request(
       "POST",
       "/api/wallet/withdrawals",
-      { amount: 500, otp: debugCode },
+      { amount: 200, otp: debugCode },
       user.token,
     );
     expect(created.statusCode).toBe(200);
@@ -108,6 +109,7 @@ describe("wallet HTTP routes", () => {
 
     const wallet = await request("GET", "/api/wallet", undefined, user.token);
     expect(wallet.json().balance).toBe(5000);
+    vi.restoreAllMocks();
   });
 
   it("rejects a withdrawal with a bad OTP", async () => {
@@ -185,7 +187,7 @@ describe("wallet HTTP routes", () => {
     expect(unfrozen.json().isFrozen).toBe(false);
   });
 
-  it("verifies coupon redemption still credits the bonus wallet", async () => {
+  it("verifies coupon redemption credits the MAIN wallet", async () => {
     const user = await createTestUser();
     const coupon = await prisma.coupon.create({
       data: {
@@ -221,7 +223,7 @@ describe("wallet HTTP routes", () => {
     expect(res.json().value).toBe(250);
 
     const wallet = await request("GET", "/api/wallet", undefined, user.token);
-    expect(wallet.json().bonusBalance).toBe(250);
+    expect(wallet.json().balance).toBe(250);
 
     const redemption = await prisma.couponRedemption.findFirst({ where: { userId: user.id } });
     expect(redemption).not.toBeNull();

@@ -16,10 +16,12 @@ export default defineConfig({
     setupFiles: ["test/setupFile.ts"],
     testTimeout: 30_000,
     hookTimeout: 120_000,
-    fileParallelism: false,
+    // Keep each test file in its own worker/module cache so mocked external
+    // integration suites cannot contaminate real PostgreSQL suites.
+    fileParallelism: true,
     pool: "forks",
     poolOptions: {
-      forks: { singleFork: true },
+      forks: { singleFork: false, maxForks: 1, minForks: 1 },
     },
     env: {
       // Dedicated test database; created and pushed in globalSetup when DATABASE_URL is set.

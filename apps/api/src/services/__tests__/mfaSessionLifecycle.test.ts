@@ -16,6 +16,9 @@ describe("Requirement 7: MFA Session Lifecycle & Isolation", () => {
   beforeEach(async () => {
     (env as any).MFA_FRESHNESS_MINUTES = 15;
 
+    // Keep fixed test tokens from reusing a prior run's MFA stamp.
+    await prisma.loginSession.deleteMany({ where: { userId: { in: [userMfa, userOther] } } });
+
     // Create user with 2FA enabled
     await prisma.user.upsert({
       where: { id: userMfa },
