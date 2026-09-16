@@ -43,6 +43,8 @@ DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'CouponRedemption_couponCodeHash_key'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_class WHERE relname = 'CouponRedemption_couponCodeHash_key'
   ) THEN
     ALTER TABLE "CouponRedemption"
       ADD CONSTRAINT "CouponRedemption_couponCodeHash_key" UNIQUE ("couponCodeHash");
@@ -54,6 +56,8 @@ DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'CouponRedemption_externalTxId_key'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_class WHERE relname = 'CouponRedemption_externalTxId_key'
   ) THEN
     ALTER TABLE "CouponRedemption"
       ADD CONSTRAINT "CouponRedemption_externalTxId_key" UNIQUE ("externalTxId");
@@ -122,6 +126,8 @@ DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'WalletRequest_externalTransferId_key'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_class WHERE relname = 'WalletRequest_externalTransferId_key'
   ) THEN
     ALTER TABLE "WalletRequest"
       ADD CONSTRAINT "WalletRequest_externalTransferId_key" UNIQUE ("externalTransferId");
