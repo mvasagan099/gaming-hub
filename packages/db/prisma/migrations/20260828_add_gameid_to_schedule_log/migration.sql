@@ -13,15 +13,15 @@ DROP INDEX IF EXISTS "TournamentTierScheduleLog_tierId_slotHour_idx";
 
 -- 3. Add the new gameId column (NOT NULL after data is cleared above)
 ALTER TABLE "TournamentTierScheduleLog"
-  ADD COLUMN "gameId" TEXT NOT NULL DEFAULT '';
+  ADD COLUMN IF NOT EXISTS "gameId" TEXT NOT NULL DEFAULT '';
 
 -- 4. Remove the temporary default now that all rows are gone
 ALTER TABLE "TournamentTierScheduleLog"
   ALTER COLUMN "gameId" DROP DEFAULT;
 
 -- 5. Create the new unique constraint and index
-CREATE UNIQUE INDEX "TournamentTierScheduleLog_tierId_gameId_slotHour_key"
+CREATE UNIQUE INDEX IF NOT EXISTS "TournamentTierScheduleLog_tierId_gameId_slotHour_key"
   ON "TournamentTierScheduleLog"("tierId", "gameId", "slotHour");
 
-CREATE INDEX "TournamentTierScheduleLog_tierId_gameId_slotHour_idx"
+CREATE INDEX IF NOT EXISTS "TournamentTierScheduleLog_tierId_gameId_slotHour_idx"
   ON "TournamentTierScheduleLog"("tierId", "gameId", "slotHour");
