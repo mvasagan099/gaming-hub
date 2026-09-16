@@ -57,7 +57,6 @@ export function getAuthErrorDetails(error: unknown): NormalizedAuthError {
 
   // 2. Email Delivery / SMTP / Server 500 Failures
   if (
-    status === 500 ||
     normalized.includes("error sending recovery email") ||
     normalized.includes("error sending confirmation email") ||
     normalized.includes("error sending magic link email") ||
