@@ -85,6 +85,8 @@ describe("MatchManager pipeline", () => {
   it("rejects out-of-turn and spectator actions in the pipeline", async () => {
     const roomId = await setupChessRoom(framework);
     await framework.matchManager.startMatch({ roomId, startedBy: "p1" });
+    const room = framework.roomManager.getRoom(roomId)!;
+    const authoritativeBefore = JSON.stringify(room.match!.engine.serialize());
 
     const outOfTurn = await framework.matchManager.applyAction({
       roomId,
@@ -93,6 +95,7 @@ describe("MatchManager pipeline", () => {
     });
     expect(outOfTurn.ok).toBe(false);
     expect(outOfTurn.error).toContain("not your turn");
+    expect(JSON.stringify(room.match!.engine.serialize())).toBe(authoritativeBefore);
 
     await framework.roomManager.joinRoom({
       roomId,
@@ -110,6 +113,7 @@ describe("MatchManager pipeline", () => {
     // defense-in-depth, covered by unit tests).
     expect(spectator.ok).toBe(false);
     expect(spectator.error).toBe("Player not in room");
+    expect(JSON.stringify(room.match!.engine.serialize())).toBe(authoritativeBefore);
   });
 
   it("resolves a finish through the winner calculator", async () => {

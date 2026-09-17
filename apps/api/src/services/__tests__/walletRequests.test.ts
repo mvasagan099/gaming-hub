@@ -19,6 +19,7 @@ import {
 import { getWallet } from "../wallet";
 import { WalletTransactionService } from "../walletTransactionService";
 import { CouponVaultService } from "../couponVaultService";
+import * as EmailTransport from "../emailTransport";
 
 async function fundMain(userId: string, amount = 2500) {
   let remaining = amount;
@@ -56,6 +57,10 @@ describe("walletRequests", () => {
     it("issues a code and returns it as debugCode outside production", async () => {
       const user = await createTestUser();
       await fundMain(user.id);
+      const sendEmail = vi.spyOn(EmailTransport, "sendSmtpEmail").mockResolvedValue({
+        accepted: [`${user.id}@test.local`],
+        messageId: "test-withdrawal-otp",
+      });
       const otp = await requestWithdrawalOtp(user.id);
 
       expect(otp.ok).toBe(true);
@@ -66,17 +71,26 @@ describe("walletRequests", () => {
       const stored = await prisma.walletOtp.findFirst({ where: { userId: user.id } });
       expect(stored).not.toBeNull();
       expect(stored!.codeHash).not.toContain(otp.debugCode!);
+      expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+        to: `${user.id}@test.local`,
+        subject: expect.stringContaining("Withdrawal Verification Code"),
+      }));
+      sendEmail.mockRestore();
     });
 
-    it("verifies the correct code and consumes it (single use)", async () => {
+    it("atomically consumes one code across concurrent verification attempts", async () => {
       const user = await createTestUser();
       await fundMain(user.id);
       const { debugCode } = await requestWithdrawalOtp(user.id);
 
-      await verifyWalletOtp(user.id, debugCode!);
-
-      // Second use of the same code fails.
-      await expectAppError(verifyWalletOtp(user.id, debugCode!), "OTP_REQUIRED");
+      const attempts = await Promise.allSettled([
+        verifyWalletOtp(user.id, debugCode!),
+        verifyWalletOtp(user.id, debugCode!),
+      ]);
+      expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
+      const rejected = attempts.find((attempt) => attempt.status === "rejected") as PromiseRejectedResult;
+      expect(rejected.reason).toBeInstanceOf(AppError);
+      expect(["OTP_ALREADY_USED", "OTP_REQUIRED"]).toContain(rejected.reason.code);
     });
 
     it("rejects a wrong code and increments the attempt counter", async () => {

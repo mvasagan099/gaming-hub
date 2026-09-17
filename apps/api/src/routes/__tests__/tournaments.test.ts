@@ -13,6 +13,7 @@ import {
   getPlayerTournamentStatus,
 } from "../../services/tournamentEngine";
 import { TournamentMatchService } from "../../services/tournamentMatchService";
+import { hashToken } from "../../services/sessions";
 import {
   nextPowerOfTwo,
   computeByeCount,
@@ -20,11 +21,17 @@ import {
   generateFirstRoundSlots,
 } from "@gaming-hub/shared";
 
+let injectedRequestNumber = 0;
 async function injectJSON(app, method, url, payload, token) {
+  injectedRequestNumber += 1;
   return app.inject({
     method,
     url,
     payload,
+    // This suite validates tournament behavior, not the global IP limiter.
+    // Give each synthetic client request its own reserved documentation IP so
+    // 61 route tests cannot exhaust one shared in-memory IP bucket.
+    remoteAddress: `2001:db8::${injectedRequestNumber.toString(16)}`,
     headers: token ? { authorization: `Bearer ${token}` } : undefined,
   });
 }
@@ -75,10 +82,19 @@ describe("Tournament Engine", () => {
   });
 
   beforeEach(async () => {
-    // The shared test setup resets the database before every test. Recreate
-    // the admin after that reset so authenticated admin requests use a live
-    // user row while exercising the real authorization pipeline.
     admin = await createTestUser({ role: "ADMIN" });
+    await prisma.profile.update({
+      where: { userId: admin.id },
+      data: { twoFactorEnabled: true },
+    });
+    await prisma.loginSession.create({
+      data: {
+        userId: admin.id,
+        tokenHash: hashToken(admin.token),
+        expiresAt: new Date(Date.now() + 60_000),
+        mfaVerifiedAt: new Date(),
+      },
+    });
   });
 
   afterEach(async () => {

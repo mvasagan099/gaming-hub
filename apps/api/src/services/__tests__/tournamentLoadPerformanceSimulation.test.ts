@@ -48,6 +48,13 @@ describe("TOURNAMENT LOAD, CONCURRENCY & PERFORMANCE AUDIT", () => {
     return userIds;
   }
 
+  async function registerInBatches(userIds: string[], tournamentId: string, batchSize = 50) {
+    for (let offset = 0; offset < userIds.length; offset += batchSize) {
+      const batch = userIds.slice(offset, offset + batchSize);
+      await Promise.all(batch.map((userId) => registerForTournament(userId, tournamentId)));
+    }
+  }
+
   afterAll(async () => {
     // Cleanup load test fixtures
     if (createdTournamentIds.length > 0) {
@@ -197,13 +204,10 @@ describe("TOURNAMENT LOAD, CONCURRENCY & PERFORMANCE AUDIT", () => {
       });
       createdTournamentIds.push(tourn.id);
 
-      // Register first 998 in parallel batches
-      const batch1 = users.slice(0, 500);
-      const batch2 = users.slice(500, 998);
-
       const t0 = performance.now();
-      await Promise.all(batch1.map((uid) => registerForTournament(uid, tourn.id)));
-      await Promise.all(batch2.map((uid) => registerForTournament(uid, tourn.id)));
+      // Keep meaningful concurrency without exceeding the nine-connection
+      // local Prisma test pool with 500 simultaneously waiting transactions.
+      await registerInBatches(users.slice(0, 998), tourn.id);
 
       // Test exact boundary:
       // Player 999 (index 998) -> accepted

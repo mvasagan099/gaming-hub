@@ -1,4 +1,4 @@
-import { afterEach, beforeEach } from "vitest";
+import { afterEach, beforeAll } from "vitest";
 import { WebSocket } from "ws";
 import { resetTestDatabase } from "./db";
 import { resetSocketBridge } from "../src/services/socketBridge";
@@ -11,7 +11,10 @@ if (!globalThis.WebSocket) {
   (globalThis as typeof globalThis & { WebSocket: typeof WebSocket }).WebSocket = WebSocket;
 }
 
-beforeEach(async () => {
+// Each test file runs in its own isolated worker. Reset once before that file's
+// suite hooks create fixtures; resetting before every test would delete data
+// intentionally created by a suite-level beforeAll hook.
+beforeAll(async () => {
   await resetTestDatabase();
   resetSocketBridge();
   resetSettingsCache();

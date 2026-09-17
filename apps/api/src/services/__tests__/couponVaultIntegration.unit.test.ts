@@ -239,7 +239,7 @@ describe("CouponVault Integration Unit Tests", () => {
       );
     });
 
-    it("treats 409 DUPLICATE_TRANSACTION as idempotent success", async () => {
+    it("does not treat an unproven 409 DUPLICATE_TRANSACTION as success", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 409,
@@ -250,15 +250,12 @@ describe("CouponVault Integration Unit Tests", () => {
         }),
       } as Response);
 
-      const result = await CouponVaultService.transferToCouponWallet({
-        userId: "user-999",
-        userEmail: "player@example.com",
-        amount: 250,
-        transactionId: "TRF-user-999-1700000000",
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.isDuplicate).toBe(true);
+      await expect(CouponVaultService.transferToCouponWallet({
+          userId: "user-999",
+          userEmail: "player@example.com",
+          amount: 250,
+          transactionId: "TRF-user-999-1700000000",
+        })).rejects.toMatchObject({ code: "COUPON_TRANSFER_CONFLICT" });
     });
 
     it("throws TRANSFER_FAILED on 400 error from CouponVault", async () => {

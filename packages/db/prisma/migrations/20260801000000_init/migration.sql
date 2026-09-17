@@ -1,6 +1,3 @@
--- CreateSchema
-CREATE SCHEMA IF NOT EXISTS "public";
-
 -- CreateEnum
 CREATE TYPE "UserRole" AS ENUM ('USER', 'MODERATOR', 'ADMIN', 'CUSTOM');
 
@@ -2501,4 +2498,3 @@ ALTER TABLE "KycReview" ADD CONSTRAINT "KycReview_reviewerId_fkey" FOREIGN KEY (
 
 -- AddForeignKey
 ALTER TABLE "KycAuditLog" ADD CONSTRAINT "KycAuditLog_requestId_fkey" FOREIGN KEY ("requestId") REFERENCES "KycRequest"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-

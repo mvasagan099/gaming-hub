@@ -4,6 +4,7 @@ import { prisma } from "@gaming-hub/db";
 import { buildApp } from "../../app";
 import { createTestUser } from "../../../test/helpers";
 import { CouponVaultService } from "../../services/couponVaultService";
+import { hashToken } from "../../services/sessions";
 
 describe("wallet HTTP routes", () => {
   let app: FastifyInstance;
@@ -27,6 +28,23 @@ describe("wallet HTTP routes", () => {
     });
   }
 
+  async function enrollFreshAdminMfa(admin: { id: string; token: string }) {
+    await prisma.profile.update({
+      where: { userId: admin.id },
+      data: { twoFactorEnabled: true },
+    });
+    await prisma.loginSession.upsert({
+      where: { tokenHash: hashToken(admin.token) },
+      create: {
+        userId: admin.id,
+        tokenHash: hashToken(admin.token),
+        expiresAt: new Date(Date.now() + 60_000),
+        mfaVerifiedAt: new Date(),
+      },
+      update: { revokedAt: null, isCurrent: true, mfaVerifiedAt: new Date() },
+    });
+  }
+
   it("rejects unauthenticated wallet access", async () => {
     const res = await request("GET", "/api/wallet");
     expect(res.statusCode).toBe(401);
@@ -42,9 +60,8 @@ describe("wallet HTTP routes", () => {
     expect(body.debugCode).toMatch(/^\d{6}$/);
   });
 
-  it("walks a deposit request through to approval", async () => {
+  it("blocks direct deposit requests because coupons are the MAIN funding path", async () => {
     const user = await createTestUser();
-    const admin = await createTestUser({ role: "ADMIN" });
 
     const created = await request(
       "POST",
@@ -52,37 +69,14 @@ describe("wallet HTTP routes", () => {
       { amount: 1000, method: "MANUAL" },
       user.token,
     );
-    expect(created.statusCode).toBe(200);
-    const requestBody = created.json();
-    expect(requestBody.status).toBe("PENDING");
-
-    const list = await request("GET", "/api/wallet/requests", undefined, user.token);
-    expect(list.json().total).toBe(1);
-    expect(list.json().items[0].id).toBe(requestBody.id);
-
-    const approved = await request(
-      "POST",
-      `/api/admin/wallet/requests/${requestBody.id}/approve`,
-      { note: "ok" },
-      admin.token,
-    );
-    expect(approved.statusCode).toBe(200);
-
-    const wallet = await request("GET", "/api/wallet", undefined, user.token);
-    expect(wallet.json().balance).toBe(1000);
-
-    const txs = await request(
-      "GET",
-      "/api/wallet/transactions?page=1&pageSize=10",
-      undefined,
-      user.token,
-    );
-    expect(txs.json().items.some((t: { referenceType: string }) => t.referenceType === "DEPOSIT")).toBe(true);
+    expect(created.statusCode).toBe(403);
+    expect(created.json().error.code).toBe("DEPOSITS_DISABLED");
   });
 
   it("walks a withdrawal request through to rejection", async () => {
     const user = await createTestUser();
     const admin = await createTestUser({ role: "ADMIN" });
+    await enrollFreshAdminMfa(admin);
 
     const otp = await request("POST", "/api/wallet/otp", {}, user.token);
     const { debugCode } = otp.json();
@@ -144,22 +138,18 @@ describe("wallet HTTP routes", () => {
   it("prevents a user from reading another user's request", async () => {
     const a = await createTestUser();
     const b = await createTestUser();
+    const created = await prisma.walletRequest.create({
+      data: { userId: a.id, kind: "WITHDRAWAL", amount: 100 },
+    });
 
-    const created = await request(
-      "POST",
-      "/api/wallet/deposits",
-      { amount: 100 },
-      a.token,
-    );
-    const { id } = created.json();
-
-    const res = await request("GET", `/api/wallet/requests/${id}`, undefined, b.token);
+    const res = await request("GET", `/api/wallet/requests/${created.id}`, undefined, b.token);
     expect(res.statusCode).toBe(404);
   });
 
   it("freezes and unfreezes a wallet via admin", async () => {
     const user = await createTestUser();
     const admin = await createTestUser({ role: "ADMIN" });
+    await enrollFreshAdminMfa(admin);
 
     const frozen = await request(
       "POST",
@@ -172,10 +162,6 @@ describe("wallet HTTP routes", () => {
 
     const wallet = await request("GET", "/api/wallet", undefined, user.token);
     expect(wallet.json().isFrozen).toBe(true);
-
-    const deposit = await request("POST", "/api/wallet/deposits", { amount: 100 }, user.token);
-    expect(deposit.statusCode).toBe(403);
-    expect(deposit.json().error.code).toBe("WALLET_FROZEN");
 
     const unfrozen = await request(
       "POST",

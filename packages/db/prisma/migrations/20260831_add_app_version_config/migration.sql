@@ -2,7 +2,7 @@
 -- Singleton table that stores admin-controlled Android app version enforcement settings.
 -- A seed row with safe defaults is inserted on first run.
 
-CREATE TABLE IF NOT EXISTS "AppVersionConfig" (
+CREATE TABLE "AppVersionConfig" (
     "id"                      TEXT NOT NULL,
     "latestVersion"           TEXT NOT NULL DEFAULT '1.0',
     "minimumSupportedVersion" TEXT NOT NULL DEFAULT '1.0',
