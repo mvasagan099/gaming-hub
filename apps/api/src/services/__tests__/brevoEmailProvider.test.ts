@@ -366,20 +366,16 @@ describe("Brevo HTTP API Email Provider Suite", () => {
 
       await withEnv({ EMAIL_PROVIDER: "brevo" }, async () => {
         await expect(requestWithdrawalOtp(userId)).rejects.toThrow(
-          "Failed to deliver withdrawal verification code to your email. Please try again later.",
+          "Failed to deliver withdrawal verification code to your email",
         );
-      });
-
-      // Verify generated OTP was immediately invalidated (consumedAt is NOT null)
-      const otpRecord = await prisma.walletOtp.findFirst({
-        where: { userId },
-        orderBy: { createdAt: "desc" },
-      });
-
-      expect(otpRecord).not.toBeNull();
-      expect(otpRecord?.consumedAt).not.toBeNull();
-
-      // Cleanup
+        // Verify OTP record in DB was indeed invalidated (consumedAt is set)
+        const otpRecord = await prisma.walletOtp.findFirst({
+          where: { userId },
+          orderBy: { createdAt: "desc" },
+        });
+        expect(otpRecord).not.toBeNull();
+        expect(otpRecord?.consumedAt).not.toBeNull();
+      }); // Cleanup
       await prisma.walletOtp.deleteMany({ where: { userId } }).catch(() => undefined);
       await prisma.profile.deleteMany({ where: { userId } }).catch(() => undefined);
       await prisma.wallet.deleteMany({ where: { userId } }).catch(() => undefined);

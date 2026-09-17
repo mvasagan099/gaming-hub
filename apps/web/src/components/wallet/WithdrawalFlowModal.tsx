@@ -158,7 +158,14 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
       }
       setStep("otp");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to dispatch verification code";
+      let msg = "Failed to dispatch verification code";
+      if (err instanceof Error) {
+        msg = err.message;
+      }
+      const reason = (err as any)?.details?.reason;
+      if (reason && !msg.includes(reason)) {
+        msg = `${msg}: ${reason}`;
+      }
       toast.error(msg);
       setErrorMessage(msg);
       setStep("error");
@@ -182,7 +189,14 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
       setOtpErrorMessage(null);
       return true;
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to resend code";
+      let msg = "Failed to resend code";
+      if (err instanceof Error) {
+        msg = err.message;
+      }
+      const reason = (err as any)?.details?.reason;
+      if (reason && !msg.includes(reason)) {
+        msg = `${msg}: ${reason}`;
+      }
       toast.error(msg);
       setOtpErrorMessage(msg);
       return false;
