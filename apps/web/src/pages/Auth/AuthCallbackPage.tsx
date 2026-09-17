@@ -61,16 +61,30 @@ export function AuthCallbackPage() {
 
           // Always check backend session status and 2FA requirement
           try {
-            const sessionRes = await apiClient.post<{ status: string; userId?: string }>(
+            const sessionRes = await apiClient.post<{
+              status: string;
+              requiresTwoFactor?: boolean;
+              userId?: string;
+              challengeId?: string;
+            }>(
               "/auth/session",
               { token: session.access_token },
               session.access_token
             );
-            if (sessionRes.status === "2fa_required" && sessionRes.userId) {
+            if (
+              (sessionRes.requiresTwoFactor ||
+                sessionRes.status === "mfa_required" ||
+                sessionRes.status === "2fa_required") &&
+              (sessionRes.userId || sessionRes.challengeId)
+            ) {
               useAuthStore.getState().setIsMfaRequired(true);
               navigate("/login", {
                 replace: true,
-                state: { require2FA: true, userId: sessionRes.userId, next: nextParam || "/" },
+                state: {
+                  require2FA: true,
+                  userId: sessionRes.userId || sessionRes.challengeId,
+                  next: nextParam || "/",
+                },
               });
               return;
             }

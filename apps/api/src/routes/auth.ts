@@ -141,7 +141,12 @@ export async function authRoutes(app: FastifyInstance) {
           targetId: verified.sub,
           meta: { email: verified.email },
         });
-        return { status: "2fa_required", userId: verified.sub };
+        return {
+          status: "mfa_required",
+          requiresTwoFactor: true,
+          userId: verified.sub,
+          challengeId: verified.sub,
+        };
       }
       
       auditFromRequest(request, {
@@ -153,7 +158,10 @@ export async function authRoutes(app: FastifyInstance) {
         targetId: verified.sub,
         meta: { email: verified.email },
       });
-      return { status: "ok" };
+      return {
+        status: "authenticated",
+        requiresTwoFactor: false,
+      };
     },
   );
 
