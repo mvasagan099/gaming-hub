@@ -68,15 +68,16 @@ function getSmtpTransporter(): Transporter {
     // requireTLS forces the upgrade and rejects plaintext connections.
     ...(secure === false ? { requireTLS: true } : {}),
     auth: {
-      type: "LOGIN",
       user,
       pass,
     },
+    // Force IPv4 to prevent broken IPv6 routing in Docker/Render environments
+    family: 4,
     // Defensive connection timeout for Render deployments
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    socketTimeout: 15_000,
-  });
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 20_000,
+  } as any);
 
   return _transporter;
 }
