@@ -106,7 +106,7 @@ export function _resetSmtpTransporter(): void {
  * Preference order: EMAIL_FROM > SMTP_FROM > hardcoded fallback.
  */
 export function getFromAddress(): string {
-  return env.EMAIL_FROM || env.SMTP_FROM || "noreply@gaminghub.com";
+  return env.EMAIL_FROM || env.SMTP_FROM || env.SMTP_USER || "noreply@gaminghub.com";
 }
 
 // ---------------------------------------------------------------------------
