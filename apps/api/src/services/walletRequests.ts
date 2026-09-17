@@ -156,6 +156,7 @@ export async function requestWithdrawalOtp(userId: string): Promise<WalletOtpRes
           "EMAIL_DELIVERY_FAILED",
           "Failed to deliver withdrawal verification code to your email. Please try again later.",
           502,
+          { reason: mailErr?.message },
         );
       }
     }
