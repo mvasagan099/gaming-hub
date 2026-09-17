@@ -150,25 +150,8 @@ export function LoginPage() {
 
       if (is2FARequired) {
         useAuthStore.getState().setIsMfaRequired(true);
-
-        // If the user already typed their 6-digit code upfront, verify immediately in 1 shot!
-        if (twoFactorCode.trim().length === 6) {
-          try {
-            await twoFactorApi.verifySession(twoFactorCode.trim());
-            toast.success("2FA verified!");
-            await finishLoginNavigation();
-            return;
-          } catch {
-            toast.error("Invalid 2FA code. Please enter the latest code from your authenticator app.");
-            setStep("2fa");
-            setTwoFactorCode("");
-            return;
-          }
-        }
-
-        // Otherwise prompt for the 2FA code right here on the same page
         setStep("2fa");
-        toast.success("Enter your 2FA authenticator code");
+        setTwoFactorCode("");
         return;
       }
 
@@ -321,31 +304,6 @@ export function LoginPage() {
               </div>
             )}
 
-            {!useMagicLink && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400">
-                  <span className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
-                    2FA Code
-                  </span>
-                  <span className="text-[11px] font-normal text-slate-400 dark:text-slate-500">
-                    If 2FA is enabled
-                  </span>
-                </div>
-                <div className="relative">
-                  <Key className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="6-digit authenticator code (optional)"
-                    value={twoFactorCode}
-                    onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    className="w-full bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-white rounded-xl pl-10 pr-4 py-3 border border-slate-300 dark:border-slate-800 focus:outline-none focus:border-indigo-500 transition-colors tracking-[0.2em] font-mono placeholder:font-sans placeholder:tracking-normal"
-                  />
-                </div>
-              </div>
-            )}
 
             <button
               type="submit"
