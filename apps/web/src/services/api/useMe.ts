@@ -42,6 +42,7 @@ export interface MePayload {
   } | null;
   wallet: MeWallet | null;
   unreadNotifications: number;
+  mfaVerified?: boolean;
 }
 
 interface UseMeResult {

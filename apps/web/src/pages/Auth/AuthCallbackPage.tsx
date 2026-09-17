@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { supabase } from "../../services/supabase";
+import { apiClient } from "../../services/api/client";
 import { useAuthStore } from "../../store/authStore";
 import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
 import { AuthLayout } from "./AuthLayout";
+import type { Session } from "@supabase/supabase-js";
 
 /**
  * Dedicated Authentication Callback Handler (/auth/callback).
@@ -50,6 +52,45 @@ export function AuthCallbackPage() {
           location.search.includes("type=recovery") ||
           nextParam === "/reset-password";
 
+        const completeAuth = async (session: Session) => {
+          if (!mounted) return;
+          useAuthStore.getState().setIsPasswordRecovery(false);
+          useAuthStore.getState().setRecoverySession(null);
+          useAuthStore.getState().setSession(session);
+          useAuthStore.getState().setUser(session.user);
+
+          // Always check backend session status and 2FA requirement
+          try {
+            const sessionRes = await apiClient.post<{ status: string; userId?: string }>(
+              "/auth/session",
+              { token: session.access_token },
+              session.access_token
+            );
+            if (sessionRes.status === "2fa_required" && sessionRes.userId) {
+              navigate("/2fa", {
+                replace: true,
+                state: { userId: sessionRes.userId, next: nextParam || "/" },
+              });
+              return;
+            }
+          } catch (sessionErr) {
+            console.error("Backend auth session check failed", sessionErr);
+          }
+
+          // If Admin, redirect to /admin by default if nextParam was not explicitly set
+          try {
+            const meData = await apiClient.get<{ user: { role: string } }>("/auth/me");
+            if (meData?.user?.role === "ADMIN" && !nextParam) {
+              navigate("/admin", { replace: true });
+              return;
+            }
+          } catch {
+            // Ignore fallback
+          }
+
+          navigate(nextParam || "/", { replace: true });
+        };
+
         // 2. Handle PKCE Code Flow (?code=...)
         const code = searchParams.get("code");
         if (code) {
@@ -68,11 +109,7 @@ export function AuthCallbackPage() {
             }
 
             if (data.session) {
-              useAuthStore.getState().setIsPasswordRecovery(false);
-              useAuthStore.getState().setRecoverySession(null);
-              useAuthStore.getState().setSession(data.session);
-              useAuthStore.getState().setUser(data.session.user);
-              navigate(nextParam || "/", { replace: true });
+              await completeAuth(data.session);
               return;
             }
           }
@@ -96,11 +133,7 @@ export function AuthCallbackPage() {
             return;
           }
 
-          useAuthStore.getState().setIsPasswordRecovery(false);
-          useAuthStore.getState().setRecoverySession(null);
-          useAuthStore.getState().setSession(session);
-          useAuthStore.getState().setUser(session.user);
-          navigate(nextParam || "/", { replace: true });
+          await completeAuth(session);
           return;
         }
 
@@ -123,11 +156,7 @@ export function AuthCallbackPage() {
               useAuthStore.getState().setUser(null);
               navigate("/reset-password", { replace: true });
             } else {
-              useAuthStore.getState().setIsPasswordRecovery(false);
-              useAuthStore.getState().setRecoverySession(null);
-              useAuthStore.getState().setSession(newSession);
-              useAuthStore.getState().setUser(newSession.user);
-              navigate(nextParam || "/", { replace: true });
+              void completeAuth(newSession);
             }
           }
         });

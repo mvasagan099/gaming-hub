@@ -1,6 +1,8 @@
 import { prisma, Prisma } from "@gaming-hub/db";
 import type { User } from "@gaming-hub/db";
 import { AppError, type PublicProfile } from "@gaming-hub/shared";
+import { hashToken } from "./sessions";
+import { env } from "../env";
 
 const USERNAME_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -180,7 +182,7 @@ export async function getPublicProfileById(userId: string): Promise<PublicProfil
   return user ? toPublicProfile(user) : null;
 }
 
-export async function getAuthenticatedUserData(user: User) {
+export async function getAuthenticatedUserData(user: User, rawToken?: string) {
   const [profile, wallet, stats, unreadNotifications] = await Promise.all([
     prisma.profile.findUnique({
       where: { userId: user.id },
@@ -208,6 +210,19 @@ export async function getAuthenticatedUserData(user: User) {
     }).catch(() => undefined);
   }
 
+  let mfaVerified = false;
+  if (rawToken) {
+    const tokenHash = hashToken(rawToken);
+    const session = await prisma.loginSession.findUnique({
+      where: { tokenHash },
+      select: { mfaVerifiedAt: true },
+    });
+    if (session?.mfaVerifiedAt) {
+      const freshnessMs = env.MFA_FRESHNESS_MINUTES * 60 * 1000;
+      mfaVerified = (Date.now() - session.mfaVerifiedAt.getTime()) <= freshnessMs;
+    }
+  }
+
   return {
     user: {
       id: user.id,
@@ -232,6 +247,7 @@ export async function getAuthenticatedUserData(user: User) {
       rating: s.rating,
     })),
     unreadNotifications,
+    mfaVerified,
   };
 }
 

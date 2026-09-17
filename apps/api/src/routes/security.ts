@@ -7,6 +7,7 @@ import { AppError, changePasswordSchema, setup2FASchema, verify2FASchema, disabl
 import { authenticate, requireMfa } from "../plugins/authenticate";
 import { requireUser, parseSchema } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
+import { hashToken } from "../services/sessions";
 import { RateLimitService } from "../services/rateLimitService";
 import { encryptTotpSecret, loadTotpSecret, isTotpEncryptionConfigured } from "../lib/crypto";
 
@@ -387,6 +388,39 @@ export async function securityRoutes(app: FastifyInstance) {
       // Success — clear the failure counter.
       reset2FAAttempts(data.userId);
 
+      // Stamp active login session(s) so requireMfa middleware and admin actions pass
+      const authHeader = request.headers.authorization as string | undefined;
+      const rawToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+      const now = new Date();
+      const sessionTtlMs = 30 * 24 * 60 * 60 * 1000;
+
+      if (rawToken) {
+        const tokenHash = hashToken(rawToken);
+        await prisma.loginSession.upsert({
+          where: { tokenHash },
+          update: { mfaVerifiedAt: now, isCurrent: true, revokedAt: null },
+          create: {
+            userId: data.userId,
+            tokenHash,
+            mfaVerifiedAt: now,
+            isCurrent: true,
+            expiresAt: new Date(now.getTime() + sessionTtlMs),
+          },
+        });
+      }
+
+      // Also ensure all unrevoked active sessions for this user receive the fresh MFA verification
+      await prisma.loginSession.updateMany({
+        where: {
+          userId: data.userId,
+          revokedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: {
+          mfaVerifiedAt: now,
+        },
+      });
+
       await auditFromRequest(request, {
         actorType: "user",
         actorId: data.userId,
@@ -396,7 +430,7 @@ export async function securityRoutes(app: FastifyInstance) {
         targetId: data.userId,
       });
 
-      return { ok: true };
+      return { ok: true, mfaVerified: true };
     },
   );
 }

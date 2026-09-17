@@ -35,7 +35,9 @@ async function isLockedOut(email: string | null): Promise<boolean> {
 
 export async function authRoutes(app: FastifyInstance) {
   app.get("/api/auth/me", { preHandler: authenticate }, async (request) => {
-    return getAuthenticatedUserData(requireUser(request));
+    const authHeader = request.headers.authorization as string | undefined;
+    const rawToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : undefined;
+    return getAuthenticatedUserData(requireUser(request), rawToken);
   });
 
   app.post(

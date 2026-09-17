@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import { ShieldCheck, Loader2 } from "lucide-react";
 import { twoFactorApi } from "../../services/api/twoFactor";
+import { apiClient } from "../../services/api/client";
+import { useAuthStore } from "../../store/authStore";
 import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
 import { AuthLayout } from "./AuthLayout";
 
@@ -12,12 +14,20 @@ export function TwoFactorPage() {
   const [token, setToken] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const userId = (location.state as { userId?: string })?.userId;
+  const stateObj = location.state as {
+    userId?: string;
+    from?: { pathname?: string; state?: unknown };
+    next?: string;
+  } | null;
 
-  if (!userId) {
-    navigate("/login", { replace: true });
-    return null;
-  }
+  const session = useAuthStore((s) => s.session);
+  const userId = stateObj?.userId || session?.user?.id;
+
+  useEffect(() => {
+    if (!userId && !session) {
+      navigate("/login", { replace: true });
+    }
+  }, [userId, session, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,8 +38,32 @@ export function TwoFactorPage() {
 
     setSubmitting(true);
     try {
-      await twoFactorApi.verifyLogin(userId, token);
-      toast.success("Welcome back!");
+      if (session?.access_token) {
+        await twoFactorApi.verifySession(token);
+      } else if (userId) {
+        await twoFactorApi.verifyLogin(userId, token);
+      } else {
+        await twoFactorApi.verifySession(token);
+      }
+
+      toast.success("2FA verified! Welcome back.");
+
+      const target = stateObj?.next || stateObj?.from?.pathname;
+      if (target) {
+        navigate(target, { replace: true, state: stateObj?.from?.state });
+        return;
+      }
+
+      try {
+        const meData = await apiClient.get<{ user: { role: string } }>("/auth/me");
+        if (meData?.user?.role === "ADMIN") {
+          navigate("/admin", { replace: true });
+          return;
+        }
+      } catch {
+        // Fallback to default
+      }
+
       navigate("/", { replace: true });
     } catch (err) {
       logAuthError("TwoFactorVerify", err);

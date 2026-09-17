@@ -13,9 +13,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  ShieldCheck,
 } from 'lucide-react';
 import { adminApi, type AdminKycRequest } from '../../services/api/enterprise';
 import { useAuthStore } from '../../store/authStore';
+import { openMfaModal } from '../../components/auth/MfaVerificationModal';
 
 export function AdminKycPage() {
   const [items, setItems] = useState<AdminKycRequest[]>([]);
@@ -95,6 +97,15 @@ export function AdminKycPage() {
     void loadRequests();
   }, [statusFilter, page]);
 
+  useEffect(() => {
+    const handleMfaVerified = () => {
+      setError(null);
+      void loadRequests();
+    };
+    window.addEventListener('gaming-hub:mfa-verified', handleMfaVerified);
+    return () => window.removeEventListener('gaming-hub:mfa-verified', handleMfaVerified);
+  }, [statusFilter, page]);
+
   const handleReview = async (approved: boolean) => {
     if (!selectedRequest) return;
     if (!approved && !rejectionReason) {
@@ -165,9 +176,25 @@ export function AdminKycPage() {
       </div>
 
       {error && (
-        <div className="p-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-500 text-xs font-bold flex items-center gap-2">
-          <XCircle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
+        <div className="p-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-500 text-xs font-bold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <XCircle className="w-4 h-4 shrink-0" />
+            <span>
+              {error.includes('/api/auth/2fa/verify')
+                ? 'This action requires two-factor authentication (2FA) verification.'
+                : error}
+            </span>
+          </div>
+          {(error.includes('2FA') || error.includes('/api/auth/2fa/verify') || error.includes('MFA')) && (
+            <button
+              type="button"
+              onClick={() => openMfaModal('Complete 2FA verification to review and manage KYC requests.')}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-md shadow-indigo-600/30 transition-all shrink-0 flex items-center gap-2"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Verify 2FA Now
+            </button>
+          )}
         </div>
       )}
 

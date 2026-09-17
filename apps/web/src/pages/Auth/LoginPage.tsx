@@ -74,7 +74,7 @@ export function LoginPage() {
       
       if (result.status === "2fa_required" && result.userId) {
         toast.success("2FA required");
-        navigate("/2fa", { replace: true, state: { userId: result.userId } });
+        navigate("/2fa", { replace: true, state: { userId: result.userId, from } });
         return;
       }
 

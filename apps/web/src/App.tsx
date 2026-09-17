@@ -9,6 +9,7 @@ import { useSettingsStore } from './store/settingsStore';
 import { ThemeProvider, useTheme, type Theme } from './contexts/ThemeProvider';
 import { AppErrorBoundary } from './components/ErrorBoundary';
 import CommandPalette from './components/CommandPalette';
+import { MfaVerificationModal } from './components/auth/MfaVerificationModal';
 import { initCapacitorServices } from './services/native/capacitorAppService';
 import { useAppVersionStore } from './store/appVersionStore';
 import { UpdateRequiredScreen } from './components/UpdateRequiredScreen';
@@ -181,6 +182,7 @@ export function App() {
             <RouterProvider router={router} />
             <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
             <CommandPalette />
+            <MfaVerificationModal />
           </>
         )}
       </AppErrorBoundary>

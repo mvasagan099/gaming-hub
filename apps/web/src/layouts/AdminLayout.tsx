@@ -31,6 +31,7 @@ import { cn } from '../utils/cn';
 import { useTheme } from '../contexts/ThemeProvider';
 import { useMe } from '../services/api/useMe';
 import { useFeatureFlagsStore } from '../store/featureFlagsStore';
+import { openMfaModal } from '../components/auth/MfaVerificationModal';
 import { useEffect, useState } from 'react';
 
 const NAV_GROUPS = [
@@ -80,13 +81,21 @@ export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { effectiveTheme, setTheme } = useTheme();
-  const { me } = useMe();
+  const { me, reload } = useMe();
   const loadFlags = useFeatureFlagsStore((s) => s.loadFlags);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   useEffect(() => {
     void loadFlags();
   }, [loadFlags]);
+
+  useEffect(() => {
+    const onMfaVerified = () => {
+      reload();
+    };
+    window.addEventListener('gaming-hub:mfa-verified', onMfaVerified);
+    return () => window.removeEventListener('gaming-hub:mfa-verified', onMfaVerified);
+  }, [reload]);
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -288,6 +297,27 @@ export function AdminLayout() {
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
               <span>Healthy</span>
             </div>
+
+            {/* 2FA Session Status Pill / Action */}
+            {me?.mfaVerified ? (
+              <div
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold"
+                title="Two-factor authentication session is active"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                <span>2FA Active</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => openMfaModal('Authenticate your admin session with 2FA to authorize privileged actions.')}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 hover:bg-amber-500/20 text-xs font-bold transition-all shadow-sm"
+                title="Click to verify your 2FA security session"
+              >
+                <Shield className="w-3.5 h-3.5 text-amber-500" />
+                <span>Verify 2FA</span>
+              </button>
+            )}
 
             {/* Theme Toggle */}
             <button

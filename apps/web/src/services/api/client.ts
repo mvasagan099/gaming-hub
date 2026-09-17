@@ -135,6 +135,19 @@ async function request<T>(path: string, init: RequestInit, tokenOverride?: strin
       }
     }
 
+    if (
+      body.error?.code === "MFA_REQUIRED" ||
+      (response.status === 403 && (body.error?.message?.includes("2FA verification") || body.error?.message?.includes("/api/auth/2fa/verify")))
+    ) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("gaming-hub:mfa-required", {
+            detail: { message: body.error?.message ?? body.message, path },
+          })
+        );
+      }
+    }
+
     throw new ApiError(
       response.status,
       body.error?.code ?? "HTTP_ERROR",
