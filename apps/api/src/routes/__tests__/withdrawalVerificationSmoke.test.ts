@@ -79,13 +79,17 @@ describe("WITHDRAWAL VERIFICATION STAGING SMOKE TEST", () => {
         messageId: "mock-id",
       });
 
-      // 3 & 4. Start withdrawal and confirm NO email OTP is sent
+      // 3 & 4. Login-time MFA pending: wallet/otp is blocked before reaching route logic.
+      // Under the new mandatory login-time 2FA flow, `authenticate` blocks any
+      // request from a 2FA-enabled user whose session has no mfaVerifiedAt stamp.
+      // The request never reaches the wallet route's own MFA_ENABLED check.
       const otpAttempt = await request("POST", "/api/wallet/otp", {}, user.token);
-      expect(otpAttempt.statusCode).toBe(400);
-      expect(otpAttempt.json().error.code).toBe("MFA_ENABLED");
+      expect(otpAttempt.statusCode).toBe(403);
+      expect(otpAttempt.json().error.code).toBe("MFA_PENDING");
       expect(sendEmailSpy).not.toHaveBeenCalled();
 
-      // 5. Enter invalid authenticator code -> withdrawal denied
+      // 5. Enter invalid authenticator code -> /api/auth/2fa/verify is exempt from the
+      //    pending-session gate, so it proceeds and returns UNAUTHORIZED for wrong codes.
       const invalidVerifyRes = await request(
         "POST",
         "/api/auth/2fa/verify",
@@ -95,7 +99,8 @@ describe("WITHDRAWAL VERIFICATION STAGING SMOKE TEST", () => {
       expect(invalidVerifyRes.statusCode).toBe(401);
       expect(invalidVerifyRes.json().error.code).toBe("UNAUTHORIZED");
 
-      // Attempting withdrawal without fresh MFA session must be denied
+      // Attempting withdrawal without fresh MFA session must still be denied.
+      // Session still has mfaVerifiedAt=null → MFA_PENDING from authenticate.
       const deniedWithdraw = await request(
         "POST",
         "/api/wallet/withdrawals",
@@ -103,7 +108,7 @@ describe("WITHDRAWAL VERIFICATION STAGING SMOKE TEST", () => {
         user.token,
       );
       expect(deniedWithdraw.statusCode).toBe(403);
-      expect(deniedWithdraw.json().error.code).toBe("MFA_REQUIRED");
+      expect(deniedWithdraw.json().error.code).toBe("MFA_PENDING");
 
       // 6. Enter valid authenticator code -> fresh MFA session created
       const validTotpCode = await generate({

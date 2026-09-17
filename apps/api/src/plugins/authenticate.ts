@@ -134,6 +134,44 @@ const header = request.headers.authorization;
   }
 
   request.user = user;
+
+  // ─── Login-Time MFA Gate ─────────────────────────────────────────────────────
+  // If the authenticated user has 2FA enabled but the current session has not yet
+  // had mfaVerifiedAt stamped, this is a PENDING MFA LOGIN session.
+  //
+  // Such sessions must only be allowed to call POST /api/auth/2fa/verify to
+  // complete their second factor. All other routes are blocked with MFA_PENDING.
+  //
+  // This is deliberately placed AFTER setting request.user so the 2FA verify
+  // endpoint can access the user identity to perform TOTP validation.
+  const isMfaVerifyRoute =
+    request.method === "POST" &&
+    (request.url === "/api/auth/2fa/verify" || request.url?.startsWith("/api/auth/2fa/verify?"));
+
+  if (!isMfaVerifyRoute) {
+    // Check profile lazily — only when needed (non-2FA users are unaffected)
+    const profileForMfa = await prisma.profile.findUnique({
+      where: { userId: user.id },
+      select: { twoFactorEnabled: true },
+    });
+
+    if (profileForMfa?.twoFactorEnabled) {
+      // Look up the session we already fetched above (re-use tokenHash)
+      const mfaTokenHash = hashToken(token);
+      const mfaSession = await prisma.loginSession.findUnique({
+        where: { tokenHash: mfaTokenHash },
+        select: { mfaVerifiedAt: true },
+      });
+
+      if (!mfaSession?.mfaVerifiedAt) {
+        throw new AppError(
+          "MFA_PENDING",
+          "Login-time two-factor authentication is required. Please complete TOTP verification to access this resource.",
+          403,
+        );
+      }
+    }
+  }
 }
 
 export async function optionalAuthenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {

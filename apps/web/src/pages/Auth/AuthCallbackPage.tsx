@@ -56,10 +56,9 @@ export function AuthCallbackPage() {
           if (!mounted) return;
           useAuthStore.getState().setIsPasswordRecovery(false);
           useAuthStore.getState().setRecoverySession(null);
-          useAuthStore.getState().setSession(session);
-          useAuthStore.getState().setUser(session.user);
 
-          // Always check backend session status and 2FA requirement
+          // Always check backend session status and 2FA requirement BEFORE
+          // promoting the session. If 2FA is required, park in pendingMfaSession.
           try {
             const sessionRes = await apiClient.post<{
               status: string;
@@ -74,10 +73,11 @@ export function AuthCallbackPage() {
             if (
               (sessionRes.requiresTwoFactor ||
                 sessionRes.status === "mfa_required" ||
-                sessionRes.status === "2fa_required") &&
-              (sessionRes.userId || sessionRes.challengeId)
+                sessionRes.status === "2fa_required")
             ) {
+              // Park the Supabase session — do NOT promote to authStore.session
               useAuthStore.getState().setIsMfaRequired(true);
+              useAuthStore.getState().setPendingMfaSession(session);
               navigate("/login", {
                 replace: true,
                 state: {
@@ -92,7 +92,11 @@ export function AuthCallbackPage() {
             console.error("Backend auth session check failed", sessionErr);
           }
 
+          // No 2FA required — promote session fully
           useAuthStore.getState().setIsMfaRequired(false);
+          useAuthStore.getState().setPendingMfaSession(null);
+          useAuthStore.getState().setSession(session);
+          useAuthStore.getState().setUser(session.user);
 
           // If Admin, redirect to /admin by default if nextParam was not explicitly set
           try {

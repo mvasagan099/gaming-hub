@@ -138,6 +138,13 @@ export function App() {
           setSession(null);
           setUser(null);
           setLoading(false);
+        } else if (useAuthStore.getState().isMfaRequired) {
+          // Login-time 2FA is pending: hold the raw Supabase session in
+          // pendingMfaSession WITHOUT promoting it to session. This prevents
+          // PublicOnlyRoute from seeing a live session and redirecting to /.
+          // LoginPage will call setSession(pendingMfaSession) only after TOTP succeeds.
+          useAuthStore.getState().setPendingMfaSession(session);
+          setLoading(false);
         } else {
           setIsPasswordRecovery(false);
           setRecoverySession(null);

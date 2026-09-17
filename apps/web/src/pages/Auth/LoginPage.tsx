@@ -38,50 +38,50 @@ export function LoginPage() {
 
   const isSessionRevoked = new URLSearchParams(location.search).get("reason") === "session_revoked";
 
-  // Form credentials state (Step 1)
+  // Step 1: Credentials
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [useMagicLink, setUseMagicLink] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Authentication Flow step: "credentials" or "2fa"
+  // Login flow step
   const [step, setStep] = useState<"credentials" | "2fa">(
     locationState?.require2FA ? "2fa" : "credentials"
   );
-  const [pendingUserId, setPendingUserId] = useState<string | undefined>(locationState?.userId);
 
-  // 6-digit OTP state (Step 2)
+  // Step 2: OTP digits
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [mfaError, setMfaError] = useState("");
   const [shouldShake, setShouldShake] = useState(false);
 
   const maintenanceEnabled = settings?.general?.maintenanceEnabled ?? false;
   const maintenanceMessage = settings?.general?.maintenanceMessage ?? "";
 
-  // If redirected with require2FA, switch immediately to 2FA challenge
+  // If redirected here with require2FA (e.g. from ProtectedRoute or magic link)
   useEffect(() => {
     if (locationState?.require2FA) {
       setStep("2fa");
       useAuthStore.getState().setIsMfaRequired(true);
-      if (locationState.userId) {
-        setPendingUserId(locationState.userId);
-      }
     }
   }, [locationState]);
 
-  // Auto-focus first digit input when entering Step 2
+  // Auto-focus first OTP box when Step 2 appears
   useEffect(() => {
     if (step === "2fa") {
-      const timer = setTimeout(() => {
-        inputRefs.current[0]?.focus();
-      }, 150);
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => inputRefs.current[0]?.focus(), 150);
+      return () => clearTimeout(t);
     }
   }, [step]);
 
-  const finishLoginNavigation = async () => {
+  // Navigate after fully completing login
+  const finishLoginNavigation = async (session: import("@supabase/supabase-js").Session) => {
+    // Promote pending session to live authenticated session
+    useAuthStore.getState().setSession(session);
+    useAuthStore.getState().setUser(session.user);
+    useAuthStore.getState().setPendingMfaSession(null);
     useAuthStore.getState().setIsMfaRequired(false);
+
     const target = locationState?.next || from?.pathname;
     if (target) {
       navigate(target, { replace: true, state: from?.state });
@@ -96,16 +96,16 @@ export function LoginPage() {
         return;
       }
     } catch {
-      // Fallback to default
+      // Fallback
     }
 
     toast.success("Welcome back!");
     navigate("/", { replace: true });
   };
 
-  // 6-Digit OTP Handlers
+  // ── OTP Box Handlers ──────────────────────────────────────────────────────
   const handleDigitChange = (index: number, val: string) => {
-    setErrorMessage("");
+    setMfaError("");
     const clean = val.replace(/\D/g, "");
     if (!clean) {
       const next = [...digits];
@@ -113,16 +113,11 @@ export function LoginPage() {
       setDigits(next);
       return;
     }
-
     const char = clean[clean.length - 1];
     const next = [...digits];
     next[index] = char;
     setDigits(next);
-
-    // Auto advance to next input box
-    if (index < 5 && char) {
-      inputRefs.current[index + 1]?.focus();
-    }
+    if (index < 5) inputRefs.current[index + 1]?.focus();
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -144,55 +139,50 @@ export function LoginPage() {
     } else if (e.key === "Enter") {
       e.preventDefault();
       const code = digits.join("");
-      if (code.length === 6 && !submitting) {
-        handleVerify2FACode(code);
-      }
+      if (code.length === 6 && !submitting) handleVerifyTotp(code);
     }
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    setErrorMessage("");
-    const pasteData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    if (!pasteData) return;
-
+    setMfaError("");
+    const paste = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!paste) return;
     const next = [...digits];
-    for (let i = 0; i < 6; i++) {
-      next[i] = pasteData[i] || "";
-    }
+    for (let i = 0; i < 6; i++) next[i] = paste[i] || "";
     setDigits(next);
-
-    const focusIndex = Math.min(pasteData.length, 5);
-    inputRefs.current[focusIndex]?.focus();
+    inputRefs.current[Math.min(paste.length, 5)]?.focus();
   };
 
-  const handleVerify2FACode = async (codeOverride?: string) => {
-    const fullCode = (codeOverride ?? digits.join("")).trim();
-    if (fullCode.length !== 6) {
-      setErrorMessage("Please enter all 6 digits of your authenticator code.");
+  // ── Step 2: Verify TOTP ───────────────────────────────────────────────────
+  const handleVerifyTotp = async (codeOverride?: string) => {
+    const code = (codeOverride ?? digits.join("")).trim();
+    if (code.length !== 6) {
+      setMfaError("Please enter all 6 digits.");
       setShouldShake(true);
       setTimeout(() => setShouldShake(false), 500);
       return;
     }
 
+    // We need the pending session's access_token to authenticate the TOTP request
+    const pendingSession = useAuthStore.getState().pendingMfaSession;
+    const bearerToken = pendingSession?.access_token;
+
+    if (!bearerToken) {
+      toast.error("Session expired. Please log in again.");
+      handleBackToLogin();
+      return;
+    }
+
     setSubmitting(true);
-    setErrorMessage("");
-
+    setMfaError("");
     try {
-      const session = useAuthStore.getState().session;
-      if (session?.access_token) {
-        await twoFactorApi.verifySession(fullCode);
-      } else if (pendingUserId) {
-        await twoFactorApi.verifyLogin(pendingUserId, fullCode);
-      } else {
-        await twoFactorApi.verifySession(fullCode);
-      }
-
+      await twoFactorApi.verifyLoginTimeTotp(code, bearerToken);
       toast.success("2FA verified!");
-      await finishLoginNavigation();
+      await finishLoginNavigation(pendingSession);
     } catch (err) {
-      logAuthError("Login2FAVerify", err);
-      setErrorMessage("Invalid authentication code. Please try again.");
+      logAuthError("LoginTimeTotpVerify", err);
+      setMfaError("Invalid authentication code. Please try again.");
       setShouldShake(true);
       setTimeout(() => setShouldShake(false), 500);
       setDigits(["", "", "", "", "", ""]);
@@ -202,32 +192,28 @@ export function LoginPage() {
     }
   };
 
+  // ── Back to login: cancel pending session ─────────────────────────────────
   const handleBackToLogin = async () => {
     setSubmitting(true);
     try {
-      await useAuthStore.getState().signOut();
+      await supabase.auth.signOut();
     } catch {
-      // Ignore network errors on sign out
+      // ignore
     } finally {
+      useAuthStore.getState().setPendingMfaSession(null);
       useAuthStore.getState().setIsMfaRequired(false);
       setStep("credentials");
       setDigits(["", "", "", "", "", ""]);
-      setErrorMessage("");
+      setMfaError("");
       setSubmitting(false);
     }
   };
 
-  // Step 1: Initial Login Submit (Email + Password)
+  // ── Step 1: Submit email + password ───────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) {
-      toast.error("Enter your email");
-      return;
-    }
-    if (!useMagicLink && !password) {
-      toast.error("Enter your password");
-      return;
-    }
+    if (!email) { toast.error("Enter your email"); return; }
+    if (!useMagicLink && !password) { toast.error("Enter your password"); return; }
 
     setSubmitting(true);
     try {
@@ -245,11 +231,19 @@ export function LoginPage() {
         return;
       }
 
+      // ── Flag MFA as required BEFORE signInWithPassword so that the
+      //    Supabase onAuthStateChange SIGNED_IN handler in App.tsx can detect
+      //    it and park the session in pendingMfaSession instead of session.
+      //    We flip it back to false if backend says no 2FA required.
+      useAuthStore.getState().setIsMfaRequired(true);
+
       const { data: signInData, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
+
       if (error) {
+        useAuthStore.getState().setIsMfaRequired(false);
         logAuthError("LoginPassword", error);
         toast.error(getAuthErrorMessage(error));
         if (
@@ -261,15 +255,17 @@ export function LoginPage() {
         return;
       }
 
-      const session = signInData?.session ?? (await supabase.auth.getSession()).data.session;
-      if (!session) {
-        await finishLoginNavigation();
+      const supabaseSession =
+        signInData?.session ?? (await supabase.auth.getSession()).data.session;
+
+      if (!supabaseSession) {
+        useAuthStore.getState().setIsMfaRequired(false);
+        await finishLoginNavigation(supabaseSession!);
         return;
       }
 
+      // Check backend session — it tells us authoritatively if 2FA is required
       let requiresTwoFactor = false;
-      let returnedUserId: string | undefined;
-
       try {
         const result = await apiClient.post<{
           status: string;
@@ -278,34 +274,38 @@ export function LoginPage() {
           challengeId?: string;
         }>(
           "/auth/session",
-          { token: session.access_token },
-          session.access_token
+          { token: supabaseSession.access_token },
+          supabaseSession.access_token
         );
 
-        if (
-          result.requiresTwoFactor ||
+        requiresTwoFactor =
+          result.requiresTwoFactor === true ||
           result.status === "mfa_required" ||
-          result.status === "2fa_required"
-        ) {
-          requiresTwoFactor = true;
-          returnedUserId = result.userId || result.challengeId;
-        }
+          result.status === "2fa_required";
       } catch (sessionErr) {
-        console.error("Backend auth session check failed", sessionErr);
+        console.error("Backend session check failed", sessionErr);
       }
 
       if (requiresTwoFactor) {
+        // isMfaRequired was already set true above; App.tsx already stored
+        // the session in pendingMfaSession via the SIGNED_IN handler.
+        // If it hasn't fired yet (race), set it explicitly here too.
         useAuthStore.getState().setIsMfaRequired(true);
-        setPendingUserId(returnedUserId || session.user?.id);
+        if (!useAuthStore.getState().pendingMfaSession) {
+          useAuthStore.getState().setPendingMfaSession(supabaseSession);
+        }
         setStep("2fa");
         setDigits(["", "", "", "", "", ""]);
-        setErrorMessage("");
+        setMfaError("");
         return;
       }
 
+      // No 2FA required — complete login normally
       useAuthStore.getState().setIsMfaRequired(false);
-      await finishLoginNavigation();
+      useAuthStore.getState().setPendingMfaSession(null);
+      await finishLoginNavigation(supabaseSession);
     } catch (err) {
+      useAuthStore.getState().setIsMfaRequired(false);
       logAuthError("Login", err);
       toast.error(getAuthErrorMessage(err));
       if (err instanceof Error && /invalid login credentials/i.test(err.message)) {
@@ -316,6 +316,7 @@ export function LoginPage() {
     }
   };
 
+  // ── Maintenance Mode ──────────────────────────────────────────────────────
   if (maintenanceEnabled) {
     return (
       <AuthLayout
@@ -360,15 +361,17 @@ export function LoginPage() {
 
         <AnimatePresence mode="wait">
           {step === "2fa" ? (
-            /* ==================================================
-               STEP 2: TWO-FACTOR AUTHENTICATION CHALLENGE
-               ================================================== */
+            /* ═══════════════════════════════════════════════════════
+               STEP 2: LOGIN-TIME 2FA CHALLENGE
+               User's Supabase session is parked in pendingMfaSession.
+               Protected routes are blocked until TOTP succeeds.
+               ═══════════════════════════════════════════════════════ */
             <motion.div
               key="2fa"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.22 }}
               className="space-y-5"
             >
               <div className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-center space-y-1.5">
@@ -376,7 +379,7 @@ export function LoginPage() {
                   <ShieldCheck className="w-5 h-5" />
                 </div>
                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Two-Factor Authentication is active for this account.
+                  Two-Factor Authentication is enabled for this account.
                 </p>
                 {email && (
                   <p className="text-[11px] font-mono text-indigo-500 dark:text-indigo-400 font-bold truncate">
@@ -385,7 +388,7 @@ export function LoginPage() {
                 )}
               </div>
 
-              {/* 6 Individual Digit OTP Boxes with Shake Animation */}
+              {/* 6-box OTP grid */}
               <div className="space-y-2">
                 <motion.div
                   className="flex items-center justify-center gap-2 sm:gap-2.5 py-1"
@@ -395,9 +398,7 @@ export function LoginPage() {
                   {digits.map((digit, i) => (
                     <input
                       key={i}
-                      ref={(el) => {
-                        inputRefs.current[i] = el;
-                      }}
+                      ref={(el) => { inputRefs.current[i] = el; }}
                       type="text"
                       inputMode="numeric"
                       pattern="[0-9]*"
@@ -415,23 +416,23 @@ export function LoginPage() {
                         digit
                           ? "border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
                           : "border-slate-300 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-700",
-                        errorMessage && "border-rose-500/80 bg-rose-500/10 text-rose-500"
+                        mfaError && "border-rose-500/80 bg-rose-500/10 text-rose-500"
                       )}
                     />
                   ))}
                 </motion.div>
 
-                {errorMessage && (
+                {mfaError && (
                   <div className="flex items-center gap-1.5 text-rose-500 text-xs font-semibold justify-center pt-1 animate-in fade-in duration-150">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>{errorMessage}</span>
+                    <span>{mfaError}</span>
                   </div>
                 )}
               </div>
 
               <button
                 type="button"
-                onClick={() => handleVerify2FACode()}
+                onClick={() => handleVerifyTotp()}
                 disabled={submitting || digits.join("").length !== 6}
                 className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
@@ -454,15 +455,15 @@ export function LoginPage() {
               </button>
             </motion.div>
           ) : (
-            /* ==================================================
-               STEP 1: INITIAL LOGIN FORM (EMAIL + PASSWORD ONLY)
-               ================================================== */
+            /* ═══════════════════════════════════════════════════════
+               STEP 1: EMAIL + PASSWORD (no 2FA field visible)
+               ═══════════════════════════════════════════════════════ */
             <motion.div
               key="credentials"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.22 }}
             >
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="relative">
