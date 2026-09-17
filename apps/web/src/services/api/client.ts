@@ -39,6 +39,43 @@ export class ApiError extends Error {
   }
 }
 
+function hasHeader(headers: HeadersInit | undefined, name: string): boolean {
+  if (!headers) return false;
+  if (headers instanceof Headers) {
+    return headers.has(name);
+  }
+  if (Array.isArray(headers)) {
+    return headers.some(([k]) => k.toLowerCase() === name.toLowerCase());
+  }
+  return Object.keys(headers).some((k) => k.toLowerCase() === name.toLowerCase());
+}
+
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const { supabase } = await import("../supabase");
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error || !data?.session?.access_token) {
+        useAuthStore.getState().signOut().catch(() => {});
+        return null;
+      }
+      useAuthStore.getState().setSession(data.session);
+      return data.session.access_token;
+    } catch {
+      useAuthStore.getState().signOut().catch(() => {});
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 async function request<T>(path: string, init: RequestInit, tokenOverride?: string): Promise<T> {
   const token = tokenOverride ?? useAuthStore.getState().session?.access_token;
   const headers = new Headers(init.headers);
@@ -72,11 +109,29 @@ async function request<T>(path: string, init: RequestInit, tokenOverride?: strin
     }
     if (response.status === 401) {
       const code = body.error?.code;
-      if (code === "SESSION_REVOKED" || (body.error?.message && /session has been revoked|terminated because your account/i.test(body.error.message))) {
+      if (
+        code === "SESSION_REVOKED" ||
+        (body.error?.message && /session has been revoked|terminated because your account/i.test(body.error.message))
+      ) {
         useAuthStore.getState().signOut().catch(() => {});
         if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
           window.location.href = "/login?reason=session_revoked";
         }
+      } else if (!hasHeader(init.headers, "X-Retried-Auth")) {
+        // Attempt automatic refresh of expired access token via Supabase
+        const freshToken = await refreshAccessToken();
+        if (freshToken) {
+          const retryHeaders = new Headers(init.headers);
+          retryHeaders.set("X-Retried-Auth", "1");
+          retryHeaders.set("Authorization", `Bearer ${freshToken}`);
+          return request<T>(path, { ...init, headers: retryHeaders }, freshToken);
+        } else {
+          // Refresh failed or token invalid -> clear stale session
+          useAuthStore.getState().signOut().catch(() => {});
+        }
+      } else {
+        // Already retried once and still 401 -> clear stale session
+        useAuthStore.getState().signOut().catch(() => {});
       }
     }
 

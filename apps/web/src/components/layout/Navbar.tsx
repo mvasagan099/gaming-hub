@@ -6,7 +6,7 @@ import {
   Moon,
   LogOut,
   Gamepad2,
-  Loader2,
+  RotateCcw,
   ShieldCheck,
   Menu,
   User,
@@ -34,7 +34,7 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
   const settings = useSettingsStore((s) => s.settings);
-  const { me, loading } = useMe();
+  const { me, loading, reload } = useMe();
   const walletBalance = useWalletStore((s) => s.balance);
   const isWalletLoaded = useWalletStore((s) => !s.isStale || s.lastUpdated !== null);
 
@@ -119,7 +119,7 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 text-slate-500 dark:text-slate-300">
-          {session && (
+          {session && me && (
             <button
               onClick={() => navigate('/notifications')}
               className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
@@ -127,7 +127,7 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
               title="Notifications"
             >
               <Bell size={20} />
-              {me && me.unreadNotifications > 0 && (
+              {me.unreadNotifications > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
                   {me.unreadNotifications > 9 ? "9+" : me.unreadNotifications}
                 </span>
@@ -135,14 +135,26 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
             </button>
           )}
 
-          {!session ? (
-            <Link
-              to="/login"
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-xs font-bold transition-colors"
-            >
-              <UserCircle2 size={18} />
-              Sign in
-            </Link>
+          {!session || (!loading && !me) ? (
+            <div className="flex items-center gap-1.5">
+              {session && !me && (
+                <button
+                  type="button"
+                  onClick={() => reload()}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  title="Retry loading account"
+                >
+                  <RotateCcw size={16} />
+                </button>
+              )}
+              <Link
+                to="/login"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-xs font-bold transition-colors"
+              >
+                <UserCircle2 size={18} />
+                Sign in
+              </Link>
+            </div>
           ) : loading ? (
             <div className="flex items-center gap-2">
               <Skeleton className="w-16 h-6" />
@@ -333,9 +345,7 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
                 )}
               </div>
             </div>
-          ) : (
-            <Loader2 className="w-5 h-5 animate-spin text-accent-400" />
-          )}
+          ) : null}
         </div>
       </div>
 

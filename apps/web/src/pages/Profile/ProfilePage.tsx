@@ -297,12 +297,37 @@ export const ProfilePage: React.FC = () => {
     navigate("/");
   };
 
-  if (loading || !me) {
+  if (loading) {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center space-y-4">
           <SkeletonCircle className="w-24 h-24 mx-auto" />
           <SkeletonText className="w-40 mx-auto h-6" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!me) {
+    return (
+      <div className="max-w-md mx-auto my-12 p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-4">
+        <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Unable to load profile</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">Please retry or sign in again.</p>
+        <div className="flex justify-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => reload()}
+            className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold hover:bg-slate-200 transition-colors"
+          >
+            Retry
+          </button>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="px-4 py-2 rounded-xl bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 transition-colors"
+          >
+            Sign Out
+          </button>
         </div>
       </div>
     );

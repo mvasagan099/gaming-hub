@@ -66,20 +66,42 @@ export function useMe(): UseMeResult {
     setLoading(true);
     setError(null);
 
-    apiClient
-      .get<MePayload>("/auth/me")
-      .then((payload) => {
+    const fetchMe = async (attempt = 0) => {
+      try {
+        const payload = await apiClient.get<MePayload>("/auth/me");
         if (cancelled) return;
         setMe(payload);
-      })
-      .catch((err: unknown) => {
+        setError(null);
+        setLoading(false);
+      } catch (err: unknown) {
         if (cancelled) return;
+
+        // If 401, session is invalid or revoked and refresh failed -> sign out & reset state
+        if (err instanceof ApiError && err.status === 401) {
+          useAuthStore.getState().signOut().catch(() => {});
+          setMe(null);
+          setError(err.message);
+          setLoading(false);
+          return;
+        }
+
+        // If 502/503/504 or network error (Render cold start), retry once after 2 seconds
+        if (attempt < 1 && (err instanceof ApiError ? err.status >= 500 : true)) {
+          setTimeout(() => {
+            if (!cancelled) {
+              void fetchMe(attempt + 1);
+            }
+          }, 2000);
+          return;
+        }
+
         if (err instanceof ApiError) setError(err.message);
         else setError("Failed to load your profile");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+        setLoading(false);
+      }
+    };
+
+    void fetchMe();
 
     return () => {
       cancelled = true;

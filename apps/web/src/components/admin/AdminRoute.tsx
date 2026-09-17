@@ -11,12 +11,16 @@ export function AdminRoute() {
     return <Navigate to="/login" replace />;
   }
 
-  if (loading || (!me && session)) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#090d16]">
         <div className="w-8 h-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
       </div>
     );
+  }
+
+  if (!me) {
+    return <Navigate to="/login" replace />;
   }
 
   const isAdmin =
