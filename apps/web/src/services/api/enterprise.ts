@@ -791,8 +791,8 @@ export const securityApi = {
       newPassword,
       confirmPassword: newPassword,
     }),
-  setup2FA: () =>
-    apiClient.post<{ ok: boolean; secret: string; authUrl: string }>('/security/2fa/setup', { enable: true }),
+  setup2FA: (params?: { enable?: boolean; reset?: boolean }) =>
+    apiClient.post<{ ok: boolean; secret: string; authUrl: string }>('/security/2fa/setup', { enable: true, ...params }),
   verify2FA: (token: string) =>
     apiClient.post<{ ok: boolean; enabled: boolean }>('/security/2fa/verify', { token }),
   disable2FA: (token: string) =>

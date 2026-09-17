@@ -132,6 +132,7 @@ export const ProfilePage: React.FC = () => {
       setState(me.profile?.state || "");
       setPostcode(me.profile?.postcode || "");
       setCountry(me.profile?.country || "IN");
+      setTwoFactorEnabled(Boolean(me.profile?.twoFactorEnabled));
     }
   }, [me]);
 
@@ -269,6 +270,22 @@ export const ProfilePage: React.FC = () => {
       } finally {
         setSettingUp2FA(false);
       }
+    }
+  };
+
+  const handleReset2FA = async () => {
+    setSettingUp2FA(true);
+    try {
+      const res = await securityApi.setup2FA({ reset: true });
+      setTwoFactorSecret(res.secret);
+      setTwoFactorAuthUrl(res.authUrl);
+      setTotpToken("");
+      setModalMode("setup");
+      setShow2FAModal(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to reset 2FA");
+    } finally {
+      setSettingUp2FA(false);
     }
   };
 
@@ -793,23 +810,59 @@ export const ProfilePage: React.FC = () => {
                   Two-Factor Auth
                 </div>
 
-                {/* Warning Amber Alert Banner */}
-                <div className="rounded-xl sm:rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 sm:p-5 flex items-start gap-3">
-                  <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                  <p className="text-xs font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
-                    Protect your account and wallet by enabling 2FA.
-                  </p>
-                </div>
+                {twoFactorEnabled ? (
+                  <div className="rounded-xl sm:rounded-2xl bg-emerald-500/10 border border-emerald-500/30 p-4 sm:p-5 flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 leading-relaxed">
+                        Two-Factor Authentication is active and protecting your account.
+                      </p>
+                      <p className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 mt-1">
+                        Wallet withdrawals and sensitive actions require your authenticator code.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl sm:rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 sm:p-5 flex items-start gap-3">
+                    <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-xs font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
+                      Protect your account and wallet by enabling Two-Factor Authentication.
+                    </p>
+                  </div>
+                )}
               </div>
 
-              <button
-                onClick={handleToggle2FA}
-                disabled={settingUp2FA}
-                className="w-full sm:w-auto px-6 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-[#1b367d] hover:bg-[#152a62] disabled:opacity-50 text-white font-black text-xs sm:text-sm uppercase tracking-wide transition-all shadow-md hover:scale-[1.02] duration-200 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Smartphone className="w-4 h-4" />
-                {settingUp2FA ? "Setting up..." : twoFactorEnabled ? "Disable 2FA" : "Enable 2FA"}
-              </button>
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                {twoFactorEnabled ? (
+                  <>
+                    <button
+                      onClick={handleToggle2FA}
+                      disabled={settingUp2FA}
+                      className="px-5 py-3 rounded-xl sm:rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 font-black text-xs sm:text-sm uppercase tracking-wide transition-all shadow-sm hover:scale-[1.02] duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      <ShieldAlert className="w-4 h-4" />
+                      Disable 2FA
+                    </button>
+                    <button
+                      onClick={handleReset2FA}
+                      disabled={settingUp2FA}
+                      className="px-5 py-3 rounded-xl sm:rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-bold text-xs sm:text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      <Smartphone className="w-4 h-4 text-indigo-500" />
+                      {settingUp2FA ? "Generating..." : "Reconfigure / New QR"}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={handleToggle2FA}
+                    disabled={settingUp2FA}
+                    className="w-full sm:w-auto px-6 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black text-xs sm:text-sm uppercase tracking-wide transition-all shadow-md hover:scale-[1.02] duration-200 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    {settingUp2FA ? "Setting up..." : "Enable 2FA"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

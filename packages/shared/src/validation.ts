@@ -97,8 +97,9 @@ export const changePasswordSchema = z.object({
 });
 
 export const setup2FASchema = z.object({
-  enable: z.boolean(),
+  enable: z.boolean().optional().default(true),
   currentPassword: z.string().optional(),
+  reset: z.boolean().optional(),
 });
 
 export const verify2FASchema = z.object({

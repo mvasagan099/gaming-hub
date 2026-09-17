@@ -169,7 +169,7 @@ export async function securityRoutes(app: FastifyInstance) {
       throw new AppError("NOT_FOUND", "Profile not found", 404);
     }
     
-    if (profile.twoFactorEnabled) {
+    if (profile.twoFactorEnabled && !data.reset) {
       throw new AppError("VALIDATION_ERROR", "2FA is already enabled", 400);
     }
 
@@ -282,7 +282,7 @@ export async function securityRoutes(app: FastifyInstance) {
     return { ok: true, enabled: true };
   });
   
-  app.post("/api/security/2fa/disable", { preHandler: [authenticate, requireMfa] }, async (request) => {
+  app.post("/api/security/2fa/disable", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
     const data = parseSchema(disable2FASchema, request.body);
     
