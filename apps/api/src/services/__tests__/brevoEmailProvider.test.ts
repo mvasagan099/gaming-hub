@@ -138,6 +138,19 @@ describe("Brevo HTTP API Email Provider Suite", () => {
       });
     });
 
+    it("throws a clean error when BREVO_API_KEY is an SMTP key (starts with xsmtpsib-)", async () => {
+      await withEnv({ BREVO_API_KEY: "xsmtpsib-fake-smtp-password-12345" }, async () => {
+        await expect(
+          sendBrevoEmail({
+            to: "player@example.com",
+            subject: "Test",
+            text: "Test",
+            html: "<p>Test</p>",
+          }),
+        ).rejects.toThrow("BREVO_API_KEY is an SMTP key (starts with 'xsmtpsib-')");
+      });
+    });
+
     it("handles Brevo API error responses safely without leaking secrets", async () => {
       const secretApiKey = "xkeysib-super-secret-key-that-must-never-leak";
 

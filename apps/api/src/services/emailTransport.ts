@@ -110,6 +110,14 @@ export async function sendBrevoEmail(options: SendEmailOptions): Promise<EmailSe
   }
   const apiKey = rawKey.trim().replace(/^['"]|['"]$/g, "");
 
+  if (apiKey.startsWith("xsmtpsib-")) {
+    throw new Error(
+      "[emailTransport] Configured BREVO_API_KEY is an SMTP key (starts with 'xsmtpsib-'). " +
+      "Brevo's REST API requires an API key (starts with 'xkeysib-'). " +
+      "In Brevo, go to 'SMTP & API' > click the 'API Keys' tab, generate a key, and update BREVO_API_KEY in Render."
+    );
+  }
+
   const sender = getBrevoSender();
   const payload = {
     sender,
