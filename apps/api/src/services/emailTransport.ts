@@ -77,8 +77,10 @@ export async function sendEmail(options: SendEmailOptions): Promise<EmailSendRes
 // ---------------------------------------------------------------------------
 
 export function getBrevoSender(): { name: string; email: string } {
-  const name = process.env.BREVO_FROM_NAME || env.BREVO_FROM_NAME || "Gaming Hub";
-  const email =
+  const name = (process.env.BREVO_FROM_NAME || env.BREVO_FROM_NAME || "Gaming Hub")
+    .trim()
+    .replace(/^['"]|['"]$/g, "");
+  const email = (
     process.env.BREVO_FROM_EMAIL ||
     env.BREVO_FROM_EMAIL ||
     process.env.EMAIL_FROM ||
@@ -87,7 +89,10 @@ export function getBrevoSender(): { name: string; email: string } {
     env.SMTP_FROM ||
     process.env.SMTP_USER ||
     env.SMTP_USER ||
-    "noreply@gaminghub.com";
+    "noreply@gaminghub.com"
+  )
+    .trim()
+    .replace(/^['"]|['"]$/g, "");
   return { name, email };
 }
 
@@ -99,10 +104,11 @@ export function getBrevoSender(): { name: string; email: string } {
  * Strict credential sanitization ensures BREVO_API_KEY is never leaked.
  */
 export async function sendBrevoEmail(options: SendEmailOptions): Promise<EmailSendResult> {
-  const apiKey = process.env.BREVO_API_KEY || env.BREVO_API_KEY;
-  if (!apiKey) {
+  const rawKey = process.env.BREVO_API_KEY || env.BREVO_API_KEY;
+  if (!rawKey) {
     throw new Error("[emailTransport] BREVO_API_KEY is not configured");
   }
+  const apiKey = rawKey.trim().replace(/^['"]|['"]$/g, "");
 
   const sender = getBrevoSender();
   const payload = {
@@ -137,7 +143,11 @@ export async function sendBrevoEmail(options: SendEmailOptions): Promise<EmailSe
       const code = errJson.code || "UNKNOWN";
       const rawMsg = errJson.message || response.statusText;
       const safeMsg = sanitizeErrorMessage(rawMsg, [apiKey]);
-      errorDetail = `code=${code}, message=${safeMsg}`;
+      if (response.status === 401 && /key not found/i.test(rawMsg)) {
+        errorDetail = "Invalid BREVO_API_KEY ('Key not found'). Please ensure you generated an API Key (xkeysib-...) from Brevo Dashboard > SMTP & API > API Keys, and not an SMTP password.";
+      } else {
+        errorDetail = `code=${code}, message=${safeMsg}`;
+      }
     } catch {
       errorDetail = `statusText=${response.statusText}`;
     }
