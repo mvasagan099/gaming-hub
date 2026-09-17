@@ -1,16 +1,18 @@
 # Gaming Hub Security and Release-Gate Report
 
-**Verification date:** 2026-09-16
+**Verification date:** 2026-09-17
 
-**Scope:** final staging release gate
+**Scope:** local release gate and staging deployment smoke verification
 
 **Production deployment:** not performed
 
 ## Final verdict
 
-# **PRODUCTION READY FOR STAGING**
+# **STAGING VERIFICATION BLOCKED**
 
-All required release gates passed on the final source and test set. This verdict authorizes the staging phase only.
+All local release gates passed on the final source and test set. The deployed
+Render stack cannot yet be certified as isolated staging, so it is not ready
+for production deployment review.
 
 ## Release checklist
 
@@ -158,4 +160,55 @@ Current route and service coverage proves:
 
 ## Deployment status
 
-No staging or production deployment was started. The next authorized phase is staging deployment and smoke testing.
+The verified commit was deployed to the existing Render web, API, and socket
+services. No production deployment was performed. Data-changing smoke tests
+were stopped because the existing Render resources do not provide sufficient
+evidence that they are isolated staging resources.
+
+## Staging deployment and smoke verification — 2026-09-17
+
+Deployed source: `a9ac318476781c1c62fa65d70eb286e204d8d11b`.
+
+| Check | Result | Evidence |
+|---|---:|---|
+| Frontend deployment | **PASS** | Render static site is live on the verified commit. |
+| API deployment | **PASS** | Render Docker service is live on the verified commit. |
+| Socket deployment | **PASS** | Render Docker service is live on the verified commit. |
+| Prisma startup gate | **PASS** | API deploy log reports 4 migrations found; deploy completed and readiness reports the database up. |
+| API liveness | **PASS** | `/health/live` returned HTTP 200. |
+| API readiness | **PASS** | `/health/ready` returned HTTP 200 with database `up`. |
+| Socket liveness/readiness | **PASS** | Both deployed endpoints returned HTTP 200. |
+| Frontend load | **PASS** | Home and login pages rendered; no browser warning/error logs were observed. |
+| Runtime mode | **PASS** | API `NODE_ENV` is `production`. |
+| CORS | **PASS** | Approved frontend origin receives its exact allow-origin value; an unapproved origin receives no allow-origin header. |
+| Rate limiting | **PASS** | API responses include an active 300-request/60-second rate-limit window. |
+| API security headers | **PASS** | CSP, HSTS, X-Frame-Options, nosniff, and referrer policy are present. |
+| Frontend security headers | **FAIL** | HSTS and nosniff are present; CSP, X-Frame-Options/frame-ancestors, and Permissions-Policy are absent from the Render static-site response. |
+| Frontend secret scan | **PASS** | Deployed bundle contains no database URL, service-role key, internal API key, CouponVault key, or SMTP password marker. |
+| Metrics access control | **PASS** | Anonymous `/metrics` request is rejected with HTTP 401. |
+| API and scheduler logs | **PASS** | Startup, health traffic, and tournament crash-recovery logs are visible. |
+| SMTP readiness | **FAIL** | API startup log reports SMTP connection verification failure (`ESOCKET`). |
+| Staging database isolation | **BLOCKED** | The existing database is named `gaming_hub_db_nojq`; resources are ungrouped and have generic names, with no staging designation or separate production-resource evidence. |
+| CouponVault staging isolation | **BLOCKED** | Configured host is `coupon-api-qyer.onrender.com` and has no staging/test/sandbox designation. |
+| Redis staging isolation | **BLOCKED** | Existing resource is generically named `gaming-hub-redis`; no separate staging designation is present. |
+| Signup/login/email verification/logout/password reset | **BLOCKED** | Requires an isolated staging stack and working staging-safe email delivery. |
+| MFA smoke | **BLOCKED** | Requires an isolated staging account and TOTP enrollment. |
+| Coupon redemption and duplicate protection | **BLOCKED** | Requires confirmed CouponVault staging/test credentials and an isolated staging database. |
+| Withdrawal success/failure/timeout/reconciliation | **BLOCKED** | Requires confirmed CouponVault staging/test controls, working OTP email, and an isolated staging database. |
+| Two-session multiplayer and settlement | **BLOCKED** | Requires isolated staging users and wallet data. |
+| Tournament lifecycle and refunds | **BLOCKED** | Requires an isolated staging database and staging admin account. |
+| Memory-growth observation | **BLOCKED** | Meaningful authenticated staging traffic was not generated. |
+
+### Required closure
+
+1. Create or identify explicitly isolated staging PostgreSQL, Redis, API,
+   socket, web, Supabase/auth, SMTP, and CouponVault resources.
+2. Prove that no production database, Redis, CouponVault, auth, or SMTP value is
+   linked to those services.
+3. Restore staging-safe SMTP connectivity.
+4. Add the required security headers to the Render static-site response.
+5. Rerun the blocked authenticated and financial smoke tests with dedicated
+   staging users and controlled CouponVault staging outcomes.
+
+Until those checks pass, the staging result remains **BLOCKED** and the release
+must not advance to production deployment review.
