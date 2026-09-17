@@ -91,8 +91,7 @@ export function getBrevoSender(): { name: string; email: string } {
     env.SMTP_USER ||
     "noreply@gaminghub.com"
   )
-    .trim()
-    .replace(/^['"]|['"]$/g, "");
+    .replace(/[\r\n\s\t'"]/g, "");
   return { name, email };
 }
 
@@ -108,7 +107,7 @@ export async function sendBrevoEmail(options: SendEmailOptions): Promise<EmailSe
   if (!rawKey) {
     throw new Error("[emailTransport] BREVO_API_KEY is not configured");
   }
-  const apiKey = rawKey.trim().replace(/^['"]|['"]$/g, "");
+  const apiKey = rawKey.replace(/[\r\n\s\t'"]/g, "");
 
   if (apiKey.startsWith("xsmtpsib-")) {
     throw new Error(
