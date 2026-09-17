@@ -76,8 +76,8 @@ export function useMe(): UseMeResult {
       } catch (err: unknown) {
         if (cancelled) return;
 
-        // If 401, session is invalid or revoked and refresh failed -> sign out & reset state
-        if (err instanceof ApiError && err.status === 401) {
+        // If 401 or 403, session is invalid, revoked, or unverified -> sign out & reset state
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
           useAuthStore.getState().signOut().catch(() => {});
           setMe(null);
           setError(err.message);

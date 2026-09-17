@@ -46,10 +46,21 @@ export async function verifyAccessToken(token: string): Promise<VerifiedSupabase
     throw new Error("Token is missing subject");
   }
 
+    const emailVerified =
+    payload.email_verified === true ||
+    payload.email_confirmed_at != null ||
+    payload.confirmed_at != null ||
+    (typeof payload.user_metadata === "object" &&
+      payload.user_metadata !== null &&
+      Boolean((payload.user_metadata as Record<string, unknown>).email_verified)) ||
+    (typeof payload.app_metadata === "object" &&
+      payload.app_metadata !== null &&
+      Boolean((payload.app_metadata as Record<string, unknown>).email_verified));
+
   return {
     sub: payload.sub,
     email: typeof payload.email === "string" ? payload.email : null,
-    emailVerified: payload.email_verified === true,
+    emailVerified,
     issuedAt: typeof payload.iat === "number" ? payload.iat : Date.now() / 1000,
     userMetadata:
       typeof payload.user_metadata === "object" && payload.user_metadata !== null

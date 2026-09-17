@@ -224,6 +224,5 @@ if (!parsed.success) {
 
 export const env = {
   ...parsed.data,
-  requireEmailVerification:
-    parsed.data.REQUIRE_EMAIL_VERIFICATION ?? parsed.data.NODE_ENV === "production",
+  requireEmailVerification: parsed.data.REQUIRE_EMAIL_VERIFICATION ?? false,
 };
