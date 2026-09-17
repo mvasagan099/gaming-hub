@@ -12,6 +12,7 @@ export interface CouponVaultVerifyResponse {
 export interface CouponVaultRedeemParams {
   couponId: string;
   userId: string;
+  userCountry?: string;
   walletTransactionId: string;
   ipAddress?: string;
   device?: string;
@@ -61,6 +62,9 @@ export class CouponVaultService {
   ): Promise<CouponVaultVerifyResponse> {
     const { apiUrl, apiKey } = this.getApiConfig();
     const codeUpper = couponCode.trim().toUpperCase();
+    const userCountry = (env.NODE_ENV === "test" && !process.env.COUPON_USER_COUNTRY)
+      ? undefined
+      : (process.env.COUPON_USER_COUNTRY || "IN");
 
     const verifyUrl = `${apiUrl}/coupons/verify`;
     let response: Response | undefined;
@@ -78,6 +82,7 @@ export class CouponVaultService {
           body: JSON.stringify({
             couponCode: codeUpper,
             userId,
+            ...(userCountry ? { userCountry } : {}),
             gameId: "gaming-hub",
           }),
           // First attempt: 15s. Second attempt (cold-start recovery): 25s.
@@ -146,6 +151,9 @@ export class CouponVaultService {
   static async redeemCoupon(params: CouponVaultRedeemParams): Promise<{ success: boolean }> {
     const { apiUrl, apiKey } = this.getApiConfig();
     const redeemUrl = `${apiUrl}/coupons/redeem`;
+    const userCountry = (env.NODE_ENV === "test" && !process.env.COUPON_USER_COUNTRY)
+      ? undefined
+      : (process.env.COUPON_USER_COUNTRY || "IN");
 
     let response: Response;
     try {
@@ -162,6 +170,7 @@ export class CouponVaultService {
           walletTransactionId: params.walletTransactionId,
           ipAddress: params.ipAddress || "0.0.0.0",
           device: params.device || "unknown",
+          ...(userCountry ? { userCountry } : {}),
         }),
         signal: AbortSignal.timeout(25000),
       });
