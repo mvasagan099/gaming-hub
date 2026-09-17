@@ -82,7 +82,9 @@ export const DOCUMENTS_REQUIRING_BACK_SIDE: KycDocumentType[] = [
 
 export const kycSubmitLevel1Schema = z.object({
   fullName: z.string().trim().min(2).max(100),
-  dateOfBirth: z.string().datetime(),
+  dateOfBirth: z.string().refine((val) => !isNaN(Date.parse(val)), {
+    message: "Invalid date format",
+  }),
   country: z.string().trim().length(2).toUpperCase(),
   mobileNumber: z.string().trim().min(10).max(15),
   streetAddress: z.string().trim().min(2).max(200).optional(),

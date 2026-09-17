@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, FileImage, X, Loader2, Check, Camera } from 'lucide-react';
+import { ArrowLeft, FileImage, X, Loader2, Check, Camera, Calendar, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { apiClient } from '../../services/api/client';
-import { KycDocumentType, COUNTRY_DOCUMENTS } from '@gaming-hub/shared';
+import { useMe } from '../../services/api/useMe';
+import { KycDocumentType, COUNTRY_DOCUMENTS, COUNTRIES } from '@gaming-hub/shared';
 
 async function compressImageIfNeeded(file: File, maxSizeBytes = 2 * 1024 * 1024): Promise<File> {
   if (!file.type.startsWith('image/')) {
@@ -72,8 +73,41 @@ async function compressImageIfNeeded(file: File, maxSizeBytes = 2 * 1024 * 1024)
   });
 }
 
+const CURRENT_YEAR = new Date().getFullYear();
+const MAX_BIRTH_YEAR = CURRENT_YEAR - 18;
+const YEARS = Array.from({ length: MAX_BIRTH_YEAR - 1920 + 1 }, (_, i) => MAX_BIRTH_YEAR - i);
+
+const MONTHS = [
+  { value: '01', label: '01 - Jan' },
+  { value: '02', label: '02 - Feb' },
+  { value: '03', label: '03 - Mar' },
+  { value: '04', label: '04 - Apr' },
+  { value: '05', label: '05 - May' },
+  { value: '06', label: '06 - Jun' },
+  { value: '07', label: '07 - Jul' },
+  { value: '08', label: '08 - Aug' },
+  { value: '09', label: '09 - Sep' },
+  { value: '10', label: '10 - Oct' },
+  { value: '11', label: '11 - Nov' },
+  { value: '12', label: '12 - Dec' },
+];
+
+function calculateAge(dobString: string): number | null {
+  if (!dobString || dobString.length < 10) return null;
+  const birth = new Date(dobString);
+  if (isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
+}
+
 export function KycVerifyPage() {
   const navigate = useNavigate();
+  const { me } = useMe();
   const [step, setStep] = useState(1);
 
   useEffect(() => {
@@ -103,6 +137,57 @@ export function KycVerifyPage() {
     state: '',
     postalCode: '',
   });
+
+  // Pre-fill user details from profile if available
+  useEffect(() => {
+    if (me) {
+      const fullName = me.user?.displayName || me.user?.username || '';
+      let dobStr = '';
+      if (me.profile?.dateOfBirth) {
+        dobStr = typeof me.profile.dateOfBirth === 'string'
+          ? me.profile.dateOfBirth.slice(0, 10)
+          : new Date(me.profile.dateOfBirth).toISOString().slice(0, 10);
+      }
+      setFormData((prev) => ({
+        fullName: prev.fullName || fullName,
+        dateOfBirth: prev.dateOfBirth || dobStr,
+        mobileNumber: prev.mobileNumber || me.profile?.phone || '',
+        streetAddress: prev.streetAddress || me.profile?.streetAddress || '',
+        addressLine2: prev.addressLine2 || '',
+        city: prev.city || me.profile?.city || '',
+        state: prev.state || me.profile?.state || '',
+        postalCode: prev.postalCode || me.profile?.postcode || '',
+      }));
+      if (me.profile?.country) {
+        setCountry(me.profile.country);
+      }
+    }
+  }, [me]);
+
+  const dobParts = formData.dateOfBirth ? formData.dateOfBirth.split('-') : ['', '', ''];
+  const dobYear = dobParts[0] || '';
+  const dobMonth = dobParts[1] || '';
+  const dobDay = dobParts[2] || '';
+
+  const daysInSelectedMonth = dobYear && dobMonth
+    ? new Date(Number(dobYear), Number(dobMonth), 0).getDate()
+    : 31;
+  const DAYS = Array.from({ length: daysInSelectedMonth }, (_, i) => String(i + 1).padStart(2, '0'));
+
+  const updateDobPart = (year: string, month: string, day: string) => {
+    if (!year && !month && !day) {
+      setFormData((prev) => ({ ...prev, dateOfBirth: '' }));
+      return;
+    }
+    const y = year || '2000';
+    const m = month || '01';
+    const d = day || '01';
+    setFormData((prev) => ({ ...prev, dateOfBirth: `${y}-${m}-${d}` }));
+  };
+
+  const currentAge = calculateAge(formData.dateOfBirth);
+  const isUnderage = currentAge !== null && currentAge < 18;
+
   const [requestId, setRequestId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Array<{
     documentType: KycDocumentType;
@@ -137,11 +222,22 @@ export function KycVerifyPage() {
       return;
     }
 
+    if (isUnderage) {
+      toast.error('You must be at least 18 years old to complete KYC verification');
+      return;
+    }
+
+    const parsedDob = new Date(formData.dateOfBirth);
+    if (isNaN(parsedDob.getTime())) {
+      toast.error('Please enter a valid Date of Birth');
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await apiClient.post<{ ok: boolean; requestId: string }>('/kyc/initiate', {
         fullName: formData.fullName,
-        dateOfBirth: new Date(formData.dateOfBirth).toISOString(),
+        dateOfBirth: parsedDob.toISOString(),
         country,
         mobileNumber: formData.mobileNumber,
         streetAddress: formData.streetAddress,
@@ -248,16 +344,6 @@ export function KycVerifyPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1.5">Date of Birth</label>
-                <input
-                  type="date"
-                  value={formData.dateOfBirth}
-                  onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-                />
-              </div>
-
-              <div>
                 <label className="block text-xs font-semibold mb-1.5">Country of Residence</label>
                 <select
                   value={country}
@@ -279,6 +365,77 @@ export function KycVerifyPage() {
                   placeholder="+1 234 567 8900"
                   className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
                 />
+              </div>
+
+              <div className="col-span-1 md:col-span-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold">Date of Birth</label>
+                  {currentAge !== null && (
+                    <span
+                      className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                        isUnderage
+                          ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
+                          : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                      }`}
+                    >
+                      {isUnderage ? `Under 18 (Age: ${currentAge})` : `${currentAge} years old`}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  {/* Day */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Day</label>
+                    <select
+                      value={dobDay}
+                      onChange={(e) => updateDobPart(dobYear || '2000', dobMonth || '01', e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm font-medium focus:border-indigo-500 outline-none"
+                    >
+                      <option value="">Day</option>
+                      {DAYS.map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Month */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Month</label>
+                    <select
+                      value={dobMonth}
+                      onChange={(e) => updateDobPart(dobYear || '2000', e.target.value, dobDay || '01')}
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm font-medium focus:border-indigo-500 outline-none"
+                    >
+                      <option value="">Month</option>
+                      {MONTHS.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Year */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Year</label>
+                    <select
+                      value={dobYear}
+                      onChange={(e) => updateDobPart(e.target.value, dobMonth || '01', dobDay || '01')}
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm font-medium focus:border-indigo-500 outline-none"
+                    >
+                      <option value="">Year</option>
+                      {YEARS.map((y) => (
+                        <option key={y} value={String(y)}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {isUnderage && (
+                  <p className="mt-2 text-xs text-rose-500 font-semibold flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    You must be at least 18 years of age to submit identity verification.
+                  </p>
+                )}
               </div>
             </div>
 
