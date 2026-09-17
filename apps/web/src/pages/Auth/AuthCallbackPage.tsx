@@ -68,9 +68,9 @@ export function AuthCallbackPage() {
             );
             if (sessionRes.status === "2fa_required" && sessionRes.userId) {
               useAuthStore.getState().setIsMfaRequired(true);
-              navigate("/2fa", {
+              navigate("/login", {
                 replace: true,
-                state: { userId: sessionRes.userId, next: nextParam || "/" },
+                state: { require2FA: true, userId: sessionRes.userId, next: nextParam || "/" },
               });
               return;
             }

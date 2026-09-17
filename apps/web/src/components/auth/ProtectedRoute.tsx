@@ -26,7 +26,7 @@ export function ProtectedRoute() {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   if (isMfaRequired || (me?.profile?.twoFactorEnabled && me?.mfaVerified === false)) {
-    return <Navigate to="/2fa" state={{ from: location }} replace />;
+    return <Navigate to="/login" state={{ from: location, require2FA: true }} replace />;
   }
   return <Outlet />;
 }

@@ -11,7 +11,8 @@ export function PublicOnlyRoute() {
 
   if (isLoading) return <FullPageLoader />;
   if (isPasswordRecovery) return <Outlet />;
-  if (isMfaRequired) return <Navigate to="/2fa" replace />;
+  // If 2FA is pending, let user remain on /login to enter their authenticator code
+  if (isMfaRequired) return <Outlet />;
   if (session) return <Navigate to="/" replace />;
   return <Outlet />;
 }

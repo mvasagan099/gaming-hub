@@ -33,7 +33,7 @@ export function AdminRoute() {
   }
 
   if (me?.profile?.twoFactorEnabled && me?.mfaVerified === false) {
-    return <Navigate to="/2fa" replace />;
+    return <Navigate to="/login" state={{ require2FA: true }} replace />;
   }
 
   return <Outlet />;
