@@ -3,6 +3,7 @@ import {
   ArrowUpRight,
   Coins,
   ShieldAlert,
+  ShieldCheck,
   Info,
   Clock,
   CheckCheck,
@@ -19,9 +20,19 @@ import { WalletProcessingAnimation } from "./WalletProcessingAnimation";
 import { WalletSuccessAnimation } from "./WalletSuccessAnimation";
 import { OtpVerificationModal } from "./OtpVerificationModal";
 import { walletApi } from "../../services/api/enterprise";
+import { twoFactorApi } from "../../services/api/twoFactor";
 import { useWalletStore } from "../../store/walletStore";
 import { notifyWalletChanged } from "../../services/api/practiceReward";
 import { cn } from "../../lib/utils";
+
+function maskEmail(email?: string | null): string | null {
+  if (!email || !email.includes("@")) return null;
+  const [local, domain] = email.split("@");
+  if (local.length <= 2) {
+    return `${local.slice(0, 1)}***@${domain}`;
+  }
+  return `${local.slice(0, 1)}***${local.slice(-1)}@${domain}`;
+}
 
 export interface WithdrawalFlowModalProps {
   isOpen: boolean;
@@ -29,6 +40,8 @@ export interface WithdrawalFlowModalProps {
   currentBalance: number;
   currency?: string;
   withdrawalFeePercent?: number;
+  twoFactorEnabled?: boolean;
+  userEmail?: string | null;
   onSuccessDone?: () => void;
   onViewTransactions?: () => void;
   onSetup2FA?: () => void;
@@ -60,6 +73,8 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
   currentBalance,
   currency = "Coins",
   withdrawalFeePercent = 0,
+  twoFactorEnabled = false,
+  userEmail = null,
   onSuccessDone,
   onViewTransactions,
   onSetup2FA,
@@ -72,6 +87,10 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
   const [txResult, setTxResult] = useState<TransactionResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>("Failed to complete withdrawal.");
   const [copied, setCopied] = useState(false);
+
+  // Determine verification method: 2FA -> TOTP; No 2FA -> EMAIL_OTP
+  const verificationMethod: "TOTP" | "EMAIL_OTP" = twoFactorEnabled ? "TOTP" : "EMAIL_OTP";
+  const maskedEmail = maskEmail(userEmail);
 
   // Numeric amount calculation
   const parsedAmount = parseFloat(amountInput) || 0;
@@ -116,16 +135,26 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
     setStep("confirm");
   };
 
-  // Step 2: Confirm -> Request OTP -> OTP Step
-  const handleConfirmAndRequestOtp = async () => {
-    setIsRequestingOtp(true);
+  // Step 2: Confirm -> Proceed to Verification (TOTP or Email OTP)
+  const handleConfirmAndProceed = async () => {
     setOtpErrorMessage(null);
+
+    if (twoFactorEnabled) {
+      // 2FA enabled: Do NOT send email OTP. Proceed directly to Authenticator input.
+      setStep("otp");
+      return;
+    }
+
+    // 2FA disabled: Request email OTP first
+    setIsRequestingOtp(true);
     try {
       const res = await walletApi.requestOtp();
       if (res.debugCode) {
         toast.success(`Verification OTP sent! (Dev code: ${res.debugCode})`);
       } else {
-        toast.success("Verification code sent to your registered email!");
+        toast.success(
+          `Verification code sent to ${maskedEmail || "your registered email"}!`
+        );
       }
       setStep("otp");
     } catch (err: unknown) {
@@ -138,14 +167,17 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
     }
   };
 
-  // Resend OTP from within OTP Step
+  // Resend OTP from within OTP Step (Email only)
   const handleResendOtp = async () => {
+    if (twoFactorEnabled) return false;
     try {
       const res = await walletApi.requestOtp();
       if (res.debugCode) {
         toast.success(`New code sent! (Dev: ${res.debugCode})`);
       } else {
-        toast.success("New verification code sent to your email!");
+        toast.success(
+          `New verification code sent to ${maskedEmail || "your email"}!`
+        );
       }
       setOtpErrorMessage(null);
       return true;
@@ -157,15 +189,34 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
     }
   };
 
-  // Step 3: Verify OTP & Submit Withdrawal
+  // Step 3: Verify (TOTP or Email OTP) & Submit Withdrawal
   const handleVerifyAndWithdraw = async (otpCode: string) => {
+    if (isSubmitting) return; // Prevent double submit
     setIsSubmitting(true);
     setOtpErrorMessage(null);
-    setStep("processing");
 
     try {
-      // Call withdrawal endpoint with verified amount and otp
-      const res = await walletApi.withdraw(parsedAmount, otpCode.trim());
+      if (verificationMethod === "TOTP") {
+        // Server-side authoritative verification of TOTP code, stamping session
+        try {
+          await twoFactorApi.verifySession(otpCode.trim());
+        } catch (totpErr: any) {
+          const errMsg =
+            totpErr?.message ||
+            "Invalid authenticator code. Please check your app and try again.";
+          setOtpErrorMessage(errMsg);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      setStep("processing");
+
+      // For EMAIL_OTP, pass otpCode. For TOTP, session is freshly stamped server-side.
+      const res = await walletApi.withdraw(
+        parsedAmount,
+        verificationMethod === "EMAIL_OTP" ? otpCode.trim() : undefined
+      );
 
       // Refresh store balances
       await useWalletStore.getState().fetchWallet();
@@ -232,9 +283,14 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
         return;
       }
 
-      // Check if it's invalid OTP (allows user to re-try OTP)
-      if (errCode === "OTP_INVALID" || errCode === "OTP_ALREADY_USED") {
-        setOtpErrorMessage(err.message || "Invalid or expired verification code");
+      // Check if it's invalid OTP or MFA required (allows user to re-try OTP)
+      if (
+        errCode === "OTP_INVALID" ||
+        errCode === "OTP_ALREADY_USED" ||
+        errCode === "OTP_EXPIRED" ||
+        errCode === "MFA_REQUIRED"
+      ) {
+        setOtpErrorMessage(err.message || "Invalid or expired verification code.");
         setStep("otp");
         return;
       }
@@ -425,8 +481,52 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
               </div>
             </div>
 
+            {/* Security Verification Status Banner */}
+            {twoFactorEnabled ? (
+              <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/30 p-4 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <ShieldCheck size={18} />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <h4 className="text-sm font-bold text-emerald-400">
+                    Verify with Authenticator
+                  </h4>
+                  <p className="text-xs text-emerald-300/80 leading-relaxed">
+                    Enter the 6-digit code from your authenticator app to authorize this withdrawal.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 mt-0.5">
+                  <ShieldAlert size={18} />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-amber-400">
+                      Verify with Email
+                    </h4>
+                    {onSetup2FA && (
+                      <button
+                        type="button"
+                        onClick={onSetup2FA}
+                        className="px-2.5 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold transition-all"
+                      >
+                        Setup 2FA App
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-amber-300/80 leading-relaxed">
+                    We will send a 6-digit verification code to {maskedEmail || "your registered email address"}.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <p className="text-xs text-slate-400 text-center leading-relaxed">
-              Upon confirmation, an OTP will be dispatched to authenticate this transaction.
+              {twoFactorEnabled
+                ? "You will enter your authenticator app code on the next step to authorize this transfer."
+                : `A verification code will be sent to ${maskedEmail || "your email"} to authorize this transfer.`}
             </p>
 
             {/* Action Buttons */}
@@ -442,17 +542,17 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
 
               <button
                 type="button"
-                onClick={handleConfirmAndRequestOtp}
+                onClick={handleConfirmAndProceed}
                 disabled={isRequestingOtp}
                 className="w-full sm:w-2/3 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-base uppercase tracking-wider transition-all shadow-lg shadow-indigo-600/30 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2"
               >
                 {isRequestingOtp ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Preparing...</span>
+                    <span>Sending Code...</span>
                   </>
                 ) : (
-                  <span>Confirm Withdrawal</span>
+                  <span>{twoFactorEnabled ? "Continue to Authenticator" : "Confirm & Send Code"}</span>
                 )}
               </button>
             </div>
@@ -467,12 +567,14 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
           onClose={handleModalClose}
           onBack={() => setStep("confirm")}
           onVerify={handleVerifyAndWithdraw}
-          onResendOtp={handleResendOtp}
+          onResendOtp={twoFactorEnabled ? undefined : handleResendOtp}
           amount={parsedAmount}
           currency={currency}
           destinationText="CouponVault Wallet"
           isSubmitting={isSubmitting}
           errorMessage={otpErrorMessage}
+          verificationMethod={verificationMethod}
+          maskedEmail={maskedEmail}
         />
       )}
 

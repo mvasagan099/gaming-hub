@@ -27,4 +27,8 @@ export const twoFactorApi = {
   verifyLogin: (userId: string, token: string): Promise<{ ok: boolean }> => {
     return apiClient.post<{ ok: boolean }>("/security/2fa/verify-login", { userId, token });
   },
+
+  verifySession: (token: string): Promise<{ ok: boolean }> => {
+    return apiClient.post<{ ok: boolean }>("/auth/2fa/verify", { token });
+  },
 };

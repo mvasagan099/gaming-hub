@@ -8,6 +8,8 @@ import {
   CreditCard,
   Trophy,
   Download,
+  ShoppingBag,
+  ExternalLink,
 } from "lucide-react";
 import type {
   Transaction,
@@ -21,6 +23,7 @@ import { Skeleton } from "../../components/Skeleton";
 import { EmptyState } from "../../components/EmptyState";
 import { Button } from "../../components/ui/Button";
 import { RedeemCouponModal, WithdrawalFlowModal } from "../../components/wallet";
+import { useMe } from "../../services/api/useMe";
 
 const PAGE_SIZE = 10;
 
@@ -53,6 +56,10 @@ export function WalletPage() {
   const [filter, setFilter] = useState<WalletBalanceType | "">("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const { me } = useMe();
+  const twoFactorEnabled = Boolean(me?.profile?.twoFactorEnabled);
+  const userEmail = me?.user?.email ?? null;
 
   // Modal States
   const [depositOpen, setDepositOpen] = useState(false);
@@ -157,6 +164,17 @@ export function WalletPage() {
               <ArrowUpRight className="w-4 h-4 stroke-[3]" />
               Withdraw
             </button>
+
+            <a
+              href="https://coupon-frontend-e8b3.onrender.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-5 py-3 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:text-amber-200 font-bold text-sm backdrop-blur-md transition-all hover:scale-105 duration-200 flex items-center gap-2"
+            >
+              <ShoppingBag className="w-4 h-4 text-amber-400" />
+              Buy Coupons
+              <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+            </a>
           </div>
         </div>
       </div>
@@ -434,6 +452,8 @@ export function WalletPage() {
         onClose={() => setWithdrawOpen(false)}
         currentBalance={currentBalance}
         currency="Coins"
+        twoFactorEnabled={twoFactorEnabled}
+        userEmail={userEmail}
         onSuccessDone={() => {
           setWithdrawOpen(false);
           void loadData();

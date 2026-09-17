@@ -9,13 +9,15 @@ export interface OtpVerificationModalProps {
   onClose: () => void;
   onBack?: () => void;
   onVerify: (otp: string) => Promise<void>;
-  onResendOtp: () => Promise<boolean | void>;
+  onResendOtp?: () => Promise<boolean | void>;
   amount: number | string;
   currency?: string;
   destinationText?: string;
   isSubmitting?: boolean;
   errorMessage?: string | null;
   initialCountdownSeconds?: number;
+  verificationMethod?: "TOTP" | "EMAIL_OTP";
+  maskedEmail?: string | null;
 }
 
 export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
@@ -30,6 +32,8 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
   isSubmitting = false,
   errorMessage = null,
   initialCountdownSeconds = 60,
+  verificationMethod = "EMAIL_OTP",
+  maskedEmail = null,
 }) => {
   const reduceMotion = useReducedMotion();
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
@@ -135,7 +139,7 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
   };
 
   const handleResend = async () => {
-    if (resendCooldown > 0 || isResending) return;
+    if (!onResendOtp || resendCooldown > 0 || isResending) return;
     setIsResending(true);
     try {
       await onResendOtp();
@@ -147,17 +151,42 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
     }
   };
 
+  const isTotp = verificationMethod === "TOTP";
+  const modalDescription = isTotp
+    ? "Enter the 6-digit code from your authenticator app to authorize this withdrawal."
+    : maskedEmail
+    ? `We sent a 6-digit verification code to ${maskedEmail}.`
+    : "We've sent a 6-digit verification code to your registered email.";
+
   return (
     <WalletActionModal
       isOpen={isOpen}
       onClose={onClose}
       isProcessing={isSubmitting}
       title="Verify Withdrawal"
-      description="We've sent a 6-digit verification code to your registered email."
+      description={modalDescription}
       icon={<ShieldCheck className="w-6 h-6 text-emerald-400" />}
       maxWidth="md"
     >
-      <div className="space-y-6 pt-2">
+      <div className="space-y-5 pt-2">
+        {/* Verification Method Badge */}
+        <div className="flex items-center justify-between">
+          <div
+            className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border",
+              isTotp
+                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+            )}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>{isTotp ? "Verify with Authenticator" : "Verify with Email"}</span>
+          </div>
+          {maskedEmail && !isTotp && (
+            <span className="text-xs text-slate-400 font-mono">{maskedEmail}</span>
+          )}
+        </div>
+
         {/* Context Summary Card */}
         <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between text-xs sm:text-sm">
           <div>
@@ -217,30 +246,32 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
           </div>
         )}
 
-        {/* Resend OTP Row */}
-        <div className="flex items-center justify-between text-xs px-1">
-          <span className="text-slate-400">Didn't receive the code?</span>
-          <button
-            type="button"
-            onClick={handleResend}
-            disabled={resendCooldown > 0 || isResending || isSubmitting}
-            className={cn(
-              "inline-flex items-center gap-1 font-bold transition-colors",
-              resendCooldown > 0 || isResending || isSubmitting
-                ? "text-slate-500 cursor-not-allowed"
-                : "text-emerald-400 hover:text-emerald-300 hover:underline"
-            )}
-          >
-            {isResending ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <RotateCcw className="w-3.5 h-3.5" />
-            )}
-            <span>
-              {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend OTP"}
-            </span>
-          </button>
-        </div>
+        {/* Resend OTP Row - Only for Email OTP */}
+        {!isTotp && onResendOtp && (
+          <div className="flex items-center justify-between text-xs px-1">
+            <span className="text-slate-400">Didn't receive the code?</span>
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resendCooldown > 0 || isResending || isSubmitting}
+              className={cn(
+                "inline-flex items-center gap-1 font-bold transition-colors",
+                resendCooldown > 0 || isResending || isSubmitting
+                  ? "text-slate-500 cursor-not-allowed"
+                  : "text-emerald-400 hover:text-emerald-300 hover:underline"
+              )}
+            >
+              {isResending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend OTP"}
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* Actions Button Row */}
         <div className="flex items-center gap-3 pt-2">

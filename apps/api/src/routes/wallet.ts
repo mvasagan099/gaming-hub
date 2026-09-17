@@ -36,7 +36,7 @@ const depositSchema = z.object({
 
 const withdrawalSchema = z.object({
   amount: z.number().int().min(1),
-  otp: z.string().trim().min(6).max(6),
+  otp: z.string().trim().min(6).max(6).optional(),
 });
 
 const requestFiltersSchema = z.object({

@@ -34,6 +34,7 @@ export interface MePayload {
     gender: string | null;
     currency: string | null;
     referredBy: string | null;
+    twoFactorEnabled?: boolean;
   } | null;
   wallet: MeWallet | null;
   unreadNotifications: number;

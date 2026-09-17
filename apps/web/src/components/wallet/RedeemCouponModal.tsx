@@ -1,5 +1,15 @@
 import React, { useState } from "react";
-import { Ticket, ArrowDownLeft, AlertTriangle, ShieldCheck, Sparkles, Loader2, ArrowRight } from "lucide-react";
+import {
+  Ticket,
+  ArrowDownLeft,
+  AlertTriangle,
+  ShieldCheck,
+  Sparkles,
+  Loader2,
+  ArrowRight,
+  ExternalLink,
+  ShoppingBag,
+} from "lucide-react";
 import { WalletActionModal } from "./WalletActionModal";
 import { WalletProcessingAnimation } from "./WalletProcessingAnimation";
 import { WalletSuccessAnimation } from "./WalletSuccessAnimation";
@@ -7,6 +17,8 @@ import { couponsApi } from "../../services/api/enterprise";
 import { useWalletStore } from "../../store/walletStore";
 import { notifyWalletChanged } from "../../services/api/practiceReward";
 import { cn } from "../../lib/utils";
+
+export const COUPON_BUY_URL = "https://coupon-frontend-e8b3.onrender.com";
 
 export interface RedeemCouponModalProps {
   isOpen: boolean;
@@ -192,9 +204,20 @@ export const RedeemCouponModal: React.FC<RedeemCouponModalProps> = ({
         >
           <div className="space-y-6 pt-2">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                Coupon Code
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Coupon Code
+                </label>
+                <a
+                  href={COUPON_BUY_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300 hover:underline transition-colors"
+                >
+                  <span>Where to buy?</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
               <div className="relative">
                 <input
                   type="text"
@@ -217,7 +240,7 @@ export const RedeemCouponModal: React.FC<RedeemCouponModalProps> = ({
               </span>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 space-y-3">
               <button
                 type="button"
                 onClick={handleVerifyCode}
@@ -233,6 +256,32 @@ export const RedeemCouponModal: React.FC<RedeemCouponModalProps> = ({
                   <span>Continue</span>
                 )}
               </button>
+
+              {/* Where to buy coupon banner */}
+              <a
+                href={COUPON_BUY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3 px-4 rounded-2xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/50 text-slate-300 hover:text-white transition-all flex items-center justify-between group shadow-sm"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-105 transition-transform">
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="text-left">
+                    <div className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors">
+                      Where to buy coupons?
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      Purchase official coupons from CouponVault
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 text-xs font-bold text-amber-400 group-hover:translate-x-0.5 transition-transform">
+                  <span>Buy Now</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </div>
+              </a>
             </div>
           </div>
         </WalletActionModal>
@@ -249,36 +298,33 @@ export const RedeemCouponModal: React.FC<RedeemCouponModalProps> = ({
           maxWidth="md"
         >
           <div className="space-y-6 pt-2">
-            {/* Coupon Card Preview */}
-            <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-800/90 to-slate-900 border border-slate-700/80 shadow-inner relative overflow-hidden">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">
-                  Coupon Code
-                </span>
-                <span className="font-mono text-xs font-bold bg-slate-800 text-amber-300 px-3 py-1 rounded-lg border border-slate-700">
-                  {maskCouponCode(verifiedData?.code || couponCode)}
-                </span>
+            {/* Amount & Currency Preview Card */}
+            <div className="p-6 rounded-2xl bg-gradient-to-b from-amber-500/10 to-amber-500/5 border border-amber-500/30 text-center space-y-2">
+              <span className="text-xs font-black uppercase tracking-widest text-amber-400">
+                Coupon Value
+              </span>
+              <div className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+                +{verifiedData?.amount ? verifiedData.amount.toLocaleString() : "..."} {verifiedData?.currency || "Coins"}
               </div>
-
-              <div className="flex items-baseline justify-between pt-2 border-t border-slate-700/50">
-                <span className="text-xs text-slate-400 font-medium">Credit Value</span>
-                <div className="flex items-baseline gap-1 text-2xl sm:text-3xl font-black text-emerald-400">
-                  <span>+{verifiedData?.amount ? verifiedData.amount.toLocaleString() : "..."}</span>
-                  <span className="text-sm font-bold text-slate-300">{verifiedData?.currency || "Coins"}</span>
-                </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-[11px] font-mono font-bold text-slate-300">
+                <span>Code:</span>
+                <span className="text-amber-400">{maskCouponCode(couponCode)}</span>
               </div>
             </div>
 
-            {/* Explanatory Note */}
-            <p className="text-xs text-slate-400 text-center leading-relaxed">
-              This amount will be added to your Gaming Hub <strong className="text-white">MAIN wallet</strong>.
-            </p>
+            {/* Reassurance Message */}
+            <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-start gap-3">
+              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-slate-300 leading-relaxed">
+                This amount will be added to your Gaming Hub <strong className="text-white">MAIN wallet</strong> balance immediately upon confirmation.
+              </p>
+            </div>
 
-            {/* Buttons */}
+            {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setStep("input")}
+                onClick={handleModalClose}
                 disabled={isRedeeming}
                 className="w-full sm:w-1/3 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm transition-colors border border-slate-700 disabled:opacity-50"
               >
@@ -289,11 +335,11 @@ export const RedeemCouponModal: React.FC<RedeemCouponModalProps> = ({
                 type="button"
                 onClick={handleExecuteRedeem}
                 disabled={isRedeeming}
-                className="w-full sm:w-2/3 py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black text-base uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(245,158,11,0.35)] hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2"
+                className="w-full sm:w-2/3 py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black text-sm uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(245,158,11,0.35)] hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isRedeeming ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                     <span>Redeeming...</span>
                   </>
                 ) : (
@@ -369,6 +415,19 @@ export const RedeemCouponModal: React.FC<RedeemCouponModalProps> = ({
               >
                 Close
               </button>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800/80">
+              <a
+                href={COUPON_BUY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 px-3 rounded-xl bg-slate-800/50 hover:bg-slate-800 text-slate-300 hover:text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <ShoppingBag className="w-3.5 h-3.5 text-amber-400" />
+                <span>Need a coupon? Buy official coupons online</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
             </div>
           </div>
         </WalletActionModal>

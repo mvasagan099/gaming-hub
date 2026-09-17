@@ -216,4 +216,112 @@ describe("wallet HTTP routes", () => {
     expect(redemption!.couponId).toBe(coupon.id);
     vi.restoreAllMocks();
   });
+
+  describe("Withdrawal Verification Flow (2FA vs Email OTP)", () => {
+    it("CASE A (2FA Enabled): blocks email OTP request, requires fresh MFA session, and succeeds without email OTP", async () => {
+      const user = await createTestUser();
+      await prisma.wallet.update({ where: { userId: user.id }, data: { balance: 2000 } });
+
+      // Enable 2FA on profile
+      await prisma.profile.update({
+        where: { userId: user.id },
+        data: { twoFactorEnabled: true },
+      });
+
+      // 1. Trying to request email OTP must be rejected with MFA_ENABLED
+      const otpRes = await request("POST", "/api/wallet/otp", {}, user.token);
+      expect(otpRes.statusCode).toBe(400);
+      expect(otpRes.json().error.code).toBe("MFA_ENABLED");
+
+      // 2. Withdrawal without fresh MFA session must be rejected with MFA_REQUIRED
+      const noMfaWithdraw = await request(
+        "POST",
+        "/api/wallet/withdrawals",
+        { amount: 100 },
+        user.token,
+      );
+      expect(noMfaWithdraw.statusCode).toBe(403);
+      expect(noMfaWithdraw.json().error.code).toBe("MFA_REQUIRED");
+
+      // 3. Stamp session with fresh MFA verification (simulating successful TOTP verification at /api/auth/2fa/verify)
+      await prisma.loginSession.upsert({
+        where: { tokenHash: hashToken(user.token) },
+        create: {
+          userId: user.id,
+          tokenHash: hashToken(user.token),
+          expiresAt: new Date(Date.now() + 60_000),
+          mfaVerifiedAt: new Date(),
+        },
+        update: { revokedAt: null, isCurrent: true, mfaVerifiedAt: new Date() },
+      });
+
+      // 4. Withdrawal now succeeds directly WITHOUT needing an email OTP
+      const mfaWithdraw = await request(
+        "POST",
+        "/api/wallet/withdrawals",
+        { amount: 100 },
+        user.token,
+      );
+      expect(mfaWithdraw.statusCode).toBe(200);
+      expect(mfaWithdraw.json().status).toBe("PENDING");
+      expect(mfaWithdraw.json().amount).toBe(100);
+    });
+
+    it("CASE B (2FA Disabled): issues email OTP, rejects invalid/reused OTP, and succeeds with valid OTP", async () => {
+      const user = await createTestUser();
+      await prisma.wallet.update({ where: { userId: user.id }, data: { balance: 2000 } });
+
+      // Ensure 2FA is disabled
+      await prisma.profile.update({
+        where: { userId: user.id },
+        data: { twoFactorEnabled: false },
+      });
+
+      // 1. Requesting email OTP succeeds
+      const otpRes = await request("POST", "/api/wallet/otp", {}, user.token);
+      expect(otpRes.statusCode).toBe(200);
+      const { debugCode } = otpRes.json();
+      expect(debugCode).toBeDefined();
+
+      // 2. Withdrawal without OTP is rejected
+      const noOtpWithdraw = await request(
+        "POST",
+        "/api/wallet/withdrawals",
+        { amount: 100 },
+        user.token,
+      );
+      expect(noOtpWithdraw.statusCode).toBe(400);
+      expect(noOtpWithdraw.json().error.code).toBe("OTP_REQUIRED");
+
+      // 3. Withdrawal with invalid OTP is rejected
+      const badOtpWithdraw = await request(
+        "POST",
+        "/api/wallet/withdrawals",
+        { amount: 100, otp: "000000" },
+        user.token,
+      );
+      expect(badOtpWithdraw.statusCode).toBe(400);
+      expect(badOtpWithdraw.json().error.code).toBe("OTP_INVALID");
+
+      // 4. Withdrawal with valid OTP succeeds
+      const validWithdraw = await request(
+        "POST",
+        "/api/wallet/withdrawals",
+        { amount: 100, otp: debugCode },
+        user.token,
+      );
+      expect(validWithdraw.statusCode).toBe(200);
+      expect(validWithdraw.json().status).toBe("PENDING");
+
+      // 5. Reusing the consumed OTP is rejected
+      const reuseWithdraw = await request(
+        "POST",
+        "/api/wallet/withdrawals",
+        { amount: 100, otp: debugCode },
+        user.token,
+      );
+      expect(reuseWithdraw.statusCode).toBe(400);
+      expect(["OTP_REQUIRED", "OTP_ALREADY_USED"]).toContain(reuseWithdraw.json().error.code);
+    });
+  });
 });

@@ -82,6 +82,19 @@ export interface WalletOtpResult {
 export async function requestWithdrawalOtp(userId: string): Promise<WalletOtpResult> {
   await assertWalletNotFrozen(userId);
 
+  const profile = await prisma.profile.findUnique({
+    where: { userId },
+    select: { twoFactorEnabled: true },
+  });
+
+  if (profile?.twoFactorEnabled) {
+    throw new AppError(
+      "MFA_ENABLED",
+      "Two-factor authentication is enabled. Please use your authenticator app instead of email OTP.",
+      400,
+    );
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { email: true, username: true },
@@ -243,14 +256,20 @@ export async function createDepositRequest(
 export async function createWithdrawalRequest(
   userId: string,
   amount: number,
-  otpCode: string,
+  otpCode?: string,
 ): Promise<WalletRequest> {
   await assertWalletNotFrozen(userId);
 
-  const kycRequest = await prisma.kycRequest.findUnique({
-    where: { userId },
-    select: { status: true, level: true },
-  });
+  const [kycRequest, profile] = await Promise.all([
+    prisma.kycRequest.findUnique({
+      where: { userId },
+      select: { status: true, level: true },
+    }),
+    prisma.profile.findUnique({
+      where: { userId },
+      select: { twoFactorEnabled: true },
+    }),
+  ]);
 
   if (process.env.NODE_ENV !== "test" && (!kycRequest || kycRequest.status !== "APPROVED")) {
     throw new AppError(
@@ -339,7 +358,16 @@ export async function createWithdrawalRequest(
       );
     }
 
-    await verifyWalletOtp(userId, otpCode, tx);
+    if (profile?.twoFactorEnabled) {
+      // 2FA enabled: TOTP verification is enforced by requireMfa
+      // and validated server-side. Do NOT require or consume email OTP.
+    } else {
+      // 2FA disabled: Email OTP is mandatory and atomically consumed.
+      if (!otpCode || !otpCode.trim()) {
+        throw new AppError("OTP_REQUIRED", "Verification code is required", 400);
+      }
+      await verifyWalletOtp(userId, otpCode.trim(), tx);
+    }
 
     const wallet = await getWallet(userId, tx);
     const fee =
