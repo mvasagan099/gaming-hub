@@ -57,7 +57,7 @@ describe("walletRequests", () => {
     it("issues a code and returns it as debugCode outside production", async () => {
       const user = await createTestUser();
       await fundMain(user.id);
-      const sendEmail = vi.spyOn(EmailTransport, "sendSmtpEmail").mockResolvedValue({
+      const sendEmail = vi.spyOn(EmailTransport, "sendEmail").mockResolvedValue({
         accepted: [`${user.id}@test.local`],
         messageId: "test-withdrawal-otp",
       });

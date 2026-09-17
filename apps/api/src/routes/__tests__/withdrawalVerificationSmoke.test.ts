@@ -74,7 +74,7 @@ describe("WITHDRAWAL VERIFICATION STAGING SMOKE TEST", () => {
       });
 
       // Spy on email transport to verify NO email OTP is ever sent
-      const sendEmailSpy = vi.spyOn(emailTransport, "sendSmtpEmail").mockResolvedValue({
+      const sendEmailSpy = vi.spyOn(emailTransport, "sendEmail").mockResolvedValue({
         accepted: [user.id],
         messageId: "mock-id",
       });
@@ -197,7 +197,7 @@ describe("WITHDRAWAL VERIFICATION STAGING SMOKE TEST", () => {
       let capturedEmailSubject = "";
       let capturedEmailText = "";
 
-      vi.spyOn(emailTransport, "sendSmtpEmail").mockImplementation(async (opts) => {
+      vi.spyOn(emailTransport, "sendEmail").mockImplementation(async (opts) => {
         capturedEmailRecipient = opts.to;
         capturedEmailSubject = opts.subject;
         capturedEmailText = opts.text;

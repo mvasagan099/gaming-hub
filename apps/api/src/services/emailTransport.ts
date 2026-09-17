@@ -1,15 +1,19 @@
 /**
  * emailTransport.ts
  *
- * Singleton Nodemailer SMTP transporter for the Gaming Hub API.
+ * Unified transactional email delivery layer for the Gaming Hub API.
+ *
+ * Providers:
+ *  - Brevo (Primary Production): HTTPS REST API (POST https://api.brevo.com/v3/smtp/email)
+ *  - SMTP (Local Dev / Fallback): Singleton Nodemailer SMTP transporter
+ *  - SendGrid: REST API fallback
+ *  - Mock: Test / In-memory mock
  *
  * Security contract:
- *  - SMTP_PASS / SMTP_USER are NEVER logged, included in error messages,
- *    or returned to the client.
- *  - The transporter instance is created once and reused (requirement 14).
- *  - TLS/STARTTLS is enabled via `requireTLS: true` when secure=false (req 7).
+ *  - BREVO_API_KEY, SMTP_PASS, and raw credentials are NEVER logged,
+ *    included in error messages, or returned to clients.
+ *  - Brevo connects via HTTPS (port 443), operating reliably on Render Free/Paid tiers.
  *  - This module must only ever be imported from server-side code.
- *    It must never be bundled into React, Vite, or Capacitor builds.
  */
 
 import nodemailer, { type Transporter, type SendMailOptions } from "nodemailer";
@@ -26,20 +30,181 @@ export interface SendEmailOptions {
   html: string;
 }
 
-export interface SmtpSendResult {
-  accepted: string[];
+export interface EmailSendResult {
   messageId: string;
+  accepted?: string[];
+}
+
+export type SmtpSendResult = EmailSendResult;
+
+// ---------------------------------------------------------------------------
+// Central Dispatcher
+// ---------------------------------------------------------------------------
+
+/**
+ * Central transactional email dispatcher for Gaming Hub.
+ *
+ * Dispatches according to EMAIL_PROVIDER:
+ *  - "brevo" (production default): Brevo HTTPS REST API (port 443)
+ *  - "smtp": Nodemailer SMTP (local dev / paid instances)
+ *  - "sendgrid": SendGrid REST API
+ *  - "mock": In-memory dev/test mock (forbidden in production)
+ */
+export async function sendEmail(options: SendEmailOptions): Promise<EmailSendResult> {
+  const provider = process.env.EMAIL_PROVIDER || env.EMAIL_PROVIDER || "mock";
+
+  switch (provider) {
+    case "brevo":
+      return sendBrevoEmail(options);
+    case "smtp":
+      return sendSmtpEmail(options);
+    case "sendgrid":
+      return sendSendgridEmail(options);
+    case "mock":
+    default:
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("[emailTransport] Mock email provider is forbidden in production");
+      }
+      return {
+        messageId: `mock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        accepted: [options.to],
+      };
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Singleton transporter
+// Brevo HTTPS REST API Provider
+// ---------------------------------------------------------------------------
+
+export function getBrevoSender(): { name: string; email: string } {
+  const name = process.env.BREVO_FROM_NAME || env.BREVO_FROM_NAME || "Gaming Hub";
+  const email =
+    process.env.BREVO_FROM_EMAIL ||
+    env.BREVO_FROM_EMAIL ||
+    process.env.EMAIL_FROM ||
+    env.EMAIL_FROM ||
+    process.env.SMTP_FROM ||
+    env.SMTP_FROM ||
+    process.env.SMTP_USER ||
+    env.SMTP_USER ||
+    "noreply@gaminghub.com";
+  return { name, email };
+}
+
+/**
+ * Sends an email using Brevo's HTTPS REST API.
+ * Endpoint: POST https://api.brevo.com/v3/smtp/email
+ *
+ * Operates over HTTPS port 443 - unaffected by Render's outbound SMTP port blocks.
+ * Strict credential sanitization ensures BREVO_API_KEY is never leaked.
+ */
+export async function sendBrevoEmail(options: SendEmailOptions): Promise<EmailSendResult> {
+  const apiKey = process.env.BREVO_API_KEY || env.BREVO_API_KEY;
+  if (!apiKey) {
+    throw new Error("[emailTransport] BREVO_API_KEY is not configured");
+  }
+
+  const sender = getBrevoSender();
+  const payload = {
+    sender,
+    to: [{ email: options.to }],
+    subject: options.subject,
+    htmlContent: options.html,
+    textContent: options.text,
+  };
+
+  let response: Response;
+  try {
+    response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (netErr: unknown) {
+    const rawMsg = netErr instanceof Error ? netErr.message : "Network error";
+    const safeMsg = sanitizeErrorMessage(rawMsg, [apiKey]);
+    throw new Error(`[emailTransport] Brevo HTTP network request failed: ${safeMsg}`);
+  }
+
+  if (!response.ok) {
+    let errorDetail = "";
+    try {
+      const errJson = (await response.json()) as { code?: string; message?: string };
+      const code = errJson.code || "UNKNOWN";
+      const rawMsg = errJson.message || response.statusText;
+      const safeMsg = sanitizeErrorMessage(rawMsg, [apiKey]);
+      errorDetail = `code=${code}, message=${safeMsg}`;
+    } catch {
+      errorDetail = `statusText=${response.statusText}`;
+    }
+    throw new Error(`[emailTransport] Brevo API error (status ${response.status}): ${errorDetail}`);
+  }
+
+  let data: { messageId?: string } = {};
+  try {
+    data = (await response.json()) as { messageId?: string };
+  } catch {
+    // Non-JSON or empty 201 response
+  }
+
+  return {
+    messageId: data.messageId || `brevo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    accepted: [options.to],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// SendGrid REST API Provider
+// ---------------------------------------------------------------------------
+
+export async function sendSendgridEmail(options: SendEmailOptions): Promise<EmailSendResult> {
+  const apiKey = env.SENDGRID_API_KEY;
+  if (!apiKey) {
+    throw new Error("[emailTransport] SENDGRID_API_KEY is not configured");
+  }
+
+  const fromEmail = env.SENDGRID_FROM || env.EMAIL_FROM || env.SMTP_FROM || "noreply@gaminghub.com";
+  const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: options.to }] }],
+      from: { email: fromEmail, name: env.BREVO_FROM_NAME || "Gaming Hub" },
+      subject: options.subject,
+      content: [
+        { type: "text/plain", value: options.text },
+        { type: "text/html", value: options.html },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`[emailTransport] SendGrid API error (${res.status}): ${errText || res.statusText}`);
+  }
+
+  return {
+    messageId: `sendgrid-${Date.now()}`,
+    accepted: [options.to],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Singleton SMTP Transporter (Local Dev / Fallback)
 // ---------------------------------------------------------------------------
 
 let _transporter: Transporter | null = null;
 
 /**
  * Returns the singleton SMTP transporter.
- * Throws a safe (non-credential-leaking) error if SMTP is not configured.
+ * Throws a safe error if SMTP credentials are missing.
  */
 function getSmtpTransporter(): Transporter {
   if (_transporter) return _transporter;
@@ -64,16 +229,12 @@ function getSmtpTransporter(): Transporter {
     host,
     port,
     secure,
-    // When secure=false and port=587, use STARTTLS upgrade (RFC 3207).
-    // requireTLS forces the upgrade and rejects plaintext connections.
     ...(secure === false ? { requireTLS: true } : {}),
     auth: {
       user,
       pass,
     },
-    // Force IPv4 to prevent broken IPv6 routing in Docker/Render environments
     family: 4,
-    // Defensive connection timeout for Render deployments
     connectionTimeout: 15_000,
     greetingTimeout: 15_000,
     socketTimeout: 20_000,
@@ -97,27 +258,17 @@ export function _resetSmtpTransporter(): void {
   _transporter = null;
 }
 
-// ---------------------------------------------------------------------------
-// From address helper
-// ---------------------------------------------------------------------------
-
 /**
  * Returns the configured sender address.
- * Preference order: EMAIL_FROM > SMTP_FROM > hardcoded fallback.
+ * Preference order: EMAIL_FROM > SMTP_FROM > SMTP_USER > hardcoded fallback.
  */
 export function getFromAddress(): string {
   return env.EMAIL_FROM || env.SMTP_FROM || env.SMTP_USER || "noreply@gaminghub.com";
 }
 
-// ---------------------------------------------------------------------------
-// Send
-// ---------------------------------------------------------------------------
-
 /**
  * Sends an email via the singleton SMTP transporter.
- *
- * Throws a safe error on failure - SMTP credentials are never included
- * in thrown messages.
+ * Maintained for local development and backwards compatibility.
  */
 export async function sendSmtpEmail(options: SendEmailOptions): Promise<SmtpSendResult> {
   const transporter = getSmtpTransporter();
@@ -138,7 +289,6 @@ export async function sendSmtpEmail(options: SendEmailOptions): Promise<SmtpSend
       messageId: info.messageId,
     };
   } catch (err: unknown) {
-    // Never surface credential details. Log only safe error code/message.
     const safeMessage = buildSafeErrorMessage(err);
     throw new Error(`[emailTransport] SMTP send failed: ${safeMessage}`);
   }
@@ -149,30 +299,23 @@ export async function sendSmtpEmail(options: SendEmailOptions): Promise<SmtpSend
 // ---------------------------------------------------------------------------
 
 /**
- * Verifies the SMTP connection is reachable.
+ * Verifies the email connection is reachable.
  * Called during API startup when EMAIL_PROVIDER=smtp.
- *
- * Does NOT crash the API on failure (per requirement 15): logs a warning
- * instead, so transient Gmail SMTP outages do not kill the entire service.
- *
- * Returns true on success, false on failure.
  */
 export async function verifySmtpConnection(
   logger?: { warn: (msg: string) => void; info: (msg: string) => void },
 ): Promise<boolean> {
-  // Only run when SMTP is the configured provider
   if (env.EMAIL_PROVIDER !== "smtp") return true;
 
   try {
     const transporter = getSmtpTransporter();
     await transporter.verify();
     const log = logger?.info ?? console.log;
-    log("[emailTransport] SMTP connection verified: Gmail STARTTLS ready");
+    log("[emailTransport] SMTP connection verified: STARTTLS ready");
     return true;
   } catch (err: unknown) {
     const safeMessage = buildSafeErrorMessage(err);
     const warn = logger?.warn ?? console.warn;
-    // Warning only - SMTP outage should not crash the API
     warn(
       `[emailTransport] SMTP connection verification failed (non-fatal): ${safeMessage}. ` +
         "Email sending will be attempted when needed.",
@@ -182,25 +325,36 @@ export async function verifySmtpConnection(
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// Internal Sanitization Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Builds a safe error message, stripping any auth-related information.
- * NEVER includes SMTP_PASS, SMTP_USER, or full connection strings.
- */
+function sanitizeErrorMessage(msg: string, secrets: (string | undefined)[]): string {
+  let cleaned = msg;
+  for (const s of secrets) {
+    if (s && s.length > 4) {
+      cleaned = cleaned.replaceAll(s, "[REDACTED]");
+    }
+  }
+  const AUTH_KEYWORDS = ["api-key", "apikey", "auth", "credential", "password", "secret", "bearer"];
+  return cleaned
+    .split("\n")
+    .filter((line) => {
+      const lower = line.toLowerCase();
+      return !AUTH_KEYWORDS.some((kw) => lower.includes(kw) && (lower.includes("=") || lower.includes(":")));
+    })
+    .join(" ")
+    .trim();
+}
+
 function buildSafeErrorMessage(err: unknown): string {
   if (!(err instanceof Error)) return "Unknown SMTP error";
 
   const nodeError = err as Error & { code?: string; responseCode?: number; response?: string };
-
   const parts: string[] = [];
 
   if (nodeError.code) parts.push(`code=${nodeError.code}`);
   if (nodeError.responseCode) parts.push(`responseCode=${nodeError.responseCode}`);
 
-  // Include SMTP response text but strip lines that contain credential-related keywords.
-  // Gmail 535 responses contain "username and password not accepted" — these must be stripped.
   const response = nodeError.response ?? "";
   const AUTH_KEYWORDS = ["auth", "credential", "password", "username", "login", "secret"];
   const safeResponse = response
@@ -214,8 +368,5 @@ function buildSafeErrorMessage(err: unknown): string {
     .trim();
 
   if (safeResponse) parts.push(`response="${safeResponse}"`);
-
-  // Fall back to generic message - never use err.message directly as it may
-  // contain the SMTP URL (which embeds credentials in some configurations).
   return parts.length > 0 ? parts.join(", ") : "SMTP transport error (check server logs)";
 }

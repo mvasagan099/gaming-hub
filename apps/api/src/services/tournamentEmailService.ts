@@ -1,7 +1,7 @@
 import { prisma } from "@gaming-hub/db";
 import { broadcastAdminAnalytics } from "./socketBridge";
 import { env } from "../env";
-import { sendSmtpEmail, getFromAddress } from "./emailTransport";
+import { sendEmail, getFromAddress } from "./emailTransport";
 
 // ============================================================================
 // 1. Types & Enums
@@ -443,8 +443,16 @@ export class TournamentEmailService {
           throw new Error("SMTP 421: Service temporarily unavailable");
         }
 
-        // Production provider transport integration (SendGrid REST API / SMTP / Mock)
-        if (process.env.NODE_ENV !== "test" && env.EMAIL_PROVIDER && env.EMAIL_PROVIDER !== "mock") {
+        // Production provider transport integration (Brevo HTTPS REST API / SendGrid / SMTP / Mock)
+        const activeProvider = process.env.EMAIL_PROVIDER || env.EMAIL_PROVIDER;
+        if (
+          activeProvider &&
+          activeProvider !== "mock" &&
+          (process.env.NODE_ENV !== "test" ||
+            activeProvider === "brevo" ||
+            activeProvider === "smtp" ||
+            activeProvider === "sendgrid")
+        ) {
           await this.sendThroughProvider(record);
         }
 
@@ -487,65 +495,27 @@ export class TournamentEmailService {
   }
 
   /**
-   * Dispatches email through configured production transport (SendGrid, SMTP, SES).
+   * Dispatches email through configured production transport (Brevo, SendGrid, SMTP).
    * Safely handles errors without crashing or exposing credentials.
    */
   private static async sendThroughProvider(record: TournamentEmailRecord): Promise<void> {
-    if (process.env.NODE_ENV === "test" || !env.EMAIL_PROVIDER || env.EMAIL_PROVIDER === "mock") {
+    const provider = process.env.EMAIL_PROVIDER || env.EMAIL_PROVIDER;
+    if (process.env.NODE_ENV === "test" && provider !== "brevo" && provider !== "smtp" && provider !== "sendgrid") {
+      return;
+    }
+    if (!provider || provider === "mock") {
       return;
     }
 
-    // 1. SendGrid REST API
-    if (env.EMAIL_PROVIDER === "sendgrid" || env.SENDGRID_API_KEY) {
-      const fromEmail = env.SENDGRID_FROM || env.SMTP_FROM || "noreply@gaminghub.com";
-      const apiKey = env.SENDGRID_API_KEY;
-      if (!apiKey) {
-        throw new Error("SENDGRID_API_KEY is not configured in environment");
-      }
-
-      const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          personalizations: [{ to: [{ email: record.email }] }],
-          from: { email: fromEmail, name: "Gaming Hub Tournaments" },
-          subject: record.subject,
-          content: [
-            { type: "text/plain", value: record.textBody },
-            { type: "text/html", value: record.htmlBody },
-          ],
-        }),
+    try {
+      await sendEmail({
+        to: record.email,
+        subject: record.subject,
+        text: record.textBody,
+        html: record.htmlBody,
       });
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        throw new Error(`SendGrid API returned status ${res.status}: ${errText || res.statusText}`);
-      }
-      return;
-    }
-
-    // 2. SMTP Transport (reusable singleton transporter)
-    if (env.EMAIL_PROVIDER === "smtp" || env.SMTP_HOST) {
-      const host = env.SMTP_HOST;
-      if (!host) {
-        throw new Error("SMTP_HOST is not configured in environment");
-      }
-
-      try {
-        await sendSmtpEmail({
-          to: record.email,
-          subject: record.subject,
-          text: record.textBody,
-          html: record.htmlBody,
-        });
-        return;
-      } catch (err: any) {
-        // err.message from sendSmtpEmail is already sanitized (no credentials)
-        throw new Error(`SMTP Transport error: ${err?.message || String(err)}`);
-      }
+    } catch (err: any) {
+      throw new Error(`Email delivery error: ${err?.message || String(err)}`);
     }
   }
 

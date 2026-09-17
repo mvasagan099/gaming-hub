@@ -130,11 +130,11 @@ export async function requestWithdrawalOtp(userId: string): Promise<WalletOtpRes
     meta: { purpose: OTP_PURPOSE, expiresAt: expiresAt.toISOString() },
   });
 
-  // In production (or if user email is present and transport configured), dispatch via emailTransport
+  // Dispatch withdrawal verification email via central sendEmail
   if (user?.email) {
     try {
-      const { sendSmtpEmail } = await import("./emailTransport");
-      await sendSmtpEmail({
+      const { sendEmail } = await import("./emailTransport");
+      await sendEmail({
         to: user.email,
         subject: "Gaming Hub - Withdrawal Verification Code",
         text: `Your withdrawal verification code is: ${code}. This code expires in ${settings.otpExpiryMinutes} minutes. If you did not initiate this withdrawal, please secure your account immediately.`,
@@ -142,8 +142,21 @@ export async function requestWithdrawalOtp(userId: string): Promise<WalletOtpRes
       });
     } catch (mailErr: any) {
       console.warn(`[requestWithdrawalOtp] Failed to send email to ${user.email}:`, mailErr?.message);
-      if (process.env.NODE_ENV === "production" && process.env.EMAIL_PROVIDER === "smtp") {
-        throw new AppError("EMAIL_DELIVERY_FAILED", "Failed to deliver withdrawal verification code to your email. Please try again later.", 502);
+      // Invalidate generated OTP to maintain strict security
+      await prisma.walletOtp.updateMany({
+        where: { userId, purpose: OTP_PURPOSE, consumedAt: null },
+        data: { consumedAt: new Date() },
+      });
+      if (
+        process.env.NODE_ENV === "production" ||
+        process.env.EMAIL_PROVIDER === "brevo" ||
+        process.env.EMAIL_PROVIDER === "smtp"
+      ) {
+        throw new AppError(
+          "EMAIL_DELIVERY_FAILED",
+          "Failed to deliver withdrawal verification code to your email. Please try again later.",
+          502,
+        );
       }
     }
   }

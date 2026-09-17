@@ -26,8 +26,11 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().default(300),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   BODY_LIMIT: z.coerce.number().default(262_144),
-  // Email configuration (SMTP / SendGrid / SES)
-  EMAIL_PROVIDER: z.enum(["smtp", "sendgrid", "ses", "mock"]).optional().default("mock"),
+  // Email configuration (Brevo HTTP / SMTP / SendGrid / SES)
+  EMAIL_PROVIDER: z.enum(["brevo", "smtp", "sendgrid", "ses", "mock"]).optional().default("mock"),
+  BREVO_API_KEY: z.string().optional(),
+  BREVO_FROM_EMAIL: z.string().optional(),
+  BREVO_FROM_NAME: z.string().optional().default("Gaming Hub"),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional().default(587),
   SMTP_SECURE: z.enum(["true", "false"]).optional().transform((v) => v === "true"),
@@ -71,11 +74,29 @@ const envSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["EMAIL_PROVIDER"],
-      message: "EMAIL_PROVIDER must be explicitly configured as 'sendgrid', 'smtp', or 'ses' in production. 'mock' email transport is forbidden in production.",
+      message: "EMAIL_PROVIDER must be explicitly configured as 'brevo', 'sendgrid', 'smtp', or 'ses' in production. 'mock' email transport is forbidden in production.",
     });
   }
 
-  // 2. Validate Email Provider credentials when in production mode
+  // 2. Validate Brevo credentials when EMAIL_PROVIDER=brevo in production mode
+  if (data.NODE_ENV === "production" && data.EMAIL_PROVIDER === "brevo") {
+    if (!data.BREVO_API_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["BREVO_API_KEY"],
+        message: "BREVO_API_KEY is required when EMAIL_PROVIDER is 'brevo' in production",
+      });
+    }
+    if (!data.BREVO_FROM_EMAIL && !data.EMAIL_FROM && !data.SMTP_FROM) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["BREVO_FROM_EMAIL"],
+        message: "BREVO_FROM_EMAIL (or EMAIL_FROM) is required when EMAIL_PROVIDER is 'brevo' in production",
+      });
+    }
+  }
+
+  // 3. Validate SendGrid credentials when in production mode
   if (data.NODE_ENV === "production" && data.EMAIL_PROVIDER === "sendgrid" && !data.SENDGRID_API_KEY) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -84,6 +105,7 @@ const envSchema = z.object({
     });
   }
 
+  // 4. Validate SMTP credentials when in production mode
   if (data.NODE_ENV === "production" && data.EMAIL_PROVIDER === "smtp") {
     const missingSmtp: string[] = [];
     if (!data.SMTP_HOST) missingSmtp.push("SMTP_HOST");
