@@ -82,7 +82,7 @@ export const updateProfileSchema = z.object({
   country: z.string().trim().max(60).optional(),
   avatarUrl: z.string().url().max(500).nullable().optional(),
   phone: z.string().trim().max(20).optional(),
-  dateOfBirth: z.string().datetime().optional(),
+  dateOfBirth: z.string().trim().max(40).optional(),
   streetAddress: z.string().trim().max(200).optional(),
   city: z.string().trim().max(100).optional(),
   state: z.string().trim().max(100).optional(),

@@ -188,6 +188,8 @@ export async function getAuthenticatedUserData(user: User) {
         bio: true, country: true, currency: true, coins: true, gems: true,
         xp: true, level: true, wins: true, losses: true, draws: true,
         premium: true, vipLevel: true, twoFactorEnabled: true,
+        phone: true, dateOfBirth: true, gender: true,
+        streetAddress: true, city: true, state: true, postcode: true,
       },
     }),
     prisma.wallet.findUnique({ where: { userId: user.id } }),

@@ -33,7 +33,7 @@ import { useMe } from "../../services/api/useMe";
 import { getAuthErrorMessage } from "../../lib/authErrors";
 import { apiClient } from "../../services/api/client";
 import { messagesApi, sessionsApi, securityApi } from "../../services/api/enterprise";
-import type { BlockedUser, LoginSession } from "@gaming-hub/shared";
+import { COUNTRIES, type BlockedUser, type LoginSession } from "@gaming-hub/shared";
 import { Skeleton, SkeletonCircle, SkeletonText } from "../../components/Skeleton";
 import { MatchHistoryView } from "../../components/MatchHistory/MatchHistoryView";
 import { MyTournamentsView } from "../../components/tournaments/MyTournamentsView";
@@ -73,14 +73,15 @@ export const ProfilePage: React.FC = () => {
 
   // Profile Form States
   const [editing, setEditing] = useState(false);
-  const [firstName, setFirstName] = useState("mani");
-  const [lastName, setLastName] = useState("vasagan");
-  const [phone, setPhone] = useState("+61 400 000 000");
-  const [dob, setDob] = useState("2004-06-17");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [dob, setDob] = useState("");
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("");
-  const [state, setState] = useState("NSW");
+  const [state, setState] = useState("");
   const [postcode, setPostcode] = useState("");
+  const [country, setCountry] = useState("IN");
   const [savingProfile, setSavingProfile] = useState(false);
 
   // Security Form States
@@ -108,11 +109,29 @@ export const ProfilePage: React.FC = () => {
 
   useEffect(() => {
     if (me) {
-      const parts = (me.user.displayName || me.user.username || "mani vasagan").split(" ");
-      setFirstName(parts[0] || "mani");
-      setLastName(parts.slice(1).join(" ") || "vasagan");
-      if (me.profile?.phone) setPhone(me.profile.phone);
-      if (me.profile?.dateOfBirth) setDob(me.profile.dateOfBirth.slice(0, 10));
+      const displayName = me.user.displayName?.trim() || "";
+      if (displayName) {
+        const parts = displayName.split(/\s+/);
+        setFirstName(parts[0] || "");
+        setLastName(parts.slice(1).join(" ") || "");
+      } else {
+        setFirstName(me.user.username || "");
+        setLastName("");
+      }
+      setPhone(me.profile?.phone || "");
+      if (me.profile?.dateOfBirth) {
+        const dateStr = typeof me.profile.dateOfBirth === "string"
+          ? me.profile.dateOfBirth.slice(0, 10)
+          : new Date(me.profile.dateOfBirth).toISOString().slice(0, 10);
+        setDob(dateStr);
+      } else {
+        setDob("");
+      }
+      setStreet(me.profile?.streetAddress || "");
+      setCity(me.profile?.city || "");
+      setState(me.profile?.state || "");
+      setPostcode(me.profile?.postcode || "");
+      setCountry(me.profile?.country || "IN");
     }
   }, [me]);
 
@@ -174,13 +193,14 @@ export const ProfilePage: React.FC = () => {
     try {
       const fullName = `${firstName} ${lastName}`.trim();
       await apiClient.patch("/users/me", {
-        displayName: fullName,
-        phone,
-        dateOfBirth: dob,
-        streetAddress: street,
-        city,
-        state,
-        postcode,
+        displayName: fullName || undefined,
+        country: country || undefined,
+        phone: phone.trim() || undefined,
+        dateOfBirth: dob ? new Date(dob).toISOString() : undefined,
+        streetAddress: street.trim() || undefined,
+        city: city.trim() || undefined,
+        state: state.trim() || undefined,
+        postcode: postcode.trim() || undefined,
       });
       toast.success("Profile details saved successfully!");
       setEditing(false);
@@ -333,8 +353,10 @@ export const ProfilePage: React.FC = () => {
     );
   }
 
-  const emailDisplay = me.user.email || "mvasagan099@gmail.com";
-  const countryDisplay = me.profile?.country || "IN";
+  const emailDisplay = me.user.email || "";
+  const countryCode = country || me.profile?.country || "IN";
+  const matchedCountry = COUNTRIES.find((c) => c.code === countryCode);
+  const countryNameDisplay = matchedCountry ? `${matchedCountry.name} (${matchedCountry.code})` : countryCode;
 
   return (
     <div className="max-w-5xl w-full min-w-0 mx-auto space-y-6 sm:space-y-8 px-0 sm:px-4 py-2 sm:py-6">
@@ -488,6 +510,7 @@ export const ProfilePage: React.FC = () => {
                     value={firstName}
                     disabled={!editing}
                     onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Enter first name"
                     className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
                   />
                 </div>
@@ -500,6 +523,7 @@ export const ProfilePage: React.FC = () => {
                   value={lastName}
                   disabled={!editing}
                   onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Enter last name"
                   className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
                 />
               </div>
@@ -526,11 +550,12 @@ export const ProfilePage: React.FC = () => {
                 <div className="relative flex items-center">
                   <Calendar className="absolute left-3.5 w-4 h-4 text-slate-400" />
                   <input
-                    type="text"
+                    type={editing ? "date" : "text"}
                     value={dob}
                     disabled={!editing}
                     onChange={(e) => setDob(e.target.value)}
-                    placeholder="DD-MM-YYYY"
+                    placeholder="YYYY-MM-DD"
+                    max={new Date(Date.now() - 18 * 365.25 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
                     className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
                   />
                 </div>
@@ -540,13 +565,17 @@ export const ProfilePage: React.FC = () => {
             {/* Phone */}
             <div>
               <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Phone</label>
-              <input
-                type="text"
-                value={phone}
-                disabled={!editing}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
-              />
+              <div className="relative flex items-center">
+                <Phone className="absolute left-3.5 w-4 h-4 text-slate-400" />
+                <input
+                  type="tel"
+                  value={phone}
+                  disabled={!editing}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder={matchedCountry ? `e.g. ${matchedCountry.callingCode} 9876543210` : "e.g. +91 9876543210"}
+                  className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
+                />
+              </div>
             </div>
 
             {/* Address Section Header */}
@@ -562,6 +591,7 @@ export const ProfilePage: React.FC = () => {
                   value={street}
                   disabled={!editing}
                   onChange={(e) => setStreet(e.target.value)}
+                  placeholder="House / Flat / Street address"
                   className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
                 />
               </div>
@@ -574,6 +604,7 @@ export const ProfilePage: React.FC = () => {
                     value={city}
                     disabled={!editing}
                     onChange={(e) => setCity(e.target.value)}
+                    placeholder="City / Town"
                     className="w-full px-3 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
                   />
                 </div>
@@ -585,6 +616,7 @@ export const ProfilePage: React.FC = () => {
                     value={state}
                     disabled={!editing}
                     onChange={(e) => setState(e.target.value)}
+                    placeholder="State / Province"
                     className="w-full px-3 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
                   />
                 </div>
@@ -596,6 +628,7 @@ export const ProfilePage: React.FC = () => {
                     value={postcode}
                     disabled={!editing}
                     onChange={(e) => setPostcode(e.target.value)}
+                    placeholder="PIN / Postal Code"
                     className="w-full px-3 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
                   />
                 </div>
@@ -603,13 +636,33 @@ export const ProfilePage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Country</label>
-                <input
-                  type="text"
-                  value={countryDisplay}
-                  disabled
-                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/30 text-slate-500 dark:text-slate-400 font-bold text-sm outline-none cursor-not-allowed"
-                />
-                <p className="mt-1 text-[11px] text-slate-400">Country cannot be changed</p>
+                {editing && kycStatus !== "APPROVED" ? (
+                  <select
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  >
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                        {c.name} ({c.code})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={countryNameDisplay}
+                    disabled
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/30 text-slate-500 dark:text-slate-400 font-bold text-sm outline-none cursor-not-allowed"
+                  />
+                )}
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {kycStatus === "APPROVED"
+                    ? "Country cannot be changed after KYC approval"
+                    : editing
+                    ? "Select your country of residence"
+                    : "Click 'Edit Profile' to change country"}
+                </p>
               </div>
             </div>
           </div>

@@ -35,6 +35,10 @@ export interface MePayload {
     currency: string | null;
     referredBy: string | null;
     twoFactorEnabled?: boolean;
+    streetAddress?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postcode?: string | null;
   } | null;
   wallet: MeWallet | null;
   unreadNotifications: number;
