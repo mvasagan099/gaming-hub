@@ -270,6 +270,16 @@ export async function securityRoutes(app: FastifyInstance) {
       where: { userId: user.id },
       data: { twoFactorEnabled: true },
     });
+
+    const authHeader = request.headers.authorization;
+    if (authHeader?.startsWith("Bearer ")) {
+      const rawToken = authHeader.slice("Bearer ".length).trim();
+      const tokenHash = hashToken(rawToken);
+      await prisma.loginSession.updateMany({
+        where: { tokenHash, userId: user.id },
+        data: { mfaVerifiedAt: new Date() },
+      });
+    }
     
     await auditFromRequest(request, {
       actorType: "user",

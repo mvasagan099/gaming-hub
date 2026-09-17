@@ -8,6 +8,7 @@ import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
 import { apiClient } from "../../services/api/client";
 import { AuthLayout } from "./AuthLayout";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useAuthStore } from "../../store/authStore";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -53,7 +54,7 @@ export function LoginPage() {
         return;
       }
 
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      const { data: signInData, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) {
         logAuthError("LoginPassword", error);
         toast.error(getAuthErrorMessage(error));
@@ -63,20 +64,39 @@ export function LoginPage() {
         return;
       }
       
-      const session = (await supabase.auth.getSession()).data.session;
+      const session = signInData?.session ?? (await supabase.auth.getSession()).data.session;
       if (!session) {
         toast.success("Welcome back!");
         navigate(from?.pathname ?? "/", { replace: true, state: from?.state });
         return;
       }
       
-      const result = await apiClient.post<{ status: string; userId?: string }>("/auth/session", { token: session.access_token }, session.access_token);
-      
-      if (result.status === "2fa_required" && result.userId) {
-        toast.success("2FA required");
-        navigate("/2fa", { replace: true, state: { userId: result.userId, from } });
+      let is2FARequired = false;
+      let targetUserId: string | undefined;
+
+      try {
+        const result = await apiClient.post<{ status: string; userId?: string }>(
+          "/auth/session",
+          { token: session.access_token },
+          session.access_token
+        );
+        
+        if (result.status === "2fa_required") {
+          is2FARequired = true;
+          targetUserId = result.userId ?? session.user.id;
+        }
+      } catch (sessionErr) {
+        console.error("Backend auth session check failed", sessionErr);
+      }
+
+      if (is2FARequired) {
+        useAuthStore.getState().setIsMfaRequired(true);
+        toast.success("Two-Factor Authentication required");
+        navigate("/2fa", { replace: true, state: { userId: targetUserId, from } });
         return;
       }
+
+      useAuthStore.getState().setIsMfaRequired(false);
 
       // If user is Admin, redirect to Admin Dashboard by default
       try {

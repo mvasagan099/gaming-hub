@@ -4,15 +4,19 @@ import { Shield, Check, X, Loader2, ExternalLink, Key } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { twoFactorApi } from "../../services/api/twoFactor";
+import { useMe } from "../../services/api/useMe";
 
 export const TwoFactorSetup: React.FC = () => {
+  const { me, reload } = useMe();
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [token, setToken] = useState("");
-  const [enabled, setEnabled] = useState(false);
+  const [localEnabled, setLocalEnabled] = useState<boolean | null>(null);
+
+  const enabled = localEnabled ?? Boolean(me?.profile?.twoFactorEnabled);
 
   const handleSetup = async () => {
     setLoading(true);
@@ -39,7 +43,8 @@ export const TwoFactorSetup: React.FC = () => {
     try {
       await twoFactorApi.verify(token);
       toast.success("2FA enabled successfully!");
-      setEnabled(true);
+      setLocalEnabled(true);
+      reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid verification code");
     } finally {
@@ -58,12 +63,17 @@ export const TwoFactorSetup: React.FC = () => {
             Your account is protected with 2FA
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="flex items-center gap-2 p-4 rounded-xl bg-green-500/10 border border-green-500/30">
-            <Check className="w-5 h-5 text-green-500" />
-            <p className="text-sm font-medium text-green-700 dark:text-green-400">
-              Two-factor authentication is enabled
-            </p>
+            <Check className="w-5 h-5 text-green-500 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                Two-factor authentication is active
+              </p>
+              <p className="text-xs text-green-600/80 dark:text-green-400/80 mt-0.5">
+                Sign-in, wallet transfers, and administrative actions require your 6-digit authenticator code.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

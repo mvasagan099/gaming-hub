@@ -67,6 +67,7 @@ export function AuthCallbackPage() {
               session.access_token
             );
             if (sessionRes.status === "2fa_required" && sessionRes.userId) {
+              useAuthStore.getState().setIsMfaRequired(true);
               navigate("/2fa", {
                 replace: true,
                 state: { userId: sessionRes.userId, next: nextParam || "/" },
@@ -76,6 +77,8 @@ export function AuthCallbackPage() {
           } catch (sessionErr) {
             console.error("Backend auth session check failed", sessionErr);
           }
+
+          useAuthStore.getState().setIsMfaRequired(false);
 
           // If Admin, redirect to /admin by default if nextParam was not explicitly set
           try {

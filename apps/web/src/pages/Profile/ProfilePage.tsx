@@ -299,6 +299,7 @@ export const ProfilePage: React.FC = () => {
     try {
       await securityApi.verify2FA(totpToken);
       setTwoFactorEnabled(true);
+      useAuthStore.getState().setIsMfaRequired(false);
       toast.success("Two-Factor Authentication activated successfully!");
       setShow2FAModal(false);
       reload();
@@ -319,6 +320,7 @@ export const ProfilePage: React.FC = () => {
     try {
       await securityApi.disable2FA(totpToken);
       setTwoFactorEnabled(false);
+      useAuthStore.getState().setIsMfaRequired(false);
       toast.success("Two-Factor Authentication disabled.");
       setShow2FAModal(false);
       reload();

@@ -32,5 +32,9 @@ export function AdminRoute() {
     return <Navigate to="/" replace />;
   }
 
+  if (me?.profile?.twoFactorEnabled && me?.mfaVerified === false) {
+    return <Navigate to="/2fa" replace />;
+  }
+
   return <Outlet />;
 }

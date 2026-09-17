@@ -46,6 +46,7 @@ export function TwoFactorPage() {
         await twoFactorApi.verifySession(token);
       }
 
+      useAuthStore.getState().setIsMfaRequired(false);
       toast.success("2FA verified! Welcome back.");
 
       const target = stateObj?.next || stateObj?.from?.pathname;
@@ -73,6 +74,11 @@ export function TwoFactorPage() {
     }
   };
 
+  const handleSignOut = async () => {
+    await useAuthStore.getState().signOut();
+    navigate("/login", { replace: true });
+  };
+
   return (
     <AuthLayout title="Two-factor authentication" subtitle="Enter the code from your authenticator app">
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -94,17 +100,24 @@ export function TwoFactorPage() {
         <button
           type="submit"
           disabled={submitting || token.length !== 6}
-          className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2"
+          className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
         >
           {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
           {submitting ? "Verifying…" : "Verify"}
         </button>
       </form>
 
-      <div className="pt-5 mt-5 border-t border-slate-200 dark:border-slate-800 text-center">
+      <div className="pt-5 mt-5 border-t border-slate-200 dark:border-slate-800 text-center space-y-3">
         <p className="text-[10px] text-slate-400 dark:text-slate-500">
           Enter the 6-digit code from Google Authenticator or similar app
         </p>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="text-xs font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white transition-colors"
+        >
+          Sign out / Use a different account
+        </button>
       </div>
     </AuthLayout>
   );

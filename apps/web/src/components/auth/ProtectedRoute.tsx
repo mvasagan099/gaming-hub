@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
+import { useMe } from "../../services/api/useMe";
 
 export function FullPageLoader() {
   return (
@@ -16,11 +17,16 @@ export function ProtectedRoute() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const session = useAuthStore((s) => s.session);
   const isPasswordRecovery = useAuthStore((s) => s.isPasswordRecovery);
+  const isMfaRequired = useAuthStore((s) => s.isMfaRequired);
   const location = useLocation();
+  const { me, loading: meLoading } = useMe();
 
-  if (isLoading) return <FullPageLoader />;
+  if (isLoading || (session && meLoading && !me)) return <FullPageLoader />;
   if (!session || isPasswordRecovery) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  if (isMfaRequired || (me?.profile?.twoFactorEnabled && me?.mfaVerified === false)) {
+    return <Navigate to="/2fa" state={{ from: location }} replace />;
   }
   return <Outlet />;
 }

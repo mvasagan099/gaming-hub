@@ -85,11 +85,15 @@ export const router = createBrowserRouter([
     errorElement: <ErrorPage />,
   },
   {
+    path: "/2fa",
+    element: <SuspensePage><TwoFactorPage /></SuspensePage>,
+    errorElement: <ErrorPage />,
+  },
+  {
     element: <PublicOnlyRoute />,
     errorElement: <ErrorPage />,
     children: [
       { path: "/login", element: <SuspensePage><LoginPage /></SuspensePage> },
-      { path: "/2fa", element: <SuspensePage><TwoFactorPage /></SuspensePage> },
       { path: "/signup", element: <SuspensePage><SignupPage /></SuspensePage> },
       { path: "/forgot-password", element: <SuspensePage><ForgotPasswordPage /></SuspensePage> },
     ],
