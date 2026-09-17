@@ -97,6 +97,18 @@ export const RedeemCouponModal: React.FC<RedeemCouponModalProps> = ({
         message: "Unable to connect to the coupon service. Please check your internet connection.",
       };
     }
+    if (
+      lower.includes("service is temporarily unavailable") ||
+      lower.includes("temporarily unavailable") ||
+      lower.includes("coupon_service_unavailable") ||
+      lower.includes("503")
+    ) {
+      return {
+        title: "Service Temporarily Unavailable",
+        message:
+          "The coupon verification service is currently waking up or temporarily unavailable. Please wait a moment and click Try Again.",
+      };
+    }
     return {
       title: "Coupon Could Not Be Verified",
       message: rawMsg && rawMsg.length < 120 ? rawMsg : "The coupon code could not be processed. Please try again later.",

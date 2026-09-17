@@ -33,8 +33,8 @@ export interface CouponVaultTransferResponse {
 
 export class CouponVaultService {
   private static getApiConfig() {
-    const apiUrl = env.COUPON_API_URL || process.env.COUPON_API_URL || "http://127.0.0.1:4000/api/v1";
-    const apiKey = env.COUPON_API_KEY || process.env.COUPON_API_KEY || "";
+    let apiUrl = (env.COUPON_API_URL || process.env.COUPON_API_URL || "http://127.0.0.1:4000/api/v1").trim();
+    const apiKey = (env.COUPON_API_KEY || process.env.COUPON_API_KEY || "").trim();
     if (!apiKey) {
       throw new AppError(
         "COUPON_SERVICE_UNAVAILABLE",
@@ -42,7 +42,13 @@ export class CouponVaultService {
         503,
       );
     }
-    return { apiUrl: apiUrl.replace(/\/+$/, ""), apiKey };
+    // Clean trailing slashes
+    apiUrl = apiUrl.replace(/\/+$/, "");
+    // Ensure /api/v1 path is present if caller only provided base domain/origin
+    if (!apiUrl.endsWith("/api/v1") && !apiUrl.includes("/api/")) {
+      apiUrl = `${apiUrl}/api/v1`;
+    }
+    return { apiUrl, apiKey };
   }
 
   /**
@@ -57,23 +63,39 @@ export class CouponVaultService {
     const codeUpper = couponCode.trim().toUpperCase();
 
     const verifyUrl = `${apiUrl}/coupons/verify`;
-    let response: Response;
-    try {
-      response = await fetch(verifyUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          couponCode: codeUpper,
-          userId,
-          gameId: "gaming-hub",
-        }),
-        signal: AbortSignal.timeout(10000),
-      });
-    } catch (err: unknown) {
-      console.error("[CouponVaultService.verifyCoupon] Network error:", err);
+    let response: Response | undefined;
+    let lastError: unknown;
+
+    // Retry once on network error or timeout to accommodate Render cold starts (free tier wake-up)
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        response = await fetch(verifyUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+          },
+          body: JSON.stringify({
+            couponCode: codeUpper,
+            userId,
+            gameId: "gaming-hub",
+          }),
+          // First attempt: 15s. Second attempt (cold-start recovery): 25s.
+          signal: AbortSignal.timeout(attempt === 1 ? 15000 : 25000),
+        });
+        break;
+      } catch (err: unknown) {
+        lastError = err;
+        console.warn(`[CouponVaultService.verifyCoupon] Attempt ${attempt} failed:`, err);
+        if (attempt === 1) {
+          // Wait 2 seconds before retry to give cold-start container time to initialize
+          await new Promise((res) => setTimeout(res, 2000));
+        }
+      }
+    }
+
+    if (!response) {
+      console.error("[CouponVaultService.verifyCoupon] Network error after retries:", lastError);
       throw new AppError(
         "COUPON_SERVICE_UNAVAILABLE",
         "Coupon verification service is temporarily unavailable. Please try again later.",
@@ -141,7 +163,7 @@ export class CouponVaultService {
           ipAddress: params.ipAddress || "0.0.0.0",
           device: params.device || "unknown",
         }),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(25000),
       });
     } catch (err: unknown) {
       console.error("[CouponVaultService.redeemCoupon] Network error:", err);
@@ -203,7 +225,7 @@ export class CouponVaultService {
           amount: params.amount,
           transactionId: params.transactionId,
         }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(30000),
       });
     } catch (err: unknown) {
       console.error("[CouponVaultService.transferToCouponWallet] Network / timeout error:", err);
@@ -304,7 +326,7 @@ export class CouponVaultService {
           "Content-Type": "application/json",
           "x-api-key": apiKey,
         },
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(25000),
       });
     } catch (err: unknown) {
       console.error("[CouponVaultService.checkTransferStatus] Network error:", err);
