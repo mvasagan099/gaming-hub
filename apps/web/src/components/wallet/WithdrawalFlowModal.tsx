@@ -261,17 +261,19 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
       // Distinguish UNCONFIRMED_HOLD / timeout from fatal errors
       const errCode = err?.code || "";
       const isTimeout =
-        err?.isTimeout ||
-        err?.isUncertain ||
         errCode === "COUPON_TRANSFER_TIMEOUT" ||
-        err?.statusCode === 504;
+        err?.status === 504 ||
+        err?.isTimeout ||
+        err?.isUncertain;
 
       if (isTimeout) {
         // Must show PENDING popup, NOT failure
         await useWalletStore.getState().fetchWallet();
         notifyWalletChanged();
+        // transactionId is passed via AppError details field
+        const txId = (err?.details as any)?.transactionId || err?.transactionId || "PENDING_CONFIRMATION";
         setTxResult({
-          transactionId: err?.transactionId || "PENDING_CONFIRMATION",
+          transactionId: txId,
           amount: parsedAmount,
           fee: calculatedFee,
           netAmount: youReceive,

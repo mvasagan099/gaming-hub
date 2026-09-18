@@ -557,10 +557,10 @@ export async function createWithdrawalRequest(
         "COUPON_TRANSFER_TIMEOUT",
         "Transfer request timed out. Please check your transaction history before retrying.",
         504,
+        { transactionId: held.id },
       );
       (holdError as any).isTimeout = true;
       (holdError as any).isUncertain = true;
-      (holdError as any).transactionId = held.id;
       throw holdError;
     }
 
