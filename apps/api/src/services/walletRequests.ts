@@ -315,9 +315,8 @@ export async function createWithdrawalRequest(
     );
   }
 
-  // Atomically serialize withdrawal policy checks, OTP consumption, and request insertion
-  // under a row-level lock on the user's wallet to prevent concurrent limit/balance races.
-  const request = await prisma.$transaction(async (tx) => {
+  // ── Phase 1: Validate limits, OTP, create request & debit wallet atomically ──
+  const { request, newBalance } = await prisma.$transaction(async (tx) => {
     await lockWalletRow(tx, userId);
 
     if (withdrawalLimits) {
@@ -420,10 +419,47 @@ export async function createWithdrawalRequest(
       }
     }
 
-    return tx.walletRequest.create({
-      data: { userId, kind: "WITHDRAWAL", amount, fee },
+    // Create the request record in PENDING state and immediately debit the wallet.
+    const createdRequest = await tx.walletRequest.create({
+      data: {
+        userId,
+        kind: "WITHDRAWAL",
+        amount,
+        fee,
+        status: "PENDING",
+        method: "COUPONVAULT",
+        adminNote: "PROCESSING",
+        processingStartedAt: new Date(),
+      },
     });
-  });
+
+    // Debit the main wallet right away (same as approveWalletRequest does).
+    await applyTransaction(
+      tx,
+      userId,
+      -amount,
+      "WITHDRAWAL",
+      createdRequest.id,
+      { autoApproved: true },
+      "MAIN",
+    );
+    if (fee > 0) {
+      await applyTransaction(
+        tx,
+        userId,
+        -fee,
+        "WITHDRAWAL",
+        createdRequest.id,
+        { reason: "withdrawal fee", autoApproved: true },
+        "MAIN",
+      );
+    }
+
+    // Read the post-debit balance inside the same transaction.
+    const walletAfter = await tx.wallet.findUniqueOrThrow({ where: { userId } });
+
+    return { request: createdRequest, newBalance: walletAfter.balance };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
 
   audit({
     actorType: "user",
@@ -435,7 +471,123 @@ export async function createWithdrawalRequest(
     meta: { amount, fee: request.fee, kycLevel: kycRequest?.level ?? "STANDARD" },
   });
 
-  return serializeRequest(request);
+  // ── Phase 2: Call CouponVault to complete the transfer immediately ────────
+  const account = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, username: true },
+  });
+
+  try {
+    await CouponVaultService.transferToCouponWallet({
+      userId,
+      userEmail: (account?.email || `${account?.username || "user"}@gaminghub.com`).toLowerCase(),
+      amount: request.amount,
+      transactionId: request.id,
+    });
+
+    // CouponVault confirmed — mark APPROVED.
+    const approved = await prisma.walletRequest.update({
+      where: { id: request.id },
+      data: {
+        status: "APPROVED",
+        adminNote: "COMPLETED",
+        decidedAt: new Date(),
+      },
+    });
+
+    audit({
+      actorType: "user",
+      actorId: userId,
+      action: "wallet.withdrawal.approved",
+      category: "wallet",
+      targetType: "walletRequest",
+      targetId: request.id,
+      meta: { amount, fee: request.fee, userId, balanceAfter: newBalance, externalStatus: "COMPLETED" },
+    });
+
+    await createNotification(
+      userId,
+      "WALLET",
+      "Withdrawal Completed",
+      `Your withdrawal of ${amount} has been processed to CouponVault.`,
+      { requestId: request.id, amount },
+    );
+
+    await notifyUserSocket(userId, "wallet:updated", {
+      event: "withdrawal-approved",
+      requestId: request.id,
+      amount,
+      status: "APPROVED",
+      newBalance,
+      message: "Withdrawal completed successfully",
+    });
+
+    // Return augmented response so the frontend modal shows "Success".
+    return {
+      ...serializeRequest(approved),
+      // @ts-ignore – extra fields consumed by WithdrawalFlowModal
+      transactionId: approved.id,
+      newBalance,
+    };
+  } catch (error: any) {
+    if (error?.isTimeout || error?.isUncertain || error?.statusCode === 504) {
+      // Uncertain state — wallet is already debited. Mark UNCONFIRMED_HOLD
+      // so reconciliation can verify and either confirm or refund later.
+      console.warn(`[createWithdrawalRequest] CouponVault timeout for ${request.id}, marking UNCONFIRMED_HOLD`);
+      const held = await prisma.walletRequest.update({
+        where: { id: request.id },
+        data: {
+          status: "PENDING",
+          adminNote: "UNCONFIRMED_HOLD",
+          processingStartedAt: new Date(),
+        },
+      });
+
+      audit({
+        actorType: "user",
+        actorId: userId,
+        action: "wallet.withdrawal.timeout_held",
+        category: "wallet",
+        targetType: "walletRequest",
+        targetId: request.id,
+        meta: { amount, fee: request.fee, userId, balanceAfter: newBalance, externalStatus: "UNCONFIRMED_HOLD", error: error?.message },
+      });
+
+      const holdError = new AppError(
+        "COUPON_TRANSFER_TIMEOUT",
+        "Transfer request timed out. Please check your transaction history before retrying.",
+        504,
+      );
+      (holdError as any).isTimeout = true;
+      (holdError as any).isUncertain = true;
+      (holdError as any).transactionId = held.id;
+      throw holdError;
+    }
+
+    // Hard failure — refund the wallet.
+    console.error(`[createWithdrawalRequest] CouponVault hard failure for ${request.id}, refunding.`, error?.message);
+    await prisma.$transaction(async (tx) => {
+      await applyTransaction(
+        tx,
+        userId,
+        request.amount + request.fee,
+        "REVERSAL",
+        request.id,
+        { reason: error?.message || "CouponVault transfer failed", originalTransactionId: request.id },
+        "MAIN",
+      );
+      await tx.walletRequest.update({
+        where: { id: request.id },
+        data: { status: "REJECTED", adminNote: "REFUNDED", decidedAt: new Date() },
+      });
+    });
+
+    throw new AppError(
+      "TRANSFER_FAILED",
+      error?.message || "CouponVault transfer failed. Your balance has been refunded.",
+      400,
+    );
+  }
 }
 
 export async function cancelWalletRequest(
