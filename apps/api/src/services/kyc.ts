@@ -140,6 +140,20 @@ export async function createKycRequest(data: CreateKycRequestInput): Promise<Kyc
     });
   }
 
+  // Pre-sync entered personal & address information to Profile
+  await prisma.profile.update({
+    where: { userId: data.userId },
+    data: {
+      phone: data.mobileNumber || undefined,
+      dateOfBirth: data.dateOfBirth || undefined,
+      country: data.country || undefined,
+      streetAddress: data.streetAddress || undefined,
+      city: data.city || undefined,
+      state: data.state || undefined,
+      postcode: data.postalCode || undefined,
+    },
+  }).catch(() => undefined);
+
   return request as KycRequestWithDocuments;
 }
 
@@ -486,6 +500,11 @@ export async function approveKycRequest(
       kycStatus: "approved",
       country: request.country ?? undefined,
       phone: request.mobileNumber ?? request.user.profile?.phone,
+      streetAddress: request.streetAddress ?? request.user.profile?.streetAddress,
+      city: request.city ?? request.user.profile?.city,
+      state: request.state ?? request.user.profile?.state,
+      postcode: request.postalCode ?? request.user.profile?.postcode,
+      dateOfBirth: request.dateOfBirth ?? request.user.profile?.dateOfBirth,
     },
   });
 
@@ -627,6 +646,20 @@ export async function adminOverrideKycLevel(
       documents: { orderBy: { createdAt: "desc" } },
     },
   });
+
+  await prisma.profile.update({
+    where: { userId: request.userId },
+    data: {
+      kycStatus: "approved",
+      country: request.country ?? undefined,
+      phone: request.mobileNumber ?? undefined,
+      streetAddress: request.streetAddress ?? undefined,
+      city: request.city ?? undefined,
+      state: request.state ?? undefined,
+      postcode: request.postalCode ?? undefined,
+      dateOfBirth: request.dateOfBirth ?? undefined,
+    },
+  }).catch(() => undefined);
 
   await prisma.kycReview.create({
     data: {

@@ -210,6 +210,41 @@ export async function getAuthenticatedUserData(user: User, rawToken?: string) {
     }).catch(() => undefined);
   }
 
+  // Fallback & auto-sync address and personal details from KYC if missing in profile
+  if (profile && (!profile.streetAddress || !profile.city || !profile.postcode)) {
+    const kyc = await prisma.kycRequest.findUnique({
+      where: { userId: user.id },
+      select: {
+        streetAddress: true,
+        city: true,
+        state: true,
+        postalCode: true,
+        dateOfBirth: true,
+        mobileNumber: true,
+      },
+    });
+    if (kyc && (kyc.streetAddress || kyc.city)) {
+      profile.streetAddress = profile.streetAddress || kyc.streetAddress;
+      profile.city = profile.city || kyc.city;
+      profile.state = profile.state || kyc.state;
+      profile.postcode = profile.postcode || kyc.postalCode;
+      if (!profile.phone && kyc.mobileNumber) profile.phone = kyc.mobileNumber;
+      if (!profile.dateOfBirth && kyc.dateOfBirth) profile.dateOfBirth = kyc.dateOfBirth;
+
+      void prisma.profile.update({
+        where: { userId: user.id },
+        data: {
+          streetAddress: profile.streetAddress,
+          city: profile.city,
+          state: profile.state,
+          postcode: profile.postcode,
+          phone: profile.phone,
+          dateOfBirth: profile.dateOfBirth,
+        },
+      }).catch(() => undefined);
+    }
+  }
+
   let mfaVerified = false;
   if (rawToken) {
     const tokenHash = hashToken(rawToken);

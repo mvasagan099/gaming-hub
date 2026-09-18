@@ -283,14 +283,43 @@ export class PlayerProfileService {
       prisma.profile.findUnique({ where: { userId } }),
     ]);
 
+    let phone = profile?.phone ?? null;
+    let dateOfBirth = profile?.dateOfBirth?.toISOString() ?? null;
+    let streetAddress = profile?.streetAddress ?? null;
+    let city = profile?.city ?? null;
+    let state = profile?.state ?? null;
+    let postcode = profile?.postcode ?? null;
+
+    if (!streetAddress || !city || !postcode) {
+      const kyc = await prisma.kycRequest.findUnique({
+        where: { userId },
+        select: {
+          streetAddress: true,
+          city: true,
+          state: true,
+          postalCode: true,
+          dateOfBirth: true,
+          mobileNumber: true,
+        },
+      });
+      if (kyc && (kyc.streetAddress || kyc.city)) {
+        streetAddress = streetAddress || kyc.streetAddress;
+        city = city || kyc.city;
+        state = state || kyc.state;
+        postcode = postcode || kyc.postalCode;
+        if (!phone && kyc.mobileNumber) phone = kyc.mobileNumber;
+        if (!dateOfBirth && kyc.dateOfBirth) dateOfBirth = kyc.dateOfBirth.toISOString();
+      }
+    }
+
     return {
       ...publicData,
-      phone: profile?.phone ?? null,
-      dateOfBirth: profile?.dateOfBirth?.toISOString() ?? null,
-      streetAddress: profile?.streetAddress ?? null,
-      city: profile?.city ?? null,
-      state: profile?.state ?? null,
-      postcode: profile?.postcode ?? null,
+      phone,
+      dateOfBirth,
+      streetAddress,
+      city,
+      state,
+      postcode,
       wallet: wallet
         ? {
             balance: wallet.balance,
