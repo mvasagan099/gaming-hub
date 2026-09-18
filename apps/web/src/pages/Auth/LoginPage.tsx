@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,19 +10,14 @@ import {
   Loader2,
   Wrench,
   AlertTriangle,
-  ShieldCheck,
-  ArrowLeft,
-  AlertCircle,
 } from "lucide-react";
 import { supabase } from "../../services/supabase";
 import { getAuthRedirectUrl } from "../../lib/authUtils";
 import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
 import { apiClient } from "../../services/api/client";
-import { twoFactorApi } from "../../services/api/twoFactor";
 import { AuthLayout } from "./AuthLayout";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useAuthStore } from "../../store/authStore";
-import { cn } from "../../lib/utils";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -44,35 +39,19 @@ export function LoginPage() {
   const [useMagicLink, setUseMagicLink] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Login flow step
-  const [step, setStep] = useState<"credentials" | "2fa">(
-    locationState?.require2FA ? "2fa" : "credentials"
-  );
-
-  // Step 2: OTP digits
-  const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const [mfaError, setMfaError] = useState("");
-  const [shouldShake, setShouldShake] = useState(false);
-
   const maintenanceEnabled = settings?.general?.maintenanceEnabled ?? false;
   const maintenanceMessage = settings?.general?.maintenanceMessage ?? "";
 
-  // If redirected here with require2FA (e.g. from ProtectedRoute or magic link)
+  // If redirected here with require2FA flag, forward straight to /2fa
   useEffect(() => {
     if (locationState?.require2FA) {
-      setStep("2fa");
       useAuthStore.getState().setIsMfaRequired(true);
+      navigate("/2fa", {
+        replace: true,
+        state: { from: locationState.from, next: locationState.next },
+      });
     }
-  }, [locationState]);
-
-  // Auto-focus first OTP box when Step 2 appears
-  useEffect(() => {
-    if (step === "2fa") {
-      const t = setTimeout(() => inputRefs.current[0]?.focus(), 150);
-      return () => clearTimeout(t);
-    }
-  }, [step]);
+  }, [locationState, navigate]);
 
   // Navigate after fully completing login
   const finishLoginNavigation = async (session: import("@supabase/supabase-js").Session) => {
@@ -101,112 +80,6 @@ export function LoginPage() {
 
     toast.success("Welcome back!");
     navigate("/", { replace: true });
-  };
-
-  // ── OTP Box Handlers ──────────────────────────────────────────────────────
-  const handleDigitChange = (index: number, val: string) => {
-    setMfaError("");
-    const clean = val.replace(/\D/g, "");
-    if (!clean) {
-      const next = [...digits];
-      next[index] = "";
-      setDigits(next);
-      return;
-    }
-    const char = clean[clean.length - 1];
-    const next = [...digits];
-    next[index] = char;
-    setDigits(next);
-    if (index < 5) inputRefs.current[index + 1]?.focus();
-  };
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Backspace") {
-      if (!digits[index] && index > 0) {
-        const next = [...digits];
-        next[index - 1] = "";
-        setDigits(next);
-        inputRefs.current[index - 1]?.focus();
-      } else {
-        const next = [...digits];
-        next[index] = "";
-        setDigits(next);
-      }
-    } else if (e.key === "ArrowLeft" && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    } else if (e.key === "ArrowRight" && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      const code = digits.join("");
-      if (code.length === 6 && !submitting) handleVerifyTotp(code);
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    setMfaError("");
-    const paste = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    if (!paste) return;
-    const next = [...digits];
-    for (let i = 0; i < 6; i++) next[i] = paste[i] || "";
-    setDigits(next);
-    inputRefs.current[Math.min(paste.length, 5)]?.focus();
-  };
-
-  // ── Step 2: Verify TOTP ───────────────────────────────────────────────────
-  const handleVerifyTotp = async (codeOverride?: string) => {
-    const code = (codeOverride ?? digits.join("")).trim();
-    if (code.length !== 6) {
-      setMfaError("Please enter all 6 digits.");
-      setShouldShake(true);
-      setTimeout(() => setShouldShake(false), 500);
-      return;
-    }
-
-    // We need the pending session's access_token to authenticate the TOTP request
-    const pendingSession = useAuthStore.getState().pendingMfaSession;
-    const bearerToken = pendingSession?.access_token;
-
-    if (!bearerToken) {
-      toast.error("Session expired. Please log in again.");
-      handleBackToLogin();
-      return;
-    }
-
-    setSubmitting(true);
-    setMfaError("");
-    try {
-      await twoFactorApi.verifyLoginTimeTotp(code, bearerToken);
-      toast.success("2FA verified!");
-      await finishLoginNavigation(pendingSession);
-    } catch (err) {
-      logAuthError("LoginTimeTotpVerify", err);
-      setMfaError("Invalid authentication code. Please try again.");
-      setShouldShake(true);
-      setTimeout(() => setShouldShake(false), 500);
-      setDigits(["", "", "", "", "", ""]);
-      inputRefs.current[0]?.focus();
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // ── Back to login: cancel pending session ─────────────────────────────────
-  const handleBackToLogin = async () => {
-    setSubmitting(true);
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // ignore
-    } finally {
-      useAuthStore.getState().setPendingMfaSession(null);
-      useAuthStore.getState().setIsMfaRequired(false);
-      setStep("credentials");
-      setDigits(["", "", "", "", "", ""]);
-      setMfaError("");
-      setSubmitting(false);
-    }
   };
 
   // ── Step 1: Submit email + password ───────────────────────────────────────
@@ -294,9 +167,11 @@ export function LoginPage() {
         if (!useAuthStore.getState().pendingMfaSession) {
           useAuthStore.getState().setPendingMfaSession(supabaseSession);
         }
-        setStep("2fa");
-        setDigits(["", "", "", "", "", ""]);
-        setMfaError("");
+        // Navigate to dedicated 2FA page, passing along any redirect info
+        navigate("/2fa", {
+          replace: true,
+          state: { from, next: locationState?.next, email: email.trim() },
+        });
         return;
       }
 
@@ -337,15 +212,11 @@ export function LoginPage() {
 
   return (
     <AuthLayout
-      title={step === "2fa" ? "Two-Factor Authentication" : "Welcome back"}
-      subtitle={
-        step === "2fa"
-          ? "Enter the 6-digit code from your authenticator app."
-          : "Log in to access your profile, wallet and matches"
-      }
+      title="Welcome back"
+      subtitle="Log in to access your profile, wallet and matches"
     >
       <div className="space-y-4">
-        {isSessionRevoked && step !== "2fa" && (
+        {isSessionRevoked && (
           <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-3 shadow-sm">
             <AlertTriangle className="w-5 h-5 shrink-0 text-amber-500 mt-0.5" />
             <div>
@@ -360,183 +231,84 @@ export function LoginPage() {
         )}
 
         <AnimatePresence mode="wait">
-          {step === "2fa" ? (
-            /* ═══════════════════════════════════════════════════════
-               STEP 2: LOGIN-TIME 2FA CHALLENGE
-               User's Supabase session is parked in pendingMfaSession.
-               Protected routes are blocked until TOTP succeeds.
-               ═══════════════════════════════════════════════════════ */
-            <motion.div
-              key="2fa"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.22 }}
-              className="space-y-5"
-            >
-              <div className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-center space-y-1.5">
-                <div className="w-9 h-9 mx-auto rounded-xl bg-indigo-500/20 text-indigo-500 flex items-center justify-center">
-                  <ShieldCheck className="w-5 h-5" />
+          <motion.div
+            key="credentials"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.22 }}
+          >
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                <input
+                  type="email"
+                  autoComplete="email"
+                  placeholder="Email address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-white rounded-xl pl-10 pr-4 py-3 border border-slate-300 dark:border-slate-800 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+
+              {!useMagicLink && (
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-white rounded-xl pl-10 pr-4 py-3 border border-slate-300 dark:border-slate-800 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
                 </div>
-                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Two-Factor Authentication is enabled for this account.
-                </p>
-                {email && (
-                  <p className="text-[11px] font-mono text-indigo-500 dark:text-indigo-400 font-bold truncate">
-                    {email}
-                  </p>
-                )}
-              </div>
-
-              {/* 6-box OTP grid */}
-              <div className="space-y-2">
-                <motion.div
-                  className="flex items-center justify-center gap-2 sm:gap-2.5 py-1"
-                  animate={shouldShake ? { x: [-10, 10, -8, 8, -4, 4, 0] } : { x: 0 }}
-                  transition={{ duration: 0.4 }}
-                >
-                  {digits.map((digit, i) => (
-                    <input
-                      key={i}
-                      ref={(el) => { inputRefs.current[i] = el; }}
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleDigitChange(i, e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(i, e)}
-                      onPaste={handlePaste}
-                      disabled={submitting}
-                      className={cn(
-                        "w-11 h-13 sm:w-12 sm:h-15 text-center text-xl sm:text-2xl font-black rounded-xl",
-                        "bg-white dark:bg-slate-950 border text-slate-900 dark:text-white",
-                        "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
-                        "transition-all duration-150 shadow-sm font-mono",
-                        digit
-                          ? "border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
-                          : "border-slate-300 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-700",
-                        mfaError && "border-rose-500/80 bg-rose-500/10 text-rose-500"
-                      )}
-                    />
-                  ))}
-                </motion.div>
-
-                {mfaError && (
-                  <div className="flex items-center gap-1.5 text-rose-500 text-xs font-semibold justify-center pt-1 animate-in fade-in duration-150">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>{mfaError}</span>
-                  </div>
-                )}
-              </div>
+              )}
 
               <button
-                type="button"
-                onClick={() => handleVerifyTotp()}
-                disabled={submitting || digits.join("").length !== 6}
+                type="submit"
+                disabled={submitting}
                 className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 {submitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <ShieldCheck className="w-4 h-4" />
+                  <LogIn className="w-4 h-4" />
                 )}
-                {submitting ? "Verifying…" : "VERIFY & CONTINUE"}
+                {submitting ? "Signing in…" : useMagicLink ? "Send magic link" : "LOG IN"}
               </button>
 
               <button
                 type="button"
-                onClick={handleBackToLogin}
-                disabled={submitting}
-                className="w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 text-xs font-bold text-slate-600 dark:text-slate-400 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                onClick={() => setUseMagicLink((v) => !v)}
+                className="w-full flex items-center justify-center gap-2 text-xs font-bold text-indigo-500 hover:text-indigo-400 transition-colors cursor-pointer"
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                Back to login
+                <Sparkles className="w-3.5 h-3.5" />
+                {useMagicLink ? "Use email & password instead" : "Send me a magic link instead"}
               </button>
-            </motion.div>
-          ) : (
-            /* ═══════════════════════════════════════════════════════
-               STEP 1: EMAIL + PASSWORD (no 2FA field visible)
-               ═══════════════════════════════════════════════════════ */
-            <motion.div
-              key="credentials"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.22 }}
-            >
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
-                  <input
-                    type="email"
-                    autoComplete="email"
-                    placeholder="Email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-white rounded-xl pl-10 pr-4 py-3 border border-slate-300 dark:border-slate-800 focus:outline-none focus:border-indigo-500 transition-colors"
-                  />
-                </div>
+            </form>
 
-                {!useMagicLink && (
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
-                    <input
-                      type="password"
-                      autoComplete="current-password"
-                      placeholder="Password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-white rounded-xl pl-10 pr-4 py-3 border border-slate-300 dark:border-slate-800 focus:outline-none focus:border-indigo-500 transition-colors"
-                    />
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            <div className="pt-5 mt-5 border-t border-slate-200 dark:border-slate-800 space-y-2 text-center">
+              <div className="flex items-center justify-center gap-4 text-xs font-bold">
+                <Link
+                  to="/forgot-password"
+                  className="text-slate-500 dark:text-slate-400 hover:text-indigo-400 transition-colors"
                 >
-                  {submitting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <LogIn className="w-4 h-4" />
-                  )}
-                  {submitting ? "Signing in…" : useMagicLink ? "Send magic link" : "LOG IN"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setUseMagicLink((v) => !v)}
-                  className="w-full flex items-center justify-center gap-2 text-xs font-bold text-indigo-500 hover:text-indigo-400 transition-colors cursor-pointer"
+                  Forgot password?
+                </Link>
+                <span className="text-slate-300 dark:text-slate-700">•</span>
+                <Link
+                  to="/signup"
+                  className="text-indigo-500 hover:text-indigo-400 transition-colors"
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  {useMagicLink ? "Use email & password instead" : "Send me a magic link instead"}
-                </button>
-              </form>
-
-              <div className="pt-5 mt-5 border-t border-slate-200 dark:border-slate-800 space-y-2 text-center">
-                <div className="flex items-center justify-center gap-4 text-xs font-bold">
-                  <Link
-                    to="/forgot-password"
-                    className="text-slate-500 dark:text-slate-400 hover:text-indigo-400 transition-colors"
-                  >
-                    Forgot password?
-                  </Link>
-                  <span className="text-slate-300 dark:text-slate-700">•</span>
-                  <Link
-                    to="/signup"
-                    className="text-indigo-500 hover:text-indigo-400 transition-colors"
-                  >
-                    Create an account
-                  </Link>
-                </div>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                  Multiplayer matches are tied to your account — sign in to play online.
-                </p>
+                  Create an account
+                </Link>
               </div>
-            </motion.div>
-          )}
+              <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                Multiplayer matches are tied to your account — sign in to play online.
+              </p>
+            </div>
+          </motion.div>
         </AnimatePresence>
       </div>
     </AuthLayout>
