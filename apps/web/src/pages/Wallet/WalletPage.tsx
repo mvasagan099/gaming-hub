@@ -44,6 +44,8 @@ const REFERENCE_LABELS: Record<TransactionReferenceType, string> = {
   CASHBACK_CREDIT: "Cashback",
   WAGER_REFUND: "Wager refund",
   REVERSAL: "Reversal",
+  AFFILIATE_COMMISSION: "Affiliate commission",
+  AFFILIATE_COMMISSION_REVERSAL: "Affiliate commission reversal",
 };
 
 export function WalletPage() {

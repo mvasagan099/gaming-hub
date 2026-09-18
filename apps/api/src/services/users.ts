@@ -77,24 +77,46 @@ export async function ensureUser(
   email: string | null,
   userMetadata?: Record<string, unknown> | null,
 ): Promise<User> {
+  const meta = readMetadata(userMetadata);
+
   const existing = await prisma.user.findUnique({ where: { id: sub } });
   if (existing) {
     if (existing.deletedAt) {
       throw new AppError("ACCOUNT_DELETED", "This account has been deleted", 403);
     }
+    // Ensure wallet and referral code exist for legacy / synced accounts
+    await prisma.wallet.upsert({
+      where: { userId: sub },
+      update: {},
+      create: { userId: sub },
+    }).catch(() => undefined);
+
+    if (!existing.referralCode) {
+      void import("./referrals")
+        .then(({ ReferralService }) => ReferralService.ensureReferralCode(sub))
+        .catch(() => undefined);
+    }
+
+    if (meta.referredBy) {
+      void import("./referrals")
+        .then(({ ReferralService }) => ReferralService.applyReferral(sub, meta.referredBy!))
+        .catch(() => undefined);
+    }
+
     if (existing.email !== email) {
       return prisma.user.update({ where: { id: sub }, data: { email } });
     }
     return existing;
   }
 
-  const meta = readMetadata(userMetadata);
   const baseUsername = sanitizeUsername(meta.username) ?? sanitizeUsername(email?.split("@")[0] ?? null) ?? "player";
 
   let created: User | null = null;
+  const { codeFromUsername } = await import("./referrals");
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const username = attempt === 0 ? baseUsername : `${baseUsername}_${randomSuffix()}`;
+    const referralCode = codeFromUsername(username);
     try {
       created = await prisma.$transaction(async (tx) => {
         const user = await tx.user.create({
@@ -104,6 +126,7 @@ export async function ensureUser(
             username,
             displayName: meta.displayName ?? username,
             avatarUrl: meta.avatarUrl,
+            referralCode,
           },
         });
         await tx.profile.create({
@@ -142,7 +165,7 @@ export async function ensureUser(
   // rewards, fire-and-forget so a bad code never blocks sign-in).
   if (meta.referredBy) {
     void import("./referrals")
-      .then(({ applyReferral }) => applyReferral(created!.id, meta.referredBy!))
+      .then(({ ReferralService }) => ReferralService.applyReferral(created!.id, meta.referredBy!))
       .catch((error) => {
         console.error("referral: failed to apply at signup", error);
       });

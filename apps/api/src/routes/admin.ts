@@ -494,7 +494,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // Patch a single dotted setting key (e.g. `auth.signupEnabled`).
-  app.patch("/api/admin/settings/:key", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/settings/:key", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:settings:edit", prisma);
     const { key } = routeParams(request);
     const { value } = parseSchema(singleSettingSchema, request.body);
@@ -517,7 +517,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // Replace an entire category (e.g. all `wallet.*` keys) in one transaction.
-  app.put("/api/admin/settings/category", { preHandler: authenticate }, async (request) => {
+  app.put("/api/admin/settings/category", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:settings:edit", prisma);
     const { category, values } = parseSchema(categoryUpdateSchema, request.body);
     const saved = await setCategorySettings(category, values, admin.id);
@@ -534,7 +534,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // Reset a category back to built-in defaults (deletes all stored rows).
-  app.delete("/api/admin/settings/category/:category", { preHandler: authenticate }, async (request) => {
+  app.delete("/api/admin/settings/category/:category", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:settings:edit", prisma);
     const { category } = routeParams(request);
     if (!(category in SETTINGS_CATEGORIES)) {

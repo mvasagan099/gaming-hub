@@ -119,6 +119,8 @@ enum TransactionReferenceType {
   CASHBACK_CREDIT
   WAGER_REFUND
   REVERSAL
+  AFFILIATE_COMMISSION
+  AFFILIATE_COMMISSION_REVERSAL
 }
 
 enum NotificationType {
@@ -129,6 +131,7 @@ enum NotificationType {
   TOURNAMENT
   SYSTEM
   REFERRAL
+  AFFILIATE_COMMISSION
   COUPON
   ANNOUNCEMENT
   MESSAGE
@@ -298,6 +301,8 @@ model User {
   matchmakingQueues  MatchmakingQueue[]
   referralsMade      Referral[]           @relation("Referrer")
   referralsReceived  Referral[]           @relation("ReferredUser")
+  affiliateCommissionsEarned    AffiliateCommission[] @relation("AffiliateReferrer")
+  affiliateCommissionsGenerated AffiliateCommission[] @relation("AffiliateReferee")
   couponRedemptions  CouponRedemption[]
   walletRequests     WalletRequest[]
   walletRequestDecisions WalletRequest[]    @relation("WalletRequestAdmin")
@@ -313,6 +318,7 @@ model User {
   announcementsRead  AnnouncementRead[]
   idempotencyRecords IdempotencyRecord[]
   userPrivacy        UserPrivacy?
+  referralRiskEvents ReferralRiskEvent[]
   
   // KYC Relations
   kycRequest         KycRequest?
@@ -1362,20 +1368,84 @@ model Referral {
   referredUserId String    @unique
   status         String    @default("PENDING")
   commission     Int       @default(0)
-  referredReward Int       @default(0)
-  qualifiedAt    DateTime?
-  rewardedAt     DateTime?
-  reversedAt     DateTime?
-  reversalReason String?
-  metadata       Json?
-  createdAt      DateTime  @default(now())
+  referredReward    Int       @default(0)
+  firstCommissionAt DateTime?
+  qualifiedAt       DateTime?
+  rewardedAt        DateTime?
+  reversedAt        DateTime?
+  reversalReason    String?
+  affiliateBlockedAt     DateTime?
+  affiliateBlockedReason String?
+  affiliateBlockedBy     String?
+  metadata          Json?
+  createdAt         DateTime  @default(now())
 
   referrer     User @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
   referredUser User @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+  affiliateCommissions AffiliateCommission[]
+  riskEvents   ReferralRiskEvent[]
 
   @@index([referrerId, createdAt])
   @@index([status, createdAt])
   @@index([code])
+}
+
+model AffiliateCommission {
+  id                String    @id @default(uuid())
+  referrerId        String
+  referredUserId    String
+  referralId        String?
+  sourceType        String
+  sourceId          String
+  depositAmount     Decimal   @db.Decimal(12, 2)
+  commissionPercent Decimal   @db.Decimal(5, 2)
+  commissionAmount  Decimal   @db.Decimal(12, 2)
+  affiliateMode     String?   @default("CONTINUOUS")
+  status            String    @default("COMPLETED")
+  reversalReason    String?
+  reversedAt        DateTime?
+  reversedBy        String?
+  payoutDueAt       DateTime?
+  heldUntil         DateTime?
+  holdMinutes       Int?      @default(0)
+  releasedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  referrer     User      @relation("AffiliateReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUser User      @relation("AffiliateReferee", fields: [referredUserId], references: [id], onDelete: Cascade)
+  referral     Referral? @relation(fields: [referralId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceType, sourceId])
+  @@index([referrerId])
+  @@index([referredUserId])
+  @@index([status])
+  @@index([affiliateMode])
+  @@index([createdAt])
+  @@index([status, heldUntil])
+}
+
+model ReferralRiskEvent {
+  id             String    @id @default(uuid())
+  referralId     String?
+  userId         String
+  type           String
+  severity       String    @default("MEDIUM")
+  status         String    @default("UNREVIEWED")
+  note           String?
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  reviewedAt     DateTime?
+  reviewedBy     String?
+
+  referral     Referral? @relation(fields: [referralId], references: [id], onDelete: SetNull)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([referralId])
+  @@index([type])
+  @@index([severity])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Coupon {

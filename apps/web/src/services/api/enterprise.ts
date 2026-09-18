@@ -2,6 +2,7 @@ import { apiClient } from './client';
 import type {
   Achievement,
   AdminCustomerDetail,
+  AffiliateCommissionRecord,
   Announcement,
   AnalyticsSnapshot,
   AnalyticsSeriesPoint,
@@ -528,6 +529,8 @@ export const referralsApi = {
   summary: () => apiClient.get<ReferralSummary>('/referrals'),
   list: (page = 1, pageSize = 20) =>
     apiClient.get<Page<Referral>>(`/referrals/list?page=${page}&pageSize=${pageSize}`),
+  commissions: (page = 1, pageSize = 20) =>
+    apiClient.get<Page<AffiliateCommissionRecord>>(`/referrals/commissions?page=${page}&pageSize=${pageSize}`),
   apply: (code: string) => apiClient.post<{ ok: boolean; applied: boolean }>('/referrals/apply', { code }),
   leaderboard: () => apiClient.get<ReferralLeaderboardEntry[]>('/referrals/leaderboard'),
 };

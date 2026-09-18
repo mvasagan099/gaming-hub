@@ -87,7 +87,7 @@ export const walletSettingsSchema = z.object({
   otpMaxAttempts: z.number().int().min(1).max(20).default(5),
   currencyConversionEnabled: z.boolean().default(false),
   bonusWalletEnabled: z.boolean().default(true),
-  referralReward: z.number().int().min(0).max(100_000).default(500),
+  referralReward: z.number().int().min(0).max(100_000).default(0),
   cashbackPercent: z.number().min(0).max(100).default(0),
 });
 
@@ -220,18 +220,34 @@ export const developerSettingsSchema = z.object({
 
 export const referralSettingsSchema = z.object({
   enabled: z.boolean().default(true),
-  referrerReward: z.number().int().min(0).max(100_000).default(500),
-  referredReward: z.number().int().min(0).max(100_000).default(250),
+  affiliateMode: z.enum(["ONE_TIME", "CONTINUOUS"]).default("CONTINUOUS"),
+  referrerFirstDepositBonus: z.number().int().min(0).max(100_000).default(0),
+  affiliateEnabled: z.boolean().default(true),
+  affiliateDepositPercent: z.number().min(0).max(100).default(5),
+  affiliateOnFirstDeposit: z.boolean().default(true),
+  minimumFirstDeposit: z.number().int().min(0).max(1_000_000).default(0),
+  referrerReward: z.number().int().min(0).max(100_000).default(0),
+  referredReward: z.number().int().min(0).max(100_000).default(0),
   commissionPercent: z.number().min(0).max(100).default(5),
   minDepositToReward: z.number().int().min(0).max(100_000).default(0),
   qualificationRule: z
     .enum(["REGISTRATION", "FIRST_GAME", "FIRST_WIN", "FIRST_DEPOSIT", "TOURNAMENT_JOIN"])
-    .default("FIRST_GAME"),
+    .default("FIRST_DEPOSIT"),
   maxRewardsPerUser: z.number().int().min(0).max(100_000).default(0),
   campaignStartDate: z.string().nullable().default(null),
   campaignEndDate: z.string().nullable().default(null),
   leaderboardEnabled: z.boolean().default(true),
   codeAutoGenerate: z.boolean().default(true),
+  referrerSignupBonus: z.number().int().min(0).max(100_000).default(0),
+  refereeSignupBonus: z.number().int().min(0).max(100_000).default(0),
+  maxAffiliateCommissionPerDeposit: z.number().int().min(0).max(10_000_000).default(0),
+  maxAffiliateCommissionPerDay: z.number().int().min(0).max(10_000_000).default(0),
+  minDepositEligible: z.number().int().min(0).max(10_000_000).default(0),
+  affiliateDailyCommissionCap: z.number().int().min(0).max(10_000_000).default(0),
+  affiliateMonthlyCommissionCap: z.number().int().min(0).max(100_000_000).default(0),
+  affiliateMaxCommissionPerDeposit: z.number().int().min(0).max(10_000_000).default(0),
+  affiliateMinEligibleDeposit: z.number().int().min(0).max(10_000_000).default(0),
+  affiliateCommissionHoldMinutes: z.number().int().min(0).max(144_000).default(0),
 });
 
 export const tournamentSettingsSchema = z.object({
@@ -490,11 +506,18 @@ export const SETTINGS_FIELD_META: Record<SettingsCategoryName, SettingsFieldMeta
   for (const [category, schema] of Object.entries(SETTINGS_CATEGORIES) as Array<
     [SettingsCategoryName, { shape: Record<string, unknown> }]
   >) {
-    const fields = Object.entries(schema.shape ?? {}).map(([key, fieldSchema]) => ({
-      key,
-      label: settingFieldLabel(key),
-      ...describeSettingField(fieldSchema),
-    }));
+    const fields = Object.entries(schema.shape ?? {})
+      .filter(([key]) => {
+        if (category === "referral" && (key === "refereeSignupBonus" || key === "referrerSignupBonus" || key === "referredReward")) {
+          return false;
+        }
+        return true;
+      })
+      .map(([key, fieldSchema]) => ({
+        key,
+        label: settingFieldLabel(key),
+        ...describeSettingField(fieldSchema),
+      }));
     out[category] = fields;
   }
   return out;

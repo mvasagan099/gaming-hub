@@ -9,7 +9,6 @@ import { IdempotencyService } from "./idempotencyService";
 import { getCategorySettings } from "./settings";
 import { audit } from "./audit";
 import { AchievementService } from "./achievementService";
-import { ReferralService } from "./referrals";
 import { notifyUserSocket, broadcastAdminAnalytics } from "./socketBridge";
 import { TournamentNotificationService } from "./tournamentNotificationService";
 import { isFeatureEnabled } from "./featureFlags";
@@ -356,12 +355,6 @@ export async function registerForTournament(userId: string, tournamentId: string
 
       TournamentAnalyticsCache.invalidateRegistrations(tournamentId, userId);
 
-      // Evaluate referral qualification (TOURNAMENT_JOIN)
-      try {
-        await ReferralService.evaluateQualification(userId, "TOURNAMENT_JOIN", { tournamentId });
-      } catch {
-        // Non-blocking side effect
-      }
     }
 
     return res;

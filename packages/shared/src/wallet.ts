@@ -16,7 +16,9 @@ export type TransactionReferenceType =
   | "REWARD_CREDIT"
   | "CASHBACK_CREDIT"
   | "WAGER_REFUND"
-  | "REVERSAL";
+  | "REVERSAL"
+  | "AFFILIATE_COMMISSION"
+  | "AFFILIATE_COMMISSION_REVERSAL";
 
 export type WalletBalanceType = "MAIN" | "BONUS" | "LOCKED" | "REWARD" | "CASHBACK";
 

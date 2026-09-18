@@ -303,6 +303,8 @@ export async function redeemCoupon(
     }
   }
 
+  let createdTxId: string | undefined;
+
   // ─── STEP 3: Credit local wallet ────────────────────────────────────────────
   try {
     await prisma.$transaction(async (tx) => {
@@ -324,12 +326,12 @@ export async function redeemCoupon(
         },
       });
 
-      // Credit MAIN wallet
-      await applyTransaction(
+      // Credit MAIN wallet with DEPOSIT referenceType
+      const creditedWallet = await applyTransaction(
         tx,
         userId,
         amount,
-        "COUPON",
+        "DEPOSIT",
         couponId,
         {
           code: codeUpper,
@@ -341,6 +343,7 @@ export async function redeemCoupon(
         },
         "MAIN",
       );
+      createdTxId = (creditedWallet as any)._transaction?.id;
 
       // Mark saga COMPLETED
       await tx.couponRedemption.update({
@@ -388,6 +391,22 @@ export async function redeemCoupon(
     });
   } catch (syncErr) {
     console.warn("Wallet sync event emission failed:", syncErr);
+  }
+
+  // ─── STEP 5: Authoritative Gaming Hub Wallet Deposit Hook ─────────────────────
+  // Decoupled from payment provider: affiliate commission triggers purely from
+  // the Gaming Hub MAIN wallet deposit transaction.
+  if (createdTxId) {
+    try {
+      const { WalletTransactionService } = await import("./walletTransactionService");
+      await WalletTransactionService.onDepositCompleted({
+        userId,
+        amount,
+        transactionId: createdTxId,
+      });
+    } catch (depErr) {
+      console.warn("Wallet deposit completion hook failed:", depErr);
+    }
   }
 
   audit({

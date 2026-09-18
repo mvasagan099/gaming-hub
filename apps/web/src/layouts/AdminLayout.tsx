@@ -8,6 +8,7 @@ import {
   Gamepad2,
   Trophy,
   Ticket,
+  Coins,
   Megaphone,
   Headset,
   HelpCircle,
@@ -60,6 +61,7 @@ const NAV_GROUPS = [
   {
     title: 'MARKETING & SUPPORT',
     items: [
+      { path: '/admin/affiliates', label: 'Affiliates', icon: Coins },
       { path: '/admin/coupons', label: 'Coupons', icon: Ticket },
       { path: '/admin/announcements', label: 'Announcements', icon: Megaphone },
       { path: '/admin/crm', label: 'Support CRM', icon: Headset },

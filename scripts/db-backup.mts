@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync, openSync, closeSync } from "node:fs";
 import path from "node:path";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -32,17 +32,20 @@ function main(): void {
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
   const file = path.join(BACKUP_DIR, `gaming-hub-${stamp}.dump`);
 
+  const outFd = openSync(file, "w");
+
   const result = spawnSync(
     "docker",
     ["compose", "exec", "-T", "postgres", "pg_dump", "-U", user, "-d", db, "-F", "c"],
-    { cwd: ROOT, stdio: ["ignore", "pipe", "inherit"] },
+    { cwd: ROOT, stdio: ["ignore", outFd, "inherit"] },
   );
+
+  closeSync(outFd);
 
   if (result.status !== 0) {
     console.error("Backup failed (is the postgres container running?)");
     process.exit(result.status ?? 1);
   }
-  writeFileSync(file, result.stdout);
   console.log(`Backup written to ${file}`);
 }
 

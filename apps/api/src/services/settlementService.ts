@@ -11,7 +11,6 @@ import { WalletTransactionService } from "./walletTransactionService";
 import { IdempotencyService } from "./idempotencyService";
 import { recordMatchResult } from "./stats";
 import { AchievementService } from "./achievementService";
-import { ReferralService } from "./referrals";
 import { createNotification } from "./notifications";
 import { audit } from "./audit";
 import { GameConfigService } from "./gameConfigService";
@@ -263,16 +262,6 @@ export class SettlementService {
               icon: achievement.icon,
             });
           }
-        } catch {
-          // Non-critical
-        }
-
-        try {
-          await ReferralService.evaluateQualification(
-            player.userId,
-            player.won ? "FIRST_WIN" : "FIRST_GAME",
-            { matchId, gameId },
-          );
         } catch {
           // Non-critical
         }

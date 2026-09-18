@@ -153,6 +153,53 @@ export class WalletTransactionService {
   }
 
   /**
+   * Standardized deposit method to credit Gaming Hub MAIN wallet ledger.
+   */
+  static async createDeposit(
+    tx: Prisma.TransactionClient,
+    params: {
+      userId: string;
+      amount: number;
+      referenceType?: TransactionReferenceType;
+      referenceId?: string | null;
+      meta?: Record<string, unknown>;
+    },
+  ): Promise<Wallet> {
+    return this.createCredit(tx, {
+      userId: params.userId,
+      amount: params.amount,
+      referenceType: params.referenceType ?? "DEPOSIT",
+      referenceId: params.referenceId ?? null,
+      walletType: "MAIN",
+      meta: {
+        description: "Gaming Hub wallet deposit",
+        ...params.meta,
+      },
+    });
+  }
+
+  /**
+   * Authoritative handler for completed wallet deposits.
+   * Dispatches affiliate commission evaluation based on Gaming Hub MAIN wallet ledger.
+   */
+  static async onDepositCompleted(params: {
+    userId: string;
+    amount: number;
+    transactionId: string;
+  }): Promise<void> {
+    try {
+      const { AffiliateService } = await import("./affiliateService");
+      await AffiliateService.processDepositCommission({
+        userId: params.userId,
+        amount: params.amount,
+        transactionId: params.transactionId,
+      });
+    } catch (err) {
+      console.error("[WalletTransactionService] Failed to process affiliate commission on deposit:", err);
+    }
+  }
+
+  /**
    * Game Match Entry Fee Debit.
    */
   static async createGameEntry(

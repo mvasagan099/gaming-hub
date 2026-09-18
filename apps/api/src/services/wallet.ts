@@ -161,24 +161,34 @@ export async function applyTransaction(
   if (result.count === 0) {
     const exists = await tx.wallet.findUnique({ where: { userId }, select: { userId: true } });
     if (!exists) {
-      throw new AppError("NOT_FOUND", "Wallet not found", 404);
+      if (!isDebit) {
+        await tx.wallet.create({
+          data: {
+            userId,
+            [field]: amount,
+          },
+        });
+      } else {
+        throw new AppError("NOT_FOUND", "Wallet not found", 404);
+      }
+    } else {
+      audit({
+        actorType: "user",
+        actorId: userId,
+        action: "wallet.transaction.rejected",
+        category: "wallet",
+        targetType: "user",
+        targetId: userId,
+        meta: {
+          amount,
+          walletType,
+          referenceType,
+          referenceId,
+          reason: "insufficient_balance",
+        },
+      });
+      throw new AppError("INSUFFICIENT_BALANCE", "Insufficient balance");
     }
-    audit({
-      actorType: "user",
-      actorId: userId,
-      action: "wallet.transaction.rejected",
-      category: "wallet",
-      targetType: "user",
-      targetId: userId,
-      meta: {
-        amount,
-        walletType,
-        referenceType,
-        referenceId,
-        reason: "insufficient_balance",
-      },
-    });
-    throw new AppError("INSUFFICIENT_BALANCE", "Insufficient balance");
   }
 
   const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
@@ -199,7 +209,7 @@ export async function applyTransaction(
     ...meta,
   };
 
-  await tx.transaction.create({
+  const createdTransaction = await tx.transaction.create({
     data: {
       userId,
       type: (isDebit ? "DEBIT" : "CREDIT") as TransactionType,
@@ -212,6 +222,8 @@ export async function applyTransaction(
       meta: transactionMeta as Prisma.InputJsonValue,
     },
   });
+
+  (wallet as any)._transaction = createdTransaction;
 
   audit({
     actorType: "user",

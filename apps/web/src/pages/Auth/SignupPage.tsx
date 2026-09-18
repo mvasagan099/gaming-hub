@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   User,
@@ -63,11 +63,26 @@ const initialForm: SignupForm = {
 
 export function SignupPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const settings = useSettingsStore((s) => s.settings);
   const [form, setForm] = useState<SignupForm>(initialForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [confirmationSent, setConfirmationSent] = useState(false);
+
+  useEffect(() => {
+    const refParam = searchParams.get("ref") || searchParams.get("referral");
+    if (refParam) {
+      const code = refParam.trim().toUpperCase();
+      sessionStorage.setItem("pending_referral_code", code);
+      setForm((prev) => ({ ...prev, referredBy: code }));
+    } else {
+      const cached = sessionStorage.getItem("pending_referral_code");
+      if (cached) {
+        setForm((prev) => (prev.referredBy ? prev : { ...prev, referredBy: cached.trim().toUpperCase() }));
+      }
+    }
+  }, [searchParams]);
 
   const signupEnabled = settings?.auth?.signupEnabled ?? true;
   const maintenanceEnabled = settings?.general?.maintenanceEnabled ?? false;
@@ -425,10 +440,16 @@ export function SignupPage() {
               autoComplete="off"
               placeholder="Referral code (optional)"
               value={form.referredBy}
-              onChange={(e) => set("referredBy", e.target.value)}
+              onChange={(e) => set("referredBy", e.target.value.toUpperCase())}
               className={inputClass + " pl-10"}
             />
           </div>
+          {form.referredBy.trim() && !errors.referredBy && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+              <Gift className="w-3.5 h-3.5" />
+              Referral code applied! Support your friend when you make your first deposit.
+            </p>
+          )}
           {errors.referredBy && <FieldError message={errors.referredBy} />}
         </div>
 

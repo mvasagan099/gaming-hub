@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
+import { apiClient } from "../services/api/client";
 import { SnakeLadder } from "../games/snake-ladder";
 import { LudoGame } from "../games/ludo/LudoGame";
 import { ChessGame } from "../games/chess/ChessGame";
@@ -12,6 +14,12 @@ import { SnookerGame } from "../games/snooker/SnookerGame";
 
 export default function GamePage() {
   const { slug } = useParams();
+
+  useEffect(() => {
+    if (slug) {
+      apiClient.post(`/games/${slug}/record-play`).catch(() => undefined);
+    }
+  }, [slug]);
 
   const handleBack = () => {
     window.location.href = "/";

@@ -20,6 +20,80 @@ export interface Referral {
   referredUser?: PublicUserSummary;
 }
 
+export interface AffiliateCommissionRecord {
+  id: string;
+  referrerId: string;
+  referredUserId: string;
+  refereeUsername?: string;
+  referralId?: string | null;
+  sourceType: string;
+  sourceId: string;
+  depositAmount: number;
+  commissionPercent: number;
+  commissionAmount: number;
+  affiliateMode?: string;
+  status: string;
+  reversalReason?: string | null;
+  reversedAt?: string | null;
+  reversedBy?: string | null;
+  createdAt: string;
+}
+
+export interface AffiliateSummary {
+  totalReferredUsers: number;
+  activeReferrals: number;
+  totalAffiliateEarnings: number;
+  thisMonthEarnings: number;
+  commissionPercent: number;
+  affiliateMode?: "ONE_TIME" | "CONTINUOUS";
+  affiliateEnabled?: boolean;
+}
+
+export interface AdminAffiliateStats {
+  affiliateStatus: "ENABLED" | "DISABLED";
+  affiliateMode: "ONE_TIME" | "CONTINUOUS";
+  commissionPercent: number;
+  totalAffiliateEarnings: number;
+  totalCommissions: number;
+  activeReferrals: number;
+  affiliateUsers: number;
+  thisMonthPaid: number;
+}
+
+export interface AdminCommissionItem {
+  id: string;
+  referrerId: string;
+  referrerUsername: string;
+  referrerDisplayName: string;
+  referredUserId: string;
+  referredUsername: string;
+  referredDisplayName: string;
+  referralId: string | null;
+  sourceType: string;
+  sourceId: string;
+  depositAmount: number;
+  commissionPercent: number;
+  commissionAmount: number;
+  affiliateMode: string;
+  status: string;
+  createdAt: string;
+  reversalReason?: string | null;
+  reversedAt?: string | null;
+  reversedBy?: string | null;
+}
+
+export interface AdminAffiliateAuditItem {
+  id: string;
+  actorId: string;
+  actorUsername: string;
+  action: string;
+  createdAt: string;
+  meta: {
+    previous?: Record<string, unknown>;
+    updated?: Record<string, unknown>;
+  } | null;
+}
+
 export interface ReferralSummary {
   code: string;
   totalReferrals: number;
@@ -29,6 +103,11 @@ export interface ReferralSummary {
   totalCommission: number;
   totalEarned?: number;
   shareUrl: string;
+  referredByCode?: string | null;
+  referrerUsername?: string | null;
+  referredStatus?: string | null;
+  referredReward?: number | null;
+  affiliate?: AffiliateSummary;
 }
 
 export interface ReferralLeaderboardEntry {

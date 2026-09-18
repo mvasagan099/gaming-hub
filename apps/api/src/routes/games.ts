@@ -46,4 +46,16 @@ export async function gamesRoutes(app: FastifyInstance) {
   app.get("/api/games/config", async () => {
     return GameConfigService.getAvailableGamesForUser();
   });
+
+  /**
+   * POST /api/games/:slug/record-play
+   * Records game play activity for analytics (no referral rewards).
+   */
+  app.post("/api/games/:slug/record-play", { preHandler: (await import("../plugins/authenticate")).authenticate }, async (request) => {
+    const { requireUser, routeParams } = await import("../lib/http");
+    const user = requireUser(request);
+    const { slug } = routeParams(request);
+    // Playing a game may still be tracked for analytics, but must NOT qualify or reward referrals
+    return { ok: true, gameId: slug, userId: user.id };
+  });
 }

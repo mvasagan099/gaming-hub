@@ -60,6 +60,7 @@ const AdminRolesPage = lazy(() => import("../pages/admin/AdminRolesPage").then((
 const AdminKycPage = lazy(() => import("../pages/admin/AdminKycPage").then((m) => ({ default: m.AdminKycPage })));
 const AdminGamesPage = lazy(() => import("../pages/admin/AdminGamesPage").then((m) => ({ default: m.AdminGamesPage })));
 const AdminAppVersionPage = lazy(() => import("../pages/admin/AdminAppVersionPage").then((m) => ({ default: m.AdminAppVersionPage })));
+const AdminAffiliatesPage = lazy(() => import("../pages/admin/AdminAffiliatesPage").then((m) => ({ default: m.AdminAffiliatesPage })));
 
 const SuspensePage = ({ children }: { children: ReactNode }) => (
   <Suspense
@@ -154,6 +155,7 @@ export const router = createBrowserRouter([
           { path: "tournaments/disputes", element: <SuspensePage><AdminTournamentDisputesPage /></SuspensePage> },
           { path: "tournaments/:id", element: <SuspensePage><AdminTournamentDetailPage /></SuspensePage> },
           { path: "coupons", element: <SuspensePage><AdminCouponsPage /></SuspensePage> },
+          { path: "affiliates", element: <SuspensePage><AdminAffiliatesPage /></SuspensePage> },
           { path: "announcements", element: <SuspensePage><AdminAnnouncementsPage /></SuspensePage> },
           { path: "crm", element: <SuspensePage><AdminCrmPage /></SuspensePage> },
           { path: "features", element: <SuspensePage><AdminFeaturesPage /></SuspensePage> },
