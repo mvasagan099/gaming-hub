@@ -317,7 +317,7 @@ export function KycVerifyPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/kyc')}>
+      <Button variant="ghost" size="sm" onClick={() => navigate('/kyc')} className="hidden">
         <ArrowLeft className="w-4 h-4 mr-1" />
         Back
       </Button>

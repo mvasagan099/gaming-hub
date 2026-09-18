@@ -2,21 +2,32 @@ import { Search, ChevronRight } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { GAMES_DATA } from '../../data/games';
 import { useUIStore } from '../../store/uiStore';
+import { MobileBackButton } from './MobileBackButton';
 
 const STATIC_TITLES: Record<string, string> = {
   '/': 'Home',
   '/leaderboard': 'Leaderboard',
   '/wallet': 'Wallet',
   '/profile': 'Profile',
+  '/profile/security': 'Security Settings',
+  '/profile/tournaments': 'My Tournaments',
+  '/profile/history': 'Match History',
+  '/profile/stats': 'Statistics',
+  '/profile/activity': 'Activity Shortcuts',
   '/settings': 'Settings',
   '/achievements': 'Achievements',
   '/friends': 'Friends',
   '/tournaments': 'Tournaments',
+  '/tournaments/history': 'Tournament History',
+  '/tournaments/leaderboard': 'Tournament Leaderboard',
   '/messages': 'Messages',
   '/notifications': 'Notifications',
   '/announcements': 'Announcements',
   '/referrals': 'Referrals',
   '/tickets': 'Support',
+  '/kyc': 'Identity Verification',
+  '/kyc/verify': 'Verify Identity',
+  '/search': 'Search',
 };
 
 export default function PageHeader() {
@@ -26,6 +37,16 @@ export default function PageHeader() {
   const segments = location.pathname.split('/').filter(Boolean);
   let title = STATIC_TITLES[location.pathname] ?? '';
   let trail: { label: string; to: string }[] = [];
+
+  // If on /profile with ?tab= query parameter, refine title
+  if (location.pathname === '/profile') {
+    const tab = new URLSearchParams(location.search).get('tab');
+    if (tab === 'security') title = 'Security Settings';
+    else if (tab === 'tournaments') title = 'My Tournaments';
+    else if (tab === 'history') title = 'Match History';
+    else if (tab === 'stats') title = 'Statistics';
+    else if (tab === 'activity') title = 'Activity Shortcuts';
+  }
 
   if (!title) {
     const game = GAMES_DATA.find((g) => g.slug === segments[segments.length - 1]);
@@ -46,7 +67,10 @@ export default function PageHeader() {
   return (
     <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
       <div className="min-w-0 shrink-0">
-        <h1 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight truncate">{title}</h1>
+        <div className="flex items-center gap-2.5">
+          <MobileBackButton />
+          <h1 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight truncate">{title}</h1>
+        </div>
         {trail.length > 0 && (
           <nav aria-label="Breadcrumb" className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
             <Link to="/" className="hover:text-accent-500 transition-colors">

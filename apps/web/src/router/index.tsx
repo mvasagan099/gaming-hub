@@ -111,6 +111,7 @@ export const router = createBrowserRouter([
         children: [
           { path: "lobby/:slug", element: <SuspensePage><FeatureGate flag="games.enabled"><LobbyPage /></FeatureGate></SuspensePage> },
           { path: "profile", element: <SuspensePage><ProfilePage /></SuspensePage> },
+          { path: "profile/:tab", element: <SuspensePage><ProfilePage /></SuspensePage> },
           { path: "wallet", element: <SuspensePage><WalletPage /></SuspensePage> },
           { path: "settings", element: <SuspensePage><SettingsPage /></SuspensePage> },
           { path: "referrals", element: <SuspensePage><FeatureGate flag="social.referrals"><ReferralsPage /></FeatureGate></SuspensePage> },

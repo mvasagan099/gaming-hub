@@ -419,7 +419,7 @@ export function AdminTournamentDetailPage() {
         <div>
           <button
             onClick={() => navigate('/admin/tournaments')}
-            className="mb-2 flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+            className="hidden items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
           >
             <ArrowLeft className="size-3" /> Tournaments Control Center
           </button>

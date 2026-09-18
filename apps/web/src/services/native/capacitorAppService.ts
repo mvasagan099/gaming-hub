@@ -9,6 +9,7 @@ import { supabase } from '../supabase';
 import { useAppVersionStore } from '../../store/appVersionStore';
 import { useWalletStore } from '../../store/walletStore';
 import { parseAndValidateDeepLink } from '@gaming-hub/shared';
+import { isHomePage, canGoBackWithinApp, goBackOrHome } from '../../utils/navigation';
 
 let isInitialized = false;
 
@@ -70,14 +71,15 @@ export async function initCapacitorServices(): Promise<void> {
     }
 
     const currentPath = window.location.pathname;
-    const rootPaths = ['/', '/login', '/signup', '/2fa'];
+    const rootPaths = ['/login', '/signup', '/2fa'];
 
-    if (rootPaths.includes(currentPath) || !canGoBack) {
+    if (isHomePage(currentPath) || rootPaths.includes(currentPath) || !canGoBack) {
       // Minimize app when at root level
       void CapApp.minimizeApp();
-    } else {
-      // Navigate to previous route in React Router
+    } else if (canGoBackWithinApp()) {
       void router.navigate(-1);
+    } else {
+      void router.navigate('/');
     }
   });
 

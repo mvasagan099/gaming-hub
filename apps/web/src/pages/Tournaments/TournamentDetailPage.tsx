@@ -341,7 +341,7 @@ export function TournamentDetailPage() {
       <div className="flex items-center justify-between">
         <button
           onClick={() => navigate('/tournaments')}
-          className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+          className="hidden items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors"
         >
           <ArrowLeft className="size-3.5" /> Back to Tournaments
         </button>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { goBackOrHome } from "../../utils/navigation";
 import toast from "react-hot-toast";
 import {
   ArrowLeft,
@@ -418,7 +419,7 @@ export const LobbyPage: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => goBackOrHome(navigate, "/")}
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 transition-colors border border-slate-300 dark:border-slate-700"
           >
             <ArrowLeft className="w-4 h-4" /> Home

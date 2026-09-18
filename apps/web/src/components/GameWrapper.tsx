@@ -62,6 +62,19 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
     }
   };
 
+  // Prevent accidental tab reload / close during an active match
+  useEffect(() => {
+    if (isMatchFinished) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isMatchFinished]);
+
   // Android hardware back button handler
   useEffect(() => {
     if (isMatchFinished) return;
@@ -99,6 +112,22 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
   if (isFullscreen) {
     return (
       <div className="fixed inset-0 z-50 bg-[#060913] text-white flex flex-col overflow-hidden">
+        {/* Floating Back / Exit button for Single Player & AI Fullscreen */}
+        {!(mode === 'multiplayer' && room) && (
+          <div className="absolute top-3 left-3 z-[65] pt-[env(safe-area-inset-top)]">
+            <button
+              type="button"
+              onClick={handleExitRequest}
+              aria-label="Exit Game"
+              title="Exit Game"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/85 hover:bg-slate-800 text-slate-200 border border-slate-700/80 shadow-lg backdrop-blur-md text-xs font-bold transition-all hover:border-purple-500/50 hover:text-purple-300 active:scale-95 cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4 text-purple-400" />
+              <span>Exit</span>
+            </button>
+          </div>
+        )}
+
         {/* Compact HUD bar — top in multiplayer */}
         {mode === 'multiplayer' && room && (
           <div className="z-[65] flex items-center justify-between px-3 sm:px-4 py-2 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 flex-shrink-0 gap-2">

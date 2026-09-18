@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Gamepad2 } from "lucide-react";
+import { MobileBackButton } from "../../components/layout/MobileBackButton";
 
 interface AuthLayoutProps {
   title: string;
@@ -10,7 +11,11 @@ interface AuthLayoutProps {
 
 export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10 bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10 bg-slate-50 dark:bg-slate-950 transition-colors duration-300 relative">
+      <div className="fixed top-4 left-4 pt-[env(safe-area-inset-top)] z-50">
+        <MobileBackButton fallback="/" />
+      </div>
+
       <Link to="/" className="flex items-center gap-3 mb-8 group">
         <img
           src="/logo.png"

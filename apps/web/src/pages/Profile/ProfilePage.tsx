@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams, useParams } from "react-router-dom";
 import {
   User,
   Mail,
@@ -43,8 +43,9 @@ type ProfileTab = "profile" | "tournaments" | "security" | "activity" | "history
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
+  const { tab: tabParam } = useParams<{ tab?: string }>();
   const [searchParams] = useSearchParams();
-  const tabFromUrl = searchParams.get("tab") as ProfileTab | null;
+  const tabFromUrl = (tabParam || searchParams.get("tab")) as ProfileTab | null;
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
   const { me, loading, reload } = useMe();
@@ -56,6 +57,15 @@ export const ProfilePage: React.FC = () => {
     }
     return "profile";
   });
+
+  const handleTabChange = (tab: ProfileTab) => {
+    setActiveTab(tab);
+    if (tab === "profile") {
+      navigate("/profile");
+    } else {
+      navigate(`/profile/${tab}`);
+    }
+  };
 
   useEffect(() => {
     if (tabFromUrl && ["profile", "tournaments", "security", "activity", "history", "stats"].includes(tabFromUrl)) {
@@ -405,7 +415,7 @@ export const ProfilePage: React.FC = () => {
         {/* Tab Navigation with sleek horizontal scroll on mobile */}
         <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl w-full md:w-auto max-w-full overflow-x-auto no-scrollbar shrink-0">
           <button
-            onClick={() => setActiveTab("profile")}
+            onClick={() => handleTabChange("profile")}
             className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === "profile"
                 ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
@@ -415,7 +425,7 @@ export const ProfilePage: React.FC = () => {
             Personal Details
           </button>
           <button
-            onClick={() => setActiveTab("tournaments")}
+            onClick={() => handleTabChange("tournaments")}
             className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === "tournaments"
                 ? "bg-amber-500 text-slate-950 shadow-sm font-black"
@@ -425,7 +435,7 @@ export const ProfilePage: React.FC = () => {
             🏆 My Tournaments
           </button>
           <button
-            onClick={() => setActiveTab("history")}
+            onClick={() => handleTabChange("history")}
             className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === "history"
                 ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
@@ -435,7 +445,7 @@ export const ProfilePage: React.FC = () => {
             Match History
           </button>
           <button
-            onClick={() => setActiveTab("stats")}
+            onClick={() => handleTabChange("stats")}
             className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === "stats"
                 ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
@@ -445,7 +455,7 @@ export const ProfilePage: React.FC = () => {
             Statistics
           </button>
           <button
-            onClick={() => setActiveTab("security")}
+            onClick={() => handleTabChange("security")}
             className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === "security"
                 ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
@@ -455,7 +465,7 @@ export const ProfilePage: React.FC = () => {
             Security Settings
           </button>
           <button
-            onClick={() => setActiveTab("activity")}
+            onClick={() => handleTabChange("activity")}
             className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === "activity"
                 ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
@@ -721,7 +731,7 @@ export const ProfilePage: React.FC = () => {
               <h3 className="text-base font-black text-slate-900 dark:text-white">Quick Links</h3>
               <div className="space-y-2">
                 <button
-                  onClick={() => setActiveTab("security")}
+                  onClick={() => handleTabChange("security")}
                   className="w-full text-left px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-bold text-slate-800 dark:text-white transition-colors flex items-center justify-between"
                 >
                   Security & Password
