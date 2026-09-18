@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   ArrowLeft,
@@ -30,9 +30,6 @@ import {
   type RoomFull,
   type PublicProfile,
 } from "@gaming-hub/shared";
-import { getAuthRedirectUrl } from "../../lib/authUtils";
-import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
-import { supabase } from "../../services/supabase";
 import { useAuthStore } from "../../store/authStore";
 import { useMultiplayerStore } from "../../store/multiplayerStore";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -231,8 +228,6 @@ export const LobbyPage: React.FC = () => {
   const state = location.state as { stake?: number } | null;
   const [stake, setStake] = useState(state?.stake ?? def?.defaultStake ?? 100);
   const [joinCode, setJoinCode] = useState("");
-  const [signingIn, setSigningIn] = useState(false);
-  const [authEmail, setAuthEmail] = useState("");
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const session = useAuthStore((s) => s.session);
@@ -335,31 +330,7 @@ export const LobbyPage: React.FC = () => {
     );
   }
 
-  const handleSignIn = async () => {
-    const email = authEmail.trim();
-    if (!email) {
-      toast.error("Please enter a valid email address.");
-      return;
-    }
-    setSigningIn(true);
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: getAuthRedirectUrl("/auth/callback") },
-      });
-      if (error) {
-        logAuthError("LobbySignInWithOtp", error);
-        toast.error(getAuthErrorMessage(error));
-        return;
-      }
-      toast.success("Magic link sent — check your inbox");
-    } catch (err) {
-      logAuthError("LobbySignInWithOtp", err);
-      toast.error(getAuthErrorMessage(err));
-    } finally {
-      setSigningIn(false);
-    }
-  };
+
 
   const handleSignOut = async () => {
     await useAuthStore.getState().signOut();
@@ -496,27 +467,22 @@ export const LobbyPage: React.FC = () => {
           </div>
           <h2 className="text-xl font-black text-slate-900 dark:text-white">Sign in to play online</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
-            Multiplayer matches are tied to your account — enter your email and we'll send you a
-            magic sign-in link.
+            Multiplayer matches are tied to your account — log in to challenge players and compete in games.
           </p>
-          <div className="flex items-center gap-2 mt-5 w-full max-w-sm">
-            <input
-              type="email"
-              value={authEmail}
-              onChange={(e) => setAuthEmail(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void handleSignIn();
-              }}
-              placeholder="you@example.com"
-              className="flex-1 px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-            />
-            <button
-              onClick={() => void handleSignIn()}
-              disabled={signingIn}
-              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-bold transition-colors"
+          <div className="flex items-center gap-3 mt-5">
+            <Link
+              to="/login"
+              state={{ from: location }}
+              className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold transition-colors inline-flex items-center gap-2"
             >
-              {signingIn ? "Sending…" : "Send Link"}
-            </button>
+              <LogIn className="w-4 h-4" /> Log In
+            </Link>
+            <Link
+              to="/signup"
+              className="px-6 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-sm font-bold transition-colors"
+            >
+              Sign Up
+            </Link>
           </div>
         </div>
       )}

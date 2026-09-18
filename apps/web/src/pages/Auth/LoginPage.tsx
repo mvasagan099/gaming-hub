@@ -6,13 +6,11 @@ import {
   LogIn,
   Mail,
   Lock,
-  Sparkles,
   Loader2,
   Wrench,
   AlertTriangle,
 } from "lucide-react";
 import { supabase } from "../../services/supabase";
-import { getAuthRedirectUrl } from "../../lib/authUtils";
 import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
 import { apiClient } from "../../services/api/client";
 import { AuthLayout } from "./AuthLayout";
@@ -36,7 +34,6 @@ export function LoginPage() {
   // Step 1: Credentials
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [useMagicLink, setUseMagicLink] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const maintenanceEnabled = settings?.general?.maintenanceEnabled ?? false;
@@ -86,24 +83,10 @@ export function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) { toast.error("Enter your email"); return; }
-    if (!useMagicLink && !password) { toast.error("Enter your password"); return; }
+    if (!password) { toast.error("Enter your password"); return; }
 
     setSubmitting(true);
     try {
-      if (useMagicLink) {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: email.trim(),
-          options: { emailRedirectTo: getAuthRedirectUrl("/auth/callback") },
-        });
-        if (error) {
-          logAuthError("LoginMagicLink", error);
-          toast.error(getAuthErrorMessage(error));
-          return;
-        }
-        toast.success("Magic link sent — check your inbox");
-        return;
-      }
-
       // ── Flag MFA as required BEFORE signInWithPassword so that the
       //    Supabase onAuthStateChange SIGNED_IN handler in App.tsx can detect
       //    it and park the session in pendingMfaSession instead of session.
@@ -119,12 +102,6 @@ export function LoginPage() {
         useAuthStore.getState().setIsMfaRequired(false);
         logAuthError("LoginPassword", error);
         toast.error(getAuthErrorMessage(error));
-        if (
-          /invalid login credentials/i.test(error.message) ||
-          error.message.toLowerCase().includes("invalid_credentials")
-        ) {
-          setUseMagicLink(true);
-        }
         return;
       }
 
@@ -183,9 +160,6 @@ export function LoginPage() {
       useAuthStore.getState().setIsMfaRequired(false);
       logAuthError("Login", err);
       toast.error(getAuthErrorMessage(err));
-      if (err instanceof Error && /invalid login credentials/i.test(err.message)) {
-        setUseMagicLink(true);
-      }
     } finally {
       setSubmitting(false);
     }
@@ -251,19 +225,17 @@ export function LoginPage() {
                 />
               </div>
 
-              {!useMagicLink && (
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
-                  <input
-                    type="password"
-                    autoComplete="current-password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-white rounded-xl pl-10 pr-4 py-3 border border-slate-300 dark:border-slate-800 focus:outline-none focus:border-indigo-500 transition-colors"
-                  />
-                </div>
-              )}
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-white rounded-xl pl-10 pr-4 py-3 border border-slate-300 dark:border-slate-800 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
 
               <button
                 type="submit"
@@ -275,16 +247,7 @@ export function LoginPage() {
                 ) : (
                   <LogIn className="w-4 h-4" />
                 )}
-                {submitting ? "Signing in…" : useMagicLink ? "Send magic link" : "LOG IN"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setUseMagicLink((v) => !v)}
-                className="w-full flex items-center justify-center gap-2 text-xs font-bold text-indigo-500 hover:text-indigo-400 transition-colors cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                {useMagicLink ? "Use email & password instead" : "Send me a magic link instead"}
+                {submitting ? "Signing in…" : "LOG IN"}
               </button>
             </form>
 

@@ -59,7 +59,6 @@ export function getAuthErrorDetails(error: unknown): NormalizedAuthError {
   if (
     normalized.includes("error sending recovery email") ||
     normalized.includes("error sending confirmation email") ||
-    normalized.includes("error sending magic link email") ||
     normalized.includes("error sending email") ||
     normalized.includes("smtp") ||
     normalized.includes("email provider")

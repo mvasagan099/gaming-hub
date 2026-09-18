@@ -14,8 +14,7 @@ import type { Session } from "@supabase/supabase-js";
  * Processes Supabase auth redirects for:
  * 1. Email confirmations (signup)
  * 2. Password recovery links (forgot password)
- * 3. Magic link sign-ins
- * 4. OAuth redirects
+ * 3. OAuth redirects
  *
  * Supports both PKCE Code Exchange (`?code=...`) and Implicit Token Hash (`#access_token=...`).
  */
