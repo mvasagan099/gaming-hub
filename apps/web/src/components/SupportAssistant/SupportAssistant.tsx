@@ -105,7 +105,7 @@ export function SupportAssistant() {
             exit="exit"
             onClick={open}
             className={cn(
-              "fixed bottom-20 right-4 md:bottom-6 md:right-6 z-[100] flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-300",
+              "fixed bottom-20 right-3 sm:bottom-6 sm:right-6 z-[100] flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full shadow-lg transition-all duration-300",
               "hover:scale-110 hover:shadow-xl active:scale-95",
               effectiveTheme === "dark"
                 ? "bg-accent-500 text-white shadow-accent-500/30"
@@ -119,7 +119,7 @@ export function SupportAssistant() {
                 <span className="relative inline-flex h-4 w-4 rounded-full bg-rose-500"></span>
               </span>
             ) : null}
-            <HelpCircle className="h-6 w-6" />
+            <HelpCircle className="h-5 w-5 sm:h-6 sm:w-6" />
           </motion.button>
         )}
       </AnimatePresence>

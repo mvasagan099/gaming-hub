@@ -100,7 +100,7 @@ export default function PageHeader() {
             <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <span className="truncate">Search games, players...</span>
           </div>
-          <kbd className="shrink-0 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+          <kbd className="hidden sm:inline-block shrink-0 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
             Ctrl K
           </kbd>
         </button>

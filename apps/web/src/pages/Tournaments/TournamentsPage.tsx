@@ -192,15 +192,15 @@ export function TournamentsPage() {
   const displayTiers = backendTiers.length > 0 ? backendTiers : DEFAULT_TOURNAMENT_TIERS;
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-3 py-6 sm:px-6 lg:px-8 space-y-8">
+    <div className="mx-auto w-full max-w-7xl px-3 pt-4 pb-28 sm:py-8 sm:px-6 lg:px-8 space-y-6 sm:space-y-8">
       {/* ------------------------------------------------------------- */}
       {/* 1. HERO HEADER                                                */}
       {/* ------------------------------------------------------------- */}
-      <div className="relative overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-white via-slate-50 to-amber-500/5 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950/40 p-6 sm:p-8 shadow-xl shadow-slate-200/50 dark:shadow-2xl backdrop-blur-xl transition-colors">
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-white via-slate-50 to-amber-500/5 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950/40 p-5 sm:p-8 shadow-xl shadow-slate-200/50 dark:shadow-2xl backdrop-blur-xl transition-colors">
         <div className="absolute right-0 top-0 -mr-16 -mt-16 size-80 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
         <div className="absolute left-1/3 bottom-0 size-60 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 sm:gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-black text-amber-600 dark:text-amber-400">
               <Trophy className="size-3.5" /> HOURLY COMPETITIVE SYSTEM
@@ -214,26 +214,29 @@ export function TournamentsPage() {
           </div>
 
           {/* Tab Switcher */}
-          <div className="flex items-center gap-1.5 self-start sm:self-center rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950/80 p-1.5 backdrop-blur-md shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 self-stretch sm:self-center rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950/80 p-1 sm:p-1.5 backdrop-blur-md shrink-0 w-full sm:w-auto">
             <button
               onClick={() => setMainTab('explore')}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-4 py-2 text-xs font-bold transition-all whitespace-nowrap ${
                 mainTab === 'explore'
                   ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-md font-black'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Swords className="size-3.5" /> Explore Tournaments
+              <Swords className="size-3.5 shrink-0" />
+              <span className="sm:hidden">Explore</span>
+              <span className="hidden sm:inline">Explore Tournaments</span>
             </button>
             <button
               onClick={() => setMainTab('my-tournaments')}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-4 py-2 text-xs font-bold transition-all whitespace-nowrap ${
                 mainTab === 'my-tournaments'
                   ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-md font-black'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Trophy className="size-3.5" /> My Tournaments
+              <Trophy className="size-3.5 shrink-0" />
+              <span>My Tournaments</span>
             </button>
           </div>
         </div>
@@ -242,7 +245,7 @@ export function TournamentsPage() {
         {/* 2. FIVE-TIER COMPARISON SHOWCASE                              */}
         {/* ------------------------------------------------------------- */}
         {mainTab === 'explore' && (
-          <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800/80">
+          <div className="mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-slate-200 dark:border-slate-800/80">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                 <Sparkles className="size-3.5 text-amber-500 dark:text-amber-400" /> 5 Tournament Tiers
@@ -257,50 +260,51 @@ export function TournamentsPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
               {displayTiers.map((tier) => {
                 const vis = TOURNAMENT_TIER_VISUALS[tier.code] ?? TOURNAMENT_TIER_VISUALS.mini!;
                 const isSelected = tierFilter === tier.code;
+                const isPro = tier.code === 'pro';
 
                 return (
                   <button
                     key={tier.code}
                     onClick={() => setTierFilter(isSelected ? '' : tier.code)}
-                    className={`group relative overflow-hidden rounded-2xl border p-3.5 text-left transition-all backdrop-blur-md ${
+                    className={`group relative overflow-hidden rounded-2xl border p-2.5 sm:p-3.5 text-left transition-all backdrop-blur-md ${isPro ? 'col-span-2 sm:col-span-1' : ''} ${
                       isSelected
                         ? `${vis.borderClass} bg-amber-500/10 dark:bg-slate-900/90 shadow-md ring-2 ring-amber-500/40 dark:ring-indigo-500/40`
                         : 'border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/60 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900/60 shadow-sm dark:shadow-none'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-base">{vis.badgeEmoji}</span>
-                        <span className="font-black text-xs text-slate-900 dark:text-white uppercase tracking-wider">
+                    <div className="flex items-center justify-between gap-1 min-w-0">
+                      <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+                        <span className="text-sm sm:text-base shrink-0">{vis.badgeEmoji}</span>
+                        <span className="font-black text-[11px] sm:text-xs text-slate-900 dark:text-white uppercase tracking-wider truncate">
                           {tier.name}
                         </span>
                       </div>
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border flex items-center gap-1 ${vis.badgeBgClass}`}>
-                        <Coins className="w-3 h-3 text-amber-400 shrink-0" /> {tier.entryFee}
+                      <span className={`text-[9px] sm:text-[10px] font-black uppercase px-1.5 sm:px-2 py-0.5 rounded-full border flex items-center gap-0.5 sm:gap-1 shrink-0 ${vis.badgeBgClass}`}>
+                        <Coins className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-400 shrink-0" /> {tier.entryFee}
                       </span>
                     </div>
 
-                    <div className="mt-2.5 space-y-1">
-                      <div className="flex items-baseline justify-between text-xs">
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Prize Pool</span>
-                        <span className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                          <Coins className="w-3 h-3 text-amber-400 shrink-0" /> {tier.prizePool.toLocaleString()}
+                    <div className="mt-2 sm:mt-2.5 space-y-1">
+                      <div className="flex items-baseline justify-between gap-1 text-xs">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate">Prize Pool</span>
+                        <span className="font-extrabold text-[11px] sm:text-xs text-amber-600 dark:text-amber-400 flex items-center gap-0.5 sm:gap-1 shrink-0">
+                          <Coins className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-400 shrink-0" /> {tier.prizePool.toLocaleString()}
                         </span>
                       </div>
-                      <div className="flex items-baseline justify-between text-xs">
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Max Players</span>
-                        <span className="font-semibold text-slate-700 dark:text-slate-200">
+                      <div className="flex items-baseline justify-between gap-1 text-xs">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate">Max Players</span>
+                        <span className="font-semibold text-[11px] sm:text-xs text-slate-700 dark:text-slate-200 shrink-0">
                           {tier.maxPlayers.toLocaleString()}
                         </span>
                       </div>
                     </div>
 
                     {isSelected && (
-                      <div className="mt-2 text-[10px] font-bold text-amber-600 dark:text-amber-400 text-center">
+                      <div className="mt-1.5 sm:mt-2 text-[10px] font-bold text-amber-600 dark:text-amber-400 text-center">
                         ✓ FILTERED
                       </div>
                     )}
@@ -329,12 +333,12 @@ export function TournamentsPage() {
           <div className="space-y-4">
             {/* Status Filter Tabs (ALL / OPEN / LIVE NOW / UPCOMING / COMPLETED) */}
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full scrollbar-none sm:flex-wrap">
                 {STATUS_FILTER_TABS.map((f) => (
                   <button
                     key={f.value || 'ALL'}
                     onClick={() => setStatusFilter(f.value)}
-                    className={`rounded-full px-3.5 py-1.5 text-xs font-black transition-all ${
+                    className={`rounded-full px-3 sm:px-3.5 py-1.5 text-xs font-black whitespace-nowrap shrink-0 transition-all ${
                       statusFilter === f.value
                         ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-md shadow-amber-500/20'
                         : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700 shadow-sm dark:shadow-none'
@@ -346,11 +350,11 @@ export function TournamentsPage() {
               </div>
 
               {/* Tier Quick Filter Buttons */}
-              <div className="flex flex-wrap items-center gap-1">
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase mr-1">Tier:</span>
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 max-w-full scrollbar-none sm:flex-wrap">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase mr-1 shrink-0">Tier:</span>
                 <button
                   onClick={() => setTierFilter('')}
-                  className={`rounded-xl px-2.5 py-1 text-[11px] font-bold border transition-all ${
+                  className={`rounded-xl px-2.5 py-1 text-[11px] font-bold border whitespace-nowrap shrink-0 transition-all ${
                     !tierFilter
                       ? 'bg-slate-900 dark:bg-slate-800 text-white border-slate-800 dark:border-slate-700 shadow-sm'
                       : 'bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-white shadow-sm dark:shadow-none'
@@ -365,7 +369,7 @@ export function TournamentsPage() {
                     <button
                       key={code}
                       onClick={() => setTierFilter(active ? '' : code)}
-                      className={`rounded-xl px-2.5 py-1 text-[11px] font-black border flex items-center gap-1 transition-all ${
+                      className={`rounded-xl px-2.5 py-1 text-[11px] font-black border flex items-center gap-1 whitespace-nowrap shrink-0 transition-all ${
                         active
                           ? `${vis.badgeBgClass} ${vis.borderClass}`
                           : 'bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-white shadow-sm dark:shadow-none'

@@ -90,7 +90,7 @@ export const FriendsPage: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-8 space-y-6">
+    <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 py-6 sm:py-8 space-y-6 pb-24 sm:pb-8">
       <div>
         <h1 className="text-2xl font-black text-slate-900 dark:text-white">Friends</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -98,9 +98,9 @@ export const FriendsPage: React.FC = () => {
         </p>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-6">
+      <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-4 sm:p-6">
         <h3 className="text-sm font-black text-slate-900 dark:text-white mb-3">Add a friend</h3>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-2">
           <input
             type="text"
             value={username}
@@ -109,11 +109,17 @@ export const FriendsPage: React.FC = () => {
               if (e.key === 'Enter') void handleSend();
             }}
             placeholder="Enter username"
-            className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white"
+            className="w-full sm:flex-1 min-w-0 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 sm:px-4 py-2.5 sm:py-2 text-sm text-slate-900 dark:text-white"
           />
-          <Button variant="primary" size="md" onClick={() => void handleSend()} disabled={sending || !username.trim()}>
-            <UserPlus className="h-4 w-4" />
-            {sending ? 'Sending...' : 'Send request'}
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => void handleSend()}
+            disabled={sending || !username.trim()}
+            className="w-full sm:w-auto justify-center whitespace-nowrap shrink-0"
+          >
+            <UserPlus className="h-4 w-4 shrink-0" />
+            <span>{sending ? 'Sending...' : 'Send request'}</span>
           </Button>
         </div>
         {actionError && <p className="mt-2 text-xs text-red-500">{actionError}</p>}
@@ -127,26 +133,28 @@ export const FriendsPage: React.FC = () => {
         <>
           {requests.length > 0 && (
             <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
                 <UserPlus size={16} className="text-accent-500" /> Friend requests ({requests.length})
               </div>
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {requests.map((r) => (
-                  <li key={r.id} className="flex items-center gap-3 px-6 py-3">
-                    <div className="relative">
-                      <div className="w-10 h-10 rounded-full bg-accent-600 flex items-center justify-center text-sm font-black text-white overflow-hidden">
-                        {r.requester.avatarUrl ? (
-                          <img src={r.requester.avatarUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (r.requester.displayName || r.requester.username || '?').slice(0, 1).toUpperCase()}
+                  <li key={r.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        <div className="w-10 h-10 rounded-full bg-accent-600 flex items-center justify-center text-sm font-black text-white overflow-hidden">
+                          {r.requester.avatarUrl ? (
+                            <img src={r.requester.avatarUrl} alt="" className="w-full h-full object-cover" />
+                          ) : (r.requester.displayName || r.requester.username || '?').slice(0, 1).toUpperCase()}
+                        </div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                          {r.requester.displayName}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">@{r.requester.username}</p>
                       </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                        {r.requester.displayName}
-                      </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">@{r.requester.username}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
                       <Button variant="primary" size="sm" onClick={() => void handleRespond(r.id, true)} disabled={busyId === r.id}>
                         <Check className="h-3.5 w-3.5" /> Accept
                       </Button>
@@ -161,36 +169,38 @@ export const FriendsPage: React.FC = () => {
           )}
 
           <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
               <Users size={16} className="text-emerald-500" /> Your friends ({friends.length})
             </div>
             {friends.length === 0 ? (
-              <p className="p-6 text-sm text-slate-500 dark:text-slate-400">No friends yet. Add someone to get started.</p>
+              <p className="p-4 sm:p-6 text-sm text-slate-500 dark:text-slate-400">No friends yet. Add someone to get started.</p>
             ) : (
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {friends.map((entry) => (
-                  <li key={entry.id} className="flex items-center gap-3 px-6 py-3">
-                    <div className="relative">
-                      <div className="w-10 h-10 rounded-full bg-accent-600 flex items-center justify-center text-sm font-black text-white overflow-hidden">
-                        {entry.friend.avatarUrl ? (
-                          <img src={entry.friend.avatarUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (entry.friend.displayName || entry.friend.username || '?').slice(0, 1).toUpperCase()}
+                  <li key={entry.id} className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        <div className="w-10 h-10 rounded-full bg-accent-600 flex items-center justify-center text-sm font-black text-white overflow-hidden">
+                          {entry.friend.avatarUrl ? (
+                            <img src={entry.friend.avatarUrl} alt="" className="w-full h-full object-cover" />
+                          ) : (entry.friend.displayName || entry.friend.username || '?').slice(0, 1).toUpperCase()}
+                        </div>
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-slate-900 ${
+                            entry.friend.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+                          }`}
+                        />
                       </div>
-                      <span
-                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-slate-900 ${
-                          entry.friend.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
-                        }`}
-                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                          {entry.friend.displayName}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                          @{entry.friend.username} · {entry.friend.isOnline ? 'Online' : 'Offline'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                        {entry.friend.displayName}
-                      </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        @{entry.friend.username} · {entry.friend.isOnline ? 'Online' : 'Offline'}
-                      </p>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => void handleRemove(entry.friend.userId)} disabled={busyId === entry.friend.userId}>
+                    <Button variant="ghost" size="sm" onClick={() => void handleRemove(entry.friend.userId)} disabled={busyId === entry.friend.userId} className="shrink-0">
                       Remove
                     </Button>
                   </li>
@@ -200,29 +210,31 @@ export const FriendsPage: React.FC = () => {
           </div>
 
           <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
               <Ban size={16} className="text-rose-500" /> Blocked users ({blocked.length})
             </div>
             {blocked.length === 0 ? (
-              <p className="p-6 text-sm text-slate-500 dark:text-slate-400">
+              <p className="p-4 sm:p-6 text-sm text-slate-500 dark:text-slate-400">
                 You haven't blocked anyone. Blocked users can't message you.
               </p>
             ) : (
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {blocked.map((b) => (
-                  <li key={b.id} className="flex items-center gap-3 px-6 py-3">
-                    <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center text-sm font-black text-rose-500 overflow-hidden">
-                      {b.avatarUrl ? (
-                        <img src={b.avatarUrl} alt="" className="w-full h-full object-cover" />
-                      ) : (b.displayName || b.username || '?').slice(0, 1).toUpperCase()}
+                  <li key={b.id} className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center text-sm font-black text-rose-500 overflow-hidden shrink-0">
+                        {b.avatarUrl ? (
+                          <img src={b.avatarUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (b.displayName || b.username || '?').slice(0, 1).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                          {b.displayName}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">@{b.username}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                        {b.displayName}
-                      </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">@{b.username}</p>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => void handleUnblock(b.blockedId)} disabled={busyId === b.blockedId}>
+                    <Button variant="ghost" size="sm" onClick={() => void handleUnblock(b.blockedId)} disabled={busyId === b.blockedId} className="shrink-0">
                       Unblock
                     </Button>
                   </li>

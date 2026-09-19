@@ -82,16 +82,16 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
 
   return (
     <header className="sticky top-0 z-50 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 transition-colors duration-300">
-      <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-2 px-3 sm:px-6">
+      <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-1.5 sm:gap-2 px-2.5 sm:px-6">
         {/* Left Brand + Hamburger */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
           {onMenuClick && (
             <button
               onClick={onMenuClick}
-              className="md:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="md:hidden p-1.5 sm:p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
               aria-label="Open Navigation Menu"
             >
-              <Menu size={22} />
+              <Menu className="w-5 h-5 sm:w-[22px] sm:h-[22px]" />
             </button>
           )}
 
@@ -100,33 +100,33 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
               if (onLogoClick) onLogoClick();
               else navigate('/');
             }}
-            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+            className="flex items-center gap-1.5 sm:gap-2.5 hover:opacity-80 transition-opacity min-w-0"
             aria-label={`${siteName} home`}
           >
             <img
               src={logoUrl || "/logo.png"}
               alt={siteName}
-              className="w-8 h-8 object-contain rounded-xl shadow-sm"
+              className="w-7 h-7 sm:w-8 sm:h-8 object-contain rounded-xl shadow-sm shrink-0"
               onError={(e) => {
                 // Fallback if image fails
                 (e.currentTarget as HTMLElement).style.display = 'none';
               }}
             />
-            <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight truncate max-w-[130px] sm:max-w-none">
+            <h1 className="text-xs sm:text-base md:text-lg font-black text-slate-900 dark:text-white tracking-tight whitespace-nowrap">
               {siteName}
             </h1>
           </button>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 text-slate-500 dark:text-slate-300">
+        <div className="flex items-center gap-1 sm:gap-3 text-slate-500 dark:text-slate-300 shrink-0">
           {session && me && (
             <button
               onClick={() => navigate('/notifications')}
-              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
+              className="p-1.5 sm:p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative shrink-0"
               aria-label="Notifications"
               title="Notifications"
             >
-              <Bell size={20} />
+              <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
               {me.unreadNotifications > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
                   {me.unreadNotifications > 9 ? "9+" : me.unreadNotifications}
@@ -141,7 +141,7 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
                 <button
                   type="button"
                   onClick={() => reload()}
-                  className="p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   title="Retry loading account"
                 >
                   <RotateCcw size={16} />
@@ -149,7 +149,7 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
               )}
               <Link
                 to="/login"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-xs font-bold transition-colors"
+                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-xs font-bold transition-colors"
               >
                 <UserCircle2 size={18} />
                 Sign in
@@ -161,11 +161,11 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
               <Skeleton className="w-8 h-8 rounded-full" />
             </div>
           ) : me ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               {((me.user as { role?: string })?.role === "ADMIN") && (
                 <button
                   onClick={() => navigate('/admin')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 text-indigo-500 dark:text-indigo-400 font-extrabold text-xs transition-colors"
+                  className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 text-indigo-500 dark:text-indigo-400 font-extrabold text-xs transition-colors shrink-0"
                   title="Admin Dashboard"
                 >
                   <ShieldCheck className="w-4 h-4" />
@@ -175,11 +175,11 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
 
               <button
                 onClick={() => navigate('/wallet')}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 hover:border-amber-500/50 transition-colors"
+                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 hover:border-amber-500/50 transition-colors shrink-0"
                 title="Wallet"
               >
-                <Coins className="w-3.5 h-3.5 text-amber-500" />
-                <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                <Coins className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span className="text-[11px] sm:text-xs font-bold text-amber-600 dark:text-amber-400">
                   {isWalletLoaded
                     ? walletBalance.toLocaleString()
                     : me.wallet
@@ -193,7 +193,7 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
                 <button
                   type="button"
                   onClick={() => setUserMenuOpen((prev) => !prev)}
-                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border transition-all cursor-pointer select-none ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border transition-all cursor-pointer select-none shrink-0 ${
                     userMenuOpen
                       ? "border-accent-500 ring-2 ring-accent-500/20 bg-slate-200/70 dark:bg-slate-700/80"
                       : "border-slate-200 dark:border-slate-700 hover:border-accent-500/50"

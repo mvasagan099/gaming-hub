@@ -79,7 +79,7 @@ export const ReferralsPage: React.FC = () => {
   const aff = summary?.affiliate;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-8 space-y-8">
+    <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8 pb-24 sm:pb-8">
       <div>
         <h1 className="text-2xl font-black text-slate-900 dark:text-white">Referrals & Affiliates</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -99,38 +99,38 @@ export const ReferralsPage: React.FC = () => {
         <>
           {/* Referral Code Hero Card */}
           {summary && (
-            <div className="rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-600 p-6 sm:p-8 text-white shadow-xl">
+            <div className="rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-600 p-4 sm:p-8 text-white shadow-xl">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-emerald-100">
                 <Gift size={16} /> Your referral code
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <code className="rounded-2xl bg-white/20 px-5 py-2.5 text-2xl sm:text-3xl font-black tracking-widest backdrop-blur-md shadow-inner">
+              <div className="mt-3 flex flex-wrap items-center gap-2.5 sm:gap-3">
+                <code className="rounded-2xl bg-white/20 px-4 sm:px-5 py-2 sm:py-2.5 text-xl sm:text-3xl font-black tracking-widest backdrop-blur-md shadow-inner">
                   {summary.code}
                 </code>
-                <Button variant="primary" size="sm" onClick={() => void handleCopy()} className="rounded-xl">
+                <Button variant="primary" size="sm" onClick={() => void handleCopy()} className="rounded-xl shrink-0">
                   <Copy className="mr-1.5 h-4 w-4" />
                   {copied ? 'Copied!' : 'Copy Code'}
                 </Button>
               </div>
-              <p className="mt-3 text-xs text-emerald-100/90">
-                Share this link: <span className="font-mono bg-white/10 px-2 py-0.5 rounded-lg select-all">{inviteUrl}</span>
+              <p className="mt-3 text-xs text-emerald-100/90 break-all sm:break-normal">
+                Share this link: <span className="font-mono bg-white/10 px-2 py-0.5 rounded-lg select-all break-all">{inviteUrl}</span>
               </p>
-              <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-2xl bg-white/10 p-3.5 backdrop-blur-sm">
-                  <p className="text-2xl font-black">{summary.totalReferrals}</p>
+              <div className="mt-6 grid grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-4">
+                <div className="rounded-2xl bg-white/10 p-3 sm:p-3.5 backdrop-blur-sm">
+                  <p className="text-xl sm:text-2xl font-black">{summary.totalReferrals}</p>
                   <p className="text-[10px] uppercase tracking-wider text-emerald-100 font-bold">Total Referred</p>
                 </div>
-                <div className="rounded-2xl bg-white/10 p-3.5 backdrop-blur-sm">
-                  <p className="text-2xl font-black">{summary.completedReferrals}</p>
+                <div className="rounded-2xl bg-white/10 p-3 sm:p-3.5 backdrop-blur-sm">
+                  <p className="text-xl sm:text-2xl font-black">{summary.completedReferrals}</p>
                   <p className="text-[10px] uppercase tracking-wider text-emerald-100 font-bold">Completed</p>
                 </div>
-                <div className="rounded-2xl bg-white/10 p-3.5 backdrop-blur-sm">
-                  <p className="text-2xl font-black">{summary.pendingReferrals}</p>
+                <div className="rounded-2xl bg-white/10 p-3 sm:p-3.5 backdrop-blur-sm">
+                  <p className="text-xl sm:text-2xl font-black">{summary.pendingReferrals}</p>
                   <p className="text-[10px] uppercase tracking-wider text-emerald-100 font-bold">Pending</p>
                 </div>
-                <div className="rounded-2xl bg-white/10 p-3.5 backdrop-blur-sm">
-                  <p className="text-2xl font-black flex items-center gap-1.5">
-                    <Coins className="w-5 h-5 text-amber-300" />
+                <div className="rounded-2xl bg-white/10 p-3 sm:p-3.5 backdrop-blur-sm">
+                  <p className="text-xl sm:text-2xl font-black flex items-center gap-1 sm:gap-1.5">
+                    <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 shrink-0" />
                     {(aff?.totalAffiliateEarnings ?? summary.totalCommission ?? 0).toLocaleString()}
                   </p>
                   <p className="text-[10px] uppercase tracking-wider text-emerald-100 font-bold">Total Earned</p>
@@ -141,9 +141,9 @@ export const ReferralsPage: React.FC = () => {
 
           {/* Referred By Card or Code Input */}
           {summary?.referredByCode ? (
-            <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-950/20 p-5 flex flex-wrap items-center justify-between gap-4">
+            <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-950/20 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
                   <Gift className="w-6 h-6" />
                 </div>
                 <div>
@@ -168,7 +168,7 @@ export const ReferralsPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-6 shadow-sm">
+            <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-4 sm:p-6 shadow-sm">
               <h2 className="text-base font-black text-slate-900 dark:text-white">Have a referral code?</h2>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 Support your referrer when you make deposits to your Gaming Hub wallet.
@@ -176,15 +176,21 @@ export const ReferralsPage: React.FC = () => {
               {applied ? (
                 <p className="mt-3 text-xs font-bold text-emerald-500">Referral code applied successfully!</p>
               ) : (
-                <div className="mt-4 flex max-w-sm gap-2">
+                <div className="mt-4 flex flex-col sm:flex-row max-w-sm gap-2.5 sm:gap-2">
                   <input
                     type="text"
                     value={applyCode}
                     onChange={(e) => setApplyCode(e.target.value.toUpperCase())}
                     placeholder="Enter referral code"
-                    className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white uppercase font-mono tracking-wider focus:outline-none focus:border-indigo-500"
+                    className="w-full sm:flex-1 min-w-0 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 sm:px-4 py-2.5 sm:py-2 text-sm text-slate-900 dark:text-white uppercase font-mono tracking-wider focus:outline-none focus:border-indigo-500"
                   />
-                  <Button variant="primary" size="sm" onClick={handleApply} disabled={submitting || !applyCode.trim()}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleApply}
+                    disabled={submitting || !applyCode.trim()}
+                    className="w-full sm:w-auto justify-center whitespace-nowrap shrink-0 py-2.5 sm:py-1.5"
+                  >
                     {submitting ? 'Applying...' : 'Apply'}
                   </Button>
                 </div>
@@ -218,43 +224,43 @@ export const ReferralsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-5 shadow-sm">
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Referred</p>
-                <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{aff?.totalReferredUsers ?? summary?.totalReferrals ?? 0}</p>
-                <p className="mt-1 text-[11px] text-slate-400">Total accounts joined</p>
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-4 sm:grid-cols-4">
+              <div className="rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3.5 sm:p-5 shadow-sm">
+                <p className="text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Referred</p>
+                <p className="mt-1.5 sm:mt-2 text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{aff?.totalReferredUsers ?? summary?.totalReferrals ?? 0}</p>
+                <p className="mt-1 text-[10px] sm:text-[11px] text-slate-400">Total accounts joined</p>
               </div>
-              <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-5 shadow-sm">
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Referrals</p>
-                <p className="mt-2 text-2xl font-black text-emerald-600 dark:text-emerald-400">{aff?.activeReferrals ?? summary?.completedReferrals ?? 0}</p>
-                <p className="mt-1 text-[11px] text-slate-400">Qualified or deposited</p>
+              <div className="rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3.5 sm:p-5 shadow-sm">
+                <p className="text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Referrals</p>
+                <p className="mt-1.5 sm:mt-2 text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">{aff?.activeReferrals ?? summary?.completedReferrals ?? 0}</p>
+                <p className="mt-1 text-[10px] sm:text-[11px] text-slate-400">Qualified or deposited</p>
               </div>
-              <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-5 shadow-sm">
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Affiliate</p>
-                <p className="mt-2 text-2xl font-black text-amber-500 flex items-center gap-1.5">
-                  <Coins className="w-5 h-5 text-amber-400" />
+              <div className="rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3.5 sm:p-5 shadow-sm">
+                <p className="text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Affiliate</p>
+                <p className="mt-1.5 sm:mt-2 text-xl sm:text-2xl font-black text-amber-500 flex items-center gap-1 sm:gap-1.5">
+                  <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
                   {(aff?.totalAffiliateEarnings ?? 0).toLocaleString()}
                 </p>
-                <p className="mt-1 text-[11px] text-slate-400">Lifetime deposit bonus</p>
+                <p className="mt-1 text-[10px] sm:text-[11px] text-slate-400">Lifetime deposit bonus</p>
               </div>
-              <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-5 shadow-sm">
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">This Month</p>
-                <p className="mt-2 text-2xl font-black text-indigo-500 flex items-center gap-1.5">
-                  <Coins className="w-5 h-5 text-indigo-400" />
+              <div className="rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3.5 sm:p-5 shadow-sm">
+                <p className="text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">This Month</p>
+                <p className="mt-1.5 sm:mt-2 text-xl sm:text-2xl font-black text-indigo-500 flex items-center gap-1 sm:gap-1.5">
+                  <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400 shrink-0" />
                   {(aff?.thisMonthEarnings ?? 0).toLocaleString()}
                 </p>
-                <p className="mt-1 text-[11px] text-slate-400">Current month earnings</p>
+                <p className="mt-1 text-[10px] sm:text-[11px] text-slate-400">Current month earnings</p>
               </div>
             </div>
 
             {/* Commissions History Table */}
             <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 overflow-hidden shadow-sm">
-              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <span className="text-sm font-bold text-slate-900 dark:text-white">Recent Deposit Commissions</span>
                 <span className="text-xs text-slate-500">{commissions.length} recorded</span>
               </div>
               {commissions.length === 0 ? (
-                <p className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                <p className="p-6 sm:p-8 text-center text-sm text-slate-500 dark:text-slate-400">
                   {aff?.affiliateMode === "ONE_TIME"
                     ? `No affiliate commissions yet. When referred players make their first Gaming Hub wallet deposit, your ${aff?.commissionPercent ?? 5}% bonus will appear here!`
                     : `No affiliate commissions yet. When referred players make a Gaming Hub wallet deposit, your ${aff?.commissionPercent ?? 5}% bonus will appear here!`}
@@ -264,33 +270,33 @@ export const ReferralsPage: React.FC = () => {
                   <table className="w-full text-left text-xs">
                     <thead className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 text-slate-500 font-bold uppercase tracking-wider">
                       <tr>
-                        <th className="px-6 py-3">Referee</th>
-                        <th className="px-6 py-3">Wallet Deposit</th>
-                        <th className="px-6 py-3">Rate</th>
-                        <th className="px-6 py-3">Commission</th>
-                        <th className="px-6 py-3">Date</th>
-                        <th className="px-6 py-3">Status</th>
+                        <th className="px-4 sm:px-6 py-3">Referee</th>
+                        <th className="px-4 sm:px-6 py-3">Wallet Deposit</th>
+                        <th className="px-4 sm:px-6 py-3">Rate</th>
+                        <th className="px-4 sm:px-6 py-3">Commission</th>
+                        <th className="px-4 sm:px-6 py-3">Date</th>
+                        <th className="px-4 sm:px-6 py-3">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {commissions.map((c) => (
                         <tr key={c.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
-                          <td className="px-6 py-3.5 font-mono font-bold text-slate-900 dark:text-white">
+                          <td className="px-4 sm:px-6 py-3.5 font-mono font-bold text-slate-900 dark:text-white">
                             @{c.refereeUsername || 'player'}
                           </td>
-                          <td className="px-6 py-3.5 text-slate-700 dark:text-slate-300 font-semibold">
+                          <td className="px-4 sm:px-6 py-3.5 text-slate-700 dark:text-slate-300 font-semibold">
                             {c.depositAmount.toLocaleString()} MAIN
                           </td>
-                          <td className="px-6 py-3.5 text-slate-500 font-medium">
+                          <td className="px-4 sm:px-6 py-3.5 text-slate-500 font-medium">
                             {c.commissionPercent}%
                           </td>
-                          <td className="px-6 py-3.5 font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <td className="px-4 sm:px-6 py-3.5 font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                             <Coins className="w-3.5 h-3.5 text-amber-400 inline" /> +{c.commissionAmount.toLocaleString()} BONUS
                           </td>
-                          <td className="px-6 py-3.5 text-slate-500">
+                          <td className="px-4 sm:px-6 py-3.5 text-slate-500">
                             {new Date(c.createdAt).toLocaleDateString()}
                           </td>
-                          <td className="px-6 py-3.5">
+                          <td className="px-4 sm:px-6 py-3.5">
                             <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
                               c.status === 'COMPLETED'
                                 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
@@ -311,15 +317,15 @@ export const ReferralsPage: React.FC = () => {
           {/* Referrals & Leaderboard side-by-side */}
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 overflow-hidden shadow-sm">
-              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
                 <Users size={16} className="text-emerald-500" /> Your Referrals
               </div>
               {list.length === 0 ? (
-                <p className="p-6 text-sm text-slate-500 dark:text-slate-400">No referrals yet.</p>
+                <p className="p-4 sm:p-6 text-sm text-slate-500 dark:text-slate-400">No referrals yet.</p>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800 max-h-96 overflow-y-auto">
                   {list.map((r) => (
-                    <li key={r.id} className="flex items-center gap-3 px-6 py-3.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                    <li key={r.id} className="flex items-center gap-3 px-4 sm:px-6 py-3 sm:py-3.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
                           {r.referredUser?.displayName ?? 'Player'}
@@ -329,14 +335,14 @@ export const ReferralsPage: React.FC = () => {
                           {r.status === 'PENDING' && ' • Commission activates on deposit'}
                         </p>
                       </div>
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold shrink-0 ${
                         r.status === 'REWARDED'
                           ? 'bg-emerald-500/10 text-emerald-600'
                           : 'bg-amber-500/10 text-amber-600'
                       }`}>
                         {r.status === 'REWARDED' ? 'REWARDED' : 'PENDING'}
                       </span>
-                      <span className="text-xs font-bold text-emerald-500 flex items-center gap-1">
+                      <span className="text-xs font-bold text-emerald-500 flex items-center gap-1 shrink-0">
                         {r.status === 'REWARDED' ? (
                           <>
                             <Coins className="w-3.5 h-3.5 text-amber-400 inline-block" /> +{r.commission} BONUS
@@ -352,28 +358,28 @@ export const ReferralsPage: React.FC = () => {
             </div>
 
             <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 overflow-hidden shadow-sm">
-              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
                 <Trophy size={16} className="text-amber-500" /> Top Referrers
               </div>
               {leaderboard.length === 0 ? (
-                <p className="p-6 text-sm text-slate-500 dark:text-slate-400">No referrers yet.</p>
+                <p className="p-4 sm:p-6 text-sm text-slate-500 dark:text-slate-400">No referrers yet.</p>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800 max-h-96 overflow-y-auto">
                   {leaderboard.map((entry) => (
-                    <li key={entry.userId} className="flex items-center gap-3 px-6 py-3.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
-                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black ${entry.rank <= 3 ? 'bg-amber-500/20 text-amber-500' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                    <li key={entry.userId} className="flex items-center gap-3 px-4 sm:px-6 py-3 sm:py-3.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ${entry.rank <= 3 ? 'bg-amber-500/20 text-amber-500' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
                         {entry.rank}
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
                           {entry.displayName}
                         </p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">@{entry.username}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">@{entry.username}</p>
                       </div>
-                      <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0">
                         {entry.referralCount} invites
                       </span>
-                      <span className="text-xs font-bold text-emerald-500 flex items-center gap-1">
+                      <span className="text-xs font-bold text-emerald-500 flex items-center gap-1 shrink-0">
                         <Coins className="w-3.5 h-3.5 text-amber-400 inline-block" /> {entry.commission}
                       </span>
                     </li>
