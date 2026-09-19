@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, useState, useCallback } from 'react';
 import { Coins } from 'lucide-react';
 import { GameWrapper } from '../../components/GameWrapper';
 import confetti from 'canvas-confetti';
@@ -662,6 +662,44 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
     return () => clearInterval(timer);
   }, [gameOver, isTurnActive, showRules, currentPlayer, mode]);
 
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof ResizeObserver === 'undefined') return;
+
+    const ro = new ResizeObserver(() => {
+      const rect = canvas.getBoundingClientRect();
+      const cssWidth = Math.round(rect.width) || BOARD_WIDTH;
+      const cssHeight = Math.round(rect.height) || BOARD_HEIGHT;
+      const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 3) : 1;
+      const targetW = Math.round(cssWidth * dpr);
+      const targetH = Math.round(cssHeight * dpr);
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+        console.log({
+          devicePixelRatio: window.devicePixelRatio,
+          canvasBackingWidth: canvas.width,
+          canvasBackingHeight: canvas.height,
+          cssWidth: rect.width,
+          cssHeight: rect.height,
+        });
+      }
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const scaleX = canvas.width / BOARD_WIDTH;
+        const scaleY = canvas.height / BOARD_HEIGHT;
+        ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        if ('imageSmoothingQuality' in ctx) {
+          ctx.imageSmoothingQuality = 'high';
+        }
+      }
+    });
+
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, []);
+
   useGameLoop((dt) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1129,6 +1167,34 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
       }
     }
 
+    // High-DPI canvas backing resolution support
+    const rect = canvas.getBoundingClientRect();
+    const cssWidth = Math.round(rect.width) || BOARD_WIDTH;
+    const cssHeight = Math.round(rect.height) || BOARD_HEIGHT;
+    const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 3) : 1;
+    const targetW = Math.round(cssWidth * dpr);
+    const targetH = Math.round(cssHeight * dpr);
+
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+      console.log({
+        devicePixelRatio: window.devicePixelRatio,
+        canvasBackingWidth: canvas.width,
+        canvasBackingHeight: canvas.height,
+        cssWidth: rect.width,
+        cssHeight: rect.height,
+      });
+    }
+
+    const scaleX = canvas.width / BOARD_WIDTH;
+    const scaleY = canvas.height / BOARD_HEIGHT;
+    ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    if ('imageSmoothingQuality' in ctx) {
+      ctx.imageSmoothingQuality = 'high';
+    }
+
     renderBoard(ctx, coins, dragState, dragStart, currentAim, strikerPhase, currentPlayer, isTurnActive, gameOver, strikerPos, mySeatRef.current);
 
   }, true);
@@ -1384,8 +1450,8 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     return {
-      x: ((e.clientX - rect.left) / rect.width) * canvas.width,
-      y: ((e.clientY - rect.top) / rect.height) * canvas.height
+      x: ((e.clientX - rect.left) / rect.width) * BOARD_WIDTH,
+      y: ((e.clientY - rect.top) / rect.height) * BOARD_HEIGHT,
     };
   };
 

@@ -1206,16 +1206,33 @@ const CarromMultiplayer: React.FC<Props> = ({
     }
 
     // Render Canvas with High-DPI support
-    const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 2, 3) : 2;
-    const targetW = Math.round(W * dpr);
-    const targetH = Math.round(H * dpr);
+    const rect = canvas.getBoundingClientRect();
+    const cssWidth = Math.round(rect.width) || W;
+    const cssHeight = Math.round(rect.height) || H;
+    const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 3) : 1;
+    const targetW = Math.round(cssWidth * dpr);
+    const targetH = Math.round(cssHeight * dpr);
+
     if (canvas.width !== targetW || canvas.height !== targetH) {
       canvas.width = targetW;
       canvas.height = targetH;
+      console.log({
+        devicePixelRatio: window.devicePixelRatio,
+        canvasBackingWidth: canvas.width,
+        canvasBackingHeight: canvas.height,
+        cssWidth: rect.width,
+        cssHeight: rect.height,
+      });
     }
 
-    ctx.save();
-    ctx.scale(dpr, dpr);
+    const scaleX = canvas.width / W;
+    const scaleY = canvas.height / H;
+    ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    if ("imageSmoothingQuality" in ctx) {
+      ctx.imageSmoothingQuality = "high";
+    }
+
     ctx.clearRect(0, 0, W, H);
     drawBoard(ctx, W, H);
 
@@ -1413,14 +1430,26 @@ const CarromMultiplayer: React.FC<Props> = ({
       ctx.restore();
     }
 
-    ctx.restore(); // Restore high-DPI scaling transformation
-
     rafRef.current = requestAnimationFrame(animate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragState, dragAim, gameOver]);
 
   useLayoutEffect(() => {
     rafRef.current = requestAnimationFrame(animate);
+
+    const canvas = canvasRef.current;
+    if (canvas && typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(() => {
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        rafRef.current = requestAnimationFrame(animate);
+      });
+      ro.observe(canvas);
+      return () => {
+        cancelAnimationFrame(rafRef.current);
+        ro.disconnect();
+      };
+    }
+
     return () => cancelAnimationFrame(rafRef.current);
   }, [animate]);
 

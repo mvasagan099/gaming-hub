@@ -49,9 +49,11 @@ export class CarromPieceRenderer {
     }
 
     // ── Realistic 3D Directional Contact Drop Shadow (Top-Left Light Source) ──
-    const dpr = ctx.getTransform().a || 1;
-    const logicalW = ctx.canvas.width / dpr;
-    const logicalH = ctx.canvas.height / dpr;
+    const transform = ctx.getTransform();
+    const scaleX = transform.a || 1;
+    const scaleY = transform.d || 1;
+    const logicalW = ctx.canvas.width / scaleX;
+    const logicalH = ctx.canvas.height / scaleY;
     const scale = logicalW / 600;
     const sm = 33 * scale;
     const drawX = Math.max(sm + r, Math.min(logicalW - sm - r, x));
