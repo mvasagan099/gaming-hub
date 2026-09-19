@@ -68,7 +68,7 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
 
   return (
     /* ── Outer Arena Wrapper ── */
-    <div className="relative w-full max-w-7xl mx-auto flex flex-col lg:flex-row items-center lg:items-stretch justify-center gap-2 sm:gap-4 px-2 py-1 sm:py-3 select-none">
+    <div className="relative w-full max-w-7xl mx-auto h-full lg:h-auto flex flex-col lg:flex-row items-center justify-between lg:justify-center gap-1.5 sm:gap-4 px-2 py-1 sm:py-3 select-none">
 
       {/* ── Deep Space Background & Board Halo ── */}
       {/* Top-left warm ambient */}
@@ -84,7 +84,7 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
       </div>
 
       {/* ── Mobile Layout Column (< lg) & Board ── */}
-      <div className="relative flex flex-col items-center justify-center gap-2 w-full max-w-[min(96vw,520px)] lg:max-w-none lg:w-auto">
+      <div className="relative flex flex-col items-center justify-between lg:justify-center gap-1.5 sm:gap-2 w-full h-full max-h-[100dvh] max-w-[min(96vw,520px)] lg:max-w-none lg:w-auto">
         {/* Mobile Top HUD (Opponent Card & Clock) */}
         <div className="w-full lg:hidden flex justify-center">
           <ChessMobileTop game={gameInstance} />
@@ -101,7 +101,7 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
           {/* Phaser canvas mount */}
           <div
             ref={containerRef}
-            className="w-full max-w-[min(94vw,calc(100dvh-8rem),760px)] aspect-square rounded-2xl overflow-hidden shadow-2xl"
+            className="w-full max-w-[min(92vw,calc(100dvh-13.5rem),480px)] lg:max-w-[min(calc(100dvh-7rem),calc(100vw-360px),760px)] aspect-square rounded-2xl overflow-hidden shadow-2xl"
             style={{
               perspective: "1400px",
             }}
@@ -116,7 +116,7 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
 
         {/* Mobile Bottom HUD (Player Card & Action Controls) */}
         <div className="w-full lg:hidden flex justify-center">
-          <ChessMobileBottom game={gameInstance} />
+          <ChessMobileBottom game={gameInstance} onReplay={onReplay} />
         </div>
       </div>
 

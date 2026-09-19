@@ -282,6 +282,8 @@ export class CricketHUDManager {
     const btnY = GAME_H - 42;
     
     if (this.role === 'batting') {
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
       // ── Ball Count Indicator (Bottom Right: e.g. "2/3") ──
       this.ballCounterText = this.scene.add.text(CENTER_X + 170, GAME_H - 35, "1/6", {
         fontSize: "24px",
@@ -290,10 +292,9 @@ export class CricketHUDManager {
         fontFamily: "Outfit, Arial, sans-serif",
         stroke: "#000000",
         strokeThickness: 4
-      }).setOrigin(0.5, 0.5).setDepth(depth + 5);
+      }).setOrigin(0.5, 0.5).setDepth(depth + 5).setVisible(!isMobile);
 
       // ── Stick Cricket Circular Touch Controls (Left & Right) ──
-      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
       const r = isMobile ? 36 : 52;
       const leftX = isMobile ? (CENTER_X - 88) : (CENTER_X - 140);
       const rightX = isMobile ? (CENTER_X + 88) : (CENTER_X + 140);

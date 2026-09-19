@@ -18,6 +18,7 @@ import {
   X,
   Flag,
   Handshake,
+  RefreshCcw,
 } from "lucide-react";
 import type { ChessRemoteState } from "../phaser/managers/ChessMultiplayerDriver";
 import { useMultiplayerStore } from "../../../store/multiplayerStore";
@@ -167,6 +168,7 @@ export function useChessPanelState(game?: Phaser.Game | null) {
     handleOfferDraw,
     handleAcceptDraw,
     handleDeclineDraw,
+    hasFloatingExit: !(isOnline && !!room),
   };
 }
 
@@ -528,10 +530,15 @@ export function ChessMobileTop({ game }: ChessMatchPanelProps) {
     isOnline,
     mode,
     aiLevel,
+    hasFloatingExit,
   } = useChessPanelState(game);
 
   return (
-    <div className="w-full flex items-center justify-between gap-2 p-2 bg-[#0b0f1a]/95 backdrop-blur-xl border border-slate-800/80 rounded-2xl shadow-lg">
+    <div
+      className={`w-full flex items-center justify-between gap-1.5 sm:gap-2 p-1.5 sm:p-2 bg-[#0b0f1a]/95 backdrop-blur-xl border border-slate-800/80 rounded-2xl shadow-lg transition-all ${
+        hasFloatingExit ? "pl-11 sm:pl-12 lg:pl-2" : ""
+      }`}
+    >
       <PlayerCard
         name={oppName}
         colorIcon={opponent.color === "w" ? "♔" : "♚"}
@@ -561,7 +568,11 @@ export function ChessMobileTop({ game }: ChessMatchPanelProps) {
 
 // ─── Mobile Bottom HUD (< lg) ───────────────────────────────────────────────
 
-export function ChessMobileBottom({ game }: ChessMatchPanelProps) {
+export interface ChessMobileBottomProps extends ChessMatchPanelProps {
+  onReplay?: () => void;
+}
+
+export function ChessMobileBottom({ game, onReplay }: ChessMobileBottomProps) {
   const {
     myPlayer,
     myName,
@@ -583,9 +594,9 @@ export function ChessMobileBottom({ game }: ChessMatchPanelProps) {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   return (
-    <div className="w-full flex flex-col gap-2">
+    <div className="w-full flex flex-col gap-1.5 sm:gap-2">
       {/* Player Card + Clock + Turn Pill */}
-      <div className="flex items-center justify-between gap-2 p-2 bg-[#0b0f1a]/95 backdrop-blur-xl border border-slate-800/80 rounded-2xl shadow-lg">
+      <div className="flex items-center justify-between gap-1.5 sm:gap-2 p-1.5 sm:p-2 bg-[#0b0f1a]/95 backdrop-blur-xl border border-slate-800/80 rounded-2xl shadow-lg">
         <PlayerCard
           name={myName}
           colorIcon={myPlayer.color === "w" ? "♔" : "♚"}
@@ -618,29 +629,38 @@ export function ChessMobileBottom({ game }: ChessMatchPanelProps) {
       </div>
 
       {/* Action Row */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2">
         <button
           onClick={() => setShowHistoryModal(true)}
-          className="flex-1 py-2 px-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-95"
+          className="flex-1 py-1.5 sm:py-2 px-2.5 sm:px-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-95"
         >
           <ScrollText size={14} className="text-amber-400" />
           <span>Moves ({movePairs.length})</span>
         </button>
 
-        {isOnline && (
+        {isOnline ? (
           <button
             onClick={canAcceptDraw ? handleAcceptDraw : handleOfferDraw}
             disabled={drawOfferedByMe}
-            className="py-2 px-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+            className="py-1.5 sm:py-2 px-2.5 sm:px-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-95 disabled:opacity-50"
           >
             <Handshake size={14} className="text-indigo-400" />
             <span>{canAcceptDraw ? "Accept Draw" : "Draw"}</span>
           </button>
-        )}
+        ) : onReplay ? (
+          <button
+            onClick={onReplay}
+            className="py-1.5 sm:py-2 px-2.5 sm:px-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-rose-400 hover:text-rose-300 border border-slate-800 hover:border-rose-900/50 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-95"
+            title="Reset Match"
+          >
+            <RefreshCcw size={13} />
+            <span>Reset</span>
+          </button>
+        ) : null}
 
         <button
           onClick={handleResign}
-          className="py-2 px-4 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-900/60 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-95"
+          className="py-1.5 sm:py-2 px-3 sm:px-4 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-900/60 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-95"
         >
           <Flag size={14} className="text-rose-400" />
           <span>Resign</span>

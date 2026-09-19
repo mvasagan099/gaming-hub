@@ -14,6 +14,7 @@ interface GameWrapperProps {
   children: React.ReactNode;
   isFullscreen?: boolean;
   isGameOver?: boolean;
+  hideFloatingExitOnMobile?: boolean;
 }
 
 function formatElapsed(seconds: number): string {
@@ -31,6 +32,7 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
   children,
   isFullscreen = false,
   isGameOver = false,
+  hideFloatingExitOnMobile = false,
 }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -114,18 +116,36 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
       <div className="fixed inset-0 z-50 bg-[#060913] text-white flex flex-col overflow-hidden">
         {/* Floating Back / Exit button for Single Player & AI Fullscreen */}
         {!(mode === 'multiplayer' && room) && (
-          <div className="absolute top-3 left-3 z-[65] pt-[env(safe-area-inset-top)]">
-            <button
-              type="button"
-              onClick={handleExitRequest}
-              aria-label="Exit Game"
-              title="Exit Game"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/85 hover:bg-slate-800 text-slate-200 border border-slate-700/80 shadow-lg backdrop-blur-md text-xs font-bold transition-all hover:border-purple-500/50 hover:text-purple-300 active:scale-95 cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4 text-purple-400" />
-              <span>Exit</span>
-            </button>
-          </div>
+          <>
+            {/* Desktop (>= lg): Exactly identical to existing styling & position */}
+            <div className="hidden lg:block absolute top-3 left-3 z-[65] pt-[env(safe-area-inset-top)]">
+              <button
+                type="button"
+                onClick={handleExitRequest}
+                aria-label="Exit Game"
+                title="Exit Game"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/85 hover:bg-slate-800 text-slate-200 border border-slate-700/80 shadow-lg backdrop-blur-md text-xs font-bold transition-all hover:border-purple-500/50 hover:text-purple-300 active:scale-95 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4 text-purple-400" />
+                <span>Exit</span>
+              </button>
+            </div>
+
+            {/* Mobile (< lg): Sleek, compact 32px circular icon button (hidden if game has own mobile exit) */}
+            {!hideFloatingExitOnMobile && (
+              <div className="lg:hidden absolute top-2.5 left-2.5 z-[65] pt-[env(safe-area-inset-top)]">
+                <button
+                  type="button"
+                  onClick={handleExitRequest}
+                  aria-label="Exit Game"
+                  title="Exit Game"
+                  className="w-8 h-8 rounded-full bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 shadow-xl backdrop-blur-md flex items-center justify-center transition-all hover:border-purple-500/50 hover:text-purple-300 active:scale-90 cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4 text-purple-400" />
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {/* Compact HUD bar — top in multiplayer */}

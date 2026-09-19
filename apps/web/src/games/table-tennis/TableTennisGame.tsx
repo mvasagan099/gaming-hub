@@ -8,6 +8,7 @@ import type { TableTennisState } from '@gaming-hub/game-engine';
 import { TABLE_TENNIS_VISUAL_CONFIG, type CameraState } from './constants/tableTennisVisualConfig';
 import { TableTennis3DRenderer } from './utils/tableTennis3DRenderer';
 import { TableTennisOverlays } from './components/TableTennisOverlays';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Timer, Users, X, LogOut } from 'lucide-react';
 
 interface TableTennisProps {
@@ -603,6 +604,16 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
     }
   };
 
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+  const handleExitClick = () => {
+    if (gameState === 'gameover') {
+      onBack();
+    } else {
+      setShowExitConfirm(true);
+    }
+  };
+
   const handleCanvasClick = () => {
     if (mode === 'multiplayer') {
       handleMultiplayerServe();
@@ -612,7 +623,16 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
   };
 
   return (
-    <GameWrapper title="Table Tennis 3D Pro" gameId="table-tennis" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={gameState === 'gameover'}>
+    <GameWrapper
+      title="Table Tennis 3D Pro"
+      gameId="table-tennis"
+      mode={mode}
+      stake={stake}
+      onBack={onBack}
+      isFullscreen
+      isGameOver={gameState === 'gameover'}
+      hideFloatingExitOnMobile={true}
+    >
       <div className="flex flex-col lg:flex-row items-center justify-center gap-0 lg:gap-4 w-full max-w-6xl relative mx-auto h-full p-0 lg:p-3 select-none overflow-hidden lg:overflow-y-auto">
         
         {/* CENTER 3D COURT CONTAINER */}
@@ -692,7 +712,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
                 </button>
               ) : (
                 <button
-                  onClick={onBack}
+                  onClick={handleExitClick}
                   className="p-1 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl bg-rose-600/20 hover:bg-rose-600 border border-rose-500/40 text-rose-300 hover:text-white flex items-center gap-1 text-[9px] sm:text-[10px] font-bold shadow-lg transition-all active:scale-95 cursor-pointer ml-1 sm:ml-2"
                   title="Exit Game"
                 >
@@ -825,6 +845,21 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={showExitConfirm}
+        onClose={() => setShowExitConfirm(false)}
+        title="Exit Match?"
+        message="Are you sure you want to exit? Your current table tennis match progress will be lost."
+        confirmText="Exit Match"
+        cancelText="Continue Playing"
+        variant="danger"
+        icon="logout"
+        onConfirm={() => {
+          setShowExitConfirm(false);
+          onBack();
+        }}
+      />
     </GameWrapper>
   );
 };

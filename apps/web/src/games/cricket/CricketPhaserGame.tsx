@@ -105,10 +105,10 @@ export function CricketPhaserGame({ mode, role, overs, onGameOver, onGameEvent }
   }, [mode, role, overs]);
 
   return (
-    <div className="relative mx-auto w-full flex-1 min-h-0 h-full md:aspect-[924/680] md:max-w-[min(98vw,calc((100dvh-2rem)*1.3588),1280px)] md:max-h-[calc(100dvh-2rem)] bg-[#090d16] rounded-xl md:rounded-2xl border-0 md:border md:border-slate-800 shadow-2xl overflow-hidden flex justify-center items-center">
+    <div className="relative mx-auto w-full flex-1 min-h-0 h-full md:aspect-[924/680] md:max-w-[min(98vw,calc((100dvh-2rem)*1.3588),1280px)] md:max-h-[calc(100dvh-2rem)] bg-[#090d16] rounded-none md:rounded-2xl border-0 md:border md:border-slate-800 shadow-2xl overflow-hidden flex justify-center items-center">
       <div
         ref={containerRef}
-        className="touch-none w-full h-full flex items-center justify-center scale-[0.85] md:scale-100 origin-center transition-transform [&>canvas]:!w-full [&>canvas]:!h-full [&>canvas]:!object-cover [&>canvas]:!m-0 [&>canvas]:!static md:[&>canvas]:!w-full md:[&>canvas]:!h-full md:[&>canvas]:!max-w-full md:[&>canvas]:!max-h-full md:[&>canvas]:!object-contain"
+        className="touch-none w-full h-full flex items-center justify-center [&>canvas]:!w-full [&>canvas]:!h-full [&>canvas]:!object-cover [&>canvas]:!m-0 [&>canvas]:!static md:[&>canvas]:!w-full md:[&>canvas]:!h-full md:[&>canvas]:!max-w-full md:[&>canvas]:!max-h-full md:[&>canvas]:!object-contain"
       />
     </div>
   );

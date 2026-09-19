@@ -13,24 +13,47 @@ interface GraphicsQualityBarProps {
 }
 
 export const GraphicsQualityBar: React.FC<GraphicsQualityBarProps> = ({ quality, onQualityChange }) => {
+  const nextQuality = () => {
+    const qualities: GraphicsQuality[] = ['LOW', 'MEDIUM', 'HIGH'];
+    const nextIdx = (qualities.indexOf(quality) + 1) % qualities.length;
+    onQualityChange(qualities[nextIdx]);
+  };
+
   return (
-    <div className="absolute top-3 left-3 z-30 flex items-center gap-1.5 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 shadow-lg">
-      <Monitor className="w-3.5 h-3.5 text-slate-400" />
-      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Quality:</span>
-      {(['LOW', 'MEDIUM', 'HIGH'] as GraphicsQuality[]).map((q) => (
+    <>
+      {/* ── Mobile (< sm): Sleek compact pill, tap to cycle with 0 scoreboard collision ── */}
+      <div className="sm:hidden absolute top-2.5 right-2.5 z-30 flex items-center">
         <button
-          key={q}
-          onClick={() => onQualityChange(q)}
-          className={`px-2 py-0.5 rounded-lg text-[9px] font-black transition-all ${
-            quality === q
-              ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/50'
-              : 'text-slate-400 hover:text-slate-200 bg-slate-900/60'
-          }`}
+          type="button"
+          onClick={nextQuality}
+          aria-label={`Graphics quality: ${quality}. Tap to cycle.`}
+          className="flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md px-2.5 py-1 rounded-xl border border-slate-800 shadow-lg active:scale-95 transition-all cursor-pointer"
         >
-          {q}
+          <Monitor className="w-3 h-3 text-slate-400" />
+          <span className="font-mono text-[9px] font-black text-amber-400">{quality}</span>
+          <span className="text-[8px] text-slate-400 font-bold">↻</span>
         </button>
-      ))}
-    </div>
+      </div>
+
+      {/* ── Desktop (>= sm): Full 3-button quality bar exactly as before ── */}
+      <div className="hidden sm:flex absolute top-3 right-3 z-30 items-center gap-1.5 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 shadow-lg">
+        <Monitor className="w-3.5 h-3.5 text-slate-400" />
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Quality:</span>
+        {(['LOW', 'MEDIUM', 'HIGH'] as GraphicsQuality[]).map((q) => (
+          <button
+            key={q}
+            onClick={() => onQualityChange(q)}
+            className={`px-2 py-0.5 rounded-lg text-[9px] font-black transition-all ${
+              quality === q
+                ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/50'
+                : 'text-slate-400 hover:text-slate-200 bg-slate-900/60'
+            }`}
+          >
+            {q}
+          </button>
+        ))}
+      </div>
+    </>
   );
 };
 
