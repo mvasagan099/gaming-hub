@@ -23,7 +23,13 @@
     "db:restore": "tsx scripts/db-restore.mts",
     "db:seed:support": "tsx scripts/seed-support.ts",
     "infra:up": "docker compose up -d",
-    "infra:down": "docker compose down"
+    "infra:down": "docker compose down",
+    "cap:sync": "npm run cap:sync -w @gaming-hub/web",
+    "cap:open": "npm run cap:open -w @gaming-hub/web",
+    "cap:build": "npm run cap:build -w @gaming-hub/web",
+    "cap:sync:ios": "npm run cap:sync:ios -w @gaming-hub/web",
+    "cap:open:ios": "npm run cap:open:ios -w @gaming-hub/web",
+    "cap:build:ios": "npm run cap:build:ios -w @gaming-hub/web"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
