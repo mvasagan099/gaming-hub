@@ -10,8 +10,8 @@ export const CRICKET_VISUAL_CONFIG = {
 
   // 3D Perspective Court & Pitch
   horizonY: 215,
-  pitchTopW: 130,
-  pitchBotW: 380,
+  pitchTopW: 120,
+  pitchBotW: 440,
   pitchTopY: 260,
   pitchBotY: 600,
 

@@ -18,8 +18,8 @@ const CENTER_Y = GAME_H / 2;
 
 // Stick Cricket Low-Angle Ground Perspective constants
 const HORIZON_Y = 175;
-const PITCH_TOP_W = 150;
-const PITCH_BOT_W = 860;
+const PITCH_TOP_W = 120;
+const PITCH_BOT_W = 440;
 const PITCH_TOP_Y = 195;
 const PITCH_BOT_Y = 680;
 
@@ -520,21 +520,21 @@ export class CricketScene extends Phaser.Scene {
     const topStumpY = 200;
     g.lineStyle(2, 0xffffff, 0.9);
     g.beginPath();
-    g.moveTo(pitchMidX - 65, topStumpY);
-    g.lineTo(pitchMidX + 65, topStumpY);
+    g.moveTo(pitchMidX - 45, topStumpY);
+    g.lineTo(pitchMidX + 45, topStumpY);
     g.strokePath();
 
     const topPoppingY = 216;
     g.lineStyle(2.5, 0xffffff, 0.95);
     g.beginPath();
-    g.moveTo(pitchMidX - 80, topPoppingY);
-    g.lineTo(pitchMidX + 80, topPoppingY);
+    g.moveTo(pitchMidX - 58, topPoppingY);
+    g.lineTo(pitchMidX + 58, topPoppingY);
     g.strokePath();
 
     // BOTTOM END (Batting Creases):
     // Main Popping Crease Line across the pitch (at y = 575)
     const botPoppingY = 575;
-    const botPoppingHalfW = 320;
+    const botPoppingHalfW = 195;
     g.lineStyle(3.5, 0xffffff, 1.0);
     g.beginPath();
     g.moveTo(pitchMidX - botPoppingHalfW, botPoppingY);
@@ -543,7 +543,7 @@ export class CricketScene extends Phaser.Scene {
 
     // Bowling Crease across stumps (at y = 665)
     const botStumpY = 665;
-    const botStumpHalfW = 220;
+    const botStumpHalfW = 135;
     g.lineStyle(2.5, 0xffffff, 0.9);
     g.beginPath();
     g.moveTo(pitchMidX - botStumpHalfW, botStumpY);
@@ -3030,7 +3030,7 @@ export class CricketScene extends Phaser.Scene {
       this.ballShadow.setScale(currentBallScale);
 
       // Keep ball strictly inside pitch corridor bounds
-      const pitchHalfW = Phaser.Math.Linear(40, 250, depthFrac);
+      const pitchHalfW = Phaser.Math.Linear(45, 190, depthFrac);
       this.ball.x = Phaser.Math.Clamp(this.ball.x, CENTER_X - pitchHalfW + 10, CENTER_X + pitchHalfW - 10);
 
       // Vertical physics (Single Pitch / Bounce)
