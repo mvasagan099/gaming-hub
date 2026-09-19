@@ -62,11 +62,33 @@ export interface CricketPlayer extends JsonObject {
   extras: number;
 }
 
+export interface CricketPitchTarget extends JsonObject {
+  targetId: string;
+  turnNumber: number;
+  /**
+   * Horizontal position from batsman's perspective.
+   * -1 = batsman's left side
+   *  0 = middle
+   * +1 = batsman's right side
+   */
+  lateral: number;
+  /**
+   * Distance away from batsman.
+   * 0 = very full / yorker
+   * 1 = very short
+   */
+  length: number;
+  line: CricketLine;
+  lengthZone: CricketLength;
+  lockedAtMs: number;
+}
+
 export interface CricketPendingDelivery extends JsonObject {
   delivery: CricketDelivery;
   power: number;
   line: string | null;
   length: string | null;
+  pitchTarget: CricketPitchTarget | null;
   deliveryId: string;
   deliverySequence: number;
 }
@@ -80,12 +102,15 @@ export interface CricketState extends JsonObject {
   battingTeam: number;
   bowlingTeam: number;
   battingFirst: number;
-  currentActor: "bowler" | "batsman" | "toss";
+  currentActor: "bowler" | "batsman" | "toss" | "toss-choice";
   target: number | null;
   pendingDelivery: CricketPendingDelivery | null;
   isProcessingDelivery: boolean;
   activeDeliveryId: string | null;
   deliverySequence: number;
+  pitchTarget: CricketPitchTarget | null;
+  bowlingPhase: "TARGETING" | "TARGET_LOCKED" | "DELIVERY";
+  pitchTargetSequence: number;
   team1Score: number;
   team2Score: number;
   team1Wickets: number;
@@ -125,12 +150,31 @@ export interface CricketState extends JsonObject {
   requiredRunRate: number | null;
   tossResult: "heads" | "tails" | null;
   tossWinner: number | null;
+  batterCreaseX: number;
+  movementLocked: boolean;
+  lastBatterMoveAtMs: number | null;
+}
+
+export interface CricketSetPitchTargetAction extends GameAction {
+  type: "set-pitch-target";
+  lateral: number;
+  length: number;
+}
+
+export interface CricketMoveBatterAction extends GameAction {
+  type: "move-batter";
+  x: number;
+}
+
+export interface CricketLockBatterMovementAction extends GameAction {
+  type: "lock-batter-movement";
 }
 
 export interface CricketBowlAction extends GameAction {
   type: "bowl";
   delivery: CricketDelivery;
   power?: number;
+  pitchTargetId?: string;
   line?: string;
   length?: string;
 }
@@ -139,6 +183,7 @@ export interface CricketBatAction extends GameAction {
   type: "bat";
   shot: CricketShot;
   timing?: CricketTiming;
+  deliveryId?: string;
 }
 
 export interface CricketTossCallAction extends GameAction {
@@ -146,10 +191,19 @@ export interface CricketTossCallAction extends GameAction {
   call: "heads" | "tails";
 }
 
+export interface CricketTossChoiceAction extends GameAction {
+  type: "toss-choice";
+  choice: "bat" | "bowl";
+}
+
 export type CricketAction =
+  | CricketSetPitchTargetAction
+  | CricketMoveBatterAction
+  | CricketLockBatterMovementAction
   | CricketBowlAction
   | CricketBatAction
   | CricketTossCallAction
+  | CricketTossChoiceAction
   | { type: "resign" }
   | { type: "draw-offer" }
   | { type: "draw-accept" }
@@ -161,6 +215,7 @@ export type CricketActionType = CricketAction["type"];
 
 export interface CricketEngineOptions {
   matchType?: CricketMatchType;
+  pitchTargetRevealMs?: number;
   turnTimer?: { turnDurationMs: number; warningThresholdMs: number };
   matchTimer?: { matchDurationMs: number; warningThresholdMs: number };
   enableResign?: boolean;

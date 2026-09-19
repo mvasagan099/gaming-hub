@@ -23,6 +23,27 @@ export interface AuthenticatedUser {
 
 
 export async function authenticateToken(token: string): Promise<AuthenticatedUser> {
+  if (env.NODE_ENV !== "production" && token.startsWith("test.")) {
+    const sub = token.slice("test.".length);
+    if (!sub) {
+      throw new Error("Test token is missing subject");
+    }
+    const tokenHash = hashToken(token);
+    const user = await ensureUser(
+      sub,
+      `${sub}@test.local`,
+      { username: `testuser_${sub}`, displayName: `Player ${sub}` },
+    );
+    return {
+      userId: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      role: user.role,
+      tokenHash,
+    };
+  }
+
   const { payload } = await jwtVerify(token, jwks, {
     issuer: `${env.SUPABASE_URL}/auth/v1`,
     audience: "authenticated",

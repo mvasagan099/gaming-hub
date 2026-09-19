@@ -38,7 +38,7 @@ const LiveScoreboard: React.FC<LiveScoreboardProps> = ({ remoteState, mySeat, na
   const target = s.target ?? null;
   const rr = (() => {
     const ballsBowled = (s.currentOver ?? 0) * 6 + (s.currentBall ?? 0);
-    const currentScore = currentInning === 1 ? score1 : score2;
+    const currentScore = s.battingTeam === 0 ? score1 : score2;
     return ballsBowled > 0 ? (currentScore / (ballsBowled / 6)).toFixed(1) : '0.0';
   })();
 
@@ -263,7 +263,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
   const targetVal = remoteState?.target ?? null;
   const runRateVal = (() => {
     const ballsBowled = ((remoteState?.currentOver ?? 0) * 6) + (remoteState?.currentBall ?? 0);
-    const currentScore = currentInning === 1 ? score1 : score2;
+    const currentScore = remoteState?.battingTeam === 0 ? score1 : score2;
     return ballsBowled > 0 ? (currentScore / (ballsBowled / 6)).toFixed(1) : '0.0';
   })();
 
@@ -525,7 +525,7 @@ export const CricketGame: React.FC<CricketProps> = ({ mode, stake, onBack }) => 
         liveTarget={isMultiplayer ? (remoteState?.target ?? null) : null}
         runRate={isMultiplayer && remoteState ? (() => {
           const balls = (remoteState.currentOver ?? 0) * 6 + (remoteState.currentBall ?? 0);
-          const sc = mySeat === 0 ? remoteState.team1Score : remoteState.team2Score;
+          const sc = remoteState.battingTeam === 0 ? remoteState.team1Score : remoteState.team2Score;
           return balls > 0 ? (sc / (balls / 6)).toFixed(1) : '0.0';
         })() : undefined}
         inning={isMultiplayer ? (remoteState?.inning as 1 | 2 ?? 1) : 1}

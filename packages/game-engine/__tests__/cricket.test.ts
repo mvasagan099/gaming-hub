@@ -12,15 +12,17 @@ describe("CricketEngine", () => {
     const eng = new CricketEngine(players, () => 0.9, options);
     const call = eng.state.tossResult === "heads" ? "heads" : "tails";
     eng.apply({ type: "toss-call", call }, 0);
+    eng.apply({ type: "toss-choice", choice: "bat" }, eng.state.currentSeat);
     return eng;
   }
 
-  function bowl(eng: CricketEngine, action: { type: "bowl"; delivery: "fast" | "slow" | "spin" } = { type: "bowl", delivery: "fast" }) {
-    return eng.apply(action, eng.state.bowlingTeam);
+  function bowl(eng: CricketEngine, action: { type: "bowl"; delivery: "fast" | "slow" | "spin"; pitchTargetId?: string } = { type: "bowl", delivery: "fast" }) {
+    eng.apply({ type: "set-pitch-target", lateral: 0, length: 0.4 }, eng.state.bowlingTeam, (eng.state.turnStartedAtMs ?? 1000));
+    return eng.apply({ ...action, pitchTargetId: eng.state.pitchTarget?.targetId }, eng.state.bowlingTeam, (eng.state.turnStartedAtMs ?? 1000) + 1000);
   }
 
   function bat(eng: CricketEngine, shot: "straight" | "left" | "right" | "up" = "straight", timing?: "early" | "good" | "late") {
-    const action: CricketAction = { type: "bat", shot, timing };
+    const action: CricketAction = { type: "bat", shot, timing, deliveryId: eng.state.activeDeliveryId ?? undefined };
     return eng.apply(action, eng.state.battingTeam);
   }
 
@@ -38,7 +40,7 @@ describe("CricketEngine", () => {
     expect(eng.state.battingFirst).toBe(0);
   });
 
-  it("toss-call determines batting first", () => {
+  it("toss-call determines toss-winner and toss-choice sets batting first", () => {
     const eng = new CricketEngine(players, () => 0.9);
     expect(eng.state.currentActor).toBe("toss");
     
@@ -46,8 +48,13 @@ describe("CricketEngine", () => {
     const res = eng.apply({ type: "toss-call", call }, 0);
     expect(res.ok).toBe(true);
     expect(res.state.tossWinner).toBe(1);
-    expect(res.state.battingFirst).toBeDefined();
-    expect(res.state.currentActor).toBe("bowler");
+    expect(res.state.currentActor).toBe("toss-choice");
+    expect(res.state.currentSeat).toBe(1);
+
+    const choiceRes = eng.apply({ type: "toss-choice", choice: "bat" }, 1);
+    expect(choiceRes.ok).toBe(true);
+    expect(choiceRes.state.battingFirst).toBe(1);
+    expect(choiceRes.state.currentActor).toBe("bowler");
   });
 
   it("random toss assigns one team to bat first", () => {
@@ -67,7 +74,7 @@ describe("CricketEngine", () => {
 
   it("only the bowling side can bowl", () => {
     const eng = setup();
-    const res = eng.apply({ type: "bowl", delivery: "fast" }, 1);
+    const res = eng.apply({ type: "bowl", delivery: "fast" }, eng.state.battingTeam);
     expect(res.ok).toBe(false);
   });
 
@@ -112,7 +119,8 @@ describe("CricketEngine", () => {
     }
     const s = eng.state;
     expect(s.inning).toBe(2);
-    expect(s.target).toBe(s.team1Score + 1);
+    const firstInningsScore = s.battingFirst === 0 ? s.team1Score : s.team2Score;
+    expect(s.target).toBe(firstInningsScore + 1);
   });
 
   it("ends the match when both innings are complete", () => {
@@ -155,7 +163,7 @@ describe("CricketEngine", () => {
     const bowlerSeat = eng.state.bowlingTeam;
 
     // First bowl request succeeds and acquires delivery lock
-    const res1 = eng.apply({ type: "bowl", delivery: "fast" }, bowlerSeat);
+    const res1 = bowl(eng, { type: "bowl", delivery: "fast" });
     expect(res1.ok).toBe(true);
     expect(res1.state.isProcessingDelivery).toBe(true);
     expect(res1.state.activeDeliveryId).toBe("delivery-1");
@@ -173,7 +181,7 @@ describe("CricketEngine", () => {
     expect(batRes.state.activeDeliveryId).toBeNull();
 
     // Next delivery can acquire lock and generates delivery-2
-    const res3 = eng.apply({ type: "bowl", delivery: "spin" }, bowlerSeat);
+    const res3 = bowl(eng, { type: "bowl", delivery: "spin" });
     expect(res3.ok).toBe(true);
     expect(res3.state.isProcessingDelivery).toBe(true);
     expect(res3.state.activeDeliveryId).toBe("delivery-2");

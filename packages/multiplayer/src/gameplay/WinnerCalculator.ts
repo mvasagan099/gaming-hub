@@ -80,11 +80,15 @@ export class WinnerCalculator {
     const s = state as unknown as {
       scores?: Record<number, number> | number[];
       score?: Record<number, number> | number[];
+      team1Score?: number;
+      team2Score?: number;
     };
     const fromScores = s.scores?.[seat];
     if (typeof fromScores === "number") return fromScores;
     const fromScore = s.score?.[seat];
     if (typeof fromScore === "number") return fromScore;
+    if (seat === 0 && typeof s.team1Score === "number") return s.team1Score;
+    if (seat === 1 && typeof s.team2Score === "number") return s.team2Score;
     return undefined;
   }
 }

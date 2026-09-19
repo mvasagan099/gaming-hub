@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { CricketDelivery } from "@gaming-hub/game-engine";
 
 const GAME_W = 924;
 const GAME_H = 680;
@@ -39,9 +40,45 @@ export class CricketHUDManager {
 
   private controlElements: Phaser.GameObjects.GameObject[] = [];
 
+  // Pitch Targeting & Bowling Controls
+  private selectedDelivery: CricketDelivery = 'fast';
+  private deliveryButtons: {
+    id: CricketDelivery;
+    bg: Phaser.GameObjects.Graphics;
+    text: Phaser.GameObjects.Text;
+    zone: Phaser.GameObjects.Zone;
+    color: number;
+    outline: number;
+    cx: number;
+    cy: number;
+    w: number;
+    h: number;
+  }[] = [];
+  private lockSpotBg?: Phaser.GameObjects.Graphics;
+  private lockSpotText?: Phaser.GameObjects.Text;
+  private lockSpotZone?: Phaser.GameObjects.Zone;
+  private bowlBtnBg?: Phaser.GameObjects.Graphics;
+  private bowlBtnText?: Phaser.GameObjects.Text;
+  private bowlBtnZone?: Phaser.GameObjects.Zone;
+  private pitchBadgeBg?: Phaser.GameObjects.Graphics;
+  private pitchBadgeText?: Phaser.GameObjects.Text;
+  private isLockSpotEnabled: boolean = true;
+  private bowlButtonState: "disabled" | "countdown" | "ready" = "disabled";
+
   public onHit: (direction: 'left' | 'right' | 'up' | 'straight') => void = () => {};
+  public onMoveBatter: (direction: -1 | 0 | 1) => void = () => {};
+  public onMoveBatterStep: (delta: number) => void = () => {};
   public onStepOut: () => void = () => {};
-  public onBowl: (type: 'fast' | 'slow' | 'spin', power: number) => void = () => {};
+  public onSelectDelivery: (delivery: CricketDelivery) => void = () => {};
+  public onLockSpot: () => void = () => {};
+  public onBowlPress: (power: number) => void = () => {};
+  public onBowl: (type: CricketDelivery, power: number) => void = () => {};
+
+  private creaseIndicatorGfx?: Phaser.GameObjects.Graphics;
+  private creaseIndicatorText?: Phaser.GameObjects.Text;
+  private creaseLockedBadge?: Phaser.GameObjects.Text;
+  private isBatterMovementLocked: boolean = false;
+  private currentCreaseX: number = 0;
 
   private isControlsDisabled = true;
 
@@ -285,87 +322,161 @@ export class CricketHUDManager {
       const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
       // ── Ball Count Indicator (Bottom Right: e.g. "2/3") ──
-      this.ballCounterText = this.scene.add.text(CENTER_X + 170, GAME_H - 35, "1/6", {
-        fontSize: "24px",
+      this.ballCounterText = this.scene.add.text(GAME_W - 55, GAME_H - 24, "1/6", {
+        fontSize: "18px",
         color: "#ffffff",
         fontStyle: "bold",
         fontFamily: "Outfit, Arial, sans-serif",
         stroke: "#000000",
-        strokeThickness: 4
+        strokeThickness: 3
       }).setOrigin(0.5, 0.5).setDepth(depth + 5).setVisible(!isMobile);
 
-      // ── Stick Cricket Circular Touch Controls (Left & Right) ──
-      const r = isMobile ? 36 : 52;
-      const leftX = isMobile ? (CENTER_X - 88) : (CENTER_X - 140);
-      const rightX = isMobile ? (CENTER_X + 88) : (CENTER_X + 140);
-      const touchY = isMobile ? (GAME_H - 165) : (GAME_H - 180);
-      const zoneSize = r * 2 + 14;
+      // ── Row 1: Distinct Shot Action Buttons (Separated from movement) ──
+      const shotRowY = GAME_H - 66;
+      const shots: { id: 'left' | 'straight' | 'right' | 'up'; label: string; sub: string; color: number; stroke: number; cx: number; w: number }[] = [
+        { id: 'left', label: '◀ DRIVE', sub: '(Q)', color: 0x0284c7, stroke: 0x38bdf8, cx: CENTER_X - 152, w: 88 },
+        { id: 'straight', label: 'STRAIGHT ⬆', sub: '(S/Space)', color: 0x059669, stroke: 0x34d399, cx: CENTER_X - 52, w: 96 },
+        { id: 'right', label: 'PULL ▶', sub: '(E)', color: 0xd97706, stroke: 0xfbbf24, cx: CENTER_X + 52, w: 88 },
+        { id: 'up', label: 'LOFT 🚀', sub: '(W)', color: 0x9333ea, stroke: 0xc084fc, cx: CENTER_X + 152, w: 88 },
+      ];
 
-      const leftGfx = this.scene.add.graphics().setDepth(depth);
+      shots.forEach(s => {
+        const bg = this.scene.add.graphics().setDepth(depth + 2);
+        const drawBtn = (isPressed: boolean = false) => {
+          bg.clear();
+          bg.fillStyle(isPressed ? s.stroke : s.color, isPressed ? 0.95 : 0.75);
+          bg.fillRoundedRect(s.cx - s.w / 2, shotRowY - 16, s.w, 32, 6);
+          bg.lineStyle(1.5, s.stroke, 0.85);
+          bg.strokeRoundedRect(s.cx - s.w / 2, shotRowY - 16, s.w, 32, 6);
+        };
+        drawBtn();
 
-      const drawGlassBubble = (gfx: Phaser.GameObjects.Graphics, cx: number, cy: number, isRight: boolean) => {
-        gfx.clear();
-        const sf = r / 60;
-        // Outer soft glow
-        gfx.fillStyle(0xffffff, 0.08);
-        gfx.fillCircle(cx, cy, r + 6);
-        // Translucent dark glass body
-        gfx.fillStyle(0x0f172a, 0.55);
-        gfx.fillCircle(cx, cy, r);
-        // Beveled glass rim
-        gfx.lineStyle(2.5, 0x38bdf8, 0.7);
-        gfx.strokeCircle(cx, cy, r);
-        gfx.lineStyle(1.5, 0xffffff, 0.35);
-        gfx.strokeCircle(cx, cy, r - 2);
+        const mainText = this.scene.add.text(s.cx, shotRowY - (isMobile ? 0 : 3), s.label, {
+          fontSize: isMobile ? "11px" : "12px",
+          color: "#ffffff",
+          fontStyle: "bold",
+          fontFamily: "Outfit, Arial, sans-serif"
+        }).setOrigin(0.5).setDepth(depth + 3);
 
-        // Stick Cricket Batsman Silhouette inside circle
-        gfx.fillStyle(0xffffff, 0.85);
-        if (isRight) {
-          // Right-facing silhouette
-          gfx.fillCircle(cx + 4 * sf, cy - 16 * sf, 6 * sf);
-          gfx.fillRect(cx - 2 * sf, cy - 10 * sf, 8 * sf, 18 * sf);
-          gfx.fillRect(cx - 5 * sf, cy + 8 * sf, 5 * sf, 15 * sf);
-          gfx.fillRect(cx + 2 * sf, cy + 8 * sf, 5 * sf, 15 * sf);
-          gfx.fillRect(cx + 6 * sf, cy - 6 * sf, 22 * sf, 6 * sf);
-        } else {
-          // Left-facing silhouette
-          gfx.fillCircle(cx - 4 * sf, cy - 16 * sf, 6 * sf);
-          gfx.fillRect(cx - 6 * sf, cy - 10 * sf, 8 * sf, 18 * sf);
-          gfx.fillRect(cx - 7 * sf, cy + 8 * sf, 5 * sf, 15 * sf);
-          gfx.fillRect(cx, cy + 8 * sf, 5 * sf, 15 * sf);
-          gfx.fillRect(cx - 28 * sf, cy - 6 * sf, 22 * sf, 6 * sf);
+        const subText = this.scene.add.text(s.cx, shotRowY + 9, s.sub, {
+          fontSize: "9px",
+          color: "#cbd5e1",
+          fontFamily: "Outfit, Arial, sans-serif"
+        }).setOrigin(0.5).setDepth(depth + 3).setVisible(!isMobile);
+
+        const zone = this.scene.add.zone(s.cx, shotRowY, s.w, 34).setInteractive({ useHandCursor: true }).setDepth(depth + 4);
+        zone.on('pointerdown', () => {
+          if (!this.isControlsDisabled) {
+            this.setControlsState(true);
+            drawBtn(true);
+            this.scene.time.delayedCall(120, () => drawBtn(false));
+            this.onHit(s.id);
+          }
+        });
+        zone.on('pointerup', () => drawBtn(false));
+        zone.on('pointerout', () => drawBtn(false));
+
+        this.controlElements.push(bg, mainText, subText, zone);
+      });
+
+      // ── Row 2: Batter Crease Movement & Live Indicator ──
+      const moveRowY = GAME_H - 24;
+      const moveBtnW = 86;
+      const moveBtnH = 26;
+
+      // ◀ MOVE LEFT Button
+      const leftMoveBg = this.scene.add.graphics().setDepth(depth + 2);
+      const drawLeftMove = (pressed: boolean = false) => {
+        leftMoveBg.clear();
+        leftMoveBg.fillStyle(pressed ? 0x0284c7 : 0x0f172a, pressed ? 0.9 : 0.7);
+        leftMoveBg.fillRoundedRect(CENTER_X - 150 - moveBtnW / 2, moveRowY - moveBtnH / 2, moveBtnW, moveBtnH, 5);
+        leftMoveBg.lineStyle(1.5, pressed ? 0x38bdf8 : 0x475569, 0.85);
+        leftMoveBg.strokeRoundedRect(CENTER_X - 150 - moveBtnW / 2, moveRowY - moveBtnH / 2, moveBtnW, moveBtnH, 5);
+      };
+      drawLeftMove();
+
+      const leftMoveText = this.scene.add.text(CENTER_X - 150, moveRowY, "◀ MOVE", {
+        fontSize: "11px",
+        color: "#38bdf8",
+        fontStyle: "bold",
+        fontFamily: "Outfit, Arial, sans-serif"
+      }).setOrigin(0.5).setDepth(depth + 3);
+
+      let leftMoveTimer: Phaser.Time.TimerEvent | undefined;
+      const leftMoveZone = this.scene.add.zone(CENTER_X - 150, moveRowY, moveBtnW, moveBtnH).setInteractive({ useHandCursor: true }).setDepth(depth + 4);
+      leftMoveZone.on('pointerdown', () => {
+        if (!this.isControlsDisabled && !this.isBatterMovementLocked) {
+          drawLeftMove(true);
+          this.onMoveBatterStep(-0.10);
+          this.onMoveBatter(-1);
+        }
+      });
+      const stopLeftMove = () => {
+        drawLeftMove(false);
+        this.onMoveBatter(0);
+        if (leftMoveTimer) {
+          leftMoveTimer.remove();
+          leftMoveTimer = undefined;
         }
       };
+      leftMoveZone.on('pointerup', stopLeftMove);
+      leftMoveZone.on('pointerout', stopLeftMove);
 
-      drawGlassBubble(leftGfx, leftX, touchY, false);
+      // ▶ MOVE RIGHT Button
+      const rightMoveBg = this.scene.add.graphics().setDepth(depth + 2);
+      const drawRightMove = (pressed: boolean = false) => {
+        rightMoveBg.clear();
+        rightMoveBg.fillStyle(pressed ? 0x0284c7 : 0x0f172a, pressed ? 0.9 : 0.7);
+        rightMoveBg.fillRoundedRect(CENTER_X + 150 - moveBtnW / 2, moveRowY - moveBtnH / 2, moveBtnW, moveBtnH, 5);
+        rightMoveBg.lineStyle(1.5, pressed ? 0x38bdf8 : 0x475569, 0.85);
+        rightMoveBg.strokeRoundedRect(CENTER_X + 150 - moveBtnW / 2, moveRowY - moveBtnH / 2, moveBtnW, moveBtnH, 5);
+      };
+      drawRightMove();
 
-      const leftZone = this.scene.add.zone(leftX, touchY, zoneSize, zoneSize).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
-      leftZone.on('pointerdown', () => {
-        if (!this.isControlsDisabled) {
-          this.setControlsState(true);
-          leftGfx.setScale(0.94);
-          this.scene.time.delayedCall(120, () => leftGfx.setScale(1));
-          this.onHit('left');
+      const rightMoveText = this.scene.add.text(CENTER_X + 150, moveRowY, "MOVE ▶", {
+        fontSize: "11px",
+        color: "#38bdf8",
+        fontStyle: "bold",
+        fontFamily: "Outfit, Arial, sans-serif"
+      }).setOrigin(0.5).setDepth(depth + 3);
+
+      let rightMoveTimer: Phaser.Time.TimerEvent | undefined;
+      const rightMoveZone = this.scene.add.zone(CENTER_X + 150, moveRowY, moveBtnW, moveBtnH).setInteractive({ useHandCursor: true }).setDepth(depth + 4);
+      rightMoveZone.on('pointerdown', () => {
+        if (!this.isControlsDisabled && !this.isBatterMovementLocked) {
+          drawRightMove(true);
+          this.onMoveBatterStep(0.10);
+          this.onMoveBatter(1);
         }
       });
-      leftZone.on('pointerup', () => leftGfx.setAlpha(this.isControlsDisabled ? 0.6 : 1));
-      leftZone.on('pointerout', () => leftGfx.setAlpha(this.isControlsDisabled ? 0.6 : 1));
-
-      // ── Right Stick Cricket Circular Button ──
-      const rightGfx = this.scene.add.graphics().setDepth(depth);
-      drawGlassBubble(rightGfx, rightX, touchY, true);
-
-      const rightZone = this.scene.add.zone(rightX, touchY, zoneSize, zoneSize).setInteractive({ useHandCursor: true }).setDepth(depth + 2);
-      rightZone.on('pointerdown', () => {
-        if (!this.isControlsDisabled) {
-          this.setControlsState(true);
-          rightGfx.setScale(0.94);
-          this.scene.time.delayedCall(120, () => rightGfx.setScale(1));
-          this.onHit('right');
+      const stopRightMove = () => {
+        drawRightMove(false);
+        this.onMoveBatter(0);
+        if (rightMoveTimer) {
+          rightMoveTimer.remove();
+          rightMoveTimer = undefined;
         }
-      });
-      rightZone.on('pointerup', () => rightGfx.setAlpha(this.isControlsDisabled ? 0.6 : 1));
-      rightZone.on('pointerout', () => rightGfx.setAlpha(this.isControlsDisabled ? 0.6 : 1));
+      };
+      rightMoveZone.on('pointerup', stopRightMove);
+      rightMoveZone.on('pointerout', stopRightMove);
+
+      // ── Crease Guide Indicator Track: |----●----| ──
+      this.creaseIndicatorGfx = this.scene.add.graphics().setDepth(depth + 2);
+      this.creaseIndicatorText = this.scene.add.text(CENTER_X, moveRowY - 8, "CREASE: 0.00", {
+        fontSize: "10px",
+        color: "#94a3b8",
+        fontStyle: "bold",
+        fontFamily: "Outfit, Arial, sans-serif"
+      }).setOrigin(0.5, 1).setDepth(depth + 3);
+
+      this.creaseLockedBadge = this.scene.add.text(CENTER_X, moveRowY, "CREASE LOCKED", {
+        fontSize: "10px",
+        color: "#ef4444",
+        fontStyle: "bold",
+        fontFamily: "Outfit, Arial, sans-serif"
+      }).setOrigin(0.5).setDepth(depth + 4).setVisible(false);
+
+      this.drawCreaseIndicator(0, false);
 
       // ── Pause Button (Top Right) ──
       const pauseGfx = this.scene.add.graphics().setDepth(depth + 10);
@@ -373,53 +484,232 @@ export class CricketHUDManager {
       pauseGfx.fillRoundedRect(GAME_W - 60, 16, 44, 44, 8);
       pauseGfx.lineStyle(2, 0xffffff, 0.85);
       pauseGfx.strokeRoundedRect(GAME_W - 60, 16, 44, 44, 8);
-      // Two white vertical bars
       pauseGfx.fillStyle(0xffffff, 1);
       pauseGfx.fillRoundedRect(GAME_W - 50, 26, 8, 24, 2);
       pauseGfx.fillRoundedRect(GAME_W - 36, 26, 8, 24, 2);
 
       if (this.ballCounterText) this.controlElements.push(this.ballCounterText);
       this.controlElements.push(
-        leftGfx, leftZone, rightGfx, rightZone, pauseGfx
+        leftMoveBg, leftMoveText, leftMoveZone,
+        rightMoveBg, rightMoveText, rightMoveZone,
+        this.creaseIndicatorGfx, this.creaseIndicatorText, this.creaseLockedBadge,
+        pauseGfx
       );
     } else {
-      // BOWL CONTROLS
-      const bowlBtnY = GAME_H - 38;
-      const types = [
-        { id: 'fast', label: 'Fast ⚡', color: 0xf43f5e, outline: 0xbe123c, xOffset: -100 },
-        { id: 'slow', label: 'Slow 🐢', color: 0x3b82f6, outline: 0x1d4ed8, xOffset: 0 },
-        { id: 'spin', label: 'Spin 🌪️', color: 0xeab308, outline: 0xca8a04, xOffset: 100 }
-      ] as const;
+      // BOWL CONTROLS WITH DELIVERY SELECTION, PITCH TARGET LOCK, AND BOWL CONFIRMATION
+      const row1Y = GAME_H - 68;
+      const row2Y = GAME_H - 26;
 
-      types.forEach(t => {
-        const cx = CENTER_X + t.xOffset;
+      const types: { id: CricketDelivery; label: string; color: number; outline: number }[] = [
+        { id: 'fast', label: 'FAST ⚡', color: 0xef4444, outline: 0xb91c1c },
+        { id: 'slow', label: 'SLOW 🐢', color: 0x3b82f6, outline: 0x1d4ed8 },
+        { id: 'spin', label: 'SPIN 🌪️', color: 0xeab308, outline: 0xa16207 },
+        { id: 'yorker', label: 'YORKER 🎯', color: 0x10b981, outline: 0x047857 },
+        { id: 'bouncer', label: 'BOUNCER 💥', color: 0xf97316, outline: 0xc2410c },
+        { id: 'swing', label: 'SWING 🌀', color: 0xa855f7, outline: 0x7e22ce },
+      ];
+
+      const btnW = 72;
+      const btnH = 26;
+      const totalW = types.length * (btnW + 8) - 8;
+      const startX = CENTER_X - totalW / 2 + btnW / 2;
+
+      this.deliveryButtons = [];
+
+      types.forEach((t, i) => {
+        const cx = startX + i * (btnW + 8);
         const bg = this.scene.add.graphics();
-        bg.fillStyle(t.color, 1);
-        bg.fillCircle(cx, bowlBtnY, 23);
-        bg.lineStyle(2.5, t.outline, 1);
-        bg.strokeCircle(cx, bowlBtnY, 23);
         bg.setDepth(depth + 10);
 
-        const text = this.scene.add.text(cx, bowlBtnY, t.label, {
-          fontSize: "12px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+        const text = this.scene.add.text(cx, row1Y, t.label, {
+          fontSize: "11px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
         }).setOrigin(0.5).setDepth(depth + 11);
 
-        const zone = this.scene.add.zone(cx, bowlBtnY, 52, 52).setInteractive({ useHandCursor: true }).setDepth(depth + 12);
+        const zone = this.scene.add.zone(cx, row1Y, btnW, btnH).setInteractive({ useHandCursor: true }).setDepth(depth + 12);
         zone.on('pointerdown', () => {
           if (!this.isControlsDisabled) {
-            this.setControlsState(true);
-            bg.setAlpha(0.5);
-            this.onBowl(t.id, this.currentPower);
+            this.setSelectedDelivery(t.id);
+            this.onSelectDelivery(t.id);
           }
         });
-        zone.on('pointerup', () => bg.setAlpha(this.isControlsDisabled ? 0.5 : 1));
-        zone.on('pointerout', () => bg.setAlpha(this.isControlsDisabled ? 0.5 : 1));
 
+        this.deliveryButtons.push({ id: t.id, bg, text, zone, color: t.color, outline: t.outline, cx, cy: row1Y, w: btnW, h: btnH });
         this.controlElements.push(bg, text, zone);
       });
+
+      this.redrawDeliveryButtons();
+
+      // Row 2: Pitch Info Badge + LOCK SPOT Button + BOWL Button
+      // Pitch Info Badge
+      this.pitchBadgeBg = this.scene.add.graphics().setDepth(depth + 10);
+      this.pitchBadgeText = this.scene.add.text(CENTER_X - 160, row2Y, "TAP PITCH TO SET SPOT", {
+        fontSize: "11px", color: "#38bdf8", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+      }).setOrigin(0.5).setDepth(depth + 11);
+      this.setPitchBadge("TAP PITCH TO SET SPOT", "#38bdf8");
+      this.controlElements.push(this.pitchBadgeBg, this.pitchBadgeText);
+
+      // LOCK SPOT Button
+      this.lockSpotBg = this.scene.add.graphics().setDepth(depth + 10);
+      this.lockSpotText = this.scene.add.text(CENTER_X, row2Y, "LOCK SPOT 🎯", {
+        fontSize: "12px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+      }).setOrigin(0.5).setDepth(depth + 11);
+      this.lockSpotZone = this.scene.add.zone(CENTER_X, row2Y, 110, 34).setInteractive({ useHandCursor: true }).setDepth(depth + 12);
+      this.lockSpotZone.on('pointerdown', () => {
+        if (!this.isControlsDisabled && this.isLockSpotEnabled) {
+          this.onLockSpot();
+        }
+      });
+      this.controlElements.push(this.lockSpotBg, this.lockSpotText, this.lockSpotZone);
+      this.setLockSpotEnabled(true);
+
+      // BOWL Button
+      this.bowlBtnBg = this.scene.add.graphics().setDepth(depth + 10);
+      this.bowlBtnText = this.scene.add.text(CENTER_X + 130, row2Y, "BOWL 🏏", {
+        fontSize: "13px", color: "#ffffff", fontStyle: "bold", fontFamily: "Outfit, sans-serif"
+      }).setOrigin(0.5).setDepth(depth + 11);
+      this.bowlBtnZone = this.scene.add.zone(CENTER_X + 130, row2Y, 110, 34).setInteractive({ useHandCursor: true }).setDepth(depth + 12);
+      this.bowlBtnZone.on('pointerdown', () => {
+        if (!this.isControlsDisabled && this.bowlButtonState === "ready") {
+          this.setControlsState(true);
+          this.onBowlPress(this.currentPower);
+          this.onBowl(this.selectedDelivery, this.currentPower);
+        }
+      });
+      this.controlElements.push(this.bowlBtnBg, this.bowlBtnText, this.bowlBtnZone);
+      this.setBowlButtonState("disabled");
     }
 
     this.setControlsState(true);
+  }
+
+  private drawCreaseIndicator(x: number, locked: boolean) {
+    if (!this.creaseIndicatorGfx) return;
+    const gfx = this.creaseIndicatorGfx;
+    gfx.clear();
+
+    const trackW = 120;
+    const trackH = 10;
+    const cy = GAME_H - 24;
+    const leftX = CENTER_X - trackW / 2;
+    const rightX = CENTER_X + trackW / 2;
+
+    // Background track
+    gfx.fillStyle(locked ? 0x1e1b2e : 0x0f172a, 0.8);
+    gfx.fillRoundedRect(leftX, cy - trackH / 2, trackW, trackH, 5);
+    gfx.lineStyle(1.2, locked ? 0xef4444 : 0x334155, 0.9);
+    gfx.strokeRoundedRect(leftX, cy - trackH / 2, trackW, trackH, 5);
+
+    // Stumps markers (vertical ticks): Off (-0.75), Middle (0.0), Leg (+0.75)
+    gfx.lineStyle(1.5, 0x64748b, 0.6);
+    gfx.lineBetween(leftX + 8, cy - 4, leftX + 8, cy + 4); // off
+    gfx.lineBetween(CENTER_X, cy - 4, CENTER_X, cy + 4); // middle
+    gfx.lineBetween(rightX - 8, cy - 4, rightX - 8, cy + 4); // leg
+
+    // Batter dot / pill
+    const clampedX = Math.max(-0.75, Math.min(0.75, x));
+    const dotX = CENTER_X + (clampedX / 0.75) * (trackW / 2 - 10);
+    const dotColor = locked ? 0xef4444 : 0x38bdf8;
+    const glowColor = locked ? 0xf87171 : 0x0284c7;
+
+    // Glow
+    gfx.fillStyle(glowColor, 0.25);
+    gfx.fillCircle(dotX, cy, 7);
+    // Body
+    gfx.fillStyle(dotColor, 1);
+    gfx.fillCircle(dotX, cy, 4);
+    // Core highlight
+    gfx.fillStyle(0xffffff, 0.9);
+    gfx.fillCircle(dotX, cy, 1.8);
+  }
+
+  public updateCreaseIndicator(x: number, locked: boolean) {
+    this.currentCreaseX = x;
+    this.isBatterMovementLocked = locked;
+    this.drawCreaseIndicator(x, locked);
+
+    if (this.creaseIndicatorText) {
+      if (locked) {
+        this.creaseIndicatorText.setText("CREASE LOCKED").setColor("#ef4444");
+      } else {
+        const sign = x > 0.03 ? "+" : "";
+        const zoneStr = x < -0.25 ? " (OFF)" : x > 0.25 ? " (LEG)" : " (MID)";
+        this.creaseIndicatorText.setText(`CREASE: ${sign}${x.toFixed(2)}${zoneStr}`).setColor("#38bdf8");
+      }
+    }
+  }
+
+  public setSelectedDelivery(delivery: CricketDelivery) {
+    this.selectedDelivery = delivery;
+    this.redrawDeliveryButtons();
+  }
+
+  public getSelectedDelivery(): CricketDelivery {
+    return this.selectedDelivery;
+  }
+
+  private redrawDeliveryButtons() {
+    this.deliveryButtons.forEach(btn => {
+      btn.bg.clear();
+      const isSelected = btn.id === this.selectedDelivery;
+      btn.bg.fillStyle(isSelected ? btn.color : 0x1e293b, isSelected ? 1 : 0.85);
+      btn.bg.fillRoundedRect(btn.cx - btn.w / 2, btn.cy - btn.h / 2, btn.w, btn.h, 6);
+      btn.bg.lineStyle(isSelected ? 2.5 : 1, isSelected ? 0xffffff : btn.outline, isSelected ? 1 : 0.6);
+      btn.bg.strokeRoundedRect(btn.cx - btn.w / 2, btn.cy - btn.h / 2, btn.w, btn.h, 6);
+      btn.text.setColor(isSelected ? "#ffffff" : "#94a3b8");
+    });
+  }
+
+  public setPitchBadge(text: string, colorStr: string = "#38bdf8") {
+    if (!this.pitchBadgeText || !this.pitchBadgeBg) return;
+    this.pitchBadgeText.setText(text);
+    this.pitchBadgeText.setColor(colorStr);
+    this.pitchBadgeBg.clear();
+    this.pitchBadgeBg.fillStyle(0x0f172a, 0.85);
+    this.pitchBadgeBg.fillRoundedRect(CENTER_X - 255, GAME_H - 43, 190, 34, 6);
+    this.pitchBadgeBg.lineStyle(1.5, 0x334155, 0.8);
+    this.pitchBadgeBg.strokeRoundedRect(CENTER_X - 255, GAME_H - 43, 190, 34, 6);
+  }
+
+  public setLockSpotEnabled(enabled: boolean) {
+    this.isLockSpotEnabled = enabled;
+    if (!this.lockSpotBg || !this.lockSpotText) return;
+    this.lockSpotBg.clear();
+    const bgColor = enabled ? 0x06b6d4 : 0x334155;
+    const strokeColor = enabled ? 0x22d3ee : 0x475569;
+    this.lockSpotBg.fillStyle(bgColor, enabled ? 1 : 0.5);
+    this.lockSpotBg.fillRoundedRect(CENTER_X - 55, GAME_H - 43, 110, 34, 6);
+    this.lockSpotBg.lineStyle(1.5, strokeColor, enabled ? 1 : 0.5);
+    this.lockSpotBg.strokeRoundedRect(CENTER_X - 55, GAME_H - 43, 110, 34, 6);
+    this.lockSpotText.setAlpha(enabled ? 1 : 0.5);
+  }
+
+  public setBowlButtonState(state: "disabled" | "countdown" | "ready", countdownSec?: number) {
+    this.bowlButtonState = state;
+    if (!this.bowlBtnBg || !this.bowlBtnText) return;
+    this.bowlBtnBg.clear();
+    if (state === "ready") {
+      this.bowlBtnBg.fillStyle(0x10b981, 1);
+      this.bowlBtnBg.fillRoundedRect(CENTER_X + 75, GAME_H - 43, 110, 34, 6);
+      this.bowlBtnBg.lineStyle(2, 0x34d399, 1);
+      this.bowlBtnBg.strokeRoundedRect(CENTER_X + 75, GAME_H - 43, 110, 34, 6);
+      this.bowlBtnText.setText("BOWL 🏏").setColor("#ffffff").setAlpha(1);
+    } else if (state === "countdown") {
+      this.bowlBtnBg.fillStyle(0x334155, 0.8);
+      this.bowlBtnBg.fillRoundedRect(CENTER_X + 75, GAME_H - 43, 110, 34, 6);
+      this.bowlBtnBg.lineStyle(1.5, 0xfbbf24, 0.8);
+      this.bowlBtnBg.strokeRoundedRect(CENTER_X + 75, GAME_H - 43, 110, 34, 6);
+      const cd = countdownSec != null ? `${countdownSec.toFixed(1)}s` : "...";
+      this.bowlBtnText.setText(`REVEAL ${cd}`).setColor("#fbbf24").setAlpha(1);
+    } else {
+      this.bowlBtnBg.fillStyle(0x1e293b, 0.5);
+      this.bowlBtnBg.fillRoundedRect(CENTER_X + 75, GAME_H - 43, 110, 34, 6);
+      this.bowlBtnBg.lineStyle(1.5, 0x334155, 0.4);
+      this.bowlBtnBg.strokeRoundedRect(CENTER_X + 75, GAME_H - 43, 110, 34, 6);
+    }
+  }
+
+  public getBowlButtonState(): "disabled" | "countdown" | "ready" {
+    return this.bowlButtonState;
   }
 
 

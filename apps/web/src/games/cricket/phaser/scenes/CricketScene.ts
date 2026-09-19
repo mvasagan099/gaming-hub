@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { CricketState, CricketDelivery, CricketShot, CricketTiming } from "@gaming-hub/game-engine";
+import type { CricketState, CricketDelivery, CricketShot, CricketTiming, CricketPitchTarget, CricketLine, CricketLength } from "@gaming-hub/game-engine";
 import { CricketHUDManager } from "../managers/CricketHUDManager";
 import { CricketAudioManager } from "../managers/CricketAudioManager";
 import { useMultiplayerStore } from "../../../../store/multiplayerStore";
@@ -93,6 +93,9 @@ export class CricketScene extends Phaser.Scene {
   private unsubscribe?: () => void;
   private multiplayerOver = false;
   private multiplayerDriver?: CricketMultiplayerDriver;
+  private lastAnimatedDeliveryId: string | null = null;
+  private processedBallResultIds = new Set<string>();
+  private inningsTransitionToken = 0;
 
   // ── NEW visual state ─────────────────────────────────────────────────────
   private ballAngle = 0;
@@ -107,6 +110,26 @@ export class CricketScene extends Phaser.Scene {
   private spinTurned = false;
   private batsmanIdleTimer?: Phaser.Time.TimerEvent;
   private batsmanRunTimer?: Phaser.Time.TimerEvent;
+
+  // Pitch Targeting & Landing Spot
+  private pitchTargetContainer: Phaser.GameObjects.Container | null = null;
+  private pitchInteractivePlane: Phaser.GameObjects.Zone | null = null;
+  private currentLocalTarget: { lateral: number; length: number } = { lateral: 0, length: 0.4 };
+  private activePitchTarget: CricketPitchTarget | null = null;
+  private isPitchTargetLocked = false;
+  private lastRenderedPitchTargetId: string | null = null;
+
+  // Batter Crease Movement & Dynamic Animations
+  private currentLocalCreaseX: number = 0; // [-0.75, 0.75]
+  private currentRemoteCreaseX: number = 0;
+  private isBatterMovementLocked: boolean = false;
+  private batterMoveContinuousDir: -1 | 0 | 1 = 0;
+  private batsmanShadow?: Phaser.GameObjects.Graphics;
+  private currentDeliveryPitchTarget: CricketPitchTarget | null = null;
+  private lastRemoteShotDirection: 'left' | 'right' | 'up' | 'straight' | null = null;
+  private ballReleaseY: number = 200;
+  private revealTimerEvent?: Phaser.Time.TimerEvent;
+  private revealRemainingMs = 0;
 
   constructor() {
     super("CricketScene");
@@ -162,7 +185,24 @@ export class CricketScene extends Phaser.Scene {
     }
     this.hud.updateOverHistory(this.overHistory);
     this.hud.onHit = (dir) => this.hitShot(false, dir);
+    this.hud.onMoveBatter = (dir) => {
+      this.batterMoveContinuousDir = dir;
+    };
+    this.hud.onMoveBatterStep = (delta) => {
+      this.stepBatterCrease(delta);
+    };
+    this.hud.onSelectDelivery = (delivery) => {
+      this.deliveryType = delivery;
+    };
+    this.hud.onLockSpot = () => {
+      this.lockCurrentPitchTarget();
+    };
+    this.hud.onBowlPress = (power) => {
+      this.playerBowl(this.hud.getSelectedDelivery(), power);
+    };
     this.hud.onBowl = (type, power) => this.playerBowl(type, power);
+
+    this.setupPitchInteractivePlane();
 
     this.audioManager = new CricketAudioManager();
     this.audioManager.playAmbientMurmur();
@@ -173,6 +213,14 @@ export class CricketScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       this.bufferedShot = null;
       this.poseLayers.clear();
+      this.clearPitchTargetMarker();
+      this.events.off("cricket:batter:moved");
+      this.events.off("cricket:batter:locked");
+      this.events.off("cricket:shot:played");
+      if (this.revealTimerEvent) {
+        this.revealTimerEvent.remove();
+        this.revealTimerEvent = undefined;
+      }
       if (this.unsubscribe) {
         this.unsubscribe();
         this.unsubscribe = undefined;
@@ -198,6 +246,25 @@ export class CricketScene extends Phaser.Scene {
         this.applyRemoteState(state, events);
       });
 
+      this.events.on("cricket:batter:moved", (x: number, seat: number) => {
+        if (this.role === "bowling") {
+          this.setRemoteBatterCreaseX(x);
+        }
+      });
+
+      this.events.on("cricket:batter:locked", () => {
+        if (this.role === "bowling") {
+          this.isBatterMovementLocked = true;
+        }
+      });
+
+      this.events.on("cricket:shot:played", (shot: 'left' | 'right' | 'up' | 'straight') => {
+        this.lastRemoteShotDirection = shot;
+        if (this.role === "bowling") {
+          this.playBatSwing(shot);
+        }
+      });
+
       this.events.on("cricket:toss:call_needed", () => {
         console.log("[CricketScene] Toss call needed, emitting to react");
         this.events.emit("cricket:toss:call_needed_react");
@@ -214,24 +281,58 @@ export class CricketScene extends Phaser.Scene {
       });
 
       this.multiplayerDriver.start();
-      return;
     }
 
-    // Keyboard shortcuts
+    // Keyboard shortcuts (Active for both AI and Multiplayer)
     if (this.input.keyboard) {
+      // ── Batter Crease Movement (Continuous hold + single press) ──
+      this.input.keyboard.on('keydown-LEFT', (event: KeyboardEvent) => {
+        if (event.repeat) return;
+        if (this.role === 'batting') {
+          this.stepBatterCrease(-0.08);
+          this.batterMoveContinuousDir = -1;
+        }
+      });
+      this.input.keyboard.on('keyup-LEFT', () => {
+        if (this.batterMoveContinuousDir === -1) this.batterMoveContinuousDir = 0;
+      });
+
+      this.input.keyboard.on('keydown-A', (event: KeyboardEvent) => {
+        if (event.repeat) return;
+        if (this.role === 'batting') {
+          this.stepBatterCrease(-0.08);
+          this.batterMoveContinuousDir = -1;
+        }
+      });
+      this.input.keyboard.on('keyup-A', () => {
+        if (this.batterMoveContinuousDir === -1) this.batterMoveContinuousDir = 0;
+      });
+
+      this.input.keyboard.on('keydown-RIGHT', (event: KeyboardEvent) => {
+        if (event.repeat) return;
+        if (this.role === 'batting') {
+          this.stepBatterCrease(0.08);
+          this.batterMoveContinuousDir = 1;
+        }
+      });
+      this.input.keyboard.on('keyup-RIGHT', () => {
+        if (this.batterMoveContinuousDir === 1) this.batterMoveContinuousDir = 0;
+      });
+
+      this.input.keyboard.on('keydown-D', (event: KeyboardEvent) => {
+        if (event.repeat) return;
+        if (this.role === 'batting') {
+          this.stepBatterCrease(0.08);
+          this.batterMoveContinuousDir = 1;
+        }
+      });
+      this.input.keyboard.on('keyup-D', () => {
+        if (this.batterMoveContinuousDir === 1) this.batterMoveContinuousDir = 0;
+      });
+
+      // ── Distinct Shot Controls (Separated from Movement) ──
+      // Straight Punch / Vertical Drive: S, Down, Space
       this.input.keyboard.on('keydown-SPACE', (event: KeyboardEvent) => {
-        if (event.repeat) return;
-        if (this.role === 'batting') this.hitShot(false, 'up');
-      });
-      this.input.keyboard.on('keydown-UP', (event: KeyboardEvent) => {
-        if (event.repeat) return;
-        if (this.role === 'batting') this.hitShot(false, 'up');
-      });
-      this.input.keyboard.on('keydown-W', (event: KeyboardEvent) => {
-        if (event.repeat) return;
-        if (this.role === 'batting') this.hitShot(false, 'up');
-      });
-      this.input.keyboard.on('keydown-DOWN', (event: KeyboardEvent) => {
         if (event.repeat) return;
         if (this.role === 'batting') this.hitShot(false, 'straight');
       });
@@ -239,22 +340,34 @@ export class CricketScene extends Phaser.Scene {
         if (event.repeat) return;
         if (this.role === 'batting') this.hitShot(false, 'straight');
       });
-      this.input.keyboard.on('keydown-LEFT', (event: KeyboardEvent) => {
+      this.input.keyboard.on('keydown-DOWN', (event: KeyboardEvent) => {
+        if (event.repeat) return;
+        if (this.role === 'batting') this.hitShot(false, 'straight');
+      });
+
+      // Cover Drive / Off Drive: Q
+      this.input.keyboard.on('keydown-Q', (event: KeyboardEvent) => {
         if (event.repeat) return;
         if (this.role === 'batting') this.hitShot(false, 'left');
       });
-      this.input.keyboard.on('keydown-A', (event: KeyboardEvent) => {
-        if (event.repeat) return;
-        if (this.role === 'batting') this.hitShot(false, 'left');
-      });
-      this.input.keyboard.on('keydown-RIGHT', (event: KeyboardEvent) => {
+
+      // Pull Shot / Leg Sweep / Cut: E
+      this.input.keyboard.on('keydown-E', (event: KeyboardEvent) => {
         if (event.repeat) return;
         if (this.role === 'batting') this.hitShot(false, 'right');
       });
-      this.input.keyboard.on('keydown-D', (event: KeyboardEvent) => {
+
+      // Lofted Slog / Six: W, UP
+      this.input.keyboard.on('keydown-W', (event: KeyboardEvent) => {
         if (event.repeat) return;
-        if (this.role === 'batting') this.hitShot(false, 'right');
+        if (this.role === 'batting') this.hitShot(false, 'up');
       });
+      this.input.keyboard.on('keydown-UP', (event: KeyboardEvent) => {
+        if (event.repeat) return;
+        if (this.role === 'batting') this.hitShot(false, 'up');
+      });
+
+      // Bowler delivery selection shortcuts
       this.input.keyboard.on('keydown-ONE', (event: KeyboardEvent) => {
         if (event.repeat) return;
         if (this.role === 'bowling') this.playerBowl('fast', this.hud.getCurrentPower());
@@ -966,8 +1079,10 @@ export class CricketScene extends Phaser.Scene {
       this.keeper = this.add.sprite(CENTER_X, 690, 'tex_fielder').setOrigin(0.5, 1).setDepth(11).setVisible(false);
       this.setPlayerScale(this.keeper, 'keeper', 690);
 
+      this.batsmanShadow = this.add.graphics().setDepth(10);
       this.batsman = this.add.sprite(CENTER_X - 22, 575, 'tex_batsman_stance').setOrigin(0.5, 1).setDepth(11);
       this.setPlayerScale(this.batsman, 'batsman', 575);
+      this.drawBatsmanShadow();
 
       this.bat = this.add.sprite(CENTER_X - 4, 550, 'tex_bat')
         .setOrigin(0.5, 0).setScale(this.getBatScale(575)).setAngle(-30).setDepth(12).setVisible(false);
@@ -985,8 +1100,10 @@ export class CricketScene extends Phaser.Scene {
       this.keeper = this.add.sprite(CENTER_X, 185, 'tex_fielder').setOrigin(0.5, 1).setDepth(4);
       this.setPlayerScale(this.keeper, 'keeper', 185);
 
+      this.batsmanShadow = this.add.graphics().setDepth(6);
       this.batsman = this.add.sprite(CENTER_X - 14, 215, 'tex_batsman_stance').setOrigin(0.5, 1).setDepth(7);
       this.setPlayerScale(this.batsman, 'batsman', 215);
+      this.drawBatsmanShadow();
 
       this.bat = this.add.sprite(CENTER_X - 4, 195, 'tex_bat')
         .setOrigin(0.5, 0).setScale(this.getBatScale(215)).setAngle(-30).setDepth(8).setVisible(false);
@@ -1193,6 +1310,12 @@ export class CricketScene extends Phaser.Scene {
   }
 
   private repositionForRole() {
+    this.currentLocalCreaseX = 0;
+    this.currentRemoteCreaseX = 0;
+    this.isBatterMovementLocked = false;
+    this.batterMoveContinuousDir = 0;
+    this.hud.updateCreaseIndicator(0, false);
+
     if (this.role === "batting") {
       this.bowlerRestX = CENTER_X + 28;
       this.bowlerRestY = 175;
@@ -1207,6 +1330,11 @@ export class CricketScene extends Phaser.Scene {
 
       this.batsman.setPosition(CENTER_X - 22, 575).setOrigin(0.5, 1).setTexture('tex_batsman_stance').setDepth(11);
       this.setPlayerScale(this.batsman, 'batsman', 575);
+
+      if (this.batsmanShadow) {
+        this.batsmanShadow.setDepth(10);
+        this.drawBatsmanShadow();
+      }
 
       this.bat.setPosition(CENTER_X - 4, 550).setScale(this.getBatScale(575)).setDepth(12).setVisible(false).setAngle(-30);
       this.batsmanStumps.setPosition(CENTER_X, 665).setScale(1).setAngle(0).setDepth(12);
@@ -1229,6 +1357,11 @@ export class CricketScene extends Phaser.Scene {
       this.batsman.setPosition(CENTER_X - 14, 215).setOrigin(0.5, 1).setTexture('tex_batsman_stance').setDepth(7);
       this.setPlayerScale(this.batsman, 'batsman', 215);
 
+      if (this.batsmanShadow) {
+        this.batsmanShadow.setDepth(6);
+        this.drawBatsmanShadow();
+      }
+
       this.bat.setPosition(CENTER_X - 4, 195).setScale(this.getBatScale(215)).setDepth(8).setVisible(false).setAngle(-30);
       this.batsmanStumps.setPosition(CENTER_X, 200).setScale(1).setAngle(0).setDepth(5);
       this.bowlerStumps.setPosition(CENTER_X, 665).setScale(1).setAngle(0).setDepth(5);
@@ -1250,14 +1383,15 @@ export class CricketScene extends Phaser.Scene {
   }
 
   private syncScoreboard(state: CricketState) {
-    const score = state.inning === 1 ? state.team1Score : state.team2Score;
-    const wkts = state.inning === 1 ? state.team1Wickets : state.team2Wickets;
+    const battingSeat = state.battingTeam;
+    const score = battingSeat === 0 ? state.team1Score : state.team2Score;
+    const wkts = battingSeat === 0 ? state.team1Wickets : state.team2Wickets;
     this.hud.updateScore(score, wkts);
     this.hud.setInnings(state.inning);
     this.hud.updateOvers(state.currentOver, state.currentBall, state.totalOvers);
     this.hud.setTarget(state.target);
     const ballsBowled = state.currentOver * 6 + state.currentBall;
-    this.hud.setRunRate(ballsBowled > 0 ? score / (ballsBowled / 6) : 0);
+    this.hud.setRunRate(ballsBowled > 0 ? (score / ballsBowled) * 6 : 0);
   }
 
   private applyRemoteState(state: CricketState, events: { type: string }[]) {
@@ -1271,7 +1405,7 @@ export class CricketScene extends Phaser.Scene {
       if (p.seat != null) this.namesBySeat[p.seat] = p.displayName;
     }
 
-    if (state.currentActor === "toss") {
+    if (state.currentActor === "toss" || state.currentActor === "toss-choice") {
       console.log("[CricketScene] Toss phase - not applying game state yet");
       return;
     }
@@ -1325,15 +1459,21 @@ export class CricketScene extends Phaser.Scene {
       this.overHistory = [];
       this.hud.updateOverHistory(this.overHistory);
 
-      const targetScore = state.target ?? (state.team1Score + 1);
+      const targetScore = state.target ?? (state.battingTeam === 0 ? state.team2Score + 1 : state.team1Score + 1);
       this.hud.setTarget(targetScore);
       this.hud.updateStatus(`INNINGS 1 ENDED! Target: ${targetScore} runs to win.`, "#fbbf24");
 
+      const token = ++this.inningsTransitionToken;
       this.time.delayedCall(2000, () => {
-        this.setRole(targetRole);
-        this.syncScoreboard(state);
-        if (!state.finished) {
-          this.updateTurnStatus(state);
+        if (token !== this.inningsTransitionToken) return;
+        const latest = this.remoteState;
+        if (!latest || latest.finished) return;
+        const latestIsBatting = this.mySeat != null && latest.battingTeam === this.mySeat;
+        const latestRole = this.mySeat == null ? "batting" : (latestIsBatting ? "batting" : "bowling");
+        this.setRole(latestRole);
+        this.syncScoreboard(latest);
+        if (!latest.finished) {
+          this.updateTurnStatus(latest);
         }
       });
       return;
@@ -1342,12 +1482,32 @@ export class CricketScene extends Phaser.Scene {
     this.setRole(targetRole);
     this.syncScoreboard(state);
 
+    // Sync pitch target state
+    if (state.pitchTarget) {
+      this.activePitchTarget = state.pitchTarget;
+      const isLocked = state.bowlingPhase === "TARGET_LOCKED";
+      const isBowlerView = this.role === "bowling";
+      if (this.lastRenderedPitchTargetId !== state.pitchTarget.targetId) {
+        this.lastRenderedPitchTargetId = state.pitchTarget.targetId;
+        this.renderPitchTargetMarker(state.pitchTarget, isLocked, isBowlerView);
+      }
+    } else if (!this.isBowling && this.role !== "bowling") {
+      this.clearPitchTargetMarker();
+      this.activePitchTarget = null;
+      this.lastRenderedPitchTargetId = null;
+    }
+
     for (const ev of events) {
       this.handleRemoteEvent(ev as Record<string, unknown> & { type: string });
     }
 
     if (state.currentActor === "batsman" && state.pendingDelivery && !this.isBowling) {
-      this.executeBowl(state.pendingDelivery.delivery as CricketDelivery, state.pendingDelivery.power ?? 0.5);
+      const deliveryId = state.pendingDelivery.deliveryId;
+      if (!deliveryId || deliveryId !== this.lastAnimatedDeliveryId) {
+        if (deliveryId) this.lastAnimatedDeliveryId = deliveryId;
+        const target = state.pendingDelivery.pitchTarget ?? state.pitchTarget ?? undefined;
+        this.executeBowl(state.pendingDelivery.delivery as CricketDelivery, state.pendingDelivery.power ?? 0.5, target);
+      }
       if (this.mySeat === state.battingTeam) {
         this.hud.setControlsState(false);
       }
@@ -1365,12 +1525,33 @@ export class CricketScene extends Phaser.Scene {
 
   private handleRemoteEvent(ev: { type: string } & Record<string, unknown>) {
     switch (ev.type) {
-      case "ball-bowled":
-        this.executeBowl(ev.delivery as CricketDelivery, (ev.power as number) ?? 0.5);
+      case "pitch-target-set": {
+        const target = (ev.pitchTarget as CricketPitchTarget | undefined) ?? this.remoteState?.pitchTarget ?? null;
+        if (target) {
+          this.activePitchTarget = target;
+          this.lastRenderedPitchTargetId = target.targetId;
+          const isBowlerView = this.role === "bowling";
+          this.renderPitchTargetMarker(target, true, isBowlerView);
+          if (!isBowlerView) {
+            this.hud.updateStatus(`Target Locked! Anticipate ${target.lengthZone.toUpperCase()} ball on ${target.line.toUpperCase()}!`, "#f59e0b");
+          }
+        }
+        break;
+      }
+      case "ball-bowled": {
+        const deliveryId = (ev.deliveryId as string | undefined) ?? null;
+        if (deliveryId && deliveryId === this.lastAnimatedDeliveryId) {
+          console.log("[CricketScene] Skipping duplicate ball-bowled animation for:", deliveryId);
+        } else {
+          if (deliveryId) this.lastAnimatedDeliveryId = deliveryId;
+          const target = (ev.pitchTarget as CricketPitchTarget | undefined) ?? this.activePitchTarget ?? this.remoteState?.pitchTarget ?? undefined;
+          this.executeBowl(ev.delivery as CricketDelivery, (ev.power as number) ?? 0.5, target);
+        }
         if (this.mySeat === this.remoteState?.battingTeam) {
           this.hud.setControlsState(false);
         }
         break;
+      }
       case "shot-played":
         this.audioManager.playWhoosh();
         break;
@@ -1395,9 +1576,21 @@ export class CricketScene extends Phaser.Scene {
   }
 
   private onRemoteBallResult(ev: { type: string } & Record<string, unknown>) {
+    const deliveryId = (ev.deliveryId as string | undefined) ?? null;
+    if (deliveryId) {
+      if (this.processedBallResultIds.has(deliveryId)) {
+        console.log("[CricketScene] Skipping duplicate ball-result for:", deliveryId);
+        return;
+      }
+      this.processedBallResultIds.add(deliveryId);
+    }
+
     this.isBowling = false;
     this.isHit = false;
     this.bowlerRunupActive = false;
+    this.clearPitchTargetMarker();
+    this.activePitchTarget = null;
+    this.lastRenderedPitchTargetId = null;
     this.tweens.killTweensOf(this.ball);
     this.tweens.killTweensOf(this.ballShadow);
     this.ball.setVisible(false);
@@ -1478,15 +1671,42 @@ export class CricketScene extends Phaser.Scene {
     if (state.currentActor === "bowler") {
       if (this.mySeat === state.bowlingTeam) {
         this.hud.setControlsState(false);
-        this.hud.updateStatus("Your turn to bowl!", "#fbbf24");
+        if (state.bowlingPhase === "TARGETING") {
+          this.isPitchTargetLocked = false;
+          this.renderPitchTargetMarker(this.currentLocalTarget, false, true);
+          const info = this.deriveTargetLineAndLength(this.currentLocalTarget);
+          this.hud.setPitchBadge(`${info.lengthZone.toUpperCase()} • ${info.line.toUpperCase()}`, "#06b6d4");
+          this.hud.setLockSpotEnabled(true);
+          this.hud.setBowlButtonState("disabled");
+          this.hud.updateStatus("Tap pitch to aim, then LOCK SPOT 🎯", "#38bdf8");
+        } else if (state.bowlingPhase === "TARGET_LOCKED") {
+          this.isPitchTargetLocked = true;
+          this.hud.setLockSpotEnabled(false);
+          const effectiveTarget = state.pitchTarget ?? this.currentLocalTarget;
+          this.renderPitchTargetMarker(effectiveTarget, true, true);
+          const info = this.deriveTargetLineAndLength(effectiveTarget);
+          this.hud.setPitchBadge(`LOCKED • ${info.lengthZone.toUpperCase()}`, "#22c55e");
+          if (this.hud.getBowlButtonState() === "disabled") {
+            this.startRevealCountdown(800);
+          }
+        }
       } else {
         this.hud.setControlsState(true);
-        this.hud.updateStatus(`Waiting for ${this.nameFor(state.bowlingTeam)} to bowl...`, "#94a3b8");
+        if (state.pitchTarget) {
+          this.renderPitchTargetMarker(state.pitchTarget, true, false);
+          this.hud.updateStatus(`Bowler locked ${state.pitchTarget.lengthZone.toUpperCase()} on ${state.pitchTarget.line.toUpperCase()}!`, "#fbbf24");
+        } else {
+          this.clearPitchTargetMarker();
+          this.hud.updateStatus(`Waiting for ${this.nameFor(state.bowlingTeam)} to set target...`, "#94a3b8");
+        }
       }
     } else if (state.currentActor === "batsman") {
       if (this.mySeat === state.battingTeam) {
         this.hud.setControlsState(false);
-        this.hud.updateStatus("Ready for the ball!", "#fbbf24");
+        this.hud.updateStatus("Ball is incoming! Time your shot!", "#fbbf24");
+        if (state.pendingDelivery?.pitchTarget) {
+          this.renderPitchTargetMarker(state.pendingDelivery.pitchTarget, true, false);
+        }
       } else {
         this.hud.setControlsState(true);
         this.hud.updateStatus(`Waiting for ${this.nameFor(state.battingTeam)} to bat...`, "#94a3b8");
@@ -1551,18 +1771,34 @@ export class CricketScene extends Phaser.Scene {
     this.ball.setVisible(false);
     this.ballShadow.setVisible(false);
 
+    this.isBatterMovementLocked = false;
+    this.batterMoveContinuousDir = 0;
+    this.currentLocalCreaseX = 0;
+    this.currentRemoteCreaseX = 0;
+    this.lastRemoteShotDirection = null;
+    this.hud.updateCreaseIndicator(0, false);
+    this.updateBatterVisualPosition(250);
+
     if (this.mode === 'multiplayer') {
       if (this.role === 'batting') {
+        this.clearPitchTargetMarker();
         this.hud.setControlsState(true);
         this.hud.updateStatus("Waiting for opponent to bowl...", "#94a3b8");
       } else {
-        this.hud.updateStatus("Select a delivery to bowl!", "#fbbf24");
+        this.isPitchTargetLocked = false;
+        this.renderPitchTargetMarker(this.currentLocalTarget, false, true);
+        const info = this.deriveTargetLineAndLength(this.currentLocalTarget);
+        this.hud.setPitchBadge(`${info.lengthZone.toUpperCase()} • ${info.line.toUpperCase()}`, "#06b6d4");
+        this.hud.setLockSpotEnabled(true);
+        this.hud.setBowlButtonState("disabled");
+        this.hud.updateStatus("Tap pitch to aim, then LOCK SPOT 🎯", "#38bdf8");
         this.hud.setControlsState(false);
       }
       return;
     }
 
     if (this.role === 'batting') {
+      this.clearPitchTargetMarker();
       this.hud.setControlsState(true);
       let timeLeft = seconds;
 
@@ -1585,29 +1821,324 @@ export class CricketScene extends Phaser.Scene {
         }
       });
     } else {
-      this.hud.updateStatus("Select a delivery to bowl!", "#fbbf24");
+      this.isPitchTargetLocked = false;
+      this.renderPitchTargetMarker(this.currentLocalTarget, false, true);
+      const info = this.deriveTargetLineAndLength(this.currentLocalTarget);
+      this.hud.setPitchBadge(`${info.lengthZone.toUpperCase()} • ${info.line.toUpperCase()}`, "#06b6d4");
+      this.hud.setLockSpotEnabled(true);
+      this.hud.setBowlButtonState("disabled");
+      this.hud.updateStatus("Tap pitch to aim, then LOCK SPOT 🎯", "#38bdf8");
       this.hud.setControlsState(false);
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // PITCH TARGETING & PERSPECTIVE MAPPING
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  public getPitchHalfWidthAtY(y: number): number {
+    const t = Phaser.Math.Clamp((y - PITCH_TOP_Y) / (PITCH_BOT_Y - PITCH_TOP_Y), 0, 1);
+    return Phaser.Math.Linear(PITCH_TOP_W / 2, PITCH_BOT_W / 2, t);
+  }
+
+  public pitchTargetToScreen(target: { lateral: number; length: number }): { x: number; y: number } {
+    if (this.role === "batting") {
+      // Batsman view: length 0 = full (y=550), length 1 = short (y=270)
+      const screenY = Phaser.Math.Linear(550, 270, target.length);
+      const halfW = this.getPitchHalfWidthAtY(screenY) * 0.85;
+      const screenX = CENTER_X + target.lateral * halfW;
+      return { x: screenX, y: screenY };
+    } else {
+      // Bowler view: camera reversed. length 0 = full near batsman (y=240), length 1 = short near bowler (y=520)
+      const screenY = Phaser.Math.Linear(240, 520, target.length);
+      const halfW = this.getPitchHalfWidthAtY(screenY) * 0.85;
+      // Horizontally mirrored because camera looks from opposite end
+      const screenX = CENTER_X - target.lateral * halfW;
+      return { x: screenX, y: screenY };
+    }
+  }
+
+  public screenToPitchTarget(x: number, y: number): { lateral: number; length: number } {
+    if (this.role === "batting") {
+      const length = Phaser.Math.Clamp((550 - y) / 280, 0.08, 0.82);
+      const halfW = Math.max(20, this.getPitchHalfWidthAtY(y) * 0.85);
+      const lateral = Phaser.Math.Clamp((x - CENTER_X) / halfW, -0.85, 0.85);
+      return { lateral, length };
+    } else {
+      const length = Phaser.Math.Clamp((y - 240) / 280, 0.08, 0.82);
+      const halfW = Math.max(20, this.getPitchHalfWidthAtY(y) * 0.85);
+      const lateral = Phaser.Math.Clamp(-(x - CENTER_X) / halfW, -0.85, 0.85);
+      return { lateral, length };
+    }
+  }
+
+  private deriveTargetLineAndLength(target: { lateral: number; length: number }): {
+    line: CricketLine;
+    lengthZone: CricketLength;
+    labelLine: string;
+    labelLength: string;
+  } {
+    const line: CricketLine = target.lateral < -0.28 ? "off" : target.lateral > 0.28 ? "leg" : "middle";
+    const lengthZone: CricketLength = target.length < 0.25 ? "full" : target.length < 0.58 ? "good" : "short";
+    const labelLine = target.lateral < -0.28 ? "OFF SIDE" : target.lateral > 0.28 ? "LEG SIDE" : "MIDDLE STUMP";
+    const labelLength = target.length < 0.25 ? "FULL / YORKER" : target.length < 0.58 ? "GOOD LENGTH" : "SHORT PITCH";
+    return { line, lengthZone, labelLine, labelLength };
+  }
+
+  private setupPitchInteractivePlane(): void {
+    if (this.pitchInteractivePlane) return;
+    this.pitchInteractivePlane = this.add.zone(CENTER_X, (PITCH_TOP_Y + PITCH_BOT_Y) / 2, PITCH_BOT_W, PITCH_BOT_Y - PITCH_TOP_Y)
+      .setDepth(15)
+      .setInteractive({ useHandCursor: true });
+
+    this.pitchInteractivePlane.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (this.role !== "bowling" || this.isPitchTargetLocked || this.isBowling) return;
+      if (this.mode === "multiplayer" && !this.multiplayerDriver?.canBowl()) return;
+      this.movePitchTargetToScreenPos(pointer.x, pointer.y);
+    });
+  }
+
+  private movePitchTargetToScreenPos(screenX: number, screenY: number): void {
+    const target = this.screenToPitchTarget(screenX, screenY);
+    this.currentLocalTarget = target;
+    const pos = this.pitchTargetToScreen(target);
+    if (this.pitchTargetContainer) {
+      this.pitchTargetContainer.setPosition(pos.x, pos.y);
+    } else {
+      this.renderPitchTargetMarker(target, false, true);
+    }
+    const info = this.deriveTargetLineAndLength(target);
+    this.hud.setPitchBadge(`${info.lengthZone} • ${info.line}`, "#38bdf8");
+    this.hud.setLockSpotEnabled(true);
+  }
+
+  public renderPitchTargetMarker(target: { lateral: number; length: number }, isLocked: boolean, isBowlerView: boolean): void {
+    this.clearPitchTargetMarker();
+    const pos = this.pitchTargetToScreen(target);
+
+    this.pitchTargetContainer = this.add.container(pos.x, pos.y).setDepth(25);
+
+    if (isBowlerView) {
+      const outerColor = isLocked ? 0x22c55e : 0x06b6d4;
+      const innerColor = isLocked ? 0x4ade80 : 0x38bdf8;
+      const dotColor = isLocked ? 0xffffff : 0x22c55e;
+
+      const ripple = this.add.circle(0, 0, 24, outerColor, 0.25);
+      this.tweens.add({
+        targets: ripple,
+        scale: { from: 0.8, to: 1.5 },
+        alpha: { from: 0.5, to: 0 },
+        duration: 800,
+        repeat: -1,
+      });
+
+      const outerRing = this.add.circle(0, 0, 16);
+      outerRing.setStrokeStyle(2, outerColor, 0.9);
+      this.tweens.add({
+        targets: outerRing,
+        scale: { from: 0.92, to: 1.08 },
+        alpha: { from: 0.6, to: 1.0 },
+        duration: 500,
+        yoyo: true,
+        repeat: -1,
+      });
+
+      const innerRing = this.add.circle(0, 0, 8);
+      innerRing.setStrokeStyle(2, innerColor, 1);
+
+      const dot = this.add.circle(0, 0, 3.5, dotColor, 1);
+
+      this.pitchTargetContainer.add([ripple, outerRing, innerRing, dot]);
+
+      if (!isLocked) {
+        const dragZone = this.add.zone(0, 0, 48, 48).setInteractive({ draggable: true, useHandCursor: true });
+        dragZone.on("drag", (pointer: Phaser.Input.Pointer) => {
+          if (this.isPitchTargetLocked || this.isBowling) return;
+          this.movePitchTargetToScreenPos(pointer.x, pointer.y);
+        });
+        this.pitchTargetContainer.add(dragZone);
+      }
+    } else {
+      const ripple = this.add.circle(0, 0, 26, 0xf97316, 0.3);
+      this.tweens.add({
+        targets: ripple,
+        scale: { from: 0.8, to: 1.6 },
+        alpha: { from: 0.6, to: 0 },
+        duration: 700,
+        repeat: -1,
+      });
+
+      const outerRing = this.add.circle(0, 0, 18);
+      outerRing.setStrokeStyle(2.5, 0xf97316, 0.95);
+      this.tweens.add({
+        targets: outerRing,
+        scale: { from: 0.9, to: 1.1 },
+        duration: 450,
+        yoyo: true,
+        repeat: -1,
+      });
+
+      const innerRing = this.add.circle(0, 0, 9);
+      innerRing.setStrokeStyle(2, 0xfde047, 1);
+
+      const dot = this.add.circle(0, 0, 4, 0xffffff, 1);
+
+      this.pitchTargetContainer.add([ripple, outerRing, innerRing, dot]);
+      this.pitchTargetContainer.setScale(0.2);
+      this.pitchTargetContainer.setAlpha(0);
+
+      this.tweens.add({
+        targets: this.pitchTargetContainer,
+        scale: 1,
+        alpha: 1,
+        duration: 220,
+        ease: "Back.out",
+      });
+    }
+  }
+
+  public clearPitchTargetMarker(): void {
+    if (this.pitchTargetContainer) {
+      this.tweens.killTweensOf(this.pitchTargetContainer);
+      this.pitchTargetContainer.destroy();
+      this.pitchTargetContainer = null;
+    }
+  }
+
+  public triggerTargetImpact(bounceX: number, bounceY: number): void {
+    const impactRing = this.add.circle(bounceX, bounceY, 14);
+    impactRing.setStrokeStyle(3, 0xffffff, 1).setDepth(26);
+    this.tweens.add({
+      targets: impactRing,
+      scale: 2.2,
+      alpha: 0,
+      duration: 250,
+      ease: "Quad.out",
+      onComplete: () => impactRing.destroy(),
+    });
+
+    this.dustEmitter.emitParticleAt(bounceX, bounceY, 8);
+
+    if (this.pitchTargetContainer) {
+      this.tweens.add({
+        targets: this.pitchTargetContainer,
+        scale: 1.4,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => this.clearPitchTargetMarker(),
+      });
+    }
+  }
+
+  private lockCurrentPitchTarget(): void {
+    if (this.isPitchTargetLocked || this.isBowling) return;
+    this.isPitchTargetLocked = true;
+    this.renderPitchTargetMarker(this.currentLocalTarget, true, true);
+
+    const info = this.deriveTargetLineAndLength(this.currentLocalTarget);
+    this.hud.setPitchBadge(`LOCKED • ${info.labelLength}`, "#22c55e");
+    this.hud.setLockSpotEnabled(false);
+
+    this.activePitchTarget = {
+      targetId: `local-pitch-${Date.now()}`,
+      turnNumber: this.balls + 1,
+      lateral: this.currentLocalTarget.lateral,
+      length: this.currentLocalTarget.length,
+      line: info.line,
+      lengthZone: info.lengthZone,
+      lockedAtMs: Date.now(),
+    };
+    this.currentDeliveryPitchTarget = this.activePitchTarget;
+
+    if (this.mode === "multiplayer") {
+      this.multiplayerDriver?.sendPitchTarget(this.currentLocalTarget.lateral, this.currentLocalTarget.length);
+    } else if (this.mode === "ai" && this.role === "bowling") {
+      this.positionAIBatsman();
+    }
+
+    this.startRevealCountdown(800);
+  }
+
+  private startRevealCountdown(durationMs: number = 800): void {
+    if (this.revealTimerEvent) this.revealTimerEvent.remove();
+    this.revealRemainingMs = durationMs;
+    this.hud.setBowlButtonState("countdown", durationMs / 1000);
+
+    const startTime = Date.now();
+    this.revealTimerEvent = this.time.addEvent({
+      delay: 50,
+      loop: true,
+      callback: () => {
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, durationMs - elapsed);
+        if (remaining <= 0) {
+          this.revealTimerEvent?.remove();
+          this.revealTimerEvent = undefined;
+          this.hud.setBowlButtonState("ready");
+          this.hud.updateStatus("Target revealed to batsman! Ready to bowl!", "#34d399");
+        } else {
+          this.hud.setBowlButtonState("countdown", remaining / 1000);
+        }
+      },
+    });
   }
 
   private aiBowlBall() {
     if (this.wickets >= 1 || this.balls >= this.maxBalls) return;
 
-    let rand = Math.random();
-    if (this.balls < 6) {
-      rand = 0.33 + Math.random() * 0.67;
+    const deliveries: CricketDelivery[] = ['fast', 'slow', 'spin', 'yorker', 'bouncer', 'swing'];
+    const type = deliveries[Math.floor(Math.random() * deliveries.length)];
+
+    let lateral = (Math.random() - 0.5) * 0.6;
+    let length = 0.4;
+    switch (type) {
+      case 'fast':
+        length = 0.38 + Math.random() * 0.15;
+        break;
+      case 'slow':
+        length = 0.45 + Math.random() * 0.2;
+        break;
+      case 'spin':
+        lateral = Math.random() > 0.5 ? 0.35 : -0.35;
+        length = 0.42 + Math.random() * 0.16;
+        break;
+      case 'yorker':
+        length = 0.12 + Math.random() * 0.1;
+        lateral = (Math.random() - 0.5) * 0.3;
+        break;
+      case 'bouncer':
+        length = 0.68 + Math.random() * 0.12;
+        break;
+      case 'swing':
+        lateral = -0.32;
+        length = 0.4 + Math.random() * 0.15;
+        break;
     }
 
-    let type: 'fast' | 'slow' | 'spin' = 'fast';
-    if (rand < 0.33) type = 'fast';
-    else if (rand < 0.66) type = 'slow';
-    else type = 'spin';
+    const aiTarget = { lateral, length };
+    this.activePitchTarget = {
+      targetId: `ai-pitch-${Date.now()}`,
+      turnNumber: this.balls + 1,
+      lateral,
+      length,
+      line: lateral < -0.28 ? "off" : lateral > 0.28 ? "leg" : "middle",
+      lengthZone: length < 0.25 ? "full" : length < 0.58 ? "good" : "short",
+      lockedAtMs: Date.now(),
+    };
 
-    this.executeBowl(type);
-    this.hud.setControlsState(false);
+    // Human batsman sees the target marker!
+    this.renderPitchTargetMarker(aiTarget, true, false);
+    const info = this.deriveTargetLineAndLength(aiTarget);
+    this.hud.updateStatus(`Watch the landing spot! (${info.labelLength} • ${info.labelLine})`, "#fbbf24");
+
+    // 800ms reveal anticipation window before AI bowler bowls
+    this.time.delayedCall(800, () => {
+      this.executeBowl(type, 0.5, aiTarget);
+      this.hud.setControlsState(false);
+    });
   }
 
-  private playerBowl(type: 'fast' | 'slow' | 'spin', power: number) {
+  private playerBowl(type: CricketDelivery, power: number) {
     if (this.ballTweenOwned || this.isBowling || this.isHit || this.wickets >= 1 || this.balls >= this.maxBalls) return;
 
     this.hud.setControlsState(true);
@@ -1620,18 +2151,31 @@ export class CricketScene extends Phaser.Scene {
       }
 
       this.hud.updateStatus("Delivery sent! Waiting...", "#93c5fd");
-      this.multiplayerDriver.sendBowlAction(type, power);
+      const pitchTargetId = this.remoteState?.pitchTarget?.targetId;
+      this.multiplayerDriver.sendBowlAction(type, power, pitchTargetId).then((res) => {
+        if (!res.ok) {
+          this.hud.setControlsState(false);
+          if (this.remoteState) {
+            this.updateTurnStatus(this.remoteState);
+          }
+          this.hud.updateStatus(`Bowl rejected: ${res.error ?? 'Try again'}`, "#f43f5e");
+        }
+      });
       return;
     }
 
-    this.executeBowl(type, power);
+    this.executeBowl(type, power, this.currentLocalTarget);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // BOWLING — WITH AUTHENTIC MULTI-STAGE DELIVERY SEQUENCE
   // ─────────────────────────────────────────────────────────────────────────────
 
-  private executeBowl(type: CricketDelivery, powerMultiplier: number = 1.0) {
+  private executeBowl(
+    type: CricketDelivery,
+    powerMultiplier: number = 1.0,
+    target?: CricketPitchTarget | { lateral: number; length: number },
+  ) {
     this.resultVisual?.stop();
     this.replay?.beginDelivery();
     this.bufferedShot = null;
@@ -1640,6 +2184,11 @@ export class CricketScene extends Phaser.Scene {
     this.tweens.killTweensOf(this.bowler);
     this.ballTweenOwned = false;
     this.isBowling = true;   // Prevent re-entry
+    this.isBatterMovementLocked = false;
+    this.lastRemoteShotDirection = null;
+    this.currentDeliveryPitchTarget = (target && 'lengthZone' in target)
+      ? target as CricketPitchTarget
+      : this.activePitchTarget ?? this.remoteState?.pitchTarget ?? null;
     this.bowlerRunupActive = true;  // Pause ball physics
     this.isHit = false;
     this.aiHasSwung = false;
@@ -1666,66 +2215,67 @@ export class CricketScene extends Phaser.Scene {
     const isBatting = this.role === 'batting';
     const bowlerScale = this.getPlayerScale('bowler', this.bowlerRestY);
     const handOffsetX = (isBatting ? 14 : 12) * bowlerScale.x;
-    const handOffsetY = 65 * bowlerScale.y;
 
     const approxReleaseX = isBatting ? (this.bowlerRestX + handOffsetX) : (this.bowlerRestX + handOffsetX);
     const approxReleaseY = isBatting ? (PITCH_TOP_Y + 12) : 620;
     const targetStumpY = isBatting ? 665 : 200;
     const targetStumpX = CENTER_X + (Math.random() - 0.5) * 6; // Target stumps
 
-    let speed = 700;
-    if (type === 'fast') speed = 700 + Math.random() * 120;
-    else if (type === 'slow') speed = 280 + Math.random() * 60;
-    else if (type === 'yorker') speed = 640 + Math.random() * 80;
-    else if (type === 'bouncer') speed = 560 + Math.random() * 100;
-    else if (type === 'swing') speed = 480 + Math.random() * 80;
-    else speed = 420 + Math.random() * 70; // spin
+    // Authoritative or local pitch target
+    const effectiveTarget = target ?? this.activePitchTarget ?? this.remoteState?.pitchTarget ?? this.currentLocalTarget;
+    const { x: bounceX, y: bounceY } = this.pitchTargetToScreen(effectiveTarget);
 
-    const finalSpeed = speed * mult;
-    const distY = Math.abs(targetStumpY - approxReleaseY);
-    const timeToStumps = distY / finalSpeed;
-    const baseVx = (targetStumpX - approxReleaseX) / timeToStumps;
-    const velY = isBatting ? finalSpeed : -finalSpeed;
+    let baseSpeed = 700;
+    if (type === 'fast') baseSpeed = 700 + Math.random() * 80;
+    else if (type === 'slow') baseSpeed = 300 + Math.random() * 40;
+    else if (type === 'yorker') baseSpeed = 660 + Math.random() * 60;
+    else if (type === 'bouncer') baseSpeed = 580 + Math.random() * 70;
+    else if (type === 'swing') baseSpeed = 500 + Math.random() * 60;
+    else baseSpeed = 440 + Math.random() * 50; // spin
+
+    // Time to first bounce (in seconds)
+    let timeToBounce: number;
+    switch (type) {
+      case "fast": timeToBounce = 0.38 / mult; break;
+      case "slow": timeToBounce = 0.58 / mult; break;
+      case "spin": timeToBounce = 0.52 / mult; break;
+      case "yorker": timeToBounce = 0.44 / mult; break;
+      case "bouncer": timeToBounce = 0.40 / mult; break;
+      case "swing": timeToBounce = 0.48 / mult; break;
+      default: timeToBounce = 0.45 / mult; break;
+    }
 
     this.swingAccel = 0;
     this.spinTurned = false;
 
-    // Calculate physics values based on delivery type
+    // Delivery specific announcements
     if (type === 'fast') {
-      this.ballVelocity = { x: baseVx, y: velY };
-      this.ballVelocityZ = -100 * mult;
-      this.hud.updateStatus("Fast pace! Straight at the stumps!", "#fca5a5");
+      this.hud.updateStatus("Fast pace! Pitching on target!", "#fca5a5");
       this.audioManager.playWhoosh();
     } else if (type === 'slow') {
-      this.ballVelocity = { x: baseVx, y: velY };
-      this.ballVelocityZ = 280 * mult;
       this.hud.updateStatus("Slower ball... hold your swing.", "#93c5fd");
     } else if (type === 'yorker') {
-      this.ballVelocity = { x: baseVx, y: velY };
-      this.ballVelocityZ = -220 * mult;
-      this.hud.updateStatus("Yorker! Direct at the stump base!", "#fbbf24");
+      this.hud.updateStatus("Yorker! Direct at the crease!", "#fbbf24");
     } else if (type === 'bouncer') {
-      this.ballVelocity = { x: baseVx, y: velY };
-      this.ballVelocityZ = 450 * mult;
       this.hud.updateStatus("Bouncer! Watch the rising ball!", "#ef4444");
     } else if (type === 'swing') {
       this.spinDirection = Math.random() > 0.5 ? 1 : -1;
-      this.swingAccel = this.spinDirection * 90;
-      this.ballVelocity = { x: baseVx - (this.swingAccel * timeToStumps * 0.5), y: velY };
-      this.ballVelocityZ = 50 * mult;
-      this.hud.updateStatus("Swing bowling! Moving into the stumps!", "#a855f7");
+      this.swingAccel = this.spinDirection * 70;
+      this.hud.updateStatus("Swing bowling! Moving off the pitch!", "#a855f7");
     } else {
-      // spin
       this.spinDirection = Math.random() > 0.5 ? 1 : -1;
-      const prePitchTargetX = targetStumpX - this.spinDirection * 18;
-      const prePitchVx = (prePitchTargetX - approxReleaseX) / timeToStumps;
-      this.ballVelocity = { x: prePitchVx, y: velY };
-      this.ballVelocityZ = 100 * mult;
-      this.hud.updateStatus("Spin! Turning towards the stumps!", "#fde047");
+      this.hud.updateStatus("Spin! Turning sharply on impact!", "#fde047");
+    }
+
+    // Pre-shot backlift trigger posture as bowler begins delivery sequence
+    if (this.batsman && this.batsman.active && this.role === 'batting') {
+      this.batsman.setTexture('tex_batsman_backlift');
+      this.batsman.setY(574);
     }
 
     // Animate complete bowler sequence, then release ball
     this.animateBowlerRunup(type, (actualReleaseX: number, actualReleaseY: number) => {
+      this.ballReleaseY = actualReleaseY;
       // Set ball start position exactly at bowler's release hand
       this.ballDepth = actualReleaseY;
       this.ballHeight = 60;
@@ -1740,6 +2290,16 @@ export class CricketScene extends Phaser.Scene {
       this.ballShadow.setPosition(actualReleaseX, this.ballDepth);
       this.ballShadow.setScale(startScale);
       this.ballShadow.setVisible(true);
+
+      // PRE-BOUNCE TRAJECTORY CALCULATION (Exact physical landing spot guarantee)
+      const vx = (bounceX - actualReleaseX) / timeToBounce;
+      const vy = (bounceY - actualReleaseY) / timeToBounce;
+      // Solve: 0 = H + vz*T - 0.5*g*T^2  => vz = (0.5*g*T^2 - H) / T
+      const H = 60;
+      const vz = (0.5 * this.gravity * timeToBounce * timeToBounce - H) / timeToBounce;
+
+      this.ballVelocity = { x: vx, y: vy };
+      this.ballVelocityZ = vz;
 
       // Release spark burst
       this.dustEmitter.emitParticleAt(actualReleaseX, actualReleaseY - 10, 4);
@@ -1889,7 +2449,12 @@ export class CricketScene extends Phaser.Scene {
         return;
       }
     }
-    if (!isAI) this.playerHasSwung = true;
+    if (!isAI) {
+      this.playerHasSwung = true;
+      if (this.role === 'batting') {
+        this.lockBatterMovement();
+      }
+    }
 
     if (this.mode === 'multiplayer' && !isAI) {
       if (!this.multiplayerDriver?.canBat()) {
@@ -1905,7 +2470,18 @@ export class CricketScene extends Phaser.Scene {
       this.hud.setControlsState(true);
       this.hud.updateStatus("Shot played! Waiting for result...", "#93c5fd");
       this.audioManager.playWhoosh();
-      this.multiplayerDriver.sendBatAction(direction, timing);
+
+      const activeDeliveryId = this.remoteState?.activeDeliveryId ?? undefined;
+      this.multiplayerDriver.sendBatAction(direction, timing, activeDeliveryId).then((res) => {
+        if (!res.ok) {
+          this.playerHasSwung = false;
+          this.bufferedShot = null;
+          if (this.remoteState) {
+            this.updateTurnStatus(this.remoteState);
+          }
+          this.hud.updateStatus(`Shot rejected: ${res.error ?? 'Try again'}`, "#f43f5e");
+        }
+      });
       return;
     }
 
@@ -1919,7 +2495,10 @@ export class CricketScene extends Phaser.Scene {
 
     const sweetSpotY = this.role === 'bowling' ? 215 : 575;
     const distance = Math.abs(this.ballDepth - sweetSpotY);
-    const dx = Math.abs(this.ball.x - CENTER_X);
+    const batterX = this.role === 'batting'
+      ? (CENTER_X - 22 + this.currentLocalCreaseX * 55)
+      : (CENTER_X - 14 - this.currentRemoteCreaseX * 55);
+    const dx = Math.abs(this.ball.x - batterX);
     let dz = 0;
     if (this.ballHeight < 10) dz = 10 - this.ballHeight;
     else if (this.ballHeight > 60) dz = this.ballHeight - 60;
@@ -1965,6 +2544,21 @@ export class CricketScene extends Phaser.Scene {
       this.createBalloons(runsAdded);
       this.audioManager.playHit(shotPower);
       this.audioManager.playCrowdRoar();
+
+      // Camera shake for boundary/six
+      this.cameras.main.shake(isSix ? 90 : 65, isSix ? 0.005 : 0.003);
+
+      // Bat glow / flash effect
+      if (this.bat) {
+        this.tweens.add({
+          targets: this.bat,
+          alpha: 0.6,
+          tint: 0x38bdf8,
+          duration: 70,
+          yoyo: true,
+          ease: 'Sine.easeInOut'
+        });
+      }
 
       // Emit bat-ball impact sparks
       if (this.dustEmitter) {
@@ -2286,8 +2880,13 @@ export class CricketScene extends Phaser.Scene {
     this.ballHeight = 30;
     this.ball.setPosition(CENTER_X, start - 30).setVisible(true);
     this.ballShadow.setVisible(true);
-    this.playBatSwing(runs >= 6 ? 'up' : 'straight');
+    const shotDir = this.lastRemoteShotDirection ?? (runs >= 6 ? 'up' : 'straight');
+    this.playBatSwing(shotDir);
     this.audioManager.playHit(runs >= 6 ? 1500 : runs >= 4 ? 1200 : 600);
+    if (runs >= 4) {
+      const isSix = runs >= 6;
+      this.cameras.main.shake(isSix ? 90 : 65, isSix ? 0.005 : 0.003);
+    }
     this.impact.play(runs >= 6 ? 1500 : runs >= 4 ? 1200 : 600, angle,
       [this.batsman, this.ball], this.ball.x, this.ball.y, this.ballDepth);
     const flight = { t: 0 };
@@ -2353,21 +2952,91 @@ export class CricketScene extends Phaser.Scene {
   private playBatSwing(direction: 'left' | 'right' | 'up' | 'straight') {
     this.stopBatsmanIdleAnimation();
 
-    // Step out for slog
-    if (direction === 'up' && !this.hasSteppedOut && this.role === 'batting') {
+    const isBatting = this.role === 'batting';
+    const baseY = isBatting ? 575 : 215;
+    const baseX = isBatting ? (CENTER_X - 22) : (CENTER_X - 14);
+    const creaseOffset = isBatting ? (this.currentLocalCreaseX * 55) : (-this.currentRemoteCreaseX * 55);
+    const startX = baseX + creaseOffset;
+
+    // Determine footwork based on delivery length and shot selection
+    const targetLength = this.currentDeliveryPitchTarget?.lengthZone ?? 'good';
+    let footwork: 'FRONT' | 'BACK' | 'NEUTRAL' = 'NEUTRAL';
+    if (targetLength === 'full' || direction === 'straight') {
+      footwork = 'FRONT';
+    } else if (targetLength === 'short' || direction === 'up') {
+      footwork = 'BACK';
+    }
+
+    // Footwork vertical adjustment: front foot strides toward bowler, back foot rocks back
+    let footworkOffsetY = 0;
+    if (footwork === 'FRONT') {
+      footworkOffsetY = isBatting ? -12 : 6;
+    } else if (footwork === 'BACK') {
+      footworkOffsetY = isBatting ? 6 : -3;
+    }
+
+    // Dynamic ground shadow behavior
+    if (this.batsmanShadow) {
+      if (footwork === 'FRONT' || direction === 'straight' || direction === 'left') {
+        this.tweens.add({
+          targets: this.batsmanShadow,
+          scaleX: 1.18,
+          scaleY: 0.88,
+          duration: 130,
+          yoyo: true,
+          ease: 'Sine.easeOut'
+        });
+      } else if (footwork === 'BACK' || direction === 'up') {
+        this.tweens.add({
+          targets: this.batsmanShadow,
+          scaleX: 0.76,
+          scaleY: 0.76,
+          duration: 140,
+          yoyo: true,
+          ease: 'Sine.easeInOut'
+        });
+      }
+    }
+
+    const restoreStance = () => {
+      if (!this.batsman.active || this.isRunning) return;
+      this.batsman.setTexture('tex_batsman_stance');
+      this.tweens.add({
+        targets: [this.batsman, this.batsmanShadow],
+        x: startX,
+        y: baseY,
+        duration: 160,
+        ease: 'Sine.easeOut',
+      });
+      if (this.batsmanShadow) {
+        this.batsmanShadow.setScale(1, 1);
+      }
+      this.hasSteppedOut = false;
+      if (!this.isHit && !this.isRunning) this.startBatsmanIdleAnimation();
+    };
+
+    // Step out for lofted shot
+    if (direction === 'up' && !this.hasSteppedOut && isBatting) {
       this.hasSteppedOut = true;
       this.tweens.add({
         targets: [this.batsman, this.bat],
-        y: '-=22',
-        duration: 140,
+        y: '-=20',
+        duration: 130,
         ease: 'Quad.easeOut'
       });
     }
 
     if (direction === 'left') {
-      // Cover Drive / Off Drive: Stride -> Impact -> High Elbow Follow-Through
+      // Leg Glance / Sweep / Off-drive: Stride -> Impact -> High Elbow Follow-Through
       this.blendPlayerPose(this.batsman, 'tex_batsman_drive_stride');
-      this.tweens.add({ targets: this.batsman, x: this.batsman.x - 14, duration: 140, yoyo: true, ease: 'Sine.easeOut' });
+      this.tweens.add({
+        targets: this.batsman,
+        x: startX - 14,
+        y: baseY + footworkOffsetY,
+        duration: 140,
+        yoyo: true,
+        ease: 'Sine.easeOut'
+      });
       this.time.delayedCall(110, () => {
         if (!this.batsman.active || this.isRunning) return;
         this.blendPlayerPose(this.batsman, 'tex_batsman_drive_impact');
@@ -2376,15 +3045,18 @@ export class CricketScene extends Phaser.Scene {
         if (!this.batsman.active || this.isRunning) return;
         this.blendPlayerPose(this.batsman, 'tex_batsman_drive_follow');
       });
-      this.time.delayedCall(620, () => {
-        if (!this.batsman.active || this.isRunning) return;
-        this.batsman.setTexture('tex_batsman_stance');
-        if (!this.isHit && !this.isRunning) this.startBatsmanIdleAnimation();
-      });
+      this.time.delayedCall(620, restoreStance);
     } else if (direction === 'right') {
-      // Pull Shot / Cut: Back-Foot Prep -> Impact -> Swivel Follow-Through
+      // Cover Drive / Cut: Back-Foot Prep -> Impact -> Swivel Follow-Through
       this.blendPlayerPose(this.batsman, 'tex_batsman_pull_prep');
-      this.tweens.add({ targets: this.batsman, x: this.batsman.x + 10, duration: 120, yoyo: true, ease: 'Sine.easeOut' });
+      this.tweens.add({
+        targets: this.batsman,
+        x: startX + 12,
+        y: baseY + footworkOffsetY,
+        duration: 120,
+        yoyo: true,
+        ease: 'Sine.easeOut'
+      });
       this.time.delayedCall(90, () => {
         if (!this.batsman.active || this.isRunning) return;
         this.blendPlayerPose(this.batsman, 'tex_batsman_pull_impact');
@@ -2393,16 +3065,18 @@ export class CricketScene extends Phaser.Scene {
         if (!this.batsman.active || this.isRunning) return;
         this.blendPlayerPose(this.batsman, 'tex_batsman_pull_follow');
       });
-      this.time.delayedCall(600, () => {
-        if (!this.batsman.active || this.isRunning) return;
-        this.batsman.setTexture('tex_batsman_stance');
-        if (!this.isHit && !this.isRunning) this.startBatsmanIdleAnimation();
-      });
+      this.time.delayedCall(600, restoreStance);
     } else if (direction === 'up') {
       // Lofted Slog / Six: Deep Power Base -> Uppercut Impact -> Skyward Follow-Through
       this.blendPlayerPose(this.batsman, 'tex_batsman_loft_prep');
       const currentBatsmanScaleY = this.getPlayerScale('batsman', this.batsman.y).y;
-      this.tweens.add({ targets: this.batsman, scaleY: currentBatsmanScaleY * 0.94, duration: 110, yoyo: true, ease: 'Sine.easeInOut' });
+      this.tweens.add({
+        targets: this.batsman,
+        scaleY: currentBatsmanScaleY * 0.93,
+        duration: 110,
+        yoyo: true,
+        ease: 'Sine.easeInOut'
+      });
       this.time.delayedCall(100, () => {
         if (!this.batsman.active || this.isRunning) return;
         this.blendPlayerPose(this.batsman, 'tex_batsman_loft_impact');
@@ -2411,24 +3085,23 @@ export class CricketScene extends Phaser.Scene {
         if (!this.batsman.active || this.isRunning) return;
         this.blendPlayerPose(this.batsman, 'tex_batsman_loft_follow');
       });
-      this.time.delayedCall(680, () => {
-        if (!this.batsman.active || this.isRunning) return;
-        this.batsman.setTexture('tex_batsman_stance');
-        if (!this.isHit && !this.isRunning) this.startBatsmanIdleAnimation();
-      });
+      this.time.delayedCall(680, restoreStance);
     } else {
       // Straight Punch / Drive: Direct Impact -> High Vertical Follow-Through
       this.blendPlayerPose(this.batsman, 'tex_batsman_straight_impact');
-      this.tweens.add({ targets: this.batsman, x: this.batsman.x - 6, duration: 120, yoyo: true, ease: 'Sine.easeInOut' });
+      this.tweens.add({
+        targets: this.batsman,
+        x: startX - 5,
+        y: baseY + (isBatting ? -12 : 6),
+        duration: 120,
+        yoyo: true,
+        ease: 'Sine.easeInOut'
+      });
       this.time.delayedCall(140, () => {
         if (!this.batsman.active || this.isRunning) return;
         this.blendPlayerPose(this.batsman, 'tex_batsman_straight_follow');
       });
-      this.time.delayedCall(540, () => {
-        if (!this.batsman.active || this.isRunning) return;
-        this.batsman.setTexture('tex_batsman_stance');
-        if (!this.isHit && !this.isRunning) this.startBatsmanIdleAnimation();
-      });
+      this.time.delayedCall(540, restoreStance);
     }
   }
 
@@ -2439,8 +3112,10 @@ export class CricketScene extends Phaser.Scene {
   private computeTiming(direction: 'left' | 'right' | 'up' | 'straight'): CricketTiming {
     const sweetSpotY = this.role === 'bowling' ? 215 : 575;
     const distance = Math.abs(this.ballDepth - sweetSpotY);
-    const targetX = CENTER_X;
-    const dx = Math.abs(this.ball.x - targetX);
+    const batterX = this.role === 'batting'
+      ? (CENTER_X - 22 + this.currentLocalCreaseX * 55)
+      : (CENTER_X - 14 - this.currentRemoteCreaseX * 55);
+    const dx = Math.abs(this.ball.x - batterX);
     let dz = 0;
     if (this.ballHeight < 10) dz = 10 - this.ballHeight;
     else if (this.ballHeight > 60) dz = this.ballHeight - 60;
@@ -2451,6 +3126,101 @@ export class CricketScene extends Phaser.Scene {
     if (totalDiff <= 90) return 'good';
     if (contactDistance(this.ballDepth, sweetSpotY, this.ballVelocity.y) > 0) return 'early';
     return 'late';
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // BATTER CREASE MOVEMENT, SHADOW & PERSPECTIVE ALIGNMENT
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  private drawBatsmanShadow(): void {
+    if (!this.batsmanShadow || !this.batsman) return;
+    this.batsmanShadow.clear();
+    const isBatting = this.role === 'batting';
+    const w = isBatting ? 46 : 24;
+    const h = isBatting ? 14 : 7;
+    const alpha = isBatting ? 0.35 : 0.28;
+
+    this.batsmanShadow.fillStyle(0x000000, alpha);
+    this.batsmanShadow.fillEllipse(0, 0, w, h);
+    this.batsmanShadow.setPosition(this.batsman.x, this.batsman.y - 2);
+  }
+
+  private updateBatterVisualPosition(duration: number = 60): void {
+    if (!this.batsman || !this.batsman.active) return;
+    const isBatting = this.role === 'batting';
+    const baseX = isBatting ? (CENTER_X - 22) : (CENTER_X - 14);
+    const offset = isBatting ? (this.currentLocalCreaseX * 55) : (-this.currentRemoteCreaseX * 55);
+    const targetX = baseX + offset;
+
+    this.tweens.add({
+      targets: [this.batsman, this.batsmanShadow],
+      x: targetX,
+      duration,
+      ease: 'Sine.easeOut',
+    });
+
+    if (this.bat && this.bat.visible) {
+      this.bat.setX(targetX + 18);
+    }
+  }
+
+  private stepBatterCrease(delta: number): void {
+    if (this.isBatterMovementLocked || this.role !== 'batting') return;
+    this.setBatterCreaseX(this.currentLocalCreaseX + delta);
+  }
+
+  private setBatterCreaseX(targetX: number): void {
+    if (this.isBatterMovementLocked) return;
+    const clamped = Phaser.Math.Clamp(targetX, -0.75, 0.75);
+    this.currentLocalCreaseX = clamped;
+    this.updateBatterVisualPosition();
+    this.hud.updateCreaseIndicator(this.currentLocalCreaseX, this.isBatterMovementLocked);
+
+    if (this.mode === 'multiplayer' && this.role === 'batting') {
+      this.multiplayerDriver?.sendBatterPosition(this.currentLocalCreaseX);
+    }
+  }
+
+  private setRemoteBatterCreaseX(x: number): void {
+    this.currentRemoteCreaseX = Phaser.Math.Clamp(x, -0.75, 0.75);
+    if (!this.batsman || !this.batsman.active) return;
+    const targetScreenX = (CENTER_X - 14) - this.currentRemoteCreaseX * 55;
+    this.tweens.add({
+      targets: [this.batsman, this.batsmanShadow],
+      x: targetScreenX,
+      duration: 80,
+      ease: 'Sine.easeOut',
+    });
+  }
+
+  private lockBatterMovement(): void {
+    if (this.isBatterMovementLocked) return;
+    this.isBatterMovementLocked = true;
+    this.batterMoveContinuousDir = 0;
+    this.hud.updateCreaseIndicator(this.currentLocalCreaseX, true);
+
+    if (this.mode === 'multiplayer' && this.role === 'batting') {
+      this.multiplayerDriver?.sendLockBatterMovement();
+    }
+  }
+
+  private positionAIBatsman(): void {
+    if (this.role !== 'bowling' || this.mode !== 'ai' || !this.activePitchTarget) return;
+
+    // AI aligns with delivery line with human-like variance
+    const lateral = this.activePitchTarget.lateral;
+    const error = (Math.random() - 0.5) * 0.12;
+    const aiCreaseX = Phaser.Math.Clamp(lateral + error, -0.75, 0.75);
+
+    this.currentRemoteCreaseX = aiCreaseX;
+    const targetScreenX = (CENTER_X - 14) - aiCreaseX * 55;
+
+    this.tweens.add({
+      targets: [this.batsman, this.batsmanShadow],
+      x: targetScreenX,
+      duration: 350,
+      ease: 'Sine.easeInOut',
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -2615,23 +3385,37 @@ export class CricketScene extends Phaser.Scene {
   private resetBatsmenPositions() {
     this.stopBatsmanIdleAnimation();
     if (this.role === 'batting') {
-      this.batsman.setPosition(CENTER_X - 22, 575).setOrigin(0.5, 1).setTexture('tex_batsman_stance');
+      const baseX = CENTER_X - 22;
+      const posX = baseX + (this.currentLocalCreaseX * 55);
+      this.batsman.setPosition(posX, 575).setOrigin(0.5, 1).setTexture('tex_batsman_stance');
       this.setPlayerScale(this.batsman, 'batsman', 575);
 
-      this.bat.setPosition(CENTER_X - 22, 575).setScale(this.getBatScale(575));
+      this.bat.setPosition(posX, 575).setScale(this.getBatScale(575));
 
       this.nonStriker.setPosition(CENTER_X - 52, 204).setTexture('tex_non_striker').setOrigin(0.5, 1);
       this.setPlayerScale(this.nonStriker, 'non_striker', 204);
 
+      if (this.batsmanShadow) {
+        this.batsmanShadow.setPosition(posX, 573);
+        this.batsmanShadow.setScale(1, 1);
+      }
+
       this.startBatsmanIdleAnimation();
     } else {
-      this.batsman.setPosition(CENTER_X - 14, 215).setOrigin(0.5, 1).setTexture('tex_batsman_stance');
+      const baseX = CENTER_X - 14;
+      const posX = baseX - (this.currentRemoteCreaseX * 55);
+      this.batsman.setPosition(posX, 215).setOrigin(0.5, 1).setTexture('tex_batsman_stance');
       this.setPlayerScale(this.batsman, 'batsman', 215);
 
-      this.bat.setPosition(CENTER_X - 14, 215).setScale(this.getBatScale(215));
+      this.bat.setPosition(posX, 215).setScale(this.getBatScale(215));
 
       this.nonStriker.setPosition(CENTER_X + 65, 640).setOrigin(0.5, 1).setTexture('tex_non_striker_rear');
       this.setPlayerScale(this.nonStriker, 'non_striker', 640);
+
+      if (this.batsmanShadow) {
+        this.batsmanShadow.setPosition(posX, 213);
+        this.batsmanShadow.setScale(1, 1);
+      }
 
       this.batsman.setTexture('tex_batsman_stance');
     }
@@ -2977,6 +3761,12 @@ export class CricketScene extends Phaser.Scene {
         }
       }
     }
+    // Continuous batter crease movement (Mobile hold + Desktop hold)
+    if (this.batterMoveContinuousDir !== 0 && !this.isBatterMovementLocked && this.role === 'batting') {
+      const moveDt = delta / 1000;
+      this.setBatterCreaseX(this.currentLocalCreaseX + this.batterMoveContinuousDir * 0.70 * moveDt);
+    }
+
     if (this.ballShadow && this.ball) {
       const scale = Phaser.Math.Linear(0.12, 0.28, Phaser.Math.Clamp((this.ballDepth - 200) / 440, 0, 1));
       const spread = 1 + Math.min(2.5, this.ballHeight / 110);
@@ -3023,6 +3813,17 @@ export class CricketScene extends Phaser.Scene {
       this.ball.x += this.ballVelocity.x * dt;
       this.ballDepth += this.ballVelocity.y * dt;
 
+      // Authoritative movement lock when ball reaches 70% travel to the batsman crease
+      const releaseY = this.ballReleaseY ?? (this.role === 'batting' ? 200 : 640);
+      const creaseY = this.role === 'batting' ? 575 : 215;
+      const totalFlightDist = Math.abs(creaseY - releaseY);
+      if (totalFlightDist > 0) {
+        const flightProg = Math.abs(this.ballDepth - releaseY) / totalFlightDist;
+        if (!this.isBatterMovementLocked && flightProg >= 0.70) {
+          this.lockBatterMovement();
+        }
+      }
+
       // Dynamic Perspective Scale based on depth (prevents ball size varying erratically)
       const depthFrac = Phaser.Math.Clamp((this.ballDepth - 200) / (640 - 200), 0, 1);
       const currentBallScale = Phaser.Math.Linear(0.12, 0.28, depthFrac);
@@ -3041,13 +3842,21 @@ export class CricketScene extends Phaser.Scene {
         this.ballHeight = 0;
         if (!this.spinTurned) {
           this.spinTurned = true;
-          // One single pitch bounce: dust puff + spin turn
-          this.dustEmitter.emitParticleAt(this.ball.x, this.ballDepth, 5);
+          // One single pitch bounce: impact ring + dust puff + target marker burst
+          this.triggerTargetImpact(this.ball.x, this.ballDepth);
           if (this.deliveryType === 'spin') {
             this.ballVelocity.x += this.spinDirection * 120;
+          } else if (this.deliveryType === 'swing') {
+            this.ballVelocity.x += this.spinDirection * 50;
           }
           // Upward velocity after the single pitch bounce
-          this.ballVelocityZ = Math.min(220, Math.abs(this.ballVelocityZ) * 0.5);
+          if (this.deliveryType === 'bouncer') {
+            this.ballVelocityZ = Math.min(290, Math.abs(this.ballVelocityZ) * 0.75);
+          } else if (this.deliveryType === 'yorker') {
+            this.ballVelocityZ = Math.min(130, Math.abs(this.ballVelocityZ) * 0.35);
+          } else {
+            this.ballVelocityZ = Math.min(220, Math.abs(this.ballVelocityZ) * 0.5);
+          }
         } else {
           // Prevent multiple bounces on pitch
           this.ballVelocityZ = 0;
