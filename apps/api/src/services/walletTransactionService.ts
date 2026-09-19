@@ -183,16 +183,16 @@ export class WalletTransactionService {
    * Dispatches affiliate commission evaluation based on Gaming Hub MAIN wallet ledger.
    */
   static async onDepositCompleted(params: {
-    userId: string;
-    amount: number;
     transactionId: string;
+    userId?: string;
+    amount?: number;
   }): Promise<void> {
     try {
       const { AffiliateService } = await import("./affiliateService");
       await AffiliateService.processDepositCommission({
+        transactionId: params.transactionId,
         userId: params.userId,
         amount: params.amount,
-        transactionId: params.transactionId,
       });
     } catch (err) {
       console.error("[WalletTransactionService] Failed to process affiliate commission on deposit:", err);

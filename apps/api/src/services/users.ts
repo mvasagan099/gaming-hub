@@ -98,8 +98,18 @@ export async function ensureUser(
     }
 
     if (meta.referredBy) {
-      void import("./referrals")
-        .then(({ ReferralService }) => ReferralService.applyReferral(sub, meta.referredBy!))
+      void prisma.referral
+        .findUnique({
+          where: { referredUserId: sub },
+          select: { id: true },
+        })
+        .then((existingRef) => {
+          if (!existingRef) {
+            return import("./referrals").then(({ ReferralService }) =>
+              ReferralService.applyReferral(sub, meta.referredBy!)
+            );
+          }
+        })
         .catch(() => undefined);
     }
 

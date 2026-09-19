@@ -730,7 +730,7 @@ async function main(): Promise<void> {
     );
 
     // ── Carrom Live Striker Mover Position Sync ──
-    let lastStrikerSeq = -1;
+    const lastStrikerSeqByTurn = new Map<number, number>();
 
     socket.on("carrom:striker-position", (payload) => {
       try {
@@ -751,23 +751,28 @@ async function main(): Promise<void> {
         // 1. Verify player is currentTurnPlayer
         if (state.currentSeat !== player.seat) return;
 
-        // 2. Verify sequence number — drop out-of-order/stale packets
-        if (typeof payload.sequence === "number" && payload.sequence <= lastStrikerSeq) {
+        // 2. Verify turnNumber matches current authoritative game turn
+        const currentTurn = typeof state.turnNumber === "number" ? state.turnNumber : 0;
+        if (typeof payload.turnNumber === "number" && payload.turnNumber !== currentTurn) {
+          return;
+        }
+
+        // 3. Verify sequence number per turn — drop out-of-order/stale packets
+        const lastSeq = lastStrikerSeqByTurn.get(currentTurn) ?? -1;
+        if (typeof payload.sequence === "number" && payload.sequence <= lastSeq) {
           return;
         }
         if (typeof payload.sequence === "number") {
-          lastStrikerSeq = payload.sequence;
+          lastStrikerSeqByTurn.set(currentTurn, payload.sequence);
         }
 
-        // 3. Validate canonical board X
+        // 4. Validate canonical board X
         const canonicalX = payload.x;
         if (typeof canonicalX !== "number" || isNaN(canonicalX)) return;
         if (!isValidStrikerPlacement(canonicalX, player.seat, state.coins)) return;
 
-        // 4. Update authoritative striker X on engine
-        state.striker.x = canonicalX;
-        state.striker.placed = true;
-        state.striker.placedBy = player.seat;
+        // Note: carrom:striker-position is purely a high-frequency visual preview event.
+        // It must NEVER directly mutate authoritative engine state (which only changes via place-striker / strike actions).
 
         // 5. Broadcast to BOTH players in room
         const broadcastPayload = {
@@ -775,6 +780,7 @@ async function main(): Promise<void> {
           matchId: room.match.matchId,
           playerId: user.userId,
           seat: player.seat,
+          turnNumber: currentTurn,
           x: canonicalX,
           sequence: payload.sequence,
           timestamp: payload.timestamp ?? Date.now(),

@@ -3,10 +3,7 @@ import { prisma, NotificationType } from "@gaming-hub/db";
 import { ReferralService } from "../referrals";
 import { AffiliateService } from "../affiliateService";
 import { updateCategorySettings } from "../settings";
-import { RateLimitService } from "../rateLimitService";
-import { SuspiciousActivityService } from "../suspiciousActivityService";
 import { applyTransaction } from "../wallet";
-import { AppError } from "@gaming-hub/shared";
 
 describe("First-Deposit-Only Referral System & Integrity", () => {
   const createdUserIds: string[] = [];
@@ -46,11 +43,11 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
   }
 
   afterEach(async () => {
-    // Reset referral settings to standard defaults
+    // Reset referral settings to standard defaults (0 fixed bonus, 5% affiliate)
     await updateCategorySettings("referral", {
       enabled: true,
-      referrerFirstDepositBonus: 500,
-      referrerReward: 500,
+      referrerFirstDepositBonus: 0,
+      referrerReward: 0,
       referredReward: 0,
       affiliateEnabled: true,
       affiliateDepositPercent: 5,
@@ -186,9 +183,9 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 5: B completes first successful coupon redemption: 1000 MAIN
+  // TEST 5: B completes first successful deposit: 1000 MAIN
   // ---------------------------------------------------------------------------
-  it("TEST 5: B completes first successful coupon redemption (1000 MAIN) -> B +1000 MAIN, A +500 BONUS, REWARDED", async () => {
+  it("TEST 5: B completes first deposit (1000 MAIN) -> B +1000 MAIN, 0 bonus; A receives 0 fixed and 50 BONUS (5% affiliate), QUALIFIED", async () => {
     const userA = await createTestUser("t5-a", 0, 0);
     const userB = await createTestUser("t5-b", 0, 0);
     const codeA = await ReferralService.ensureReferralCode(userA);
@@ -197,9 +194,9 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
 
     const sagaId = `saga-first-dep-${Date.now()}`;
 
-    // 1. Simulate coupon redemption crediting B's MAIN wallet
+    // 1. Simulate deposit crediting B's MAIN wallet
     await prisma.$transaction(async (tx) => {
-      await applyTransaction(tx, userB, 1000, "COUPON", sagaId, {}, "MAIN");
+      await applyTransaction(tx, userB, 1000, "DEPOSIT", sagaId, {}, "MAIN");
     });
 
     // 2. Authoritative FIRST_DEPOSIT referral qualification triggered
@@ -209,12 +206,13 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
     });
 
     expect(qualResult).toBeDefined();
-    expect(qualResult?.status).toBe("REWARDED");
+    expect(qualResult?.status).toBe("QUALIFIED");
+    expect(qualResult?.commission).toBe(0);
 
-    // 3. Optional affiliate commission on first deposit (default true)
+    // 3. Affiliate commission on deposit: 5% of 1000 = 50 BONUS
     await AffiliateService.processDepositCommission({
       referredUserId: userB,
-      sourceType: "COUPON_REDEMPTION",
+      sourceType: "GAME_WALLET_DEPOSIT",
       sourceId: sagaId,
       amount: 1000,
       isFirstDeposit: true,
@@ -226,30 +224,27 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
 
     expect(walletB?.balance).toBe(1000); // 1000 MAIN
     expect(walletB?.bonusBalance).toBe(0); // 0 referee referral bonus
-    // Referrer A receives 500 BONUS fixed reward + 50 BONUS affiliate (5% of 1000)
-    expect(walletA?.bonusBalance).toBe(550);
+    // Referrer A receives 0 fixed referral reward + 50 BONUS affiliate (5% of 1000)
+    expect(walletA?.bonusBalance).toBe(50);
 
-    // Exactly one REFERRAL transaction for referrer
+    // 0 fixed REFERRAL transactions for referrer
     const refTxs = await prisma.transaction.findMany({
       where: { userId: userA, referenceType: "REFERRAL" },
     });
-    expect(refTxs.length).toBe(1);
-    expect(refTxs[0].amount).toBe(500);
-    expect(refTxs[0].walletType).toBe("BONUS");
+    expect(refTxs.length).toBe(0);
 
-    // Check referrer notification
-    const notifs = await prisma.appNotification.findMany({
-      where: { userId: userA, type: NotificationType.REFERRAL },
+    // Exactly 1 AFFILIATE_COMMISSION transaction for referrer
+    const affTxs = await prisma.transaction.findMany({
+      where: { userId: userA, referenceType: "AFFILIATE_COMMISSION" },
     });
-    expect(notifs.length).toBe(1);
-    expect(notifs[0].title).toBe("Referral Reward Earned");
-    expect(notifs[0].body).toContain("500 bonus coins");
+    expect(affTxs.length).toBe(1);
+    expect(affTxs[0].amount).toBe(50);
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 6: Replay same coupon redemption
+  // TEST 6: Replay same deposit
   // ---------------------------------------------------------------------------
-  it("TEST 6: Replay same coupon redemption -> No extra 500, no duplicate affiliate commission", async () => {
+  it("TEST 6: Replay same deposit -> No duplicate qualification, no duplicate affiliate commission", async () => {
     const userA = await createTestUser("t6-a", 0, 0);
     const userB = await createTestUser("t6-b", 0, 0);
     const codeA = await ReferralService.ensureReferralCode(userA);
@@ -258,46 +253,46 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
 
     const sagaId = `saga-replay-${Date.now()}`;
 
-    // 1st redemption
+    // 1st deposit
     await prisma.$transaction(async (tx) => {
-      await applyTransaction(tx, userB, 1000, "COUPON", sagaId, {}, "MAIN");
+      await applyTransaction(tx, userB, 1000, "DEPOSIT", sagaId, {}, "MAIN");
     });
     await ReferralService.evaluateQualification(userB, "FIRST_DEPOSIT", { amount: 1000, sagaId });
     await AffiliateService.processDepositCommission({
       referredUserId: userB,
-      sourceType: "COUPON_REDEMPTION",
+      sourceType: "GAME_WALLET_DEPOSIT",
       sourceId: sagaId,
       amount: 1000,
       isFirstDeposit: true,
     });
 
     const walletAfter1 = await prisma.wallet.findUnique({ where: { userId: userA } });
-    expect(walletAfter1?.bonusBalance).toBe(550);
+    expect(walletAfter1?.bonusBalance).toBe(50);
 
-    // Replay same coupon deposit
+    // Replay same deposit
     const secondQual = await ReferralService.evaluateQualification(userB, "FIRST_DEPOSIT", { amount: 1000, sagaId });
-    expect(secondQual).toBeNull(); // Skipped, already REWARDED
+    expect(secondQual).toBeNull(); // Skipped, already QUALIFIED
 
     await AffiliateService.processDepositCommission({
       referredUserId: userB,
-      sourceType: "COUPON_REDEMPTION",
+      sourceType: "GAME_WALLET_DEPOSIT",
       sourceId: sagaId,
       amount: 1000,
     });
 
     const walletAfterReplay = await prisma.wallet.findUnique({ where: { userId: userA } });
-    expect(walletAfterReplay?.bonusBalance).toBe(550); // Unchanged
+    expect(walletAfterReplay?.bonusBalance).toBe(50); // Unchanged
 
-    const totalRefTxs = await prisma.transaction.count({
-      where: { userId: userA, referenceType: "REFERRAL" },
+    const totalAffTxs = await prisma.transaction.count({
+      where: { userId: userA, referenceType: "AFFILIATE_COMMISSION" },
     });
-    expect(totalRefTxs).toBe(1);
+    expect(totalAffTxs).toBe(1);
   });
 
   // ---------------------------------------------------------------------------
   // TEST 7: B completes second deposit
   // ---------------------------------------------------------------------------
-  it("TEST 7: B completes second deposit -> NO additional 500 fixed reward, 5% affiliate only", async () => {
+  it("TEST 7: B completes second deposit -> NO fixed reward, 5% affiliate only", async () => {
     const userA = await createTestUser("t7-a", 0, 0);
     const userB = await createTestUser("t7-b", 0, 0);
     const codeA = await ReferralService.ensureReferralCode(userA);
@@ -309,47 +304,47 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
 
     // Deposit 1: 1000 MAIN
     await prisma.$transaction(async (tx) => {
-      await applyTransaction(tx, userB, 1000, "COUPON", saga1, {}, "MAIN");
+      await applyTransaction(tx, userB, 1000, "DEPOSIT", saga1, {}, "MAIN");
     });
     await ReferralService.evaluateQualification(userB, "FIRST_DEPOSIT", { amount: 1000, sagaId: saga1 });
     await AffiliateService.processDepositCommission({
       referredUserId: userB,
-      sourceType: "COUPON_REDEMPTION",
+      sourceType: "GAME_WALLET_DEPOSIT",
       sourceId: saga1,
       amount: 1000,
       isFirstDeposit: true,
     });
 
-    // A has 500 (fixed) + 50 (affiliate 1) = 550
-    expect((await prisma.wallet.findUnique({ where: { userId: userA } }))?.bonusBalance).toBe(550);
+    // A has 50 (affiliate 1)
+    expect((await prisma.wallet.findUnique({ where: { userId: userA } }))?.bonusBalance).toBe(50);
 
     // Deposit 2: 2000 MAIN
     await prisma.$transaction(async (tx) => {
-      await applyTransaction(tx, userB, 2000, "COUPON", saga2, {}, "MAIN");
+      await applyTransaction(tx, userB, 2000, "DEPOSIT", saga2, {}, "MAIN");
     });
 
-    // Referral qualification skips because status is already REWARDED
+    // Referral qualification skips because status is already QUALIFIED
     const qual2 = await ReferralService.evaluateQualification(userB, "FIRST_DEPOSIT", { amount: 2000, sagaId: saga2 });
     expect(qual2).toBeNull();
 
     // Affiliate commission processes: 5% of 2000 = 100 BONUS
     await AffiliateService.processDepositCommission({
       referredUserId: userB,
-      sourceType: "COUPON_REDEMPTION",
+      sourceType: "GAME_WALLET_DEPOSIT",
       sourceId: saga2,
       amount: 2000,
       isFirstDeposit: false,
     });
 
     const walletAfter2 = await prisma.wallet.findUnique({ where: { userId: userA } });
-    // Total: 550 + 100 = 650 BONUS
-    expect(walletAfter2?.bonusBalance).toBe(650);
+    // Total: 50 + 100 = 150 BONUS
+    expect(walletAfter2?.bonusBalance).toBe(150);
 
-    // Fixed referral transactions count is STILL exactly 1
+    // Fixed referral transactions count is 0
     const fixedTxs = await prisma.transaction.count({
       where: { userId: userA, referenceType: "REFERRAL" },
     });
-    expect(fixedTxs).toBe(1);
+    expect(fixedTxs).toBe(0);
 
     // Affiliate commission transactions count is 2
     const affTxs = await prisma.transaction.count({
@@ -359,9 +354,9 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 8: Concurrent first-deposit processing
+  // TEST 8: Concurrent first-deposit qualification
   // ---------------------------------------------------------------------------
-  it("TEST 8: Concurrent first-deposit processing -> exactly one 500 BONUS credit and one REFERRAL transaction", async () => {
+  it("TEST 8: Concurrent first-deposit qualification -> exactly one marks QUALIFIED, 0 fixed bonus transactions", async () => {
     const userA = await createTestUser("t8-a", 0, 0);
     const userB = await createTestUser("t8-b", 0, 0);
     const codeA = await ReferralService.ensureReferralCode(userA);
@@ -379,20 +374,38 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
       ReferralService.evaluateQualification(userB, "FIRST_DEPOSIT", { amount: 1000, sagaId }),
     ]);
 
-    // Exactly one winner returned a rewarded referral; other 4 returned null
-    const winners = results.filter((r) => r !== null && r.status === "REWARDED");
+    // Exactly one winner returned a qualified referral; other 4 returned null
+    const winners = results.filter((r) => r !== null && r.status === "QUALIFIED");
     expect(winners.length).toBe(1);
 
-    // Referrer wallet was credited exactly 500 once
+    // Referrer wallet bonusBalance is untouched (0 fixed bonus)
     const walletA = await prisma.wallet.findUnique({ where: { userId: userA } });
-    expect(walletA?.bonusBalance).toBe(500);
+    expect(walletA?.bonusBalance).toBe(0);
 
-    // Exactly one referral reward ledger transaction exists
+    // 0 referral reward ledger transactions exist
     const txs = await prisma.transaction.findMany({
       where: { userId: userA, referenceType: "REFERRAL" },
     });
-    expect(txs.length).toBe(1);
-    expect(txs[0].amount).toBe(500);
+    expect(txs.length).toBe(0);
+  });
+
+  // ---------------------------------------------------------------------------
+  // TEST 9: Idempotent repeat applyReferral with same code
+  // ---------------------------------------------------------------------------
+  it("TEST 9: Repeated applyReferral with same code is idempotent and returns existing status", async () => {
+    const userA = await createTestUser("t9-a");
+    const userB = await createTestUser("t9-b");
+    const codeA = await ReferralService.ensureReferralCode(userA);
+
+    const first = await ReferralService.applyReferral(userB, codeA);
+    expect(first.applied).toBe(true);
+
+    const second = await ReferralService.applyReferral(userB, codeA);
+    expect(second.applied).toBe(true);
+    expect(second.status).toBe(first.status);
+
+    const count = await prisma.referral.count({ where: { referredUserId: userB } });
+    expect(count).toBe(1);
   });
 
   // ---------------------------------------------------------------------------
@@ -424,7 +437,7 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
     await expect(ReferralService.applyReferral(userB, code2)).rejects.toThrowError(/already been referred/i);
   });
 
-  it("Integrity: Admin reversal creates compensating debit transaction", async () => {
+  it("Integrity: Admin reversal marks referral as REVERSED without wallet debits", async () => {
     const admin = await createTestUser("u-rev-adm");
     const userA = await createTestUser("u-rev-a");
     const userB = await createTestUser("u-rev-b");
@@ -434,17 +447,17 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
     await ReferralService.evaluateQualification(userB, "FIRST_DEPOSIT", { amount: 1000 });
 
     const ref = await prisma.referral.findUnique({ where: { referredUserId: userB } });
-    expect(ref?.status).toBe("REWARDED");
+    expect(ref?.status).toBe("QUALIFIED");
 
     await ReferralService.reverseReferral(ref!.id, admin, "Fraudulent multi-account");
 
     const updatedRef = await prisma.referral.findUnique({ where: { id: ref!.id } });
     expect(updatedRef?.status).toBe("REVERSED");
 
+    // No financial reversal transactions created
     const reversalTx = await prisma.transaction.findFirst({
       where: { userId: userA, referenceType: "REVERSAL" },
     });
-    expect(reversalTx?.amount).toBe(500);
-    expect(reversalTx?.type).toBe("DEBIT");
+    expect(reversalTx).toBeNull();
   });
 });

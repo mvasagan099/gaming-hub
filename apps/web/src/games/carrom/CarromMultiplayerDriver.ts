@@ -105,7 +105,7 @@ export default class CarromMultiplayerDriver {
   public lastState: CarromRemoteState | null = null;
 
   // Callbacks set by the UI component
-  public onStateUpdate: ((s: CarromRemoteState) => void) | null = null;
+  public onStateUpdate: ((s: CarromRemoteState, stateVersion?: number) => void) | null = null;
   public onCoinPocketed:
     | ((coinId: string, coinType: string, pocketIndex: number) => void)
     | null = null;
@@ -131,17 +131,31 @@ export default class CarromMultiplayerDriver {
   }
 
   private strikerSeq = 0;
-  private lastReceivedStrikerSeq = -1;
-  public onStrikerPositionUpdate?: (data: { seat: number; x: number; sequence: number }) => void;
+  private lastReceivedSequenceByTurn = new Map<string, number>();
+  public onStrikerPositionUpdate?: (data: {
+    seat: number;
+    x: number;
+    sequence: number;
+    turnNumber?: number;
+  }) => void;
 
   private handleRemoteStrikerPosition = (data: {
     seat: number;
     x: number;
     sequence: number;
+    turnNumber?: number;
   }) => {
     if (data.seat === this.mySeat) return;
-    if (data.sequence <= this.lastReceivedStrikerSeq) return;
-    this.lastReceivedStrikerSeq = data.sequence;
+    const currentTurn = this.lastState?.turnNumber ?? 0;
+    if (typeof data.turnNumber === "number" && data.turnNumber !== currentTurn) {
+      return;
+    }
+    const turnKey = `${data.seat}:${data.turnNumber ?? currentTurn}`;
+    const lastSeq = this.lastReceivedSequenceByTurn.get(turnKey) ?? -1;
+    if (typeof data.sequence === "number" && data.sequence <= lastSeq) return;
+    if (typeof data.sequence === "number") {
+      this.lastReceivedSequenceByTurn.set(turnKey, data.sequence);
+    }
     this.onStrikerPositionUpdate?.(data);
   };
 
@@ -151,7 +165,8 @@ export default class CarromMultiplayerDriver {
     this._apply(
       s.gameState as CarromRemoteState | null,
       s.lastEvents,
-      s.winner
+      s.winner,
+      s.lastStateVersion
     );
 
     // Attach socket listener for live striker position
@@ -163,11 +178,16 @@ export default class CarromMultiplayerDriver {
     // Subscribe to future updates.
     this.unsubscribe = useMultiplayerStore.subscribe((state, prev) => {
       if (this.destroyed) return;
-      if (state.renderKey !== prev.renderKey || state.winner !== prev.winner) {
+      if (
+        state.renderKey !== prev.renderKey ||
+        state.winner !== prev.winner ||
+        state.lastStateVersion !== prev.lastStateVersion
+      ) {
         this._apply(
           state.gameState as CarromRemoteState | null,
           state.lastEvents,
-          state.winner
+          state.winner,
+          state.lastStateVersion
         );
       }
     });
@@ -230,8 +250,6 @@ export default class CarromMultiplayerDriver {
     return this.lastState?.striker ?? null;
   }
 
-  // ── Actions ─────────────────────────────────────────────────────────────────
-
   /**
    * Send a live striker position update via low-latency socket event.
    * @param clientX  X in client canvas coordinates (0–500).
@@ -242,11 +260,13 @@ export default class CarromMultiplayerDriver {
     const socket = useMultiplayerStore.getState().socket;
     const room = useMultiplayerStore.getState().room;
     const user = useAuthStore.getState().user;
+    const currentTurn = this.lastState?.turnNumber ?? 0;
     if (socket && socket.connected && room) {
       socket.emit("carrom:striker-position", {
         roomId: room.id,
         matchId: room.matchId ?? undefined,
         playerId: user?.id,
+        turnNumber: currentTurn,
         x: serverX,
         sequence: this.strikerSeq,
         timestamp: Date.now(),
@@ -258,12 +278,19 @@ export default class CarromMultiplayerDriver {
    * Send a place-striker action.
    * @param clientX  X in client canvas coordinates (0–500).
    */
-  async sendPlaceStriker(clientX: number): Promise<void> {
+  async sendPlaceStriker(clientX: number): Promise<{ ok: boolean; error?: string }> {
     const serverX = mapToServer(clientX, 0, this.mySeat).x;
-    await useMultiplayerStore
-      .getState()
-      .sendGameAction({ type: "place-striker", x: serverX })
-      .catch(() => {/* ignore */});
+    try {
+      const res = await useMultiplayerStore
+        .getState()
+        .sendGameAction({ type: "place-striker", x: serverX });
+      if (!res.ok && res.error) {
+        return { ok: false, error: res.error };
+      }
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || "Failed to place striker" };
+    }
   }
 
   /**
@@ -303,14 +330,15 @@ export default class CarromMultiplayerDriver {
   private _apply(
     state: CarromRemoteState | null,
     events: { type: string }[] = [],
-    winner: WinnerInfo | null = null
+    winner: WinnerInfo | null = null,
+    stateVersion?: number
   ): void {
     if (!state || this.destroyed) return;
     this.lastState = state;
     this.lastEvents = events;
 
-    // Notify UI with full state and events.
-    this.onStateUpdate?.(state);
+    // Notify UI with full state, events, and stateVersion.
+    this.onStateUpdate?.(state, stateVersion);
 
     // Process events idempotently.
     for (const ev of events) {

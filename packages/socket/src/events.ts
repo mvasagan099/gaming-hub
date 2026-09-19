@@ -92,6 +92,7 @@ export interface ClientToServerEvents {
     roomId?: string;
     matchId?: string;
     playerId?: string;
+    turnNumber?: number;
     x: number;
     sequence: number;
     timestamp?: number;
@@ -176,6 +177,7 @@ export interface ServerToClientEvents {
     matchId: string;
     playerId: string;
     seat: number;
+    turnNumber?: number;
     x: number;
     sequence: number;
     timestamp: number;

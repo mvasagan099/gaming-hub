@@ -708,32 +708,61 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
           const r = c.radius;
           const wallRestitution = c.type === 'striker' ? 0.75 : 0.70;
           
-          // Check if coin is in a pocket corner cutout zone (skip straight wall clamping near corners)
-          let inPocketZone = false;
-          for (const p of POCKETS) {
-            if (Math.hypot(c.x - p.x, c.y - p.y) < POCKET_CUTOUT_ZONE) {
-              inPocketZone = true;
-              break;
-            }
-          }
+          const resolveLocalWall = (coin: LocalCoin) => {
+            if (!coin.active || coin.pocketing) return;
+            const r = coin.radius;
+            const wallR = coin.type === 'striker' ? 0.75 : 0.70;
 
-          if (!inPocketZone) {
-            if (c.x - r < innerMin) {
-              c.x = innerMin + r;
-              c.vx = Math.abs(c.vx) * wallRestitution;
-            } else if (c.x + r > innerMax) {
-              c.x = innerMax - r;
-              c.vx = -Math.abs(c.vx) * wallRestitution;
+            // 1. Corner cushion rim bounce behind pockets (scaled: 28 * 400 / 600 ≈ 18.67)
+            const cornerLimit = 18.67;
+            for (const p of POCKETS) {
+              const dx = coin.x - p.x;
+              const dy = coin.y - p.y;
+              const dist = Math.hypot(dx, dy);
+              const isCornerDir = (p.x < BOARD_WIDTH / 2 ? dx < 0 : dx > 0) &&
+                                  (p.y < BOARD_HEIGHT / 2 ? dy < 0 : dy > 0);
+              if (isCornerDir && dist > cornerLimit) {
+                const nx = dx / dist;
+                const ny = dy / dist;
+                coin.x = p.x + nx * cornerLimit;
+                coin.y = p.y + ny * cornerLimit;
+                const vn = coin.vx * nx + coin.vy * ny;
+                if (vn > 0) {
+                  coin.vx -= (1 + wallR) * vn * nx;
+                  coin.vy -= (1 + wallR) * vn * ny;
+                }
+              }
             }
 
-            if (c.y - r < innerMin) {
-              c.y = innerMin + r;
-              c.vy = Math.abs(c.vy) * wallRestitution;
-            } else if (c.y + r > innerMax) {
-              c.y = innerMax - r;
-              c.vy = -Math.abs(c.vy) * wallRestitution;
+            // 2. Straight perimeter walls (only allow crossing if in capture zone)
+            let inCaptureZone = false;
+            for (const p of POCKETS) {
+              if (Math.hypot(coin.x - p.x, coin.y - p.y) <= POCKET_CAPTURE_MOVING) {
+                inCaptureZone = true;
+                break;
+              }
             }
-          }
+
+            if (!inCaptureZone) {
+              if (coin.x - r < innerMin) {
+                coin.x = innerMin + r;
+                coin.vx = Math.abs(coin.vx) * wallR;
+              } else if (coin.x + r > innerMax) {
+                coin.x = innerMax - r;
+                coin.vx = -Math.abs(coin.vx) * wallR;
+              }
+
+              if (coin.y - r < innerMin) {
+                coin.y = innerMin + r;
+                coin.vy = Math.abs(coin.vy) * wallR;
+              } else if (coin.y + r > innerMax) {
+                coin.y = innerMax - r;
+                coin.vy = -Math.abs(coin.vy) * wallR;
+              }
+            }
+          };
+
+          resolveLocalWall(c);
 
           // Friction: 0.985 per 60fps frame (1/12 power per substep)
           const friction = Math.pow(0.985, stepFactor);
@@ -788,6 +817,28 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
               c1.y -= ny * overlap * (c2.mass / totalMass);
               c2.x += nx * overlap * (c1.mass / totalMass);
               c2.y += ny * overlap * (c1.mass / totalMass);
+
+              // CRITICAL: Re-apply wall collision so overlap push cannot force pieces into or through cushions
+              const resolvePieceWall = (coin: LocalCoin) => {
+                if (!coin.active || coin.pocketing) return;
+                const r = coin.radius;
+                const wallR = coin.type === 'striker' ? 0.75 : 0.70;
+                let inCaptureZone = false;
+                for (const p of POCKETS) {
+                  if (Math.hypot(coin.x - p.x, coin.y - p.y) <= POCKET_CAPTURE_MOVING) {
+                    inCaptureZone = true;
+                    break;
+                  }
+                }
+                if (!inCaptureZone) {
+                  if (coin.x - r < innerMin) { coin.x = innerMin + r; coin.vx = Math.abs(coin.vx) * wallR; }
+                  else if (coin.x + r > innerMax) { coin.x = innerMax - r; coin.vx = -Math.abs(coin.vx) * wallR; }
+                  if (coin.y - r < innerMin) { coin.y = innerMin + r; coin.vy = Math.abs(coin.vy) * wallR; }
+                  else if (coin.y + r > innerMax) { coin.y = innerMax - r; coin.vy = -Math.abs(coin.vy) * wallR; }
+                }
+              };
+              resolvePieceWall(c1);
+              resolvePieceWall(c2);
             }
           }
         }
@@ -1069,6 +1120,14 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
       }
     }
 
+    // Ensure active coins strictly stay on the playing surface and never on the border
+    for (const c of coins) {
+      if (c.active && !c.pocketing) {
+        const r = c.radius;
+        c.x = Math.max(BORDER_SIZE + r, Math.min(BOARD_WIDTH - BORDER_SIZE - r, c.x));
+        c.y = Math.max(BORDER_SIZE + r, Math.min(BOARD_HEIGHT - BORDER_SIZE - r, c.y));
+      }
+    }
 
     renderBoard(ctx, coins, dragState, dragStart, currentAim, strikerPhase, currentPlayer, isTurnActive, gameOver, strikerPos, mySeatRef.current);
 

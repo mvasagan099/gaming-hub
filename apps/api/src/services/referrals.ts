@@ -149,7 +149,7 @@ export class ReferralService {
         reason: "User attempted self-referral using own code",
         referenceType: "USER",
         referenceId: userId,
-        metadata: { code: normalized, ip: reqContext?.ip },
+        metadata: { code: normalized, ip: reqContext?.ip ? hashIdentifier(reqContext.ip) : undefined },
       });
       throw new AppError("SELF_REFERRAL_NOT_ALLOWED", "You cannot use your own referral code", 400);
     }
@@ -159,6 +159,14 @@ export class ReferralService {
       where: { referredUserId: userId },
     });
     if (existing) {
+      if (existing.referrerId === referrer.id) {
+        return {
+          applied: true,
+          referrerReward: 0,
+          referredReward: 0,
+          status: existing.status,
+        };
+      }
       await prisma.referralRiskEvent.create({
         data: {
           referralId: existing.id,
@@ -242,7 +250,7 @@ export class ReferralService {
         reason: `High referral velocity detected: ${recent10mCount} in 10m / ${recent5mCount} in 5m`,
         referenceType: "REFERRER",
         referenceId: referrer.id,
-        metadata: { recent10mCount, recent5mCount, ip: reqContext?.ip },
+        metadata: { recent10mCount, recent5mCount, ip: reqContext?.ip ? hashIdentifier(reqContext.ip) : undefined },
       });
     }
 
@@ -339,68 +347,29 @@ export class ReferralService {
       return null;
     }
 
-    const fixedBonus = Number(
-      referralSettings.referrerFirstDepositBonus ??
-      referralSettings.referrerReward ??
-      referralSettings.referrerSignupBonus ??
-      500
-    );
-
     let rewardedReferral: any = null;
 
     try {
       rewardedReferral = await prisma.$transaction(async (tx) => {
         // Atomic status transition using updateMany to guarantee single-winner concurrency
+        // NOTE: Fixed referral bonuses are strictly 0.
+        // Financial earnings are strictly governed by AffiliateService.processDepositCommission on MAIN deposits.
         const updateResult = await tx.referral.updateMany({
           where: {
             id: referral.id,
             status: "PENDING",
           },
           data: {
-            status: "REWARDED",
+            status: "QUALIFIED",
             qualifiedAt: new Date(),
-            rewardedAt: new Date(),
-            commission: fixedBonus,
+            commission: 0,
             referredReward: 0,
           },
         });
 
         if (updateResult.count === 0) {
-          // Already qualified/rewarded by another concurrent process
+          // Already qualified by another concurrent process
           return null;
-        }
-
-        // Ensure wallet records exist
-        await tx.wallet.upsert({
-          where: { userId: referral.referrerId },
-          update: {},
-          create: { userId: referral.referrerId },
-        });
-        await tx.wallet.upsert({
-          where: { userId: referral.referredUserId },
-          update: {},
-          create: { userId: referral.referredUserId },
-        });
-
-        // Credit referrer BONUS wallet exactly once
-        if (fixedBonus > 0) {
-          await applyTransaction(
-            tx,
-            referral.referrerId,
-            fixedBonus,
-            "REFERRAL",
-            referral.id, // idempotent referenceId
-            {
-              referenceType: "REFERRAL_REWARD",
-              referralId: referral.id,
-              referralCode: referral.code,
-              referredUserId: referral.referredUserId,
-              referredUsername: referral.referredUser?.username,
-              depositAmount,
-              sourceId: ctx?.sagaId ?? ctx?.sourceId,
-            },
-            "BONUS"
-          );
         }
 
         return tx.referral.findUnique({
@@ -420,37 +389,20 @@ export class ReferralService {
       return null;
     }
 
-    // Send notification to referrer:
-    // Title: Referral Reward Earned
-    // Message: "Your referred player made their first deposit. You earned 500 bonus coins."
-    if (fixedBonus > 0) {
-      void NotificationService.createNotification({
-        userId: referral.referrerId,
-        type: NotificationType.REFERRAL,
-        title: "Referral Reward Earned",
-        body: `Your referred player made their first deposit. You earned ${fixedBonus} bonus coins.`,
-        referenceType: "REFERRAL_REWARD",
-        referenceId: referral.id,
-        data: { referralId: referral.id, amount: fixedBonus },
-      }).catch((notifErr) => {
-        console.warn("Referral reward notification dispatch error:", notifErr);
-      });
-    }
-
     // Trigger achievement evaluation
     void AchievementService.evaluateAchievements(referral.referrerId, { userId: referral.referrerId }).catch(() => undefined);
 
     audit({
       actorType: "system",
-      action: "referral.rewarded",
-      category: "wallet",
+      action: "referral.qualified",
+      category: "account",
       targetType: "Referral",
       targetId: referral.id,
       meta: {
         referrerId: referral.referrerId,
         referredUserId: referral.referredUserId,
         depositAmount,
-        referrerReward: fixedBonus,
+        referrerReward: 0,
         referredReward: 0,
         source: ctx,
       },
@@ -473,7 +425,8 @@ export class ReferralService {
   }
 
   /**
-   * 5. Compensating transaction for reversing rewards on fraud or rollback.
+   * 5. Compensating transaction for reversing referral relation on fraud or rollback.
+   * NOTE: Does NOT execute financial debits on user wallets.
    */
   static async reverseReferral(referralId: string, adminId: string, reason: string) {
     const referral = await prisma.referral.findUnique({
@@ -485,37 +438,17 @@ export class ReferralService {
       throw new AppError("NOT_FOUND", "Referral record not found", 404);
     }
 
-    if (referral.status !== "REWARDED") {
+    if (referral.status !== "REWARDED" && referral.status !== "QUALIFIED") {
       throw new AppError("VALIDATION_ERROR", `Cannot reverse referral in '${referral.status}' status`, 400);
     }
 
-    await prisma.$transaction(async (tx) => {
-      // Mark referral as REVERSED
-      await tx.referral.update({
-        where: { id: referralId },
-        data: {
-          status: "REVERSED",
-          reversedAt: new Date(),
-          reversalReason: reason,
-        },
-      });
-
-      // Deduct reward from referrer wallet via compensating reversal transaction
-      if (referral.commission > 0) {
-        await applyTransaction(
-          tx,
-          referral.referrerId,
-          -referral.commission,
-          "REVERSAL",
-          referral.id,
-          {
-            originalTransactionType: "REFERRAL",
-            reversalReason: reason,
-            reversedBy: adminId,
-          },
-          "BONUS"
-        );
-      }
+    await prisma.referral.update({
+      where: { id: referralId },
+      data: {
+        status: "REVERSED",
+        reversedAt: new Date(),
+        reversalReason: reason,
+      },
     });
 
     audit({
@@ -528,7 +461,6 @@ export class ReferralService {
       meta: {
         referrerId: referral.referrerId,
         referredUserId: referral.referredUserId,
-        amount: referral.commission,
         reason,
       },
     });

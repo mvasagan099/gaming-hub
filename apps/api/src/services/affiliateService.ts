@@ -1,4 +1,4 @@
-import { prisma, NotificationType } from "@gaming-hub/db";
+import { prisma, Prisma, NotificationType } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
 import type {
   AffiliateCommissionRecord,
@@ -81,16 +81,45 @@ export class AffiliateService {
   static async processDepositCommission(params: {
     userId?: string;
     referredUserId?: string;
-    amount: number;
+    amount?: number;
     transactionId?: string;
     sourceType?: string;
     sourceId?: string;
     isFirstDeposit?: boolean;
   }) {
-    const referredUserId = params.userId ?? params.referredUserId;
+    const rawSourceId = params.transactionId ?? params.sourceId;
+    let referredUserId = params.userId ?? params.referredUserId;
+    let amount = params.amount ?? 0;
     const sourceType = params.sourceType ?? "GAME_WALLET_DEPOSIT";
-    const sourceId = params.transactionId ?? params.sourceId;
-    const amount = params.amount;
+
+    // 0. Authoritative transaction lookup if transactionId/sourceId is present in DB
+    if (rawSourceId) {
+      const dbTx = await prisma.transaction.findUnique({
+        where: { id: rawSourceId },
+      });
+      if (dbTx) {
+        if (
+          dbTx.type !== "CREDIT" ||
+          dbTx.walletType !== "MAIN" ||
+          (dbTx.referenceType !== "DEPOSIT" && dbTx.referenceType !== "COUPON") ||
+          dbTx.amount <= 0
+        ) {
+          logAffiliateMetric("affiliate_commission_skipped", {
+            reason: "ineligible_transaction_record",
+            txId: dbTx.id,
+            type: dbTx.type,
+            walletType: dbTx.walletType,
+            referenceType: dbTx.referenceType,
+            amount: dbTx.amount,
+          });
+          return null;
+        }
+        referredUserId = dbTx.userId;
+        amount = dbTx.amount;
+      }
+    }
+
+    const sourceId = rawSourceId;
 
     if (!referredUserId || !sourceId || !amount || amount <= 0) {
       logAffiliateMetric("affiliate_commission_skipped", { reason: "invalid_params", referredUserId, sourceId, amount });
@@ -180,13 +209,9 @@ export class AffiliateService {
         return null;
       }
       const priorCount = await prisma.affiliateCommission.count({
-        where: { referralId: referral.id, status: { in: ["COMPLETED", "PENDING"] } },
+        where: { referralId: referral.id, status: { in: ["COMPLETED", "PENDING", "PROCESSING"] } },
       });
       if (priorCount > 0) {
-        await prisma.referral.update({
-          where: { id: referral.id },
-          data: { firstCommissionAt: new Date(), status: "REWARDED" },
-        }).catch(() => {});
         logAffiliateMetric("affiliate_commission_skipped", { reason: "prior_completed_commissions_exist", referralId: referral.id });
         return null;
       }
@@ -196,10 +221,6 @@ export class AffiliateService {
     if (affiliateMode === "CONTINUOUS" && settings.affiliateOnFirstDeposit === false) {
       const isFirst = referral.firstCommissionAt === null;
       if (isFirst) {
-        await prisma.referral.update({
-          where: { id: referral.id },
-          data: { firstCommissionAt: new Date(), status: "REWARDED" },
-        }).catch(() => {});
         logAffiliateMetric("affiliate_commission_skipped", { reason: "first_deposit_excluded_by_config", referralId: referral.id });
         return null;
       }
@@ -307,6 +328,15 @@ export class AffiliateService {
     let createdCommission: any;
     try {
       createdCommission = await prisma.$transaction(async (tx) => {
+        // Enforce transactional advisory lock per referrer to serialize concurrent cap evaluations
+        try {
+          await tx.$executeRaw(
+            Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('affiliate_commission:' || ${referral.referrerId}))`
+          );
+        } catch {
+          // Gracefully continue if running in an environment without advisory lock support
+        }
+
         // Idempotency check inside transaction
         const inTxExisting = await tx.affiliateCommission.findUnique({
           where: {
@@ -318,6 +348,47 @@ export class AffiliateService {
         });
         if (inTxExisting) {
           return inTxExisting;
+        }
+
+        // Daily commission cap evaluation inside transaction lock
+        let finalCommissionAmount = commissionAmount;
+        if (dailyCap > 0) {
+          const startOfDay = new Date();
+          startOfDay.setHours(0, 0, 0, 0);
+          const todayAgg = await tx.affiliateCommission.aggregate({
+            where: {
+              referrerId: referral.referrerId,
+              status: { in: ["COMPLETED", "PENDING", "PROCESSING"] },
+              createdAt: { gte: startOfDay },
+            },
+            _sum: { commissionAmount: true },
+          });
+          const currentDayTotal = Number(todayAgg._sum.commissionAmount ?? 0);
+          const remainingAllowed = Math.max(0, dailyCap - currentDayTotal);
+          finalCommissionAmount = Math.min(finalCommissionAmount, remainingAllowed);
+        }
+
+        // Monthly commission cap evaluation inside transaction lock
+        if (monthlyCap > 0) {
+          const startOfMonth = new Date();
+          startOfMonth.setDate(1);
+          startOfMonth.setHours(0, 0, 0, 0);
+          const monthAgg = await tx.affiliateCommission.aggregate({
+            where: {
+              referrerId: referral.referrerId,
+              status: { in: ["COMPLETED", "PENDING", "PROCESSING"] },
+              createdAt: { gte: startOfMonth },
+            },
+            _sum: { commissionAmount: true },
+          });
+          const currentMonthTotal = Number(monthAgg._sum.commissionAmount ?? 0);
+          const remainingAllowed = Math.max(0, monthlyCap - currentMonthTotal);
+          finalCommissionAmount = Math.min(finalCommissionAmount, remainingAllowed);
+        }
+
+        if (finalCommissionAmount <= 0) {
+          logAffiliateMetric("affiliate_commission_skipped", { reason: "cap_exceeded_in_tx", referralId: referral.id });
+          return null;
         }
 
         const now = new Date();
@@ -333,7 +404,7 @@ export class AffiliateService {
               firstCommissionAt: now,
               status: "REWARDED",
               rewardedAt: referral.rewardedAt ?? now,
-              commission: { increment: commissionAmount },
+              commission: { increment: finalCommissionAmount },
             },
           });
           if (updateResult.count === 0) {
@@ -348,7 +419,7 @@ export class AffiliateService {
               ...(referral.firstCommissionAt ? {} : { firstCommissionAt: now }),
               status: "REWARDED",
               rewardedAt: referral.rewardedAt ?? now,
-              commission: { increment: commissionAmount },
+              commission: { increment: finalCommissionAmount },
             },
           });
         }
@@ -362,7 +433,7 @@ export class AffiliateService {
             sourceId,
             depositAmount: amount,
             commissionPercent: percent,
-            commissionAmount,
+            commissionAmount: finalCommissionAmount,
             affiliateMode,
             status: initialStatus,
             heldUntil,
@@ -384,7 +455,7 @@ export class AffiliateService {
           await applyTransaction(
             tx,
             referral.referrerId,
-            commissionAmount,
+            finalCommissionAmount,
             "AFFILIATE_COMMISSION",
             sourceId,
             {
@@ -410,7 +481,7 @@ export class AffiliateService {
               referredUserId,
               depositAmount: amount,
               commissionPercent: percent,
-              commissionAmount,
+              commissionAmount: finalCommissionAmount,
               sourceType,
               sourceId,
               affiliateMode,
@@ -428,7 +499,7 @@ export class AffiliateService {
               referredUserId,
               depositAmount: amount,
               commissionPercent: percent,
-              commissionAmount,
+              commissionAmount: finalCommissionAmount,
               sourceType,
               sourceId,
               affiliateMode,
@@ -1106,7 +1177,22 @@ export class AffiliateService {
     for (const comm of matured) {
       try {
         const commissionAmount = Number(comm.commissionAmount);
-        await prisma.$transaction(async (tx) => {
+        const released = await prisma.$transaction(async (tx) => {
+          // Atomic claim: only succeed if still PENDING
+          const claimResult = await tx.affiliateCommission.updateMany({
+            where: {
+              id: comm.id,
+              status: "PENDING",
+            },
+            data: {
+              status: "PROCESSING",
+            },
+          });
+          if (claimResult.count === 0) {
+            // Already claimed/processed by concurrent worker
+            return false;
+          }
+
           await tx.affiliateCommission.update({
             where: { id: comm.id },
             data: {
@@ -1149,22 +1235,26 @@ export class AffiliateService {
               sourceId: comm.sourceId,
             },
           });
+
+          return true;
         });
 
-        void NotificationService.createNotification({
-          userId: comm.referrerId,
-          type: NotificationType.AFFILIATE_COMMISSION,
-          title: "🎁 Affiliate Commission Released!",
-          body: `Your hold period has ended. You received ${commissionAmount} bonus coins.`,
-          referenceType: "AFFILIATE_COMMISSION",
-          referenceId: comm.id,
-          data: {
-            commissionId: comm.id,
-            amount: commissionAmount,
-          },
-        }).catch(() => {});
+        if (released) {
+          void NotificationService.createNotification({
+            userId: comm.referrerId,
+            type: NotificationType.AFFILIATE_COMMISSION,
+            title: "🎁 Affiliate Commission Released!",
+            body: `Your hold period has ended. You received ${commissionAmount} bonus coins.`,
+            referenceType: "AFFILIATE_COMMISSION",
+            referenceId: comm.id,
+            data: {
+              commissionId: comm.id,
+              amount: commissionAmount,
+            },
+          }).catch(() => {});
 
-        releasedCount++;
+          releasedCount++;
+        }
       } catch (err) {
         console.warn(`Failed to release held commission ${comm.id}:`, err);
       }

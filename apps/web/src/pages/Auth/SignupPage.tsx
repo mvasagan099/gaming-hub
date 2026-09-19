@@ -69,6 +69,7 @@ export function SignupPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [confirmationSent, setConfirmationSent] = useState(false);
+  const [referralLocked, setReferralLocked] = useState(false);
 
   useEffect(() => {
     const refParam = searchParams.get("ref") || searchParams.get("referral");
@@ -76,6 +77,7 @@ export function SignupPage() {
       const code = refParam.trim().toUpperCase();
       sessionStorage.setItem("pending_referral_code", code);
       setForm((prev) => ({ ...prev, referredBy: code }));
+      setReferralLocked(true);
     } else {
       const cached = sessionStorage.getItem("pending_referral_code");
       if (cached) {
@@ -172,6 +174,8 @@ export function SignupPage() {
         toast.error(getAuthErrorMessage(error));
         return;
       }
+
+      sessionStorage.removeItem("pending_referral_code");
 
       if (data.session) {
         toast.success("Account created — welcome!");
@@ -440,14 +444,22 @@ export function SignupPage() {
               autoComplete="off"
               placeholder="Referral code (optional)"
               value={form.referredBy}
-              onChange={(e) => set("referredBy", e.target.value.toUpperCase())}
-              className={inputClass + " pl-10"}
+              readOnly={referralLocked}
+              onChange={(e) => !referralLocked && set("referredBy", e.target.value.toUpperCase())}
+              className={`${inputClass} pl-10 ${referralLocked ? "opacity-80 bg-slate-100 dark:bg-slate-900 cursor-not-allowed" : ""}`}
             />
+            {referralLocked && (
+              <span className="absolute right-3.5 top-3.5 text-[10px] font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+                Locked from link
+              </span>
+            )}
           </div>
           {form.referredBy.trim() && !errors.referredBy && (
             <p className="mt-1.5 flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
               <Gift className="w-3.5 h-3.5" />
-              Referral code applied! Support your friend when you make your first deposit.
+              {referralLocked
+                ? "Referral link applied! Your friend will be credited when you deposit."
+                : "Referral code applied! Support your friend when you make your first deposit."}
             </p>
           )}
           {errors.referredBy && <FieldError message={errors.referredBy} />}

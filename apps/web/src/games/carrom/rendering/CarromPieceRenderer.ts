@@ -49,15 +49,23 @@ export class CarromPieceRenderer {
     }
 
     // ── Realistic 3D Directional Contact Drop Shadow (Top-Left Light Source) ──
+    const dpr = ctx.getTransform().a || 1;
+    const logicalW = ctx.canvas.width / dpr;
+    const logicalH = ctx.canvas.height / dpr;
+    const scale = logicalW / 600;
+    const sm = 33 * scale;
+    const drawX = Math.max(sm + r, Math.min(logicalW - sm - r, x));
+    const drawY = Math.max(sm + r, Math.min(logicalH - sm - r, y));
+
     ctx.save();
     const shadowOffset = type === "striker" ? 3.8 : 2.6;
     ctx.fillStyle = "rgba(12, 6, 2, 0.42)";
     ctx.beginPath();
-    ctx.arc(x + shadowOffset * 0.75, y + shadowOffset, r, 0, Math.PI * 2);
+    ctx.arc(drawX + shadowOffset * 0.75, drawY + shadowOffset, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
-    this.drawCoinBody(ctx, x, y, r, type, isCurrentShooterWhite, isMyTurn, isTurnActive, coin);
+    this.drawCoinBody(ctx, drawX, drawY, r, type, isCurrentShooterWhite, isMyTurn, isTurnActive, coin);
   }
 
   private static drawCoinBody(

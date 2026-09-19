@@ -203,7 +203,10 @@ function fromServerState(
         ? "white"
         : "black";
     const pos = mapToClient(sc.x, sc.y, mySeat);
-    const c = buildLocalCoin(sc.id, ctype, pos.x, pos.y);
+    const r = ctype === "queen" ? 12.5 : 12.5;
+    const clampedX = Math.max(BORDER + r, Math.min(W - BORDER - r, pos.x));
+    const clampedY = Math.max(BORDER + r, Math.min(H - BORDER - r, pos.y));
+    const c = buildLocalCoin(sc.id, ctype, clampedX, clampedY);
     coins.push(c);
   }
 
@@ -290,6 +293,9 @@ const CarromMultiplayer: React.FC<Props> = ({
   const processedPocketEventsRef = useRef<Set<string>>(new Set());
   const shotAnimCountRef = useRef<Record<string | number, number>>({});
   const shotDupCountRef = useRef<Record<string | number, number>>({});
+  const lastAppliedStateVersionRef = useRef<number | null>(null);
+  const localPlacementDirtyRef = useRef(false);
+  const lastAuthoritativeStrikerXRef = useRef<number>(W / 2);
 
   // UI state
   const [dragState, setDragState] = useState<"idle" | "dragging" | "placing_striker">("idle");
@@ -330,7 +336,7 @@ const CarromMultiplayer: React.FC<Props> = ({
     const driver = new CarromMultiplayerDriver(mySeat, playerNames);
     driverRef.current = driver;
 
-    driver.onStateUpdate = (state) => {
+    driver.onStateUpdate = (state, stateVersion) => {
       const strikeInfo = driver.consumeNewStrike();
       const {
         isNew,
@@ -395,7 +401,7 @@ const CarromMultiplayer: React.FC<Props> = ({
               activeTrajectoryRef.current = null;
               const s = pendingStateRef.current || driverRef.current?.lastState;
               pendingStateRef.current = null;
-              if (s) applyServerState(s);
+              if (s) applyServerState(s, stateVersion);
             }
           }, durationMs + 600);
 
@@ -405,7 +411,7 @@ const CarromMultiplayer: React.FC<Props> = ({
         if (isTurnActiveRef.current || bySeat === seat) {
           pendingStateRef.current = state;
           if (!isTurnActiveRef.current) {
-            applyServerState(state);
+            applyServerState(state, stateVersion);
             pendingStateRef.current = null;
           }
           return;
@@ -445,7 +451,7 @@ const CarromMultiplayer: React.FC<Props> = ({
             setIsTurnActive(false);
             const s = pendingStateRef.current || driverRef.current?.lastState;
             pendingStateRef.current = null;
-            if (s) applyServerState(s);
+            if (s) applyServerState(s, stateVersion);
           }
         }, 4000);
 
@@ -461,7 +467,7 @@ const CarromMultiplayer: React.FC<Props> = ({
         return;
       }
 
-      applyServerState(state);
+      applyServerState(state, stateVersion);
     };
 
     driver.onCoinPocketed = (_id, _type, _pocket) => {
@@ -497,6 +503,8 @@ const CarromMultiplayer: React.FC<Props> = ({
     };
 
     driver.onStrikerPositionUpdate = (data) => {
+      if (data.seat === mySeatRef.current) return;
+      if (isMyTurnRef.current) return;
       if (isTurnActiveRef.current) return;
       const seat = mySeatRef.current;
       // Convert canonical world X to player's local view X
@@ -516,7 +524,36 @@ const CarromMultiplayer: React.FC<Props> = ({
   // ── Server state application ──────────────────────────────────────────────
 
   const applyServerState = useCallback(
-    (state: CarromRemoteState) => {
+    (state: CarromRemoteState, stateVersion?: number) => {
+      // 1. Monotonic stateVersion check
+      if (typeof stateVersion === "number" && typeof lastAppliedStateVersionRef.current === "number") {
+        if (stateVersion < lastAppliedStateVersionRef.current) {
+          console.log("[CARROM] Dropping out-of-order stateVersion packet", {
+            stateVersion,
+            lastApplied: lastAppliedStateVersionRef.current,
+          });
+          return;
+        }
+        lastAppliedStateVersionRef.current = stateVersion;
+      } else if (typeof stateVersion === "number") {
+        lastAppliedStateVersionRef.current = stateVersion;
+      }
+
+      // 2. Monotonic turnNumber check: drop stale packets early before mutating ANY UI state
+      if (typeof state.turnNumber === "number" && state.turnNumber < turnNumberRef.current) {
+        console.log("[CARROM TIMER] Ignoring stale state packet", {
+          stateTurn: state.turnNumber,
+          currentTurn: turnNumberRef.current,
+        });
+        return;
+      }
+
+      const isNewTurn = typeof state.turnNumber === "number" && state.turnNumber > turnNumberRef.current;
+      if (typeof state.turnNumber === "number") {
+        turnNumberRef.current = state.turnNumber;
+        setTurnNumber(state.turnNumber);
+      }
+
       const seat = mySeatRef.current;
       // Sync coins and reposition striker to server-confirmed locations.
       syncCoinsToServer(state, true);
@@ -539,15 +576,6 @@ const CarromMultiplayer: React.FC<Props> = ({
       isMyTurnRef.current = myTurn;
       setIsMyTurn(myTurn);
 
-      if (typeof state.turnNumber === "number" && state.turnNumber < turnNumberRef.current) {
-        console.log("[CARROM TIMER] Ignoring stale state packet", { stateTurn: state.turnNumber, currentTurn: turnNumberRef.current });
-        return;
-      }
-      if (typeof state.turnNumber === "number") {
-        turnNumberRef.current = state.turnNumber;
-        setTurnNumber(state.turnNumber);
-      }
-
       const serverTs = (state as any).serverTimestamp ?? state.lastActionAtMs ?? state.turnStartedAt;
       if (serverTs) {
         serverOffsetRef.current = serverTs - Date.now();
@@ -557,14 +585,29 @@ const CarromMultiplayer: React.FC<Props> = ({
       turnExpiresAtRef.current = exp;
       setTurnExpiresAt(exp);
 
-      // Initialize mover slider position when gaining turn or awarded an extra turn
-      if (myTurn && (prevTurn !== myTurn || state.strikerPlacementPhase)) {
-        remoteTargetStrikerXRef.current = null;
-        const sx = state.striker?.x;
-        const initialOffset = sx !== undefined ? mapToClient(sx, 0, seat).x - W / 2 : 0;
-        const clampedOffset = Math.max(STRIKER_SLIDER_MIN, Math.min(STRIKER_SLIDER_MAX, initialOffset));
-        setStrikerPos(clampedOffset);
-        strikerPosRef.current = clampedOffset;
+      // Initialize mover slider position ONLY when gaining turn or on a new turn
+      const gainedTurn = myTurn && !prevTurn;
+      if (myTurn) {
+        if (gainedTurn || isNewTurn) {
+          localPlacementDirtyRef.current = false;
+          remoteTargetStrikerXRef.current = null;
+          const sx = state.striker?.x;
+          const initialOffset = sx !== undefined ? mapToClient(sx, 0, seat).x - W / 2 : 0;
+          const clampedOffset = Math.max(STRIKER_SLIDER_MIN, Math.min(STRIKER_SLIDER_MAX, initialOffset));
+          setStrikerPos(clampedOffset);
+          strikerPosRef.current = clampedOffset;
+          lastAuthoritativeStrikerXRef.current = W / 2 + clampedOffset;
+        } else if (!localPlacementDirtyRef.current) {
+          // Sync with server if user is not actively dragging
+          const sx = state.striker?.x;
+          if (sx !== undefined) {
+            const serverOffset = mapToClient(sx, 0, seat).x - W / 2;
+            const clampedOffset = Math.max(STRIKER_SLIDER_MIN, Math.min(STRIKER_SLIDER_MAX, serverOffset));
+            setStrikerPos(clampedOffset);
+            strikerPosRef.current = clampedOffset;
+            lastAuthoritativeStrikerXRef.current = W / 2 + clampedOffset;
+          }
+        }
       }
 
       if (state.finished) setGameOver(true);
@@ -604,8 +647,9 @@ const CarromMultiplayer: React.FC<Props> = ({
         const rawType = sc.type as string;
         lc.type = rawType === "queen" ? "queen" : rawType === "white" ? "white" : "black";
         const cp = mapToClient(sc.x, sc.y, seat);
-        lc.x = cp.x;
-        lc.y = cp.y;
+        const r = lc.radius;
+        lc.x = Math.max(BORDER + r, Math.min(W - BORDER - r, cp.x));
+        lc.y = Math.max(BORDER + r, Math.min(H - BORDER - r, cp.y));
         lc.vx = 0; lc.vy = 0;
         lc.trail = [];
       }
@@ -627,9 +671,17 @@ const CarromMultiplayer: React.FC<Props> = ({
       const striker = coinsRef.current.find((c) => c.type === "striker");
       if (striker) {
         const isMyTurnNow = state.currentSeat === seat;
-        const sx = state.striker?.x;
-        striker.x = sx !== undefined ? mapToClient(sx, 0, seat).x : W / 2;
-        striker.y = isMyTurnNow ? STRIKER_Y : OPPONENT_STRIKER_Y;
+        if (!isMyTurnNow) {
+          const sx = state.striker?.x;
+          striker.x = sx !== undefined ? mapToClient(sx, 0, seat).x : W / 2;
+          striker.y = OPPONENT_STRIKER_Y;
+        } else {
+          if (!localPlacementDirtyRef.current) {
+            const sx = state.striker?.x;
+            striker.x = sx !== undefined ? mapToClient(sx, 0, seat).x : (W / 2 + strikerPosRef.current);
+          }
+          striker.y = STRIKER_Y;
+        }
         striker.vx = 0; striker.vy = 0;
         striker.trail = [];
         // CRITICAL: clear pocketing animation so the striker doesn't render
@@ -759,12 +811,16 @@ const CarromMultiplayer: React.FC<Props> = ({
           const worldY = p1.y + (p2.y - p1.y) * alpha;
           const viewPos = worldToView(worldX, worldY, seat);
 
-          const dx = viewPos.x - c.x;
-          const dy = viewPos.y - c.y;
+          const r = c.radius;
+          const clampedX = Math.max(BORDER + r, Math.min(W - BORDER - r, viewPos.x));
+          const clampedY = Math.max(BORDER + r, Math.min(H - BORDER - r, viewPos.y));
+
+          const dx = clampedX - c.x;
+          const dy = clampedY - c.y;
           const spd = Math.hypot(dx, dy);
 
-          c.x = viewPos.x;
-          c.y = viewPos.y;
+          c.x = clampedX;
+          c.y = clampedY;
           c.vx = dx;
           c.vy = dy;
           c.active = true;
@@ -845,38 +901,64 @@ const CarromMultiplayer: React.FC<Props> = ({
             c.trail.shift();
           }
 
-          const r = c.radius;
-          // Match server wall restitution: striker=0.75, coin=0.70
-          const wallR = c.type === "striker" ? 0.75 : 0.70;
+          const resolveClientWall = (coin: LocalCoin) => {
+            if (!coin.active || coin.pocketing) return;
+            const r = coin.radius;
+            const wallR = coin.type === "striker" ? 0.75 : 0.70;
 
-          let inPocketZone = false;
-          for (const p of POCKETS) {
-            if (Math.hypot(c.x - p.x, c.y - p.y) <= POCKET_ZONE) {
-              inPocketZone = true;
-              break;
+            // 1. Corner cushion rim bounce behind pockets (scaled: 28 * 5/6 ≈ 23.33)
+            const cornerLimit = 23.33;
+            for (const p of POCKETS) {
+              const dx = coin.x - p.x;
+              const dy = coin.y - p.y;
+              const dist = Math.hypot(dx, dy);
+              const isCornerDir = (p.x < W / 2 ? dx < 0 : dx > 0) &&
+                                  (p.y < H / 2 ? dy < 0 : dy > 0);
+              if (isCornerDir && dist > cornerLimit) {
+                const nx = dx / dist;
+                const ny = dy / dist;
+                coin.x = p.x + nx * cornerLimit;
+                coin.y = p.y + ny * cornerLimit;
+                const vn = coin.vx * nx + coin.vy * ny;
+                if (vn > 0) {
+                  coin.vx -= (1 + wallR) * vn * nx;
+                  coin.vy -= (1 + wallR) * vn * ny;
+                }
+              }
             }
-          }
 
-          if (!inPocketZone) {
-            if (c.x - r < innerMin) {
-              c.x = innerMin + r;
-              c.vx = Math.abs(c.vx) * wallR;
-              c.spinVel = (c.spinVel || 0) + c.vy * 0.04;
-            } else if (c.x + r > innerMax) {
-              c.x = innerMax - r;
-              c.vx = -Math.abs(c.vx) * wallR;
-              c.spinVel = (c.spinVel || 0) - c.vy * 0.04;
+            // 2. Straight perimeter walls (only permitted to cross straight line if in pocket capture zone)
+            let inCaptureZone = false;
+            for (const p of POCKETS) {
+              if (Math.hypot(coin.x - p.x, coin.y - p.y) <= POCKET_CAP) {
+                inCaptureZone = true;
+                break;
+              }
             }
-            if (c.y - r < innerMin) {
-              c.y = innerMin + r;
-              c.vy = Math.abs(c.vy) * wallR;
-              c.spinVel = (c.spinVel || 0) - c.vx * 0.04;
-            } else if (c.y + r > innerMax) {
-              c.y = innerMax - r;
-              c.vy = -Math.abs(c.vy) * wallR;
-              c.spinVel = (c.spinVel || 0) + c.vx * 0.04;
+
+            if (!inCaptureZone) {
+              if (coin.x - r < innerMin) {
+                coin.x = innerMin + r;
+                coin.vx = Math.abs(coin.vx) * wallR;
+                coin.spinVel = (coin.spinVel || 0) + coin.vy * 0.04;
+              } else if (coin.x + r > innerMax) {
+                coin.x = innerMax - r;
+                coin.vx = -Math.abs(coin.vx) * wallR;
+                coin.spinVel = (coin.spinVel || 0) - coin.vy * 0.04;
+              }
+              if (coin.y - r < innerMin) {
+                coin.y = innerMin + r;
+                coin.vy = Math.abs(coin.vy) * wallR;
+                coin.spinVel = (coin.spinVel || 0) - coin.vx * 0.04;
+              } else if (coin.y + r > innerMax) {
+                coin.y = innerMax - r;
+                coin.vy = -Math.abs(coin.vy) * wallR;
+                coin.spinVel = (coin.spinVel || 0) + coin.vx * 0.04;
+              }
             }
-          }
+          };
+
+          resolveClientWall(c);
 
           c.vx *= frictionStep;
           c.vy *= frictionStep;
@@ -951,6 +1033,28 @@ const CarromMultiplayer: React.FC<Props> = ({
               a.y -= ny * overlap * (b.mass / tm);
               b.x += nx * overlap * (a.mass / tm);
               b.y += ny * overlap * (a.mass / tm);
+
+              // CRITICAL: Re-apply wall collision so overlap push cannot force pieces into or through cushions
+              const resolvePieceWall = (coin: LocalCoin) => {
+                if (!coin.active || coin.pocketing) return;
+                const r = coin.radius;
+                const wallR = coin.type === "striker" ? 0.75 : 0.70;
+                let inCaptureZone = false;
+                for (const p of POCKETS) {
+                  if (Math.hypot(coin.x - p.x, coin.y - p.y) <= POCKET_CAP) {
+                    inCaptureZone = true;
+                    break;
+                  }
+                }
+                if (!inCaptureZone) {
+                  if (coin.x - r < innerMin) { coin.x = innerMin + r; coin.vx = Math.abs(coin.vx) * wallR; }
+                  else if (coin.x + r > innerMax) { coin.x = innerMax - r; coin.vx = -Math.abs(coin.vx) * wallR; }
+                  if (coin.y - r < innerMin) { coin.y = innerMin + r; coin.vy = Math.abs(coin.vy) * wallR; }
+                  else if (coin.y + r > innerMax) { coin.y = innerMax - r; coin.vy = -Math.abs(coin.vy) * wallR; }
+                }
+              };
+              resolvePieceWall(a);
+              resolvePieceWall(b);
             }
           }
         }
@@ -1089,6 +1193,15 @@ const CarromMultiplayer: React.FC<Props> = ({
         pendingStateRef.current = null;
         authoritativeShotRef.current = null;
         applyServerState(state);
+      }
+    }
+
+    // Ensure all active coins strictly stay on the playing surface and never on the border
+    for (const c of coins) {
+      if (c.active && !c.pocketing) {
+        const r = c.radius;
+        c.x = Math.max(BORDER + r, Math.min(W - BORDER - r, c.x));
+        c.y = Math.max(BORDER + r, Math.min(H - BORDER - r, c.y));
       }
     }
 
@@ -1430,9 +1543,12 @@ const CarromMultiplayer: React.FC<Props> = ({
         isTurnActiveRef.current = false;
         turnFramesRef.current = 0;
         setIsTurnActive(false);
+        localPlacementDirtyRef.current = false;
         const s = driverRef.current?.lastState;
         if (s) applyServerState(s);
         toast.error(res.error ?? "Shot rejected", { id: "shot-rejected" });
+      } else {
+        localPlacementDirtyRef.current = false;
       }
     };
     executeShot();
@@ -1442,6 +1558,7 @@ const CarromMultiplayer: React.FC<Props> = ({
 
   function updateStrikerPos(val: number) {
     if (isTurnActiveRef.current || !isMyTurnRef.current) return;
+    localPlacementDirtyRef.current = true;
     const clampedVal = Math.max(STRIKER_SLIDER_MIN, Math.min(STRIKER_SLIDER_MAX, val));
     strikerPosRef.current = clampedVal;
     setStrikerPos(clampedVal);
@@ -1462,13 +1579,31 @@ const CarromMultiplayer: React.FC<Props> = ({
     }
   }
 
-  function handleMoverRelease() {
+  async function handleMoverRelease() {
     if (isTurnActiveRef.current || !isMyTurnRef.current) return;
     const striker = coinsRef.current.find((c) => c.type === "striker");
-    if (striker && driverRef.current?.canPlaceStriker()) {
-      lastPlaceSentRef.current = Date.now();
-      driverRef.current.sendLiveStrikerPosition(striker.x);
-      driverRef.current.sendPlaceStriker(striker.x);
+    if (!striker || !driverRef.current?.canPlaceStriker()) return;
+
+    lastPlaceSentRef.current = Date.now();
+    driverRef.current.sendLiveStrikerPosition(striker.x);
+    const res = await driverRef.current.sendPlaceStriker(striker.x);
+    if (!res.ok) {
+      console.warn("[CARROM] place-striker rejected, rolling back", res.error);
+      const s = driverRef.current.lastState;
+      if (s) {
+        const rollbackX = s.striker?.x;
+        const seat = mySeatRef.current;
+        const clientOffset = rollbackX !== undefined ? mapToClient(rollbackX, 0, seat).x - W / 2 : 0;
+        const clampedOffset = Math.max(STRIKER_SLIDER_MIN, Math.min(STRIKER_SLIDER_MAX, clientOffset));
+        strikerPosRef.current = clampedOffset;
+        setStrikerPos(clampedOffset);
+        striker.x = W / 2 + clampedOffset;
+        setStrikerOverlap(checkStrikerOverlap());
+      }
+      toast.error(res.error ?? "Invalid striker position", { id: "striker-invalid" });
+    } else {
+      lastAuthoritativeStrikerXRef.current = striker.x;
+      localPlacementDirtyRef.current = false;
     }
   }
 
@@ -1727,6 +1862,8 @@ const CarromMultiplayer: React.FC<Props> = ({
                   value={strikerPos}
                   onChange={(e) => updateStrikerPos(Number(e.target.value))}
                   onPointerUp={handleMoverRelease}
+                  onPointerCancel={handleMoverRelease}
+                  onBlur={handleMoverRelease}
                   className="relative w-full h-full opacity-0 cursor-ew-resize z-10"
                   style={{ WebkitAppearance: "none" }}
                   title="Drag to position the striker horizontally"

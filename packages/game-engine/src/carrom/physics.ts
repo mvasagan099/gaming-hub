@@ -101,6 +101,7 @@ export function createInitialStriker(seat: number = 0): CarromStriker {
 }
 
 export function isValidStrikerPlacement(x: number, seat: number, coins: CarromCoin[] = []): boolean {
+  if (typeof x !== "number" || isNaN(x)) return false;
   // Allow striker center anywhere between the left circle center (BASE_LINE_X_START = 129)
   // and right circle center (BASE_LINE_X_END = 471), with 2px tolerance for float rounding.
   if (x < BASE_LINE_X_START - 2 || x > BASE_LINE_X_END + 2) return false;
@@ -355,14 +356,78 @@ export function simulatePhysics(
     }
   }
 
+  const resolveWall = (b: Body) => {
+    if (b.pocketed) return;
+    const r = b.radius;
+    const wallRestitution = b.isStriker ? 0.75 : 0.70;
+
+    // 1. Corner pocket corner-cushion bounce:
+    // Authentic carrom boards have a solid corner bumper behind the pocket cutout.
+    // If a piece heads into the corner pocket region beyond the pocket center towards the outer corner,
+    // the corner cushion rim rebounds it back toward the pocket/board.
+    for (const p of POCKETS) {
+      const dx = b.x - p.x;
+      const dy = b.y - p.y;
+      const dist = Math.hypot(dx, dy);
+      const isCornerDir = (p.x < CARROM_BOARD_WIDTH / 2 ? dx < 0 : dx > 0) &&
+                          (p.y < CARROM_BOARD_HEIGHT / 2 ? dy < 0 : dy > 0);
+      const cornerLimit = 28; // Outer corner cushion rim behind pocket hole
+      if (isCornerDir && dist > cornerLimit) {
+        const nx = dx / dist;
+        const ny = dy / dist;
+        b.x = p.x + nx * cornerLimit;
+        b.y = p.y + ny * cornerLimit;
+        const vn = b.vx * nx + b.vy * ny;
+        if (vn > 0) {
+          b.vx -= (1 + wallRestitution) * vn * nx;
+          b.vy -= (1 + wallRestitution) * vn * ny;
+        }
+      }
+    }
+
+    // 2. Straight perimeter walls
+    // Crossing the straight innerMin/innerMax boundary is only permitted if the piece is within
+    // the pocket capture radius (where it is immediately pocketed).
+    let inCaptureZone = false;
+    for (const p of POCKETS) {
+      if (Math.hypot(b.x - p.x, b.y - p.y) <= POCKET_CAPTURE_RADIUS) {
+        inCaptureZone = true;
+        break;
+      }
+    }
+
+    if (!inCaptureZone) {
+      if (b.x - r < innerMin) {
+        b.x = innerMin + r;
+        b.vx = Math.abs(b.vx) * wallRestitution;
+      } else if (b.x + r > innerMax) {
+        b.x = innerMax - r;
+        b.vx = -Math.abs(b.vx) * wallRestitution;
+      }
+
+      if (b.y - r < innerMin) {
+        b.y = innerMin + r;
+        b.vy = Math.abs(b.vy) * wallRestitution;
+      } else if (b.y + r > innerMax) {
+        b.y = innerMax - r;
+        b.vy = -Math.abs(b.vy) * wallRestitution;
+      }
+    }
+  };
+
   const recordKeyframe = (f: number) => {
-    const pieces = allBodies.map((b) => ({
-      id: b.id,
-      x: Math.round(b.x * 100) / 100,
-      y: Math.round(b.y * 100) / 100,
-      pocketed: b.pocketed,
-      pocketIndex: b.pocketIndex ?? null,
-    }));
+    const pieces = allBodies.map((b) => {
+      const r = b.radius;
+      const clampedX = b.pocketed ? b.x : Math.max(innerMin + r, Math.min(innerMax - r, b.x));
+      const clampedY = b.pocketed ? b.y : Math.max(innerMin + r, Math.min(innerMax - r, b.y));
+      return {
+        id: b.id,
+        x: Math.round(clampedX * 100) / 100,
+        y: Math.round(clampedY * 100) / 100,
+        pocketed: b.pocketed,
+        pocketIndex: b.pocketIndex ?? null,
+      };
+    });
     keyframes.push({ frame: f, pieces });
   };
 
@@ -383,35 +448,7 @@ export function simulatePhysics(
         b.x += b.vx * (subDt * 60);
         b.y += b.vy * (subDt * 60);
 
-        const r = b.radius;
-        const wallRestitution = b.isStriker ? 0.75 : 0.70;
-
-        // Check if coin is in a pocket corner cutout zone (skip straight wall clamping near corners)
-        let inPocketZone = false;
-        for (const p of POCKETS) {
-          if (Math.hypot(b.x - p.x, b.y - p.y) <= POCKET_RADIUS) {
-            inPocketZone = true;
-            break;
-          }
-        }
-
-        if (!inPocketZone) {
-          if (b.x - r < innerMin) {
-            b.x = innerMin + r;
-            b.vx = Math.abs(b.vx) * wallRestitution;
-          } else if (b.x + r > innerMax) {
-            b.x = innerMax - r;
-            b.vx = -Math.abs(b.vx) * wallRestitution;
-          }
-
-          if (b.y - r < innerMin) {
-            b.y = innerMin + r;
-            b.vy = Math.abs(b.vy) * wallRestitution;
-          } else if (b.y + r > innerMax) {
-            b.y = innerMax - r;
-            b.vy = -Math.abs(b.vy) * wallRestitution;
-          }
-        }
+        resolveWall(b);
 
         // Friction
         b.vx *= frictionPerSubstep;
@@ -459,6 +496,10 @@ export function simulatePhysics(
             b1.y -= ny * overlap * (b2.mass / totalMass);
             b2.x += nx * overlap * (b1.mass / totalMass);
             b2.y += ny * overlap * (b1.mass / totalMass);
+
+            // CRITICAL: Re-apply wall collision so overlap push cannot force pieces into or through cushions
+            resolveWall(b1);
+            resolveWall(b2);
           }
         }
       }
@@ -524,8 +565,13 @@ export function simulatePhysics(
   // Record final settled keyframe
   recordKeyframe(settledFrame || steps);
 
-  // Update final position & velocity on source objects
+  // Update final position & velocity on source objects (strictly constrained to legal board surface)
   for (const b of allBodies) {
+    if (!b.pocketed) {
+      const r = b.radius;
+      b.x = Math.max(innerMin + r, Math.min(innerMax - r, b.x));
+      b.y = Math.max(innerMin + r, Math.min(innerMax - r, b.y));
+    }
     if (b.isStriker) {
       striker.x = b.x;
       striker.y = b.y;
