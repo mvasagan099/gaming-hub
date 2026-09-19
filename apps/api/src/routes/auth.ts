@@ -131,7 +131,10 @@ export async function authRoutes(app: FastifyInstance) {
         select: { twoFactorEnabled: true },
       });
       
-      if (profile?.twoFactorEnabled) {
+      const tokenHash = hashToken(token);
+      const session = await prisma.loginSession.findUnique({ where: { tokenHash } });
+
+      if (profile?.twoFactorEnabled && !session?.mfaVerifiedAt) {
         auditFromRequest(request, {
           actorType: "user",
           actorId: verified.sub,

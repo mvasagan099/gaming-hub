@@ -53,6 +53,34 @@ export async function authenticateToken(token: string): Promise<AuthenticatedUse
       : null,
   );
 
+  // Check 2FA gating: If user has twoFactorEnabled, active session MUST have mfaVerifiedAt
+  const profile = await prisma.profile.findUnique({
+    where: { userId: user.id },
+    select: { twoFactorEnabled: true },
+  });
+
+  if (profile?.twoFactorEnabled) {
+    if (!existingSession?.mfaVerifiedAt) {
+      throw new Error("MFA_PENDING");
+    }
+  }
+
+  // Check active account bans / penalties
+  const activePenalty = await prisma.playerPenalty.findFirst({
+    where: {
+      userId: user.id,
+      status: "ACTIVE",
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gt: new Date() } },
+      ],
+    },
+  });
+
+  if (activePenalty) {
+    throw new Error("ACCOUNT_BANNED");
+  }
+
   return {
     userId: user.id,
     username: user.username,

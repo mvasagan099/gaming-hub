@@ -144,6 +144,12 @@ export function LoginPage() {
         if (!useAuthStore.getState().pendingMfaSession) {
           useAuthStore.getState().setPendingMfaSession(supabaseSession);
         }
+        try {
+          sessionStorage.setItem("mfa_pending", "true");
+          if (email) sessionStorage.setItem("mfa_email", email.trim());
+        } catch {
+          // ignore storage quota / sandbox errors
+        }
         // Navigate to dedicated 2FA page, passing along any redirect info
         navigate("/2fa", {
           replace: true,

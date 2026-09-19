@@ -14,6 +14,7 @@ import { initCapacitorServices } from './services/native/capacitorAppService';
 import { useAppVersionStore } from './store/appVersionStore';
 import { UpdateRequiredScreen } from './components/UpdateRequiredScreen';
 import { FullPageLoader } from './components/auth/ProtectedRoute';
+import { apiClient } from './services/api/client';
 
 /**
  * Applies the admin-configured site theme (settings → general.theme) the first
@@ -95,16 +96,64 @@ export function App() {
 
     supabase.auth
       .getSession()
-      .then(({ data: { session } }) => {
+      .then(async ({ data: { session } }) => {
         if (!active) return;
         if (isRecoveryTarget()) {
           setIsPasswordRecovery(true);
           setRecoverySession(session);
           setSession(null);
           setUser(null);
-        } else {
+        } else if (session) {
+          const isMfaPending =
+            sessionStorage.getItem('mfa_pending') === 'true' ||
+            window.location.pathname === '/2fa';
+
+          if (isMfaPending) {
+            try {
+              const res = await apiClient.post<{ status: string; requiresTwoFactor?: boolean }>(
+                '/auth/session',
+                { token: session.access_token },
+                session.access_token,
+              );
+              if (res.requiresTwoFactor || res.status === 'mfa_required') {
+                sessionStorage.setItem('mfa_pending', 'true');
+                setIsPasswordRecovery(false);
+                setRecoverySession(null);
+                setSession(null);
+                setUser(null);
+                useAuthStore.getState().setIsMfaRequired(true);
+                useAuthStore.getState().setPendingMfaSession(session);
+                if (window.location.pathname !== '/2fa') {
+                  void router.navigate('/2fa', { replace: true });
+                }
+                return;
+              } else {
+                sessionStorage.removeItem('mfa_pending');
+              }
+            } catch (err) {
+              sessionStorage.setItem('mfa_pending', 'true');
+              setIsPasswordRecovery(false);
+              setRecoverySession(null);
+              setSession(null);
+              setUser(null);
+              useAuthStore.getState().setIsMfaRequired(true);
+              useAuthStore.getState().setPendingMfaSession(session);
+              if (window.location.pathname !== '/2fa') {
+                void router.navigate('/2fa', { replace: true });
+              }
+              return;
+            }
+          }
+
+          setIsPasswordRecovery(false);
+          setRecoverySession(null);
           setSession(session);
           setUser(session?.user ?? null);
+        } else {
+          setIsPasswordRecovery(false);
+          setRecoverySession(null);
+          setSession(null);
+          setUser(null);
         }
       })
       .catch((err) => {

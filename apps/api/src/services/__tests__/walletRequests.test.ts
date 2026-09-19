@@ -1,8 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { prisma } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
 import { createTestUser } from "../../../test/helpers";
-import { setSetting } from "../settings";
+import { setSetting, resetSettingsCache } from "../settings";
 import { socketBridge } from "../socketBridge";
 import {
   approveWalletRequest,
@@ -53,6 +53,16 @@ async function expectAppError(
 }
 
 describe("walletRequests", () => {
+  beforeEach(() => {
+    vi.spyOn(CouponVaultService, "transferToCouponWallet").mockResolvedValue({ success: true } as any);
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await prisma.siteSetting.deleteMany({ where: { category: "wallet" } });
+    resetSettingsCache();
+  });
+
   describe("OTP", () => {
     it("issues a code and returns it as debugCode outside production", async () => {
       const user = await createTestUser();

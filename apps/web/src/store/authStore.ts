@@ -40,6 +40,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   setLoading: (isLoading) => set({ isLoading }),
   signOut: async () => {
     try {
+      sessionStorage.removeItem("mfa_pending");
+      sessionStorage.removeItem("mfa_email");
       await supabase.auth.signOut();
     } catch {
       // Ignore network errors on sign out

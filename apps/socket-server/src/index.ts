@@ -450,8 +450,9 @@ async function main(): Promise<void> {
       socket.data.username = user.username;
       (socket.data as { user: AuthenticatedUser }).user = user;
       next();
-    } catch {
-      next(new Error("UNAUTHORIZED"));
+    } catch (err: any) {
+      const msg = err?.message || "UNAUTHORIZED";
+      next(new Error(msg));
     }
   });
 

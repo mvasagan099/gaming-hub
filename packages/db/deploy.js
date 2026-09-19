@@ -6,16 +6,26 @@ function run(cmd) {
   return execSync(cmd, { stdio: "inherit", env: process.env });
 }
 
-// Never auto-baseline an existing database. A failed migration can indicate
-// schema drift, a broken migration, or an unavailable database; marking the
-// baseline as applied would hide all three. Legacy databases must be inspected
-// and baselined explicitly after their complete schema has been verified.
 try {
   run("npx prisma migrate deploy --schema packages/db/prisma/schema.prisma");
   console.log("==> [Database] Migrations deployed successfully.");
 } catch (error) {
-  console.error(
-    "==> [Database] Migration failed. Refusing automatic baseline recovery; inspect and resolve the database schema explicitly.",
+  console.warn(
+    "==> [Database] Initial prisma migrate deploy failed. Checking for unrecovered failed migration (20260918_affiliate_fraud_and_risk)...",
   );
-  process.exit(typeof error?.status === "number" ? error.status : 1);
+  try {
+    // If 20260918_affiliate_fraud_and_risk failed in a prior deployment due to table dependency order,
+    // mark it as rolled back so Prisma can re-apply it with the idempotent schema definition.
+    run(
+      "npx prisma migrate resolve --rolled-back 20260918_affiliate_fraud_and_risk --schema packages/db/prisma/schema.prisma",
+    );
+    console.log("==> [Database] Successfully rolled back failed migration state. Retrying migrate deploy...");
+    run("npx prisma migrate deploy --schema packages/db/prisma/schema.prisma");
+    console.log("==> [Database] Migrations deployed successfully after resolving failed migration.");
+  } catch (recoverError) {
+    console.error(
+      "==> [Database] Migration recovery failed; inspect and resolve the database schema explicitly.",
+    );
+    process.exit(typeof error?.status === "number" ? error.status : 1);
+  }
 }

@@ -35,13 +35,14 @@ export function TwoFactorPage() {
   const [mfaError, setMfaError] = useState("");
   const [shouldShake, setShouldShake] = useState(false);
 
-  // Guard: if there's no pending MFA session, redirect back to login
+  // Guard: if there's no pending MFA session and session restoration is done, redirect back to login
   const pendingMfaSession = useAuthStore((s) => s.pendingMfaSession);
+  const isLoading = useAuthStore((s) => s.isLoading);
   useEffect(() => {
-    if (!pendingMfaSession) {
+    if (!isLoading && !pendingMfaSession) {
       navigate("/login", { replace: true });
     }
-  }, [pendingMfaSession, navigate]);
+  }, [isLoading, pendingMfaSession, navigate]);
 
   // Auto-focus first box on mount
   useEffect(() => {
@@ -51,6 +52,12 @@ export function TwoFactorPage() {
 
   // ── Navigate after completing login ──────────────────────────────────────
   const finishLoginNavigation = async (session: import("@supabase/supabase-js").Session) => {
+    try {
+      sessionStorage.removeItem("mfa_pending");
+      sessionStorage.removeItem("mfa_email");
+    } catch {
+      // ignore
+    }
     useAuthStore.getState().setSession(session);
     useAuthStore.getState().setUser(session.user);
     useAuthStore.getState().setPendingMfaSession(null);
@@ -169,6 +176,8 @@ export function TwoFactorPage() {
   const handleBack = async () => {
     setSubmitting(true);
     try {
+      sessionStorage.removeItem("mfa_pending");
+      sessionStorage.removeItem("mfa_email");
       await supabase.auth.signOut();
     } catch {
       // ignore

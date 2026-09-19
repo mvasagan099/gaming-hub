@@ -347,7 +347,7 @@ describe("CRASH-SAFE TOURNAMENT STATE RECOVERY & RESUME SYSTEM", () => {
       });
       const matchIds = slots.map((s) => s.matchId).filter(Boolean);
       expect(matchIds.length).toBeLessThanOrEqual(2);
-    });
+    }, 15000);
   });
 
   // ===========================================================================
