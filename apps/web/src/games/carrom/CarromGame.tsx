@@ -1304,7 +1304,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
       }
       ctx.save();
       ctx.globalAlpha = Math.max(0, pop.opacity);
-      ctx.font = '900 13px system-ui, sans-serif';
+      ctx.font = '900 16px system-ui, sans-serif';
       ctx.fillStyle = pop.color;
       ctx.textAlign = 'center';
       ctx.shadowColor = 'rgba(0,0,0,0.9)';

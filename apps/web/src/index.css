@@ -3,6 +3,28 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Global root typography scale: increase entire application text size by 20% (16px base -> 19.2px) */
+html {
+  font-size: 120%;
+}
+
+/* Scale arbitrary pixel font classes by 20% to maintain proportional visual hierarchy */
+.text-\[7px\] {
+  font-size: 8.4px !important;
+}
+.text-\[8px\] {
+  font-size: 9.6px !important;
+}
+.text-\[9px\] {
+  font-size: 10.8px !important;
+}
+.text-\[10px\] {
+  font-size: 12px !important;
+}
+.text-\[11px\] {
+  font-size: 13.2px !important;
+}
+
 /* Design tokens (Tailwind v4 theme) — default accent: indigo.
    The accent scale is redefined at runtime via html[data-accent="..."] so that
    bg-accent-500, text-accent-300, ring-accent-500 etc. follow the active accent. */
@@ -289,17 +311,17 @@ html[data-contrast="high"] *:focus-visible {
 
 /* Fluid Typography Utilities */
 .text-fluid-title {
-  font-size: clamp(1.25rem, 4vw, 2.5rem);
+  font-size: clamp(1.25rem, 4.8vw, 2.5rem);
   line-height: 1.15;
 }
 
 .text-fluid-hero {
-  font-size: clamp(1.5rem, 5vw, 3.25rem);
+  font-size: clamp(1.5rem, 6vw, 3.25rem);
   line-height: 1.1;
 }
 
 .text-fluid-score {
-  font-size: clamp(1.5rem, 3.5vw, 2.75rem);
+  font-size: clamp(1.5rem, 4.2vw, 2.75rem);
   line-height: 1;
 }
 

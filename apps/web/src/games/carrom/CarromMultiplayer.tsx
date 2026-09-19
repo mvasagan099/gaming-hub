@@ -1421,7 +1421,7 @@ const CarromMultiplayer: React.FC<Props> = ({
       if (fp.alpha <= 0) { floatsRef.current.splice(i, 1); continue; }
       ctx.save();
       ctx.globalAlpha = fp.alpha;
-      ctx.font = "900 14px system-ui,sans-serif";
+      ctx.font = "900 17px system-ui,sans-serif";
       ctx.fillStyle = fp.color;
       ctx.textAlign = "center";
       ctx.shadowColor = "rgba(0,0,0,0.9)";
