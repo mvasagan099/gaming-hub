@@ -117,6 +117,14 @@ export class TournamentRecoveryService {
 
       for (const t of expiredRegistrations) {
         try {
+          const fresh = await prisma.tournament.findUnique({
+            where: { id: t.id },
+            select: { status: true },
+          });
+          if (!fresh || fresh.status !== "REGISTRATION_OPEN") {
+            continue;
+          }
+
           const playerCount = t._count.players;
           if (playerCount < (t.minPlayers ?? 2)) {
             await cancelTournamentWithRefunds(t.id, "Insufficient players at registration close", null);

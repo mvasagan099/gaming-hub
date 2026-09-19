@@ -709,6 +709,9 @@ export async function cancelTournamentWithRefunds(
   if (!tournament) throw new AppError("NOT_FOUND", "Tournament not found", 404);
 
   const currentStatus = tournament.status as TournamentStatus;
+  if (currentStatus === "CANCELLED") {
+    return;
+  }
   if (!canTransitionTournamentStatus(currentStatus, "CANCELLED")) {
     throw new AppError(
       "INVALID_ACTION",
