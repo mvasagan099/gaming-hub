@@ -306,8 +306,8 @@ describe("Feature 30: Centralized Achievement & Badge System", () => {
     await prisma.tournament.create({
       data: {
         id: tId,
-        gameId: "cricket",
-        title: "Cricket Championship",
+        gameId: "ludo",
+        title: "Ludo Championship",
         description: "Championship Tournament",
         status: "ENDED",
         format: "KNOCKOUT",
@@ -435,7 +435,7 @@ describe("Feature 30: Centralized Achievement & Badge System", () => {
     await prisma.match.create({
       data: {
         id: mId,
-        gameId: "cricket",
+        gameId: "ludo",
         status: "FINISHED",
         stake: 100,
         winnerIds: [playerA],
@@ -453,8 +453,8 @@ describe("Feature 30: Centralized Achievement & Badge System", () => {
     });
 
     await prisma.$transaction(async (tx) => {
-      await LeaderboardService.updatePlayerRanking(tx, { userId: playerA, gameId: "cricket", result: "win", score: 80 });
-      await LeaderboardService.updatePlayerRanking(tx, { userId: playerB, gameId: "cricket", result: "loss", score: 70 });
+      await LeaderboardService.updatePlayerRanking(tx, { userId: playerA, gameId: "ludo", result: "win", score: 80 });
+      await LeaderboardService.updatePlayerRanking(tx, { userId: playerB, gameId: "ludo", result: "loss", score: 70 });
     });
 
     // Admin corrects result to playerB
@@ -465,8 +465,8 @@ describe("Feature 30: Centralized Achievement & Badge System", () => {
       reason: "Scorer mistake verified playerB won",
     });
 
-    const statA = await prisma.playerStatistic.findUnique({ where: { userId_gameId: { userId: playerA, gameId: "cricket" } } });
-    const statB = await prisma.playerStatistic.findUnique({ where: { userId_gameId: { userId: playerB, gameId: "cricket" } } });
+    const statA = await prisma.playerStatistic.findUnique({ where: { userId_gameId: { userId: playerA, gameId: "ludo" } } });
+    const statB = await prisma.playerStatistic.findUnique({ where: { userId_gameId: { userId: playerB, gameId: "ludo" } } });
 
     expect(statA?.wins).toBe(0);
     expect(statB?.wins).toBe(1);

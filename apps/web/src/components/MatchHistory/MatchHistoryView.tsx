@@ -29,7 +29,6 @@ const ALL_GAMES = [
   { id: "all", name: "All Games" },
   { id: "snooker", name: "Snooker" },
   { id: "chess", name: "Chess" },
-  { id: "cricket", name: "Cricket" },
   { id: "carrom", name: "Carrom" },
   { id: "fruit-ninja", name: "Fruit Ninja" },
   { id: "bubble-shooter", name: "Bubble Shooter" },
@@ -421,11 +420,11 @@ export const MatchHistoryView: React.FC<{ userId?: string }> = ({ userId }) => {
                 </div>
               )}
 
-              {/* Cricket Card */}
+              {/* Legacy statistics remain readable for historical records only. */}
               {stats.gameStats.cricket && (
                 <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-                    <span className="font-black text-sm text-slate-900 dark:text-white">Cricket</span>
+                    <span className="font-black text-sm text-slate-900 dark:text-white">Cricket — no longer available</span>
                     <span className="text-xs font-bold text-emerald-500">{stats.gameStats.cricket.runs} Total Runs</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-xs">

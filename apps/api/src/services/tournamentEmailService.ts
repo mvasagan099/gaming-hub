@@ -72,7 +72,7 @@ export function getAppBaseUrl(): string {
 }
 
 // ============================================================================
-// 3. Game Display Name Mapping (All 10 Games)
+// 3. Game Display Name Mapping
 // ============================================================================
 
 export const GAME_DISPLAY_NAMES: Record<string, string> = {
@@ -83,7 +83,6 @@ export const GAME_DISPLAY_NAMES: Record<string, string> = {
   "bubble-shooter": "Bubble Shooter",
   "table-tennis": "Table Tennis",
   "snake-vs-worms": "Snake vs Worms",
-  cricket: "Cricket",
   carrom: "Carrom",
   snooker: "Snooker",
 };

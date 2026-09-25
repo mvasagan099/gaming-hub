@@ -12,7 +12,6 @@ export const GAME_IDS = [
   "bubble-shooter",
   "table-tennis",
   "snake-vs-worms",
-  "cricket",
   "snooker",
 ] as const;
 
@@ -159,21 +158,6 @@ export const GAME_DEFINITIONS: readonly GameDefinition[] = [
     online: true,
     featured: false,
     description: "Grow the longest snake",
-  },
-  {
-    id: "cricket",
-    name: "Cricket",
-    slug: "cricket",
-    icon: "🏏",
-    category: "Sports",
-    mode: "turn-based",
-    minPlayers: 2,
-    maxPlayers: 2,
-    defaultStake: 100,
-    serverAuthoritative: true,
-    online: true,
-    featured: true,
-    description: "Quick cricket matches",
   },
   {
     id: "snooker",

@@ -7,7 +7,6 @@ export * from "./chess";
 export * from "./ludo";
 export * from "./bubble-shooter";
 export * from "./carrom";
-export * from "./cricket";
 export * from "./table-tennis";
 export * from "./snake-vs-worms";
 export * from "./fruit-ninja";

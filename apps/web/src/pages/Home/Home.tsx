@@ -44,7 +44,7 @@ const banners = [
     tagText: "UNIFIED GAMING HUB PLATFORM",
     tagIcon: Sparkles,
     title: "Play 9 Iconic Games \n In One Arena.",
-    desc: "Jump directly into Snake & Ladder, Ludo, Chess, Fruit Ninja, Cricket & more.",
+    desc: "Jump directly into Snake & Ladder, Ludo, Chess, Fruit Ninja & more.",
     btnText: "PLAY CHESS NOW",
     targetGame: "chess",
     gradient: "from-indigo-900 via-purple-900 to-slate-900",

@@ -106,8 +106,8 @@ describe("Feature 9: Multiplayer Reconnect & Match Recovery", () => {
     const userB = await createTestUser("u-rec-fin-b", 1000);
     const matchId = `match-rec-fin-${Date.now()}`;
 
-    await GameEntryLifecycleService.initiateEntry({ userId: userA, gameId: "cricket", stake: 100, matchId });
-    await GameEntryLifecycleService.initiateEntry({ userId: userB, gameId: "cricket", stake: 100, matchId });
+    await GameEntryLifecycleService.initiateEntry({ userId: userA, gameId: "ludo", stake: 100, matchId });
+    await GameEntryLifecycleService.initiateEntry({ userId: userB, gameId: "ludo", stake: 100, matchId });
     await GameEntryLifecycleService.startMatch(matchId);
 
     // Match finishes while userB was away

@@ -381,7 +381,7 @@ describe("TOURNAMENT RESULT VERIFICATION & DISPUTE MANAGEMENT", () => {
     it("rejects dispute submission containing dangerous executable file extensions", async () => {
       const { tournament, players } = await createTestTournament({
         title: "Malicious Evidence Check",
-        gameId: "cricket",
+        gameId: "ludo",
         playerCount: 2,
         status: "IN_PROGRESS",
       });
@@ -390,7 +390,7 @@ describe("TOURNAMENT RESULT VERIFICATION & DISPUTE MANAGEMENT", () => {
       const slot = await prisma.tournamentRound.findFirst({ where: { tournamentId: tournament.id } });
 
       const match = await prisma.match.create({
-        data: { gameId: "cricket", status: "FINISHED", winnerIds: [players[0].id] },
+        data: { gameId: "ludo", status: "FINISHED", winnerIds: [players[0].id] },
       });
       createdMatchIds.push(match.id);
 
@@ -449,8 +449,8 @@ describe("TOURNAMENT RESULT VERIFICATION & DISPUTE MANAGEMENT", () => {
     it("allows admin to review dispute, inspect snapshot, and confirm valid result", async () => {
       const admin = await createTestPlayer("Admin Reviewer", "admin_rev", "ADMIN");
       const { tournament, players } = await createTestTournament({
-        title: "Cricket Blitz Cup",
-        gameId: "cricket",
+        title: "Ludo Blitz Cup",
+        gameId: "ludo",
         playerCount: 2,
         status: "IN_PROGRESS",
       });
@@ -459,7 +459,7 @@ describe("TOURNAMENT RESULT VERIFICATION & DISPUTE MANAGEMENT", () => {
       const slot = await prisma.tournamentRound.findFirst({ where: { tournamentId: tournament.id } });
 
       const match = await prisma.match.create({
-        data: { gameId: "cricket", status: "FINISHED", winnerIds: [players[0].id] },
+        data: { gameId: "ludo", status: "FINISHED", winnerIds: [players[0].id] },
       });
       createdMatchIds.push(match.id);
 
@@ -761,9 +761,9 @@ describe("TOURNAMENT RESULT VERIFICATION & DISPUTE MANAGEMENT", () => {
   });
 
   // ===========================================================================
-  // 5. All 10 Competitive Games Compatibility
+  // 5. Available Games Compatibility
   // ===========================================================================
-  describe("5. Verification & Dispute Coverage Across All 10 Games", () => {
+  describe("5. Verification & Dispute Coverage Across Available Games", () => {
     const allGames = [
       "snake-ladder",
       "ludo",
@@ -772,7 +772,6 @@ describe("TOURNAMENT RESULT VERIFICATION & DISPUTE MANAGEMENT", () => {
       "bubble-shooter",
       "table-tennis",
       "snake-vs-worms",
-      "cricket",
       "carrom",
       "snooker",
     ];

@@ -351,9 +351,9 @@ describe("CRASH-SAFE TOURNAMENT STATE RECOVERY & RESUME SYSTEM", () => {
   });
 
   // ===========================================================================
-  // 5. Crash Recovery Across All 10 Games
+  // 5. Crash Recovery Across Available Games
   // ===========================================================================
-  describe("5. Crash Recovery Across All 10 Games", () => {
+  describe("5. Crash Recovery Across Available Games", () => {
     const allGames = [
       "snake-and-ladder",
       "ludo",
@@ -362,7 +362,6 @@ describe("CRASH-SAFE TOURNAMENT STATE RECOVERY & RESUME SYSTEM", () => {
       "bubble-shooter",
       "table-tennis",
       "snake-vs-worms",
-      "cricket",
       "carrom",
       "snooker",
     ];
@@ -397,7 +396,7 @@ describe("CRASH-SAFE TOURNAMENT STATE RECOVERY & RESUME SYSTEM", () => {
     it("returns accurate tournament health diagnostic report", async () => {
       const { tournament } = await createTestTournament({
         title: "Diagnostic Tourney",
-        gameId: "cricket",
+        gameId: "ludo",
         playerCount: 2,
       });
 

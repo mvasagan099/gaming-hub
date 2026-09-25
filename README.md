@@ -1,6 +1,6 @@
 # Gaming Hub
 
-A multiplayer gaming platform: Phaser-based browser games (Chess, Ludo, Snake & Ladder, Cricket, Fruit Ninja) with real-time matchmaking, friend lists, coin wallet with wagers, leaderboards, achievements, and admin moderation.
+A multiplayer gaming platform with browser games, real-time matchmaking, friend lists, coin wallet with wagers, leaderboards, achievements, and admin moderation.
 
 ## Stack
 

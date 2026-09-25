@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { apiClient } from "../services/api/client";
+import { isGameId } from "@gaming-hub/shared";
 import { SnakeLadder } from "../games/snake-ladder";
 import { LudoGame } from "../games/ludo/LudoGame";
 import { ChessGame } from "../games/chess/ChessGame";
@@ -9,14 +10,13 @@ import { FruitNinjaGame } from "../games/fruit-ninja/FruitNinjaGame";
 import { BubbleShooterGame } from "../games/bubble-shooter/BubbleShooterGame";
 import { TableTennisGame } from "../games/table-tennis/TableTennisGame";
 import { SnakeVsWormsGame } from "../games/snake-vs-worms/SnakeVsWormsGame";
-import { CricketGame } from "../games/cricket/CricketGame";
 import { SnookerGame } from "../games/snooker/SnookerGame";
 
 export default function GamePage() {
   const { slug } = useParams();
 
   useEffect(() => {
-    if (slug) {
+    if (slug && isGameId(slug)) {
       apiClient.post(`/games/${slug}/record-play`).catch(() => undefined);
     }
   }, [slug]);
@@ -42,15 +42,13 @@ export default function GamePage() {
       return <TableTennisGame mode="ai" stake={100} onBack={handleBack} />;
     case "snake-vs-worms":
       return <SnakeVsWormsGame mode="ai" stake={100} onBack={handleBack} />;
-    case "cricket":
-      return <CricketGame mode="ai" stake={100} onBack={handleBack} />;
     case "snooker":
       return <SnookerGame mode="ai" stake={100} onBack={handleBack} />;
     default:
       return (
         <div className="p-10 text-center">
-          <h1 className="text-4xl font-bold capitalize">{slug}</h1>
-          <p className="mt-4 text-slate-400">Game coming soon...</p>
+          <h1 className="text-4xl font-bold">Game not found</h1>
+          <p className="mt-4 text-slate-400">This game is unavailable.</p>
           <Link to="/" className="mt-6 inline-block bg-blue-600 px-4 py-2 rounded-lg font-bold">
             Back to Home
           </Link>

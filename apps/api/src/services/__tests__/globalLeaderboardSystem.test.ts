@@ -139,10 +139,10 @@ describe("Feature 28: Global Leaderboard System", () => {
     const userAllRounder = await createTestUser("u-glob-all", 100);
     const userRichIdle = await createTestUser("u-glob-rich", 999999);
 
-    // All-rounder plays Chess, Cricket, and Ludo
+    // All-rounder plays Chess, Snooker, and Ludo
     await prisma.$transaction(async (tx) => {
       await LeaderboardService.updatePlayerRanking(tx, { userId: userAllRounder, gameId: "chess", result: "win", score: 100 });
-      await LeaderboardService.updatePlayerRanking(tx, { userId: userAllRounder, gameId: "cricket", result: "win", score: 80 });
+      await LeaderboardService.updatePlayerRanking(tx, { userId: userAllRounder, gameId: "ludo", result: "win", score: 80 });
       await LeaderboardService.updatePlayerRanking(tx, { userId: userAllRounder, gameId: "ludo", result: "win", score: 60 });
     });
 
@@ -258,16 +258,16 @@ describe("Feature 28: Global Leaderboard System", () => {
 
     await prisma.$transaction(async (tx) => {
       // Top user gets 2 wins (rating 1050)
-      await LeaderboardService.updatePlayerRanking(tx, { userId: topUser, gameId: "cricket", result: "win", score: 100 });
-      await LeaderboardService.updatePlayerRanking(tx, { userId: topUser, gameId: "cricket", result: "win", score: 100 });
+      await LeaderboardService.updatePlayerRanking(tx, { userId: topUser, gameId: "ludo", result: "win", score: 100 });
+      await LeaderboardService.updatePlayerRanking(tx, { userId: topUser, gameId: "ludo", result: "win", score: 100 });
       // Mid user gets 1 win (rating 1025)
-      await LeaderboardService.updatePlayerRanking(tx, { userId: midUser, gameId: "cricket", result: "win", score: 50 });
+      await LeaderboardService.updatePlayerRanking(tx, { userId: midUser, gameId: "ludo", result: "win", score: 50 });
       // Bottom user gets 1 loss (rating 980)
-      await LeaderboardService.updatePlayerRanking(tx, { userId: bottomUser, gameId: "cricket", result: "loss", score: 10 });
+      await LeaderboardService.updatePlayerRanking(tx, { userId: bottomUser, gameId: "ludo", result: "loss", score: 10 });
     });
 
     // Request page 1 with pageSize 1 as bottomUser
-    const res = await LeaderboardService.getGameLeaderboard("cricket", { period: "all", metric: "rating", page: 1, pageSize: 1 }, bottomUser);
+    const res = await LeaderboardService.getGameLeaderboard("snooker", { period: "all", metric: "rating", page: 1, pageSize: 1 }, bottomUser);
     expect(res.items.length).toBe(1);
     expect(res.items[0].userId).toBe(topUser);
     expect(res.viewerRank).toBe(3);

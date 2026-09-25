@@ -129,7 +129,7 @@ describe("Feature 6: Central Automatic Refund Engine", () => {
 
     await GameEntryLifecycleService.initiateEntry({
       userId: user,
-      gameId: "cricket",
+      gameId: "ludo",
       stake: 100,
       matchId,
     });

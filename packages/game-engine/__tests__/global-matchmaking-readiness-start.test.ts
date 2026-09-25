@@ -13,7 +13,6 @@ import {
   BubbleShooterEngine,
   TableTennisEngine,
   SnakeVsWormsEngine,
-  CricketEngine,
   CarromEngine,
   SnookerEngine,
   createEngine,
@@ -411,9 +410,9 @@ describe("GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM", () => {
     });
 
     it("cancels countdown if a player disconnects during countdown", () => {
-      joinMatchmaking("p1", "cricket", 50);
-      joinMatchmaking("p2", "cricket", 50);
-      const room = tryPairMatchmaking("cricket", 50)!;
+      joinMatchmaking("p1", "ludo", 50);
+      joinMatchmaking("p2", "ludo", 50);
+      const room = tryPairMatchmaking("ludo", 50)!;
 
       setPlayerReady(room.id, "p1", true);
       setPlayerReady(room.id, "p2", true);
@@ -436,7 +435,7 @@ describe("GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM", () => {
   // 5. CRITICAL TIMER RULE & INVARIANCE
   // =========================================================================
   describe("5. Critical 10-Minute Timer Start Rule", () => {
-    it("timer starts ONLY at MATCH_STARTED across all 10 games", () => {
+    it("timer starts ONLY at MATCH_STARTED across all 9 available games", () => {
       for (const gameId of GAME_IDS) {
         joinMatchmaking("p1", gameId, 100);
         joinMatchmaking("p2", gameId, 100);

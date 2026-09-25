@@ -398,13 +398,6 @@ describe("GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM", () => {
       }
     });
 
-    it("Cricket: DELIVERY_STARTED, DELIVERY_COMPLETED, RUNS_SCORED, WICKET, OVER_COMPLETED, INNINGS_COMPLETED", () => {
-      const events = ["DELIVERY_STARTED", "DELIVERY_COMPLETED", "RUNS_SCORED", "WICKET", "OVER_COMPLETED", "INNINGS_COMPLETED"];
-      for (const ev of events) {
-        expect(GAME_SPECIFIC_EVENT_TYPES).toContain(ev);
-      }
-    });
-
     it("Carrom: SHOT_STARTED, SHOT_COMPLETED, COIN_POCKETED, FOUL, QUEEN_COVERED", () => {
       const events = ["SHOT_STARTED", "SHOT_COMPLETED", "COIN_POCKETED", "FOUL", "QUEEN_COVERED"];
       for (const ev of events) {

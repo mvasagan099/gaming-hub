@@ -7,8 +7,8 @@ import {
   type TournamentStatus,
 } from "@gaming-hub/shared";
 
-// 10 competitive games
-const ALL_10_GAMES = [
+// 9 available games
+const ALL_9_GAMES = [
   { id: "snake-ladder", name: "Snake & Ladder" },
   { id: "ludo", name: "Ludo" },
   { id: "chess", name: "Chess" },
@@ -16,7 +16,6 @@ const ALL_10_GAMES = [
   { id: "bubble-shooter", name: "Bubble Shooter" },
   { id: "table-tennis", name: "Table Tennis" },
   { id: "snake-vs-worms", name: "Snake vs Worms" },
-  { id: "cricket", name: "Cricket" },
   { id: "carrom", name: "Carrom" },
   { id: "snooker", name: "Snooker" },
 ];
@@ -402,12 +401,12 @@ describe("Tournament Minimum Players, Cancellation & Refund System Unit Tests", 
   });
 
   // -------------------------------------------------------------------------
-  // 19. All 10 Games Compatibility
+  // 19. All 9 Available Games Compatibility
   // -------------------------------------------------------------------------
-  describe("19. All 10 Competitive Games Compatibility", () => {
-    it("Test 19: All 10 competitive games support tournament minimums & refunds", () => {
-      expect(ALL_10_GAMES.length).toBe(10);
-      for (const game of ALL_10_GAMES) {
+  describe("19. All 9 Available Games Compatibility", () => {
+    it("Test 19: All 9 available games support tournament minimums & refunds", () => {
+      expect(ALL_9_GAMES.length).toBe(9);
+      for (const game of ALL_9_GAMES) {
         // Financial refund is decoupled from game rules
         const refundResult = {
           gameId: game.id,

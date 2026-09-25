@@ -347,7 +347,7 @@ describe("TOURNAMENT SEEDING & FAIR BRACKET GENERATION", () => {
     it("returns detailed admin bracket view with all rounds, match slots, and paired player seeds", async () => {
       const { tournament, players } = await createTestTournament({
         title: "Admin Bracket Breakdown",
-        gameId: "cricket",
+        gameId: "ludo",
         playerCount: 4,
         seedMethod: "ADMIN_DEFINED",
       });

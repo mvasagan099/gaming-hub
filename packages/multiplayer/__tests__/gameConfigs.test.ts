@@ -12,7 +12,7 @@ describe("gameConfigs", () => {
   });
 
   it("classifies turn-based games", () => {
-    for (const id of ["snake-ladder", "ludo", "chess", "cricket", "carrom"] as const) {
+    for (const id of ["snake-ladder", "ludo", "chess", "carrom"] as const) {
       expect(getGamePlayConfig(id).turnBased).toBe(true);
     }
     for (const id of ["fruit-ninja", "bubble-shooter", "table-tennis", "snake-vs-worms"] as const) {

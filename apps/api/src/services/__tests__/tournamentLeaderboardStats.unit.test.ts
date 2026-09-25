@@ -85,17 +85,17 @@ describe("Tournament Leaderboard & Player Ranking System Unit Tests", () => {
       expect(getTournamentTierCode({ title: "Mini Snooker Tournament", entryFee: 5 })).toBe("mini");
       expect(getTournamentTierCode({ title: "Basic Chess Open", entryFee: 10 })).toBe("basic");
       expect(getTournamentTierCode({ title: "Standard Carrom Cup", entryFee: 25 })).toBe("standard");
-      expect(getTournamentTierCode({ title: "Premium Cricket League", entryFee: 50 })).toBe("premium");
+      expect(getTournamentTierCode({ title: "Premium Snooker League", entryFee: 50 })).toBe("premium");
       expect(getTournamentTierCode({ title: "Pro Table Tennis Grand Prix", entryFee: 100 })).toBe("pro");
       expect(getTournamentTierCode({ title: "Custom Cup", entryFee: 0, configSnapshot: { tierCode: "pro" } })).toBe("pro");
     });
   });
 
   // -------------------------------------------------------------------------
-  // 5 & 6. Multi-Game Segregation Across All 10 Games
+  // 5 & 6. Multi-Game Segregation Across Available Games
   // -------------------------------------------------------------------------
-  describe("5-6. Game-Specific Statistics for all 10 Games", () => {
-    const ALL_10_GAMES = [
+  describe("5-6. Game-Specific Statistics for all 9 Available Games", () => {
+    const AVAILABLE_GAMES = [
       "chess",
       "ludo",
       "snake-ladder",
@@ -104,13 +104,12 @@ describe("Tournament Leaderboard & Player Ranking System Unit Tests", () => {
       "snake-vs-worms",
       "table-tennis",
       "carrom",
-      "cricket",
       "snooker",
     ];
 
     it("Test 5: Segregates statistics independently per game", () => {
       const statsMap = new Map<string, { wins: number; losses: number }>();
-      for (const g of ALL_10_GAMES) {
+      for (const g of AVAILABLE_GAMES) {
         statsMap.set(g, { wins: 0, losses: 0 });
       }
 

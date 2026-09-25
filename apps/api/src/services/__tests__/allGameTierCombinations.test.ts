@@ -1,18 +1,18 @@
 /**
  * ALL GAME × TIER COMBINATIONS — AVAILABILITY VERIFICATION
  *
- * Validates that all 50 combinations (10 games × 5 tiers) are fully
+ * Validates that all 45 combinations (9 games × 5 tiers) are fully
  * supported by the platform without any restriction, hardcoded exclusion,
  * or missing configuration.
  *
  * Scope:
- *   1.  Canonical game registry contains exactly 10 games.
+ *   1.  Canonical game registry contains exactly 9 games.
  *   2.  Canonical tier defaults contain exactly 5 tiers with correct fees/pools.
  *   3.  Every game is accepted by `isGameId()` validation.
  *   4.  Every game has a complete `DEFAULT_GAME_CONFIGS` entry.
- *   5.  All 50 game×tier combinations are enabled in the availability matrix.
+ *   5.  All 45 game×tier combinations are enabled in the availability matrix.
  *   6.  Prize distribution math is correct for all 5 tiers (50/25/15/10 split).
- *   7.  A tournament can be created in the DB for each of the 50 combinations.
+ *   7.  A tournament can be created in the DB for each of the 45 combinations.
  *   8.  A player can register for any game×tier tournament without error.
  *   9.  Entry fee is deducted exactly once per registration.
  *   10. Bracket can be built for any game×tier tournament.
@@ -47,7 +47,7 @@ import { registerForTournament } from "../tournaments";
 // Constants
 // ---------------------------------------------------------------------------
 
-const ALL_10_GAMES = [
+const ALL_9_GAMES = [
   "snake-ladder",
   "ludo",
   "chess",
@@ -56,7 +56,6 @@ const ALL_10_GAMES = [
   "bubble-shooter",
   "table-tennis",
   "snake-vs-worms",
-  "cricket",
   "snooker",
 ] as const;
 
@@ -177,30 +176,31 @@ afterAll(async () => {
 // ===========================================================================
 
 describe("SUITE 1 — Game Registry Completeness", () => {
-  it("GAME_IDS exports exactly 10 unique game identifiers", () => {
-    expect(GAME_IDS).toHaveLength(10);
+  it("GAME_IDS exports exactly 9 unique game identifiers", () => {
+    expect(GAME_IDS).toHaveLength(9);
     const unique = new Set(GAME_IDS);
-    expect(unique.size).toBe(10);
+    expect(unique.size).toBe(9);
   });
 
-  it("all 10 required games are present in GAME_IDS", () => {
-    const required = [...ALL_10_GAMES];
+  it("all 9 required games are present in GAME_IDS", () => {
+    const required = [...ALL_9_GAMES];
     for (const g of required) {
       expect(GAME_IDS).toContain(g);
     }
   });
 
-  it("isGameId() accepts all 10 games and rejects invalid values", () => {
-    for (const g of ALL_10_GAMES) {
+  it("isGameId() accepts all 9 games and rejects invalid values", () => {
+    for (const g of ALL_9_GAMES) {
       expect(isGameId(g)).toBe(true);
     }
     expect(isGameId("unknown-game")).toBe(false);
+    expect(isGameId("cricket")).toBe(false); // Retired game IDs cannot enter new gameplay.
     expect(isGameId("")).toBe(false);
     expect(isGameId("CHESS")).toBe(false); // case sensitive
   });
 
   it("DEFAULT_GAME_CONFIGS has a complete entry for every registered game", () => {
-    for (const gameId of ALL_10_GAMES) {
+    for (const gameId of ALL_9_GAMES) {
       const cfg = DEFAULT_GAME_CONFIGS[gameId as keyof typeof DEFAULT_GAME_CONFIGS];
       expect(cfg, `Missing config for ${gameId}`).toBeDefined();
       expect(cfg.gameId).toBe(gameId);
@@ -320,22 +320,22 @@ describe("SUITE 4 — Game-Tier Availability Matrix", () => {
   beforeAll(() => {
     // Reset matrix to defaults before this suite
     const reset: Record<string, Record<string, boolean>> = {};
-    for (const g of ALL_10_GAMES) {
+    for (const g of ALL_9_GAMES) {
       reset[g] = { mini: true, basic: true, standard: true, premium: true, pro: true };
     }
     updateGameTierAvailabilityMatrix(reset);
   });
 
-  it("matrix has an entry for all 10 games", () => {
+  it("matrix has an entry for all 9 games", () => {
     const matrix = getGameTierAvailabilityMatrix();
-    for (const g of ALL_10_GAMES) {
+    for (const g of ALL_9_GAMES) {
       expect(matrix[g], `Missing matrix entry for ${g}`).toBeDefined();
     }
   });
 
-  it("all 50 game×tier combinations default to enabled (true)", () => {
+  it("all 45 game×tier combinations default to enabled (true)", () => {
     const matrix = getGameTierAvailabilityMatrix();
-    for (const g of ALL_10_GAMES) {
+    for (const g of ALL_9_GAMES) {
       for (const t of ALL_5_TIERS) {
         expect(
           matrix[g]![t],
@@ -376,12 +376,12 @@ describe("SUITE 4 — Game-Tier Availability Matrix", () => {
 });
 
 // ===========================================================================
-// SUITE 5 — Tournament creation for all 50 combinations
+// SUITE 5 — Tournament creation for all 45 combinations
 // ===========================================================================
 
-describe("SUITE 5 — Tournament Creation (all 50 game×tier combos)", () => {
+describe("SUITE 5 — Tournament Creation (all 45 game×tier combos)", () => {
   it.each(
-    ALL_10_GAMES.flatMap((gameId) =>
+    ALL_9_GAMES.flatMap((gameId) =>
       ALL_5_TIERS.map((tierCode) => [gameId, tierCode] as const),
     ),
   )("can create a REGISTRATION_OPEN tournament for %s × %s", async (gameId, tierCode) => {
@@ -409,7 +409,7 @@ describe("SUITE 5 — Tournament Creation (all 50 game×tier combos)", () => {
 
 describe("SUITE 6 — Player Registration (representative sample)", () => {
   /**
-   * Full registration for all 50 combinations would be too slow for a unit
+   * Full registration for all 45 combinations would be too slow for a unit
    * test (50 DB writes × player × wallet deduction). We test one game per tier
    * (5 registrations) — enough to prove the path is open for every tier, plus
    * representative games from each category (Board/Arcade/Sports).
@@ -425,7 +425,7 @@ describe("SUITE 6 — Player Registration (representative sample)", () => {
     { gameId: "carrom",        tierCode: "standard" },
     { gameId: "bubble-shooter",tierCode: "basic"    },
     { gameId: "snake-vs-worms",tierCode: "premium"  },
-    { gameId: "cricket",       tierCode: "pro"      },
+    { gameId: "ludo",       tierCode: "pro"      },
   ];
 
   it.each(SAMPLE_COMBINATIONS)(
@@ -519,7 +519,7 @@ describe("SUITE 8 — System Invariants", () => {
   });
 
   it("no game config exceeds the 10-minute match limit", () => {
-    for (const gameId of ALL_10_GAMES) {
+    for (const gameId of ALL_9_GAMES) {
       const cfg = DEFAULT_GAME_CONFIGS[gameId as keyof typeof DEFAULT_GAME_CONFIGS];
       expect(cfg.matchDurationSeconds).toBeLessThanOrEqual(600);
     }
@@ -530,45 +530,45 @@ describe("SUITE 8 — System Invariants", () => {
     expect(total).toBe(100);
   });
 
-  it("all 10 games have entry fee 50 available in their default config", () => {
+  it("all 9 games have entry fee 50 available in their default config", () => {
     // This ensures all games are eligible for the 'premium' tier (entryFee=50)
-    for (const gameId of ALL_10_GAMES) {
+    for (const gameId of ALL_9_GAMES) {
       const cfg = DEFAULT_GAME_CONFIGS[gameId as keyof typeof DEFAULT_GAME_CONFIGS];
       expect(cfg.entryFees).toContain(50);
     }
   });
 
-  it("all 10 games have entry fee 100 available for the pro tier", () => {
-    for (const gameId of ALL_10_GAMES) {
+  it("all 9 games have entry fee 100 available for the pro tier", () => {
+    for (const gameId of ALL_9_GAMES) {
       const cfg = DEFAULT_GAME_CONFIGS[gameId as keyof typeof DEFAULT_GAME_CONFIGS];
       expect(cfg.entryFees).toContain(100);
     }
   });
 
   it("scheduler matrix defaults do not gate any game or tier", () => {
-    // After resetting, all 50 combinations must be enabled
+    // After resetting, all 45 combinations must be enabled
     const reset: Record<string, Record<string, boolean>> = {};
-    for (const g of ALL_10_GAMES) {
+    for (const g of ALL_9_GAMES) {
       reset[g] = { mini: true, basic: true, standard: true, premium: true, pro: true };
     }
     const matrix = updateGameTierAvailabilityMatrix(reset);
 
     let combinationCount = 0;
-    for (const g of ALL_10_GAMES) {
+    for (const g of ALL_9_GAMES) {
       for (const t of ALL_5_TIERS) {
         expect(matrix[g]![t]).toBe(true);
         combinationCount++;
       }
     }
-    expect(combinationCount).toBe(50);
+    expect(combinationCount).toBe(45);
   });
 });
 
 // ===========================================================================
-// SUITE 9 — Scheduler Integration: 50 tournaments/hour + idempotency
+// SUITE 9 — Scheduler Integration: 45 tournaments/hour + idempotency
 // ===========================================================================
 
-describe("SUITE 9 — Hourly Scheduler: 50 slots per hour + idempotency", () => {
+describe("SUITE 9 — Hourly Scheduler: 45 slots per hour + idempotency", () => {
   let scheduleHourlyTournaments: () => Promise<import("../hourlyTournamentScheduler").HourlyScheduleResult>;
 
   async function seedSchedulerTiers() {
@@ -599,7 +599,7 @@ describe("SUITE 9 — Hourly Scheduler: 50 slots per hour + idempotency", () => 
     await seedSchedulerTiers();
   });
 
-  it("first run creates exactly 50 tournaments (10 games × 5 active tiers)", async () => {
+  it("first run creates exactly 45 tournaments (9 games × 5 active tiers)", async () => {
     // Count existing schedule log entries for the NEXT hour slot
     const now = new Date();
     const nextHour = new Date(now);
@@ -614,27 +614,27 @@ describe("SUITE 9 — Hourly Scheduler: 50 slots per hour + idempotency", () => 
     // we verify by inspecting the returned created count)
     const result = await scheduleHourlyTournaments();
 
-    // Either 50 created (fresh run) or 0 created + 50 skipped (already ran this hour)
+    // Either 45 created (fresh run) or 0 created + 45 skipped (already ran this hour)
     const total = result.created + result.skipped;
     expect(result.errors).toHaveLength(0);
 
-    // Total scheduled for the CURRENT slot must be exactly 50 (10 × 5)
+    // Total scheduled for the CURRENT slot must be exactly 45 (9 × 5)
     const activeTierCount = await prisma.tournamentTier.count({ where: { isActive: true } });
     expect(activeTierCount).toBe(5);
-    // Each of the 5 tiers must have 10 game slots = 50 total
-    expect(total).toBe(50);
+    // Each of the 5 tiers must have 9 game slots = 45 total
+    expect(total).toBe(45);
   }, 30000);
 
   it("second run is fully idempotent — creates 0 new tournaments", async () => {
     await scheduleHourlyTournaments();
     const result = await scheduleHourlyTournaments();
-    // All 50 slots already exist → every attempt is skipped, none created
+    // All 45 slots already exist → every attempt is skipped, none created
     expect(result.created).toBe(0);
-    expect(result.skipped).toBe(50);
+    expect(result.skipped).toBe(45);
     expect(result.errors).toHaveLength(0);
   }, 15000);
 
-  it("all 5 tiers have exactly 10 game slots in the DB for the current hour", async () => {
+  it("all 5 tiers have exactly 9 game slots in the DB for the current hour", async () => {
     await scheduleHourlyTournaments();
     const now = new Date();
     const currentSlot = new Date(now);
@@ -654,11 +654,11 @@ describe("SUITE 9 — Hourly Scheduler: 50 slots per hour + idempotency", () => 
 
     for (const tierCode of ALL_5_TIERS) {
       const games = byTier[tierCode] ?? [];
-      expect(games.length, `${tierCode} should have 10 game slots`).toBe(10);
-      // All 10 game IDs must be present, each exactly once
+      expect(games.length, `${tierCode} should have 9 game slots`).toBe(9);
+      // All 9 game IDs must be present, each exactly once
       const gameSet = new Set(games);
-      expect(gameSet.size).toBe(10);
-      for (const g of ALL_10_GAMES) {
+      expect(gameSet.size).toBe(9);
+      for (const g of ALL_9_GAMES) {
         expect(gameSet.has(g), `${tierCode} missing game ${g}`).toBe(true);
       }
     }

@@ -304,11 +304,11 @@ describe("COMPLETE TOURNAMENT NOTIFICATION & REMINDER SYSTEM", () => {
     it("skips match reminder if player has already entered the match room", async () => {
       const player = await createTestPlayer("joined.player@test.com", "Prompt Joiner");
       const tourney = await createTestTournament({
-        title: "Cricket Blitz",
-        gameId: "cricket",
+        title: "Ludo Blitz",
+        gameId: "ludo",
       });
 
-      const matchId = `match_cricket_${Date.now()}`;
+      const matchId = `match_ludo_${Date.now()}`;
 
       // Record player joined
       TournamentNotificationService.recordPlayerJoinedMatch({ matchId, userId: player.id });
@@ -320,7 +320,7 @@ describe("COMPLETE TOURNAMENT NOTIFICATION & REMINDER SYSTEM", () => {
         tournamentTitle: tourney.title,
         matchId,
         roundNumber: 1,
-        gameId: "cricket",
+        gameId: "ludo",
         opponentDisplayName: "Bowler Pro",
       });
 
@@ -554,10 +554,10 @@ describe("COMPLETE TOURNAMENT NOTIFICATION & REMINDER SYSTEM", () => {
   });
 
   // ===========================================================================
-  // 7. Universal 5-Tier & 10-Game Verification
+  // 7. Universal 5-Tier & 9-Game Verification
   // ===========================================================================
-  describe("7. Universal 5 Tiers and All 10 Games", () => {
-    it("formats display names dynamically across all 10 multiplayer games", () => {
+  describe("7. Universal 5 Tiers and All 9 Available Games", () => {
+    it("formats display names dynamically across all 9 available multiplayer games", () => {
       const allGames = [
         "snake-ladder",
         "ludo",
@@ -566,7 +566,6 @@ describe("COMPLETE TOURNAMENT NOTIFICATION & REMINDER SYSTEM", () => {
         "bubble-shooter",
         "table-tennis",
         "snake-vs-worms",
-        "cricket",
         "carrom",
         "snooker",
       ];

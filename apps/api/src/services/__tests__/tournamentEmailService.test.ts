@@ -433,9 +433,9 @@ describe("TOURNAMENT EMAIL REMINDER & MATCH-READY SYSTEM", () => {
   });
 
   // ===========================================================================
-  // 6. Dynamic Game Name Resolution Across All 10 Games
+  // 6. Dynamic Game Name Resolution Across Available Games
   // ===========================================================================
-  describe("6. Dynamic Game Names Across All 10 Games", () => {
+  describe("6. Dynamic Game Names Across 9 Available Games", () => {
     const allGames = [
       { id: "snake-ladder", name: "Snake & Ladder" },
       { id: "ludo", name: "Ludo" },
@@ -444,7 +444,6 @@ describe("TOURNAMENT EMAIL REMINDER & MATCH-READY SYSTEM", () => {
       { id: "bubble-shooter", name: "Bubble Shooter" },
       { id: "table-tennis", name: "Table Tennis" },
       { id: "snake-vs-worms", name: "Snake vs Worms" },
-      { id: "cricket", name: "Cricket" },
       { id: "carrom", name: "Carrom" },
       { id: "snooker", name: "Snooker" },
     ];

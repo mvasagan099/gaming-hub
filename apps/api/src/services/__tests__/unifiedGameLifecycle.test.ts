@@ -146,7 +146,7 @@ describe("Feature 5: Unified Game Entry Lifecycle", () => {
 
     const res1 = await GameEntryLifecycleService.initiateEntry({
       userId: user,
-      gameId: "cricket",
+      gameId: "ludo",
       stake: 100,
       matchId,
       seat: 0,
@@ -155,7 +155,7 @@ describe("Feature 5: Unified Game Entry Lifecycle", () => {
 
     const res2 = await GameEntryLifecycleService.initiateEntry({
       userId: user,
-      gameId: "cricket",
+      gameId: "ludo",
       stake: 100,
       matchId,
       seat: 0,
@@ -360,8 +360,8 @@ describe("Feature 5: Unified Game Entry Lifecycle", () => {
     const userB = await createTestUser("u-abort-b", 1000);
     const matchId = `match-abort-${Date.now()}`;
 
-    await GameEntryLifecycleService.initiateEntry({ userId: userA, gameId: "cricket", stake: 100, matchId });
-    await GameEntryLifecycleService.initiateEntry({ userId: userB, gameId: "cricket", stake: 100, matchId });
+    await GameEntryLifecycleService.initiateEntry({ userId: userA, gameId: "ludo", stake: 100, matchId });
+    await GameEntryLifecycleService.initiateEntry({ userId: userB, gameId: "ludo", stake: 100, matchId });
 
     // Both users debited 100
     expect((await getWallet(userA)).balance).toBe(900);

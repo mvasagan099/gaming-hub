@@ -5,7 +5,6 @@ import { ChessEngine } from "./chess/engine";
 import { LudoEngine } from "./ludo/engine";
 import { BubbleShooterEngine } from "./bubble-shooter/engine";
 import { CarromEngine } from "./carrom/engine";
-import { CricketEngine } from "./cricket/engine";
 import { TableTennisEngine } from "./table-tennis/engine";
 import { SnakeVsWormsEngine } from "./snake-vs-worms/engine";
 import { FruitNinjaEngine } from "./fruit-ninja/engine";
@@ -31,7 +30,6 @@ const ENGINES: Record<string, EngineConstructor> = {
   ludo: LudoEngine,
   "bubble-shooter": BubbleShooterEngine,
   carrom: CarromEngine,
-  cricket: CricketEngine,
   "table-tennis": TableTennisEngine,
   "snake-vs-worms": SnakeVsWormsEngine,
   "fruit-ninja": FruitNinjaEngine,

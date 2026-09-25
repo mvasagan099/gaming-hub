@@ -420,8 +420,8 @@ describe("COMPLETE TOURNAMENT ADMIN MANAGEMENT SYSTEM", () => {
       expect(updated.chess.mini).toBe(true);
     });
 
-    it("formats display names for all 10 multiplayer games properly", () => {
-      const all10 = [
+    it("formats display names for all 9 available multiplayer games properly", () => {
+      const all9 = [
         "snake-ladder",
         "ludo",
         "chess",
@@ -429,19 +429,18 @@ describe("COMPLETE TOURNAMENT ADMIN MANAGEMENT SYSTEM", () => {
         "bubble-shooter",
         "table-tennis",
         "snake-vs-worms",
-        "cricket",
         "carrom",
         "snooker",
       ];
 
-      for (const g of all10) {
+      for (const g of all9) {
         const name = formatGameName(g);
         expect(name).toBe(GAME_DISPLAY_NAMES[g]);
       }
     });
 
-    it("verifies all 10 games across all 5 tiers have authoritative source-of-truth configuration", () => {
-      const all10Games = [
+    it("verifies all 9 games across all 5 tiers have authoritative source-of-truth configuration", () => {
+      const all9Games = [
         "snake-ladder",
         "ludo",
         "chess",
@@ -449,7 +448,6 @@ describe("COMPLETE TOURNAMENT ADMIN MANAGEMENT SYSTEM", () => {
         "bubble-shooter",
         "table-tennis",
         "snake-vs-worms",
-        "cricket",
         "carrom",
         "snooker",
       ];
@@ -457,7 +455,7 @@ describe("COMPLETE TOURNAMENT ADMIN MANAGEMENT SYSTEM", () => {
       const all5Tiers = ["mini", "basic", "standard", "premium", "pro"];
       const matrix = getGameTierAvailabilityMatrix();
 
-      for (const g of all10Games) {
+      for (const g of all9Games) {
         expect(matrix[g]).toBeDefined();
         for (const t of all5Tiers) {
           expect(typeof matrix[g]![t as "mini" | "basic" | "standard" | "premium" | "pro"]).toBe("boolean");

@@ -346,11 +346,11 @@ describe("TOURNAMENT REGISTRATION, ELIGIBILITY & ANTI-ABUSE SYSTEM", () => {
     it("returns complete registration info and eligibility for frontend button states", async () => {
       const tournament = await createTestTournament({
         title: "Eligibility Summary Tourney",
-        gameId: "cricket",
+        gameId: "ludo",
         maxPlayers: 10,
         entryFee: 50,
       });
-      const player = await createTestPlayer("Cricket Fan", "cricket", 200);
+      const player = await createTestPlayer("Ludo Fan", "ludo", 200);
 
       // Before registration
       let info = await getRegistrationInfo(tournament.id, player.id);

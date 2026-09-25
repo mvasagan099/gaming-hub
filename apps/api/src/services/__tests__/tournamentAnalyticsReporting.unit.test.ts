@@ -73,7 +73,7 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
       expect(TournamentAnalyticsService.getTierCode({ title: "Pro Grand Prix", entryFee: 100 })).toBe("pro");
     });
 
-    it("Test 6: Validates all 10 competitive game definitions", () => {
+    it("Test 6: Validates all 9 available competitive game definitions", () => {
       const gameIds = GAME_DEFINITIONS.map((g) => g.id);
       expect(gameIds).toContain("chess");
       expect(gameIds).toContain("ludo");
@@ -83,9 +83,8 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
       expect(gameIds).toContain("snake-vs-worms");
       expect(gameIds).toContain("table-tennis");
       expect(gameIds).toContain("carrom");
-      expect(gameIds).toContain("cricket");
       expect(gameIds).toContain("snooker");
-      expect(gameIds.length).toBe(10);
+      expect(gameIds.length).toBe(9);
     });
   });
 
@@ -128,7 +127,7 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
       expect(completionRate).toBe(80); // 80% completion rate
     });
 
-    it("Test 10: Aggregates Prize Distribution breakdown across all 10 competitive games", () => {
+    it("Test 10: Aggregates Prize Distribution breakdown across all 9 available competitive games", () => {
       const mockGamePrizeStats = GAME_DEFINITIONS.map((g) => ({
         gameId: g.id,
         gameName: g.name,
@@ -149,7 +148,7 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
         failedSettlementsCount: 0,
       }));
 
-      expect(mockGamePrizeStats.length).toBe(10);
+      expect(mockGamePrizeStats.length).toBe(9);
       const snooker = mockGamePrizeStats.find((g) => g.gameId === "snooker");
       expect(snooker).toBeDefined();
       expect(snooker!.firstPlaceAmount).toBe(10000);
@@ -353,7 +352,7 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
       const tBracket = { id: "t-1", title: "Bracket Stuck", gameId: "chess", tierCode: "pro", state: "BRACKET_GENERATING" as const, currentRound: "Bracket Generation", elapsedMinutes: 8, lastActivityTime: "2026-08-27T12:00:00Z" };
       const tRound = { id: "t-2", title: "Round Stuck", gameId: "ludo", tierCode: "basic", state: "ROUND_READY" as const, currentRound: "Round 1", elapsedMinutes: 6, lastActivityTime: "2026-08-27T12:00:00Z" };
       const tProgress = { id: "t-3", title: "Progress Stuck", gameId: "carrom", tierCode: "standard", state: "IN_PROGRESS" as const, currentRound: "Round 3", elapsedMinutes: 75, lastActivityTime: "2026-08-27T12:00:00Z" };
-      const tSettle = { id: "t-4", title: "Settle Stuck", gameId: "cricket", tierCode: "premium", state: "SETTLEMENT_PROCESSING" as const, currentRound: "Finals", elapsedMinutes: 14, lastActivityTime: "2026-08-27T12:00:00Z" };
+      const tSettle = { id: "t-4", title: "Settle Stuck", gameId: "snooker", tierCode: "premium", state: "SETTLEMENT_PROCESSING" as const, currentRound: "Finals", elapsedMinutes: 14, lastActivityTime: "2026-08-27T12:00:00Z" };
       const tNormal = { id: "t-5", title: "Normal Match", gameId: "chess", tierCode: "mini", state: "IN_PROGRESS" as const, currentRound: "Round 1", elapsedMinutes: 10, lastActivityTime: "2026-08-27T12:00:00Z" };
 
       expect(detectStuckTournament(tBracket)).toEqual({
@@ -800,8 +799,8 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
       expect(chessWinRate).toBe(50.0); // 15 / 30 * 100 = 50.0% (draws excluded)
     });
 
-    it("Test 14v: Verifies Game-Specific Performance metrics across all 10 games using native engine metrics", () => {
-      const all10Games = [
+    it("Test 14v: Verifies Game-Specific Performance metrics across all 9 available games using native engine metrics", () => {
+      const all9Games = [
         { id: "snake-ladder", scoreUnit: "Board Points / Squares", resultFormat: "Rank / Board Position" },
         { id: "ludo", scoreUnit: "Tokens Home / Points", resultFormat: "Finished Tokens / Rank" },
         { id: "chess", scoreUnit: "Match Points / Rating", resultFormat: "Wins / Losses / Draws" },
@@ -809,13 +808,12 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
         { id: "bubble-shooter", scoreUnit: "Bubbles Cleared / Points", resultFormat: "Points Scored / Clear Rate" },
         { id: "table-tennis", scoreUnit: "Set Points / Rallies", resultFormat: "Sets Won / Points" },
         { id: "snake-vs-worms", scoreUnit: "Mass / Length Score", resultFormat: "Length Score / Mass" },
-        { id: "cricket", scoreUnit: "Runs Scored / Wickets", resultFormat: "Runs / Overs / Wickets" },
         { id: "carrom", scoreUnit: "Board Points / Coins", resultFormat: "Points / Queen Covers" },
         { id: "snooker", scoreUnit: "Frame Points / Breaks", resultFormat: "Frame Score / Breaks" },
       ];
 
-      expect(all10Games.length).toBe(10);
-      for (const g of all10Games) {
+      expect(all9Games.length).toBe(9);
+      for (const g of all9Games) {
         expect(g.scoreUnit).toBeDefined();
         expect(g.resultFormat).toBeDefined();
       }
@@ -928,7 +926,7 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
       expect(modifiesWalletLedger).toBe(false);
     });
 
-    it("Test 14ab: Verifies Game × Tier configuration matrix for all 10 games and 5 tiers", () => {
+    it("Test 14ab: Verifies Game × Tier configuration matrix for all 9 games and 5 tiers", () => {
       const games = [
         "snake-ladder",
         "ludo",
@@ -937,7 +935,6 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
         "bubble-shooter",
         "table-tennis",
         "snake-vs-worms",
-        "cricket",
         "carrom",
         "snooker",
       ];
@@ -949,7 +946,7 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
         { code: "pro", entryFee: 100, maxPlayers: 1000, prizePool: 90000 },
       ];
 
-      expect(games.length).toBe(10);
+      expect(games.length).toBe(9);
       expect(tiers.length).toBe(5);
 
       // Verify each game has all 5 tiers configured
@@ -1156,7 +1153,6 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
     it("Test 16e: Verifies game and tier friendly display name resolution", () => {
       expect(TournamentAnalyticsService.getGameName("chess")).toBe("Chess");
       expect(TournamentAnalyticsService.getGameName("carrom")).toBe("Carrom");
-      expect(TournamentAnalyticsService.getGameName("cricket")).toBe("Cricket");
       expect(TournamentAnalyticsService.getGameName("unknown_custom")).toBe("unknown_custom");
 
       expect(TournamentAnalyticsService.getTierName("mini")).toBe("Mini");
@@ -1266,7 +1262,7 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
         totalRefundedCoins: 125,
       }));
 
-      expect(mockGameRefunds.length).toBe(10);
+      expect(mockGameRefunds.length).toBe(9);
       const chess = mockGameRefunds.find((g) => g.gameId === "chess");
       expect(chess).toBeDefined();
       expect(chess!.totalRefundedCoins).toBe(125);
@@ -2518,5 +2514,3 @@ describe("Tournament Analytics & Reporting System Unit Tests", () => {
     });
   });
 });
-
-

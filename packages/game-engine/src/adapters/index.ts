@@ -2,7 +2,6 @@ export * from "./IGameResultAdapter";
 export * from "./ChessResultAdapter";
 export * from "./CarromResultAdapter";
 export * from "./SnookerResultAdapter";
-export * from "./CricketResultAdapter";
 export * from "./LudoResultAdapter";
 export * from "./SnakeLadderResultAdapter";
 export * from "./FruitNinjaResultAdapter";

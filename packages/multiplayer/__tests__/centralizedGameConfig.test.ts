@@ -274,12 +274,12 @@ describe("Centralized Game Configuration + Admin Control System (All 18 Acceptan
 
   // Test 15: Audit logs
   it("15. Verify audit logs are created for every change", () => {
-    service.updateGameConfig("cricket", { turnTimerSeconds: 25 }, admin);
-    service.updateGameConfig("cricket", { enabled: false }, admin);
+    service.updateGameConfig("ludo", { turnTimerSeconds: 25 }, admin);
+    service.updateGameConfig("ludo", { enabled: false }, admin);
 
     const logs = service.getAuditLogs();
     expect(logs.length).toBe(2);
-    expect(logs[0].gameId).toBe("cricket");
+    expect(logs[0].gameId).toBe("ludo");
     expect(logs[0].adminId).toBe("admin-1");
     expect(logs[1].action).toBe("GAME_DISABLED");
   });

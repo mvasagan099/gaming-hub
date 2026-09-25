@@ -6,7 +6,6 @@ import { FruitNinjaEngine } from "../src/fruit-ninja/engine";
 import { BubbleShooterEngine } from "../src/bubble-shooter/engine";
 import { TableTennisEngine } from "../src/table-tennis/engine";
 import { SnakeVsWormsEngine } from "../src/snake-vs-worms/engine";
-import { CricketEngine } from "../src/cricket/engine";
 import { CarromEngine } from "../src/carrom/engine";
 import { SnookerEngine } from "../src/snooker/engine";
 
@@ -91,19 +90,6 @@ describe("Global 10-Minute Match Timeout Winner Resolution Across All 10 Games",
     expect(res.ok).toBe(true);
     expect(res.finished).toBe(true);
     expect(res.winnerSeats).toEqual([1]);
-  });
-
-  it("8. Cricket: resolves winner by runs scored, then fewest wickets lost", () => {
-    const engine = new CricketEngine(players);
-    (engine as any).state.team1Score = 48;
-    (engine as any).state.team1Wickets = 2;
-    (engine as any).state.team2Score = 42;
-    (engine as any).state.team2Wickets = 1;
-
-    const res = engine.handleTimeout("match");
-    expect(res.ok).toBe(true);
-    expect(res.finished).toBe(true);
-    expect(res.winnerSeats).toEqual([0]);
   });
 
   it("9. Carrom: resolves winner by score, then assigned pocketed coins", () => {

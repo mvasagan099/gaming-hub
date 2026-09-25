@@ -5,7 +5,7 @@ import {
   createEngine,
 } from "../src/index";
 
-const ALL_10_GAMES: GameId[] = [
+const AVAILABLE_GAMES: GameId[] = [
   "snake-ladder",
   "ludo",
   "chess",
@@ -13,7 +13,6 @@ const ALL_10_GAMES: GameId[] = [
   "bubble-shooter",
   "table-tennis",
   "snake-vs-worms",
-  "cricket",
   "carrom",
   "snooker",
 ];
@@ -24,8 +23,8 @@ describe("Universal Game Result Adapters Suite", () => {
   });
 
   describe("1. Registry Resolution", () => {
-    it("resolves a dedicated adapter for all 10 games", () => {
-      for (const gameId of ALL_10_GAMES) {
+    it("resolves a dedicated adapter for all 9 available games", () => {
+      for (const gameId of AVAILABLE_GAMES) {
         expect(GameResultAdapterRegistry.hasAdapter(gameId)).toBe(true);
         const adapter = GameResultAdapterRegistry.getAdapter(gameId);
         expect(adapter).toBeDefined();
@@ -189,53 +188,6 @@ describe("Universal Game Result Adapters Suite", () => {
       expect(result.winnerSeats).toEqual([1]);
       expect(result.winnerIds).toEqual(["user-s2"]);
       expect(result.loserId).toBe("user-s1");
-    });
-  });
-
-  describe("5. Cricket Result Adapter", () => {
-    const adapter = GameResultAdapterRegistry.getAdapter("cricket");
-    const players = [
-      { seat: 0, userId: "user-c1" },
-      { seat: 1, userId: "user-c2" },
-    ];
-
-    it("resolves winner by total runs scored", () => {
-      const state = {
-        team1Score: 34,
-        team2Score: 28,
-        team1Wickets: 2,
-        team2Wickets: 1,
-      };
-
-      const result = adapter.calculateTimeLimitResult(state, players);
-      expect(result.winnerSeats).toEqual([0]);
-      expect(result.winnerIds).toEqual(["user-c1"]);
-    });
-
-    it("resolves tied runs by wickets lost (fewer wickets wins)", () => {
-      const state = {
-        team1Score: 30,
-        team2Score: 30,
-        team1Wickets: 3,
-        team2Wickets: 1, // Team 2 lost fewer wickets
-      };
-
-      const result = adapter.calculateTimeLimitResult(state, players);
-      expect(result.winnerSeats).toEqual([1]);
-      expect(result.winnerIds).toEqual(["user-c2"]);
-    });
-
-    it("resolves tied runs and tied wickets as DRAW", () => {
-      const state = {
-        team1Score: 25,
-        team2Score: 25,
-        team1Wickets: 2,
-        team2Wickets: 2,
-      };
-
-      const result = adapter.calculateTimeLimitResult(state, players);
-      expect(result.isDraw).toBe(true);
-      expect(result.winnerSeats).toEqual([]);
     });
   });
 

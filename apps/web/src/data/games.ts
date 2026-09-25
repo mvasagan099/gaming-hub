@@ -91,17 +91,6 @@ export const games: Game[] = [
   },
   {
     id: 9,
-    name: "Cricket",
-    slug: "cricket",
-    description: "Quick cricket matches",
-    icon: "🏏",
-    category: "Sports",
-    multiplayer: true,
-    featured: true,
-    image: "/images/cricket.png",
-  },
-  {
-    id: 10,
     name: "Snooker",
     slug: "snooker",
     description: "Professional 22-Ball Snooker with Full Rules",

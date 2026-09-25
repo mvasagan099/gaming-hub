@@ -7,7 +7,6 @@ import {
   BubbleShooterEngine,
   TableTennisEngine,
   SnakeVsWormsEngine,
-  CricketEngine,
   CarromEngine,
   SnookerEngine,
 } from "../src";
@@ -35,7 +34,7 @@ describe("GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS", (
     });
 
     it("identifies expired matches where serverTime > matchDeadline", () => {
-      const engine = new CricketEngine(testPlayers);
+      const engine = new SnookerEngine(testPlayers);
       const deadline = engine.currentMatchDeadline!;
       const simulatedServerTime = deadline + 5000; // 5s past deadline
 
@@ -355,18 +354,6 @@ describe("GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS", (
       const engine = new SnakeVsWormsEngine(testPlayers);
       (engine as any).state.players[0].score = 500;
       (engine as any).state.players[1].score = 500;
-
-      const res = engine.handleTimeout("match");
-      expect(res.ok).toBe(true);
-      expect(res.winnerSeats).toEqual([0, 1]);
-    });
-
-    it("8. Cricket: handles equal runs & wickets with draw", () => {
-      const engine = new CricketEngine(testPlayers);
-      (engine as any).state.team1Score = 50;
-      (engine as any).state.team1Wickets = 3;
-      (engine as any).state.team2Score = 50;
-      (engine as any).state.team2Wickets = 3;
 
       const res = engine.handleTimeout("match");
       expect(res.ok).toBe(true);

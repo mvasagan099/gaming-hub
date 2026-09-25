@@ -145,8 +145,8 @@ describe("Feature 11: Abandoned Match Detection & Handling", () => {
     const userB = await createTestUser("u-ab-4-b", 1000);
     const matchId = `match-ab-4-${Date.now()}`;
 
-    await GameEntryLifecycleService.initiateEntry({ userId: userA, gameId: "cricket", stake: 100, matchId });
-    await GameEntryLifecycleService.initiateEntry({ userId: userB, gameId: "cricket", stake: 100, matchId });
+    await GameEntryLifecycleService.initiateEntry({ userId: userA, gameId: "ludo", stake: 100, matchId });
+    await GameEntryLifecycleService.initiateEntry({ userId: userB, gameId: "ludo", stake: 100, matchId });
     await GameEntryLifecycleService.startMatch(matchId);
 
     const disconnectedAt = new Date(Date.now() - 40000);

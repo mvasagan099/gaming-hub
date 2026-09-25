@@ -115,9 +115,9 @@ describe("Centralized Real-Time Notification & Game Event System (22 Acceptance 
 
   // Test 9: COUNTDOWN_STARTED & COUNTDOWN_UPDATED events
   it("9. Authoritative countdown events emit correct step values", () => {
-    const c3 = GameEventBus.createEnvelope("COUNTDOWN_STARTED", "test-match-1", "cricket", { countdown: 3, value: 3 });
-    const c2 = GameEventBus.createEnvelope("COUNTDOWN_UPDATED", "test-match-1", "cricket", { countdown: 2, value: 2 });
-    const c0 = GameEventBus.createEnvelope("COUNTDOWN_UPDATED", "test-match-1", "cricket", { countdown: 0, value: 0 });
+    const c3 = GameEventBus.createEnvelope("COUNTDOWN_STARTED", "test-match-1", "ludo", { countdown: 3, value: 3 });
+    const c2 = GameEventBus.createEnvelope("COUNTDOWN_UPDATED", "test-match-1", "ludo", { countdown: 2, value: 2 });
+    const c0 = GameEventBus.createEnvelope("COUNTDOWN_UPDATED", "test-match-1", "ludo", { countdown: 0, value: 0 });
 
     expect(c3.payload.value).toBe(3);
     expect(c2.payload.value).toBe(2);
@@ -191,8 +191,8 @@ describe("Centralized Real-Time Notification & Game Event System (22 Acceptance 
   // Test 14: GAME_STATE_UPDATED with serialized engine state
   it("14. GAME_STATE_UPDATED envelope contains serialized game state and event log", () => {
     const state = { score: 100, ballsRemaining: 5 };
-    const events = [{ type: "BALL_BOWLED", speed: 120 }];
-    const envelope = GameEventBus.createEnvelope("GAME_STATE_UPDATED", "test-match-1", "cricket", {
+    const events = [{ type: "TOKEN_MOVED" }];
+    const envelope = GameEventBus.createEnvelope("GAME_STATE_UPDATED", "test-match-1", "ludo", {
       matchId: "test-match-1",
       state,
       events,
@@ -315,7 +315,6 @@ describe("Centralized Real-Time Notification & Game Event System (22 Acceptance 
     expect(GAME_EVENTS_BY_GAME.ludo).toContain("LUDO_TOKEN_MOVED");
     expect(GAME_EVENTS_BY_GAME["snake-ladder"]).toContain("SNAKE_TRIGGERED");
     expect(GAME_EVENTS_BY_GAME["table-tennis"]).toContain("POINT_SCORED");
-    expect(GAME_EVENTS_BY_GAME.cricket).toContain("BALL_STARTED");
     expect(GAME_EVENTS_BY_GAME["fruit-ninja"]).toContain("BOMB_HIT");
     expect(GAME_EVENTS_BY_GAME["snake-vs-worms"]).toContain("PLAYER_COLLISION");
     expect(GAME_EVENTS_BY_GAME["bubble-shooter"]).toContain("BUBBLE_SHOT");

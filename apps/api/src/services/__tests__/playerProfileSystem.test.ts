@@ -329,7 +329,7 @@ describe("Feature 29: Player Profile & Complete Game Statistics", () => {
     await prisma.match.create({
       data: {
         id: matchId,
-        gameId: "cricket",
+        gameId: "ludo",
         status: "FINISHED",
         stake: 100,
         winnerIds: [userA],
@@ -347,8 +347,8 @@ describe("Feature 29: Player Profile & Complete Game Statistics", () => {
     });
 
     await prisma.$transaction(async (tx) => {
-      await LeaderboardService.updatePlayerRanking(tx, { userId: userA, gameId: "cricket", result: "win", score: 80 });
-      await LeaderboardService.updatePlayerRanking(tx, { userId: userB, gameId: "cricket", result: "loss", score: 65 });
+      await LeaderboardService.updatePlayerRanking(tx, { userId: userA, gameId: "ludo", result: "win", score: 80 });
+      await LeaderboardService.updatePlayerRanking(tx, { userId: userB, gameId: "ludo", result: "loss", score: 65 });
     });
 
     // Before correction

@@ -609,6 +609,7 @@ export class GameHistoryService {
       };
     }
 
+    // Preserve statistics from archived Cricket matches; this is history-only.
     if (gameStatsMap["cricket"]) {
       const g = gameStatsMap["cricket"];
       const avgRuns = g.scores.length > 0 ? Math.round(g.totalScore / g.scores.length) : 0;
@@ -860,4 +861,3 @@ export class GameHistoryService {
     };
   }
 }
-

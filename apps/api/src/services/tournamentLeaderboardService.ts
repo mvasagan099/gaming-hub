@@ -565,7 +565,6 @@ export class TournamentLeaderboardService {
       "snake-vs-worms",
       "table-tennis",
       "carrom",
-      "cricket",
       "snooker",
     ];
     const gameMap = new Map<string, { played: number; won: number; topFour: number; wins: number; losses: number; prizes: number }>();

@@ -486,7 +486,7 @@ describe("Feature 2: Atomic Entry Fee / Coin Deduction", () => {
     const matchId = `match-cancel-${Date.now()}`;
     await GameCoinService.createAndFundMatch({
       matchId,
-      gameId: "cricket",
+      gameId: "ludo",
       stake: 100,
       players: [
         { userId: player1, seat: 0 },

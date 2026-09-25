@@ -123,6 +123,7 @@ export interface ChessPlayerStats {
   totalMoves: number;
 }
 
+/** Legacy-only statistics retained so archived match records remain readable. */
 export interface CricketPlayerStats {
   matches: number;
   wins: number;
@@ -213,6 +214,7 @@ export interface SnakeVsWormsPlayerStats {
 export type AllGameSpecificStats = {
   snooker: SnookerPlayerStats;
   chess: ChessPlayerStats;
+  /** Legacy historical data only; Cricket is not an available game. */
   cricket: CricketPlayerStats;
   carrom: CarromPlayerStats;
   ludo: LudoPlayerStats;

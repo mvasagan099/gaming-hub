@@ -1673,7 +1673,6 @@ export class TournamentAnalyticsService {
       "bubble-shooter": { scoreUnit: "Bubbles Cleared / Points", resultFormat: "Points Scored / Clear Rate" },
       "table-tennis": { scoreUnit: "Set Points / Rallies", resultFormat: "Sets Won / Points" },
       "snake-vs-worms": { scoreUnit: "Mass / Length Score", resultFormat: "Length Score / Mass" },
-      "cricket": { scoreUnit: "Runs Scored / Wickets", resultFormat: "Runs / Overs / Wickets" },
       "carrom": { scoreUnit: "Board Points / Coins", resultFormat: "Points / Queen Covers" },
       "snooker": { scoreUnit: "Frame Points / Breaks", resultFormat: "Frame Score / Breaks" },
     };

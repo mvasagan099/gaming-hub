@@ -8,9 +8,9 @@ import { FruitNinjaGame } from '../../games/fruit-ninja/FruitNinjaGame';
 import { BubbleShooterGame } from '../../games/bubble-shooter/BubbleShooterGame';
 import { TableTennisGame } from '../../games/table-tennis/TableTennisGame';
 import { SnakeVsWormsGame } from '../../games/snake-vs-worms/SnakeVsWormsGame';
-import { CricketGame } from '../../games/cricket/CricketGame';
 import { SnookerGame } from '../../games/snooker/SnookerGame';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
+import { isGameId } from '@gaming-hub/shared';
 
 export const GamePage: React.FC = () => {
   const params = useParams<{ gameId?: string; slug?: string }>();
@@ -23,6 +23,10 @@ export const GamePage: React.FC = () => {
   const stake = state?.stake !== undefined ? state.stake : (mode === 'multiplayer' ? 100 : 0);
 
   const room = useMultiplayerStore((s) => s.room);
+
+  if (!gameId || !isGameId(gameId)) {
+    return <Navigate to="/" replace />;
+  }
 
   const onBack = () => {
     if (mode === 'multiplayer') {
@@ -50,7 +54,6 @@ export const GamePage: React.FC = () => {
     case 'bubble-shooter': return <BubbleShooterGame mode={mode} stake={stake} onBack={onBack} />;
     case 'table-tennis': return <TableTennisGame mode={mode} stake={stake} onBack={onBack} />;
     case 'snake-vs-worms': return <SnakeVsWormsGame mode={mode} stake={stake} onBack={onBack} />;
-    case 'cricket': return <CricketGame mode={mode} stake={stake} onBack={onBack} />;
     case 'snooker': return <SnookerGame mode={mode} stake={stake} onBack={onBack} />;
     default: return <div className="text-center py-12">Game not found</div>;
   }

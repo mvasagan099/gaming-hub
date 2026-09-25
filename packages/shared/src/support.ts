@@ -200,7 +200,6 @@ export const SUPPORTED_PAGE_ROUTES: PageSupportConfig[] = [
   { pageRoute: "/games/table-tennis", pageName: "Table Tennis", icon: "Table2", description: "Table Tennis game" },
   { pageRoute: "/games/snake-vs-worms", pageName: "Snake vs Worms", icon: "Snail", description: "Snake vs Worms game" },
   { pageRoute: "/games/carrom", pageName: "Carrom", icon: "Disc", description: "Carrom game" },
-  { pageRoute: "/games/cricket", pageName: "Cricket", icon: "Target", description: "Cricket game" },
   { pageRoute: "/leaderboard", pageName: "Leaderboard", icon: "Trophy", description: "Leaderboards" },
   { pageRoute: "/tournaments", pageName: "Tournaments", icon: "Swords", description: "Tournaments" },
   { pageRoute: "/friends", pageName: "Friends", icon: "Users", description: "Friends list" },

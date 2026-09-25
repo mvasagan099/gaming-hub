@@ -283,45 +283,6 @@ async function seedSupportContent() {
     pageRoutes: ["/games/ludo"],
   });
 
-  // Cricket Support
-  await createArticleIfNotExists({
-    categoryId: gamesCategoryId,
-    title: "How does multiplayer cricket work?",
-    content: `
-      <p>In multiplayer cricket:</p>
-      <ul>
-        <li>One player bats while the opponent bowls</li>
-        <li>Both players share the same live match view</li>
-        <li>The match progresses in real-time as players take turns</li>
-        <li>After the first innings, batting and bowling roles swap automatically</li>
-      </ul>
-    `,
-    contentType: "FAQ",
-    status: "PUBLISHED",
-    tags: ["cricket", "multiplayer", "rules"],
-    keywords: ["cricket", "multiplayer", "bat", "bowl"],
-    pageRoutes: ["/games/cricket"],
-  });
-
-  await createArticleIfNotExists({
-    categoryId: gamesCategoryId,
-    title: "Why hasn't the cricket match started?",
-    content: `
-      <p>A match won't start until:</p>
-      <ul>
-        <li>Both players have joined the same room</li>
-        <li>Both players are marked as <strong>Ready</strong></li>
-        <li>The server has verified both players are connected</li>
-      </ul>
-      <p>Make sure both players click the Ready button before the countdown.</p>
-    `,
-    contentType: "FAQ",
-    status: "PUBLISHED",
-    tags: ["cricket", "start", "match", "ready"],
-    keywords: ["start", "match", "cricket", "ready"],
-    pageRoutes: ["/games/cricket", "/lobby"],
-  });
-
   // Admin Support
   await createArticleIfNotExists({
     categoryId: adminCategoryId,
@@ -463,7 +424,7 @@ async function seedSupportContent() {
       <p>To start playing a game:</p>
       <ol>
         <li>Go to the <strong>Games</strong> section from the home page or sidebar</li>
-        <li>Choose any game (Chess, Ludo, Cricket, etc.)</li>
+        <li>Choose any available game, such as Chess or Ludo</li>
         <li>Click <strong>Play Now</strong> to start a quick match or <strong>Create Room</strong> to play with friends</li>
         <li>Wait for the match to load and follow the on-screen instructions</li>
       </ol>

@@ -3,7 +3,6 @@ import type { IGameResultAdapter } from "./IGameResultAdapter";
 import { ChessResultAdapter } from "./ChessResultAdapter";
 import { CarromResultAdapter } from "./CarromResultAdapter";
 import { SnookerResultAdapter } from "./SnookerResultAdapter";
-import { CricketResultAdapter } from "./CricketResultAdapter";
 import { LudoResultAdapter } from "./LudoResultAdapter";
 import { SnakeLadderResultAdapter } from "./SnakeLadderResultAdapter";
 import { FruitNinjaResultAdapter } from "./FruitNinjaResultAdapter";
@@ -21,7 +20,6 @@ export class GameResultAdapterRegistry {
     this.register(new ChessResultAdapter());
     this.register(new CarromResultAdapter());
     this.register(new SnookerResultAdapter());
-    this.register(new CricketResultAdapter());
     this.register(new LudoResultAdapter());
     this.register(new SnakeLadderResultAdapter());
     this.register(new FruitNinjaResultAdapter());

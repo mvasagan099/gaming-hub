@@ -15,7 +15,7 @@ import {
   getRegistrationInfo,
 } from "../tournaments";
 
-const ALL_10_GAMES = [
+const ALL_9_GAMES = [
   "snake_and_ladder",
   "ludo",
   "chess",
@@ -23,7 +23,6 @@ const ALL_10_GAMES = [
   "bubble_shooter",
   "table_tennis",
   "snake_vs_worms",
-  "cricket",
   "carrom",
   "snooker",
 ] as const;
@@ -540,10 +539,10 @@ describe("Complete Tournament Financial Transaction & Settlement System", () => 
   });
 
   // =========================================================================
-  // 6. Shared Financial Architecture across all 10 Games
+  // 6. Shared Financial Architecture across all 9 available games
   // =========================================================================
-  describe("6. Shared Financial Processing across all 10 Competitive Games", () => {
-    it.each(ALL_10_GAMES)(
+  describe("6. Shared Financial Processing across all 9 Competitive Games", () => {
+    it.each(ALL_9_GAMES)(
       "correctly operates entry and settlement financial lifecycle for game: %s",
       async (gameId) => {
         const p1 = await createTestUser(`Winner_${gameId}`, 50);

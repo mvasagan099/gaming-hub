@@ -34,7 +34,7 @@ export interface SettlementResult {
 
 /**
  * Centralized GameCoinService for all online multiplayer games
- * (Carrom, Ludo, Snake & Ladder, Table Tennis, Cricket, Fruit Ninja, Snake vs Worms, Bubble Shooter, Chess, etc.)
+ * (Carrom, Ludo, Snake & Ladder, Table Tennis, Fruit Ninja, Snake vs Worms, Bubble Shooter, Chess, etc.)
  */
 export class GameCoinService {
   /**

@@ -4835,7 +4835,7 @@ export function AdminTournamentsPage() {
                   <div className="flex items-center gap-2">
                     <Shield className="size-4 text-sky-400 flex-shrink-0" />
                     <span>
-                      <strong>Native Engine Verification:</strong> Displays only authoritative metrics derived from each game's engine (e.g. Chess wins/losses, Snooker frame score, Cricket runs/wickets, Carrom points, Table Tennis sets). Does not alter game rules, scoring, tournament results, leaderboard, wallet, or prize logic.
+                      <strong>Native Engine Verification:</strong> Displays only authoritative metrics derived from each game's engine (e.g. Chess wins/losses, Snooker frame score, Carrom points, Table Tennis sets). Does not alter game rules, scoring, tournament results, leaderboard, wallet, or prize logic.
                     </span>
                   </div>
                 </div>
@@ -7011,4 +7011,3 @@ export function AdminTournamentsPage() {
 }
 
 export default AdminTournamentsPage;
-

@@ -212,8 +212,8 @@ describe("Feature 8: Server-Authoritative Game Result Security", () => {
     const userB = await createTestUser("u-auth-b", 1000);
     const matchId = `match-forged-key-${Date.now()}`;
 
-    await GameEntryLifecycleService.initiateEntry({ userId: userA, gameId: "cricket", stake: 100, matchId });
-    await GameEntryLifecycleService.initiateEntry({ userId: userB, gameId: "cricket", stake: 100, matchId });
+    await GameEntryLifecycleService.initiateEntry({ userId: userA, gameId: "ludo", stake: 100, matchId });
+    await GameEntryLifecycleService.initiateEntry({ userId: userB, gameId: "ludo", stake: 100, matchId });
     await GameEntryLifecycleService.startMatch(matchId);
 
     await expect(

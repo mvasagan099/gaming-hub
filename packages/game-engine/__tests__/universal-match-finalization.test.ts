@@ -5,7 +5,7 @@ import {
   createEngine,
 } from "../src/index";
 
-const ALL_10_GAMES: GameId[] = [
+const AVAILABLE_GAMES: GameId[] = [
   "snake-ladder",
   "ludo",
   "chess",
@@ -13,7 +13,6 @@ const ALL_10_GAMES: GameId[] = [
   "bubble-shooter",
   "table-tennis",
   "snake-vs-worms",
-  "cricket",
   "carrom",
   "snooker",
 ];
@@ -23,8 +22,8 @@ describe("Universal Match Result Validation & Finalization Pipeline", () => {
     GameResultAdapterRegistry.initialize();
   });
 
-  describe("1. Standard Result Structure Compliance Across All 10 Games", () => {
-    for (const gameId of ALL_10_GAMES) {
+  describe("1. Standard Result Structure Compliance Across All 9 Available Games", () => {
+    for (const gameId of AVAILABLE_GAMES) {
       it(`produces standardized result structure for ${gameId}`, () => {
         const adapter = GameResultAdapterRegistry.getAdapter(gameId);
         const players = [

@@ -7,7 +7,6 @@ import {
   BubbleShooterEngine,
   TableTennisEngine,
   SnakeVsWormsEngine,
-  CricketEngine,
   CarromEngine,
   SnookerEngine,
 } from "../src";
@@ -26,12 +25,10 @@ describe("GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS", () => {
       const snakeEngine = new SnakeLadderEngine(players);
       const snookerEngine = new SnookerEngine(players);
       const carromEngine = new CarromEngine(players);
-      const cricketEngine = new CricketEngine(players);
 
       expect(snakeEngine.currentMatchDeadline).toBeGreaterThan(0);
       expect(snookerEngine.currentMatchDeadline).toBeGreaterThan(0);
       expect(carromEngine.currentMatchDeadline).toBeGreaterThan(0);
-      expect(cricketEngine.currentMatchDeadline).toBeGreaterThan(0);
     });
   });
 
@@ -150,18 +147,6 @@ describe("GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS", () => {
       const engine = new SnakeVsWormsEngine(players);
       (engine as any).state.players[0].score = 800;
       (engine as any).state.players[1].score = 420;
-
-      const res = engine.handleTimeout("match");
-      expect(res.ok).toBe(true);
-      expect(res.winnerSeats).toEqual([0]);
-    });
-
-    it("8. Cricket: resolves runs scored -> fewest wickets lost without altering innings", () => {
-      const engine = new CricketEngine(players);
-      (engine as any).state.team1Score = 48;
-      (engine as any).state.team1Wickets = 2;
-      (engine as any).state.team2Score = 36;
-      (engine as any).state.team2Wickets = 4;
 
       const res = engine.handleTimeout("match");
       expect(res.ok).toBe(true);

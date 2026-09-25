@@ -10,7 +10,7 @@ describe("TOURNAMENT LEADERBOARD & PLAYER RANKING SYSTEM", () => {
   const createdUserIds: string[] = [];
   const createdTournamentIds: string[] = [];
 
-  const ALL_10_GAMES = [
+  const ALL_9_GAMES = [
     "snake_and_ladder",
     "ludo",
     "chess",
@@ -18,7 +18,6 @@ describe("TOURNAMENT LEADERBOARD & PLAYER RANKING SYSTEM", () => {
     "bubble_shooter",
     "table_tennis",
     "snake_vs_worms",
-    "cricket",
     "carrom",
     "snooker",
   ];
@@ -474,7 +473,7 @@ describe("TOURNAMENT LEADERBOARD & PLAYER RANKING SYSTEM", () => {
   // 7. All 10 Competitive Multiplayer Games Compatibility
   // =========================================================================
   describe("7. Game-Specific Isolation Across All 10 Games", () => {
-    ALL_10_GAMES.forEach((gameId) => {
+    ALL_9_GAMES.forEach((gameId) => {
       it(`tracks and isolates game rankings for: ${gameId}`, async () => {
         const { tournament, players } = await createTestTournament({ gameId, playerCount: 2 });
         await startTournament(tournament.id);

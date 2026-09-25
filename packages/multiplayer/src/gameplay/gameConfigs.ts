@@ -33,7 +33,6 @@ export const GAME_PLAY_CONFIGS: Record<GameId, GamePlayConfig> = {
   "snake-ladder": baseConfig("snake-ladder", {}),
   ludo: baseConfig("ludo", {}),
   chess: baseConfig("chess", { defaultTurnTimerMs: 120_000 }),
-  cricket: baseConfig("cricket", {}),
   carrom: baseConfig("carrom", {
     // Carrom's natural input is a rapid sequence: slider positioning ticks, a
     // confirm tap and a quick flick to shoot. A nonzero cooldown rejects these

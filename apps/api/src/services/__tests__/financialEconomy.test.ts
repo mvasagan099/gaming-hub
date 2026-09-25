@@ -262,7 +262,7 @@ describe("Financial Economy & Settlement Full Audit Test Suite", () => {
     await prisma.match.create({
       data: {
         id: matchId,
-        gameId: "cricket",
+        gameId: "ludo",
         status: "ACTIVE",
         stake: 100,
         players: {

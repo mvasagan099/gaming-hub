@@ -484,7 +484,7 @@ describe("AUTOMATIC TOURNAMENT ROUND & MATCH MANAGEMENT", () => {
     it("detects and self-heals stuck rounds when all matches are finished", async () => {
       const { tournament, players } = await createTestTournament({
         title: "Recovery Tourney",
-        gameId: "cricket",
+        gameId: "ludo",
         playerCount: 2,
       });
 

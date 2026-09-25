@@ -195,15 +195,14 @@ describe("Global Game Time & Timeout Configuration System", () => {
     return match;
   };
 
-  // 1. Default Configuration & Resolution Strategies for all 10 Games
-  describe("All 10 Games Default Configuration & Typed Strategies", () => {
+  // 1. Default Configuration & Resolution Strategies for all 9 games
+  describe("All 9 Available Games Default Configuration & Typed Strategies", () => {
     const expectedResolutions: Record<GameId, TimeoutResolution> = {
       chess: "CONFIGURED_CHESS_RESOLUTION",
       carrom: "CURRENT_POINTS",
       ludo: "CURRENT_PROGRESS",
       "snake-ladder": "CURRENT_POSITION",
       "table-tennis": "CURRENT_MATCH_SCORE",
-      cricket: "CURRENT_RUNS",
       "fruit-ninja": "CURRENT_SCORE",
       "snake-vs-worms": "CURRENT_SCORE",
       "bubble-shooter": "CURRENT_SCORE_PROGRESS",
@@ -334,7 +333,7 @@ describe("Global Game Time & Timeout Configuration System", () => {
       expect(match2.matchDeadline).toBe(match2.startedAt + 480_000);
     });
 
-    it("verifies active match protection across all 10 games", () => {
+    it("verifies active match protection across all 9 available games", () => {
       for (const gameId of GAME_IDS) {
         // Start initial match
         const matchId1 = `active-${gameId}-1`;
@@ -382,14 +381,14 @@ describe("Global Game Time & Timeout Configuration System", () => {
   // 6. Financial & Wallet Isolation
   describe("Financial & Entry Fee Safety", () => {
     it("changing match-time configuration does not alter entry fee or prize calculation", () => {
-      const match = startMatch("cricket", "cricket-match-1", 500);
+      const match = startMatch("ludo", "ludo-match-1", 500);
       expect(match.snapshot.entryFee).toBe(500);
 
       // Admin modifies timers
-      updateGameConfig("cricket", { matchDurationSeconds: 420, turnTimerSeconds: 15 }, "admin-1", true);
+      updateGameConfig("ludo", { matchDurationSeconds: 420, turnTimerSeconds: 15 }, "admin-1", true);
 
       // Match snapshot entry fee remains untouched
-      expect(activeMatches.get("cricket-match-1")?.snapshot.entryFee).toBe(500);
+      expect(activeMatches.get("ludo-match-1")?.snapshot.entryFee).toBe(500);
     });
   });
 });

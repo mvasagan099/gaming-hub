@@ -230,8 +230,8 @@ describe("TOURNAMENT ADMIN CONTROL CENTER", () => {
 
     it("rejects result override when reason is invalid or winner is not in the slot", async () => {
       const { tournament, players } = await createTestTournament({
-        title: "Cricket Override Reject Test",
-        gameId: "cricket",
+        title: "Ludo Override Reject Test",
+        gameId: "ludo",
         playerCount: 2,
       });
 

@@ -281,7 +281,7 @@ describe("Feature 3: Global Financial Idempotency System", () => {
     const matchId = `match-refund-idem-${Date.now()}`;
     await GameCoinService.createAndFundMatch({
       matchId,
-      gameId: "cricket",
+      gameId: "ludo",
       stake: 100,
       players: [
         { userId: userA, seat: 0 },

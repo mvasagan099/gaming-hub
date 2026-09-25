@@ -13,7 +13,7 @@ import {
 import { TournamentEmailService } from "../tournamentEmailService";
 import { TournamentNotificationService } from "../tournamentNotificationService";
 
-const ALL_10_GAMES = [
+const ALL_9_GAMES = [
   "snake_and_ladder",
   "ludo",
   "chess",
@@ -21,7 +21,6 @@ const ALL_10_GAMES = [
   "bubble_shooter",
   "table_tennis",
   "snake_vs_worms",
-  "cricket",
   "carrom",
   "snooker",
 ] as const;
@@ -526,7 +525,7 @@ describe("Tournament Prize Distribution & Settlement Verification", () => {
   // 8. Compatibility Across All 10 Multiplayer Games
   // =========================================================================
   describe("8. Game-Agnostic Compatibility Across All 10 Games", () => {
-    it.each(ALL_10_GAMES)(
+    it.each(ALL_9_GAMES)(
       "validates prize snapshotting and settlement for %s",
       async (gameId) => {
         const user = await createTestPlayer(`Player ${gameId}`);

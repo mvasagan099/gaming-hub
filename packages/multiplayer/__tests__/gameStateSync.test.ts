@@ -10,7 +10,7 @@ import {
   type AuthoritativeMatchState,
   type CarromAuthoritativeState,
 } from "@gaming-hub/shared";
-import { CarromEngine, ChessEngine, LudoEngine, CricketEngine } from "@gaming-hub/game-engine";
+import { CarromEngine, ChessEngine, LudoEngine } from "@gaming-hub/game-engine";
 import { GameStateSyncManager } from "../../../apps/socket-server/src/sync/GameStateSyncManager";
 
 describe("Centralized Game State Sync + Recovery System", () => {
@@ -257,24 +257,6 @@ describe("Centralized Game State Sync + Recovery System", () => {
       expect(rollEvent).toBeDefined();
       expect(rollEvent.dice).toBeGreaterThanOrEqual(1);
       expect(rollEvent.dice).toBeLessThanOrEqual(6);
-    });
-  });
-
-  // ==========================================================================
-  // 6. Cricket State Authority
-  // ==========================================================================
-  describe("6. Cricket State Sync", () => {
-    it("one ball produces authoritative score update and shared state", () => {
-      const engine = new CricketEngine([
-        { userId: "batsman", seat: 0 },
-        { userId: "bowler", seat: 1 },
-      ]);
-
-      const toss = engine.apply({ type: "toss-call", call: "heads" }, 0);
-      expect(toss.ok).toBe(true);
-
-      const state = engine.serialize() as any;
-      expect(state.players).toBeDefined();
     });
   });
 

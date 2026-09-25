@@ -5,7 +5,7 @@
  * fair play and prevent cheating.
  * 
  * Games: Chess, Ludo, Snake & Ladder, Bubble Shooter,
- *        Fruit Ninja, Snake vs Worms, Table Tennis, Carrom, Cricket
+ *        Fruit Ninja, Snake vs Worms, Table Tennis, Carrom, Snooker
  */
 
 import type { JsonObject } from "@gaming-hub/shared";
@@ -591,69 +591,6 @@ export class CarromValidator implements GameValidator {
   }
 }
 
-export class CricketValidator implements GameValidator {
-  validateAction(
-    state: JsonObject,
-    action: JsonObject,
-    playerId: string,
-    timestamp: number
-  ): ValidationResult {
-    const cricketState = state as any;
-
-    if (action.type === "shot") {
-      const batSpeed = action.batSpeed as number;
-      if (batSpeed && batSpeed > 150) {
-        return {
-          valid: false,
-          reason: "Impossible bat speed",
-          penalty: "speed_hack",
-        };
-      }
-
-      const timing = action.timing as number;
-      if (timing && (timing < 0 || timing > 1)) {
-        return {
-          valid: false,
-          reason: "Invalid timing",
-          penalty: "physics_manipulation",
-        };
-      }
-    }
-
-    if (action.type === "bowl") {
-      const speed = action.speed as number;
-      if (speed && (speed < 80 || speed > 160)) {
-        return {
-          valid: false,
-          reason: "Invalid bowling speed",
-          penalty: "physics_manipulation",
-        };
-      }
-    }
-
-    if (action.type === "score_update") {
-      const runs = action.runs as number;
-      if (runs < 0 || runs > 6) {
-        return {
-          valid: false,
-          reason: "Invalid runs scored",
-          penalty: "score_manipulation",
-        };
-      }
-    }
-
-    return { valid: true };
-  }
-
-  validateGameState(state: JsonObject): ValidationResult {
-    return { valid: true };
-  }
-
-  validateMoveLegality(state: JsonObject, action: JsonObject): ValidationResult {
-    return { valid: true };
-  }
-}
-
 export class SnookerValidator implements GameValidator {
   validateAction(
     state: JsonObject,
@@ -726,11 +663,9 @@ export const GameValidators: Record<string, GameValidator> = {
   "snake-vs-worms": new SnakeVsWormsValidator(),
   "table-tennis": new TableTennisValidator(),
   carrom: new CarromValidator(),
-  cricket: new CricketValidator(),
   snooker: new SnookerValidator(),
 };
 
 export function getValidator(gameId: string): GameValidator | undefined {
   return GameValidators[gameId];
 }
-

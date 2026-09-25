@@ -3,7 +3,7 @@ import { prisma } from "@gaming-hub/db";
 import { AppError, type GameId } from "@gaming-hub/shared";
 import { randomUUID } from "node:crypto";
 
-const ALL_10_GAMES: GameId[] = [
+const ALL_9_GAMES: GameId[] = [
   "snake-ladder",
   "ludo",
   "chess",
@@ -11,7 +11,6 @@ const ALL_10_GAMES: GameId[] = [
   "bubble-shooter",
   "table-tennis",
   "snake-vs-worms",
-  "cricket",
   "carrom",
   "snooker",
 ];
@@ -320,9 +319,9 @@ describe("Universal Multiplayer Match Room & Ready System", () => {
     expect(match.stake).toBe(0);
   });
 
-  // 9-18. Universal room verification across all 10 games
+  // 9-17. Universal room verification across all 9 available games
   describe("All 10 Competitive Games Compatibility", () => {
-    for (const game of ALL_10_GAMES) {
+    for (const game of ALL_9_GAMES) {
       it(`initializes universal match room for game: ${game}`, async () => {
         const matchId = randomUUID();
         const match = await prisma.match.create({

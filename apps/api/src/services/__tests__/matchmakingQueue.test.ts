@@ -7,7 +7,7 @@ describe("GLOBAL MULTIPLAYER MATCHMAKING QUEUE", () => {
   const createdUserIds: string[] = [];
   const createdMatchIds: string[] = [];
 
-  const ALL_10_GAMES: GameId[] = [
+  const ALL_9_GAMES: GameId[] = [
     "snake-ladder",
     "ludo",
     "chess",
@@ -15,7 +15,6 @@ describe("GLOBAL MULTIPLAYER MATCHMAKING QUEUE", () => {
     "bubble-shooter",
     "table-tennis",
     "snake-vs-worms",
-    "cricket",
     "carrom",
     "snooker",
   ];
@@ -254,11 +253,11 @@ describe("GLOBAL MULTIPLAYER MATCHMAKING QUEUE", () => {
       const user = await createTestUser("cancel_u1", 500);
       const joinRes = await MatchmakingQueueService.joinQueue({
         userId: user.id,
-        gameId: "cricket",
+        gameId: "ludo",
         entryFee: 250,
       });
 
-      const cancelRes = await MatchmakingQueueService.cancelQueue(user.id, "cricket");
+      const cancelRes = await MatchmakingQueueService.cancelQueue(user.id, "ludo");
       expect(cancelRes.cancelled).toBe(true);
       expect(cancelRes.queueId).toBe(joinRes.queueId);
 
@@ -437,7 +436,7 @@ describe("GLOBAL MULTIPLAYER MATCHMAKING QUEUE", () => {
   });
 
   describe("9. Full Verification Across All 10 Games", () => {
-    for (const gameId of ALL_10_GAMES) {
+    for (const gameId of ALL_9_GAMES) {
       it(`successfully queues and pairs players for ${gameId}`, async () => {
         const p1 = await createTestUser(`p1_${gameId}`, 2000);
         const p2 = await createTestUser(`p2_${gameId}`, 2000);

@@ -10,7 +10,6 @@ This platform supports multiple games, each powered by a server-authoritative en
 | Ludo | `ludo` | Board | ✓ | ✓ |
 | Chess | `chess` | Board | ✓ | ✓ |
 | Carrom | `carrom` | Board | ✓ | ✓ |
-| Cricket | `cricket` | Sports | ✓ | ✓ |
 | Table Tennis | `table-tennis` | Sports | ✓ | ✓ |
 | Snake vs Worms | `snake-vs-worms` | Arcade | ✓ | ✓ |
 | Fruit Ninja | `fruit-ninja` | Arcade | | ✓ |

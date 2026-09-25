@@ -153,18 +153,6 @@ export const GAME_SPECIFIC_EVENT_TYPES = [
   "OBJECTIVE_COMPLETED",
   "SPEED_CHANGED",
 
-  // Cricket
-  "DELIVERY_STARTED",
-  "BALL_STARTED",
-  "DELIVERY_COMPLETED",
-  "BALL_RESOLVED",
-  "RUNS_SCORED",
-  "RUN_SCORED",
-  "WICKET",
-  "OVER_COMPLETED",
-  "INNINGS_COMPLETED",
-  "TARGET_REACHED",
-
   // Carrom
   "CARROM_SHOT_STARTED",
   "SHOT_STARTED",
@@ -254,18 +242,6 @@ export const GAME_EVENTS_BY_GAME: Record<GameId, readonly string[]> = {
     "SET_WON",
     "SET_COMPLETED",
     "MATCH_WON",
-  ],
-  cricket: [
-    "DELIVERY_STARTED",
-    "BALL_STARTED",
-    "DELIVERY_COMPLETED",
-    "BALL_RESOLVED",
-    "RUNS_SCORED",
-    "RUN_SCORED",
-    "WICKET",
-    "OVER_COMPLETED",
-    "INNINGS_COMPLETED",
-    "TARGET_REACHED",
   ],
   "fruit-ninja": [
     "ROUND_STARTED",

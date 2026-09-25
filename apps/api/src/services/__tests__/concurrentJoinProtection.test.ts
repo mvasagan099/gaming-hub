@@ -327,7 +327,7 @@ describe("Feature 4: Concurrent Join & Slot Protection", () => {
       data: {
         id: roomId,
         code,
-        gameId: "cricket",
+        gameId: "ludo",
         hostId: hostUser,
         status: "WAITING",
         isPrivate: false,
@@ -517,7 +517,7 @@ describe("Feature 4: Concurrent Join & Slot Protection", () => {
     await prisma.tournament.create({
       data: {
         id: tournamentId,
-        gameId: "cricket",
+        gameId: "ludo",
         title: "Atomicity Verification",
         description: "Test rollback consistency",
         entryFee: 100, // costs 100 coins

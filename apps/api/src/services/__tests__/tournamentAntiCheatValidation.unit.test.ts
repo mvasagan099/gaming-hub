@@ -17,12 +17,11 @@ import {
   SnakeVsWormsValidator,
   TableTennisValidator,
   CarromValidator,
-  CricketValidator,
   SnookerValidator,
 } from "@gaming-hub/game-engine";
 
 // All 10 Competitive Games
-const ALL_10_GAMES = [
+const ALL_9_GAMES = [
   "chess",
   "ludo",
   "snake-ladder",
@@ -31,7 +30,6 @@ const ALL_10_GAMES = [
   "snake-vs-worms",
   "table-tennis",
   "carrom",
-  "cricket",
   "snooker",
 ] as const;
 
@@ -275,8 +273,8 @@ describe("Tournament Anti-Cheat, Action Validation & Fair-Play System", () => {
   // 9. All 10 Competitive Games Authoritative Validation
   // -------------------------------------------------------------------------
   describe("9. All 10 Competitive Games Authoritative Validators", () => {
-    it("Test 9.1: Validates all 10 games have registered validators", () => {
-      for (const gameId of ALL_10_GAMES) {
+    it("Test 9.1: Validates all 9 available games have registered validators", () => {
+      for (const gameId of ALL_9_GAMES) {
         const validator = getValidator(gameId);
         expect(validator, `Validator for ${gameId} must exist`).toBeDefined();
       }
@@ -352,15 +350,6 @@ describe("Tournament Anti-Cheat, Action Validation & Fair-Play System", () => {
 
       const impossiblePower = validator.validateAction({}, { type: "strike", power: 500, angle: 180 }, "user-1", Date.now());
       expect(impossiblePower.valid).toBe(false);
-    });
-
-    it("Test 9.10: CricketValidator validates batting and bowling speeds", () => {
-      const validator = new CricketValidator();
-      const validBowl = validator.validateAction({}, { type: "bowl", speed: 135 }, "user-1", Date.now());
-      expect(validBowl.valid).toBe(true);
-
-      const impossibleBat = validator.validateAction({}, { type: "shot", batSpeed: 300 }, "user-1", Date.now());
-      expect(impossibleBat.valid).toBe(false);
     });
 
     it("Test 9.11: SnookerValidator validates strike force, cue ball coords, and color nomination", () => {

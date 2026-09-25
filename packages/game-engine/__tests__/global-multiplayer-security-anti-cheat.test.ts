@@ -14,7 +14,6 @@ import {
   BubbleShooterEngine,
   TableTennisEngine,
   SnakeVsWormsEngine,
-  CricketEngine,
   CarromEngine,
   SnookerEngine,
   createEngine,
@@ -377,15 +376,15 @@ describe("GLOBAL MULTIPLAYER SECURITY & ANTI-CHEAT SYSTEM", () => {
   // =========================================================================
   describe("7. Timer Manipulation Immunity", () => {
     it("rejects actions after authoritative deadline even if client clock is lagging", () => {
-      const match = createTestMatch("match-cricket-1", "cricket");
+      const match = createTestMatch("match-snooker-1", "snooker");
       const player1: TestUser = { userId: "player-1", role: "USER" };
 
       // Set server deadline in the past
       match.matchDeadline = Date.now() - 5000;
 
       const res = processClientAction(player1, match.matchId, {
-        type: "bowl",
-        speed: 80,
+        type: "strike",
+        power: 80,
       });
 
       expect(res.ok).toBe(false);
@@ -395,10 +394,10 @@ describe("GLOBAL MULTIPLAYER SECURITY & ANTI-CHEAT SYSTEM", () => {
   });
 
   // =========================================================================
-  // 8. ALL 10 GAMES SERVER-AUTHORITATIVE ENGINE VALIDATION
+  // 8. Available game engines are server-authoritative
   // =========================================================================
   describe("8. Authoritative Engine Enforcement Across All 10 Games", () => {
-    it("enforces server rules and rejects illegal moves across all 10 games", () => {
+    it("enforces server rules and rejects illegal moves across all available games", () => {
       for (const gameId of GAME_IDS) {
         const match = createTestMatch(`match-${gameId}`, gameId);
         const player1: TestUser = { userId: "player-1", role: "USER" };

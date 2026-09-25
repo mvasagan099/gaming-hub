@@ -8,7 +8,7 @@ import {
 } from "@gaming-hub/shared";
 import { WalletTransactionService } from "../walletTransactionService";
 
-const ALL_10_GAMES = [
+const ALL_9_GAMES = [
   "snake_and_ladder",
   "ludo",
   "chess",
@@ -16,7 +16,6 @@ const ALL_10_GAMES = [
   "bubble_shooter",
   "table_tennis",
   "snake_vs_worms",
-  "cricket",
   "carrom",
   "snooker",
 ] as const;
@@ -284,7 +283,7 @@ describe("Tournament Financial Unit & Validation Test Suite", () => {
   // 3. Shared Financial Processing Across All 10 Games
   // =========================================================================
   describe("3. Game Invariance Across All 10 Competitive Games", () => {
-    it.each(ALL_10_GAMES)(
+    it.each(ALL_9_GAMES)(
       "ensures identical financial validation and prize distribution regardless of game: %s",
       (gameId) => {
         const pool = 10000;
@@ -401,4 +400,3 @@ describe("Tournament Financial Unit & Validation Test Suite", () => {
     });
   });
 });
-
