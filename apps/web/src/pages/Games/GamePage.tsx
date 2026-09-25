@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { SnakeLadder } from '../../games/snake-ladder';
 import { LudoGame } from '../../games/ludo/LudoGame';
@@ -11,6 +11,8 @@ import { SnakeVsWormsGame } from '../../games/snake-vs-worms/SnakeVsWormsGame';
 import { SnookerGame } from '../../games/snooker/SnookerGame';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { isGameId } from '@gaming-hub/shared';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { goBackOrHome } from '../../utils/navigation';
 
 export const GamePage: React.FC = () => {
   const params = useParams<{ gameId?: string; slug?: string }>();
@@ -23,21 +25,27 @@ export const GamePage: React.FC = () => {
   const stake = state?.stake !== undefined ? state.stake : (mode === 'multiplayer' ? 100 : 0);
 
   const room = useMultiplayerStore((s) => s.room);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
 
   if (!gameId || !isGameId(gameId)) {
     return <Navigate to="/" replace />;
   }
 
-  const onBack = () => {
+  const onBack = () => setShowExitConfirm(true);
+
+  const confirmExit = async () => {
+    if (isExiting) return;
+    setIsExiting(true);
     if (mode === 'multiplayer') {
-      void useMultiplayerStore.getState().leaveRoom();
+      await useMultiplayerStore.getState().leaveRoom();
       navigate(`/lobby/${gameId}`);
     } else {
-      navigate('/');
+      goBackOrHome(navigate);
     }
   };
 
-  if (mode === 'multiplayer') {
+  if (mode === 'multiplayer' && !isExiting) {
     const canPlayOnline =
       !!room && room.gameId === gameId && (room.status === 'playing' || room.status === 'ended');
     if (!canPlayOnline) {
@@ -45,16 +53,32 @@ export const GamePage: React.FC = () => {
     }
   }
 
+  let game: React.ReactNode = null;
   switch (gameId) {
-    case 'snake-ladder': return <SnakeLadder mode={mode} stake={stake} onBack={onBack} />;
-    case 'ludo': return <LudoGame mode={mode} stake={stake} onBack={onBack} />;
-    case 'chess': return <ChessGame mode={mode} stake={stake} onBack={onBack} />;
-    case 'carrom': return <CarromGame mode={mode} stake={stake} onBack={onBack} />;
-    case 'fruit-ninja': return <FruitNinjaGame mode={mode} stake={stake} onBack={onBack} />;
-    case 'bubble-shooter': return <BubbleShooterGame mode={mode} stake={stake} onBack={onBack} />;
-    case 'table-tennis': return <TableTennisGame mode={mode} stake={stake} onBack={onBack} />;
-    case 'snake-vs-worms': return <SnakeVsWormsGame mode={mode} stake={stake} onBack={onBack} />;
-    case 'snooker': return <SnookerGame mode={mode} stake={stake} onBack={onBack} />;
-    default: return <div className="text-center py-12">Game not found</div>;
+    case 'snake-ladder': game = <SnakeLadder mode={mode} stake={stake} onBack={onBack} />; break;
+    case 'ludo': game = <LudoGame mode={mode} stake={stake} onBack={onBack} />; break;
+    case 'chess': game = <ChessGame mode={mode} stake={stake} onBack={onBack} />; break;
+    case 'carrom': game = <CarromGame mode={mode} stake={stake} onBack={onBack} />; break;
+    case 'fruit-ninja': game = <FruitNinjaGame mode={mode} stake={stake} onBack={onBack} />; break;
+    case 'bubble-shooter': game = <BubbleShooterGame mode={mode} stake={stake} onBack={onBack} />; break;
+    case 'table-tennis': game = <TableTennisGame mode={mode} stake={stake} onBack={onBack} />; break;
+    case 'snake-vs-worms': game = <SnakeVsWormsGame mode={mode} stake={stake} onBack={onBack} />; break;
+    case 'snooker': game = <SnookerGame mode={mode} stake={stake} onBack={onBack} />; break;
   }
+
+  return <>
+    {game}
+    <ConfirmDialog
+      isOpen={showExitConfirm}
+      onClose={() => setShowExitConfirm(false)}
+      title="Exit Game?"
+      message="Are you sure you want to exit the game?"
+      cancelText="Cancel"
+      confirmText="Exit Game"
+      variant="danger"
+      icon="warning"
+      isLoading={isExiting}
+      onConfirm={confirmExit}
+    />
+  </>;
 };

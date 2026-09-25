@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Navbar from "../components/layout/Navbar";
 import Sidebar from "../components/layout/Sidebar";
@@ -10,6 +10,7 @@ import { MatchmakingSearchModal } from "../components/Matchmaking/MatchmakingSea
 import { MatchFoundModal } from "../components/Matchmaking/MatchFoundModal";
 import { useFeatureFlagsStore } from "../store/featureFlagsStore";
 import { useMe } from "../services/api/useMe";
+import { useMultiplayerStore } from "../store/multiplayerStore";
 
 function MaintenanceScreen() {
   return (
@@ -35,6 +36,19 @@ export default function MainLayout() {
   const hideChrome = isGamePage || isLobbyPage;
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const previousPathRef = useRef(location.pathname);
+
+  // Browser, gesture and native Back all use normal routing. Release an active
+  // multiplayer room when navigation leaves a game, before the lobby's redirect
+  // effect can send the player back into that match.
+  useLayoutEffect(() => {
+    const previousGame = previousPathRef.current.match(/^\/games?\/([^/]+)/)?.[1];
+    const isGame = /^\/games?\//.test(location.pathname);
+    previousPathRef.current = location.pathname;
+    if (previousGame && !isGame && useMultiplayerStore.getState().room?.gameId === previousGame) {
+      void useMultiplayerStore.getState().leaveRoom();
+    }
+  }, [location.pathname]);
 
   const flags = useFeatureFlagsStore((s) => s.flags);
   const loadFlags = useFeatureFlagsStore((s) => s.loadFlags);

@@ -8,7 +8,6 @@ import type { TableTennisState } from '@gaming-hub/game-engine';
 import { TABLE_TENNIS_VISUAL_CONFIG, type CameraState } from './constants/tableTennisVisualConfig';
 import { TableTennis3DRenderer } from './utils/tableTennis3DRenderer';
 import { TableTennisOverlays } from './components/TableTennisOverlays';
-import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Timer, Users, X, LogOut } from 'lucide-react';
 
 interface TableTennisProps {
@@ -604,16 +603,6 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
     }
   };
 
-  const [showExitConfirm, setShowExitConfirm] = useState(false);
-
-  const handleExitClick = () => {
-    if (gameState === 'gameover') {
-      onBack();
-    } else {
-      setShowExitConfirm(true);
-    }
-  };
-
   const handleCanvasClick = () => {
     if (mode === 'multiplayer') {
       handleMultiplayerServe();
@@ -640,10 +629,10 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         <div className="relative flex flex-col items-center justify-center w-full h-full lg:h-auto flex-1 lg:flex-initial lg:max-w-[min(96vw,calc((100dvh-7rem)*1.54),1200px)] shrink-0 overflow-hidden">
           
           {/* TOP BROADCAST TOURNAMENT SCOREBOARD HUD */}
-          <div className="absolute top-2 left-2 right-2 z-20 pointer-events-none lg:pointer-events-auto lg:relative lg:top-auto lg:left-auto lg:right-auto w-auto lg:w-full bg-slate-950/80 lg:bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 rounded-xl sm:rounded-2xl p-1.5 sm:p-2.5 lg:mb-2.5 flex items-center justify-between shadow-2xl gap-1.5 sm:gap-2">
+          <div className="absolute top-2 left-2 right-2 z-20 pointer-events-none lg:pointer-events-auto lg:relative lg:top-auto lg:left-auto lg:right-auto w-auto lg:w-full bg-slate-950/80 lg:bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 rounded-xl sm:rounded-2xl p-1.5 sm:p-2.5 lg:mb-2.5 grid grid-cols-2 lg:flex items-center justify-between shadow-2xl gap-x-2 gap-y-1.5 sm:gap-2">
             
             {/* Left Card: Always LOCAL PLAYER (Foreground / Near side) */}
-            <div className="flex items-center gap-1.5 sm:gap-3">
+            <div className="order-2 lg:order-none min-w-0 flex items-center gap-1.5 sm:gap-3">
               <div className={`w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl border flex items-center justify-center font-black text-[11px] sm:text-xs shrink-0 ${
                 mySeat === 1
                   ? 'bg-gradient-to-br from-sky-500/20 to-sky-600/30 border-sky-500/50 text-sky-400'
@@ -651,9 +640,9 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
               }`}>
                 {mySeat === 1 ? 'P2' : 'P1'}
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-1 sm:gap-2">
-                  <span className="text-[11px] sm:text-sm font-black text-slate-100 uppercase tracking-wide truncate max-w-[65px] sm:max-w-[150px]">
+                  <span className="block min-w-0 text-[11px] sm:text-sm font-black text-slate-100 uppercase tracking-wide truncate sm:max-w-[150px]">
                     {mySeat === 1 ? p2Name : p1Name}
                   </span>
                   {(mySeat === 1 ? p2Sets : p1Sets) > 0 && (
@@ -682,7 +671,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
             </div>
 
             {/* Large Center Score Board & Match Timer */}
-            <div className="flex items-center gap-1.5 sm:gap-4 bg-slate-900/90 px-2 sm:px-6 py-0.5 sm:py-1 rounded-lg sm:rounded-xl border border-slate-800 shadow-inner shrink-0 pointer-events-auto">
+            <div className="order-1 col-span-2 justify-self-center lg:order-none lg:col-span-1 flex items-center gap-1.5 sm:gap-4 bg-slate-900/90 px-2 sm:px-6 py-0.5 sm:py-1 rounded-lg sm:rounded-xl border border-slate-800 shadow-inner shrink-0 pointer-events-auto">
               <span className={`text-lg sm:text-3xl font-black font-mono tracking-tight ${
                 mySeat === 1 ? 'text-sky-400' : 'text-rose-400'
               }`}>
@@ -713,7 +702,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
                 </button>
               ) : (
                 <button
-                  onClick={handleExitClick}
+                  onClick={onBack}
                   className="p-1 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl bg-rose-600/20 hover:bg-rose-600 border border-rose-500/40 text-rose-300 hover:text-white flex items-center gap-1 text-[9px] sm:text-[10px] font-bold shadow-lg transition-all active:scale-95 cursor-pointer ml-1 sm:ml-2"
                   title="Exit Game"
                 >
@@ -724,8 +713,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
             </div>
 
             {/* Right Card: Always OPPONENT (Background / Far side) */}
-            <div className="flex items-center gap-1.5 sm:gap-3 text-right">
-              <div>
+            <div className="order-3 lg:order-none min-w-0 flex items-center justify-end gap-1.5 sm:gap-3 text-right">
+              <div className="min-w-0">
                 <div className="flex items-center justify-end gap-1 sm:gap-2">
                   {(mySeat === 1 ? p1Sets : p2Sets) > 0 && (
                     <span className={`px-1 py-0.5 rounded text-[8px] sm:text-[10px] font-black border ${
@@ -736,7 +725,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
                       {(mySeat === 1 ? p1Sets : p2Sets)}S
                     </span>
                   )}
-                  <span className="text-[11px] sm:text-sm font-black text-slate-100 uppercase tracking-wide truncate max-w-[65px] sm:max-w-[150px]">
+                  <span className="block min-w-0 text-[11px] sm:text-sm font-black text-slate-100 uppercase tracking-wide truncate sm:max-w-[150px]">
                     {mySeat === 1 ? p1Name : p2Name}
                   </span>
                 </div>
@@ -847,20 +836,6 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         )}
       </div>
 
-      <ConfirmDialog
-        isOpen={showExitConfirm}
-        onClose={() => setShowExitConfirm(false)}
-        title="Exit Match?"
-        message="Are you sure you want to exit? Your current table tennis match progress will be lost."
-        confirmText="Exit Match"
-        cancelText="Continue Playing"
-        variant="danger"
-        icon="logout"
-        onConfirm={() => {
-          setShowExitConfirm(false);
-          onBack();
-        }}
-      />
     </GameWrapper>
   );
 };

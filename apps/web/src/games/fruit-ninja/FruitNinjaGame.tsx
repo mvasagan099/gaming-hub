@@ -31,13 +31,13 @@ export const FruitNinjaGame: React.FC<FruitNinjaProps> = ({ mode: initialMode, s
 
   if (isGameStarted) {
     return (
-      <GameWrapper title="Fruit Ninja Blade" gameId="fruit-ninja" mode={initialMode} stake={stake} onBack={isMultiplayer ? onBack : resetGame} isFullscreen>
+      <GameWrapper title="Fruit Ninja Blade" gameId="fruit-ninja" mode={initialMode} stake={stake} onBack={onBack} isFullscreen>
         <div className="flex flex-col lg:flex-row items-center justify-center gap-0 lg:gap-6 w-full max-w-6xl h-full my-auto overflow-hidden select-none">
           <div className="flex-1 flex flex-col items-center justify-center gap-0 lg:gap-4 w-full h-full lg:h-auto my-auto overflow-hidden">
             <FruitNinjaPhaserGame
               mode={activePlayMode}
               isMultiplayer={isMultiplayer}
-              onBack={isMultiplayer ? onBack : resetGame}
+              onBack={onBack}
               onReplay={handleReplay}
             />
             {!isMultiplayer && (

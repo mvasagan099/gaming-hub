@@ -781,13 +781,15 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       clearRoom(set);
       return;
     }
+    // Clear local membership before awaiting the server, so route navigation
+    // cannot re-enter a playing room and repeated exits cannot emit twice.
+    clearRoom(set);
     try {
       const res = await socket.emitWithAck("room:leave", { roomId: room.id });
       unwrapAck(res);
     } catch {
-      // The room may already be gone; still clear local state.
+      // The room may already be gone; local membership is already cleared.
     }
-    clearRoom(set);
   },
 
   setReady: async (ready) => {

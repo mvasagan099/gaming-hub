@@ -826,11 +826,11 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
         )}
 
         {/* Main Snooker Arena */}
-        <div className="w-full flex-1 flex items-center justify-center max-w-7xl px-1 sm:px-2 my-auto overflow-hidden">
+        <div className="w-full flex-1 min-h-0 flex items-center justify-center max-w-7xl px-1 sm:px-2 my-auto overflow-hidden">
           {/* Snooker Table Container & Mobile Side Power Slider */}
-          <div className="relative flex items-center justify-center gap-1.5 sm:gap-4 w-full max-w-[min(98vw,calc((100dvh-9.5rem)*2),1340px)]">
+          <div className="relative flex items-center justify-center gap-1.5 sm:gap-4 w-full h-full min-h-0 max-w-[min(98vw,calc((100dvh-9.5rem)*2),1340px)]">
             {/* Snooker Table Main Canvas Container */}
-            <div className={`relative ${isRotated ? 'aspect-[620/1100] max-h-[min(68vh,620px)] w-auto' : 'aspect-[1100/620] w-full max-w-[min(94vw,calc((100dvh-9.5rem)*2),1300px)] max-h-[calc(100dvh-9.5rem)]'} flex items-center justify-center`}>
+            <div className={`relative ${isRotated ? 'aspect-[620/1100] h-full max-h-full w-auto' : 'aspect-[1100/620] w-full max-w-[min(94vw,calc((100dvh-9.5rem)*2),1300px)] max-h-[calc(100dvh-9.5rem)]'} flex items-center justify-center`}>
               <canvas
                 ref={canvasRef}
                 width={isRotated ? 480 + TABLE_PAD * 2 : 960 + TABLE_PAD * 2}

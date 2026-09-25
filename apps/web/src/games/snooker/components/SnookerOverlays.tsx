@@ -105,7 +105,7 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
   const targetCfg = targetConfigMap[targetBall] || targetConfigMap.RED;
 
   return (
-    <div className="w-full flex flex-col gap-2 pointer-events-none select-none">
+    <div className="relative z-30 w-full shrink-0 flex flex-col gap-2 pointer-events-none select-none">
       {/* ── 1. Top Broadcast TV Scoreboard ───────────────────────────────── */}
       <div className="w-full bg-slate-900/95 backdrop-blur-xl border border-slate-700/60 rounded-2xl p-2 sm:p-2.5 shadow-[0_10px_30px_rgba(0,0,0,0.5)] pointer-events-auto">
         {/* Mobile Toolbar (Header Top Row) */}
@@ -158,7 +158,7 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
         </div>
 
         {/* Main Scoreboard Layout */}
-        <div className="flex items-center justify-between gap-2 sm:gap-4 md:gap-8">
+        <div className="grid grid-cols-2 items-center gap-x-2 gap-y-1.5 sm:gap-4 md:flex md:justify-between md:gap-8">
           {/* Desktop Toolbar (Hidden on mobile) */}
           <div className="hidden md:flex items-center gap-2">
             {mode !== "multiplayer" && <button
@@ -188,13 +188,13 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
 
           {/* Player 1 Card */}
           <div
-            className={`flex items-center gap-1.5 sm:gap-3 p-1.5 sm:px-4 sm:py-2 rounded-xl transition-all duration-300 flex-1 md:flex-initial ${
+            className={`order-2 md:order-none min-w-0 flex items-center gap-1.5 sm:gap-3 p-1.5 sm:px-4 sm:py-2 rounded-xl transition-all duration-300 md:flex-initial ${
               currentSeat === 0
                 ? "bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-slate-900/40 border-2 border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.25)]"
                 : "bg-slate-800/40 border border-slate-700/50 opacity-85"
             }`}
           >
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-black text-white shadow-md text-[10px] sm:text-xs border border-amber-300/40 shrink-0">
+            <div className="hidden sm:flex w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 items-center justify-center font-black text-white shadow-md text-[10px] sm:text-xs border border-amber-300/40 shrink-0">
               P1
             </div>
             <div className="min-w-0 flex-1">
@@ -220,7 +220,7 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
           </div>
 
           {/* Center Match Frame & Countdown Hub */}
-          <div className="flex flex-col items-center justify-center shrink-0 px-1">
+          <div className="order-1 col-span-2 justify-self-center md:order-none md:col-span-1 flex flex-col items-center justify-center shrink-0 px-1">
             <div className="text-[9px] sm:text-[10px] font-black tracking-wider text-slate-400 uppercase whitespace-nowrap">
               FRAME {frameNumber}{totalFrames > 1 ? `/${totalFrames}` : ""}
             </div>
@@ -257,7 +257,7 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
 
           {/* Player 2 Card */}
           <div
-            className={`flex items-center gap-1.5 sm:gap-3 p-1.5 sm:px-4 sm:py-2 rounded-xl transition-all duration-300 flex-1 md:flex-initial justify-end ${
+            className={`order-3 md:order-none min-w-0 flex items-center gap-1.5 sm:gap-3 p-1.5 sm:px-4 sm:py-2 rounded-xl transition-all duration-300 md:flex-initial justify-end ${
               currentSeat === 1
                 ? "bg-gradient-to-l from-blue-500/20 via-blue-500/10 to-slate-900/40 border-2 border-blue-400 shadow-[0_0_25px_rgba(59,130,246,0.25)]"
                 : "bg-slate-800/40 border border-slate-700/50 opacity-85"
@@ -283,7 +283,7 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
                 <span className="text-blue-400 font-bold">F:{player2FramesWon}</span>
               </div>
             </div>
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-gradient-to-tr from-blue-600 to-blue-400 flex items-center justify-center font-black text-white shadow-md text-[10px] sm:text-xs border border-blue-300/40 shrink-0">
+            <div className="hidden sm:flex w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-gradient-to-tr from-blue-600 to-blue-400 items-center justify-center font-black text-white shadow-md text-[10px] sm:text-xs border border-blue-300/40 shrink-0">
               {mode === "ai" ? "AI" : "P2"}
             </div>
           </div>
@@ -352,7 +352,7 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
 
         {/* Foul Compact Banner (Auto-Dismissable) */}
         {lastFoul && dismissedFoul !== lastFoul && (
-          <div className="px-3.5 py-1.5 rounded-full bg-rose-900/90 border border-rose-500/80 text-rose-200 font-bold text-xs shadow-lg flex items-center gap-1.5 animate-in fade-in slide-in-from-top-2">
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 max-w-[calc(100vw-1rem)] whitespace-nowrap px-3.5 py-1.5 rounded-full bg-rose-900/90 border border-rose-500/80 text-rose-200 font-bold text-xs shadow-lg flex items-center gap-1.5 animate-in fade-in slide-in-from-top-2">
             <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
             <span className="max-w-[220px] truncate">{lastFoul}</span>
             <span className="text-amber-300 font-mono font-black">(+{foulPoints})</span>

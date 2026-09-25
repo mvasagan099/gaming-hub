@@ -31,7 +31,6 @@ export const FruitNinjaOverlays: React.FC<FruitNinjaOverlaysProps> = ({
   const rematchState = useMultiplayerStore((s) => s.rematchState);
   const requestRematch = useMultiplayerStore((s) => s.requestRematch);
   const acceptRematch = useMultiplayerStore((s) => s.acceptRematch);
-  const leaveRoom = useMultiplayerStore((s) => s.leaveRoom);
 
   // Listen to Phaser scene game over events
   useEffect(() => {
@@ -255,10 +254,7 @@ export const FruitNinjaOverlays: React.FC<FruitNinjaOverlaysProps> = ({
     }
   };
 
-  const handleExitMatch = () => {
-    void leaveRoom();
-    onClose();
-  };
+  const handleExitMatch = () => onClose();
 
   const stats = localStats || { score: myScore, combosCount: 0, slicedCount: 0, bombsHit: 0, missedCount: 0 };
 

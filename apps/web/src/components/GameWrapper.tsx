@@ -2,8 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { GameId } from '../types';
 import { ArrowLeft, Copy, Check, Eye, Timer, Volume2, VolumeX, X, Zap, Users, Globe, Lock, Coins } from 'lucide-react';
 import { useMultiplayerStore } from '../store/multiplayerStore';
-import { ConfirmDialog } from './ui/ConfirmDialog';
-import { registerBackButtonHandler } from '../services/native/capacitorAppService';
 
 interface GameWrapperProps {
   title: string;
@@ -39,32 +37,13 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [copied, setCopied] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [showExitConfirm, setShowExitConfirm] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
 
   const room = useMultiplayerStore((s) => s.room);
   const isMatchFinished = isGameOver || room?.status === 'ended';
   const startRef = useRef<number>(Date.now());
 
-  // Intercept exit action
-  const handleExitRequest = () => {
-    if (isMatchFinished) {
-      onBack();
-    } else {
-      setShowExitConfirm(true);
-    }
-  };
-
-  const handleConfirmExit = async () => {
-    if (isExiting) return;
-    setIsExiting(true);
-    try {
-      setShowExitConfirm(false);
-      onBack();
-    } finally {
-      setIsExiting(false);
-    }
-  };
+  // Visible exit controls request confirmation from the game route.
+  const handleExitRequest = () => onBack();
 
   // Prevent accidental tab reload / close during an active match
   useEffect(() => {
@@ -77,18 +56,6 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isMatchFinished]);
-
-  // Android hardware back button handler
-  useEffect(() => {
-    if (isMatchFinished) return;
-
-    const unregister = registerBackButtonHandler(() => {
-      setShowExitConfirm(true);
-      return true; // prevent default back navigation
-    });
-
-    return () => unregister();
   }, [isMatchFinished]);
 
   useEffect(() => {
@@ -238,19 +205,6 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
           {children}
         </div>
 
-        {/* Exit Game Safety Confirmation Dialog */}
-        <ConfirmDialog
-          isOpen={showExitConfirm}
-          onClose={() => setShowExitConfirm(false)}
-          title="Exit Game?"
-          message="Are you sure you want to exit this game? You may lose your current progress or forfeit the match."
-          confirmText="Exit Game"
-          cancelText="Continue Playing"
-          variant="danger"
-          icon="warning"
-          isLoading={isExiting}
-          onConfirm={handleConfirmExit}
-        />
       </div>
     );
   }
@@ -326,19 +280,6 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
         {children}
       </div>
 
-      {/* Exit Game Safety Confirmation Dialog */}
-      <ConfirmDialog
-        isOpen={showExitConfirm}
-        onClose={() => setShowExitConfirm(false)}
-        title="Exit Game?"
-        message="Are you sure you want to exit this game? You may lose your current progress or forfeit the match."
-        confirmText="Exit Game"
-        cancelText="Continue Playing"
-        variant="danger"
-        icon="warning"
-        isLoading={isExiting}
-        onConfirm={handleConfirmExit}
-      />
     </div>
   );
 };

@@ -44,7 +44,7 @@ export const LudoGame: React.FC<LudoGameProps> = ({ mode: initialMode, stake, on
 
   if (isPlaying) {
     return (
-      <GameWrapper title="Ludo Champion" gameId="ludo" mode={initialMode} stake={stake} onBack={isMultiplayer ? onBack : resetGame} isFullscreen>
+      <GameWrapper title="Ludo Champion" gameId="ludo" mode={initialMode} stake={stake} onBack={onBack} isFullscreen>
         <div className="relative flex flex-col lg:flex-row items-center justify-center gap-4 w-full h-full p-0 sm:p-2">
           <div className="flex flex-col items-center gap-4 w-full h-full justify-center overflow-hidden">
             <LudoPhaserGame

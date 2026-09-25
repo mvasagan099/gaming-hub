@@ -62,7 +62,7 @@ export async function initCapacitorServices(): Promise<void> {
 
   // 4. Android Hardware Back Button Handling
   CapApp.addListener('backButton', ({ canGoBack }) => {
-    // If a custom handler intercepts the back button (e.g., active game exit confirmation dialog)
+    // Allow app-wide blocking screens to intercept Back; games use normal navigation.
     if (backButtonHandlers.length > 0) {
       const topHandler = backButtonHandlers[backButtonHandlers.length - 1];
       if (topHandler && topHandler()) {
