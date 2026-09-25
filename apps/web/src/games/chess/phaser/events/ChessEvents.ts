@@ -5,6 +5,7 @@ export const ChessEvents = {
   SQUARE_CLICKED:   "chess:square-clicked",
   PROMOTION_NEEDED: "chess:promotion-needed",
   PROMOTION_CHOSEN: "chess:promotion-chosen",
+  HISTORY_UPDATED:  "chess:history-updated",
 
   // Game End Status
   CHECK:            "chess:check",

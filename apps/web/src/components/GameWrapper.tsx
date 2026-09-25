@@ -15,6 +15,7 @@ interface GameWrapperProps {
   isFullscreen?: boolean;
   isGameOver?: boolean;
   hideFloatingExitOnMobile?: boolean;
+  hideFloatingExitOnDesktop?: boolean;
 }
 
 function formatElapsed(seconds: number): string {
@@ -33,6 +34,7 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
   isFullscreen = false,
   isGameOver = false,
   hideFloatingExitOnMobile = false,
+  hideFloatingExitOnDesktop = false,
 }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -113,12 +115,12 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
 
   if (isFullscreen) {
     return (
-      <div className="fixed inset-0 z-50 bg-[#060913] text-white flex flex-col overflow-hidden">
+      <div className="game-text-scale fixed inset-0 z-50 bg-[#060913] text-white flex flex-col overflow-hidden">
         {/* Floating Back / Exit button for Single Player & AI Fullscreen */}
         {!(mode === 'multiplayer' && room) && (
           <>
             {/* Desktop (>= lg): Exactly identical to existing styling & position */}
-            <div className="hidden lg:block absolute top-3 left-3 z-[65] pt-[env(safe-area-inset-top)]">
+            {!hideFloatingExitOnDesktop && <div className="hidden lg:block absolute top-3 left-3 z-[65] pt-[env(safe-area-inset-top)]">
               <button
                 type="button"
                 onClick={handleExitRequest}
@@ -129,7 +131,7 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
                 <ArrowLeft className="w-4 h-4 text-purple-400" />
                 <span>Exit</span>
               </button>
-            </div>
+            </div>}
 
             {/* Mobile (< lg): Sleek, compact 32px circular icon button (hidden if game has own mobile exit) */}
             {!hideFloatingExitOnMobile && (
@@ -254,7 +256,7 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
   }
 
   return (
-    <div className="min-h-full w-full flex flex-col items-center justify-between p-2 relative overflow-y-auto custom-scrollbar">
+    <div className="game-text-scale min-h-full w-full flex flex-col items-center justify-between p-2 relative overflow-y-auto custom-scrollbar">
       {/* Header bar */}
       <div className="w-full max-w-6xl flex flex-wrap sm:flex-nowrap items-center justify-between py-2.5 px-3 sm:px-6 rounded-2xl glass-panel border border-slate-200 dark:border-slate-800 shadow-xl mb-4 z-20 gap-2 shrink-0">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">

@@ -87,7 +87,7 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
       <div className="relative flex flex-col items-center justify-between lg:justify-center gap-1.5 sm:gap-2 w-full h-full max-h-[100dvh] max-w-[min(96vw,520px)] lg:max-w-none lg:w-auto">
         {/* Mobile Top HUD (Opponent Card & Clock) */}
         <div className="w-full lg:hidden flex justify-center">
-          <ChessMobileTop game={gameInstance} />
+          <ChessMobileTop game={gameInstance} online={online} />
         </div>
 
         {/* ── 3D Elevated Chess Board ── */}
@@ -116,13 +116,13 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
 
         {/* Mobile Bottom HUD (Player Card & Action Controls) */}
         <div className="w-full lg:hidden flex justify-center">
-          <ChessMobileBottom game={gameInstance} onReplay={onReplay} />
+          <ChessMobileBottom game={gameInstance} online={online} onReplay={onReplay} />
         </div>
       </div>
 
       {/* ── Desktop Unified Match Sidebar (>= lg) ── */}
       <div className="hidden lg:flex w-[300px] xl:w-[320px] flex-shrink-0 justify-center">
-        <ChessDesktopSidebar game={gameInstance} />
+        <ChessDesktopSidebar game={gameInstance} online={online} />
       </div>
 
       {/* ── Overlays (Promotion, Resign Confirm, Victory) ── */}

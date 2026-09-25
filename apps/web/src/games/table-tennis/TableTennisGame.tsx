@@ -632,6 +632,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       isFullscreen
       isGameOver={gameState === 'gameover'}
       hideFloatingExitOnMobile={true}
+      hideFloatingExitOnDesktop={true}
     >
       <div className="flex flex-col lg:flex-row items-center justify-center gap-0 lg:gap-4 w-full max-w-6xl relative mx-auto h-full p-0 lg:p-3 select-none overflow-hidden lg:overflow-y-auto">
         

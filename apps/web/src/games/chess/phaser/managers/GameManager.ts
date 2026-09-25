@@ -220,6 +220,7 @@ export default class GameManager {
     this.hud.updateStatus(
       this.chessEngine.turn() === "w" ? "White's Turn" : "Black's Turn"
     );
+    this.scene.events.emit(ChessEvents.HISTORY_UPDATED, this.chessEngine.history());
 
     // Sync captures
     this.hud.updateCaptures(computeCaptures(this.chessEngine));

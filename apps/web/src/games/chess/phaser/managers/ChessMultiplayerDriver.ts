@@ -1,9 +1,11 @@
 import Phaser from "phaser";
 import { Chess } from "chess.js";
 import { useMultiplayerStore } from "../../../../store/multiplayerStore";
+import { useAuthStore } from "../../../../store/authStore";
 import type { WinnerInfo } from "../../../../store/multiplayerStore";
 import { ChessEvents } from "../events/ChessEvents";
 import { fenToPieces, computeCaptures } from "../utils/chessUtils";
+import { orientationForChessColor, resolveChessParticipants, type ChessParticipant } from "../../utils/chessState";
 import type BoardManager from "./BoardManager";
 import type PieceManager from "./PieceManager";
 import type HUDManager from "./HUDManager";
@@ -46,7 +48,9 @@ export interface ChessRemoteState {
     | "flag"
     | null
     | string;
-  players?: { seat: number; color: "w" | "b" }[];
+  players?: ChessParticipant[];
+  whitePlayerId?: string;
+  blackPlayerId?: string;
 }
 
 // ...
@@ -72,7 +76,7 @@ export default class ChessMultiplayerDriver {
   private hud: HUDManager;
   private audio: AudioManager;
   private readonly mySeat: number | null;
-  private readonly myColor: "w" | "b" | null;
+  private myColor: "w" | "b" | null = null;
   private readonly names: string[];
 
   private mirror = new Chess();
@@ -99,7 +103,6 @@ export default class ChessMultiplayerDriver {
     this.hud = hud;
     this.audio = audio;
     this.mySeat = mySeat;
-    this.myColor = mySeat == null ? null : mySeat === 0 ? "w" : "b";
     this.names = names;
   }
 
@@ -306,6 +309,11 @@ export default class ChessMultiplayerDriver {
     }
 
     this.lastState = s;
+    const assignment = resolveChessParticipants(s.players, useAuthStore.getState().user?.id);
+    this.myColor = assignment?.local.seat === this.mySeat ? assignment.local.color : null;
+    if (assignment && this.board.isFlipped() !== (orientationForChessColor(assignment.local.color) === "black")) {
+      this.board.drawBoard(orientationForChessColor(assignment.local.color) === "black");
+    }
     this.mirror.load(s.fen);
     console.log("[ChessMultiplayerDriver] Mirror engine loaded, current turn:", this.mirror.turn());
 

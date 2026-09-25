@@ -1873,10 +1873,10 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
 
                 <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">SCORE BOARD</h3>
 
-                <div className="w-full grid grid-cols-3 gap-1.5 text-center bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-                  <div className={`flex flex-col items-center p-1.5 rounded-lg transition-all ${myColor === 'white' ? 'bg-emerald-500/15 border border-emerald-500/40 ring-1 ring-emerald-500/30' : ''}`}>
+                <div className="w-full min-w-0 grid grid-cols-2 gap-2 text-center bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                  <div className={`min-w-0 flex flex-col items-center p-2 rounded-lg transition-all ${myColor === 'white' ? 'bg-emerald-500/15 border border-emerald-500/40 ring-1 ring-emerald-500/30' : ''}`}>
                     <div className="w-4 h-4 rounded-full bg-white mb-1 shadow-sm border border-slate-300"></div>
-                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest flex items-center gap-1">
+                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wide flex flex-wrap items-center justify-center gap-x-1 leading-tight">
                       White {myColor === 'white' && <span className="text-[9px] text-emerald-400 font-black">(YOU)</span>}
                     </p>
                     <p className="text-base font-black text-amber-400 mt-1">
@@ -1884,23 +1884,23 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
                     </p>
                   </div>
                   
-                  <div className="flex flex-col items-center border-l border-r border-slate-700 px-1 p-1.5">
-                    <div className="w-4 h-4 rounded-full bg-rose-500 mb-1 shadow-sm border border-rose-300"></div>
-                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest">Queen</p>
-                    <p className="text-[9px] font-black text-amber-400 mt-1 uppercase">
-                       {mode === 'ai'
-                         ? (rulesRef.current.queenStatus === 'covered' ? 'Covered' : rulesRef.current.queenStatus === 'pocketed_needs_cover' ? 'Needs Cover' : 'Unpocketed')
-                         : (queenStatus === 'covered' ? 'Covered' : queenStatus === 'pocketed_needs_cover' ? 'Needs Cover' : 'Unpocketed')}
-                    </p>
-                  </div>
-
-                  <div className={`flex flex-col items-center p-1.5 rounded-lg transition-all ${myColor === 'black' ? 'bg-emerald-500/15 border border-emerald-500/40 ring-1 ring-emerald-500/30' : ''}`}>
+                  <div className={`min-w-0 flex flex-col items-center p-2 rounded-lg transition-all ${myColor === 'black' ? 'bg-emerald-500/15 border border-emerald-500/40 ring-1 ring-emerald-500/30' : ''}`}>
                     <div className="w-4 h-4 rounded-full bg-slate-950 mb-1 shadow-sm border border-slate-800"></div>
-                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest flex items-center gap-1">
+                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wide flex flex-wrap items-center justify-center gap-x-1 leading-tight">
                       Black {myColor === 'black' && <span className="text-[9px] text-emerald-400 font-black">(YOU)</span>}
                     </p>
                     <p className="text-base font-black text-slate-200 mt-1">
                       {coinsRef.current.filter(c => c.type === 'black' && (!c.active || c.pocketing !== undefined)).length} / 9
+                    </p>
+                  </div>
+
+                  <div className="col-span-2 min-w-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t border-slate-700 pt-2">
+                    <div className="w-3 h-3 rounded-full bg-rose-500 shadow-sm border border-rose-300" />
+                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wide">Queen</p>
+                    <p className="text-[10px] font-black text-amber-400 uppercase">
+                      {mode === 'ai'
+                        ? (rulesRef.current.queenStatus === 'covered' ? 'Covered' : rulesRef.current.queenStatus === 'pocketed_needs_cover' ? 'Needs Cover' : 'Unpocketed')
+                        : (queenStatus === 'covered' ? 'Covered' : queenStatus === 'pocketed_needs_cover' ? 'Needs Cover' : 'Unpocketed')}
                     </p>
                   </div>
                 </div>
@@ -1938,4 +1938,3 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
     </GameWrapper>
   );
 };
-

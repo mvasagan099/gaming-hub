@@ -7,6 +7,43 @@ describe("ChessEngine", () => {
     { seat: 1, userId: "p1", id: "p1", name: "Black Player" },
   ];
 
+  it("assigns white to seat 0 and black to seat 1 by user ID, regardless of input order", () => {
+    const engine = new ChessEngine([...players].reverse());
+    expect(engine.state.players).toEqual([
+      { userId: "p0", seat: 0, color: "w" },
+      { userId: "p1", seat: 1, color: "b" },
+    ]);
+    expect(engine.state.whitePlayerId).toBe("p0");
+    expect(engine.state.blackPlayerId).toBe("p1");
+    expect(engine.serialize()).toMatchObject({ whitePlayerId: "p0", blackPlayerId: "p1" });
+  });
+
+  it("keeps SAN history chronological and unchanged by invalid moves or duplicate snapshot reads", () => {
+    const engine = new ChessEngine(players);
+    expect(engine.apply({ type: "move", from: "e2", to: "e4" }, 0).ok).toBe(true);
+    expect(engine.state.history).toEqual(["e4"]);
+    expect(engine.apply({ type: "move", from: "e2", to: "e4" }, 0).ok).toBe(false);
+    expect(engine.state.history).toEqual(["e4"]);
+    expect(engine.apply({ type: "move", from: "e7", to: "e4" }, 1).ok).toBe(false);
+    expect(engine.state.history).toEqual(["e4"]);
+    expect(engine.apply({ type: "move", from: "e7", to: "e5" }, 1).ok).toBe(true);
+    const snapshot = engine.serialize();
+    expect(snapshot.history).toEqual(["e4", "e5"]);
+    expect(engine.serialize().history).toEqual(["e4", "e5"]);
+    expect(engine.state.history).toEqual(["e4", "e5"]);
+  });
+
+  it("restores the same participant colors and move history after reconnect", () => {
+    const original = new ChessEngine(players);
+    original.apply({ type: "move", from: "e2", to: "e4" }, 0);
+    const restored = new ChessEngine(players);
+    restored.restoreState(original.serialize() as typeof restored.state);
+    expect(restored.state.players).toEqual(original.state.players);
+    expect(restored.state.history).toEqual(["e4"]);
+    expect(restored.apply({ type: "move", from: "e7", to: "e5" }, 1).ok).toBe(true);
+    expect(restored.state.history).toEqual(["e4", "e5"]);
+  });
+
   it("handles valid moves and piece captures", () => {
     const engine = new ChessEngine(players);
     expect(engine.state.turn).toBe("w");
@@ -29,6 +66,7 @@ describe("ChessEngine", () => {
     expect(r3.events[0]?.type).toBe("move");
     expect((r3.events[0] as any).isCapture).toBe(true);
     expect(engine.state.turn).toBe("b");
+    expect(engine.state.history).toEqual(["e4", "d5", "exd5"]);
   });
 
   it("rejects out of turn moves", () => {
@@ -147,6 +185,7 @@ describe("ChessEngine", () => {
     expect(engine.state.checkmate).toBe(true);
     expect(engine.state.winnerSeats).toEqual([1]); // Black wins
     expect(engine.state.endReason).toBe("checkmate");
+    expect(engine.state.history.at(-1)).toBe("Qh4#");
   });
 
   it("handles resignation", () => {

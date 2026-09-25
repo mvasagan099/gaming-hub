@@ -3,6 +3,9 @@ import Phaser from "phaser";
 import { ChessEvents } from "../phaser/events/ChessEvents";
 import { Trophy, Shield, XCircle, RotateCcw, Flag, Handshake, Sparkles, Swords } from "lucide-react";
 import { useMultiplayerStore } from "../../../store/multiplayerStore";
+import { useAuthStore } from "../../../store/authStore";
+import { resolveChessParticipants } from "../utils/chessState";
+import type { ChessRemoteState } from "../phaser/managers/ChessMultiplayerDriver";
 
 interface ChessOverlaysProps {
   game: Phaser.Game | null;
@@ -24,7 +27,8 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
   const [showMatchIntro, setShowMatchIntro] = useState(true);
 
   const room = useMultiplayerStore((s) => s.room);
-  const mySeat = useMultiplayerStore((s) => s.mySeat);
+  const gameState = useMultiplayerStore((s) => s.gameState) as ChessRemoteState | null;
+  const userId = useAuthStore((s) => s.user?.id);
   const sendGameAction = useMultiplayerStore((s) => s.sendGameAction);
 
   // Match intro timer (< 1.8s)
@@ -84,8 +88,11 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
     setShowResignConfirm(false);
   };
 
-  const opponentPlayer = room?.players?.find((p) => p.seat !== mySeat);
-  const myPlayer = room?.players?.find((p) => p.seat === mySeat);
+  const assignment = online ? resolveChessParticipants(gameState?.players, userId) : null;
+  const opponentPlayer = room?.players?.find((p) => p.id === assignment?.opponent.userId);
+  const myPlayer = room?.players?.find((p) => p.id === assignment?.local.userId);
+  const myColor = online ? assignment?.local.color : "w";
+  const opponentColor = online ? assignment?.opponent.color : "b";
 
   return (
     <>
@@ -102,12 +109,12 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
             <div className="flex items-center gap-6 my-2">
               <div className="text-center">
                 <p className="text-sm font-black text-amber-300 truncate max-w-[100px]">{myPlayer?.displayName || "You"}</p>
-                <p className="text-[10px] text-slate-400 uppercase font-bold">White</p>
+                <p className="text-[10px] text-slate-400 uppercase font-bold">{myColor === "w" ? "White" : myColor === "b" ? "Black" : "Assigning"}</p>
               </div>
               <span className="text-xs font-black text-amber-500">VS</span>
               <div className="text-center">
                 <p className="text-sm font-black text-sky-300 truncate max-w-[100px]">{opponentPlayer?.displayName || "Opponent"}</p>
-                <p className="text-[10px] text-slate-400 uppercase font-bold">Black</p>
+                <p className="text-[10px] text-slate-400 uppercase font-bold">{opponentColor === "w" ? "White" : opponentColor === "b" ? "Black" : "Assigning"}</p>
               </div>
             </div>
 
@@ -130,17 +137,17 @@ export const ChessOverlays: React.FC<ChessOverlaysProps> = ({ game, online = fal
 
             <div className="grid grid-cols-4 gap-3 w-full">
               {[
-                { type: "q" as const, symbol: "♕", name: "Queen" },
-                { type: "r" as const, symbol: "♖", name: "Rook" },
-                { type: "b" as const, symbol: "♗", name: "Bishop" },
-                { type: "n" as const, symbol: "♘", name: "Knight" },
+                { type: "q" as const, white: "♕", black: "♛", name: "Queen" },
+                { type: "r" as const, white: "♖", black: "♜", name: "Rook" },
+                { type: "b" as const, white: "♗", black: "♝", name: "Bishop" },
+                { type: "n" as const, white: "♘", black: "♞", name: "Knight" },
               ].map((p) => (
                 <button
                   key={p.type}
                   onClick={() => handlePromotion(p.type)}
                   className="group flex flex-col items-center justify-center p-3.5 bg-slate-800/80 hover:bg-amber-500/20 rounded-2xl border border-slate-700 hover:border-amber-500/60 transition-all hover:scale-105 active:scale-95 shadow-lg"
                 >
-                  <span className="text-3xl text-white group-hover:text-amber-400 transition-colors drop-shadow-md mb-1">{p.symbol}</span>
+                  <span className="text-3xl text-white group-hover:text-amber-400 transition-colors drop-shadow-md mb-1">{myColor === "b" ? p.black : p.white}</span>
                   <span className="text-[10px] font-bold text-slate-400 group-hover:text-amber-300 uppercase tracking-wider">{p.name}</span>
                 </button>
               ))}

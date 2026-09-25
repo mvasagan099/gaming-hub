@@ -775,7 +775,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
   const showColorPicker = isMyTurn && !isSimulating && (frameStatus === "COLOR_PHASE" || frameStatus === "FREE_BALL");
 
   return (
-    <GameWrapper title="Snooker 3D" gameId="snooker" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={frameStatus === "MATCH_END"}>
+    <GameWrapper title="Snooker 3D" gameId="snooker" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={frameStatus === "MATCH_END"} hideFloatingExitOnMobile hideFloatingExitOnDesktop>
       <div className="relative h-full w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-between p-2 sm:p-3 select-none overflow-hidden">
         {/* Top Snooker Championship Broadcast HUD */}
         <SnookerHUD

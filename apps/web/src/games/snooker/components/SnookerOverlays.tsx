@@ -111,14 +111,14 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
         {/* Mobile Toolbar (Header Top Row) */}
         <div className="flex items-center justify-between gap-1.5 pb-1.5 mb-1.5 border-b border-slate-800 md:hidden">
           <div className="flex items-center gap-1.5">
-            <button
+            {mode !== "multiplayer" && <button
               onClick={onBack}
               className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 active:scale-95"
               title="Leave Match"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Exit</span>
-            </button>
+            </button>}
 
             {onToggleRotate && (
               <button
@@ -161,14 +161,14 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
         <div className="flex items-center justify-between gap-2 sm:gap-4 md:gap-8">
           {/* Desktop Toolbar (Hidden on mobile) */}
           <div className="hidden md:flex items-center gap-2">
-            <button
+            {mode !== "multiplayer" && <button
               onClick={onBack}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 hover:scale-105 active:scale-95"
               title="Leave Match"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Exit</span>
-            </button>
+            </button>}
 
             {onToggleRotate && (
               <button

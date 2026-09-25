@@ -8,6 +8,10 @@ import ThemeManager from "../managers/ThemeManager";
 import AudioManager from "../../../snake-ladder/phaser/managers/AudioManager";
 import type { ChessSettings } from "../types/chess.types";
 import { ChessEvents } from "../events/ChessEvents";
+import { useAuthStore } from "../../../../store/authStore";
+import { useMultiplayerStore } from "../../../../store/multiplayerStore";
+import { orientationForChessColor, resolveChessParticipants } from "../../utils/chessState";
+import type { ChessRemoteState } from "../managers/ChessMultiplayerDriver";
 
 export default class ChessScene extends Phaser.Scene {
   private board!: BoardManager;
@@ -45,7 +49,11 @@ export default class ChessScene extends Phaser.Scene {
 
     // 2. Board Manager (depth 0–4)
     this.board = new BoardManager(this, this.themeManager);
-    this.board.drawBoard(online && seat === 1);
+    const initialState = useMultiplayerStore.getState().gameState as ChessRemoteState | null;
+    const assignment = online
+      ? resolveChessParticipants(initialState?.players, useAuthStore.getState().user?.id)
+      : null;
+    this.board.drawBoard(orientationForChessColor(assignment?.local.color) === "black");
 
     // 3. Piece Manager (depth 50)
     this.pieceManager = new PieceManager(this, this.board);

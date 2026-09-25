@@ -6,7 +6,8 @@
  *   - ChessMobileTop (< lg): Compact opponent card + digital clock + sound toggle
  *   - ChessMobileBottom (< lg): Compact player card + clock + turn pill + action buttons + move modal
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Chess } from "chess.js";
 import {
   Trophy,
   Volume2,
@@ -22,36 +23,40 @@ import {
 } from "lucide-react";
 import type { ChessRemoteState } from "../phaser/managers/ChessMultiplayerDriver";
 import { useMultiplayerStore } from "../../../store/multiplayerStore";
+import { useAuthStore } from "../../../store/authStore";
 import {
   liveRemainingMs,
   formatClock,
   materialEval,
 } from "../utils/chessReactUtils";
 import { ChessEvents } from "../phaser/events/ChessEvents";
+import { computeCaptures } from "../phaser/utils/chessUtils";
+import { chessPieceGlyph, pairChessHistory, resolveChessParticipants, type ChessColor, type ChessParticipant } from "../utils/chessState";
 import type { PieceType } from "../phaser/types/chess.types";
 
 interface ChessMatchPanelProps {
   game?: Phaser.Game | null;
+  online: boolean;
 }
-
-const PIECE_GLYPHS: Record<PieceType, string> = {
-  p: "♟", r: "♜", n: "♞", b: "♝", q: "♛", k: "♚",
-};
 
 const PIECE_VALUES: Record<PieceType, number> = {
   p: 1, n: 3, b: 3, r: 5, q: 9, k: 0,
 };
 
+const colorLabel = (color: ChessColor | null) => color === "w" ? "White" : color === "b" ? "Black" : "Pending";
+const colorIcon = (color: ChessColor | null) => color === "w" ? "♔" : color === "b" ? "♚" : "–";
+
 /** Shared hook for chess match panel state and real-time timers */
-export function useChessPanelState(game?: Phaser.Game | null) {
+export function useChessPanelState(game: Phaser.Game | null | undefined, online: boolean) {
   const gameState      = useMultiplayerStore((s) => s.gameState) as unknown as ChessRemoteState | null;
   const room           = useMultiplayerStore((s) => s.room);
-  const mySeat         = useMultiplayerStore((s) => s.mySeat);
+  const userId         = useAuthStore((s) => s.user?.id);
   const sendGameAction = useMultiplayerStore((s) => s.sendGameAction);
   const socketStatus   = useMultiplayerStore((s) => s.status);
 
   const [localStatus,   setLocalStatus]   = useState<string>("WHITE'S TURN");
   const [localCaptures, setLocalCaptures] = useState<{ w: PieceType[]; b: PieceType[] }>({ w: [], b: [] });
+  const [localHistory, setLocalHistory] = useState<string[]>([]);
   const [isMuted,       setIsMuted]       = useState(false);
   const [tick,          setTick]          = useState(Date.now());
 
@@ -64,32 +69,43 @@ export function useChessPanelState(game?: Phaser.Game | null) {
   // Scene event bridge (offline / AI)
   useEffect(() => {
     if (!game) return;
+    let attachedScene: Phaser.Scene | null = null;
+    const onStatus = (status: string) => setLocalStatus(status.toUpperCase());
+    const onCaptures = (captures: { w: PieceType[]; b: PieceType[] }) => setLocalCaptures(captures);
+    const onHistory = (history: string[]) => setLocalHistory(history);
+    setLocalHistory([]);
     const id = setInterval(() => {
       const scene = game.scene.getScene("ChessScene");
       if (!scene) return;
       clearInterval(id);
-      scene.events.on("chess:hud-status",   (s: string)                          => setLocalStatus(s.toUpperCase()));
-      scene.events.on("chess:hud-captures", (c: { w: PieceType[]; b: PieceType[] }) => setLocalCaptures(c));
+      attachedScene = scene;
+      scene.events.on("chess:hud-status", onStatus);
+      scene.events.on("chess:hud-captures", onCaptures);
+      scene.events.on(ChessEvents.HISTORY_UPDATED, onHistory);
     }, 100);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      attachedScene?.events.off("chess:hud-status", onStatus);
+      attachedScene?.events.off("chess:hud-captures", onCaptures);
+      attachedScene?.events.off(ChessEvents.HISTORY_UPDATED, onHistory);
+    };
   }, [game]);
 
-  const s        = gameState;
-  const isOnline = !!s;
+  const s        = online ? gameState : null;
+  const isOnline = online;
   const mode     = (game?.registry.get("mode") as "ai" | "pvp") ?? "ai";
   const aiLevel  = (game?.registry.get("aiLevel") as number)    ?? 2;
 
-  const players    = s?.players ?? [];
-  const myIdx      = players.findIndex((p) => p.seat === mySeat);
-  const oppIdx     = myIdx === 0 ? 1 : 0;
-  const opponent   = players[oppIdx]  ?? { seat: oppIdx,       color: oppIdx === 0 ? "w" : "b" };
-  const myPlayer   = players[myIdx]   ?? { seat: mySeat ?? 0,  color: mySeat === 0 ? "w" : "b" };
+  const assignment = resolveChessParticipants(s?.players, userId);
+  const pendingPlayer: ChessParticipant | { userId: string; seat: number; color: null } = { userId: "", seat: -1, color: null };
+  const myPlayer = isOnline ? assignment?.local ?? pendingPlayer : { userId: "local", seat: 0, color: "w" as const };
+  const opponent = isOnline ? assignment?.opponent ?? pendingPlayer : { userId: "ai", seat: 1, color: "b" as const };
 
   const oppName = isOnline
-    ? room?.players?.find((p) => p.seat === opponent.seat)?.displayName || `Player ${(opponent.seat ?? 0) + 1}`
+    ? room?.players?.find((p) => p.id === opponent.userId)?.displayName || "Opponent"
     : mode === "ai" ? `StockAI (Lv${aiLevel})` : "Player 2";
   const myName  = isOnline
-    ? room?.players?.find((p) => p.seat === myPlayer.seat)?.displayName || "You"
+    ? room?.players?.find((p) => p.id === myPlayer.userId)?.displayName || "You"
     : "Player 1";
 
   const clocks       = s?.clocks;
@@ -98,32 +114,25 @@ export function useChessPanelState(game?: Phaser.Game | null) {
   const myMs         = clocks?.[myKey]  ? liveRemainingMs(clocks[myKey]!,  tick) : Infinity;
   const oppMs        = clocks?.[oppKey] ? liveRemainingMs(clocks[oppKey]!, tick) : Infinity;
 
-  const isMySeatTurn  = isOnline ? s?.currentSeat === mySeat          : localStatus.includes("WHITE");
-  const isOppTurn     = isOnline ? s?.currentSeat === opponent.seat    : localStatus.includes("BLACK");
+  const isMySeatTurn  = isOnline ? myPlayer.seat >= 0 && s?.currentSeat === myPlayer.seat && s?.turn === myPlayer.color : localStatus.includes("WHITE");
+  const isOppTurn     = isOnline ? opponent.seat >= 0 && s?.currentSeat === opponent.seat && s?.turn === opponent.color : localStatus.includes("BLACK");
 
-  const drawOfferedByMe = s?.drawOfferedBy === mySeat;
-  const canAcceptDraw   = s?.drawOfferedBy != null && s?.drawOfferedBy !== mySeat;
+  const drawOfferedByMe = myPlayer.seat >= 0 && s?.drawOfferedBy === myPlayer.seat;
+  const canAcceptDraw   = myPlayer.seat >= 0 && s?.drawOfferedBy != null && s.drawOfferedBy !== myPlayer.seat;
 
   // Material advantage (positive = my advantage)
-  const myEval = s?.fen ? materialEval(s.fen) : 0;
+  const myEval = s?.fen ? materialEval(s.fen) * (myPlayer.color === "b" ? -1 : 1) : 0;
 
   // Captured pieces from local captures or server history
-  const myCaptures  = localCaptures.b; // I captured black pieces
-  const oppCaptures = localCaptures.w; // opponent captured white pieces
+  const serverCaptures = useMemo(() => s?.fen ? computeCaptures(new Chess(s.fen)) : null, [s?.fen]);
+  const captures = serverCaptures ?? localCaptures;
+  const myCaptures = myPlayer.color === "b" ? captures.w : myPlayer.color === "w" ? captures.b : [];
+  const oppCaptures = opponent.color === "b" ? captures.w : opponent.color === "w" ? captures.b : [];
   const myCaptureScore  = myCaptures.reduce((a, p)  => a + PIECE_VALUES[p],  0);
   const oppCaptureScore = oppCaptures.reduce((a, p) => a + PIECE_VALUES[p], 0);
 
   // Move history pairs
-  const movePairs: Array<{ num: number; white: string; black?: string }> = [];
-  if (s?.history) {
-    for (let i = 0; i < s.history.length; i += 2) {
-      const wRaw = s.history[i];
-      const bRaw = s.history[i + 1];
-      const w    = typeof wRaw === "string" ? wRaw : (wRaw as any)?.san ?? "";
-      const b    = typeof bRaw === "string" ? bRaw : (bRaw as any)?.san;
-      movePairs.push({ num: Math.floor(i / 2) + 1, white: w, black: b });
-    }
-  }
+  const movePairs = pairChessHistory(s?.history ?? localHistory);
 
   const handleResign = () => {
     if (isOnline) sendGameAction?.({ type: "resign" });
@@ -208,6 +217,7 @@ function PlayerCard({
   colorIcon,
   colorLabel,
   captures,
+  capturedColor,
   materialScore,
   isActive,
   isMe,
@@ -217,6 +227,7 @@ function PlayerCard({
   colorIcon: string;
   colorLabel: string;
   captures: PieceType[];
+  capturedColor: ChessColor | null;
   materialScore: number;
   isActive: boolean;
   isMe: boolean;
@@ -264,7 +275,7 @@ function PlayerCard({
         {captures.length > 0 && (
           <div className="flex flex-wrap items-center gap-0.5 mt-0.5">
             {captures.map((p, i) => (
-              <span key={i} className="text-[10px] sm:text-[11px] leading-none text-slate-400">{PIECE_GLYPHS[p]}</span>
+              <span key={i} className="text-[10px] sm:text-[11px] leading-none text-slate-400">{chessPieceGlyph(capturedColor ?? "b", p)}</span>
             ))}
             {materialScore > 0 && (
               <span className="ml-1 text-[9px] sm:text-[10px] font-black text-emerald-400">+{materialScore}</span>
@@ -278,7 +289,7 @@ function PlayerCard({
 
 // ─── Desktop Sidebar (>= lg) ────────────────────────────────────────────────
 
-export function ChessDesktopSidebar({ game }: ChessMatchPanelProps) {
+export function ChessDesktopSidebar({ game, online }: ChessMatchPanelProps) {
   const {
     s,
     isOnline,
@@ -307,7 +318,7 @@ export function ChessDesktopSidebar({ game }: ChessMatchPanelProps) {
     handleOfferDraw,
     handleAcceptDraw,
     handleDeclineDraw,
-  } = useChessPanelState(game);
+  } = useChessPanelState(game, online);
 
   const moveHistoryRef = useRef<HTMLDivElement>(null);
 
@@ -371,9 +382,10 @@ export function ChessDesktopSidebar({ game }: ChessMatchPanelProps) {
       {/* ── OPPONENT CARD ── */}
       <PlayerCard
         name={oppName}
-        colorIcon={opponent.color === "w" ? "♔" : "♚"}
-        colorLabel={opponent.color === "w" ? "White" : "Black"}
+        colorIcon={colorIcon(opponent.color)}
+        colorLabel={colorLabel(opponent.color)}
         captures={oppCaptures}
+        capturedColor={myPlayer.color}
         materialScore={oppCaptureScore > myCaptureScore ? oppCaptureScore - myCaptureScore : 0}
         isActive={isOppTurn}
         isMe={false}
@@ -400,11 +412,11 @@ export function ChessDesktopSidebar({ game }: ChessMatchPanelProps) {
       {/* ── EVALUATION BAR ── */}
       <div className="space-y-1">
         <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-          <span>{myPlayer.color === "w" ? "White" : "Black"}</span>
+          <span>{colorLabel(myPlayer.color)}</span>
           <span className={`${myEval > 0 ? "text-amber-400" : myEval < 0 ? "text-sky-400" : "text-slate-500"}`}>
             {myEval > 0 ? `+${myEval}` : myEval < 0 ? `${myEval}` : "="}
           </span>
-          <span>{opponent.color === "w" ? "White" : "Black"}</span>
+          <span>{colorLabel(opponent.color)}</span>
         </div>
         <div className="relative h-2 w-full bg-slate-800 rounded-full overflow-hidden">
           <div
@@ -461,9 +473,10 @@ export function ChessDesktopSidebar({ game }: ChessMatchPanelProps) {
       {/* ── MY PLAYER CARD ── */}
       <PlayerCard
         name={myName}
-        colorIcon={myPlayer.color === "w" ? "♔" : "♚"}
-        colorLabel={myPlayer.color === "w" ? "White" : "Black"}
+        colorIcon={colorIcon(myPlayer.color)}
+        colorLabel={colorLabel(myPlayer.color)}
         captures={myCaptures}
+        capturedColor={opponent.color}
         materialScore={myCaptureScore > oppCaptureScore ? myCaptureScore - oppCaptureScore : 0}
         isActive={isMySeatTurn}
         isMe={true}
@@ -516,9 +529,10 @@ export function ChessDesktopSidebar({ game }: ChessMatchPanelProps) {
 
 // ─── Mobile Top HUD (< lg) ──────────────────────────────────────────────────
 
-export function ChessMobileTop({ game }: ChessMatchPanelProps) {
+export function ChessMobileTop({ game, online }: ChessMatchPanelProps) {
   const {
     opponent,
+    myPlayer,
     oppName,
     oppMs,
     isOppTurn,
@@ -531,7 +545,7 @@ export function ChessMobileTop({ game }: ChessMatchPanelProps) {
     mode,
     aiLevel,
     hasFloatingExit,
-  } = useChessPanelState(game);
+  } = useChessPanelState(game, online);
 
   return (
     <div
@@ -541,9 +555,10 @@ export function ChessMobileTop({ game }: ChessMatchPanelProps) {
     >
       <PlayerCard
         name={oppName}
-        colorIcon={opponent.color === "w" ? "♔" : "♚"}
-        colorLabel={opponent.color === "w" ? "White" : "Black"}
+        colorIcon={colorIcon(opponent.color)}
+        colorLabel={colorLabel(opponent.color)}
         captures={oppCaptures}
+        capturedColor={myPlayer.color}
         materialScore={oppCaptureScore > myCaptureScore ? oppCaptureScore - myCaptureScore : 0}
         isActive={isOppTurn}
         isMe={false}
@@ -572,9 +587,10 @@ export interface ChessMobileBottomProps extends ChessMatchPanelProps {
   onReplay?: () => void;
 }
 
-export function ChessMobileBottom({ game, onReplay }: ChessMobileBottomProps) {
+export function ChessMobileBottom({ game, online, onReplay }: ChessMobileBottomProps) {
   const {
     myPlayer,
+    opponent,
     myName,
     myMs,
     isMySeatTurn,
@@ -589,7 +605,7 @@ export function ChessMobileBottom({ game, onReplay }: ChessMobileBottomProps) {
     handleOfferDraw,
     handleAcceptDraw,
     handleResign,
-  } = useChessPanelState(game);
+  } = useChessPanelState(game, online);
 
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
@@ -599,9 +615,10 @@ export function ChessMobileBottom({ game, onReplay }: ChessMobileBottomProps) {
       <div className="flex items-center justify-between gap-1.5 sm:gap-2 p-1.5 sm:p-2 bg-[#0b0f1a]/95 backdrop-blur-xl border border-slate-800/80 rounded-2xl shadow-lg">
         <PlayerCard
           name={myName}
-          colorIcon={myPlayer.color === "w" ? "♔" : "♚"}
-          colorLabel={myPlayer.color === "w" ? "White" : "Black"}
+          colorIcon={colorIcon(myPlayer.color)}
+          colorLabel={colorLabel(myPlayer.color)}
           captures={myCaptures}
+          capturedColor={opponent.color}
           materialScore={myCaptureScore > oppCaptureScore ? myCaptureScore - oppCaptureScore : 0}
           isActive={isMySeatTurn}
           isMe={true}

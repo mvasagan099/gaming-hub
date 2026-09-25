@@ -24,6 +24,8 @@ const gamesList: GameMetadata[] = GAMES_DATA.map(g => ({
   isHot: g.isFeatured
 }));
 
+const strategyGameIds = new Set<GameId>(['chess', 'ludo', 'carrom', 'snooker']);
+
 const banners = [
   {
     id: 4,
@@ -146,7 +148,8 @@ export const Home: React.FC = () => {
   const popularGames = playableGamesList.filter(g => g.isHot);
 
   const filteredGames = playableGamesList.filter(g => {
-    const matchesCat = selectedCategory === 'All' || g.category === selectedCategory;
+    const matchesCat = selectedCategory === 'All'
+      || (selectedCategory === 'Strategy' ? strategyGameIds.has(g.id) : g.category === selectedCategory);
     const matchesSearch = g.title.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCat && matchesSearch;
   });

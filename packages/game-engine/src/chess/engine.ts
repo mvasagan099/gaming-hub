@@ -44,7 +44,9 @@ export type ChessState = JsonObject & {
   moveCount: number;
   /** SAN of every played ply, in order. */
   history: string[];
-  players: { seat: number; color: ChessColor }[];
+  players: { userId: string; seat: number; color: ChessColor }[];
+  whitePlayerId: string;
+  blackPlayerId: string;
   timeControl: ChessTimeControlConfig | null;
   clocks: { [seat: string]: ChessClockSnapshot } | null;
   lastMoveAtMs: number | null;
@@ -82,8 +84,8 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
 
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: ChessEngineOptions) {
     super(players, rng);
-    if (players.length !== 2) {
-      throw new Error("Chess requires exactly 2 players");
+    if (players.length !== 2 || !this.players.some((p) => p.seat === 0) || !this.players.some((p) => p.seat === 1)) {
+      throw new Error("Chess requires Player 1 in seat 0 and Player 2 in seat 1");
     }
     const tc = options?.timeControl;
     this.timeControl =
@@ -150,7 +152,9 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
       lastMove: null,
       moveCount: chess.moveNumber(),
       history: [],
-      players: this.players.map((p) => ({ seat: p.seat, color: p.seat === 0 ? "w" : "b" })),
+      players: this.players.map((p) => ({ userId: p.userId, seat: p.seat, color: p.seat === 0 ? "w" : "b" })),
+      whitePlayerId: this.players[0]!.userId,
+      blackPlayerId: this.players[1]!.userId,
       timeControl: this.timeControl,
       clocks: null,
       lastMoveAtMs: null,
@@ -224,7 +228,7 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
         if (seat !== state.currentSeat) {
           return "It is not your turn";
         }
-        const expectedColor: ChessColor = seat === 0 ? "w" : "b";
+        const expectedColor = state.players.find((player) => player.seat === seat)?.color;
         if (state.turn !== expectedColor) {
           return "You are moving the wrong color";
         }
