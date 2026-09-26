@@ -607,6 +607,18 @@ export async function cancelWalletRequest(
         409,
       );
     }
+    if (request.kind === "WITHDRAWAL") {
+      await lockWalletRow(tx, userId);
+      await applyTransaction(
+        tx,
+        userId,
+        request.amount + request.fee,
+        "REVERSAL",
+        requestId,
+        { reason: "Withdrawal cancelled by user", originalTransactionId: requestId },
+        "MAIN",
+      );
+    }
     return tx.walletRequest.update({
       where: { id: requestId },
       data: { status: "CANCELLED", decidedAt: new Date() },
@@ -672,39 +684,10 @@ export async function approveWalletRequest(
           "Direct deposit approvals are disabled; funding is handled via CouponVault coupons.",
           403,
         );
-      } else {
-        const wallet = await tx.wallet.findUniqueOrThrow({
-          where: { userId: request!.userId },
-        });
-        const total = request!.amount + request!.fee;
-        if (wallet.balance < total) {
-          throw new AppError(
-            "INSUFFICIENT_BALANCE",
-            "Insufficient balance to approve this withdrawal",
-            400,
-          );
-        }
-        await applyTransaction(
-          tx,
-          request!.userId,
-          -request!.amount,
-          "WITHDRAWAL",
-          request!.id,
-          { approvedBy: adminId },
-          "MAIN",
-        );
-        if (request!.fee > 0) {
-          await applyTransaction(
-            tx,
-            request!.userId,
-            -request!.fee,
-            "WITHDRAWAL",
-            request!.id,
-            { approvedBy: adminId, fee: true },
-            "MAIN",
-          );
-        }
       }
+      // Note: Withdrawal funds (amount + fee) were already debited from the user's wallet
+      // upon creation in createWithdrawalRequest() to hold the funds.
+      // Therefore, do NOT debit the wallet a second time here.
 
       const wallet = await tx.wallet.findUniqueOrThrow({
         where: { userId: request!.userId },
@@ -832,6 +815,20 @@ export async function rejectWalletRequest(
       await lockWalletRequestRow(tx, requestId);
       const request = await tx.walletRequest.findUnique({ where: { id: requestId } });
       await assertPending(request);
+
+      if (request!.kind === "WITHDRAWAL") {
+        await lockWalletRow(tx, request!.userId);
+        await applyTransaction(
+          tx,
+          request!.userId,
+          request!.amount + request!.fee,
+          "REVERSAL",
+          requestId,
+          { reason: reason.trim() || "Withdrawal rejected by admin", originalTransactionId: requestId },
+          "MAIN",
+        );
+      }
+
       return tx.walletRequest.update({
         where: { id: requestId },
         data: {

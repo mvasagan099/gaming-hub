@@ -92,12 +92,12 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
   const verificationMethod: "TOTP" | "EMAIL_OTP" = twoFactorEnabled ? "TOTP" : "EMAIL_OTP";
   const maskedEmail = maskEmail(userEmail);
 
-  // Numeric amount calculation
-  const parsedAmount = parseFloat(amountInput) || 0;
+  // Numeric amount calculation (strictly integer coins)
+  const parsedAmount = Math.floor(parseFloat(amountInput) || 0);
   const calculatedFee =
     withdrawalFeePercent > 0 ? Math.round((parsedAmount * withdrawalFeePercent) / 100) : 0;
   const youReceive = Math.max(0, parsedAmount - calculatedFee);
-  const remainingBalance = Math.max(0, currentBalance - parsedAmount);
+  const remainingBalance = Math.max(0, Math.floor(currentBalance) - parsedAmount);
 
   // Reset state on open/close
   useEffect(() => {
@@ -124,8 +124,8 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
 
   // Step 1: Input Validation -> Confirm
   const handleProceedToConfirm = () => {
-    if (parsedAmount < 50) {
-      toast.error("Minimum withdrawal is 50 Coins");
+    if (!/^\d+$/.test(amountInput.trim()) || parsedAmount < 50) {
+      toast.error("Withdrawal amount must be a whole number of at least 50 Coins");
       return;
     }
     if (parsedAmount > currentBalance) {
@@ -398,11 +398,17 @@ export const WithdrawalFlowModal: React.FC<WithdrawalFlowModalProps> = ({
                 <Coins className="absolute left-4 text-amber-400 w-5 h-5 pointer-events-none" />
                 <input
                   type="number"
+                  step="1"
                   value={amountInput}
-                  onChange={(e) => setAmountInput(e.target.value)}
-                  placeholder="0.00"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "" || /^\d+$/.test(val)) {
+                      setAmountInput(val);
+                    }
+                  }}
+                  placeholder="50"
                   min="50"
-                  max={currentBalance}
+                  max={Math.floor(currentBalance)}
                   autoFocus
                   className="w-full pl-11 pr-24 py-4 rounded-2xl border border-slate-700/80 bg-slate-800/80 text-white font-black text-xl outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-inner"
                 />

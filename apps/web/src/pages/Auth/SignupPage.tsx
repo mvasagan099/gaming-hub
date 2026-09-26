@@ -15,6 +15,8 @@ import {
   Gift,
   ShieldCheck,
   AtSign,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { COUNTRIES, CURRENCIES, countryToCurrency } from "@gaming-hub/shared";
 import { supabase } from "../../services/supabase";
@@ -70,6 +72,8 @@ export function SignupPage() {
   const [submitting, setSubmitting] = useState(false);
   const [confirmationSent, setConfirmationSent] = useState(false);
   const [referralLocked, setReferralLocked] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     const refParam = searchParams.get("ref") || searchParams.get("referral");
@@ -465,18 +469,26 @@ export function SignupPage() {
           {errors.referredBy && <FieldError message={errors.referredBy} />}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 autoComplete="new-password"
                 placeholder="Password (min 8)"
                 value={form.password}
                 onChange={(e) => set("password", e.target.value)}
-                className={inputClass + " pl-10"}
+                className={inputClass + " pl-10 pr-10"}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
             {errors.password && <FieldError message={errors.password} />}
           </div>
@@ -485,13 +497,21 @@ export function SignupPage() {
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
               <input
-                type="password"
+                type={showConfirmPassword ? "text" : "password"}
                 autoComplete="new-password"
                 placeholder="Confirm password"
                 value={form.confirmPassword}
                 onChange={(e) => set("confirmPassword", e.target.value)}
-                className={inputClass + " pl-10"}
+                className={inputClass + " pl-10 pr-10"}
               />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((prev) => !prev)}
+                className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
+                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+              >
+                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
             {errors.confirmPassword && <FieldError message={errors.confirmPassword} />}
           </div>

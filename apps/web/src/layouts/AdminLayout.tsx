@@ -27,6 +27,7 @@ import {
   ChevronRight,
   Bell,
   Smartphone,
+  Menu,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useTheme } from '../contexts/ThemeProvider';
@@ -34,48 +35,62 @@ import { useMe } from '../services/api/useMe';
 import { useFeatureFlagsStore } from '../store/featureFlagsStore';
 import { openMfaModal } from '../components/auth/MfaVerificationModal';
 import { MobileBackButton } from '../components/layout/MobileBackButton';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { hasPermission, type Permission, type DbUserRole } from '@gaming-hub/shared';
 
-const NAV_GROUPS = [
+interface NavItem {
+  path: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  exact?: boolean;
+  permission?: Permission;
+}
+
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
   {
     title: 'OVERVIEW',
     items: [
       { path: '/admin', label: 'Overview', icon: LayoutDashboard, exact: true },
-      { path: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
-      { path: '/admin/monitoring', label: 'Monitoring', icon: Activity },
+      { path: '/admin/analytics', label: 'Analytics', icon: BarChart3, permission: 'admin:analytics:view' },
+      { path: '/admin/monitoring', label: 'Monitoring', icon: Activity, permission: 'admin:monitoring:view' },
     ],
   },
   {
     title: 'MANAGEMENT',
     items: [
-      { path: '/admin/users', label: 'Users', icon: Users },
-      { path: '/admin/kyc', label: 'KYC Verification', icon: FileCheck },
-      { path: '/admin/roles', label: 'Roles & Permissions', icon: Shield },
-      { path: '/admin/games', label: 'Games Management', icon: Gamepad2 },
-      { path: '/admin/matches', label: 'Matches', icon: Swords },
-      { path: '/admin/rooms', label: 'Rooms', icon: Gamepad2 },
-      { path: '/admin/tournaments', label: 'Tournaments', icon: Trophy },
-      { path: '/admin/features', label: 'Feature Flags', icon: Flag },
+      { path: '/admin/users', label: 'Users', icon: Users, permission: 'admin:users:view' },
+      { path: '/admin/kyc', label: 'KYC Verification', icon: FileCheck, permission: 'admin:kyc:view' },
+      { path: '/admin/roles', label: 'Roles & Permissions', icon: Shield, permission: 'admin:roles:view' },
+      { path: '/admin/games', label: 'Games Management', icon: Gamepad2, permission: 'admin:games:view' },
+      { path: '/admin/matches', label: 'Matches', icon: Swords, permission: 'admin:matches:view' },
+      { path: '/admin/rooms', label: 'Rooms', icon: Gamepad2, permission: 'admin:rooms:view' },
+      { path: '/admin/tournaments', label: 'Tournaments', icon: Trophy, permission: 'admin:tournaments:view' },
+      { path: '/admin/features', label: 'Feature Flags', icon: Flag, permission: 'admin:features:view' },
     ],
   },
   {
     title: 'MARKETING & SUPPORT',
     items: [
-      { path: '/admin/affiliates', label: 'Affiliates', icon: Coins },
-      { path: '/admin/coupons', label: 'Coupons', icon: Ticket },
-      { path: '/admin/announcements', label: 'Announcements', icon: Megaphone },
-      { path: '/admin/crm', label: 'Support CRM', icon: Headset },
-      { path: '/admin/support', label: 'Help Center', icon: HelpCircle },
+      { path: '/admin/affiliates', label: 'Affiliates', icon: Coins, permission: 'admin:referrals:view' },
+      { path: '/admin/coupons', label: 'Coupons', icon: Ticket, permission: 'admin:coupons:view' },
+      { path: '/admin/announcements', label: 'Announcements', icon: Megaphone, permission: 'admin:announcements:view' },
+      { path: '/admin/crm', label: 'Support CRM', icon: Headset, permission: 'admin:crm:view' },
+      { path: '/admin/support', label: 'Help Center', icon: HelpCircle, permission: 'admin:crm:view' },
     ],
   },
   {
     title: 'SYSTEM & LOGS',
     items: [
-      { path: '/admin/errors', label: 'Error Center', icon: AlertTriangle },
-      { path: '/admin/automation', label: 'Automation', icon: Cpu },
-      { path: '/admin/audit', label: 'Audit Logs', icon: History },
-      { path: '/admin/settings', label: 'Settings', icon: Settings },
-      { path: '/admin/app-version', label: 'App Version', icon: Smartphone },
+      { path: '/admin/errors', label: 'Error Center', icon: AlertTriangle, permission: 'admin:errors:view' },
+      { path: '/admin/automation', label: 'Automation', icon: Cpu, permission: 'admin:automation:view' },
+      { path: '/admin/audit', label: 'Audit Logs', icon: History, permission: 'admin:audit:view' },
+      { path: '/admin/settings', label: 'Settings', icon: Settings, permission: 'admin:settings:view' },
+      { path: '/admin/app-version', label: 'App Version', icon: Smartphone, permission: 'admin:settings:view' },
     ],
   },
 ];
@@ -105,7 +120,20 @@ export function AdminLayout() {
     setIsMobileOpen(false);
   }, [location.pathname]);
 
-  const allItems = NAV_GROUPS.flatMap((g) => g.items);
+  const userRole = (me?.user?.role as DbUserRole) || 'USER';
+  const customPermissions = (me as unknown as { customPermissions?: Permission[] })?.customPermissions || [];
+
+  const filteredGroups = useMemo(() => {
+    return NAV_GROUPS.map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (!item.permission || userRole === 'ADMIN') return true;
+        return hasPermission(userRole, item.permission, customPermissions);
+      }),
+    })).filter((group) => group.items.length > 0);
+  }, [userRole, customPermissions]);
+
+  const allItems = filteredGroups.flatMap((g) => g.items);
   const currentItem = allItems.find((n) =>
     n.exact ? location.pathname === n.path : location.pathname.startsWith(n.path),
   );
@@ -146,7 +174,7 @@ export function AdminLayout() {
 
         {/* Nav Links Grouped */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5 custom-scrollbar">
-          {NAV_GROUPS.map((group) => (
+          {filteredGroups.map((group) => (
             <div key={group.title} className="space-y-1">
               <div className="px-3 text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5">
                 {group.title}
@@ -198,7 +226,7 @@ export function AdminLayout() {
               </div>
               <div className="text-[10px] font-extrabold text-emerald-500 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Super Admin
+                {userRole === 'ADMIN' ? 'Super Admin' : userRole === 'MODERATOR' ? 'Moderator' : 'Staff'}
               </div>
             </div>
           </div>
@@ -228,7 +256,7 @@ export function AdminLayout() {
               </button>
             </div>
             <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-4">
-              {NAV_GROUPS.map((group) => (
+              {filteredGroups.map((group) => (
                 <div key={group.title} className="space-y-1">
                   <div className="px-3 text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
                     {group.title}
@@ -274,7 +302,7 @@ export function AdminLayout() {
               className="lg:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               aria-label="Open Admin Menu"
             >
-              ☰
+              <Menu className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
               <Link to="/admin" className="hover:text-indigo-500 transition-colors">Admin</Link>

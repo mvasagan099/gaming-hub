@@ -40,19 +40,9 @@ function SiteThemeSync() {
     const primaryColor = settings?.general?.primaryColor;
     if (!primaryColor || !/^#?[0-9a-fA-F]{6}$/.test(primaryColor)) return;
     const hex = primaryColor.startsWith('#') ? primaryColor : `#${primaryColor}`;
-    // Inline styles outrank the html[data-accent="..."] stylesheet rules, so the
-    // admin brand color wins regardless of the active accent swatch.
-    const set = (name: string, mix: string) => root.style.setProperty(name, mix);
-    set('--color-accent-500', hex);
-    set('--color-accent-600', `color-mix(in srgb, ${hex} 82%, black)`);
-    set('--color-accent-700', `color-mix(in srgb, ${hex} 64%, black)`);
-    set('--color-accent-800', `color-mix(in srgb, ${hex} 46%, black)`);
-    set('--color-accent-900', `color-mix(in srgb, ${hex} 28%, black)`);
-    set('--color-accent-400', `color-mix(in srgb, ${hex} 82%, white)`);
-    set('--color-accent-300', `color-mix(in srgb, ${hex} 64%, white)`);
-    set('--color-accent-200', `color-mix(in srgb, ${hex} 46%, white)`);
-    set('--color-accent-100', `color-mix(in srgb, ${hex} 28%, white)`);
-    set('--color-accent-50', `color-mix(in srgb, ${hex} 14%, white)`);
+    // Set custom accent variable so html[data-accent="custom"] can use it
+    // without overriding user swatch selections (emerald, rose, amber, cyan, violet, indigo).
+    root.style.setProperty('--custom-accent', hex);
   }, [settings]);
 
   return null;

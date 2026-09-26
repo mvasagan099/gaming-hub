@@ -187,14 +187,16 @@ export const Home: React.FC = () => {
       {/* Hero Banner */}
       <div className={`relative rounded-3xl overflow-hidden bg-gradient-to-r ${banners[currentBannerIndex].gradient} p-8 border ${banners[currentBannerIndex].border} shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500 min-h-[340px] md:min-h-[280px]`}>
         
-        {/* Invisible Click Areas for Navigation */}
+        {/* Invisible Click Areas for Navigation (desktop/tablet only to preserve mobile vertical scroll) */}
         <div 
           onClick={() => setCurrentBannerIndex((prev) => (prev - 1 + banners.length) % banners.length)}
-          className="absolute left-0 top-0 w-20 h-full z-20 cursor-pointer" 
+          className="hidden sm:block absolute left-0 top-0 w-20 h-full z-20 cursor-pointer" 
+          aria-label="Previous banner"
         />
         <div 
           onClick={() => setCurrentBannerIndex((prev) => (prev + 1) % banners.length)}
-          className="absolute right-0 top-0 w-20 h-full z-20 cursor-pointer" 
+          className="hidden sm:block absolute right-0 top-0 w-20 h-full z-20 cursor-pointer" 
+          aria-label="Next banner"
         />
 
         <div className="space-y-3 z-30 w-full md:w-2/3 pointer-events-none [&>div>button]:pointer-events-auto">
@@ -242,6 +244,20 @@ export const Home: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Carousel indicator dots */}
+        <div className="absolute bottom-3 right-6 z-20 flex items-center gap-1.5 pointer-events-auto">
+          {banners.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => setCurrentBannerIndex(idx)}
+              aria-label={`Go to slide ${idx + 1}`}
+              className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                idx === currentBannerIndex ? "w-6 bg-white shadow" : "w-1.5 bg-white/40 hover:bg-white/70"
+              }`}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Search & Category Filter Section */}

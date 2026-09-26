@@ -245,6 +245,10 @@ export const LobbyPage: React.FC = () => {
     timeControl: isChess ? DEFAULT_TIME_CONTROL : null,
     rated: true,
   });
+  const [isJoiningMatch, setIsJoiningMatch] = useState(false);
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [isJoiningByCode, setIsJoiningByCode] = useState(false);
+
 
   useEffect(() => {
     setSettings({ timeControl: isChess ? DEFAULT_TIME_CONTROL : null, rated: true });
@@ -340,21 +344,27 @@ export const LobbyPage: React.FC = () => {
   };
 
   const handleCreatePrivate = async () => {
-    if (!def) return;
+    if (!def || isCreatingRoom) return;
+    setIsCreatingRoom(true);
     try {
       await createRoom(def.id, true, stake, allowsPlayerCountChoice ? playerCount : def.maxPlayers, settings);
       toast.success("Private room created");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create room");
+    } finally {
+      setIsCreatingRoom(false);
     }
   };
 
   const handleQuickMatch = async () => {
-    if (!def) return;
+    if (!def || isJoiningMatch || matchmaking.queued) return;
+    setIsJoiningMatch(true);
     try {
       await joinMatchmaking(def.id, stake, { ...settings, playerCount: allowsPlayerCountChoice ? playerCount : undefined } as Record<string, unknown>);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not join matchmaking");
+    } finally {
+      setIsJoiningMatch(false);
     }
   };
 
@@ -364,11 +374,15 @@ export const LobbyPage: React.FC = () => {
       toast.error("Enter a room code");
       return;
     }
+    if (isJoiningByCode) return;
+    setIsJoiningByCode(true);
     try {
       await joinRoom({ code, asSpectator });
       setJoinCode("");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not join room");
+    } finally {
+      setIsJoiningByCode(false);
     }
   };
 
@@ -596,19 +610,20 @@ export const LobbyPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => void handleQuickMatch()}
-                disabled={balance != null && balance < stake}
-                className="flex flex-col items-center gap-2 p-5 rounded-3xl bg-gradient-to-br from-indigo-600 to-purple-700 hover:from-indigo-500 hover:to-purple-600 disabled:opacity-40 text-white border border-indigo-500/40 shadow-xl shadow-indigo-500/20 transition-all"
+                disabled={(balance != null && balance < stake) || isJoiningMatch || matchmaking.queued}
+                className="flex flex-col items-center gap-2 p-5 rounded-3xl bg-gradient-to-br from-indigo-600 to-purple-700 hover:from-indigo-500 hover:to-purple-600 disabled:opacity-40 text-white border border-indigo-500/40 shadow-xl shadow-indigo-500/20 transition-all cursor-pointer disabled:cursor-not-allowed"
               >
-                <Swords className="w-7 h-7" />
-                <span className="text-sm font-black">Quick Match</span>
+                {isJoiningMatch ? <Loader2 className="w-7 h-7 animate-spin" /> : <Swords className="w-7 h-7" />}
+                <span className="text-sm font-black">{isJoiningMatch ? "Joining..." : "Quick Match"}</span>
                 <span className="text-[10px] text-indigo-200">Auto-join an open game</span>
               </button>
               <button
                 onClick={() => void handleCreatePrivate()}
-                className="flex flex-col items-center gap-2 p-5 rounded-3xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 transition-all"
+                disabled={isCreatingRoom}
+                className="flex flex-col items-center gap-2 p-5 rounded-3xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 disabled:opacity-40 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 transition-all cursor-pointer disabled:cursor-not-allowed"
               >
-                <Users className="w-7 h-7 text-indigo-400" />
-                <span className="text-sm font-black">Private Room</span>
+                {isCreatingRoom ? <Loader2 className="w-7 h-7 animate-spin text-indigo-400" /> : <Users className="w-7 h-7 text-indigo-400" />}
+                <span className="text-sm font-black">{isCreatingRoom ? "Creating..." : "Private Room"}</span>
                 <span className="text-[10px] text-slate-500 dark:text-slate-400">Create and invite friends</span>
               </button>
             </div>
@@ -632,8 +647,10 @@ export const LobbyPage: React.FC = () => {
               />
               <button
                 onClick={() => void handleJoinByCode(false)}
-                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors"
+                disabled={isJoiningByCode || !joinCode.trim()}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-bold transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center gap-1.5"
               >
+                {isJoiningByCode && <Loader2 className="w-4 h-4 animate-spin" />}
                 Join
               </button>
             </div>

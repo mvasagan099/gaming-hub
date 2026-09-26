@@ -62,10 +62,10 @@ export const MobileBackButton: React.FC<MobileBackButtonProps> = ({
       aria-label="Go back"
       title="Go back"
       className={cn(
-        'inline-flex items-center justify-center gap-1.5 h-9 min-w-[36px] px-2.5 rounded-xl',
+        'inline-flex md:hidden items-center justify-center gap-1.5 h-9 min-w-[36px] px-2.5 rounded-xl',
         'bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700/90',
         'border border-slate-200/80 dark:border-slate-700/60 shadow-xs',
-        'text-slate-700 dark:text-slate-200 hover:text-purple-600 dark:hover:text-purple-400 hover:border-purple-500/50',
+        'text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-500/50',
         'active:scale-95 transition-all duration-150 shrink-0 cursor-pointer select-none',
         className
       )}

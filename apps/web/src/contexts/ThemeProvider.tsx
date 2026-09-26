@@ -54,7 +54,7 @@ export function ThemeProvider({
   children,
   defaultTheme = 'dark',
   defaultAccent = 'indigo',
-  storageKey = 'vite-ui-theme',
+  storageKey = 'gaming-hub-theme',
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(

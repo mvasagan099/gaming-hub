@@ -20,6 +20,7 @@ import { authenticateToken, type AuthenticatedUser } from "./auth";
 import { assertFeatureEnabled } from "./settings";
 import { GameEventBus } from "./events/GameEventBus";
 import { GameStateSyncManager } from "./sync/GameStateSyncManager";
+import { createAndFundMatch, settleMatch, cancelMatch } from "./apiClient";
 
 const logger = pino({ level: env.LOG_LEVEL, transport: { target: "pino-pretty" } });
 
@@ -433,6 +434,58 @@ async function main(): Promise<void> {
     enableAntiCheat: true,
     enableReplay: true,
     debug: env.LOG_LEVEL === "debug",
+    onMatchStarting: async (room, matchId) => {
+      if (room.config.stake > 0) {
+        const participants = [...room.players.values()].filter((p) => !p.isSpectator && p.seat !== null);
+        await createAndFundMatch({
+          matchId,
+          roomId: room.id,
+          gameId: room.config.gameId,
+          stake: room.config.stake,
+          players: participants.map((p) => ({ userId: p.userId || p.id, seat: p.seat! })),
+        });
+      }
+    },
+    onMatchFinished: async (room, matchResult) => {
+      const scores: Record<string, number> = {};
+      for (const p of matchResult.players) {
+        if (p.score !== undefined && p.score !== null) {
+          scores[p.playerId] = p.score;
+        }
+      }
+      const isDraw = matchResult.draw || matchResult.winnerIds.length === 0;
+      const resultType = isDraw ? "DRAW" : "WIN";
+
+      try {
+        const settlement = await settleMatch(matchResult.matchId, {
+          winnerIds: matchResult.winnerIds,
+          scores,
+          resultType,
+          rated: room.config.settings.rated !== false,
+          reason: matchResult.endReason || "NORMAL",
+        });
+
+        io.to(room.ioName).emit("game:settlement-completed" as any, {
+          matchId: matchResult.matchId,
+          resultType,
+          coinsWon: settlement?.result?.payouts?.find((p) => matchResult.winnerIds.includes(p.userId))?.amount ?? 0,
+          isDraw,
+          refundPerPlayer: isDraw ? room.config.stake : 0,
+          payouts: settlement?.result?.payouts ?? [],
+        });
+      } catch (err) {
+        logger.error({ err, matchId: matchResult.matchId }, "Failed to settle match via internal API");
+      }
+    },
+    onMatchAborted: async (room, reason) => {
+      if (room.match?.matchId) {
+        try {
+          await cancelMatch(room.match.matchId, reason);
+        } catch (err) {
+          logger.error({ err, matchId: room.match.matchId }, "Failed to cancel match via internal API");
+        }
+      }
+    },
   });
 
   await framework.initialize();
@@ -703,12 +756,25 @@ async function main(): Promise<void> {
           ack?.({ ok: false, error: { code: "UNAUTHORIZED", message: "Not a participant in this match" } } as any);
           return;
         }
-        const syncRes = GameStateSyncManager.handleStateSyncRequest(
-          socket.id,
-          payload.matchId,
-          payload.lastStateVersion,
-        );
-        ack?.({ ok: true, data: { stateVersion: syncRes.stateVersion, fullState: syncRes.fullState.gameState } });
+        let fullState: any = null;
+        let stateVersion = 1;
+        try {
+          const syncRes = GameStateSyncManager.handleStateSyncRequest(
+            socket.id,
+            payload.matchId,
+            payload.lastStateVersion,
+          );
+          fullState = syncRes.fullState.gameState;
+          stateVersion = syncRes.stateVersion;
+        } catch {
+          if (syncRoom.match?.engine) {
+            fullState = (syncRoom.match.engine as any).serialize();
+            stateVersion = syncRoom.match.turnNumber || 1;
+          } else {
+            throw new AppError("NOT_FOUND", `No authoritative state available for match ${payload.matchId}`);
+          }
+        }
+        ack?.({ ok: true, data: { stateVersion, fullState } });
       }),
     );
 
@@ -720,12 +786,44 @@ async function main(): Promise<void> {
           ack?.({ ok: false, error: { code: "UNAUTHORIZED", message: "Not a participant in this match" } } as any);
           return;
         }
-        const syncRes = GameStateSyncManager.handleStateSyncRequest(
-          socket.id,
-          payload.matchId,
-          payload.lastStateVersion,
-        );
-        ack?.({ ok: true, data: syncRes });
+        try {
+          const syncRes = GameStateSyncManager.handleStateSyncRequest(
+            socket.id,
+            payload.matchId,
+            payload.lastStateVersion,
+          );
+          ack?.({ ok: true, data: syncRes });
+        } catch {
+          if (syncRoom.match?.engine) {
+            const fullState = (syncRoom.match.engine as any).serialize();
+            const stateVersion = syncRoom.match.turnNumber || 1;
+            ack?.({
+              ok: true,
+              data: {
+                matchId: payload.matchId,
+                stateVersion,
+                actionSequence: stateVersion,
+                fullState: {
+                  matchId: payload.matchId,
+                  gameId: syncRoom.config.gameId,
+                  stateVersion,
+                  actionSequence: stateVersion,
+                  status: syncRoom.status === "playing" ? "playing" : "waiting",
+                  currentPlayerId: (syncRoom.match as any).currentPlayerId ?? null,
+                  turnNumber: syncRoom.match.turnNumber || 1,
+                  turnStartedAt: null,
+                  turnExpiresAt: null,
+                  gameState: fullState,
+                  lastActionId: null,
+                  lastActionSequence: stateVersion,
+                  updatedAt: Date.now(),
+                },
+              },
+            });
+          } else {
+            throw new AppError("NOT_FOUND", `No authoritative state available for match ${payload.matchId}`);
+          }
+        }
       }),
     );
 

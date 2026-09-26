@@ -162,16 +162,21 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
             </div>
           ) : me ? (
             <div className="flex items-center gap-1 sm:gap-2">
-              {((me.user as { role?: string })?.role === "ADMIN") && (
-                <button
-                  onClick={() => navigate('/admin')}
-                  className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 text-indigo-500 dark:text-indigo-400 font-extrabold text-xs transition-colors shrink-0"
-                  title="Admin Dashboard"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span className="hidden sm:inline">Admin</span>
-                </button>
-              )}
+              {(() => {
+                const userRole = (me.user as { role?: string })?.role;
+                const isStaff = userRole === "ADMIN" || userRole === "MODERATOR" || userRole === "CUSTOM";
+                if (!isStaff) return null;
+                return (
+                  <button
+                    onClick={() => navigate('/admin')}
+                    className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 text-indigo-500 dark:text-indigo-400 font-extrabold text-xs transition-colors shrink-0"
+                    title={userRole === "ADMIN" ? "Admin Dashboard" : "Staff Portal"}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span className="hidden sm:inline">{userRole === "ADMIN" ? "Admin" : "Staff"}</span>
+                  </button>
+                );
+              })()}
 
               <button
                 onClick={() => navigate('/wallet')}

@@ -237,6 +237,11 @@ export class MatchManager {
       this.framework.playerManager.startAfkMonitoring(player.id, roomId);
     }
     
+    // Lifecycle hook before broadcasting match start (e.g. wagers/funding)
+    if (this.framework.config.onMatchStarting) {
+      await this.framework.config.onMatchStarting(room, matchId);
+    }
+
     // Schedule clock check
     this.scheduleClockCheck(room);
     
@@ -499,6 +504,15 @@ export class MatchManager {
     // Persist match statistics.
     await this.framework.statisticsCollector.finalize(room, matchResult);
     
+    // Invoke settlement hook if configured
+    if (this.framework.config.onMatchFinished) {
+      try {
+        await this.framework.config.onMatchFinished(room, matchResult);
+      } catch (err) {
+        this.framework.log(`Error in onMatchFinished hook: ${err}`);
+      }
+    }
+
     // Broadcast game over
     await this.framework.syncManager.broadcastGameOver(room);
     
@@ -531,6 +545,14 @@ export class MatchManager {
       roomId: room.id,
       reason,
     });
+    
+    if (this.framework.config.onMatchAborted) {
+      try {
+        await this.framework.config.onMatchAborted(room, reason);
+      } catch (err) {
+        this.framework.log(`Error in onMatchAborted hook: ${err}`);
+      }
+    }
     
     // Close the room after a short linger so the abort isn't followed by a leak.
     this.framework.roomManager.scheduleRoomCleanup(room.id);

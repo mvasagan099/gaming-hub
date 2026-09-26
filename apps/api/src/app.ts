@@ -42,6 +42,8 @@ import { adminTournamentTiersRoutes } from "./routes/adminTournamentTiers";
 import { appVersionRoutes } from "./routes/appVersion";
 import { adminAppVersionRoutes } from "./routes/adminAppVersion";
 import { privacyRoutes } from "./routes/privacy";
+import { adminTournamentsRoutes } from "./routes/adminTournaments";
+import { seasonsRoutes } from "./routes/seasons";
 import { isFeatureEnabled } from "./services/featureFlags";
 import { instrument } from "./services/metrics";
 
@@ -165,6 +167,8 @@ export function buildApp() {
   void app.register(appVersionRoutes);
   void app.register(adminAppVersionRoutes);
   void app.register(privacyRoutes);
+  void app.register(adminTournamentsRoutes);
+  void app.register(seasonsRoutes);
 
   return app;
 }

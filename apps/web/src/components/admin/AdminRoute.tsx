@@ -23,17 +23,11 @@ export function AdminRoute() {
     return <Navigate to="/login" replace />;
   }
 
-  const isAdmin =
-    user?.app_metadata?.role === 'ADMIN' ||
-    user?.user_metadata?.role === 'ADMIN' ||
-    me?.user?.role === 'ADMIN';
+  const role = me?.user?.role || (user?.app_metadata?.role as string) || (user?.user_metadata?.role as string);
+  const isStaff = role === 'ADMIN' || role === 'MODERATOR' || role === 'CUSTOM';
 
-  if (!isAdmin) {
+  if (!isStaff) {
     return <Navigate to="/" replace />;
-  }
-
-  if (me?.profile?.twoFactorEnabled && me?.mfaVerified === false) {
-    return <Navigate to="/login" state={{ require2FA: true }} replace />;
   }
 
   return <Outlet />;

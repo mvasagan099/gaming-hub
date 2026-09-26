@@ -86,11 +86,12 @@ export async function authenticateToken(token: string): Promise<AuthenticatedUse
     }
   }
 
-  // Check active account bans / penalties
+  // Check active account bans / penalties (excluding warnings)
   const activePenalty = await prisma.playerPenalty.findFirst({
     where: {
       userId: user.id,
       status: "ACTIVE",
+      type: { not: "AFK_WARNING" },
       OR: [
         { expiresAt: null },
         { expiresAt: { gt: new Date() } },

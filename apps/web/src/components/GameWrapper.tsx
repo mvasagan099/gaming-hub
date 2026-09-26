@@ -219,7 +219,7 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
             className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 transition-colors border border-slate-200 dark:border-slate-700 shrink-0 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
-            <span className="hidden xs:inline">Back to Lobby</span>
+            <span className="hidden sm:inline">Back to Lobby</span>
           </button>
           <div className="min-w-0">
             <h1 className="text-sm sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-1.5 sm:gap-2 truncate">

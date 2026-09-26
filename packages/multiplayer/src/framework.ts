@@ -33,6 +33,9 @@ import { StatisticsCollector } from "./gameplay/StatisticsCollector";
 import { DisconnectHandler } from "./gameplay/DisconnectHandler";
 import { ReconnectHandler } from "./gameplay/ReconnectHandler";
 
+import type { RoomRuntime } from "./types";
+import type { MatchResult } from "./gameplay/types";
+
 export interface MultiplayerFrameworkConfig {
   /** Socket.IO server instance */
   io: Server;
@@ -60,6 +63,11 @@ export interface MultiplayerFrameworkConfig {
   
   /** Enable detailed logging (default: false) */
   debug?: boolean;
+
+  /** Optional lifecycle hooks */
+  onMatchStarting?: (room: RoomRuntime, matchId: string) => Promise<void>;
+  onMatchFinished?: (room: RoomRuntime, matchResult: MatchResult) => Promise<void>;
+  onMatchAborted?: (room: RoomRuntime, reason: string) => Promise<void>;
 }
 
 /**
@@ -88,7 +96,16 @@ export class MultiplayerFramework {
   readonly disconnectHandler: DisconnectHandler;
   readonly reconnectHandler: ReconnectHandler;
   
-  readonly config: Required<MultiplayerFrameworkConfig>;
+  readonly config: MultiplayerFrameworkConfig & {
+    reconnectGracePeriodMs: number;
+    afkTimeoutMs: number;
+    roomExpirationMs: number;
+    endedRoomLingerMs: number;
+    maxSpectators: number;
+    enableAntiCheat: boolean;
+    enableReplay: boolean;
+    debug: boolean;
+  };
   
   private initialized = false;
   
@@ -104,6 +121,9 @@ export class MultiplayerFramework {
       enableAntiCheat: config.enableAntiCheat ?? true,
       enableReplay: config.enableReplay ?? true,
       debug: config.debug ?? false,
+      onMatchStarting: config.onMatchStarting,
+      onMatchFinished: config.onMatchFinished,
+      onMatchAborted: config.onMatchAborted,
     };
     
     // Initialize managers (lazy initialization)

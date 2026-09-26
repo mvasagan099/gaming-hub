@@ -18,9 +18,10 @@ export async function internalRoutes(app: FastifyInstance) {
     }
   });
 
-  const RATE_LIMIT = { max: 60, timeWindow: "1 minute" };
+  // Internal service-to-service calls authenticated by x-internal-key should not be throttled by public rate limits.
+  const INTERNAL_CONFIG = { rateLimit: false };
 
-  app.post("/internal/matches/create-and-fund", { config: { rateLimit: RATE_LIMIT } }, async (request) => {
+  app.post("/internal/matches/create-and-fund", { config: INTERNAL_CONFIG }, async (request) => {
     try {
       const body = (request.body ?? {}) as {
         matchId: string;
@@ -37,7 +38,7 @@ export async function internalRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/internal/matches/:id/hold-wagers", { config: { rateLimit: RATE_LIMIT } }, async (request) => {
+  app.post("/internal/matches/:id/hold-wagers", { config: INTERNAL_CONFIG }, async (request) => {
     try {
       const { id } = routeParams(request);
       const match = await holdMatchWagers(id);
@@ -48,7 +49,7 @@ export async function internalRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/internal/matches/:id/settle", { config: { rateLimit: RATE_LIMIT } }, async (request) => {
+  app.post("/internal/matches/:id/settle", { config: INTERNAL_CONFIG }, async (request) => {
     const { id } = routeParams(request);
     const body = (request.body ?? {}) as {
       rated?: boolean;
@@ -70,14 +71,14 @@ export async function internalRoutes(app: FastifyInstance) {
     return { ok: true, result };
   });
 
-  app.post("/internal/matches/:id/cancel", { config: { rateLimit: RATE_LIMIT } }, async (request) => {
+  app.post("/internal/matches/:id/cancel", { config: INTERNAL_CONFIG }, async (request) => {
     const { id } = routeParams(request);
     const body = (request.body ?? {}) as { reason?: string };
     const result = await GameCoinService.cancelMatch(id, body.reason);
     return { ok: true, result };
   });
 
-  app.post("/internal/wallet/check-balance", { config: { rateLimit: RATE_LIMIT } }, async (request) => {
+  app.post("/internal/wallet/check-balance", { config: INTERNAL_CONFIG }, async (request) => {
     const body = (request.body ?? {}) as { userId: string; entryFee: number };
     const result = await GameCoinService.checkPlayerBalance(body.userId, body.entryFee);
     return { ok: true, result };
@@ -88,7 +89,7 @@ export async function internalRoutes(app: FastifyInstance) {
    * Drives advancement through the bracket: winner moves to next slot,
    * loser is eliminated, round completion checked, and auto-settlement triggered.
    */
-  app.post("/internal/tournament/match-result", { config: { rateLimit: RATE_LIMIT } }, async (request) => {
+  app.post("/internal/tournament/match-result", { config: INTERNAL_CONFIG }, async (request) => {
     const body = (request.body ?? {}) as {
       matchId: string;
       tournamentId: string;
@@ -120,7 +121,7 @@ export async function internalRoutes(app: FastifyInstance) {
   /**
    * Get current tournament match for a player
    */
-  app.get("/internal/tournament/:id/current-match", { config: { rateLimit: RATE_LIMIT } }, async (request) => {
+  app.get("/internal/tournament/:id/current-match", { config: INTERNAL_CONFIG }, async (request) => {
     const { id } = routeParams(request);
     const query = request.query as { userId?: string };
     const userId = query.userId ?? "";

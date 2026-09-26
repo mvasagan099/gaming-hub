@@ -434,9 +434,17 @@ export async function adminRoutes(app: FastifyInstance) {
       throw new AppError("FORBIDDEN", "You cannot change your own role", 403);
     }
 
+    if (role === "ADMIN" && admin.role !== "ADMIN") {
+      throw new AppError("FORBIDDEN", "Only administrators can grant the ADMIN role", 403);
+    }
+
     const target = await prisma.user.findUnique({ where: { id }, select: { role: true, customRoleId: true } });
     if (!target) {
       throw new AppError("NOT_FOUND", "User not found", 404);
+    }
+
+    if (target.role === "ADMIN" && admin.role !== "ADMIN") {
+      throw new AppError("FORBIDDEN", "Only administrators can modify an administrator's role", 403);
     }
 
     if (role === "CUSTOM" && customRoleId) {

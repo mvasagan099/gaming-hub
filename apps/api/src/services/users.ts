@@ -355,7 +355,18 @@ export async function updateUserProfile(
         postcode: data.postcode,
       },
     });
-    return { user, profile };
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        role: user.role,
+        createdAt: user.createdAt.toISOString(),
+      },
+      profile,
+    };
   });
 }
 

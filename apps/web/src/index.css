@@ -3,9 +3,24 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Global root typography scale: increase entire application text size by 20% (16px base -> 19.2px) */
+/* Responsive root typography scale:
+   - 100% on compact mobile (<640px) to prevent element overflow and badge wrapping
+   - 110% on tablets (>=640px) for comfortable readability
+   - 120% on desktop (>=1024px) for expansive layout scaling */
 html {
-  font-size: 120%;
+  font-size: 100%;
+}
+
+@media (min-width: 640px) {
+  html {
+    font-size: 110%;
+  }
+}
+
+@media (min-width: 1024px) {
+  html {
+    font-size: 120%;
+  }
 }
 
 /* Scale arbitrary pixel font classes by 20% to maintain proportional visual hierarchy */

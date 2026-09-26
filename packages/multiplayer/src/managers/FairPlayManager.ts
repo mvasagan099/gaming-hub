@@ -238,7 +238,7 @@ export class FairPlayManager {
         matchId: options.matchId ?? null,
         type: options.type,
         severity,
-        status: "ACTIVE",
+        status: duration === 0 ? "EXPIRED" : "ACTIVE",
         duration,
         startedAt: now,
         expiresAt,
@@ -276,6 +276,7 @@ export class FairPlayManager {
       where: {
         userId,
         status: "ACTIVE",
+        type: { not: "AFK_WARNING" },
         OR: [
           { expiresAt: null },
           { expiresAt: { gt: new Date() } },

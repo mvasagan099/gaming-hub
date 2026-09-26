@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { SnakeLadder } from '../../games/snake-ladder';
 import { LudoGame } from '../../games/ludo/LudoGame';
@@ -27,6 +27,24 @@ export const GamePage: React.FC = () => {
   const room = useMultiplayerStore((s) => s.room);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
+
+  // Trap browser/hardware back button or mobile swipe gesture during active match
+  useEffect(() => {
+    if (mode !== 'multiplayer' || room?.status !== 'playing' || isExiting) return;
+
+    window.history.pushState({ matchGuarded: true }, '');
+
+    const handlePopState = (e: PopStateEvent) => {
+      e.preventDefault();
+      window.history.pushState({ matchGuarded: true }, '');
+      setShowExitConfirm(true);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [mode, room?.status, isExiting]);
 
   if (!gameId || !isGameId(gameId)) {
     return <Navigate to="/" replace />;

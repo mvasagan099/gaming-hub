@@ -167,6 +167,7 @@ export const router = createBrowserRouter([
           { path: "audit", element: <SuspensePage><AdminAuditPage /></SuspensePage> },
           { path: "settings", element: <SuspensePage><AdminSettingsPage /></SuspensePage> },
           { path: "app-version", element: <SuspensePage><AdminAppVersionPage /></SuspensePage> },
+          { path: "*", element: <Navigate to="/admin" replace /> },
         ],
       },
     ],
