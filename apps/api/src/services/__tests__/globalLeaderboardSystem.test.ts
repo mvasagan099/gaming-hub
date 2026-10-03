@@ -142,7 +142,7 @@ describe("Feature 28: Global Leaderboard System", () => {
     // All-rounder plays Chess, Snooker, and Ludo
     await prisma.$transaction(async (tx) => {
       await LeaderboardService.updatePlayerRanking(tx, { userId: userAllRounder, gameId: "chess", result: "win", score: 100 });
-      await LeaderboardService.updatePlayerRanking(tx, { userId: userAllRounder, gameId: "ludo", result: "win", score: 80 });
+      await LeaderboardService.updatePlayerRanking(tx, { userId: userAllRounder, gameId: "snooker", result: "win", score: 80 });
       await LeaderboardService.updatePlayerRanking(tx, { userId: userAllRounder, gameId: "ludo", result: "win", score: 60 });
     });
 
@@ -267,7 +267,7 @@ describe("Feature 28: Global Leaderboard System", () => {
     });
 
     // Request page 1 with pageSize 1 as bottomUser
-    const res = await LeaderboardService.getGameLeaderboard("snooker", { period: "all", metric: "rating", page: 1, pageSize: 1 }, bottomUser);
+    const res = await LeaderboardService.getGameLeaderboard("ludo", { period: "all", metric: "rating", page: 1, pageSize: 1 }, bottomUser);
     expect(res.items.length).toBe(1);
     expect(res.items[0].userId).toBe(topUser);
     expect(res.viewerRank).toBe(3);

@@ -265,7 +265,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
     }
     return false;
   };
-  const placementOverlapping = strikerPhase === 'positioning' && isMyTurn && !isTurnActive && strikerOverlapsCoin();
+  const placementOverlapping = isMyTurn && !isTurnActive && strikerOverlapsCoin();
 
   const pendingServerStateRef = useRef<CarromRemoteState | null>(null);
   const lastAnimatedActionAtRef = useRef<number | null>(null);
@@ -1472,11 +1472,15 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
       if (striker) {
         const distToStriker = Math.hypot(x - striker.x, y - striker.y);
         if (distToStriker <= striker.radius + 18) {
+          // Reject placement before entering aiming: aiming used to hide the
+          // mover, trapping the striker on the coin that blocked the shot.
+          if (strikerOverlapsCoin()) {
+            setStrikerPhase('positioning');
+            setDragState('idle');
+            toast.error('Striker overlaps a coin — move it before aiming.', { id: 'overlap-error' });
+            return;
+          }
           if (mode === 'multiplayer' && driverRef.current?.canPlaceStriker()) {
-            if (strikerOverlapsCoin()) {
-              toast.error('Striker overlaps a coin — move it before confirming.', { id: 'overlap-error' });
-              return;
-            }
             driverRef.current.sendPlaceStriker(striker.x);
             setStrikerPhase('aiming');
           } else if (mode === 'ai') {
@@ -1486,21 +1490,9 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
       }
     }
     
-    const striker = coinsRef.current.find(c => c.type === 'striker');
-    let overlap = false;
-    if (striker) {
-       for (const c of coinsRef.current) {
-          if (c.type === 'striker' || !c.active) continue;
-          const dx = c.x - striker.x;
-          const dy = c.y - striker.y;
-          if (Math.hypot(dx, dy) < c.radius + striker.radius) {
-             overlap = true;
-             break;
-          }
-       }
-    }
-
-    if (mode === 'ai' && overlap) {
+    if (mode === 'ai' && strikerOverlapsCoin()) {
+       setStrikerPhase('positioning');
+       setDragState('idle');
        toast.error('Cannot shoot! Reposition striker off overlapping coins first using the slider.', { id: 'overlap-error' });
        return;
     }
@@ -1524,6 +1516,12 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
 
   const handlePointerUp = () => {
     if (dragState === 'dragging') {
+      if (strikerOverlapsCoin()) {
+        setStrikerPhase('positioning');
+        setDragState('idle');
+        toast.error('Striker overlaps a coin — move it before shooting.', { id: 'overlap-error' });
+        return;
+      }
       const striker = coinsRef.current.find(c => c.type === 'striker');
       if (striker) {
         const dx = dragStart.x - currentAim.x;
@@ -1564,6 +1562,10 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
   };
 
   const handleStrikerPosChange = (val: number) => {
+    if (gameOver || isTurnActive || !isMyTurn) return;
+    // Repositioning cancels the old aim without firing it.
+    setStrikerPhase('positioning');
+    setDragState('idle');
     setStrikerPos(val);
     const striker = coinsRef.current.find(c => c.type === 'striker');
     if (!striker) return;
@@ -1784,12 +1786,12 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
+              onPointerCancel={() => setDragState('idle')}
               className={`w-full h-full object-contain touch-none shadow-[0_20px_60px_rgba(0,0,0,0.7)] rounded-[28px] ${dragState === 'idle' && isMyTurn ? 'cursor-grab' : !isMyTurn ? 'cursor-not-allowed' : 'cursor-grabbing'}`}
             />
           </div>
 
-          {!isTurnActive && !gameOver && strikerPhase === 'positioning' && isMyTurn && (
+          {!isTurnActive && !gameOver && isMyTurn && (
             <div className="w-full flex flex-col items-center gap-1.5">
               <div
                 className="relative w-full flex items-center px-4"

@@ -17,6 +17,7 @@ interface TableTennisOverlaysProps {
   isServing: boolean;
   currentServer: 1 | 2;
   rallyCount?: number;
+  onServe?: () => void;
   onReplay: () => void;
   onExit: () => void;
 }
@@ -37,6 +38,7 @@ export const TableTennisOverlays: React.FC<TableTennisOverlaysProps> = ({
   isServing,
   currentServer,
   rallyCount = 0,
+  onServe,
   onReplay,
   onExit,
 }) => {
@@ -89,24 +91,34 @@ export const TableTennisOverlays: React.FC<TableTennisOverlaysProps> = ({
         </div>
       )}
 
-      {/* ── 4. Compact Premium Serve Indicator (Non-intrusive bottom pill) ── */}
+      {/* ── 4. Compact Premium Serve Indicator (Interactive bottom pill) ── */}
       {isServing && !isGameOver && (
-        <div className="absolute bottom-8 lg:bottom-5 left-1/2 -translate-x-1/2 pointer-events-none z-20 animate-in fade-in duration-200">
-          <div className={`px-4 py-1.5 rounded-full backdrop-blur-md border shadow-lg flex items-center gap-2 ${
-            isMyServe
-              ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300 shadow-emerald-500/20'
-              : 'bg-slate-900/80 border-slate-700 text-slate-300'
-          }`}>
-            <span className={`w-2 h-2 rounded-full ${isMyServe ? 'bg-emerald-400 animate-ping' : 'bg-slate-400'}`} />
-            <span className="text-xs font-black uppercase tracking-wider">
+        <div className="absolute bottom-6 sm:bottom-8 lg:bottom-5 left-1/2 -translate-x-1/2 z-30 animate-in fade-in duration-200">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isMyServe && onServe) {
+                onServe();
+              }
+            }}
+            disabled={!isMyServe}
+            className={`px-4 sm:px-6 py-1.5 sm:py-2 rounded-full backdrop-blur-md border shadow-2xl flex items-center gap-2 transition-all transform ${
+              isMyServe
+                ? 'bg-emerald-950/90 hover:bg-emerald-900 border-emerald-500/80 text-emerald-300 shadow-emerald-500/30 cursor-pointer active:scale-95 animate-pulse'
+                : 'bg-slate-900/80 border-slate-700 text-slate-400 cursor-default'
+            }`}
+          >
+            <span className={`w-2.5 h-2.5 rounded-full ${isMyServe ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`} />
+            <span className="text-xs sm:text-sm font-black uppercase tracking-wider">
               {isMyServe ? 'YOUR SERVE' : 'OPPONENT SERVING'}
             </span>
             {isMyServe && (
-              <span className="text-[10px] text-emerald-400/90 font-bold tracking-tight pl-1">
-                (Tap or Click)
+              <span className="text-[10px] sm:text-xs text-emerald-300 font-bold bg-emerald-800/60 px-2 py-0.5 rounded-full ml-1">
+                Tap to Serve
               </span>
             )}
-          </div>
+          </button>
         </div>
       )}
 

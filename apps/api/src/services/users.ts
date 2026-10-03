@@ -237,7 +237,7 @@ export async function getAuthenticatedUserData(user: User, rawToken?: string) {
 
   if (wallet && profile && profile.coins !== wallet.balance) {
     profile.coins = wallet.balance;
-    void prisma.profile.update({
+    await prisma.profile.update({
       where: { userId: user.id },
       data: { coins: wallet.balance },
     }).catch(() => undefined);
@@ -264,7 +264,7 @@ export async function getAuthenticatedUserData(user: User, rawToken?: string) {
       if (!profile.phone && kyc.mobileNumber) profile.phone = kyc.mobileNumber;
       if (!profile.dateOfBirth && kyc.dateOfBirth) profile.dateOfBirth = kyc.dateOfBirth;
 
-      void prisma.profile.update({
+      await prisma.profile.update({
         where: { userId: user.id },
         data: {
           streetAddress: profile.streetAddress,

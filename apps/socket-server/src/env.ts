@@ -19,6 +19,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(4001),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   SUPABASE_URL: z.string().url("SUPABASE_URL must be a valid URL"),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   INTERNAL_API_KEY: z.string().min(8, "INTERNAL_API_KEY must be at least 8 characters"),
   API_URL: z.string().url("API_URL must be a valid URL"),
   CORS_ORIGIN: z.string().default("*"),

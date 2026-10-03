@@ -249,7 +249,7 @@ export async function adminKycRoutes(app: FastifyInstance) {
     return limits;
   });
 
-  app.post("/api/admin/kyc/limits", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/kyc/limits", { preHandler: [authenticate, requireMfa] }, async (request) => {
     await requirePermission(request, "admin:kyc:config", prisma);
     const data = parseSchema(kycSetWithdrawalLimitsSchema, request.body);
 
@@ -281,7 +281,7 @@ export async function adminKycRoutes(app: FastifyInstance) {
     return configs;
   });
 
-  app.post("/api/admin/kyc/document-config", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/kyc/document-config", { preHandler: [authenticate, requireMfa] }, async (request) => {
     await requirePermission(request, "admin:kyc:config", prisma);
     const data = parseSchema(kycDocumentConfigSchema, request.body);
 

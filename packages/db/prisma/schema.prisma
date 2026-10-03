@@ -2341,3 +2341,12 @@ model SecurityEvent {
   @@index([eventType, createdAt])
   @@index([matchId])
 }
+
+// Shared, fixed-window security budgets. Keys are SHA-256 digests, never tokens/PII.
+model RateLimitWindow {
+  key       String   @id
+  count     Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}

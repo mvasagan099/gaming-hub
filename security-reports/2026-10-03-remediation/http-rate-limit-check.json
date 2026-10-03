@@ -1,0 +1,12 @@
+{
+  "statuses": [
+    200,
+    200,
+    429
+  ],
+  "restarted": 429,
+  "expired": 200,
+  "outage": 500,
+  "success": true,
+  "productionDbTouched": false
+}

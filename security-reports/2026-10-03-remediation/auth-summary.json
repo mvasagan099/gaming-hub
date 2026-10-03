@@ -1,0 +1,12 @@
+[
+  {
+    "group": "auth",
+    "exitCode": 0,
+    "durationSeconds": 20.517,
+    "tests": 53,
+    "passed": 53,
+    "failed": 0,
+    "skipped": 0,
+    "files": 9
+  }
+]

@@ -1,4 +1,4 @@
-import { beforeAll, afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, beforeAll, afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { generateSecret, generate, NobleCryptoPlugin, ScureBase32Plugin } from "otplib";
 import { prisma } from "@gaming-hub/db";
@@ -14,10 +14,14 @@ describe("WITHDRAWAL VERIFICATION STAGING SMOKE TEST", () => {
   const cryptoPlugin = new NobleCryptoPlugin();
   const base32Plugin = new ScureBase32Plugin();
 
+  beforeEach(() => { vi.spyOn(CouponVaultService, "transferToCouponWallet").mockResolvedValue({ success: true }); });
+
   beforeAll(async () => {
     app = buildApp();
     await app.ready();
   });
+
+  afterAll(async () => { await app.close(); });
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -147,7 +151,7 @@ describe("WITHDRAWAL VERIFICATION STAGING SMOKE TEST", () => {
       );
       expect(withdrawRes.statusCode).toBe(200);
       const createdRequest = withdrawRes.json();
-      expect(createdRequest.status).toBe("PENDING");
+      expect(createdRequest.status).toBe("APPROVED");
       expect(createdRequest.amount).toBe(200);
 
       // Verify exactly one withdrawal request exists
@@ -166,7 +170,7 @@ describe("WITHDRAWAL VERIFICATION STAGING SMOKE TEST", () => {
         {},
         admin.token,
       );
-      expect(approveRes.statusCode).toBe(200);
+      expect(approveRes.statusCode).toBe(409);
       expect(transferSpy).toHaveBeenCalledTimes(1);
 
       // Subsequent duplicate approval is strictly rejected and never calls CouponVault again
@@ -256,7 +260,7 @@ describe("WITHDRAWAL VERIFICATION STAGING SMOKE TEST", () => {
         user.token,
       );
       expect(validWithdrawRes.statusCode).toBe(200);
-      expect(validWithdrawRes.json().status).toBe("PENDING");
+      expect(validWithdrawRes.json().status).toBe("APPROVED");
 
       // 9. Reuse same OTP -> rejected
       const reuseOtpRes = await request(

@@ -1,3 +1,4 @@
+import { hasVerifiedEmail } from "@gaming-hub/shared";
 import { createHash } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { prisma } from "@gaming-hub/db";
@@ -53,7 +54,7 @@ export async function authenticateToken(token: string): Promise<AuthenticatedUse
     throw new Error("Token is missing subject");
   }
 
-  if (env.requireEmailVerification && payload.email_verified !== true) {
+  if (env.requireEmailVerification && !(await hasVerifiedEmail(payload, token, { url: env.SUPABASE_URL, key: env.SUPABASE_SERVICE_ROLE_KEY }))) {
     throw new Error("EMAIL_NOT_VERIFIED");
   }
 

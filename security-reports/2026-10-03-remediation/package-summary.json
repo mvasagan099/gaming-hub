@@ -1,0 +1,32 @@
+[
+  {
+    "name": "game-engine",
+    "exitCode": 0,
+    "durationSeconds": 5.362,
+    "files": 23,
+    "tests": 311,
+    "passed": 311,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "name": "multiplayer",
+    "exitCode": 0,
+    "durationSeconds": 4.28,
+    "files": 9,
+    "tests": 89,
+    "passed": 89,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "name": "web",
+    "exitCode": 0,
+    "durationSeconds": 1.846,
+    "files": 2,
+    "tests": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0
+  }
+]

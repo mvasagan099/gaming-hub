@@ -1,0 +1,12 @@
+[
+  {
+    "group": "legacyMfaProbe",
+    "exitCode": 1,
+    "durationSeconds": 7.386,
+    "tests": 32,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 31,
+    "files": 1
+  }
+]

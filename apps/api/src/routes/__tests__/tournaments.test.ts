@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { beforeAll, beforeEach, afterEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, afterEach, afterAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "@gaming-hub/db";
 import { buildApp } from "../../app";
@@ -49,7 +49,7 @@ async function createTournament(adminToken, app, overrides = {}) {
     ...overrides,
   }, adminToken);
   expect(res.statusCode).toBe(200);
-  return res.json();
+  return res.json().tournament;
 }
 
 async function openReg(app, id, adminToken) {
@@ -80,6 +80,8 @@ describe("Tournament Engine", () => {
     app = buildApp();
     await app.ready();
   });
+
+  afterAll(async () => { await app.close(); });
 
   beforeEach(async () => {
     admin = await createTestUser({ role: "ADMIN" });
@@ -741,11 +743,12 @@ describe("Tournament Engine", () => {
     // -----------------------------------------------------------------
     it("1. Expired registration is closed by scheduler", async () => {
       const t = await createTournament(admin.token, app, {
-        registrationEndsAt: new Date(Date.now() - 1_000).toISOString(),
+        registrationEndsAt: new Date(Date.now() + 60_000).toISOString(),
         maxPlayers: 16,
       });
       await openReg(app, t.id, admin.token);
       await seedPlayers(4, t.id, app);
+      await prisma.tournament.update({ where: { id: t.id }, data: { registrationEndsAt: new Date(Date.now() - 1000) } });
 
       const { closeExpiredRegistrations } = await import("../../services/tournamentScheduler");
       // We can't call it directly since it's not exported, so test via reconcile

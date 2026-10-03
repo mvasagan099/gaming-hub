@@ -1,0 +1,151 @@
+{
+  "discovered": 85,
+  "assigned": 85,
+  "missing": [],
+  "duplicates": [],
+  "groups": {
+    "U1": [
+      "src/services/__tests__/coinWorkflowAudit.unit.test.ts",
+      "src/services/__tests__/couponVaultIntegration.unit.test.ts",
+      "src/services/__tests__/deepLinkValidation.unit.test.ts",
+      "src/services/__tests__/productionCoinVerification.unit.test.ts"
+    ],
+    "U2": [
+      "src/services/__tests__/securityRemediation.unit.test.ts",
+      "src/services/__tests__/tournamentAnalyticsReporting.unit.test.ts",
+      "src/services/__tests__/tournamentAntiCheatValidation.unit.test.ts",
+      "src/services/__tests__/tournamentCancellationRefundUnit.unit.test.ts"
+    ],
+    "U3": [
+      "src/services/__tests__/tournamentFinancialUnit.unit.test.ts",
+      "src/services/__tests__/tournamentLeaderboardStats.unit.test.ts"
+    ],
+    "A1": [
+      "src/services/__tests__/adminSecurityHardeningEngine.test.ts",
+      "src/services/__tests__/auditRemediation.test.ts",
+      "src/services/__tests__/gameResultSecurity.test.ts",
+      "src/services/__tests__/idorAndEconomyValidation.test.ts"
+    ],
+    "A2": [
+      "src/services/__tests__/kycAddressSync.test.ts",
+      "src/services/__tests__/kycSecurityHardening.test.ts",
+      "src/services/__tests__/loginTimeMfa.test.ts",
+      "src/services/__tests__/mfaSessionLifecycle.test.ts"
+    ],
+    "A3": [
+      "src/services/__tests__/passwordResetAuthFlow.test.ts",
+      "src/services/__tests__/securityAttackSimulation.test.ts",
+      "src/services/__tests__/securityRemediationHardening.test.ts",
+      "src/services/__tests__/singleActiveSession.test.ts"
+    ],
+    "A4": [
+      "src/services/__tests__/totpEncryptionMigration.test.ts"
+    ],
+    "B1": [
+      "src/routes/__tests__/wallet.test.ts",
+      "src/routes/__tests__/withdrawalVerificationSmoke.test.ts",
+      "src/services/__tests__/adminWalletManagement.test.ts",
+      "src/services/__tests__/affiliateFraud.test.ts"
+    ],
+    "B2": [
+      "src/services/__tests__/affiliateReconciliation.test.ts",
+      "src/services/__tests__/affiliateSystem.test.ts",
+      "src/services/__tests__/couponVaultLiveIntegration.test.ts",
+      "src/services/__tests__/financialConcurrencyAndRecovery.test.ts"
+    ],
+    "B3": [
+      "src/services/__tests__/financialEconomy.test.ts",
+      "src/services/__tests__/financialIdempotency.test.ts",
+      "src/services/__tests__/financialReconciliationEngine.test.ts",
+      "src/services/__tests__/gameCoinService.test.ts"
+    ],
+    "B4": [
+      "src/services/__tests__/insufficientBalanceExperience.test.ts",
+      "src/services/__tests__/practiceMatchWalletBehavior.test.ts",
+      "src/services/__tests__/referralSystem.test.ts",
+      "src/services/__tests__/tournamentFinancialSettlementSystem.test.ts"
+    ],
+    "B5": [
+      "src/services/__tests__/walletHistory.test.ts",
+      "src/services/__tests__/walletNotificationEngine.test.ts",
+      "src/services/__tests__/walletRequests.test.ts",
+      "src/services/__tests__/walletSyncEngine.test.ts"
+    ],
+    "B6": [
+      "src/services/__tests__/walletTransactionService.test.ts"
+    ],
+    "C1": [
+      "src/routes/__tests__/tournaments.test.ts"
+    ],
+    "C2": [
+      "src/services/__tests__/allGameTierCombinations.test.ts"
+    ],
+    "C3": [
+      "src/services/__tests__/automaticTournamentManagement.test.ts"
+    ],
+    "C4": [
+      "src/services/__tests__/tournamentAdminControlCenter.test.ts"
+    ],
+    "C5": [
+      "src/services/__tests__/tournamentAdminManagementSystem.test.ts"
+    ],
+    "C6": [
+      "src/services/__tests__/tournamentCrashRecovery.test.ts",
+      "src/services/__tests__/tournamentEmailService.test.ts",
+      "src/services/__tests__/tournamentHistory.test.ts",
+      "src/services/__tests__/tournamentLeaderboardRanking.test.ts"
+    ],
+    "C7": [
+      "src/services/__tests__/tournamentLoadPerformanceSimulation.test.ts"
+    ],
+    "C8": [
+      "src/services/__tests__/tournamentNotificationSystem.test.ts",
+      "src/services/__tests__/tournamentPlayerDashboard.test.ts",
+      "src/services/__tests__/tournamentPrizeSettlement.test.ts",
+      "src/services/__tests__/tournamentRegistrationAntiAbuse.test.ts"
+    ],
+    "C9": [
+      "src/services/__tests__/tournamentSeedingBracket.test.ts",
+      "src/services/__tests__/tournamentVerificationDisputes.test.ts"
+    ],
+    "D1": [
+      "src/services/__tests__/adminGameStatsEngine.test.ts",
+      "src/services/__tests__/gameHistory.test.ts",
+      "src/services/__tests__/matchAbandonmentEngine.test.ts",
+      "src/services/__tests__/matchTimeoutEngine.test.ts"
+    ],
+    "D2": [
+      "src/services/__tests__/matchmakingQueue.test.ts",
+      "src/services/__tests__/multiplayerRecovery.test.ts",
+      "src/services/__tests__/persistentMatchState.test.ts",
+      "src/services/__tests__/unifiedGameLifecycle.test.ts"
+    ],
+    "D3": [
+      "src/services/__tests__/universalMatchRoom.test.ts"
+    ],
+    "E1": [
+      "src/services/__tests__/achievementSystem.test.ts",
+      "src/services/__tests__/adminAuditLogEngine.test.ts",
+      "src/services/__tests__/adminFinanceDashboard.test.ts",
+      "src/services/__tests__/atomicEntryFee.test.ts"
+    ],
+    "E2": [
+      "src/services/__tests__/brevoEmailProvider.test.ts",
+      "src/services/__tests__/centralRefundEngine.test.ts",
+      "src/services/__tests__/concurrentJoinProtection.test.ts",
+      "src/services/__tests__/entryFeeConfirmationEngine.test.ts"
+    ],
+    "E3": [
+      "src/services/__tests__/globalLeaderboardSystem.test.ts",
+      "src/services/__tests__/globalPlatformSearch.test.ts",
+      "src/services/__tests__/globalRateLimitingEngine.test.ts",
+      "src/services/__tests__/playerProfileSystem.test.ts"
+    ],
+    "E4": [
+      "src/services/__tests__/productionSmokeTest.test.ts",
+      "src/services/__tests__/smtpEmailProvider.test.ts",
+      "src/services/__tests__/suspiciousActivityEngine.test.ts",
+      "src/services/__tests__/universalSettlementEngine.test.ts"
+    ]
+  }
+}

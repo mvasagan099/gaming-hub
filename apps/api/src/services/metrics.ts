@@ -17,8 +17,9 @@ let durationSumMs = 0;
 
 export function instrument(app: FastifyInstance): void {
   app.addHook("onResponse", async (request, reply) => {
-    const route = request.routeOptions?.url ?? request.url ?? "unknown";
-    const key = `${request.method} ${route}`;
+    const route = request.routeOptions?.url ?? "unmatched";
+    const method = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"].includes(request.method) ? request.method : "OTHER";
+    const key = `${method} ${route}`;
     let stat = routes.get(key);
     if (!stat) {
       stat = { count: 0, statuses: new Map() };

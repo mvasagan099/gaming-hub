@@ -1,0 +1,12 @@
+[
+  {
+    "group": "C1",
+    "exitCode": 1,
+    "durationSeconds": 41.1,
+    "files": 1,
+    "tests": 61,
+    "passed": 59,
+    "failed": 2,
+    "skipped": 0
+  }
+]

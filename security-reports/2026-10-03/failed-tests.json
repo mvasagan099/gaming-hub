@@ -1,0 +1,210 @@
+[
+  {
+    "group": "auth",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/kycAddressSync.test.ts",
+    "test": "KYC Address Sync to Profile falls back to KYC address and auto-syncs profile in getAuthenticatedUserData",
+    "failures": [
+      "AssertionError: expected null to be '77 Brigade Road' // Object.is equality\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/kycAddressSync.test.ts:129:38\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/routes/__tests__/wallet.test.ts",
+    "test": "wallet HTTP routes walks a withdrawal request through to rejection",
+    "failures": [
+      "AssertionError: expected 'APPROVED' to be 'PENDING' // Object.is equality\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/routes/__tests__/wallet.test.ts:93:35\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/routes/__tests__/wallet.test.ts",
+    "test": "wallet HTTP routes Withdrawal Verification Flow (2FA vs Email OTP) CASE A (2FA Enabled): blocks email OTP request, requires fresh MFA session, and succeeds without email OTP",
+    "failures": [
+      "AssertionError: expected 403 to be 400 // Object.is equality\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/routes/__tests__/wallet.test.ts:233:33\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/routes/__tests__/wallet.test.ts",
+    "test": "wallet HTTP routes Withdrawal Verification Flow (2FA vs Email OTP) CASE B (2FA Disabled): issues email OTP, rejects invalid/reused OTP, and succeeds with valid OTP",
+    "failures": [
+      "AssertionError: expected 504 to be 200 // Object.is equality\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/routes/__tests__/wallet.test.ts:313:40\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/routes/__tests__/withdrawalVerificationSmoke.test.ts",
+    "test": "WITHDRAWAL VERIFICATION STAGING SMOKE TEST CASE A — 2FA ENABLED Smoke A: Full 2FA withdrawal verification workflow",
+    "failures": [
+      "AssertionError: expected 'APPROVED' to be 'PENDING' // Object.is equality\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/routes/__tests__/withdrawalVerificationSmoke.test.ts:150:37\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/routes/__tests__/withdrawalVerificationSmoke.test.ts",
+    "test": "WITHDRAWAL VERIFICATION STAGING SMOKE TEST CASE B — 2FA DISABLED Smoke B: Full Email OTP withdrawal verification workflow",
+    "failures": [
+      "AssertionError: expected 504 to be 200 // Object.is equality\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/routes/__tests__/withdrawalVerificationSmoke.test.ts:258:43\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/routes/__tests__/withdrawalVerificationSmoke.test.ts",
+    "test": "WITHDRAWAL VERIFICATION STAGING SMOKE TEST SECURITY ASSURANCES Smoke Sec 2: Email OTP is atomically consumed across concurrent requests",
+    "failures": [
+      "AssertionError: expected +0 to be 1 // Object.is equality\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/routes/__tests__/withdrawalVerificationSmoke.test.ts:449:32\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts",
+    "test": "walletRequests withdrawals creates a PENDING withdrawal request when the OTP is valid",
+    "failures": [
+      "AssertionError: expected 'APPROVED' to be 'PENDING' // Object.is equality\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts:166:30\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts",
+    "test": "walletRequests withdrawals caps concurrent pending withdrawal requests",
+    "failures": [
+      "AssertionError: expected null to be an instance of AppError\n    at Proxy.<anonymous> (file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/expect/dist/index.js:1254:15)\n    at Proxy.<anonymous> (file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/expect/dist/index.js:1029:14)\n    at Proxy.methodWrapper (file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/chai/index.js:1686:25)\n    at expectAppError (/Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts:50:17)\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts:208:7\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts",
+    "test": "walletRequests admin approval approving a withdrawal debits MAIN, fee, and completes via CouponVault",
+    "failures": [
+      "AppError: This request has already been decided\n    at assertPending (/Users/lakoffice/Documents/gaming hub/apps/api/src/services/walletRequests.ts:652:11)\n    at __vite_ssr_import_1__.prisma.$transaction.isolationLevel (/Users/lakoffice/Documents/gaming hub/apps/api/src/services/walletRequests.ts:677:13)\n    at Proxy._transactionWithCallback (/Users/lakoffice/Documents/gaming hub/packages/db/src/generated/client/runtime/library.js:134:8120)\n    at approveWalletRequest (/Users/lakoffice/Documents/gaming hub/apps/api/src/services/walletRequests.ts:673:18)\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts:243:24\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts",
+    "test": "walletRequests admin approval sets UNCONFIRMED_HOLD on CouponVault transfer timeout and leaves status PENDING",
+    "failures": [
+      "AppError: Transfer request timed out. Please check your transaction history before retrying.\n    at createWithdrawalRequest (/Users/lakoffice/Documents/gaming hub/apps/api/src/services/walletRequests.ts:556:25)\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts:268:23\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts",
+    "test": "walletRequests admin approval rejects when the balance no longer covers the withdrawal",
+    "failures": [
+      "AssertionError: expected 'WALLET_REQUEST_ALREADY_DECIDED' to be 'INSUFFICIENT_BALANCE' // Object.is equality\n    at expectAppError (/Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts:51:36)\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts:291:7\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts",
+    "test": "walletRequests admin approval approving an already-decided request fails and debits nothing twice",
+    "failures": [
+      "AppError: This request has already been decided\n    at assertPending (/Users/lakoffice/Documents/gaming hub/apps/api/src/services/walletRequests.ts:652:11)\n    at __vite_ssr_import_1__.prisma.$transaction.isolationLevel (/Users/lakoffice/Documents/gaming hub/apps/api/src/services/walletRequests.ts:677:13)\n    at Proxy._transactionWithCallback (/Users/lakoffice/Documents/gaming hub/packages/db/src/generated/client/runtime/library.js:134:8120)\n    at approveWalletRequest (/Users/lakoffice/Documents/gaming hub/apps/api/src/services/walletRequests.ts:673:18)\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts:308:7\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts",
+    "test": "walletRequests admin approval rejecting a request leaves the balance untouched",
+    "failures": [
+      "AppError: This request has already been decided\n    at assertPending (/Users/lakoffice/Documents/gaming hub/apps/api/src/services/walletRequests.ts:652:11)\n    at __vite_ssr_import_1__.prisma.$transaction.isolationLevel (/Users/lakoffice/Documents/gaming hub/apps/api/src/services/walletRequests.ts:817:13)\n    at Proxy._transactionWithCallback (/Users/lakoffice/Documents/gaming hub/packages/db/src/generated/client/runtime/library.js:134:8120)\n    at rejectWalletRequest (/Users/lakoffice/Documents/gaming hub/apps/api/src/services/walletRequests.ts:813:19)\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts:323:24\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts",
+    "test": "walletRequests cancel lets the owner cancel a pending request but not a decided one",
+    "failures": [
+      "AppError: This request has already been decided\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/services/walletRequests.ts:604:13\n    at Proxy._transactionWithCallback (/Users/lakoffice/Documents/gaming hub/packages/db/src/generated/client/runtime/library.js:134:8120)\n    at cancelWalletRequest (/Users/lakoffice/Documents/gaming hub/apps/api/src/services/walletRequests.ts:597:19)\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts:340:7\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "finance",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts",
+    "test": "walletRequests listing lists and filters requests by kind and status",
+    "failures": [
+      "AssertionError: expected +0 to be 1 // Object.is equality\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/walletRequests.test.ts:394:29\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "privacy_abuse",
+    "file": "/Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/globalPlatformSearch.test.ts",
+    "test": "Feature 33: Global Platform Search 15. Suggestions & history: logs search history and supports clear history",
+    "failures": [
+      "AssertionError: expected 0 to be greater than or equal to 1\n    at /Users/lakoffice/Documents/gaming hub/apps/api/src/services/__tests__/globalPlatformSearch.test.ts:349:32\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "probes",
+    "file": "/Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts",
+    "test": "Audit negative security probes optional authentication must reject a revoked session",
+    "failures": [
+      "AssertionError: expected { …(13) } to be undefined\n    at /Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts:43:20\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "probes",
+    "file": "/Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts",
+    "test": "Audit negative security probes MFA-pending admin must not see another private profile through optional auth",
+    "failures": [
+      "AssertionError: expected 3 to be +0 // Object.is equality\n    at /Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts:54:26\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "probes",
+    "file": "/Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts",
+    "test": "Audit negative security probes tournament cancellation/refund route must deny admin without enrolled MFA",
+    "failures": [
+      "AssertionError: expected { status: 200, …(1) } to deeply equal { status: 403, …(1) }\n    at /Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts:62:91\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "probes",
+    "file": "/Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts",
+    "test": "Audit negative security probes route withdrawal timeout must be discoverable by its returned request ID",
+    "failures": [
+      "Error: promise rejected \"AppError: No wallet request found for tra… { …(3) }\" instead of resolving\n    at _Assertion.__VITEST_RESOLVES__ (file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/expect/dist/index.js:1577:17)\n    at _Assertion.propertyGetter (file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/chai/index.js:1557:27)\n    at Reflect.get (<anonymous>)\n    at Object.proxyGetter [as get] (file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/chai/index.js:1645:22)\n    at /Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts:70:52\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "probes",
+    "file": "/Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts",
+    "test": "Audit negative security probes batch reconciliation must query a held route-created withdrawal",
+    "failures": [
+      "AssertionError: expected { completed: +0, queries: +0 } to deeply equal { completed: 1, queries: 1 }\n    at /Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts:77:74\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "probes",
+    "file": "/Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts",
+    "test": "Audit negative security probes provider PENDING/unknown status must remain held without refund",
+    "failures": [
+      "AssertionError: expected { resolution: 'REFUNDED', …(1) } to deeply equal { resolution: 'HELD', balance: 900 }\n    at /Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts:83:62\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "probes",
+    "file": "/Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts",
+    "test": "Audit negative security probes definitive failure reconciliation must restore principal plus charged fee",
+    "failures": [
+      "AssertionError: expected 990 to be 1000 // Object.is equality\n    at /Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts:88:87\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "probes",
+    "file": "/Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts",
+    "test": "Audit negative security probes post-transfer notification failure must never refund a successful external transfer",
+    "failures": [
+      "AssertionError: expected { externalCalls: 1, …(2) } to deeply equal { Object (externalCalls, balance, ...) }\n    at /Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts:96:93\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  },
+  {
+    "group": "probes",
+    "file": "/Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts",
+    "test": "Audit negative security probes production email verification must default to enabled when flag is omitted",
+    "failures": [
+      "AssertionError: expected false to be true // Object.is equality\n    at /Users/lakoffice/Documents/gaming hub/security-reports/2026-10-03/audit-probes.test.ts:106:44\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/lakoffice/Documents/gaming%20hub/apps/api/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+    ]
+  }
+]

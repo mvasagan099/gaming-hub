@@ -1,0 +1,12 @@
+[
+  {
+    "group": "finance",
+    "exitCode": 1,
+    "durationSeconds": 37.934,
+    "tests": 136,
+    "passed": 134,
+    "failed": 2,
+    "skipped": 0,
+    "files": 12
+  }
+]

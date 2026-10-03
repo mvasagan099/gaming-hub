@@ -59,6 +59,7 @@ const envSchema = z.object({
   COUPON_API_KEY: z.string().default("dev-fallback-key-123"),
   // M-07 fix: constrain how many X-Forwarded-For hops are trusted.
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
+  TRUST_PROXY_CIDRS: z.string().default(""),
   // M-05: AES-256-GCM key for encrypting TOTP secrets at rest.
   // Production: must be exactly 32 cryptographically random bytes, base64-encoded.
   // Generate: node -e "require('crypto').randomBytes(32).toString('base64')" | pbcopy
@@ -224,5 +225,5 @@ if (!parsed.success) {
 
 export const env = {
   ...parsed.data,
-  requireEmailVerification: parsed.data.REQUIRE_EMAIL_VERIFICATION ?? false,
+  requireEmailVerification: parsed.data.REQUIRE_EMAIL_VERIFICATION ?? (parsed.data.NODE_ENV === "production"),
 };

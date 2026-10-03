@@ -251,7 +251,7 @@ describe("Real PostgreSQL Financial Concurrency & Crash Recovery", () => {
         where: { externalTransferId: txId },
       });
       expect(req.status).toBe("APPROVED");
-      expect(req.adminNote).toBe("RECONCILED_SUCCESS");
+      expect(req.adminNote).toBe("COMPLETED");
     });
 
     it("recovers stale PROCESSING state after simulated worker crash", async () => {

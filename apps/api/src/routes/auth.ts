@@ -1,3 +1,4 @@
+import { RateLimitService } from "../services/rateLimitService";
 import type { FastifyInstance } from "fastify";
 import { decodeJwt } from "jose";
 import { AppError } from "@gaming-hub/shared";
@@ -177,6 +178,8 @@ export async function authRoutes(app: FastifyInstance) {
     { preHandler: authenticate, config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
     async (request) => {
       const user = requireUser(request);
+      const limit = await RateLimitService.checkSharedRateLimit(user.id, "TWO_FA");
+      if (!limit.allowed) throw new AppError("RATE_LIMITED", "Too many TOTP attempts; retry after the cooldown.", 429);
       const { token: totpToken } = (request.body as { token?: unknown });
       if (typeof totpToken !== "string" || !totpToken.trim()) {
         throw new AppError("VALIDATION_ERROR", "TOTP token is required", 400);
@@ -229,18 +232,13 @@ export async function authRoutes(app: FastifyInstance) {
       const authHeader = request.headers.authorization as string;
       const rawToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
       const tokenHash = hashToken(rawToken);
-      const sessionTtlMs = 30 * 24 * 60 * 60 * 1000;
-      await prisma.loginSession.upsert({
-        where: { tokenHash },
-        update: { mfaVerifiedAt: new Date(), isCurrent: true, revokedAt: null },
-        create: {
-          userId: user.id,
-          tokenHash,
-          mfaVerifiedAt: new Date(),
-          isCurrent: true,
-          expiresAt: new Date(Date.now() + sessionTtlMs),
-        },
+      const now = new Date();
+      const result = await prisma.loginSession.updateMany({
+        where: { userId: user.id, tokenHash, revokedAt: null, expiresAt: { gt: now } },
+        data: { mfaVerifiedAt: now },
       });
+      if (result.count !== 1) throw new AppError("SESSION_REVOKED", "Session is no longer active", 401);
+
 
       auditFromRequest(request, {
         actorType: "user",

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { prisma, Prisma } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
 import type {
@@ -12,6 +12,8 @@ import { createNotification } from "./notifications";
 import { getCategorySettings } from "./settings";
 import { notifyUserSocket } from "./socketBridge";
 import { CouponVaultService } from "./couponVaultService";
+
+import { resolveWithdrawal, isDefinitiveTransferFailure } from "./withdrawalResolution";
 
 const OTP_PURPOSE = "WALLET_WITHDRAWAL";
 
@@ -420,8 +422,12 @@ export async function createWithdrawalRequest(
     }
 
     // Create the request record in PENDING state and immediately debit the wallet.
+    const requestId = randomUUID();
     const createdRequest = await tx.walletRequest.create({
       data: {
+        id: requestId,
+        note: requestId,
+        externalTransferId: requestId,
         userId,
         kind: "WITHDRAWAL",
         amount,
@@ -477,6 +483,7 @@ export async function createWithdrawalRequest(
     select: { email: true, username: true },
   });
 
+  // Only the external call can establish a definitive provider rejection.
   try {
     await CouponVaultService.transferToCouponWallet({
       userId,
@@ -484,110 +491,34 @@ export async function createWithdrawalRequest(
       amount: request.amount,
       transactionId: request.id,
     });
-
-    // CouponVault confirmed — mark APPROVED.
-    const approved = await prisma.walletRequest.update({
-      where: { id: request.id },
-      data: {
-        status: "APPROVED",
-        adminNote: "COMPLETED",
-        decidedAt: new Date(),
-      },
-    });
-
-    audit({
-      actorType: "user",
-      actorId: userId,
-      action: "wallet.withdrawal.approved",
-      category: "wallet",
-      targetType: "walletRequest",
-      targetId: request.id,
-      meta: { amount, fee: request.fee, userId, balanceAfter: newBalance, externalStatus: "COMPLETED" },
-    });
-
-    await createNotification(
-      userId,
-      "WALLET",
-      "Withdrawal Completed",
-      `Your withdrawal of ${amount} has been processed to CouponVault.`,
-      { requestId: request.id, amount },
-    );
-
-    await notifyUserSocket(userId, "wallet:updated", {
-      event: "withdrawal-approved",
-      requestId: request.id,
-      amount,
-      status: "APPROVED",
-      newBalance,
-      message: "Withdrawal completed successfully",
-    });
-
-    // Return augmented response so the frontend modal shows "Success".
-    return {
-      ...serializeRequest(approved),
-      // @ts-ignore – extra fields consumed by WithdrawalFlowModal
-      transactionId: approved.id,
-      newBalance,
-    };
-  } catch (error: any) {
-    if (error?.isTimeout || error?.isUncertain || error?.statusCode === 504) {
-      // Uncertain state — wallet is already debited. Mark UNCONFIRMED_HOLD
-      // so reconciliation can verify and either confirm or refund later.
-      console.warn(`[createWithdrawalRequest] CouponVault timeout for ${request.id}, marking UNCONFIRMED_HOLD`);
-      const held = await prisma.walletRequest.update({
-        where: { id: request.id },
-        data: {
-          status: "PENDING",
-          adminNote: "UNCONFIRMED_HOLD",
-          processingStartedAt: new Date(),
-        },
-      });
-
-      audit({
-        actorType: "user",
-        actorId: userId,
-        action: "wallet.withdrawal.timeout_held",
-        category: "wallet",
-        targetType: "walletRequest",
-        targetId: request.id,
-        meta: { amount, fee: request.fee, userId, balanceAfter: newBalance, externalStatus: "UNCONFIRMED_HOLD", error: error?.message },
-      });
-
-      const holdError = new AppError(
-        "COUPON_TRANSFER_TIMEOUT",
-        "Transfer request timed out. Please check your transaction history before retrying.",
-        504,
-        { transactionId: held.id },
-      );
-      (holdError as any).isTimeout = true;
-      (holdError as any).isUncertain = true;
-      throw holdError;
+  } catch (error: unknown) {
+    if (isDefinitiveTransferFailure(error)) {
+      await resolveWithdrawal(request.id, "REFUNDED", request.processingStartedAt);
+      throw new AppError("TRANSFER_FAILED", "CouponVault rejected the transfer. Your balance has been refunded.", 400);
     }
-
-    // Hard failure — refund the wallet.
-    console.error(`[createWithdrawalRequest] CouponVault hard failure for ${request.id}, refunding.`, error?.message);
-    await prisma.$transaction(async (tx) => {
-      await applyTransaction(
-        tx,
-        userId,
-        request.amount + request.fee,
-        "REVERSAL",
-        request.id,
-        { reason: error?.message || "CouponVault transfer failed", originalTransactionId: request.id },
-        "MAIN",
-      );
-      await tx.walletRequest.update({
-        where: { id: request.id },
-        data: { status: "REJECTED", adminNote: "REFUNDED", decidedAt: new Date() },
-      });
-    });
-
-    throw new AppError(
-      "TRANSFER_FAILED",
-      error?.message || "CouponVault transfer failed. Your balance has been refunded.",
-      400,
-    );
+    await resolveWithdrawal(request.id, "UNCONFIRMED_HOLD", request.processingStartedAt);
+    throw new AppError("COUPON_TRANSFER_TIMEOUT", "Transfer outcome is unconfirmed. Check transaction history before retrying.", 504, { transactionId: request.id });
   }
+
+  let approved;
+  try {
+    approved = await resolveWithdrawal(request.id, "COMPLETED", request.processingStartedAt);
+  } catch {
+    // External success is irreversible. A failed local write requires reconciliation.
+    await resolveWithdrawal(request.id, "UNCONFIRMED_HOLD", request.processingStartedAt).catch(() => undefined);
+    throw new AppError("COUPON_TRANSFER_TIMEOUT", "Transfer received; local confirmation is pending reconciliation.", 504, { transactionId: request.id });
+  }
+  audit({ actorType: "user", actorId: userId, action: "wallet.withdrawal.approved", category: "wallet",
+    targetType: "walletRequest", targetId: request.id,
+    meta: { amount, fee: request.fee, balanceAfter: newBalance, externalStatus: approved.adminNote } });
+  // Notifications never determine the financial outcome.
+  await createNotification(userId, "WALLET", "Withdrawal Completed",
+    `Your withdrawal of ${amount} has been processed to CouponVault.`, { requestId: request.id, amount }).catch(() => undefined);
+  await notifyUserSocket(userId, "wallet:updated", { event: "withdrawal-approved", requestId: request.id,
+    amount, status: approved.status, newBalance, message: "Withdrawal completed successfully" }).catch(() => undefined);
+  const response = { ...serializeRequest(approved), transactionId: approved.id, newBalance };
+  return response;
+
 }
 
 export async function cancelWalletRequest(
@@ -607,6 +538,7 @@ export async function cancelWalletRequest(
         409,
       );
     }
+    assertTransferNotInFlight(request);
     if (request.kind === "WITHDRAWAL") {
       await lockWalletRow(tx, userId);
       await applyTransaction(
@@ -642,6 +574,12 @@ export async function cancelWalletRequest(
 // Admin decisions
 // ---------------------------------------------------------------------------
 
+function assertTransferNotInFlight(request: { kind: string; adminNote: string | null }) {
+  if (request.kind === "WITHDRAWAL" && ["PROCESSING", "UNCONFIRMED_HOLD", "UNCONFIRMED_TIMEOUT"].includes(request.adminNote || "")) {
+    throw new AppError("WALLET_REQUEST_ALREADY_DECIDED", "This transfer must be reconciled before another decision.", 409);
+  }
+}
+
 async function assertPending(
   request: { id: string; status: WalletRequestStatus } | null,
 ): Promise<{ id: string; status: WalletRequestStatus }> {
@@ -675,6 +613,7 @@ export async function approveWalletRequest(
       await lockWalletRequestRow(tx, requestId);
       const request = await tx.walletRequest.findUnique({ where: { id: requestId } });
       await assertPending(request);
+      assertTransferNotInFlight(request!);
 
       await lockWalletRow(tx, request!.userId);
 
@@ -720,89 +659,30 @@ export async function approveWalletRequest(
     await CouponVaultService.transferToCouponWallet({
       userId: result.updated.userId,
       userEmail: (account?.email || `${account?.username || "user"}@gaminghub.com`).toLowerCase(),
-      amount: result.updated.amount,
-      transactionId,
+      amount: result.updated.amount, transactionId,
     });
-    const completed = await prisma.walletRequest.update({
-      where: { id: transactionId },
-      data: {
-        status: "APPROVED",
-        adminNote: adminNote?.trim() ? `COMPLETED: ${adminNote.trim()}` : "COMPLETED",
-        decidedAt: new Date(),
-      },
-    });
-    audit({
-      actorType: "user",
-      actorId: adminId,
-      action: "wallet.withdrawal.approved",
-      category: "wallet",
-      targetType: "walletRequest",
-      targetId: requestId,
-      meta: {
-        amount: result.updated.amount,
-        fee: result.updated.fee,
-        userId: result.updated.userId,
-        balanceAfter: result.wallet.balance,
-        externalStatus: "COMPLETED",
-      },
-    });
-
-    await createNotification(
-      result.updated.userId,
-      "WALLET",
-      "Withdrawal Completed",
-      `Your withdrawal of ${result.updated.amount} has been processed to CouponVault.`,
-      { requestId: result.updated.id, amount: result.updated.amount },
-    );
-
-    return serializeRequest(completed);
-  } catch (error: any) {
-    if (error?.isTimeout || error?.isUncertain || error?.statusCode === 504) {
-      console.warn(`[approveWalletRequest] CouponVault timeout for ${transactionId}, marking UNCONFIRMED_HOLD`);
-      const held = await prisma.walletRequest.update({
-        where: { id: transactionId },
-        data: {
-          status: "PENDING",
-          adminNote: "UNCONFIRMED_HOLD",
-          processingStartedAt: new Date(),
-        },
-      });
-      audit({
-        actorType: "user",
-        actorId: adminId,
-        action: "wallet.withdrawal.timeout_held",
-        category: "wallet",
-        targetType: "walletRequest",
-        targetId: requestId,
-        meta: {
-          amount: result.updated.amount,
-          fee: result.updated.fee,
-          userId: result.updated.userId,
-          balanceAfter: result.wallet.balance,
-          externalStatus: "UNCONFIRMED_HOLD",
-          error: error?.message,
-        },
-      });
-      return serializeRequest(held);
-    } else {
-      await prisma.$transaction(async (tx) => {
-        await applyTransaction(
-          tx,
-          result.updated.userId,
-          result.updated.amount + result.updated.fee,
-          "REVERSAL",
-          transactionId,
-          { reason: error?.message || "CouponVault transfer failed", originalTransactionId: transactionId },
-          "MAIN",
-        );
-        await tx.walletRequest.update({
-          where: { id: transactionId },
-          data: { status: "REJECTED", adminNote: "REFUNDED", decidedAt: new Date() },
-        });
-      });
-      throw new AppError("TRANSFER_FAILED", error?.message || "CouponVault transfer failed", 400);
+  } catch (error: unknown) {
+    if (isDefinitiveTransferFailure(error)) {
+      await resolveWithdrawal(transactionId, "REFUNDED", result.updated.processingStartedAt);
+      throw new AppError("TRANSFER_FAILED", "CouponVault rejected the transfer. Funds refunded.", 400);
     }
+    return serializeRequest(await resolveWithdrawal(transactionId, "UNCONFIRMED_HOLD", result.updated.processingStartedAt));
   }
+  let completed;
+  try {
+    completed = await resolveWithdrawal(transactionId, "COMPLETED", result.updated.processingStartedAt);
+  } catch {
+    await resolveWithdrawal(transactionId, "UNCONFIRMED_HOLD", result.updated.processingStartedAt).catch(() => undefined);
+    throw new AppError("COUPON_TRANSFER_TIMEOUT", "Transfer received; local confirmation is pending reconciliation.", 504, { transactionId });
+  }
+  audit({ actorType: "user", actorId: adminId, action: "wallet.withdrawal.approved", category: "wallet",
+    targetType: "walletRequest", targetId: requestId,
+    meta: { amount: result.updated.amount, externalStatus: completed.adminNote } });
+  await createNotification(result.updated.userId, "WALLET", "Withdrawal Completed",
+    `Your withdrawal of ${result.updated.amount} has been processed to CouponVault.`,
+    { requestId, amount: result.updated.amount }).catch(() => undefined);
+  return serializeRequest(completed);
+
 }
 
 export async function rejectWalletRequest(
@@ -815,6 +695,7 @@ export async function rejectWalletRequest(
       await lockWalletRequestRow(tx, requestId);
       const request = await tx.walletRequest.findUnique({ where: { id: requestId } });
       await assertPending(request);
+      assertTransferNotInFlight(request!);
 
       if (request!.kind === "WITHDRAWAL") {
         await lockWalletRow(tx, request!.userId);

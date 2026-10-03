@@ -1,0 +1,42 @@
+[
+  {
+    "group": "units",
+    "exitCode": 0,
+    "durationSeconds": 6.447,
+    "tests": 248,
+    "passed": 248,
+    "failed": 0,
+    "skipped": 0,
+    "files": 10
+  },
+  {
+    "group": "auth",
+    "exitCode": 1,
+    "durationSeconds": 37.883,
+    "tests": 53,
+    "passed": 52,
+    "failed": 1,
+    "skipped": 0,
+    "files": 9
+  },
+  {
+    "group": "finance",
+    "exitCode": 1,
+    "durationSeconds": 61.48,
+    "tests": 136,
+    "passed": 121,
+    "failed": 15,
+    "skipped": 0,
+    "files": 12
+  },
+  {
+    "group": "privacy_abuse",
+    "exitCode": 1,
+    "durationSeconds": 31.244,
+    "tests": 120,
+    "passed": 119,
+    "failed": 1,
+    "skipped": 0,
+    "files": 9
+  }
+]

@@ -1,0 +1,7 @@
+{
+  "parse": true,
+  "uuid": true,
+  "serialize": true,
+  "nativeFilesChanged": false,
+  "pass": true
+}

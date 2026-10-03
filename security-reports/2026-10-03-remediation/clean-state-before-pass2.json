@@ -1,0 +1,772 @@
+{
+  "host": "127.0.0.1",
+  "port": 5541,
+  "database": "gaming_hub_remediation_20261003_test",
+  "before": [
+    {
+      "table": "Achievement",
+      "rows": 0
+    },
+    {
+      "table": "AffiliateCommission",
+      "rows": 0
+    },
+    {
+      "table": "Announcement",
+      "rows": 0
+    },
+    {
+      "table": "AnnouncementRead",
+      "rows": 0
+    },
+    {
+      "table": "AppNotification",
+      "rows": 0
+    },
+    {
+      "table": "AppVersionConfig",
+      "rows": 0
+    },
+    {
+      "table": "AuditLog",
+      "rows": 0
+    },
+    {
+      "table": "BlockedUser",
+      "rows": 0
+    },
+    {
+      "table": "ChatMessage",
+      "rows": 0
+    },
+    {
+      "table": "CompetitiveRank",
+      "rows": 0
+    },
+    {
+      "table": "Conversation",
+      "rows": 0
+    },
+    {
+      "table": "ConversationMember",
+      "rows": 0
+    },
+    {
+      "table": "Coupon",
+      "rows": 0
+    },
+    {
+      "table": "CouponRedemption",
+      "rows": 0
+    },
+    {
+      "table": "CronJobRun",
+      "rows": 0
+    },
+    {
+      "table": "CustomRole",
+      "rows": 0
+    },
+    {
+      "table": "ErrorEvent",
+      "rows": 0
+    },
+    {
+      "table": "FeatureFlag",
+      "rows": 0
+    },
+    {
+      "table": "Friend",
+      "rows": 0
+    },
+    {
+      "table": "GameNotification",
+      "rows": 0
+    },
+    {
+      "table": "GameSeason",
+      "rows": 0
+    },
+    {
+      "table": "GameState",
+      "rows": 0
+    },
+    {
+      "table": "Gift",
+      "rows": 0
+    },
+    {
+      "table": "GlobalAnnouncement",
+      "rows": 0
+    },
+    {
+      "table": "IdempotencyRecord",
+      "rows": 0
+    },
+    {
+      "table": "KycAuditLog",
+      "rows": 0
+    },
+    {
+      "table": "KycDocument",
+      "rows": 0
+    },
+    {
+      "table": "KycDocumentConfig",
+      "rows": 0
+    },
+    {
+      "table": "KycRequest",
+      "rows": 0
+    },
+    {
+      "table": "KycReview",
+      "rows": 0
+    },
+    {
+      "table": "KycWithdrawalLimit",
+      "rows": 0
+    },
+    {
+      "table": "Leaderboard",
+      "rows": 0
+    },
+    {
+      "table": "LiveEvent",
+      "rows": 0
+    },
+    {
+      "table": "LoginSession",
+      "rows": 0
+    },
+    {
+      "table": "MaintenanceWindow",
+      "rows": 0
+    },
+    {
+      "table": "Match",
+      "rows": 0
+    },
+    {
+      "table": "MatchPlayer",
+      "rows": 0
+    },
+    {
+      "table": "MatchStatistics",
+      "rows": 0
+    },
+    {
+      "table": "MatchmakingQueue",
+      "rows": 0
+    },
+    {
+      "table": "Message",
+      "rows": 0
+    },
+    {
+      "table": "Move",
+      "rows": 0
+    },
+    {
+      "table": "NotificationPreference",
+      "rows": 0
+    },
+    {
+      "table": "NotificationTemplate",
+      "rows": 0
+    },
+    {
+      "table": "PlayerGameStats",
+      "rows": 0
+    },
+    {
+      "table": "PlayerPenalty",
+      "rows": 0
+    },
+    {
+      "table": "PlayerReport",
+      "rows": 0
+    },
+    {
+      "table": "PlayerReputation",
+      "rows": 0
+    },
+    {
+      "table": "PlayerStatistic",
+      "rows": 0
+    },
+    {
+      "table": "Profile",
+      "rows": 0
+    },
+    {
+      "table": "PushSubscription",
+      "rows": 0
+    },
+    {
+      "table": "RateLimitWindow",
+      "rows": 0
+    },
+    {
+      "table": "RatingHistory",
+      "rows": 0
+    },
+    {
+      "table": "Referral",
+      "rows": 0
+    },
+    {
+      "table": "ReferralRiskEvent",
+      "rows": 0
+    },
+    {
+      "table": "RemoteConfig",
+      "rows": 0
+    },
+    {
+      "table": "Replay",
+      "rows": 0
+    },
+    {
+      "table": "RolePermission",
+      "rows": 0
+    },
+    {
+      "table": "Room",
+      "rows": 0
+    },
+    {
+      "table": "RoomPlayer",
+      "rows": 0
+    },
+    {
+      "table": "ScheduledNotification",
+      "rows": 0
+    },
+    {
+      "table": "SearchHistory",
+      "rows": 0
+    },
+    {
+      "table": "Season",
+      "rows": 0
+    },
+    {
+      "table": "SecurityEvent",
+      "rows": 0
+    },
+    {
+      "table": "ServerBroadcast",
+      "rows": 0
+    },
+    {
+      "table": "SiteSetting",
+      "rows": 0
+    },
+    {
+      "table": "StoreItem",
+      "rows": 0
+    },
+    {
+      "table": "SubscriptionPlan",
+      "rows": 0
+    },
+    {
+      "table": "SupportArticle",
+      "rows": 0
+    },
+    {
+      "table": "SupportArticleFeedback",
+      "rows": 0
+    },
+    {
+      "table": "SupportArticleTranslation",
+      "rows": 0
+    },
+    {
+      "table": "SupportCategory",
+      "rows": 0
+    },
+    {
+      "table": "SupportPageMapping",
+      "rows": 0
+    },
+    {
+      "table": "SupportSearchLog",
+      "rows": 0
+    },
+    {
+      "table": "SupportTicket",
+      "rows": 0
+    },
+    {
+      "table": "TicketMessage",
+      "rows": 0
+    },
+    {
+      "table": "Tournament",
+      "rows": 0
+    },
+    {
+      "table": "TournamentDispute",
+      "rows": 0
+    },
+    {
+      "table": "TournamentIntegrityAlert",
+      "rows": 0
+    },
+    {
+      "table": "TournamentNotificationIdempotency",
+      "rows": 0
+    },
+    {
+      "table": "TournamentPlayer",
+      "rows": 0
+    },
+    {
+      "table": "TournamentPrize",
+      "rows": 0
+    },
+    {
+      "table": "TournamentResultIdempotency",
+      "rows": 0
+    },
+    {
+      "table": "TournamentResultSnapshot",
+      "rows": 0
+    },
+    {
+      "table": "TournamentRound",
+      "rows": 0
+    },
+    {
+      "table": "TournamentTier",
+      "rows": 0
+    },
+    {
+      "table": "TournamentTierScheduleLog",
+      "rows": 0
+    },
+    {
+      "table": "Transaction",
+      "rows": 0
+    },
+    {
+      "table": "User",
+      "rows": 0
+    },
+    {
+      "table": "UserAchievement",
+      "rows": 0
+    },
+    {
+      "table": "UserInventoryItem",
+      "rows": 0
+    },
+    {
+      "table": "UserPrivacy",
+      "rows": 0
+    },
+    {
+      "table": "UserSubscription",
+      "rows": 0
+    },
+    {
+      "table": "Wallet",
+      "rows": 0
+    },
+    {
+      "table": "WalletOtp",
+      "rows": 0
+    },
+    {
+      "table": "WalletRequest",
+      "rows": 0
+    }
+  ],
+  "after": [
+    {
+      "table": "Achievement",
+      "rows": 0
+    },
+    {
+      "table": "AffiliateCommission",
+      "rows": 0
+    },
+    {
+      "table": "Announcement",
+      "rows": 0
+    },
+    {
+      "table": "AnnouncementRead",
+      "rows": 0
+    },
+    {
+      "table": "AppNotification",
+      "rows": 0
+    },
+    {
+      "table": "AppVersionConfig",
+      "rows": 0
+    },
+    {
+      "table": "AuditLog",
+      "rows": 0
+    },
+    {
+      "table": "BlockedUser",
+      "rows": 0
+    },
+    {
+      "table": "ChatMessage",
+      "rows": 0
+    },
+    {
+      "table": "CompetitiveRank",
+      "rows": 0
+    },
+    {
+      "table": "Conversation",
+      "rows": 0
+    },
+    {
+      "table": "ConversationMember",
+      "rows": 0
+    },
+    {
+      "table": "Coupon",
+      "rows": 0
+    },
+    {
+      "table": "CouponRedemption",
+      "rows": 0
+    },
+    {
+      "table": "CronJobRun",
+      "rows": 0
+    },
+    {
+      "table": "CustomRole",
+      "rows": 0
+    },
+    {
+      "table": "ErrorEvent",
+      "rows": 0
+    },
+    {
+      "table": "FeatureFlag",
+      "rows": 0
+    },
+    {
+      "table": "Friend",
+      "rows": 0
+    },
+    {
+      "table": "GameNotification",
+      "rows": 0
+    },
+    {
+      "table": "GameSeason",
+      "rows": 0
+    },
+    {
+      "table": "GameState",
+      "rows": 0
+    },
+    {
+      "table": "Gift",
+      "rows": 0
+    },
+    {
+      "table": "GlobalAnnouncement",
+      "rows": 0
+    },
+    {
+      "table": "IdempotencyRecord",
+      "rows": 0
+    },
+    {
+      "table": "KycAuditLog",
+      "rows": 0
+    },
+    {
+      "table": "KycDocument",
+      "rows": 0
+    },
+    {
+      "table": "KycDocumentConfig",
+      "rows": 0
+    },
+    {
+      "table": "KycRequest",
+      "rows": 0
+    },
+    {
+      "table": "KycReview",
+      "rows": 0
+    },
+    {
+      "table": "KycWithdrawalLimit",
+      "rows": 0
+    },
+    {
+      "table": "Leaderboard",
+      "rows": 0
+    },
+    {
+      "table": "LiveEvent",
+      "rows": 0
+    },
+    {
+      "table": "LoginSession",
+      "rows": 0
+    },
+    {
+      "table": "MaintenanceWindow",
+      "rows": 0
+    },
+    {
+      "table": "Match",
+      "rows": 0
+    },
+    {
+      "table": "MatchPlayer",
+      "rows": 0
+    },
+    {
+      "table": "MatchStatistics",
+      "rows": 0
+    },
+    {
+      "table": "MatchmakingQueue",
+      "rows": 0
+    },
+    {
+      "table": "Message",
+      "rows": 0
+    },
+    {
+      "table": "Move",
+      "rows": 0
+    },
+    {
+      "table": "NotificationPreference",
+      "rows": 0
+    },
+    {
+      "table": "NotificationTemplate",
+      "rows": 0
+    },
+    {
+      "table": "PlayerGameStats",
+      "rows": 0
+    },
+    {
+      "table": "PlayerPenalty",
+      "rows": 0
+    },
+    {
+      "table": "PlayerReport",
+      "rows": 0
+    },
+    {
+      "table": "PlayerReputation",
+      "rows": 0
+    },
+    {
+      "table": "PlayerStatistic",
+      "rows": 0
+    },
+    {
+      "table": "Profile",
+      "rows": 0
+    },
+    {
+      "table": "PushSubscription",
+      "rows": 0
+    },
+    {
+      "table": "RateLimitWindow",
+      "rows": 0
+    },
+    {
+      "table": "RatingHistory",
+      "rows": 0
+    },
+    {
+      "table": "Referral",
+      "rows": 0
+    },
+    {
+      "table": "ReferralRiskEvent",
+      "rows": 0
+    },
+    {
+      "table": "RemoteConfig",
+      "rows": 0
+    },
+    {
+      "table": "Replay",
+      "rows": 0
+    },
+    {
+      "table": "RolePermission",
+      "rows": 0
+    },
+    {
+      "table": "Room",
+      "rows": 0
+    },
+    {
+      "table": "RoomPlayer",
+      "rows": 0
+    },
+    {
+      "table": "ScheduledNotification",
+      "rows": 0
+    },
+    {
+      "table": "SearchHistory",
+      "rows": 0
+    },
+    {
+      "table": "Season",
+      "rows": 0
+    },
+    {
+      "table": "SecurityEvent",
+      "rows": 0
+    },
+    {
+      "table": "ServerBroadcast",
+      "rows": 0
+    },
+    {
+      "table": "SiteSetting",
+      "rows": 0
+    },
+    {
+      "table": "StoreItem",
+      "rows": 0
+    },
+    {
+      "table": "SubscriptionPlan",
+      "rows": 0
+    },
+    {
+      "table": "SupportArticle",
+      "rows": 0
+    },
+    {
+      "table": "SupportArticleFeedback",
+      "rows": 0
+    },
+    {
+      "table": "SupportArticleTranslation",
+      "rows": 0
+    },
+    {
+      "table": "SupportCategory",
+      "rows": 0
+    },
+    {
+      "table": "SupportPageMapping",
+      "rows": 0
+    },
+    {
+      "table": "SupportSearchLog",
+      "rows": 0
+    },
+    {
+      "table": "SupportTicket",
+      "rows": 0
+    },
+    {
+      "table": "TicketMessage",
+      "rows": 0
+    },
+    {
+      "table": "Tournament",
+      "rows": 0
+    },
+    {
+      "table": "TournamentDispute",
+      "rows": 0
+    },
+    {
+      "table": "TournamentIntegrityAlert",
+      "rows": 0
+    },
+    {
+      "table": "TournamentNotificationIdempotency",
+      "rows": 0
+    },
+    {
+      "table": "TournamentPlayer",
+      "rows": 0
+    },
+    {
+      "table": "TournamentPrize",
+      "rows": 0
+    },
+    {
+      "table": "TournamentResultIdempotency",
+      "rows": 0
+    },
+    {
+      "table": "TournamentResultSnapshot",
+      "rows": 0
+    },
+    {
+      "table": "TournamentRound",
+      "rows": 0
+    },
+    {
+      "table": "TournamentTier",
+      "rows": 0
+    },
+    {
+      "table": "TournamentTierScheduleLog",
+      "rows": 0
+    },
+    {
+      "table": "Transaction",
+      "rows": 0
+    },
+    {
+      "table": "User",
+      "rows": 0
+    },
+    {
+      "table": "UserAchievement",
+      "rows": 0
+    },
+    {
+      "table": "UserInventoryItem",
+      "rows": 0
+    },
+    {
+      "table": "UserPrivacy",
+      "rows": 0
+    },
+    {
+      "table": "UserSubscription",
+      "rows": 0
+    },
+    {
+      "table": "Wallet",
+      "rows": 0
+    },
+    {
+      "table": "WalletOtp",
+      "rows": 0
+    },
+    {
+      "table": "WalletRequest",
+      "rows": 0
+    }
+  ],
+  "allApplicationTablesEmpty": true,
+  "migrationHistoryPreserved": true,
+  "productionDbTouched": false
+}

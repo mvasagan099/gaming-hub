@@ -87,7 +87,7 @@ export class ReferralService {
     code: string,
     reqContext?: ReferralRequestContext
   ): Promise<ReferralApplyResult> {
-    const rateCheck = RateLimitService.checkRateLimit(userId, "REFERRAL");
+    const rateCheck = await RateLimitService.checkSharedRateLimit(userId, "REFERRAL");
     if (!rateCheck.allowed) {
       throw new AppError("RATE_LIMITED", "Too many referral attempts. Please try again later.", 429);
     }

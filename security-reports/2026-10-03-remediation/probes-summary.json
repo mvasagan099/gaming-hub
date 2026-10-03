@@ -1,0 +1,12 @@
+[
+  {
+    "group": "probes",
+    "exitCode": 1,
+    "durationSeconds": 11.153,
+    "tests": 9,
+    "passed": 8,
+    "failed": 1,
+    "skipped": 0,
+    "files": 1
+  }
+]

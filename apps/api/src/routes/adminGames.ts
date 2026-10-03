@@ -12,7 +12,7 @@ import {
   TIMEOUT_RESOLUTIONS,
   type TimeoutResolution,
 } from "@gaming-hub/shared";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, requireMfa } from "../plugins/authenticate";
 import { parseSchema, routeParams, queryParams, queryString } from "../lib/http";
 import { requirePermission } from "../lib/permissions";
 import { GameConfigService } from "../services/gameConfigService";
@@ -115,7 +115,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
    * POST /api/admin/games/:gameId/config
    * Full or partial update of game configuration.
    */
-  app.post("/api/admin/games/:gameId/config", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/games/:gameId/config", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const user = await requirePermission(request, "admin:games:manage", prisma);
     const { gameId } = routeParams(request);
     if (!isGameId(gameId as GameId)) {
@@ -130,7 +130,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
   /**
    * PATCH /api/admin/games/:gameId/config
    */
-  app.patch("/api/admin/games/:gameId/config", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/games/:gameId/config", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const user = await requirePermission(request, "admin:games:manage", prisma);
     const { gameId } = routeParams(request);
     if (!isGameId(gameId as GameId)) {
@@ -145,7 +145,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
   /**
    * POST /api/admin/games/:gameId/enable
    */
-  app.post("/api/admin/games/:gameId/enable", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/games/:gameId/enable", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const user = await requirePermission(request, "admin:games:manage", prisma);
     const { gameId } = routeParams(request);
     if (!isGameId(gameId as GameId)) {
@@ -158,7 +158,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
   /**
    * POST /api/admin/games/:gameId/disable
    */
-  app.post("/api/admin/games/:gameId/disable", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/games/:gameId/disable", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const user = await requirePermission(request, "admin:games:manage", prisma);
     const { gameId } = routeParams(request);
     if (!isGameId(gameId as GameId)) {
@@ -171,7 +171,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
   /**
    * POST /api/admin/games/:gameId/online/enable
    */
-  app.post("/api/admin/games/:gameId/online/enable", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/games/:gameId/online/enable", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const user = await requirePermission(request, "admin:games:manage", prisma);
     const { gameId } = routeParams(request);
     if (!isGameId(gameId as GameId)) {
@@ -184,7 +184,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
   /**
    * POST /api/admin/games/:gameId/online/disable
    */
-  app.post("/api/admin/games/:gameId/online/disable", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/games/:gameId/online/disable", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const user = await requirePermission(request, "admin:games:manage", prisma);
     const { gameId } = routeParams(request);
     if (!isGameId(gameId as GameId)) {
@@ -274,7 +274,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
    * POST /api/admin/refunds/match
    * Admin-authorized refund for a match entry.
    */
-  app.post("/api/admin/refunds/match", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/refunds/match", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
     const body = parseSchema(
       z.object({
@@ -301,7 +301,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
    * POST /api/admin/refunds/tournament
    * Admin-authorized refund for a tournament registration.
    */
-  app.post("/api/admin/refunds/tournament", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/refunds/tournament", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
     const body = parseSchema(
       z.object({
@@ -328,7 +328,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
    * POST /api/admin/settlement/match
    * Admin-authorized settlement for a match.
    */
-  app.post("/api/admin/settlement/match", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/settlement/match", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
     const body = parseSchema(
       z.object({
@@ -355,7 +355,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
    * POST /api/admin/settlement/tournament
    * Admin-authorized settlement for a tournament.
    */
-  app.post("/api/admin/settlement/tournament", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/settlement/tournament", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
     const body = parseSchema(
       z.object({
@@ -392,7 +392,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
    * POST /api/admin/matches/:id/force-timeout
    * Manually triggers turn or match timeout from admin dashboard.
    */
-  app.post("/api/admin/matches/:id/force-timeout", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/matches/:id/force-timeout", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:games:manage", prisma);
     const { id } = routeParams(request);
     const body = (request.body ?? {}) as { currentTurnSeat?: number };
@@ -411,7 +411,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
    * POST /api/admin/matches/:id/abandon
    * Admin-authorized force-abandon / forfeit of a player with audit trail.
    */
-  app.post("/api/admin/matches/:id/abandon", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/matches/:id/abandon", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:games:manage", prisma);
     const { id } = routeParams(request);
     const body = parseSchema(
@@ -448,7 +448,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
    * POST /api/admin/matches/:id/recover
    * Manually loads and revalidates persistent match state snapshot.
    */
-  app.post("/api/admin/matches/:id/recover", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/matches/:id/recover", { preHandler: [authenticate, requireMfa] }, async (request) => {
     await requirePermission(request, "admin:games:manage", prisma);
     const { id } = routeParams(request);
     const { PersistentMatchStateService } = await import("../services/persistentMatchStateService");
@@ -485,7 +485,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
    * PATCH /api/admin/game-settings/:gameId
    * Updates a game's timeout, duration, or enabled status.
    */
-  app.patch("/api/admin/game-settings/:gameId", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/game-settings/:gameId", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:games:manage", prisma);
     const { gameId } = routeParams(request);
     const body = parseSchema(updateGameConfigSchema, request.body);
@@ -536,7 +536,7 @@ export async function adminGamesRoutes(app: FastifyInstance) {
    * PATCH /api/admin/match-settings
    * Updates platform-wide match limit and warning times.
    */
-  app.patch("/api/admin/match-settings", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/match-settings", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:settings:edit", prisma);
     const body = parseSchema(
       z.object({

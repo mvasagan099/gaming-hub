@@ -302,7 +302,15 @@ export class CouponVaultService {
       const code: "DUPLICATE_TRANSACTION" | "TRANSFER_FAILED" =
         data?.code === "DUPLICATE_TRANSACTION" ? "DUPLICATE_TRANSACTION" : "TRANSFER_FAILED";
       const message = data?.message || "Failed to transfer to Coupon Wallet";
-      throw new AppError(code, message, 400);
+      const error = new AppError(code, message, response.status >= 500 ? 502 : 400);
+      if (response.status >= 500 || response.status === 408 || response.ok) (error as any).isUncertain = true;
+      throw error;
+    }
+    const returnedId = data?.data?.transactionId || data?.transactionId;
+    if (returnedId && returnedId !== params.transactionId) {
+      const error = new AppError("COUPON_TRANSFER_CONFLICT", "Provider returned a different transaction identity.", 409);
+      (error as any).isUncertain = true;
+      throw error;
     }
 
     return {
@@ -323,6 +331,7 @@ export class CouponVaultService {
     processed: boolean;
     status: string;
     amount?: number;
+    transactionId?: string;
   }> {
     const { apiUrl, apiKey } = this.getApiConfig();
     const checkUrl = `${apiUrl}/wallet/transfer/${encodeURIComponent(transactionId)}`;
@@ -358,8 +367,8 @@ export class CouponVaultService {
     }
 
     if (!response.ok) {
-      if (response.status === 404) {
-        return { success: true, processed: false, status: "NOT_FOUND" };
+      if (response.status === 404 && data?.processed === false && data?.status === "NOT_FOUND") {
+        return { success: true, processed: false, status: "NOT_FOUND", transactionId: data.transactionId };
       }
       throw new AppError(
         "COUPON_SERVICE_UNAVAILABLE",
@@ -369,10 +378,11 @@ export class CouponVaultService {
     }
 
     return {
-      success: true,
-      processed: Boolean(data?.processed),
-      status: data?.status || (data?.processed ? "SUCCESS" : "NOT_FOUND"),
-      amount: data?.amount ? Number(data.amount) : undefined,
+      success: data?.success !== false && typeof data?.processed === "boolean" && typeof data?.status === "string",
+      processed: data?.processed === true,
+      status: typeof data?.status === "string" ? data.status : "UNKNOWN",
+      amount: data?.amount === undefined ? undefined : Number(data.amount),
+      transactionId: data?.transactionId || data?.data?.transactionId,
     };
   }
 }

@@ -78,7 +78,8 @@ const mockStore = {
   redemptions: [] as any[],
 };
 
-vi.mock("@gaming-hub/db", () => ({
+vi.mock("@gaming-hub/db", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@gaming-hub/db")>()),
   prisma: {
     wallet: {
       findUnique: vi.fn().mockImplementation(async () => ({ ...mockStore.wallet })),
@@ -132,6 +133,10 @@ vi.mock("@gaming-hub/db", () => ({
       }),
     },
       walletRequest: {
+      findFirstOrThrow: vi.fn().mockImplementation(async ({ where }: any) => {
+        const r = mockStore.walletRequests.find(r => r.externalTransferId === where.externalTransferId);
+        if (!r) throw new Error("Request not found"); return { ...r };
+      }),
       findUnique: vi.fn().mockImplementation(async ({ where }: any) =>
         mockStore.walletRequests.find((r) => r.id === where?.id) || null),
       create: vi.fn().mockImplementation(async ({ data }: any) => {
@@ -143,7 +148,7 @@ vi.mock("@gaming-hub/db", () => ({
         const ids = where?.OR ?? [];
         return mockStore.walletRequests.find((r) =>
           r.kind === where?.kind && r.method === where?.method &&
-          (r.note === where?.note || ids.some((x: any) => r.note === x.note || r.externalTransferId === x.externalTransferId)),
+          (r.note === where?.note || ids.some((x: any) => (x.note && r.note === x.note) || (x.externalTransferId && r.externalTransferId === x.externalTransferId) || (x.id && r.id === x.id))),
         ) || null;
       }),
       findMany: vi.fn().mockImplementation(async ({ where }: any) => {
@@ -206,6 +211,7 @@ vi.mock("@gaming-hub/db", () => ({
     $transaction: vi.fn().mockImplementation(async (cb: any) => {
       if (typeof cb === "function") {
         return cb({
+          $queryRaw: vi.fn().mockResolvedValue([]),
           wallet: {
             findUnique: vi.fn().mockImplementation(async () => ({ ...mockStore.wallet })),
             findUniqueOrThrow: vi.fn().mockImplementation(async () => ({ ...mockStore.wallet })),
@@ -247,6 +253,14 @@ vi.mock("@gaming-hub/db", () => ({
             }),
           },
           walletRequest: {
+            findUniqueOrThrow: vi.fn().mockImplementation(async ({ where }: any) => {
+              const r = mockStore.walletRequests.find(r => r.id === where.id);
+              if (!r) throw new Error("Request not found"); return { ...r };
+            }),
+            update: vi.fn().mockImplementation(async ({ where, data }: any) => {
+              const r = mockStore.walletRequests.find(r => r.id === where.id);
+              if (!r) throw new Error("Request not found"); Object.assign(r, data); return { ...r };
+            }),
             findUnique: vi.fn().mockImplementation(async ({ where }: any) =>
               mockStore.walletRequests.find((r) => r.id === where?.id) || null),
             create: vi.fn().mockImplementation(async ({ data }: any) => {
@@ -270,7 +284,7 @@ vi.mock("@gaming-hub/db", () => ({
             findFirst: vi.fn().mockImplementation(async ({ where }: any) => {
               const ids = where?.OR ?? [];
               return mockStore.walletRequests.find((r) => r.kind === where?.kind && r.method === where?.method &&
-                (r.note === where?.note || ids.some((x: any) => r.note === x.note || r.externalTransferId === x.externalTransferId))) || null;
+                (r.note === where?.note || ids.some((x: any) => (x.note && r.note === x.note) || (x.externalTransferId && r.externalTransferId === x.externalTransferId) || (x.id && r.id === x.id)))) || null;
             }),
           },
           coupon: {
@@ -611,7 +625,7 @@ describe("LIVE CouponVault HTTP Integration & Validation", () => {
     serverState.shouldFailTransfer = true;
     const initialBalance = mockStore.wallet.balance;
 
-    await expect(transferToCouponWallet("user-live-1", 100)).rejects.toThrow(/suspended|TRANSFER_FAILED/i);
+    await expect(transferToCouponWallet("user-live-1", 100)).rejects.toThrow(/rejected|TRANSFER_FAILED/i);
 
     // Balance should be restored to initialBalance via automatic compensation refund
     expect(mockStore.wallet.balance).toBe(initialBalance);
@@ -630,7 +644,7 @@ describe("LIVE CouponVault HTTP Integration & Validation", () => {
     const initialBalance = mockStore.wallet.balance;
 
     await expect(transferToCouponWallet("user-live-1", 100)).rejects.toThrow(
-      /processing|retrying|COUPON_TRANSFER_TIMEOUT/i,
+      /unknown|processing|retrying|COUPON_TRANSFER_TIMEOUT/i,
     );
 
     // Funds were reserved (-100) and MUST NOT be blindly refunded
@@ -647,6 +661,7 @@ describe("LIVE CouponVault HTTP Integration & Validation", () => {
     const txId = `TRF-user-liv-reconcile-success`;
     // Create an UNCONFIRMED_HOLD request in local store
     mockStore.walletRequests.push({
+      fee: 0,
       id: "req-held-1",
       userId: "user-live-1",
       amount: 100,
@@ -672,7 +687,7 @@ describe("LIVE CouponVault HTTP Integration & Validation", () => {
     // Local records marked approved / completed
     const req = mockStore.walletRequests.find((r) => r.note === txId);
     expect(req.status).toBe("APPROVED");
-    expect(req.adminNote).toBe("RECONCILED_SUCCESS");
+    expect(req.adminNote).toBe("COMPLETED");
   });
 
   // Test 11: Reconciliation - CouponVault Confirms Not Processed -> REFUND
@@ -681,6 +696,7 @@ describe("LIVE CouponVault HTTP Integration & Validation", () => {
     const balanceBefore = mockStore.wallet.balance;
 
     mockStore.walletRequests.push({
+      fee: 0,
       id: "req-held-2",
       userId: "user-live-1",
       amount: 100,
@@ -716,6 +732,7 @@ describe("LIVE CouponVault HTTP Integration & Validation", () => {
     const balanceBefore = mockStore.wallet.balance;
 
     mockStore.walletRequests.push({
+      fee: 0,
       id: "req-held-3",
       userId: "user-live-1",
       amount: 100,

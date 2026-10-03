@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-03",
+  "commit": "1f1bf1ed089d15a62a6253d939e0058fe986b24e",
+  "verdict": "NOT PRODUCTION READY",
+  "typecheck": {
+    "exitCode": 0,
+    "result": "PASS"
+  },
+  "build": {
+    "exitCode": 0,
+    "result": "PASS"
+  },
+  "freshMigration": {
+    "exitCode": 0,
+    "migrations": 6,
+    "result": "PASS"
+  },
+  "schemaDiff": {
+    "exitCode": 0,
+    "result": "No difference detected"
+  },
+  "migrationDriftGuard": "FAIL: existing integer status column accepted instead of expected text",
+  "selectedApi": {
+    "files": 40,
+    "tests": 557,
+    "passed": 540,
+    "failed": 17,
+    "skipped": 0
+  },
+  "negativeProbes": {
+    "files": 1,
+    "tests": 9,
+    "passed": 0,
+    "failed": 9,
+    "skipped": 0
+  },
+  "gameEngine": {
+    "files": 23,
+    "tests": 311,
+    "passed": 311,
+    "failed": 0
+  },
+  "multiplayer": {
+    "files": 9,
+    "tests": 89,
+    "passed": 89,
+    "failed": 0
+  },
+  "productionDatabaseTouched": false,
+  "productionLogicChanged": false,
+  "deployed": false,
+  "dependencyAudit": {
+    "command": "npm audit --audit-level=high --json",
+    "exitCode": 1,
+    "result": "FAIL",
+    "info": 0,
+    "low": 1,
+    "moderate": 18,
+    "high": 7,
+    "critical": 0,
+    "total": 26
+  }
+}

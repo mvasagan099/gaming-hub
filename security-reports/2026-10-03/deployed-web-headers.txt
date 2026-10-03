@@ -1,0 +1,16 @@
+HTTP/2 200 
+date: Sat, 03 Oct 2026 05:34:04 GMT
+content-type: text/html; charset=utf-8
+cache-control: public, max-age=0, s-maxage=300
+cf-cache-status: EXPIRED
+etag: W/"bc5e61bb2b7ec26339bdf53bffeee783"
+last-modified: Sat, 03 Oct 2026 05:12:08 UTC
+rndr-id: a7e3256b-23fe-4af6
+server: cloudflare
+strict-transport-security: max-age=315360000; includeSubdomains; preload
+vary: Accept-Encoding
+vary: Accept-Encoding
+x-content-type-options: nosniff
+cf-ray: a449935e0e23b540-MAA
+alt-svc: h3=":443"; ma=86400
+

@@ -1,0 +1,32 @@
+[
+  {
+    "migration": "20260801000000_init",
+    "unchanged": true,
+    "sha256": "f805c6cc3971441769f9c56408c6288490bfcbfa59e42e4c35761e9540029df1"
+  },
+  {
+    "migration": "20260828_add_gameid_to_schedule_log",
+    "unchanged": true,
+    "sha256": "5d855a65bfe822a4310431f02241818562f0384b83ab8321990ed55e6a088341"
+  },
+  {
+    "migration": "20260831_add_app_version_config",
+    "unchanged": true,
+    "sha256": "cc293e590dc8a3ba8e4d2b58692cf74455a3ede6dd13cf27cc9fe71bd13959de"
+  },
+  {
+    "migration": "20260915_security_schema_v1",
+    "unchanged": true,
+    "sha256": "f530c1e6ec6e2db337b8f6808b509f17e64c63c23547226532db1ddbdcf90fba"
+  },
+  {
+    "migration": "20260918_affiliate_fraud_and_risk",
+    "unchanged": true,
+    "sha256": "628c61e8ba1842b516ddc5d1aa77a9bc5ed9d8be631c7b620b31022ab7c4f946"
+  },
+  {
+    "migration": "20260918_finalize_affiliate_wallet_commissions",
+    "unchanged": true,
+    "sha256": "42f603f3ecea295e588f11e143a5d03ae88e62907bd6107f3a5c8a52935a752f"
+  }
+]

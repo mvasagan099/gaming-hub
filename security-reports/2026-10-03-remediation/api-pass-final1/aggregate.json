@@ -1,0 +1,900 @@
+{
+  "files": 85,
+  "tests": 1197,
+  "passed": 1197,
+  "failed": 0,
+  "skipped": 0,
+  "durationSeconds": 467.25299999999993,
+  "missing": [],
+  "duplicates": [],
+  "pass": true,
+  "groups": [
+    {
+      "group": "U1",
+      "exitCode": 0,
+      "durationSeconds": 4.444,
+      "files": 4,
+      "tests": 64,
+      "passed": 64,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "U2",
+      "exitCode": 0,
+      "durationSeconds": 3.584,
+      "files": 4,
+      "tests": 155,
+      "passed": 155,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "U3",
+      "exitCode": 0,
+      "durationSeconds": 3.013,
+      "files": 2,
+      "tests": 29,
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "A1",
+      "exitCode": 0,
+      "durationSeconds": 23.306,
+      "files": 4,
+      "tests": 34,
+      "passed": 34,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "A2",
+      "exitCode": 0,
+      "durationSeconds": 9.965,
+      "files": 4,
+      "tests": 20,
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "A3",
+      "exitCode": 0,
+      "durationSeconds": 46.208,
+      "files": 4,
+      "tests": 71,
+      "passed": 71,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "A4",
+      "exitCode": 0,
+      "durationSeconds": 6.005,
+      "files": 1,
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "B1",
+      "exitCode": 0,
+      "durationSeconds": 17.352,
+      "files": 4,
+      "tests": 39,
+      "passed": 39,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "B2",
+      "exitCode": 0,
+      "durationSeconds": 14.637,
+      "files": 4,
+      "tests": 34,
+      "passed": 34,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "B3",
+      "exitCode": 0,
+      "durationSeconds": 15.047,
+      "files": 4,
+      "tests": 45,
+      "passed": 45,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "B4",
+      "exitCode": 0,
+      "durationSeconds": 17.894,
+      "files": 4,
+      "tests": 47,
+      "passed": 47,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "B5",
+      "exitCode": 0,
+      "durationSeconds": 14.423,
+      "files": 4,
+      "tests": 43,
+      "passed": 43,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "B6",
+      "exitCode": 0,
+      "durationSeconds": 5.385,
+      "files": 1,
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "C1",
+      "exitCode": 0,
+      "durationSeconds": 42.23,
+      "files": 1,
+      "tests": 61,
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "C2",
+      "exitCode": 0,
+      "durationSeconds": 19.047,
+      "files": 1,
+      "tests": 93,
+      "passed": 93,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "C3",
+      "exitCode": 0,
+      "durationSeconds": 11.444,
+      "files": 1,
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "C4",
+      "exitCode": 0,
+      "durationSeconds": 6.142,
+      "files": 1,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "C5",
+      "exitCode": 0,
+      "durationSeconds": 6.474,
+      "files": 1,
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "C6",
+      "exitCode": 0,
+      "durationSeconds": 26.425,
+      "files": 4,
+      "tests": 65,
+      "passed": 65,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "C7",
+      "exitCode": 0,
+      "durationSeconds": 49.993,
+      "files": 1,
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "C8",
+      "exitCode": 0,
+      "durationSeconds": 14.73,
+      "files": 4,
+      "tests": 46,
+      "passed": 46,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "C9",
+      "exitCode": 0,
+      "durationSeconds": 12.126,
+      "files": 2,
+      "tests": 32,
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "D1",
+      "exitCode": 0,
+      "durationSeconds": 14.05,
+      "files": 4,
+      "tests": 24,
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "D2",
+      "exitCode": 0,
+      "durationSeconds": 16.79,
+      "files": 4,
+      "tests": 52,
+      "passed": 52,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "D3",
+      "exitCode": 0,
+      "durationSeconds": 5.693,
+      "files": 1,
+      "tests": 17,
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "E1",
+      "exitCode": 0,
+      "durationSeconds": 13.976,
+      "files": 4,
+      "tests": 41,
+      "passed": 41,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "E2",
+      "exitCode": 0,
+      "durationSeconds": 17.717,
+      "files": 4,
+      "tests": 38,
+      "passed": 38,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "E3",
+      "exitCode": 0,
+      "durationSeconds": 14.171,
+      "files": 4,
+      "tests": 45,
+      "passed": 45,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "group": "E4",
+      "exitCode": 0,
+      "durationSeconds": 14.982,
+      "files": 4,
+      "tests": 58,
+      "passed": 58,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "records": [
+    {
+      "file": "src/services/__tests__/coinWorkflowAudit.unit.test.ts",
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/couponVaultIntegration.unit.test.ts",
+      "tests": 17,
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/deepLinkValidation.unit.test.ts",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/productionCoinVerification.unit.test.ts",
+      "tests": 30,
+      "passed": 30,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/securityRemediation.unit.test.ts",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentAnalyticsReporting.unit.test.ts",
+      "tests": 105,
+      "passed": 105,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentAntiCheatValidation.unit.test.ts",
+      "tests": 22,
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentCancellationRefundUnit.unit.test.ts",
+      "tests": 18,
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentFinancialUnit.unit.test.ts",
+      "tests": 20,
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentLeaderboardStats.unit.test.ts",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/adminSecurityHardeningEngine.test.ts",
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/auditRemediation.test.ts",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/gameResultSecurity.test.ts",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/idorAndEconomyValidation.test.ts",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/kycAddressSync.test.ts",
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/kycSecurityHardening.test.ts",
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/loginTimeMfa.test.ts",
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/mfaSessionLifecycle.test.ts",
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/passwordResetAuthFlow.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/securityAttackSimulation.test.ts",
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/securityRemediationHardening.test.ts",
+      "tests": 39,
+      "passed": 39,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/singleActiveSession.test.ts",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/totpEncryptionMigration.test.ts",
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/routes/__tests__/wallet.test.ts",
+      "tests": 11,
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/routes/__tests__/withdrawalVerificationSmoke.test.ts",
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/adminWalletManagement.test.ts",
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/affiliateFraud.test.ts",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/affiliateReconciliation.test.ts",
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/affiliateSystem.test.ts",
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/couponVaultLiveIntegration.test.ts",
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/financialConcurrencyAndRecovery.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/financialEconomy.test.ts",
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/financialIdempotency.test.ts",
+      "tests": 18,
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/financialReconciliationEngine.test.ts",
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/gameCoinService.test.ts",
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/insufficientBalanceExperience.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/practiceMatchWalletBehavior.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/referralSystem.test.ts",
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentFinancialSettlementSystem.test.ts",
+      "tests": 22,
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/walletHistory.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/walletNotificationEngine.test.ts",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/walletRequests.test.ts",
+      "tests": 22,
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/walletSyncEngine.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/walletTransactionService.test.ts",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/routes/__tests__/tournaments.test.ts",
+      "tests": 61,
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/allGameTierCombinations.test.ts",
+      "tests": 93,
+      "passed": 93,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/automaticTournamentManagement.test.ts",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentAdminControlCenter.test.ts",
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentAdminManagementSystem.test.ts",
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentCrashRecovery.test.ts",
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentEmailService.test.ts",
+      "tests": 29,
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentHistory.test.ts",
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentLeaderboardRanking.test.ts",
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentLoadPerformanceSimulation.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentNotificationSystem.test.ts",
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentPlayerDashboard.test.ts",
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentPrizeSettlement.test.ts",
+      "tests": 18,
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentRegistrationAntiAbuse.test.ts",
+      "tests": 11,
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentSeedingBracket.test.ts",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/tournamentVerificationDisputes.test.ts",
+      "tests": 22,
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/adminGameStatsEngine.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/gameHistory.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/matchAbandonmentEngine.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/matchTimeoutEngine.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/matchmakingQueue.test.ts",
+      "tests": 24,
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/multiplayerRecovery.test.ts",
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/persistentMatchState.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/unifiedGameLifecycle.test.ts",
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/universalMatchRoom.test.ts",
+      "tests": 17,
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/achievementSystem.test.ts",
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/adminAuditLogEngine.test.ts",
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/adminFinanceDashboard.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/atomicEntryFee.test.ts",
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/brevoEmailProvider.test.ts",
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/centralRefundEngine.test.ts",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/concurrentJoinProtection.test.ts",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/entryFeeConfirmationEngine.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/globalLeaderboardSystem.test.ts",
+      "tests": 11,
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/globalPlatformSearch.test.ts",
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/globalRateLimitingEngine.test.ts",
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/playerProfileSystem.test.ts",
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/productionSmokeTest.test.ts",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/smtpEmailProvider.test.ts",
+      "tests": 35,
+      "passed": 35,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/suspiciousActivityEngine.test.ts",
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "src/services/__tests__/universalSettlementEngine.test.ts",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    }
+  ]
+}

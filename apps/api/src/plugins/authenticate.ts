@@ -146,7 +146,7 @@ const header = request.headers.authorization;
   // endpoint can access the user identity to perform TOTP validation.
   const isMfaVerifyRoute =
     request.method === "POST" &&
-    (request.url === "/api/auth/2fa/verify" || request.url?.startsWith("/api/auth/2fa/verify?"));
+    ["/api/auth/2fa/verify", "/api/security/2fa/verify-login"].includes(request.url.split("?")[0]);
 
   if (!isMfaVerifyRoute) {
     // Check profile lazily — only when needed (non-2FA users are unaffected)
@@ -175,20 +175,12 @@ const header = request.headers.authorization;
 }
 
 export async function optionalAuthenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
-const header = request.headers.authorization;
-  const token = header?.startsWith("Bearer ")
-    ? header.slice("Bearer ".length).trim()
-    : undefined;
-
-  if (!token) return;
-
+  // Optional identity must meet the same session/MFA eligibility as protected routes.
+  if (!request.headers.authorization) return;
   try {
-    const verified = await verifyAccessToken(token);
-    if (env.requireEmailVerification && !verified.emailVerified) return;
-    const user = await ensureUser(verified.sub, verified.email, verified.userMetadata);
-    request.user = user;
+    await authenticate(request, _reply);
   } catch {
-    // Ignore invalid/expired tokens for optional auth
+    Reflect.deleteProperty(request, "user");
   }
 }
 
@@ -218,7 +210,7 @@ export async function requireMfa(request: FastifyRequest, _reply: FastifyReply):
 
   // For administrative or privileged users, MFA enrollment is strictly mandatory
   if (!profile?.twoFactorEnabled) {
-    if (user.role === "ADMIN" || user.role === "MODERATOR") {
+    if (user.role !== "USER") {
       throw new AppError(
         "MFA_ENROLLMENT_REQUIRED",
         "Administrative operations require two-factor authentication (2FA) to be enabled on your account.",

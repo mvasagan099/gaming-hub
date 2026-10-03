@@ -16,7 +16,7 @@ import {
   setWalletFrozen,
   verifyWalletOtp,
 } from "../walletRequests";
-import { getWallet } from "../wallet";
+import { applyTransaction, getWallet } from "../wallet";
 import { WalletTransactionService } from "../walletTransactionService";
 import { CouponVaultService } from "../couponVaultService";
 import * as EmailTransport from "../emailTransport";
@@ -37,6 +37,17 @@ async function fundMain(userId: string, amount = 2500) {
     );
     remaining -= chunk;
   }
+}
+
+// Ledger-backed legacy approval fixture: current requests auto-transfer at creation.
+async function reservedPending(userId: string, amount: number, fee = 0) {
+  return prisma.$transaction(async tx => {
+    const r = await tx.walletRequest.create({ data: { userId, amount, fee, kind: "WITHDRAWAL",
+      status: "PENDING", method: "COUPONVAULT", adminNote: "WAITING_APPROVAL" } });
+    await applyTransaction(tx, userId, -amount, "WITHDRAWAL", r.id, {}, "MAIN");
+    if (fee) await applyTransaction(tx, userId, -fee, "WITHDRAWAL", r.id, { reason: "withdrawal fee" }, "MAIN");
+    return r;
+  });
 }
 
 async function expectAppError(
@@ -154,7 +165,7 @@ describe("walletRequests", () => {
   });
 
   describe("withdrawals", () => {
-    it("creates a PENDING withdrawal request when the OTP is valid", async () => {
+    it("completes an auto-transfer withdrawal when the OTP is valid", async () => {
       const user = await createTestUser();
       await fundMain(user.id);
       const { debugCode } = await requestWithdrawalOtp(user.id);
@@ -163,7 +174,7 @@ describe("walletRequests", () => {
 
       expect(request.kind).toBe("WITHDRAWAL");
       expect(request.amount).toBe(100);
-      expect(request.status).toBe("PENDING");
+      expect(request.status).toBe("APPROVED");
     });
 
     it("requires a valid OTP", async () => {
@@ -199,9 +210,10 @@ describe("walletRequests", () => {
       await fundMain(user.id);
       await setSetting("wallet.maxPendingWithdrawalRequests", 2, null);
 
+      vi.mocked(CouponVaultService.transferToCouponWallet).mockRejectedValue(Object.assign(new Error("timeout"), { isTimeout: true }));
       for (let i = 0; i < 2; i++) {
         const { debugCode } = await requestWithdrawalOtp(user.id);
-        await createWithdrawalRequest(user.id, 100, debugCode!);
+        await expectAppError(createWithdrawalRequest(user.id, 100, debugCode!), "COUPON_TRANSFER_TIMEOUT");
       }
 
       const third = await requestWithdrawalOtp(user.id);
@@ -238,7 +250,7 @@ describe("walletRequests", () => {
       vi.spyOn(CouponVaultService, "transferToCouponWallet").mockResolvedValue({ success: true } as any);
 
       const { debugCode } = await requestWithdrawalOtp(user.id);
-      const request = await createWithdrawalRequest(user.id, 1000, debugCode!);
+      const request = await reservedPending(user.id, 1000, 50);
 
       const approved = await approveWalletRequest(admin.id, request.id);
       expect(approved.status).toBe("APPROVED");
@@ -265,7 +277,7 @@ describe("walletRequests", () => {
       vi.spyOn(CouponVaultService, "transferToCouponWallet").mockRejectedValue(timeoutError);
 
       const { debugCode } = await requestWithdrawalOtp(user.id);
-      const request = await createWithdrawalRequest(user.id, 500, debugCode!);
+      const request = await reservedPending(user.id, 500);
 
       await approveWalletRequest(admin.id, request.id);
 
@@ -274,26 +286,19 @@ describe("walletRequests", () => {
       expect(hold.adminNote).toBe("UNCONFIRMED_HOLD");
     });
 
-    it("rejects when the balance no longer covers the withdrawal", async () => {
+    it("approval does not debit again when funds are already reserved", async () => {
       const user = await createTestUser();
       await fundMain(user.id);
       const admin = await createTestUser({ role: "ADMIN" });
 
       const { debugCode } = await requestWithdrawalOtp(user.id);
-      const request = await createWithdrawalRequest(user.id, 2400, debugCode!);
+      const request = await reservedPending(user.id, 2400);
 
-      // Balance drops below 2400 before the admin decides.
-      await prisma.wallet.update({
-        where: { userId: user.id },
-        data: { balance: { decrement: 200 } },
-      });
+      await prisma.$transaction(tx => applyTransaction(tx, user.id, -50, "MATCH_WAGER", "separate-game", {}, "MAIN"));
+      await approveWalletRequest(admin.id, request.id);
+      expect((await getWalletRequest(request.id)).status).toBe("APPROVED");
+      expect((await getWallet(user.id)).balance).toBe(50); // no second debit
 
-      await expectAppError(approveWalletRequest(admin.id, request.id), "INSUFFICIENT_BALANCE");
-
-      const pending = await getWalletRequest(request.id);
-      expect(pending.status).toBe("PENDING");
-      const wallet = await getWallet(user.id);
-      expect(wallet.balance).toBe(2300); // no partial debit
     });
 
     it("approving an already-decided request fails and debits nothing twice", async () => {
@@ -303,7 +308,7 @@ describe("walletRequests", () => {
       vi.spyOn(CouponVaultService, "transferToCouponWallet").mockResolvedValue({ success: true } as any);
 
       const { debugCode } = await requestWithdrawalOtp(user.id);
-      const request = await createWithdrawalRequest(user.id, 500, debugCode!);
+      const request = await reservedPending(user.id, 500);
 
       await approveWalletRequest(admin.id, request.id);
       await expectAppError(approveWalletRequest(admin.id, request.id), "WALLET_REQUEST_ALREADY_DECIDED");
@@ -312,13 +317,13 @@ describe("walletRequests", () => {
       expect(wallet.balance).toBe(2000);
     });
 
-    it("rejecting a request leaves the balance untouched", async () => {
+    it("rejecting a reserved request restores its balance once", async () => {
       const user = await createTestUser();
       await fundMain(user.id);
       const admin = await createTestUser({ role: "ADMIN" });
 
       const { debugCode } = await requestWithdrawalOtp(user.id);
-      const request = await createWithdrawalRequest(user.id, 500, debugCode!);
+      const request = await reservedPending(user.id, 500);
 
       const rejected = await rejectWalletRequest(admin.id, request.id, "not eligible");
 
@@ -335,7 +340,7 @@ describe("walletRequests", () => {
       const user = await createTestUser();
       await fundMain(user.id);
       const { debugCode } = await requestWithdrawalOtp(user.id);
-      const request = await createWithdrawalRequest(user.id, 500, debugCode!);
+      const request = await reservedPending(user.id, 500);
 
       await cancelWalletRequest(user.id, request.id);
       expect((await getWalletRequest(request.id)).status).toBe("CANCELLED");
@@ -348,7 +353,7 @@ describe("walletRequests", () => {
       const other = await createTestUser();
       await fundMain(other.id);
       const { debugCode } = await requestWithdrawalOtp(other.id);
-      const request = await createWithdrawalRequest(other.id, 500, debugCode!);
+      const request = await reservedPending(other.id, 500);
 
       await expectAppError(cancelWalletRequest(user.id, request.id), "WALLET_REQUEST_NOT_FOUND");
     });
@@ -391,10 +396,10 @@ describe("walletRequests", () => {
       expect(withdrawals.total).toBe(1);
 
       const pending = await listWalletRequests({ userId: user.id, status: "PENDING" }, 1, 10);
-      expect(pending.total).toBe(1);
+      expect(pending.total).toBe(0);
 
       const approved = await listWalletRequests({ userId: user.id, status: "APPROVED" }, 1, 10);
-      expect(approved.total).toBe(0);
+      expect(approved.total).toBe(1);
     });
   });
 });

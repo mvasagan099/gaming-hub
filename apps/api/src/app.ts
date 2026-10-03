@@ -1,3 +1,4 @@
+import { PostgresRateLimitStore } from "./services/sharedRateLimit";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -46,8 +47,12 @@ import { adminTournamentsRoutes } from "./routes/adminTournaments";
 import { seasonsRoutes } from "./routes/seasons";
 import { isFeatureEnabled } from "./services/featureFlags";
 import { instrument } from "./services/metrics";
+import proxyAddr from "@fastify/proxy-addr";
 
 export function buildApp() {
+  // Hop count alone cannot identify a trusted immediate peer. Default to no trust.
+  const proxies = env.TRUST_PROXY_CIDRS.split(",").map(value => value.trim()).filter(Boolean);
+  const trustedAddress = proxies.length ? proxyAddr.compile(proxies) : null;
   const app = Fastify({
     logger: {
       level: env.LOG_LEVEL,
@@ -55,7 +60,9 @@ export function buildApp() {
         ? { transport: { target: "pino-pretty", options: { colorize: true } } }
         : {}),
     },
-    // M-07 fix: trust only the configured number of upstream proxy hops instead of all.\n    // Set TRUST_PROXY_HOPS=0 for direct deployments, 1 for a single load balancer, etc.\n    trustProxy: env.TRUST_PROXY_HOPS,
+    trustProxy: trustedAddress && env.TRUST_PROXY_HOPS > 0
+      ? (address, hop) => hop < env.TRUST_PROXY_HOPS && trustedAddress(address, hop)
+      : false,
     // Reject oversized JSON payloads (defense against body abuse). The API has
     // no file-upload surface yet; raise via env.BODY_LIMIT when one is added.
     bodyLimit: env.BODY_LIMIT,
@@ -86,6 +93,8 @@ export function buildApp() {
   });
 
   void app.register(rateLimit, {
+    ...(env.NODE_ENV === "production" ? { store: PostgresRateLimitStore } : {}),
+    skipOnError: false,
     max: env.RATE_LIMIT_MAX,
     timeWindow: "1 minute",
     // The plugin throws whatever this builder returns, so return an AppError
@@ -96,6 +105,11 @@ export function buildApp() {
         `Rate limit exceeded, retry in ${context.after}`,
         429,
       ),
+  });
+
+  app.addHook("onSend", async (_request, reply, payload) => {
+    reply.header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+    return payload;
   });
 
   registerErrorHandler(app);

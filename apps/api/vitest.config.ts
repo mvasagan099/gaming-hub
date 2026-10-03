@@ -3,8 +3,12 @@ import { config as loadDotenv } from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { validateTestDatabaseUrl } from "./test/databaseSafety.ts";
+
 const dir = path.dirname(fileURLToPath(import.meta.url));
-loadDotenv({ path: path.join(dir, ".env") });
+loadDotenv({ path: path.join(dir, ".env.test") });
+const testUrl = validateTestDatabaseUrl(process.env.TEST_DATABASE_URL);
+process.env.DATABASE_URL = testUrl;
 
 process.env.NODE_ENV = "test";
 process.env.REQUIRE_EMAIL_VERIFICATION = "false";
@@ -20,28 +24,10 @@ export default defineConfig({
     // integration suites cannot contaminate real PostgreSQL suites.
     fileParallelism: false,
     pool: "forks",
-    poolOptions: {
-      forks: { singleFork: false, maxForks: 1, minForks: 1 },
-    },
+    maxWorkers: 1,
     env: {
-      // Dedicated test database; created and pushed in globalSetup when DATABASE_URL is set.
-      ...(process.env.DATABASE_URL ? {
-        DATABASE_URL: (() => {
-          const dev = process.env.DATABASE_URL;
-          try {
-            const url = new URL(dev);
-            const name = url.pathname.split('/')
-              .filter(Boolean)
-              .at(-1);
-            const base = name?.endsWith("_test") ? name : `${name}_test`;
-            url.pathname = url.pathname.replace(/[^/]*$/, base);
-            return url.toString();
-          } catch (e) {
-            // If invalid URL, fallback to original value.
-            return dev;
-          }
-        })(),
-      } : {}),
+      DATABASE_URL: testUrl,
+      TEST_DATABASE_URL: testUrl,
       LOG_LEVEL: "silent",
     },
   },

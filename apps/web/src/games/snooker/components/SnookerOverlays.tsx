@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Trophy, RefreshCw, ArrowLeft, Clock, AlertTriangle, Sparkles, Volume2, VolumeX, Flame, Check, Video, Eye, RotateCw, Users } from "lucide-react";
+import { Trophy, RefreshCw, ArrowLeft, Clock, AlertTriangle, Sparkles, Volume2, VolumeX, Flame, Check, Video, Eye, EyeOff, RotateCw, Users } from "lucide-react";
 import type { SnookerPlayer, SnookerBall, SnookerTarget, SnookerFrameStatus, SnookerBallType, SnookerFrameHistoryItem } from "@gaming-hub/game-engine";
 
 interface SnookerHUDProps {
@@ -374,6 +374,22 @@ export const ColorPickerModal: React.FC<ColorPickerModalProps> = ({
   nominatedColor,
   isFreeBall = false,
 }) => {
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [localNominated, setLocalNominated] = useState<SnookerBallType | null>(nominatedColor);
+
+  useEffect(() => {
+    setLocalNominated(nominatedColor);
+  }, [nominatedColor]);
+
+  // If nomination is cleared (e.g. new shot / turn / foul), restore expanded view
+  useEffect(() => {
+    if (!nominatedColor && !localNominated) {
+      setIsMinimized(false);
+    }
+  }, [nominatedColor, localNominated]);
+
+  const effectiveNominated = nominatedColor || localNominated;
+
   const colors: { type: SnookerBallType; label: string; bg: string; border: string; pts: number; key: string }[] = [
     { type: "yellow", label: "Yellow", bg: "bg-yellow-400 text-slate-950", border: "border-yellow-300", pts: 2, key: "1" },
     { type: "green", label: "Green", bg: "bg-emerald-600 text-white", border: "border-emerald-400", pts: 3, key: "2" },
@@ -383,28 +399,79 @@ export const ColorPickerModal: React.FC<ColorPickerModalProps> = ({
     { type: "black", label: "Black", bg: "bg-zinc-950 text-white", border: "border-zinc-600", pts: 7, key: "6" },
   ];
 
-  return (
-    <div className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-3xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col items-center gap-3 animate-in fade-in zoom-in-95 pointer-events-auto">
-      <div className="text-xs font-black tracking-wider uppercase text-slate-200 flex items-center gap-1.5">
-        <Sparkles className="w-4 h-4 text-amber-400" />
-        <span>{isFreeBall ? "Nominate Free Ball" : "Nominate Target Color"}</span>
+  const selectedColorObj = colors.find((c) => c.type === effectiveNominated);
+
+  // Minimized Compact State
+  if (isMinimized && effectiveNominated && selectedColorObj) {
+    return (
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 animate-in fade-in slide-in-from-top-2 pointer-events-auto">
+        <button
+          type="button"
+          onClick={() => setIsMinimized(false)}
+          className="group flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-slate-900/95 hover:bg-slate-800/95 backdrop-blur-xl border border-slate-700/80 hover:border-amber-400/60 shadow-[0_10px_30px_rgba(0,0,0,0.8)] text-xs transition-all transform hover:scale-105 active:scale-95 cursor-pointer"
+          title="Click to expand and change nominated color"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+          <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Target:</span>
+          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border flex items-center gap-1 shadow-sm ${selectedColorObj.bg} ${selectedColorObj.border}`}>
+            <span>{selectedColorObj.label}</span>
+            <span className="text-[9px] opacity-80">+{selectedColorObj.pts} PTS</span>
+          </span>
+          <div className="w-px h-3.5 bg-slate-700 group-hover:bg-slate-600" />
+          <span className="flex items-center gap-1 text-[11px] font-bold text-amber-400 group-hover:text-amber-300">
+            <Eye className="w-3.5 h-3.5" />
+            <span>Change</span>
+          </span>
+        </button>
       </div>
-      <div className="flex gap-2">
+    );
+  }
+
+  return (
+    <div className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-3xl p-4 sm:p-5 shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col items-center gap-3 animate-in fade-in zoom-in-95 pointer-events-auto max-w-[calc(100vw-1.5rem)]">
+      <div className="w-full flex items-center justify-between gap-3">
+        <div className="text-xs font-black tracking-wider uppercase text-slate-200 flex items-center gap-1.5">
+          <Sparkles className="w-4 h-4 text-amber-400" />
+          <span>{isFreeBall ? "Nominate Free Ball" : "Nominate Target Color"}</span>
+        </div>
+        {effectiveNominated && (
+          <button
+            type="button"
+            onClick={() => setIsMinimized(true)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/90 hover:bg-slate-700 active:scale-95 border border-slate-600/80 text-xs font-bold text-slate-200 hover:text-white shadow transition-all cursor-pointer animate-in fade-in"
+            title="Minimize popup to view table"
+          >
+            <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+            <span>Hide</span>
+          </button>
+        )}
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto max-w-full py-0.5">
         {colors.map((c) => (
           <button
             key={c.type}
-            onClick={() => onSelectColor(c.type)}
+            type="button"
+            onClick={() => {
+              if (effectiveNominated === c.type) {
+                // If user clicks the already selected option, minimize the popup
+                setIsMinimized(true);
+                return;
+              }
+              setLocalNominated(c.type);
+              onSelectColor(c.type);
+            }}
             className={`px-3.5 py-2.5 rounded-2xl font-black text-xs shadow-lg transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center gap-1 cursor-pointer border ${
               c.bg
             } ${c.border} ${
-              nominatedColor === c.type
+              effectiveNominated === c.type
                 ? "ring-4 ring-white ring-offset-2 ring-offset-slate-900 scale-105"
                 : "opacity-90 hover:opacity-100"
             }`}
           >
             <div className="flex items-center gap-1">
               <span>{c.label}</span>
-              {nominatedColor === c.type && <Check className="w-3.5 h-3.5" />}
+              {effectiveNominated === c.type && <Check className="w-3.5 h-3.5" />}
             </div>
             <span className="text-[10px] opacity-85 font-mono">+{c.pts} PTS</span>
           </button>

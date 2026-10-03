@@ -1,0 +1,17 @@
+{
+  "version": "8.0.0-rc.19",
+  "dependencies": {
+    "open": "^11.0.0",
+    "execa": "^9.6.1",
+    "dotenv": "^17.4.2",
+    "cross-spawn": "^7.0.6",
+    "better-result": "^2.9.2",
+    "@manypkg/tools": "^2.1.2",
+    "@prisma/cli-engine": "0.6.2",
+    "@prisma/compute-sdk": "0.43.0",
+    "@prisma/composer-cli": "0.25.0",
+    "@vercel/detect-agent": "^1.2.3",
+    "@prisma/orm-toolchain": "8.0.0-rc.13",
+    "@prisma/management-api-sdk": "1.80.0"
+  }
+}

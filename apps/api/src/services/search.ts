@@ -313,7 +313,7 @@ export class SearchService {
 
     // Rate Limit enforcement (Feature 25)
     const rateLimitKey = userId || "anonymous";
-    const rateLimit = RateLimitService.checkRateLimit(rateLimitKey, "SEARCH");
+    const rateLimit = await RateLimitService.checkSharedRateLimit(rateLimitKey, "SEARCH");
     if (!rateLimit.allowed) {
       throw new AppError(
         "RATE_LIMITED",

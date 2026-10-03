@@ -192,7 +192,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return SuspiciousActivityService.getAlertDetails(id);
   });
 
-  app.patch("/api/admin/security/alerts/:id", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/security/alerts/:id", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:wallet:view", prisma);
     const { id } = routeParams(request);
     const body = (request.body ?? {}) as { status?: any; adminNotes?: string };
@@ -260,7 +260,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // ---- Automated Financial Reconciliation ----------------------------------
-  app.post("/api/admin/reconciliation/run", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/reconciliation/run", { preHandler: [authenticate, requireMfa] }, async (request) => {
     await requirePermission(request, "admin:wallet:view", prisma);
     const body = (request.body ?? {}) as { userId?: string; matchId?: string; tournamentId?: string };
     const { ReconciliationService } = await import("../services/reconciliationService");
@@ -300,7 +300,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return ReconciliationService.getIssueDetails(id);
   });
 
-  app.patch("/api/admin/reconciliation/issues/:id", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/reconciliation/issues/:id", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:wallet:view", prisma);
     const { id } = routeParams(request);
     const body = (request.body ?? {}) as { status?: any; notes?: string };

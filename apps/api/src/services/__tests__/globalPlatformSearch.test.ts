@@ -345,14 +345,14 @@ describe("Feature 33: Global Platform Search", () => {
     await SearchService.globalSearch(userId, { query: "snooker championship" });
     await SearchService.globalSearch(userId, { query: "carrom master" });
 
-    const suggestions = await SearchService.getSearchSuggestions(userId, "crick");
+    const suggestions = await SearchService.getSearchSuggestions(userId, "snook");
     expect(suggestions.length).toBeGreaterThanOrEqual(1);
     expect(suggestions[0].query).toContain("snooker");
 
     // Clear history
     await SearchService.clearSearchHistory(userId);
 
-    const clearedSuggestions = await SearchService.getSearchSuggestions(userId, "crick");
+    const clearedSuggestions = await SearchService.getSearchSuggestions(userId, "snook");
     expect(clearedSuggestions.length).toBe(0);
   });
 });

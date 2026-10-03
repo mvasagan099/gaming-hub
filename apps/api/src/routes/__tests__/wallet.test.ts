@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "@gaming-hub/db";
 import { buildApp } from "../../app";
@@ -73,7 +73,9 @@ describe("wallet HTTP routes", () => {
     expect(created.json().error.code).toBe("DEPOSITS_DISABLED");
   });
 
-  it("walks a withdrawal request through to rejection", async () => {
+  beforeEach(() => { vi.spyOn(CouponVaultService, "transferToCouponWallet").mockResolvedValue({ success: true }); });
+
+  it("completed withdrawal cannot be rejected or refunded", async () => {
     const user = await createTestUser();
     const admin = await createTestUser({ role: "ADMIN" });
     await enrollFreshAdminMfa(admin);
@@ -90,7 +92,7 @@ describe("wallet HTTP routes", () => {
       user.token,
     );
     expect(created.statusCode).toBe(200);
-    expect(created.json().status).toBe("PENDING");
+    expect(created.json().status).toBe("APPROVED");
 
     const rejected = await request(
       "POST",
@@ -98,11 +100,11 @@ describe("wallet HTTP routes", () => {
       { reason: "verification required" },
       admin.token,
     );
-    expect(rejected.statusCode).toBe(200);
-    expect(rejected.json().request.status).toBe("REJECTED");
+    expect(rejected.statusCode).toBe(409);
+    expect(rejected.json().error.code).toBe("WALLET_REQUEST_ALREADY_DECIDED");
 
     const wallet = await request("GET", "/api/wallet", undefined, user.token);
-    expect(wallet.json().balance).toBe(5000);
+    expect(wallet.json().balance).toBe(4800);
     vi.restoreAllMocks();
   });
 
@@ -230,8 +232,8 @@ describe("wallet HTTP routes", () => {
 
       // 1. Trying to request email OTP must be rejected with MFA_ENABLED
       const otpRes = await request("POST", "/api/wallet/otp", {}, user.token);
-      expect(otpRes.statusCode).toBe(400);
-      expect(otpRes.json().error.code).toBe("MFA_ENABLED");
+      expect(otpRes.statusCode).toBe(403);
+      expect(otpRes.json().error.code).toBe("MFA_PENDING");
 
       // 2. Withdrawal without fresh MFA session must be rejected with MFA_REQUIRED
       const noMfaWithdraw = await request(
@@ -241,7 +243,7 @@ describe("wallet HTTP routes", () => {
         user.token,
       );
       expect(noMfaWithdraw.statusCode).toBe(403);
-      expect(noMfaWithdraw.json().error.code).toBe("MFA_REQUIRED");
+      expect(noMfaWithdraw.json().error.code).toBe("MFA_PENDING");
 
       // 3. Stamp session with fresh MFA verification (simulating successful TOTP verification at /api/auth/2fa/verify)
       await prisma.loginSession.upsert({
@@ -263,7 +265,7 @@ describe("wallet HTTP routes", () => {
         user.token,
       );
       expect(mfaWithdraw.statusCode).toBe(200);
-      expect(mfaWithdraw.json().status).toBe("PENDING");
+      expect(mfaWithdraw.json().status).toBe("APPROVED");
       expect(mfaWithdraw.json().amount).toBe(100);
     });
 
@@ -311,7 +313,7 @@ describe("wallet HTTP routes", () => {
         user.token,
       );
       expect(validWithdraw.statusCode).toBe(200);
-      expect(validWithdraw.json().status).toBe("PENDING");
+      expect(validWithdraw.json().status).toBe("APPROVED");
 
       // 5. Reusing the consumed OTP is rejected
       const reuseWithdraw = await request(

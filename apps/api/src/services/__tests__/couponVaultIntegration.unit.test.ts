@@ -469,7 +469,9 @@ describe("CouponVault Integration Unit Tests", () => {
         updatedAt: new Date(),
       });
 
+      let requestRow: any;
       const mockTx = {
+        $queryRaw: vi.fn().mockResolvedValue([]),
         wallet: {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
           findUniqueOrThrow: vi.fn().mockResolvedValue({
@@ -489,7 +491,9 @@ describe("CouponVault Integration Unit Tests", () => {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
         walletRequest: {
-          create: vi.fn().mockResolvedValue({ id: "req-1" }),
+          create: vi.fn().mockImplementation(({ data }: any) => requestRow = { id: "req-1", fee: 0, ...data }),
+          findUniqueOrThrow: vi.fn().mockImplementation(() => ({ ...requestRow })),
+          update: vi.fn().mockImplementation(({ data }: any) => Object.assign(requestRow, data)),
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
       };
@@ -547,7 +551,9 @@ describe("CouponVault Integration Unit Tests", () => {
       });
 
       const applyTxCalls: any[] = [];
+      let requestRow: any;
       const mockTx = {
+        $queryRaw: vi.fn().mockResolvedValue([]),
         wallet: {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
           findUniqueOrThrow: vi.fn().mockImplementation(() => {
@@ -572,7 +578,9 @@ describe("CouponVault Integration Unit Tests", () => {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
         walletRequest: {
-          create: vi.fn().mockResolvedValue({ id: "req-fail" }),
+          create: vi.fn().mockImplementation(({ data }: any) => requestRow = { id: "req-fail", fee: 0, ...data }),
+          findUniqueOrThrow: vi.fn().mockImplementation(() => ({ ...requestRow })),
+          update: vi.fn().mockImplementation(({ data }: any) => Object.assign(requestRow, data)),
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
       };
@@ -587,7 +595,7 @@ describe("CouponVault Integration Unit Tests", () => {
       );
 
       await expect(transferToCouponWallet("user-fail", 400)).rejects.toThrow(
-        "User not found in Coupon platform",
+        "Provider rejected transfer",
       );
 
       // Verify that a reversal transaction was executed to refund the balance

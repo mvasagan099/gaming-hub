@@ -1,3 +1,4 @@
+import { consumeSharedLimit } from "./sharedRateLimit";
 import { AppError } from "@gaming-hub/shared";
 import { SuspiciousActivityService } from "./suspiciousActivityService";
 
@@ -55,6 +56,16 @@ export class RateLimitService {
   private static throttleCounts = new Map<string, number>();
   private static metrics = new Map<string, RateLimitMetricItem>();
 
+  static async checkSharedRateLimit(key: string, category: RateLimitCategory, overrideConfig?: Partial<RateLimitConfig>): Promise<RateLimitResult> {
+    if (process.env.NODE_ENV !== "production") return this.checkRateLimit(key, category, overrideConfig);
+    const config = { ...this.defaultConfigs[category], ...overrideConfig };
+    const result = await consumeSharedLimit(`${category}:${key}`, config.windowSeconds * 1000);
+    return { allowed: result.current <= config.maxRequests, total: result.current,
+      remaining: Math.max(0, config.maxRequests - result.current),
+      retryAfterSeconds: result.current > config.maxRequests ? Math.ceil(result.ttl / 1000) : 0,
+      resetTime: Date.now() + result.ttl };
+  }
+
   /**
    * 1. Check Rate Limit and update sliding window
    */
@@ -63,12 +74,18 @@ export class RateLimitService {
     category: RateLimitCategory,
     overrideConfig?: Partial<RateLimitConfig>
   ): RateLimitResult {
+    if (process.env.NODE_ENV === "production") throw new Error("Production limits must use shared storage");
     const config: RateLimitConfig = {
       ...this.defaultConfigs[category],
       ...(overrideConfig ?? {}),
     };
 
     const now = Date.now();
+    for (const [actor, metric] of this.metrics) {
+      if (now - metric.lastHit.getTime() > 15 * 60_000 || this.metrics.size >= 5000) {
+        this.metrics.delete(actor); this.requestTimestamps.delete(actor); this.throttleCounts.delete(actor);
+      }
+    }
     const windowMs = config.windowSeconds * 1000;
     const cutoff = now - windowMs;
 
@@ -99,7 +116,7 @@ export class RateLimitService {
       this.metrics.set(fullKey, metric);
 
       // If continuous flooding (e.g. >= 5 violations), trigger suspicious activity alert
-      if (throttles >= 5 && key.startsWith("user:")) {
+      if (throttles === 5 && key.startsWith("user:")) {
         const userId = key.replace("user:", "");
         void SuspiciousActivityService.createAlert({
           userId,

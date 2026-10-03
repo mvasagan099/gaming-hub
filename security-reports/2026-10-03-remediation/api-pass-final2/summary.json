@@ -1,0 +1,292 @@
+[
+  {
+    "group": "U1",
+    "exitCode": 0,
+    "durationSeconds": 3.957,
+    "files": 4,
+    "tests": 64,
+    "passed": 64,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "U2",
+    "exitCode": 0,
+    "durationSeconds": 2.065,
+    "files": 4,
+    "tests": 155,
+    "passed": 155,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "U3",
+    "exitCode": 0,
+    "durationSeconds": 1.458,
+    "files": 2,
+    "tests": 29,
+    "passed": 29,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "A1",
+    "exitCode": 0,
+    "durationSeconds": 22.408,
+    "files": 4,
+    "tests": 34,
+    "passed": 34,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "A2",
+    "exitCode": 0,
+    "durationSeconds": 12.265,
+    "files": 4,
+    "tests": 20,
+    "passed": 20,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "A3",
+    "exitCode": 0,
+    "durationSeconds": 54.818,
+    "files": 4,
+    "tests": 71,
+    "passed": 71,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "A4",
+    "exitCode": 0,
+    "durationSeconds": 5.873,
+    "files": 1,
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "B1",
+    "exitCode": 0,
+    "durationSeconds": 17.077,
+    "files": 4,
+    "tests": 39,
+    "passed": 39,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "B2",
+    "exitCode": 0,
+    "durationSeconds": 13.849,
+    "files": 4,
+    "tests": 34,
+    "passed": 34,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "B3",
+    "exitCode": 0,
+    "durationSeconds": 15.341,
+    "files": 4,
+    "tests": 45,
+    "passed": 45,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "B4",
+    "exitCode": 0,
+    "durationSeconds": 16.305,
+    "files": 4,
+    "tests": 47,
+    "passed": 47,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "B5",
+    "exitCode": 0,
+    "durationSeconds": 13.965,
+    "files": 4,
+    "tests": 43,
+    "passed": 43,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "B6",
+    "exitCode": 0,
+    "durationSeconds": 5.985,
+    "files": 1,
+    "tests": 9,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "C1",
+    "exitCode": 0,
+    "durationSeconds": 45.941,
+    "files": 1,
+    "tests": 61,
+    "passed": 61,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "C2",
+    "exitCode": 0,
+    "durationSeconds": 15.016,
+    "files": 1,
+    "tests": 93,
+    "passed": 93,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "C3",
+    "exitCode": 0,
+    "durationSeconds": 12.972,
+    "files": 1,
+    "tests": 10,
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "C4",
+    "exitCode": 0,
+    "durationSeconds": 6.976,
+    "files": 1,
+    "tests": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "C5",
+    "exitCode": 0,
+    "durationSeconds": 6.902,
+    "files": 1,
+    "tests": 13,
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "C6",
+    "exitCode": 0,
+    "durationSeconds": 25.068,
+    "files": 4,
+    "tests": 65,
+    "passed": 65,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "C7",
+    "exitCode": 0,
+    "durationSeconds": 43.222,
+    "files": 1,
+    "tests": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "C8",
+    "exitCode": 0,
+    "durationSeconds": 13.918,
+    "files": 4,
+    "tests": 46,
+    "passed": 46,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "C9",
+    "exitCode": 0,
+    "durationSeconds": 12.256,
+    "files": 2,
+    "tests": 32,
+    "passed": 32,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "D1",
+    "exitCode": 0,
+    "durationSeconds": 13.141,
+    "files": 4,
+    "tests": 24,
+    "passed": 24,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "D2",
+    "exitCode": 0,
+    "durationSeconds": 14.857,
+    "files": 4,
+    "tests": 52,
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "D3",
+    "exitCode": 0,
+    "durationSeconds": 7.995,
+    "files": 1,
+    "tests": 17,
+    "passed": 17,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "E1",
+    "exitCode": 0,
+    "durationSeconds": 13.689,
+    "files": 4,
+    "tests": 41,
+    "passed": 41,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "E2",
+    "exitCode": 0,
+    "durationSeconds": 14.455,
+    "files": 4,
+    "tests": 38,
+    "passed": 38,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "E3",
+    "exitCode": 0,
+    "durationSeconds": 11.322,
+    "files": 4,
+    "tests": 45,
+    "passed": 45,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "group": "E4",
+    "exitCode": 0,
+    "durationSeconds": 13.242,
+    "files": 4,
+    "tests": 58,
+    "passed": 58,
+    "failed": 0,
+    "skipped": 0
+  }
+]

@@ -100,7 +100,7 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     enabled: z.boolean(),
   });
 
-  app.patch("/api/admin/features/:key", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/features/:key", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:features:edit");
     const { key } = routeParams(request);
     const { enabled } = parseSchema(flagPatchSchema, request.body);
@@ -293,7 +293,7 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     return listJobRuns(page, pageSize);
   });
 
-  app.post("/api/admin/automation/jobs/:name/run", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/automation/jobs/:name/run", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:automation:manage");
     const { name } = routeParams(request);
     const result = await runJob(name);
@@ -318,14 +318,14 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     return listCoupons(page, pageSize, status);
   });
 
-  app.post("/api/admin/coupons", { preHandler: authenticate }, async (request) => {
+  app.post("/api/admin/coupons", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:coupons:manage");
     const input = parseSchema(couponCreateSchema, request.body);
     const coupon = await createCoupon(input, admin.id);
     return coupon;
   });
 
-  app.patch("/api/admin/coupons/:id", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/coupons/:id", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:coupons:manage");
     const { id } = routeParams(request);
     const input = parseSchema(couponPatchSchema, request.body);
@@ -333,7 +333,7 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     return coupon;
   });
 
-  app.patch("/api/admin/coupons/:id/status", { preHandler: authenticate }, async (request) => {
+  app.patch("/api/admin/coupons/:id/status", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:coupons:manage");
     const { id } = routeParams(request);
     const { status } = parseSchema(z.object({ status: z.enum(["ACTIVE", "INACTIVE", "EXPIRED"]) }), request.body);
@@ -341,7 +341,7 @@ export async function adminEnterpriseRoutes(app: FastifyInstance) {
     return { ok: true, status: coupon.status };
   });
 
-  app.delete("/api/admin/coupons/:id", { preHandler: authenticate }, async (request) => {
+  app.delete("/api/admin/coupons/:id", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:coupons:manage");
     const { id } = routeParams(request);
     await deleteCoupon(id, admin.id);

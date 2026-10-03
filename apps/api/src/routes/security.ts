@@ -11,25 +11,14 @@ import { hashToken } from "../services/sessions";
 import { RateLimitService } from "../services/rateLimitService";
 import { encryptTotpSecret, loadTotpSecret, isTotpEncryptionConfigured } from "../lib/crypto";
 
-// ---------------------------------------------------------------------------
-// Per-userId 2FA login attempt tracking (NEW-3 fix — was bespoke Map, now uses
-// RateLimitService so metrics, suspicious-activity alerts, and any future Redis
-// backend all apply automatically).
-//
-// Window: 5 failures per 15 minutes → 429. Consistent with the AUTH category
-// defaults used by other sensitive endpoints.
-//
-// In a multi-node deployment RateLimitService is already the shared in-process
-// rate-limiter for all other sensitive paths.  A Redis back-end can be wired in
-// a single place later rather than per-endpoint.
-// ---------------------------------------------------------------------------
+// Account attempts share an atomic PostgreSQL budget in production.
 const MAX_2FA_ATTEMPTS = 5;
 const WINDOW_SECONDS_2FA = 15 * 60; // 15 minutes
 
-function check2FALockout(userId: string): void {
+async function check2FALockout(userId: string): Promise<void> {
   // Use checkRateLimit (not assertRateLimit) so we can provide a clearer error message.
-  const result = RateLimitService.checkRateLimit(
-    `2fa:${userId}`,
+  const result = await RateLimitService.checkSharedRateLimit(
+    userId,
     "TWO_FA",
     { maxRequests: MAX_2FA_ATTEMPTS, windowSeconds: WINDOW_SECONDS_2FA },
   );
@@ -47,16 +36,6 @@ function record2FAFailure(_userId: string): void {
   // This function is intentionally a no-op — kept for call-site symmetry.
 }
 
-function reset2FAAttempts(userId: string): void {
-  // Clear the sliding-window timestamps so a successful login immediately
-  // grants a full fresh budget (mirrored from the old Map.delete behaviour).
-  // We access the private static Maps via type-cast to reach internal state.
-  const fullKey = `TWO_FA:2fa:${userId}`;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (RateLimitService as any)["requestTimestamps"].delete(fullKey);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (RateLimitService as any)["throttleCounts"].delete(fullKey);
-}
 
 const scryptAsync = promisify(scrypt);
 
@@ -349,16 +328,19 @@ export async function securityRoutes(app: FastifyInstance) {
   // HIGH-1 fix: strict 5 req/min rate limit + per-userId failed-attempt lockout.
   app.post(
     "/api/security/2fa/verify-login",
-    { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
+    { preHandler: authenticate, config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
     async (request) => {
+      const user = requireUser(request);
       const data = parseSchema(verify2FASchema, request.body);
 
       if (!data.userId || !data.token) {
         throw new AppError("VALIDATION_ERROR", "userId and token are required", 400);
       }
 
+      if (data.userId !== user.id) throw new AppError("FORBIDDEN", "Cannot verify another user\'s session", 403);
+
       // Enforce per-userId lockout before any DB access.
-      check2FALockout(data.userId);
+      await check2FALockout(data.userId);
 
       const profile = await prisma.profile.findUnique({
         where: { userId: data.userId },
@@ -395,41 +377,16 @@ export async function securityRoutes(app: FastifyInstance) {
         throw new AppError("VALIDATION_ERROR", "Invalid verification code", 400);
       }
 
-      // Success — clear the failure counter.
-      reset2FAAttempts(data.userId);
+      // Successful verification does not reset the shared attempt budget.
 
-      // Stamp active login session(s) so requireMfa middleware and admin actions pass
-      const authHeader = request.headers.authorization as string | undefined;
-      const rawToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+      // Only this authenticated, unrevoked session is eligible for verification.
+      const rawToken = request.headers.authorization!.slice(7).trim();
       const now = new Date();
-      const sessionTtlMs = 30 * 24 * 60 * 60 * 1000;
-
-      if (rawToken) {
-        const tokenHash = hashToken(rawToken);
-        await prisma.loginSession.upsert({
-          where: { tokenHash },
-          update: { mfaVerifiedAt: now, isCurrent: true, revokedAt: null },
-          create: {
-            userId: data.userId,
-            tokenHash,
-            mfaVerifiedAt: now,
-            isCurrent: true,
-            expiresAt: new Date(now.getTime() + sessionTtlMs),
-          },
-        });
-      }
-
-      // Also ensure all unrevoked active sessions for this user receive the fresh MFA verification
-      await prisma.loginSession.updateMany({
-        where: {
-          userId: data.userId,
-          revokedAt: null,
-          expiresAt: { gt: now },
-        },
-        data: {
-          mfaVerifiedAt: now,
-        },
+      const result = await prisma.loginSession.updateMany({
+        where: { userId: user.id, tokenHash: hashToken(rawToken), revokedAt: null, expiresAt: { gt: now } },
+        data: { mfaVerifiedAt: now },
       });
+      if (result.count !== 1) throw new AppError("SESSION_REVOKED", "Session is no longer active", 401);
 
       await auditFromRequest(request, {
         actorType: "user",
