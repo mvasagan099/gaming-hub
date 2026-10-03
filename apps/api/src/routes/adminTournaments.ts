@@ -14,6 +14,7 @@ import {
   updateTournament,
   adminListTournaments,
   deleteTournament,
+  setTournamentStatus,
 } from "../services/tournaments";
 import {
   startTournament,
@@ -22,6 +23,7 @@ import {
   getTournamentBracket,
   createTournamentMatch,
   transitionTournamentStatus,
+  assignManualSeeds,
 } from "../services/tournamentEngine";
 import {
   reconcileTournament,
@@ -392,6 +394,80 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
       category: "admin", targetType: "tournament", targetId: id,
     });
     return { ok: true };
+  });
+
+  /** Update tournament status directly */
+  app.patch("/api/admin/tournaments/:id/status", { preHandler: [authenticate, requireMfa] }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
+    const { id } = routeParams(request);
+    const { status } = parseSchema(z.object({ status: z.enum(["UPCOMING", "LIVE", "ENDED", "CANCELLED"]) }), request.body);
+    const tournament = await setTournamentStatus(id, status, admin.id);
+    auditFromRequest(request, {
+      actorType: "user",
+      actorId: admin.id,
+      action: "admin.tournament.status.changed",
+      category: "admin",
+      targetType: "tournament",
+      targetId: id,
+      meta: { status },
+    });
+    return { ok: true, status: tournament.status };
+  });
+
+  /** Assign manual seeds */
+  app.post("/api/admin/tournaments/:id/seeds", { preHandler: [authenticate, requireMfa] }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
+    const { id } = routeParams(request);
+    const body = request.body as { assignments: { userId: string; seed: number }[] };
+    if (!body?.assignments || !Array.isArray(body.assignments)) {
+      throw new AppError("VALIDATION_ERROR", "Invalid assignments array", 400);
+    }
+    await assignManualSeeds(id, body.assignments, admin.id);
+    return { ok: true };
+  });
+
+  /** Get comprehensive Tournament Admin Control Center data */
+  app.get("/api/admin/tournaments/:id/control-center", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const { id } = routeParams(request);
+    const { getTournamentControlCenterData } = await import("../services/tournamentAdminControlCenter");
+    return getTournamentControlCenterData(id);
+  });
+
+  /** Emergency administrative match result override (audited & RBAC protected) */
+  app.post("/api/admin/tournaments/:id/override-result", { preHandler: [authenticate, requireMfa] }, async (request) => {
+    const admin = await requirePermission(request, "admin:tournaments:manage", prisma);
+    const { id } = routeParams(request);
+    const body = request.body as { slotId: string; winnerId: string; reason: string };
+    if (!body?.slotId || !body?.winnerId || !body?.reason) {
+      throw new AppError("VALIDATION_ERROR", "slotId, winnerId, and reason are required", 400);
+    }
+    const { overrideTournamentMatchResult } = await import("../services/tournamentAdminControlCenter");
+    await overrideTournamentMatchResult({
+      tournamentId: id,
+      slotId: body.slotId,
+      winnerId: body.winnerId,
+      reason: body.reason,
+      adminId: admin.id,
+    });
+    return { ok: true };
+  });
+
+  /** Trigger crash-safe tournament state recovery & resume */
+  app.post("/api/admin/tournaments/recover", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:manage", prisma);
+    const { TournamentRecoveryService } = await import("../services/tournamentRecoveryService");
+    const summary = await TournamentRecoveryService.recoverAllTournamentStates();
+    return summary;
+  });
+
+  /** Get crash recovery & tournament health status */
+  app.get("/api/admin/tournaments/recovery-status", { preHandler: authenticate }, async (request) => {
+    await requirePermission(request, "admin:tournaments:view", prisma);
+    const { TournamentRecoveryService } = await import("../services/tournamentRecoveryService");
+    const q = queryParams(request);
+    const tournamentId = q.tournamentId ? String(q.tournamentId) : undefined;
+    return TournamentRecoveryService.getRecoveryStatusReport(tournamentId);
   });
 
   // ------------------------------------------------------------------
