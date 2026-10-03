@@ -1,0 +1,47 @@
+{
+  "scope": "Synthetic disposable fixture only; not a production backup",
+  "host": "127.0.0.1",
+  "port": 5541,
+  "sourceDatabase": "gaming_hub_readiness_upgrade_1791027395692_test",
+  "restoredDatabase": "gaming_hub_readiness_restore_1791027979430_test",
+  "restoreSeconds": 3.4,
+  "backupBytes": 254915,
+  "allTableCountsMatch": true,
+  "allConstraintDefinitionsMatch": true,
+  "wallet": {
+    "main": 100,
+    "bonus": 0,
+    "locked": 0
+  },
+  "driftProbes": [
+    {
+      "label": "type",
+      "driftRejected": true
+    },
+    {
+      "label": "nullability",
+      "driftRejected": true
+    },
+    {
+      "label": "default",
+      "driftRejected": true
+    },
+    {
+      "label": "primary-key",
+      "driftRejected": true
+    },
+    {
+      "label": "foreign-key",
+      "driftRejected": true
+    },
+    {
+      "label": "unique-index",
+      "driftRejected": true
+    },
+    {
+      "label": "nonunique-index",
+      "driftRejected": true
+    }
+  ],
+  "productionDbTouched": false
+}

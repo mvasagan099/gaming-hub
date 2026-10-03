@@ -37,6 +37,21 @@ export interface EmailSendResult {
 
 export type SmtpSendResult = EmailSendResult;
 
+export const EMAIL_HTTP_TIMEOUT_MS = 15_000;
+
+async function withEmailDeadline<T>(provider: string, send: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`[emailTransport] ${provider} HTTP request timed out`));
+    }, EMAIL_HTTP_TIMEOUT_MS);
+  });
+  try { return await Promise.race([send(controller.signal), deadline]); }
+  finally { clearTimeout(timer); }
+}
+
 // ---------------------------------------------------------------------------
 // Central Dispatcher
 // ---------------------------------------------------------------------------
@@ -103,6 +118,10 @@ export function getBrevoSender(): { name: string; email: string } {
  * Strict credential sanitization ensures BREVO_API_KEY is never leaked.
  */
 export async function sendBrevoEmail(options: SendEmailOptions): Promise<EmailSendResult> {
+  return withEmailDeadline('Brevo', signal => deliverBrevoEmail(options, signal));
+}
+
+async function deliverBrevoEmail(options: SendEmailOptions, signal: AbortSignal): Promise<EmailSendResult> {
   const rawKey = process.env.BREVO_API_KEY || env.BREVO_API_KEY;
   if (!rawKey) {
     throw new Error("[emailTransport] BREVO_API_KEY is not configured");
@@ -136,10 +155,11 @@ export async function sendBrevoEmail(options: SendEmailOptions): Promise<EmailSe
         Accept: "application/json",
       },
       body: JSON.stringify(payload),
+      signal,
     });
   } catch (netErr: unknown) {
     const rawMsg = netErr instanceof Error ? netErr.message : "Network error";
-    const safeMsg = sanitizeErrorMessage(rawMsg, [apiKey]);
+    const safeMsg = sanitizeErrorMessage(rawMsg, [apiKey, options.to]);
     throw new Error(`[emailTransport] Brevo HTTP network request failed: ${safeMsg}`);
   }
 
@@ -147,16 +167,16 @@ export async function sendBrevoEmail(options: SendEmailOptions): Promise<EmailSe
     let errorDetail = "";
     try {
       const errJson = (await response.json()) as { code?: string; message?: string };
-      const code = errJson.code || "UNKNOWN";
+      const code = sanitizeErrorMessage(errJson.code || 'UNKNOWN', [apiKey, options.to]);
       const rawMsg = errJson.message || response.statusText;
-      const safeMsg = sanitizeErrorMessage(rawMsg, [apiKey]);
+      const safeMsg = sanitizeErrorMessage(rawMsg, [apiKey, options.to]);
       if (response.status === 401 && /key not found/i.test(rawMsg)) {
         errorDetail = "Invalid BREVO_API_KEY ('Key not found'). Please ensure you generated an API Key (xkeysib-...) from Brevo Dashboard > SMTP & API > API Keys, and not an SMTP password.";
       } else {
         errorDetail = `code=${code}, message=${safeMsg}`;
       }
     } catch {
-      errorDetail = `statusText=${response.statusText}`;
+      errorDetail = `statusText=${sanitizeErrorMessage(response.statusText, [apiKey, options.to])}`;
     }
     throw new Error(`[emailTransport] Brevo API error (status ${response.status}): ${errorDetail}`);
   }
@@ -179,13 +199,19 @@ export async function sendBrevoEmail(options: SendEmailOptions): Promise<EmailSe
 // ---------------------------------------------------------------------------
 
 export async function sendSendgridEmail(options: SendEmailOptions): Promise<EmailSendResult> {
-  const apiKey = env.SENDGRID_API_KEY;
+  return withEmailDeadline('SendGrid', signal => deliverSendgridEmail(options, signal));
+}
+
+async function deliverSendgridEmail(options: SendEmailOptions, signal: AbortSignal): Promise<EmailSendResult> {
+  const apiKey = process.env.SENDGRID_API_KEY || env.SENDGRID_API_KEY;
   if (!apiKey) {
     throw new Error("[emailTransport] SENDGRID_API_KEY is not configured");
   }
 
   const fromEmail = env.SENDGRID_FROM || env.EMAIL_FROM || env.SMTP_FROM || "noreply@gaminghub.com";
-  const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+  let res: Response;
+  try {
+  res = await fetch("https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -200,11 +226,17 @@ export async function sendSendgridEmail(options: SendEmailOptions): Promise<Emai
         { type: "text/html", value: options.html },
       ],
     }),
+    signal,
   });
+  } catch (error: unknown) {
+    const safe = sanitizeErrorMessage(error instanceof Error ? error.message : 'Network error', [apiKey, options.to]);
+    throw new Error(`[emailTransport] SendGrid HTTP network request failed: ${safe}`);
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
-    throw new Error(`[emailTransport] SendGrid API error (${res.status}): ${errText || res.statusText}`);
+    const safe = sanitizeErrorMessage(errText || res.statusText, [apiKey, options.to]);
+    throw new Error(`[emailTransport] SendGrid API error (${res.status}): ${safe}`);
   }
 
   return {
@@ -354,6 +386,8 @@ function sanitizeErrorMessage(msg: string, secrets: (string | undefined)[]): str
   }
   const AUTH_KEYWORDS = ["api-key", "apikey", "auth", "credential", "password", "secret", "bearer"];
   return cleaned
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[REDACTED]')
+    .replace(/\b\d{6}\b/g, '[REDACTED]')
     .split("\n")
     .filter((line) => {
       const lower = line.toLowerCase();

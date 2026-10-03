@@ -1,0 +1,46 @@
+import { PrismaClient } from '../../packages/db/src/generated/client/index.js';
+import {spawnSync} from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+const root=process.cwd(),out=root+'/security-reports/2026-10-03-readiness-fixes';
+const base='postgresql://audit:audit_local_only@127.0.0.1:5541/';
+const maintenance=new PrismaClient({datasources:{db:{url:base+'postgres'}}});
+const stamp=Date.now();
+const name=`gaming_hub_readiness_fresh_${stamp}_test`;
+const upgradeName=`gaming_hub_readiness_upgrade_${stamp}_test`;
+await maintenance.$executeRawUnsafe(`CREATE DATABASE "${upgradeName}"`);
+const found=await maintenance.$queryRawUnsafe('SELECT 1 FROM pg_database WHERE datname=$1',name);
+if(!found.length)await maintenance.$executeRawUnsafe(`CREATE DATABASE "${name}"`);
+await maintenance.$disconnect();
+const results=[];
+function run(label,url,args){const r=spawnSync(args[0],args.slice(1),{cwd:root,env:{...process.env,DATABASE_URL:url},encoding:'utf8'});fs.writeFileSync(out+'/'+label+'.log',(r.stdout||'')+(r.stderr||''));results.push({label,exitCode:r.status});if(r.status!==0)throw new Error(label+' failed; see saved log');}
+run('fresh-migrate',base+name,['node','packages/db/deploy.js']);
+run('fresh-schema-diff',base+name,['npx','prisma','migrate','diff','--from-schema-datasource','packages/db/prisma/schema.prisma','--to-schema-datamodel','packages/db/prisma/schema.prisma','--exit-code']);
+const upgradeUrl=base+upgradeName;
+const baseline=fs.mkdtempSync(path.join(os.tmpdir(),'gaming-hub-migration-baseline-'));
+fs.copyFileSync(root+'/packages/db/prisma/schema.prisma',baseline+'/schema.prisma');
+fs.mkdirSync(baseline+'/migrations');
+for(const item of fs.readdirSync(root+'/packages/db/prisma/migrations')){
+  if(item.startsWith('20261003'))continue;
+  fs.cpSync(root+'/packages/db/prisma/migrations/'+item,baseline+'/migrations/'+item,{recursive:true});
+}
+run('six-migration-baseline',upgradeUrl,['npx','prisma','migrate','deploy','--schema',baseline+'/schema.prisma']);
+fs.rmSync(baseline,{recursive:true,force:true});
+const p=new PrismaClient({datasources:{db:{url:upgradeUrl}}});
+const id='security-upgrade-preservation-test-user';
+await p.user.upsert({where:{id},create:{id,username:'security_upgrade_test',displayName:'Disposable Upgrade User',email:'upgrade@disposable.test',wallet:{create:{balance:100}},profile:{create:{}}},update:{}});
+await p.transaction.upsert({where:{id:'security-upgrade-ledger'},create:{id:'security-upgrade-ledger',userId:id,type:'CREDIT',amount:100,balanceBefore:0,balanceAfter:100,walletType:'MAIN',referenceType:'ADMIN',referenceId:'upgrade-fixture'},update:{}});
+const before={users:await p.user.count(),wallets:await p.wallet.count(),transactions:await p.transaction.count(),balance:(await p.wallet.findUniqueOrThrow({where:{userId:id}})).balance};
+run('existing-db-upgrade',upgradeUrl,['node','packages/db/deploy.js']);
+const after={users:await p.user.count(),wallets:await p.wallet.count(),transactions:await p.transaction.count(),balance:(await p.wallet.findUniqueOrThrow({where:{userId:id}})).balance};
+if(JSON.stringify(before)!==JSON.stringify(after))throw new Error('Upgrade preservation failure');
+run('upgrade-schema-diff',upgradeUrl,['npx','prisma','migrate','diff','--from-schema-datasource','packages/db/prisma/schema.prisma','--to-schema-datamodel','packages/db/prisma/schema.prisma','--exit-code']);
+const fresh=new PrismaClient({datasources:{db:{url:base+name}}});
+const newUser=await fresh.user.upsert({where:{id:'fresh-wallet-test'},create:{id:'fresh-wallet-test',username:'fresh_wallet_test',displayName:'Fresh Wallet Test',wallet:{create:{}}},update:{}});
+const wallet=await fresh.wallet.findUniqueOrThrow({where:{userId:newUser.id}});
+if(wallet.balance!==0||wallet.bonusBalance!==0||wallet.lockedBalance!==0)throw new Error('Wallet defaults are not zero');
+const migrations=await fresh.$queryRawUnsafe('SELECT migration_name,finished_at IS NOT NULL AS finished FROM _prisma_migrations WHERE rolled_back_at IS NULL ORDER BY started_at');
+await fresh.$disconnect();await p.$disconnect();
+fs.writeFileSync(out+'/migration-summary.json',JSON.stringify({databases:{fresh:name,upgrade:upgradeName,host:'127.0.0.1',port:5541},results,migrations,preservation:{before,after},walletDefaults:{MAIN:wallet.balance,BONUS:wallet.bonusBalance,LOCKED:wallet.lockedBalance},productionDbTouched:false},null,2));
+console.log('Fresh and existing disposable migration checks passed; zero schema difference; wallet defaults zero; controlled ledger preserved.');

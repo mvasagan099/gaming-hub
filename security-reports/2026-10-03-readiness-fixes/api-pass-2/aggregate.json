@@ -1,0 +1,63 @@
+{
+  "totals": {
+    "files": 87,
+    "tests": 1222,
+    "passed": 1222,
+    "failed": 0,
+    "skipped": 0
+  },
+  "missing": [],
+  "duplicates": [],
+  "durationSeconds": 566.057,
+  "subsets": {
+    "security": {
+      "files": 44,
+      "tests": 630,
+      "passed": 630,
+      "failed": 0,
+      "skipped": 0
+    },
+    "tournament_routes": {
+      "files": 1,
+      "tests": 61,
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0
+    },
+    "tournament_all": {
+      "files": 23,
+      "tests": 531,
+      "passed": 531,
+      "failed": 0,
+      "skipped": 0
+    },
+    "tier_combinations": {
+      "files": 1,
+      "tests": 93,
+      "passed": 93,
+      "failed": 0,
+      "skipped": 0
+    },
+    "wallet_routes": {
+      "files": 1,
+      "tests": 11,
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    "financial_concurrency_reconciliation_idempotency": {
+      "files": 3,
+      "tests": 32,
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0
+    },
+    "privacy": {
+      "files": 1,
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    }
+  }
+}

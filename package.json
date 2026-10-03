@@ -34,7 +34,6 @@
   "devDependencies": {
     "concurrently": "^9.1.2",
     "loupe": "^3.2.1",
-    "prisma": "^6.5.0",
     "tsx": "^4.19.3",
     "typescript": "~6.0.2"
   },
@@ -54,6 +53,7 @@
     "qs": "6.16.0"
   },
   "dependencies": {
-    "@capacitor/ios": "^8.5.1"
+    "@capacitor/ios": "^8.5.1",
+    "prisma": "^6.5.0"
   }
 }

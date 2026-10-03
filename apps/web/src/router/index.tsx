@@ -9,6 +9,8 @@ import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { PublicOnlyRoute } from "../components/auth/PublicOnlyRoute";
 import { AdminRoute } from "../components/admin/AdminRoute";
 import { FeatureGate } from "../components/FeatureGate";
+import { AUTH_CALLBACK_PATH, PASSWORD_RESET_PATH } from '@gaming-hub/shared';
+import { AuthLinkAliasPage } from '../pages/Auth/AuthLinkAliasPage';
 
 // Route-level code splitting: heavy pages (Phaser games, chess.js) load on
 // demand instead of inflating the initial bundle.
@@ -75,13 +77,16 @@ const SuspensePage = ({ children }: { children: ReactNode }) => (
 );
 
 export const router = createBrowserRouter([
+  ...['/auth/reset-password', '/auth/verify-email', '/verify-email'].map(path => ({
+    path, element: <AuthLinkAliasPage />, errorElement: <ErrorPage />,
+  })),
   {
-    path: "/auth/callback",
+    path: AUTH_CALLBACK_PATH,
     element: <SuspensePage><AuthCallbackPage /></SuspensePage>,
     errorElement: <ErrorPage />,
   },
   {
-    path: "/reset-password",
+    path: PASSWORD_RESET_PATH,
     element: <SuspensePage><ResetPasswordPage /></SuspensePage>,
     errorElement: <ErrorPage />,
   },

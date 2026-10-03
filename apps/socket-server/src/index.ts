@@ -22,7 +22,10 @@ import { GameEventBus } from "./events/GameEventBus";
 import { GameStateSyncManager } from "./sync/GameStateSyncManager";
 import { createAndFundMatch, settleMatch, cancelMatch } from "./apiClient";
 
-const logger = pino({ level: env.LOG_LEVEL, transport: { target: "pino-pretty" } });
+const logger = pino({
+  level: env.LOG_LEVEL,
+  ...(env.NODE_ENV === 'development' ? { transport: { target: 'pino-pretty' } } : {}),
+});
 
 function parseOrigins(value: string): boolean | string[] {
   if (value === "*") return true;

@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { SnakeLadder } from '../../games/snake-ladder';
-import { LudoGame } from '../../games/ludo/LudoGame';
-import { ChessGame } from '../../games/chess/ChessGame';
-import { CarromGame } from '../../games/carrom/CarromGame';
-import { FruitNinjaGame } from '../../games/fruit-ninja/FruitNinjaGame';
-import { BubbleShooterGame } from '../../games/bubble-shooter/BubbleShooterGame';
-import { TableTennisGame } from '../../games/table-tennis/TableTennisGame';
-import { SnakeVsWormsGame } from '../../games/snake-vs-worms/SnakeVsWormsGame';
-import { SnookerGame } from '../../games/snooker/SnookerGame';
+const SnakeLadder = lazy(() => import("../../games/snake-ladder").then(m => ({ default: m.SnakeLadder })));
+const LudoGame = lazy(() => import("../../games/ludo/LudoGame").then(m => ({ default: m.LudoGame })));
+const ChessGame = lazy(() => import("../../games/chess/ChessGame").then(m => ({ default: m.ChessGame })));
+const CarromGame = lazy(() => import("../../games/carrom/CarromGame").then(m => ({ default: m.CarromGame })));
+const FruitNinjaGame = lazy(() => import("../../games/fruit-ninja/FruitNinjaGame").then(m => ({ default: m.FruitNinjaGame })));
+const BubbleShooterGame = lazy(() => import("../../games/bubble-shooter/BubbleShooterGame").then(m => ({ default: m.BubbleShooterGame })));
+const TableTennisGame = lazy(() => import("../../games/table-tennis/TableTennisGame").then(m => ({ default: m.TableTennisGame })));
+const SnakeVsWormsGame = lazy(() => import("../../games/snake-vs-worms/SnakeVsWormsGame").then(m => ({ default: m.SnakeVsWormsGame })));
+const SnookerGame = lazy(() => import("../../games/snooker/SnookerGame").then(m => ({ default: m.SnookerGame })));
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { isGameId } from '@gaming-hub/shared';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
@@ -85,7 +85,7 @@ export const GamePage: React.FC = () => {
   }
 
   return <>
-    {game}
+    <Suspense fallback={<div role="status" className="p-10 text-center">Loading game…</div>}>{game}</Suspense>
     <ConfirmDialog
       isOpen={showExitConfirm}
       onClose={() => setShowExitConfirm(false)}

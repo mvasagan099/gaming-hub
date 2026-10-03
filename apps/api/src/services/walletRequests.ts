@@ -142,8 +142,9 @@ export async function requestWithdrawalOtp(userId: string): Promise<WalletOtpRes
         text: `Your withdrawal verification code is: ${code}. This code expires in ${settings.otpExpiryMinutes} minutes. If you did not initiate this withdrawal, please secure your account immediately.`,
         html: `<p>Your withdrawal verification code is: <strong>${code}</strong></p><p>This code expires in ${settings.otpExpiryMinutes} minutes.</p><p>If you did not initiate this withdrawal, please secure your account immediately.</p>`,
       });
-    } catch (mailErr: any) {
-      console.warn(`[requestWithdrawalOtp] Failed to send email to ${user.email}:`, mailErr?.message);
+    } catch {
+      // Provider bodies may echo PII, keys or the OTP; never log them here.
+      console.warn('[requestWithdrawalOtp] Email delivery failed', { userId });
       // Invalidate generated OTP to maintain strict security
       await prisma.walletOtp.updateMany({
         where: { userId, purpose: OTP_PURPOSE, consumedAt: null },
@@ -152,15 +153,13 @@ export async function requestWithdrawalOtp(userId: string): Promise<WalletOtpRes
       if (
         process.env.NODE_ENV === "production" ||
         process.env.EMAIL_PROVIDER === "brevo" ||
-        process.env.EMAIL_PROVIDER === "smtp"
+        process.env.EMAIL_PROVIDER === "smtp" ||
+        process.env.EMAIL_PROVIDER === "sendgrid"
       ) {
         throw new AppError(
           "EMAIL_DELIVERY_FAILED",
-          mailErr?.message
-            ? `Failed to deliver withdrawal verification code to your email: ${mailErr.message}`
-            : "Failed to deliver withdrawal verification code to your email. Please try again later.",
+          "Failed to deliver withdrawal verification code to your email. Please try again later.",
           502,
-          { reason: mailErr?.message },
         );
       }
     }

@@ -1,0 +1,25 @@
+{
+  "apiImage": "gaming-hub-api-audit-fixes:local",
+  "socketImage": "gaming-hub-socket-audit-fixes:local",
+  "environment": "NODE_ENV=production; dummy provider credentials; disposable localhost audit PostgreSQL",
+  "productionDatabaseTouched": false,
+  "apiHealth": {
+    "status": "ok",
+    "service": "gaming-hub-api",
+    "timestamp": "2026-10-03T12:55:20.032Z",
+    "uptime": 32.486931302
+  },
+  "socketReady": {
+    "status": "ok"
+  },
+  "apiRuntimeVerified": true,
+  "socketRuntimeVerified": true,
+  "migrationCommandVerified": true,
+  "developmentToolsCheckedAbsent": [
+    "vitest",
+    "tsup",
+    "pino-pretty",
+    "tsx"
+  ],
+  "prismaCliRetained": "6.19.3"
+}

@@ -1,7 +1,27 @@
 import { describe, it, expect } from "vitest";
-import { parseAndValidateDeepLink } from "@gaming-hub/shared";
+import { parseAndValidateDeepLink, AUTH_CALLBACK_PATH, PASSWORD_RESET_PATH } from "@gaming-hub/shared";
 
 describe("M-06: Capacitor Deep-Link Validation", () => {
+  it.each([
+    'com.gaminghub.app://auth/verify-email', 'com.gaminghub.app://verify-email',
+    'com.gaminghub.app://verify-email/', 'https://gaminghub.com/verify-email',
+    'https://app.gaminghub.com/auth/verify-email',
+  ])('routes verification alias %s to the mounted callback preserving auth parameters', (url) => {
+    expect(parseAndValidateDeepLink(`${url}?code=verification#access_token=token`)).toMatchObject({ valid: true, isPasswordRecovery: false, target: `${AUTH_CALLBACK_PATH}?code=verification#access_token=token` });
+  });
+  it.each([
+    'com.gaminghub.app://auth/reset-password', 'com.gaminghub.app://reset-password/',
+    'https://gaminghub.com/auth/reset-password',
+  ])('identifies recovery alias %s without a type parameter', (url) => {
+    expect(parseAndValidateDeepLink(`${url}?code=recovery`)).toMatchObject({ valid: true, isPasswordRecovery: true, target: `${PASSWORD_RESET_PATH}?code=recovery` });
+  });
+  it('does not misclassify an unrelated value containing type=recovery', () => {
+    expect(parseAndValidateDeepLink('com.gaminghub.app://auth/callback?state=type=recovery').isPasswordRecovery).toBe(false);
+  });
+  it.each(['redirect', 'redirectTo', 'next', 'returnUrl', 'url', 'target'])('strips %s from alias query and hash', (key) => {
+    const result = parseAndValidateDeepLink(`com.gaminghub.app://auth/verify-email?code=ok&${key}=https://evil.invalid#access_token=token&${key}=https://evil.invalid`);
+    expect(result.target).toBe(`${AUTH_CALLBACK_PATH}?code=ok#access_token=token`);
+  });
   it("allows valid custom scheme auth callback with safe params", () => {
     const result = parseAndValidateDeepLink(
       "com.gaminghub.app://auth/callback?code=valid-auth-code&state=xyz123"

@@ -1,5 +1,6 @@
 import { prisma } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
+import { withDatabaseJobLock } from "./databaseJobLock";
 import { audit } from "./audit";
 import {
   transitionTournamentStatus,
@@ -46,6 +47,10 @@ export class TournamentRecoveryService {
    * Fully crash-safe, idempotent, and non-destructive.
    */
   static async recoverAllTournamentStates(): Promise<TournamentRecoverySummary> {
+    return withDatabaseJobLock("tournament:maintenance", () => this.recoverUnderLock());
+  }
+
+  private static async recoverUnderLock(): Promise<TournamentRecoverySummary> {
     if (isRecoveryRunning) {
       return {
         timestamp: new Date().toISOString(),

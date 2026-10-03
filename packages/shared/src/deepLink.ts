@@ -12,6 +12,8 @@ const ALLOWED_SCHEMES = new Set(["com.gaminghub.app:", "https:"]);
 const HTTPS_HOSTS = new Set(["app.gaminghub.com", "gaminghub.com"]);
 const CUSTOM_HOSTS = new Set(["auth", "reset-password", "verify-email"]);
 const ALLOWED_PATHS = new Set(["/auth/callback", "/auth/reset-password", "/auth/verify-email", "/reset-password", "/verify-email"]);
+export const AUTH_CALLBACK_PATH = "/auth/callback";
+export const PASSWORD_RESET_PATH = "/reset-password";
 
 const ALLOWED_QUERY_KEYS = new Set([
   "code",
@@ -162,13 +164,13 @@ export function parseAndValidateDeepLink(rawUrl: string): DeepLinkValidationResu
   const searchPart = queryStr ? `?${queryStr}` : "";
   const isPasswordRecovery =
     pathname === "/reset-password" ||
-    searchPart.includes("type=recovery") ||
-    safeHash.includes("type=recovery");
+    pathname === "/auth/reset-password" ||
+    safeSearchParams.get("type") === "recovery" ||
+    new URLSearchParams(safeHash.slice(1)).get("type") === "recovery";
 
-  let target = `${pathname}${searchPart}${safeHash}`;
-  if (isPasswordRecovery && pathname !== "/reset-password") {
-    target = `/reset-password${searchPart}${safeHash}`;
-  }
+  // Retain issued provider/native aliases, but navigate only to mounted pages.
+  const canonicalPath = isPasswordRecovery ? PASSWORD_RESET_PATH : AUTH_CALLBACK_PATH;
+  const target = `${canonicalPath}${searchPart}${safeHash}`;
 
   return {
     valid: true,

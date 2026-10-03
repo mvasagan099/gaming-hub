@@ -1,6 +1,11 @@
 # Merge these fields into the EXISTING static site's Blueprint, or enter them
 # under Render Dashboard -> Headers. This fragment does not deploy a service.
+# Generate a fragment with exact environment endpoints using
+# scripts/render-security-headers.mjs. Review on staging before applying.
 headers:
+  - path: /*
+    name: Strict-Transport-Security
+    value: max-age=31536000; includeSubDomains
   - path: /*
     name: X-Content-Type-Options
     value: nosniff

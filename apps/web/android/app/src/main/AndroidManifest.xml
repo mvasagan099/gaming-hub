@@ -32,6 +32,13 @@
                 <data android:scheme="https" android:host="gaminghub.com" android:path="/auth/callback" />
                 <data android:scheme="https" android:host="gaminghub.com" android:path="/reset-password" />
                 <data android:scheme="https" android:host="gaminghub.com" android:path="/verify-email" />
+                <data android:scheme="https" android:host="gaminghub.com" android:path="/auth/reset-password" />
+                <data android:scheme="https" android:host="gaminghub.com" android:path="/auth/verify-email" />
+                <data android:scheme="https" android:host="app.gaminghub.com" android:path="/auth/callback" />
+                <data android:scheme="https" android:host="app.gaminghub.com" android:path="/reset-password" />
+                <data android:scheme="https" android:host="app.gaminghub.com" android:path="/verify-email" />
+                <data android:scheme="https" android:host="app.gaminghub.com" android:path="/auth/reset-password" />
+                <data android:scheme="https" android:host="app.gaminghub.com" android:path="/auth/verify-email" />
             </intent-filter>
 
             <!-- Custom Scheme Deep Linking -->

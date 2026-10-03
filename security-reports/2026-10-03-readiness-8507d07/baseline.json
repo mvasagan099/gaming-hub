@@ -1,0 +1,8 @@
+{
+  "startedAt": "2026-10-03T11:34:01.377602+00:00",
+  "checks": {
+    "git rev-parse HEAD": "8507d07234bc307096f266c35a3480e9ab125ec9",
+    "git branch --show-current": "main",
+    "git status --porcelain": "?? security-reports/2026-10-03-readiness-8507d07/"
+  }
+}

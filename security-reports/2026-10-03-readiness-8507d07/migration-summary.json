@@ -1,0 +1,80 @@
+{
+  "databases": {
+    "fresh": "gaming_hub_readiness_fresh_1791027395692_test",
+    "upgrade": "gaming_hub_readiness_upgrade_1791027395692_test",
+    "host": "127.0.0.1",
+    "port": 5541
+  },
+  "results": [
+    {
+      "label": "fresh-migrate",
+      "exitCode": 0
+    },
+    {
+      "label": "fresh-schema-diff",
+      "exitCode": 0
+    },
+    {
+      "label": "six-migration-baseline",
+      "exitCode": 0
+    },
+    {
+      "label": "existing-db-upgrade",
+      "exitCode": 0
+    },
+    {
+      "label": "upgrade-schema-diff",
+      "exitCode": 0
+    }
+  ],
+  "migrations": [
+    {
+      "migration_name": "20260801000000_init",
+      "finished": true
+    },
+    {
+      "migration_name": "20260828_add_gameid_to_schedule_log",
+      "finished": true
+    },
+    {
+      "migration_name": "20260831_add_app_version_config",
+      "finished": true
+    },
+    {
+      "migration_name": "20260915_security_schema_v1",
+      "finished": true
+    },
+    {
+      "migration_name": "20260918_affiliate_fraud_and_risk",
+      "finished": true
+    },
+    {
+      "migration_name": "20260918_finalize_affiliate_wallet_commissions",
+      "finished": true
+    },
+    {
+      "migration_name": "20261003000000_shared_security_limits_and_schema_guard",
+      "finished": true
+    }
+  ],
+  "preservation": {
+    "before": {
+      "users": 1,
+      "wallets": 1,
+      "transactions": 1,
+      "balance": 100
+    },
+    "after": {
+      "users": 1,
+      "wallets": 1,
+      "transactions": 1,
+      "balance": 100
+    }
+  },
+  "walletDefaults": {
+    "MAIN": 0,
+    "BONUS": 0,
+    "LOCKED": 0
+  },
+  "productionDbTouched": false
+}

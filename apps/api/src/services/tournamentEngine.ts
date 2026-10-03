@@ -24,6 +24,7 @@ import { audit } from "./audit";
 import { TournamentMatchService } from "./tournamentMatchService";
 import { TournamentNotificationService } from "./tournamentNotificationService";
 import { verifyAndSnapshotTournamentMatchResult } from "./tournamentResultVerification";
+import { withDatabaseJobLock } from './databaseJobLock';
 
 // ---------------------------------------------------------------------------
 // State machine transition (with DB update)
@@ -49,13 +50,16 @@ export async function transitionTournamentStatus(
     );
   }
 
-  await prisma.tournament.update({
-    where: { id: tournamentId },
+  const claim = await prisma.tournament.updateMany({
+    where: { id: tournamentId, status: tournament.status },
     data: {
       status: newStatus,
       stateVersion: { increment: 1 },
     },
   });
+  if (claim.count !== 1) {
+    throw new AppError('INVALID_ACTION', 'Tournament status changed; refresh before retrying', 409);
+  }
 
   audit({
     actorType: "user",
@@ -200,6 +204,10 @@ export async function assignManualSeeds(
 // ---------------------------------------------------------------------------
 
 export async function buildSingleEliminationBracket(tournamentId: string): Promise<void> {
+  return withDatabaseJobLock(`tournament:bracket:${tournamentId}`, () => buildBracket(tournamentId));
+}
+
+async function buildBracket(tournamentId: string): Promise<void> {
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
     include: { players: true },
@@ -211,7 +219,13 @@ export async function buildSingleEliminationBracket(tournamentId: string): Promi
     throw new AppError("INVALID_ACTION", "Not enough players to build bracket", 400);
   }
 
-  // Clear any existing rounds
+  const activeRound = await prisma.tournamentRound.findFirst({
+    where: { tournamentId, OR: [{ matchId: { not: null } }, { status: { in: ['IN_PROGRESS', 'COMPLETED'] } }] },
+    select: { id: true },
+  });
+  if (activeRound) throw new AppError('INVALID_ACTION', 'An active bracket cannot be rebuilt', 409);
+
+  // Only an unplayed bracket may be rebuilt, under the dedicated DB lock.
   await prisma.tournamentRound.deleteMany({ where: { tournamentId } });
 
   const seededIds = await seedPlayers(tournamentId);

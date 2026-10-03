@@ -23,15 +23,13 @@ export default defineConfig({
     // to anyone who extracts the APK or visits the web build.
     sourcemap: false,
 
-    // esbuild transform options applied during production minification.
-    // drop: ['debugger'] removes any stray `debugger;` statements that
-    // could enable DevTools pause-on-debugger in production.
-    // legalComments: 'none' strips license banner comments from the output,
-    // which can reveal library names, versions and internal details.
-  },
-  esbuild: {
-    // Strip debugger statements and legal comments from all production output.
-    drop: ["debugger"],
-    legalComments: "none",
+    rolldownOptions: {
+      output: {
+        minify: {
+          compress: { dropDebugger: true },
+          codegen: { legalComments: 'none' },
+        },
+      },
+    },
   },
 });

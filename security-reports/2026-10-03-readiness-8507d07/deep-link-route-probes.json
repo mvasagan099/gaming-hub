@@ -1,0 +1,38 @@
+[
+  {
+    "url": "com.gaminghub.app://auth/callback?code=audit",
+    "valid": true,
+    "target": "/auth/callback?code=audit",
+    "isPasswordRecovery": false
+  },
+  {
+    "url": "com.gaminghub.app://auth/reset-password",
+    "valid": true,
+    "target": "/auth/reset-password",
+    "isPasswordRecovery": false
+  },
+  {
+    "url": "com.gaminghub.app://auth/verify-email?code=audit",
+    "valid": true,
+    "target": "/auth/verify-email?code=audit",
+    "isPasswordRecovery": false
+  },
+  {
+    "url": "com.gaminghub.app://verify-email/?code=audit",
+    "valid": true,
+    "target": "/verify-email?code=audit",
+    "isPasswordRecovery": false
+  },
+  {
+    "url": "https://gaminghub.com/verify-email?code=audit",
+    "valid": true,
+    "target": "/verify-email?code=audit",
+    "isPasswordRecovery": false
+  },
+  {
+    "url": "com.gaminghub.app://auth/reset-password?type=recovery",
+    "valid": true,
+    "target": "/reset-password?type=recovery",
+    "isPasswordRecovery": true
+  }
+]

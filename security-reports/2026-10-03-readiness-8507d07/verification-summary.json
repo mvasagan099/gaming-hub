@@ -1,0 +1,215 @@
+{
+  "commit": "8507d07234bc307096f266c35a3480e9ab125ec9",
+  "api": {
+    "1": {
+      "totals": {
+        "files": 85,
+        "tests": 1197,
+        "passed": 1197,
+        "failed": 0,
+        "skipped": 0
+      },
+      "missing": [],
+      "duplicates": [],
+      "durationSeconds": 467.013,
+      "subsets": {
+        "security": {
+          "files": 42,
+          "tests": 605,
+          "passed": 605,
+          "failed": 0,
+          "skipped": 0
+        },
+        "tournament_routes": {
+          "files": 1,
+          "tests": 61,
+          "passed": 61,
+          "failed": 0,
+          "skipped": 0
+        },
+        "tournament_all": {
+          "files": 22,
+          "tests": 527,
+          "passed": 527,
+          "failed": 0,
+          "skipped": 0
+        },
+        "tier_combinations": {
+          "files": 1,
+          "tests": 93,
+          "passed": 93,
+          "failed": 0,
+          "skipped": 0
+        },
+        "wallet_routes": {
+          "files": 1,
+          "tests": 11,
+          "passed": 11,
+          "failed": 0,
+          "skipped": 0
+        },
+        "financial_concurrency_reconciliation_idempotency": {
+          "files": 3,
+          "tests": 32,
+          "passed": 32,
+          "failed": 0,
+          "skipped": 0
+        },
+        "privacy": {
+          "files": 1,
+          "tests": 12,
+          "passed": 12,
+          "failed": 0,
+          "skipped": 0
+        }
+      }
+    },
+    "2": {
+      "totals": {
+        "files": 85,
+        "tests": 1197,
+        "passed": 1197,
+        "failed": 0,
+        "skipped": 0
+      },
+      "missing": [],
+      "duplicates": [],
+      "durationSeconds": 444.994,
+      "subsets": {
+        "security": {
+          "files": 42,
+          "tests": 605,
+          "passed": 605,
+          "failed": 0,
+          "skipped": 0
+        },
+        "tournament_routes": {
+          "files": 1,
+          "tests": 61,
+          "passed": 61,
+          "failed": 0,
+          "skipped": 0
+        },
+        "tournament_all": {
+          "files": 22,
+          "tests": 527,
+          "passed": 527,
+          "failed": 0,
+          "skipped": 0
+        },
+        "tier_combinations": {
+          "files": 1,
+          "tests": 93,
+          "passed": 93,
+          "failed": 0,
+          "skipped": 0
+        },
+        "wallet_routes": {
+          "files": 1,
+          "tests": 11,
+          "passed": 11,
+          "failed": 0,
+          "skipped": 0
+        },
+        "financial_concurrency_reconciliation_idempotency": {
+          "files": 3,
+          "tests": 32,
+          "passed": 32,
+          "failed": 0,
+          "skipped": 0
+        },
+        "privacy": {
+          "files": 1,
+          "tests": 12,
+          "passed": 12,
+          "failed": 0,
+          "skipped": 0
+        }
+      }
+    }
+  },
+  "otherRegressions": {
+    "game-engine": {
+      "files": 24,
+      "tests": 329,
+      "passed": 329,
+      "failed": 0,
+      "skipped": 0
+    },
+    "multiplayer": {
+      "files": 9,
+      "tests": 89,
+      "passed": 89,
+      "failed": 0,
+      "skipped": 0
+    },
+    "web": {
+      "files": 3,
+      "tests": 22,
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "dependencyAll": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "dependencyProduction": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "securitySubsetFiles": [
+    "src/routes/__tests__/wallet.test.ts",
+    "src/routes/__tests__/withdrawalVerificationSmoke.test.ts",
+    "src/services/__tests__/adminSecurityHardeningEngine.test.ts",
+    "src/services/__tests__/affiliateFraud.test.ts",
+    "src/services/__tests__/affiliateReconciliation.test.ts",
+    "src/services/__tests__/affiliateSystem.test.ts",
+    "src/services/__tests__/auditRemediation.test.ts",
+    "src/services/__tests__/brevoEmailProvider.test.ts",
+    "src/services/__tests__/coinWorkflowAudit.unit.test.ts",
+    "src/services/__tests__/couponVaultIntegration.unit.test.ts",
+    "src/services/__tests__/couponVaultLiveIntegration.test.ts",
+    "src/services/__tests__/deepLinkValidation.unit.test.ts",
+    "src/services/__tests__/financialConcurrencyAndRecovery.test.ts",
+    "src/services/__tests__/financialIdempotency.test.ts",
+    "src/services/__tests__/financialReconciliationEngine.test.ts",
+    "src/services/__tests__/gameResultSecurity.test.ts",
+    "src/services/__tests__/globalPlatformSearch.test.ts",
+    "src/services/__tests__/globalRateLimitingEngine.test.ts",
+    "src/services/__tests__/idorAndEconomyValidation.test.ts",
+    "src/services/__tests__/kycAddressSync.test.ts",
+    "src/services/__tests__/kycSecurityHardening.test.ts",
+    "src/services/__tests__/loginTimeMfa.test.ts",
+    "src/services/__tests__/mfaSessionLifecycle.test.ts",
+    "src/services/__tests__/passwordResetAuthFlow.test.ts",
+    "src/services/__tests__/playerProfileSystem.test.ts",
+    "src/services/__tests__/productionCoinVerification.unit.test.ts",
+    "src/services/__tests__/referralSystem.test.ts",
+    "src/services/__tests__/securityAttackSimulation.test.ts",
+    "src/services/__tests__/securityRemediation.unit.test.ts",
+    "src/services/__tests__/securityRemediationHardening.test.ts",
+    "src/services/__tests__/singleActiveSession.test.ts",
+    "src/services/__tests__/smtpEmailProvider.test.ts",
+    "src/services/__tests__/suspiciousActivityEngine.test.ts",
+    "src/services/__tests__/totpEncryptionMigration.test.ts",
+    "src/services/__tests__/tournamentAdminControlCenter.test.ts",
+    "src/services/__tests__/tournamentAnalyticsReporting.unit.test.ts",
+    "src/services/__tests__/tournamentAntiCheatValidation.unit.test.ts",
+    "src/services/__tests__/tournamentCancellationRefundUnit.unit.test.ts",
+    "src/services/__tests__/tournamentFinancialUnit.unit.test.ts",
+    "src/services/__tests__/tournamentLeaderboardStats.unit.test.ts",
+    "src/services/__tests__/walletRequests.test.ts",
+    "src/services/__tests__/walletTransactionService.test.ts"
+  ],
+  "productionDatabaseTouched": false
+}

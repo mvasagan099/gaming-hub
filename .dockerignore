@@ -14,3 +14,8 @@ Thumbs.db
 .DS_Store
 .vscode
 .idea
+
+# Local audit evidence and native build output are not server runtime inputs.
+security-reports
+apps/web/android
+apps/web/ios

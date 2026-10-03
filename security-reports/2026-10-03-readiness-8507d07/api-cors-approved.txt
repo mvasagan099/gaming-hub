@@ -1,0 +1,27 @@
+HTTP/2 204 
+date: Sat, 03 Oct 2026 11:44:02 GMT
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type, X-Internal-Key, X-Requested-With, X-App-Version, X-App-Platform
+access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+access-control-allow-origin: https://gaming-hub-frontend.onrender.com
+content-security-policy: default-src 'none';base-uri 'none';font-src 'self' https: data:;form-action 'self';frame-ancestors 'none';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests
+cross-origin-opener-policy: same-origin
+cross-origin-resource-policy: same-origin
+origin-agent-cluster: ?1
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+referrer-policy: no-referrer
+rndr-id: 6e455a77-0542-48d1
+server: cloudflare
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: Origin
+x-content-type-options: nosniff
+x-dns-prefetch-control: off
+x-download-options: noopen
+x-frame-options: SAMEORIGIN
+x-permitted-cross-domain-policies: none
+x-render-origin-server: Render
+x-xss-protection: 0
+cf-cache-status: DYNAMIC
+cf-ray: a44bb14e4b597f2b-MAA
+alt-svc: h3=":443"; ma=86400
+

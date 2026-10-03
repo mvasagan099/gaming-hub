@@ -2,6 +2,7 @@ import { prisma } from "@gaming-hub/db";
 import type { Prisma } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
 import { getCategorySettings } from "./settings";
+import { withDatabaseJobLock } from './databaseJobLock';
 
 export type JobName =
   | "cleanup-expired-coupons"
@@ -90,10 +91,8 @@ async function runTournamentSchedulerJob(): Promise<JobResult> {
   const { runTournamentScheduler } = await import("./tournamentScheduler");
   const { TournamentRecoveryService } = await import("./tournamentRecoveryService");
 
-  const [schedResult, recoveryResult] = await Promise.all([
-    runTournamentScheduler(),
-    TournamentRecoveryService.recoverAllTournamentStates(),
-  ]);
+  const schedResult = await runTournamentScheduler();
+  const recoveryResult = await TournamentRecoveryService.recoverAllTournamentStates();
 
   const processed =
     schedResult.registrationsClosed +
@@ -155,21 +154,7 @@ export async function runJob(jobName: string): Promise<{ ok: boolean; processed:
   }
 
   const lockKey = `job:${jobName}`;
-  let lockAcquired = false;
-
-  try {
-    const lockRows = await prisma.$queryRaw<Array<{ acquired: boolean }>>`
-      SELECT pg_try_advisory_lock(hashtext(${lockKey})) as acquired
-    `;
-    lockAcquired = lockRows[0]?.acquired ?? false;
-  } catch (err) {
-    console.warn(`[runJob] Failed to query PostgreSQL advisory lock for ${jobName}:`, err);
-  }
-
-  if (!lockAcquired) {
-    throw new AppError("INVALID_ACTION", "This job is already running on another instance", 409);
-  }
-
+  return withDatabaseJobLock(lockKey, async () => {
   RUNNING.add(jobName);
   const startedAt = new Date();
 
@@ -200,14 +185,8 @@ export async function runJob(jobName: string): Promise<{ ok: boolean; processed:
     throw error;
   } finally {
     RUNNING.delete(jobName);
-    if (lockAcquired) {
-      try {
-        await prisma.$queryRaw`SELECT pg_advisory_unlock(hashtext(${lockKey}))`;
-      } catch (err) {
-        console.warn(`[runJob] Failed to release PostgreSQL advisory lock for ${jobName}:`, err);
-      }
-    }
   }
+  });
 }
 
 export async function runScheduledJobs(): Promise<void> {

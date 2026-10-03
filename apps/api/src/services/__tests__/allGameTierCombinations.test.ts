@@ -500,8 +500,15 @@ describe("SUITE 7 — Bracket Generation (representative sample)", () => {
       });
 
       await startTournament(id);
-      // buildSingleEliminationBracket returns void; verify via DB
-      await buildSingleEliminationBracket(id);
+      // Starting already builds and links the bracket. A second build must
+      // preserve the active matches rather than delete/recreate their slots.
+      const activeSlots = await prisma.tournamentRound.findMany({
+        where: { tournamentId: id }, orderBy: { id: 'asc' },
+      });
+      await expect(buildSingleEliminationBracket(id)).rejects.toMatchObject({ code: 'INVALID_ACTION' });
+      expect(await prisma.tournamentRound.findMany({
+        where: { tournamentId: id }, orderBy: { id: 'asc' },
+      })).toEqual(activeSlots);
 
       const rounds = await prisma.tournamentRound.count({ where: { tournamentId: id } });
       expect(rounds).toBeGreaterThanOrEqual(3); // 8-player bracket = 3 rounds (R1, R2, Final)

@@ -12,6 +12,7 @@ import {
 import { TournamentMatchService } from "./tournamentMatchService";
 import { TournamentNotificationService } from "./tournamentNotificationService";
 import { scheduleHourlyTournaments } from "./hourlyTournamentScheduler";
+import { withDatabaseJobLock } from "./databaseJobLock";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -20,30 +21,9 @@ import { scheduleHourlyTournaments } from "./hourlyTournamentScheduler";
 const STALE_MATCH_START_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 // ---------------------------------------------------------------------------
-// In-process mutex (replaces unreliable PG advisory lock)
-//
-// WHY: Prisma's connection pool assigns a different Postgres connection on each
-// $queryRaw call.  pg_advisory_lock is session-level — connection A acquires
-// it, returns to the pool, and connection B (different session) then sees the
-// lock as "held by another instance".  The real idempotency guard is the
-// TournamentTierScheduleLog @@unique([tierId, gameId, slotHour]) constraint,
-// so this mutex is only an optimisation to skip redundant work.
+// Lifecycle work is serialized across API processes by a dedicated DB session.
 // ---------------------------------------------------------------------------
 
-let schedulerRunning = false;
-
-function acquireLock(_lockKey: string): boolean {
-  if (schedulerRunning) return false;
-  schedulerRunning = true;
-  return true;
-}
-
-function releaseLock(_lockKey: string): void {
-  schedulerRunning = false;
-}
-
-
-// ---------------------------------------------------------------------------
 // Audit helper
 // ---------------------------------------------------------------------------
 
@@ -689,16 +669,7 @@ export async function runTournamentScheduler(): Promise<SchedulerRunResult> {
     errors: [],
   };
 
-  const lockKey = "tournament:scheduler:global";
-
-  // Try to acquire the in-process lock (prevents concurrent scheduler runs)
-  const locked = acquireLock(lockKey);
-  if (!locked) {
-    console.log("[SCHEDULER] Scheduler already running, skipping");
-    return result;
-  }
-
-  try {
+  return withDatabaseJobLock("tournament:maintenance", async () => {
     // -1. Create hourly tier-based tournaments for the current clock-hour slot
     try {
       const hourlyResult = await scheduleHourlyTournaments();
@@ -799,11 +770,8 @@ export async function runTournamentScheduler(): Promise<SchedulerRunResult> {
     } catch (error) {
       result.errors.push(`sendTournamentStartingReminders: ${error}`);
     }
-  } finally {
-    releaseLock(lockKey);
-  }
-
-  return result;
+    return result;
+  });
 }
 
 // ---------------------------------------------------------------------------

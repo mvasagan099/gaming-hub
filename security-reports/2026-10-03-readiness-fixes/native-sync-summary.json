@@ -1,0 +1,15 @@
+{
+  "scope": "Isolated copy of tracked native project files plus freshly built dist; repository native files not modified; sync is not a signed native build or device smoke test",
+  "results": [
+    {
+      "platform": "android",
+      "exitCode": 0,
+      "durationSeconds": 1.408
+    },
+    {
+      "platform": "ios",
+      "exitCode": 0,
+      "durationSeconds": 1.513
+    }
+  ]
+}
