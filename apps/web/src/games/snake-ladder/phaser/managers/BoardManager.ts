@@ -204,16 +204,16 @@ export default class BoardManager {
       // ── Embossed Tile Numbers ──
       let numColor = "#ffffff";
       let numStroke = "rgba(0,0,0,0.65)";
-      let numFontSize = "15px";
+      let numFontSize = "16.5px";
 
       if (tile === 100) {
         numColor = "#451a03";
         numStroke = "rgba(254, 243, 199, 0.8)";
-        numFontSize = "16px";
+        numFontSize = "18.5px";
       } else if (tile === 1) {
         numColor = "#ffffff";
         numStroke = "rgba(6, 78, 59, 0.9)";
-        numFontSize = "16px";
+        numFontSize = "18.5px";
       }
 
       // Embossed number background drop shadow
@@ -231,7 +231,7 @@ export default class BoardManager {
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
         stroke: numStroke,
-        strokeThickness: 2.5,
+        strokeThickness: 3,
       }).setOrigin(0.5).setDepth(2);
 
       // ── START / FINISH Special Badges ─────────────────────────────────────

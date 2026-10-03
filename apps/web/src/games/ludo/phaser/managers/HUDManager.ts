@@ -2,8 +2,8 @@ import Phaser from "phaser";
 import type { PlayerColor } from "../types/ludo.types";
 import { LUDO_DESIGN_CONFIG, animDuration, prefersReducedMotion } from "../constants";
 
-const PANEL_X = 1000;
-const PANEL_W = 400;
+const PANEL_X = 1080;
+const PANEL_W = 560;
 const PANEL_H = 800;
 
 const ORDERED_COLORS: PlayerColor[] = ["red", "blue", "green", "yellow"];
@@ -62,7 +62,7 @@ export default class HUDManager {
       // ═════════════════════════════════════════════════════════════════════
       // 1. Top Title & Header
       this.scene.add.text(360, 18, "LUDO CHAMPION", {
-        fontSize: "15px",
+        fontSize: "16px",
         color: "#f59e0b",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
@@ -74,35 +74,35 @@ export default class HUDManager {
       this.createSoundToggle(depth, 670, 20);
 
       // Turn Banner at top
-      this.createTurnBanner(depth, 360, 48, 340, 34);
+      this.createTurnBanner(depth, 360, 52, 420, 42);
 
       // Token selection prompt
-      this.createSelectionBanner(360, 48, 340, 34);
+      this.createSelectionBanner(360, 52, 420, 42);
 
-      // Player cards across top (y: 92)
+      // Player cards across top (y: 96)
       this.createPlayerCardsPortrait(totalPlayers, depth);
 
-      // Bottom Control Deck (y: 820..1060)
+      // Bottom Control Deck (y: 826..1060)
       const deckBg = this.scene.add.graphics();
       deckBg.setDepth(depth);
       deckBg.fillStyle(0x000000, 0.45);
-      deckBg.fillRoundedRect(24, 824, 672, 240, 18);
+      deckBg.fillRoundedRect(20, 830, 680, 230, 18);
       deckBg.fillStyle(0x070b14, 0.96);
-      deckBg.fillRoundedRect(24, 820, 672, 240, 18);
+      deckBg.fillRoundedRect(20, 826, 680, 230, 18);
       deckBg.lineStyle(1.5, 0x1e293b, 0.9);
-      deckBg.strokeRoundedRect(24, 820, 672, 240, 18);
+      deckBg.strokeRoundedRect(20, 826, 680, 230, 18);
 
       // Dice Area Title
-      this.scene.add.text(185, 836, "DICE CONTROLLER", {
-        fontSize: "11px",
+      this.scene.add.text(182, 844, "DICE CONTROLLER", {
+        fontSize: "13px",
         color: "#64748b",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
       }).setOrigin(0.5).setDepth(depth + 1);
 
       // Action Log Title
-      this.scene.add.text(515, 836, "ACTION LOG", {
-        fontSize: "11px",
+      this.scene.add.text(518, 844, "ACTION LOG", {
+        fontSize: "13px",
         color: "#64748b",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
@@ -112,20 +112,20 @@ export default class HUDManager {
       const logGfx = this.scene.add.graphics();
       logGfx.setDepth(depth);
       logGfx.fillStyle(0x020617, 0.95);
-      logGfx.fillRoundedRect(360, 856, 310, 188, 10);
+      logGfx.fillRoundedRect(355, 860, 325, 184, 12);
       logGfx.lineStyle(1.2, 0x1e293b, 0.8);
-      logGfx.strokeRoundedRect(360, 856, 310, 188, 10);
+      logGfx.strokeRoundedRect(355, 860, 325, 184, 12);
 
       for (let i = 0; i < HUDManager.MAX_LOG; i++) {
         const t = this.scene.add.text(
-          372,
-          868 + i * 24,
+          368,
+          874 + i * 26,
           "",
           {
-            fontSize: "11px",
+            fontSize: "12px",
             color: "#94a3b8",
             fontFamily: "Outfit, sans-serif",
-            wordWrap: { width: 285 },
+            wordWrap: { width: 300 },
           },
         ).setDepth(depth + 1);
         this.logLines.push(t);
@@ -133,9 +133,9 @@ export default class HUDManager {
 
     } else {
       // ═════════════════════════════════════════════════════════════════════
-      // LANDSCAPE DESKTOP HUD (Canvas: 1200 x 800)
+      // LANDSCAPE DESKTOP HUD (Canvas: 1360 x 800)
       // ═════════════════════════════════════════════════════════════════════
-      // 1. Sidebar Background Panel
+      // 1. Sidebar Background Panel (x: 800..1360, width 560, center 1080)
       const bg = this.scene.add.graphics();
       bg.setDepth(depth);
       bg.fillStyle(0x070b14, 0.98);
@@ -144,30 +144,30 @@ export default class HUDManager {
       bg.lineBetween(PANEL_X - PANEL_W / 2, 0, PANEL_X - PANEL_W / 2, PANEL_H);
       bg.strokeRoundedRect(PANEL_X - PANEL_W / 2, 0, PANEL_W, PANEL_H, { tl: 0, tr: 20, bl: 0, br: 20 });
 
-      // 2. Game Title & Header
-      this.scene.add.text(PANEL_X - 25, 26, "LUDO CHAMPION", {
-        fontSize: "23px",
+      // 2. Game Title & Header (Centered in 560px panel)
+      this.scene.add.text(PANEL_X, 28, "LUDO CHAMPION", {
+        fontSize: "26px",
         color: "#f59e0b",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
-        letterSpacing: 2.5,
+        letterSpacing: 3,
         shadow: {
           offsetX: 0,
           offsetY: 2,
           color: "#d9770655",
-          blur: 8,
+          blur: 10,
           fill: true,
         },
       }).setOrigin(0.5).setDepth(depth + 1);
 
-      // 3. Sound Toggle Button
-      this.createSoundToggle(depth, PANEL_X + 155, 26);
+      // 3. Sound Toggle Button (Positioned at panel right margin)
+      this.createSoundToggle(depth, PANEL_X + 235, 28);
 
-      // 4. Modern Floating Turn Banner
-      this.createTurnBanner(depth, PANEL_X, 80, 360, 54);
+      // 4. Modern Floating Turn Banner (Centered, exactly 490px wide)
+      this.createTurnBanner(depth, PANEL_X, 74, 490, 52);
 
       // 5. Floating Token Selection Prompt
-      this.createSelectionBanner(400, 36, 340, 40);
+      this.createSelectionBanner(400, 36, 360, 42);
 
       // 6. Modern Player HUD Cards
       this.createPlayerCardsLandscape(totalPlayers, depth);
@@ -183,22 +183,16 @@ export default class HUDManager {
     this.soundBtnGfx = this.scene.add.graphics();
     this.drawSoundBtn(true);
 
-    this.soundIconText = this.scene.add.text(0, 0, "🔊", {
-      fontSize: "15px",
-    }).setOrigin(0.5);
-
-    const hit = this.scene.add.rectangle(0, 0, 36, 36, 0xffffff, 0);
+    const hit = this.scene.add.circle(0, 0, 18, 0xffffff, 0);
     hit.setInteractive({ useHandCursor: true });
     hit.on("pointerdown", () => {
       this.soundOn = !this.soundOn;
-      this.soundIconText.setText(this.soundOn ? "🔊" : "🔇");
       this.drawSoundBtn(this.soundOn);
       this.onSoundToggle?.();
     });
 
     this.soundBtnContainer = this.scene.add.container(btnX, btnY, [
       this.soundBtnGfx,
-      this.soundIconText,
       hit,
     ]);
     this.soundBtnContainer.setDepth(depth + 2);
@@ -206,10 +200,31 @@ export default class HUDManager {
 
   private drawSoundBtn(active: boolean): void {
     this.soundBtnGfx.clear();
+    // Glass base
     this.soundBtnGfx.fillStyle(0x0f172a, 0.95);
     this.soundBtnGfx.fillCircle(0, 0, 16);
     this.soundBtnGfx.lineStyle(1.8, active ? 0xf59e0b : 0x475569, 0.9);
     this.soundBtnGfx.strokeCircle(0, 0, 16);
+
+    // Vector speaker cone
+    const iconColor = active ? 0xe2e8f0 : 0x64748b;
+    this.soundBtnGfx.fillStyle(iconColor, 1);
+    this.soundBtnGfx.fillRect(-8, -4, 4, 8);
+    this.soundBtnGfx.fillTriangle(-4, -4, 0, -8, 0, 8);
+    this.soundBtnGfx.fillRect(-4, -4, 2, 8);
+
+    if (active) {
+      this.soundBtnGfx.lineStyle(1.8, iconColor, 0.9);
+      this.soundBtnGfx.beginPath();
+      this.soundBtnGfx.arc(1, 0, 6, -Math.PI / 3.5, Math.PI / 3.5, false);
+      this.soundBtnGfx.strokePath();
+      this.soundBtnGfx.beginPath();
+      this.soundBtnGfx.arc(1, 0, 10, -Math.PI / 3.5, Math.PI / 3.5, false);
+      this.soundBtnGfx.strokePath();
+    } else {
+      this.soundBtnGfx.lineStyle(2, 0xef4444, 0.95);
+      this.soundBtnGfx.lineBetween(-7, -7, 7, 7);
+    }
   }
 
   setSoundToggleCallback(cb: () => void): void {
@@ -222,16 +237,16 @@ export default class HUDManager {
     this.turnBannerBg = this.scene.add.graphics();
     this.drawTurnBannerBg(0x7c3aed, w, h);
 
-    this.turnBannerText = this.scene.add.text(0, -8, "WAITING...", {
-      fontSize: this.isPortrait ? "13px" : "18px",
+    this.turnBannerText = this.scene.add.text(0, -7, "WAITING...", {
+      fontSize: this.isPortrait ? "15px" : "20px",
       color: "#ffffff",
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
-      letterSpacing: this.isPortrait ? 0 : 0.8,
+      letterSpacing: this.isPortrait ? 0 : 1.2,
     }).setOrigin(0.5);
 
-    this.turnSubText = this.scene.add.text(0, this.isPortrait ? 7 : 12, "Match starting", {
-      fontSize: this.isPortrait ? "10px" : "13.5px",
+    this.turnSubText = this.scene.add.text(0, this.isPortrait ? 9 : 12, "Match starting", {
+      fontSize: this.isPortrait ? "11px" : "13.5px",
       color: "#cbd5e1",
       fontFamily: "Outfit, sans-serif",
     }).setOrigin(0.5);
@@ -244,9 +259,9 @@ export default class HUDManager {
     this.turnBannerContainer.setDepth(depth + 1);
   }
 
-  private drawTurnBannerBg(color: number, w = this.isPortrait ? 340 : 360, h = this.isPortrait ? 34 : 54): void {
+  private drawTurnBannerBg(color: number, w = this.isPortrait ? 420 : 490, h = this.isPortrait ? 42 : 56): void {
     this.turnBannerBg.clear();
-    const r = 12;
+    const r = 14;
 
     this.turnBannerBg.fillStyle(0x000000, 0.3);
     this.turnBannerBg.fillRoundedRect(-w / 2 + 2, -h / 2 + 3, w, h, r);
@@ -257,16 +272,16 @@ export default class HUDManager {
     this.turnBannerBg.fillStyle(color, 0.15);
     this.turnBannerBg.fillRoundedRect(-w / 2, -h / 2, w, h, r);
 
-    this.turnBannerBg.lineStyle(1.8, color, 0.9);
+    this.turnBannerBg.lineStyle(2, color, 0.9);
     this.turnBannerBg.strokeRoundedRect(-w / 2, -h / 2, w, h, r);
 
-    this.turnBannerBg.fillStyle(0xffffff, 0.12);
+    this.turnBannerBg.fillStyle(0xffffff, 0.15);
     this.turnBannerBg.fillRoundedRect(-w / 2, -h / 2, w, 4, { tl: r, tr: r, bl: 0, br: 0 });
   }
 
   // ─── Selection Banner ───────────────────────────────────────────────────────
 
-  private createSelectionBanner(bx = 400, by = 36, w = 304, h = 36): void {
+  private createSelectionBanner(bx = 400, by = 36, w = 360, h = 42): void {
     const bannerBg = this.scene.add.graphics();
     bannerBg.fillStyle(0xd97706, 1);
     bannerBg.fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
@@ -274,7 +289,7 @@ export default class HUDManager {
     bannerBg.strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2);
 
     this.selectionBannerText = this.scene.add.text(0, 0, "TAP A HIGHLIGHTED TOKEN TO MOVE!", {
-      fontSize: "14px",
+      fontSize: "15px",
       color: "#ffffff",
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
@@ -402,10 +417,10 @@ export default class HUDManager {
   private createPlayerCardsLandscape(totalPlayers: number, depth: number): void {
     const isTwoPlayer = totalPlayers <= 2;
     const cardH = isTwoPlayer ? 76 : 62;
-    const gap = isTwoPlayer ? 90 : 68;
-    const startY = isTwoPlayer ? 336 : 322;
-    const cardW = 360;
-    const avatarX = -146;
+    const gap = isTwoPlayer ? 92 : 72;
+    const startY = isTwoPlayer ? 344 : 336;
+    const cardW = 490;
+    const avatarX = -195;
 
     for (let i = 0; i < totalPlayers; i++) {
       const cy = startY + i * gap;
@@ -423,39 +438,39 @@ export default class HUDManager {
       this.drawPlayerCardGraphics(cardBg, avatarRing, avatarGlow, c.main, false, geom);
 
       // Player circle icon
-      const dot = this.scene.add.circle(avatarX, 0, 14, c.main);
-      dot.setStrokeStyle(1.8, 0xffffff);
+      const dot = this.scene.add.circle(avatarX, 0, 16, c.main);
+      dot.setStrokeStyle(2, 0xffffff);
 
       // Player Name
       const defaultName = i === 0 ? "Player 1 (You)" : `Player ${i + 1} (AI)`;
-      const nameTxt = this.scene.add.text(avatarX + 26, isTwoPlayer ? -18 : -14, defaultName, {
-        fontSize: isTwoPlayer ? "17px" : "15px",
+      const nameTxt = this.scene.add.text(avatarX + 30, isTwoPlayer ? -18 : -14, defaultName, {
+        fontSize: isTwoPlayer ? "19px" : "16px",
         color: "#ffffff",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
       });
 
       // Progress text
-      const progTxt = this.scene.add.text(avatarX + 26, isTwoPlayer ? 4 : 2, "Home: 0 / 4", {
-        fontSize: isTwoPlayer ? "13.5px" : "12px",
+      const progTxt = this.scene.add.text(avatarX + 30, isTwoPlayer ? 6 : 4, "Home: 0 / 4", {
+        fontSize: isTwoPlayer ? "14px" : "12.5px",
         color: "#94a3b8",
         fontFamily: "Outfit, sans-serif",
       });
 
       // 4 Progress Token Pips
       const pips: Phaser.GameObjects.Arc[] = [];
-      const pipStartX = 48;
-      const pipSpacing = 18;
-      const pipRadius = isTwoPlayer ? 5.5 : 4.5;
+      const pipStartX = 55;
+      const pipSpacing = 26;
+      const pipRadius = isTwoPlayer ? 6 : 5;
       for (let p = 0; p < 4; p++) {
         const pip = this.scene.add.circle(pipStartX + p * pipSpacing, isTwoPlayer ? 3 : 2, pipRadius, 0x1e293b);
-        pip.setStrokeStyle(1.2, c.main, 0.7);
+        pip.setStrokeStyle(1.4, c.main, 0.7);
         pips.push(pip);
       }
 
       // Token count text
-      const tokCount = this.scene.add.text(142, isTwoPlayer ? -6 : -5, "0", {
-        fontSize: isTwoPlayer ? "21px" : "17px",
+      const tokCount = this.scene.add.text(195, isTwoPlayer ? -1 : -1, "0", {
+        fontSize: isTwoPlayer ? "24px" : "20px",
         color: "#" + c.main.toString(16).padStart(6, "0"),
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
@@ -500,7 +515,7 @@ export default class HUDManager {
     avatarGlow.clear();
 
     const { w, h, avatarX } = geom;
-    const r = 12;
+    const r = 14;
 
     // Drop shadow
     cardBg.fillStyle(0x000000, 0.25);
@@ -524,8 +539,8 @@ export default class HUDManager {
       cardBg.fillRoundedRect(-w / 2, -h / 2, w, 3.5, { tl: r, tr: r, bl: 0, br: 0 });
 
       // Avatar active glowing ring
-      const glowR = w > 250 ? 20 : 15;
-      const ringR = w > 250 ? 16.5 : 12.5;
+      const glowR = w > 400 ? 25 : (w > 250 ? 20 : 15);
+      const ringR = w > 400 ? 21 : (w > 250 ? 16.5 : 12.5);
       avatarGlow.fillStyle(color, 0.35);
       avatarGlow.fillCircle(avatarX, 0, glowR);
 
@@ -542,21 +557,19 @@ export default class HUDManager {
 
   private createActionLogLandscape(totalPlayers: number, depth: number): void {
     const isTwoPlayer = totalPlayers <= 2;
-    const gap = isTwoPlayer ? 90 : 68;
-    const startY = isTwoPlayer ? 336 : 322;
-    const logHeaderY = startY + totalPlayers * gap + (isTwoPlayer ? 10 : 6);
+    const logHeaderY = isTwoPlayer ? 506 : 614;
 
     this.scene.add.text(PANEL_X, logHeaderY, "ACTION LOG", {
-      fontSize: "14px",
+      fontSize: "15px",
       color: "#94a3b8",
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
       letterSpacing: 2,
     }).setOrigin(0.5).setDepth(depth + 1);
 
-    const logBoxY = logHeaderY + 14;
-    const logBoxH = isTwoPlayer ? 210 : 150;
-    const logBoxW = 360;
+    const logBoxY = isTwoPlayer ? 524 : 630;
+    const logBoxH = isTwoPlayer ? 246 : 140;
+    const logBoxW = 490;
 
     const logGfx = this.scene.add.graphics();
     logGfx.setDepth(depth);
@@ -565,17 +578,18 @@ export default class HUDManager {
     logGfx.lineStyle(1.4, 0x1e293b, 0.9);
     logGfx.strokeRoundedRect(PANEL_X - logBoxW / 2, logBoxY, logBoxW, logBoxH, 12);
 
-    const lineGap = isTwoPlayer ? 28 : 21;
-    for (let i = 0; i < HUDManager.MAX_LOG; i++) {
+    const lineGap = isTwoPlayer ? 34 : 25;
+    const numLines = isTwoPlayer ? 6 : 4;
+    for (let i = 0; i < numLines; i++) {
       const t = this.scene.add.text(
-        PANEL_X - logBoxW / 2 + 16,
-        logBoxY + 14 + i * lineGap,
-        "",
+        PANEL_X - logBoxW / 2 + 20,
+        logBoxY + 16 + i * lineGap,
+        i === 0 ? "Match started. Roll the dice to begin!" : "",
         {
           fontSize: isTwoPlayer ? "14px" : "12.5px",
-          color: "#94a3b8",
+          color: i === 0 ? "#64748b" : "#94a3b8",
           fontFamily: "Outfit, sans-serif",
-          wordWrap: { width: logBoxW - 32 },
+          wordWrap: { width: logBoxW - 40 },
         },
       ).setDepth(depth + 1);
       this.logLines.push(t);
@@ -603,10 +617,12 @@ export default class HUDManager {
         const pName = card ? card.nameText.text : `Player ${playerIndex + 1}`;
 
         if (isMyTurn) {
-          this.turnBannerText.setText("🟢 YOUR TURN");
+          this.turnBannerText.setText("YOUR TURN");
+          this.turnBannerText.setColor("#4ade80");
           this.turnSubText.setText("Roll the dice");
         } else {
           this.turnBannerText.setText(`${pName.toUpperCase()}`);
+          this.turnBannerText.setColor("#ffffff");
           this.turnSubText.setText("Rolling dice...");
         }
 

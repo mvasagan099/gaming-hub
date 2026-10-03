@@ -52,7 +52,7 @@ export default class LudoScene extends Phaser.Scene {
       mode,
     };
 
-    const canvasW = isPortrait ? 720 : 1200;
+    const canvasW = isPortrait ? 720 : 1360;
     const canvasH = isPortrait ? 1080 : 800;
 
     // 0. Ambient backdrop lighting
@@ -64,7 +64,7 @@ export default class LudoScene extends Phaser.Scene {
     bgG.fillCircle(isPortrait ? 360 : 400, isPortrait ? 470 : 400, isPortrait ? 330 : 380);
     if (!isPortrait) {
       bgG.fillStyle(0x312e81, 0.15);
-      bgG.fillCircle(1000, 400, 320);
+      bgG.fillCircle(1080, 400, 360);
     }
 
     // 1. Audio & Particles
@@ -117,7 +117,7 @@ export default class LudoScene extends Phaser.Scene {
 
     // 7. Dice
     this.dice = new DiceManager(this);
-    this.dice.create(isPortrait ? 185 : 1000, isPortrait ? 945 : 205, isPortrait);
+    this.dice.create(isPortrait ? 182 : 1080, isPortrait ? 945 : 198, isPortrait);
 
     // 8. Feedback Text
     this.feedback = new FeedbackText(this);

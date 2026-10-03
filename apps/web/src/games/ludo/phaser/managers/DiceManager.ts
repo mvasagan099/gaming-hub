@@ -14,6 +14,8 @@ const DOT_PATTERNS: Array<Array<[number, number]>> = [
 export default class DiceManager {
   private scene: Phaser.Scene;
   private container!: Phaser.GameObjects.Container;
+  private diceContainer!: Phaser.GameObjects.Container;
+  private btnContainer!: Phaser.GameObjects.Container;
   private diceGfx!: Phaser.GameObjects.Graphics;
   private hitArea!: Phaser.GameObjects.Rectangle;
   private rollBtnGfx!: Phaser.GameObjects.Graphics;
@@ -32,41 +34,47 @@ export default class DiceManager {
     this.scene = scene;
   }
 
-  create(x = 1000, y = 205, isPortrait = false): void {
+  create(x = 1080, y = 198, isPortrait = false): void {
     this.isPortrait = isPortrait;
     this.diceGfx = this.scene.add.graphics();
     this.draw3DDice(this.value);
 
     // Invisible click target over dice cube
-    const cubeHit = this.isPortrait ? 80 : 104;
-    const cubeCy = this.isPortrait ? -18 : -22;
-    this.hitArea = this.scene.add.rectangle(0, cubeCy, cubeHit, cubeHit, 0xffffff, 0);
+    const s = this.isPortrait ? 36 : 40;
+    const cubeCy = this.isPortrait ? -24 : -30;
+    const cubeHit = s * 2 + 16;
+    this.hitArea = this.scene.add.rectangle(0, 0, cubeHit, cubeHit, 0xffffff, 0);
     this.hitArea.setInteractive({ useHandCursor: true });
     this.hitArea.on("pointerdown", () => this.handlePointerDown());
     this.hitArea.on("pointerover", () => {
       if (this.enabled) {
-        this.scene.tweens.add({ targets: this.container, scaleX: 1.05, scaleY: 1.05, duration: 100 });
+        this.scene.tweens.add({ targets: this.diceContainer, scaleX: 1.05, scaleY: 1.05, duration: 100 });
       }
     });
     this.hitArea.on("pointerout", () => {
-      this.scene.tweens.add({ targets: this.container, scaleX: 1, scaleY: 1, duration: 100 });
+      this.scene.tweens.add({ targets: this.diceContainer, scaleX: 1, scaleY: 1, duration: 100 });
     });
 
-    // ─── Modern Tactile Roll Button ───────────────────────────────────────────
+    this.diceContainer = this.scene.add.container(0, cubeCy, [
+      this.diceGfx,
+      this.hitArea,
+    ]);
+
+    // ─── Modern Tactile Roll Button (Isolated in dedicated button container) ────
     this.rollBtnGfx = this.scene.add.graphics();
     this.drawButton(true, "active");
 
-    const btnW = this.isPortrait ? 172 : 320;
-    const btnH = this.isPortrait ? 42 : 54;
-    const btnY = this.isPortrait ? 48 : 56;
-    const btnHit = this.scene.add.rectangle(0, btnY, btnW, btnH, 0xffffff, 0);
+    const btnW = this.isPortrait ? 240 : 490;
+    const btnH = this.isPortrait ? 46 : 50;
+    const btnY = this.isPortrait ? 54 : 56;
+    const btnHit = this.scene.add.rectangle(0, 0, btnW, btnH, 0xffffff, 0);
     btnHit.setInteractive({ useHandCursor: true });
     btnHit.on("pointerdown", () => {
-      // Press micro-animation
+      // Button press micro-animation only on the button
       this.scene.tweens.add({
-        targets: this.container,
-        scaleX: 0.96,
-        scaleY: 0.96,
+        targets: this.btnContainer,
+        scaleX: 0.97,
+        scaleY: 0.97,
         duration: 60,
         yoyo: true,
       });
@@ -79,12 +87,12 @@ export default class DiceManager {
       if (this.enabled) this.drawButton(true, "active");
     });
 
-    this.rollLabel = this.scene.add.text(0, btnY, "ROLL DICE", {
-      fontSize: this.isPortrait ? "14px" : "20px",
+    this.rollLabel = this.scene.add.text(0, 0, "ROLL DICE", {
+      fontSize: this.isPortrait ? "15px" : "20px",
       color: "#ffffff",
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
-      letterSpacing: this.isPortrait ? 0 : 1.5,
+      letterSpacing: this.isPortrait ? 0.5 : 2,
       shadow: {
         offsetX: 0,
         offsetY: 1,
@@ -94,12 +102,15 @@ export default class DiceManager {
       },
     }).setOrigin(0.5);
 
-    this.container = this.scene.add.container(x, y, [
-      this.diceGfx,
-      this.hitArea,
+    this.btnContainer = this.scene.add.container(0, btnY, [
       this.rollBtnGfx,
       btnHit,
       this.rollLabel,
+    ]);
+
+    this.container = this.scene.add.container(x, y, [
+      this.diceContainer,
+      this.btnContainer,
     ]);
     this.container.setDepth(100);
 
@@ -118,11 +129,11 @@ export default class DiceManager {
 
   private draw3DDice(face: number, isGoldenSix = false, tiltX = 0, tiltY = 0): void {
     this.diceGfx.clear();
-    const s = this.isPortrait ? 34 : 44; // Half-size of dice cube
-    const r = this.isPortrait ? 10 : 12;
-    const dotR = this.isPortrait ? 5.2 : 6.5;
-    const cy = this.isPortrait ? -18 : -22;
-    const dotSpacing = this.isPortrait ? 12 : 16;
+    const s = this.isPortrait ? 36 : 40; // Half-size of dice cube
+    const r = this.isPortrait ? 11 : 12;
+    const dotR = this.isPortrait ? 5.2 : 6.2;
+    const cy = 0;
+    const dotSpacing = this.isPortrait ? 13 : 15;
 
     // 1. Soft 3D Ambient Drop Shadow under cube
     this.diceGfx.fillStyle(0x000000, 0.35);
@@ -173,10 +184,10 @@ export default class DiceManager {
 
   private drawButton(enabled: boolean, state: "active" | "hover" | "disabled" | "select"): void {
     this.rollBtnGfx.clear();
-    const w = this.isPortrait ? 172 : 320;
-    const h = this.isPortrait ? 42 : 54;
-    const y = this.isPortrait ? 48 : 56;
-    const r = this.isPortrait ? 12 : 16;
+    const w = this.isPortrait ? 240 : 490;
+    const h = this.isPortrait ? 46 : 50;
+    const y = 0;
+    const r = this.isPortrait ? 10 : 14;
 
     // Drop shadow
     this.rollBtnGfx.fillStyle(0x000000, 0.25);
@@ -271,9 +282,9 @@ export default class DiceManager {
 
   private flashSelectHint(): void {
     this.scene.tweens.add({
-      targets: this.container,
-      scaleX: 1.10,
-      scaleY: 1.10,
+      targets: this.btnContainer,
+      scaleX: 1.05,
+      scaleY: 1.05,
       duration: animDuration(90),
       yoyo: true,
       ease: "Sine.InOut",
@@ -332,10 +343,10 @@ export default class DiceManager {
       const tiltY = (count % 3 === 0 ? 1 : -1) * 2;
       this.draw3DDice(temp, false, tiltX, tiltY);
 
-      // 3D rotation wobble during tumble
+      // 3D rotation wobble on dice cube only during tumble
       if (!reduced) {
         this.scene.tweens.add({
-          targets: this.container,
+          targets: this.diceContainer,
           scaleX: count % 2 === 0 ? 1.08 : 0.94,
           scaleY: count % 2 === 0 ? 0.94 : 1.08,
           angle: count % 2 === 0 ? ANIM.diceRotationAmount * 180 : -ANIM.diceRotationAmount * 180,
@@ -358,9 +369,9 @@ export default class DiceManager {
     const isSix = this.value === 6;
     this.draw3DDice(this.value, isSix, 0, 0);
 
-    // Celebratory landing bounce with scale pop
+    // Celebratory landing bounce with scale pop on dice cube only
     this.scene.tweens.add({
-      targets: this.container,
+      targets: this.diceContainer,
       scaleX: ANIM.diceLandingScale,
       scaleY: ANIM.diceLandingScale,
       angle: 0,
@@ -368,7 +379,7 @@ export default class DiceManager {
       ease: "Back.Out",
       yoyo: true,
       onComplete: () => {
-        this.container.setScale(1).setAngle(0);
+        this.diceContainer.setScale(1).setAngle(0);
         this.rolling = false;
         this.scene.events.emit(LudoEvents.DICE_ROLLED, this.value);
         if (this.onRollCompleteCb) {
@@ -387,6 +398,7 @@ export default class DiceManager {
     this.rolling = false;
     this.value = 1;
     this.draw3DDice(1);
+    this.diceContainer.setScale(1).setAngle(0);
     this.enable();
   }
 

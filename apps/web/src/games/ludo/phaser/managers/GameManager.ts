@@ -120,8 +120,8 @@ export default class GameManager {
 
     // Dice feedback
     const isPortrait = this.scene.scale.height > this.scene.scale.width;
-    const diceFeedbackX = isPortrait ? 185 : 1000;
-    const diceFeedbackY = isPortrait ? 900 : 185;
+    const diceFeedbackX = isPortrait ? 182 : 1080;
+    const diceFeedbackY = isPortrait ? 900 : 195;
 
     if (this.feedback) {
       this.feedback.diceResult(value, diceFeedbackX, diceFeedbackY);

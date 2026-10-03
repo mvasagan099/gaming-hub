@@ -20,14 +20,16 @@ export default function PhaserGame({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
 
-  const [isPortrait, setIsPortrait] = useState(() => {
+  const checkIsPortrait = () => {
     if (typeof window === "undefined") return false;
-    return window.innerWidth < 768 && window.innerHeight > window.innerWidth;
-  });
+    return window.innerHeight > window.innerWidth || window.innerWidth < 800;
+  };
+
+  const [isPortrait, setIsPortrait] = useState(checkIsPortrait);
 
   useEffect(() => {
     const handleResize = () => {
-      const portrait = window.innerWidth < 768 && window.innerHeight > window.innerWidth;
+      const portrait = checkIsPortrait();
       setIsPortrait((prev) => (prev !== portrait ? portrait : prev));
     };
     window.addEventListener("resize", handleResize);
@@ -49,7 +51,7 @@ export default function PhaserGame({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const gameWidth = isPortrait ? 720 : 1200;
+    const gameWidth = isPortrait ? 720 : 1360;
     const gameHeight = isPortrait ? 1080 : 800;
 
     const config: Phaser.Types.Core.GameConfig = {
@@ -99,8 +101,8 @@ export default function PhaserGame({
     <div
       className={`relative mx-auto w-full ${
         isPortrait
-          ? "max-w-[min(98vw,720px)] aspect-[720/1080] max-h-[calc(100dvh-5.5rem)]"
-          : "max-w-[min(98vw,calc((100dvh-5rem)*1.5),1440px)] aspect-[1200/800] max-h-[calc(100dvh-4.5rem)]"
+          ? "max-w-[min(98vw,520px)] aspect-[720/1080] max-h-[calc(100dvh-5.5rem)]"
+          : "max-w-[min(98vw,calc((100dvh-5rem)*1.7),1560px)] aspect-[1360/800] max-h-[calc(100dvh-4.5rem)]"
       } h-auto rounded-2xl overflow-hidden border border-slate-700/50 shadow-2xl flex justify-center items-center backdrop-blur-md`}
     >
       {/* Subtle ambient lighting flares behind the board */}

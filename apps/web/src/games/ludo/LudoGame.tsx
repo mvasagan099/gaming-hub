@@ -45,8 +45,8 @@ export const LudoGame: React.FC<LudoGameProps> = ({ mode: initialMode, stake, on
   if (isPlaying) {
     return (
       <GameWrapper title="Ludo Champion" gameId="ludo" mode={initialMode} stake={stake} onBack={onBack} isFullscreen>
-        <div className="relative flex flex-col lg:flex-row items-center justify-center gap-4 w-full h-full p-0 sm:p-2">
-          <div className="flex flex-col items-center gap-4 w-full h-full justify-center overflow-hidden">
+        <div className="relative flex flex-col lg:flex-row items-center justify-center gap-2 sm:gap-4 w-full h-full p-0 sm:p-2">
+          <div className="flex flex-col items-center gap-2 sm:gap-4 w-full h-full justify-center overflow-hidden">
             <LudoPhaserGame
               mode={playMode}
               players={onlinePlayers}
@@ -57,9 +57,9 @@ export const LudoGame: React.FC<LudoGameProps> = ({ mode: initialMode, stake, on
             {!isMultiplayer && (
               <button
                 onClick={handleReplay}
-                className="px-6 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-bold text-rose-400 text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg transition-all hover:scale-105 active:scale-95"
+                className="px-4 sm:px-6 py-2 sm:py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-bold text-rose-400 text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg transition-all hover:scale-105 active:scale-95"
               >
-                <RefreshCcw className="w-4 h-4" /> Reset Match
+                <RefreshCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Reset Match
               </button>
             )}
           </div>

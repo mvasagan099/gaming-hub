@@ -18,6 +18,7 @@ const DICE_CORNER_RADIUS = 12;
 export default class DiceManager {
   private scene: Phaser.Scene;
   private container!: Phaser.GameObjects.Container;
+  private diceContainer!: Phaser.GameObjects.Container;
   private diceGraphics!: Phaser.GameObjects.Graphics;
   private valueText!: Phaser.GameObjects.Text;
   private rollBtn!: Phaser.GameObjects.Graphics;
@@ -32,44 +33,51 @@ export default class DiceManager {
     this.scene = scene;
   }
 
-  create(x = 1000, y = 210, isPortrait = false): void {
+  create(x = 1080, y = 198, isPortrait = false): void {
     this.isPortrait = isPortrait;
     const reduced = prefersReducedMotion();
 
-    // ── 3D Dice Face Graphics ──────────────────────────────────
+    // ── 3D Dice Face Graphics & Dedicated Tumbling Container ────
     this.diceGraphics = this.scene.add.graphics();
     this.draw3DDiceFace(this.value);
 
     // Hit area for clicking directly on the 3D dice
-    const s = this.isPortrait ? 36 : 44;
-    const cubeCy = this.isPortrait ? -18 : -22;
-    const diceHitArea = this.scene.add.rectangle(0, cubeCy, s * 2 + 16, s * 2 + 16, 0xffffff, 0);
+    const s = this.isPortrait ? 36 : 40;
+    const cubeCy = this.isPortrait ? -24 : -30;
+    const diceHitArea = this.scene.add.rectangle(0, 0, s * 2 + 16, s * 2 + 16, 0xffffff, 0);
     diceHitArea.setInteractive({ useHandCursor: true });
     diceHitArea.on("pointerdown", () => this.roll());
     diceHitArea.on("pointerover", () => {
       if (this.enabled && !reduced) {
-        this.scene.tweens.add({ targets: this.container, scale: 1.05, duration: 100 });
+        this.scene.tweens.add({ targets: this.diceContainer, scale: 1.05, duration: 100 });
       }
     });
     diceHitArea.on("pointerout", () => {
       if (!reduced) {
-        this.scene.tweens.add({ targets: this.container, scale: 1.0, duration: 100 });
+        this.scene.tweens.add({ targets: this.diceContainer, scale: 1.0, duration: 100 });
       }
     });
 
     // Hidden value text
-    this.valueText = this.scene.add.text(0, cubeCy, "", {
+    this.valueText = this.scene.add.text(0, 0, "", {
       fontSize: "0px",
       color: "#000000",
     }).setOrigin(0.5).setDepth(0);
 
-    // ── Physical 3D Push Button ─────────────────────────────────────────
+    // Dedicated dice cube container that tumbles and rotates without affecting the roll button
+    this.diceContainer = this.scene.add.container(0, cubeCy, [
+      this.diceGraphics,
+      diceHitArea,
+      this.valueText,
+    ]);
+
+    // ── Physical 3D Push Button (Stationary) ─────────────────────────
     this.rollBtn = this.scene.add.graphics();
     this.draw3DRollButton(false, false);
 
-    const btnW = this.isPortrait ? 172 : 320;
-    const btnH = this.isPortrait ? 44 : 54;
-    const btnCenterY = this.isPortrait ? 50 : 58;
+    const btnW = this.isPortrait ? 240 : 490;
+    const btnH = this.isPortrait ? 46 : 50;
+    const btnCenterY = this.isPortrait ? 54 : 56;
     const btnHitArea = this.scene.add.rectangle(0, btnCenterY, btnW, btnH, 0xffffff, 0);
     btnHitArea.setInteractive({ useHandCursor: true });
     btnHitArea.on("pointerdown", () => {
@@ -87,19 +95,17 @@ export default class DiceManager {
     });
 
     this.rollBtnLabel = this.scene.add.text(0, btnCenterY, "ROLL DICE", {
-      fontSize: this.isPortrait ? "14px" : "20px",
+      fontSize: this.isPortrait ? "15px" : "20px",
       color: "#ffffff",
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
-      letterSpacing: this.isPortrait ? 0 : 1.5,
+      letterSpacing: this.isPortrait ? 0.5 : 2,
       stroke: "#1e1b4b",
       strokeThickness: 2,
     }).setOrigin(0.5);
 
     this.container = this.scene.add.container(x, y, [
-      this.diceGraphics,
-      diceHitArea,
-      this.valueText,
+      this.diceContainer,
       this.rollBtn,
       btnHitArea,
       this.rollBtnLabel,
@@ -109,12 +115,12 @@ export default class DiceManager {
   }
 
   private getButtonDims(pressed = false) {
-    const btnW = this.isPortrait ? 172 : 320;
-    const btnH = this.isPortrait ? 44 : 54;
+    const btnW = this.isPortrait ? 240 : 490;
+    const btnH = this.isPortrait ? 46 : 50;
     const bx = -btnW / 2;
-    const by = (this.isPortrait ? 28 : 31) + (pressed ? 3 : 0);
+    const by = 31 + (pressed ? 3 : 0);
     const r = this.isPortrait ? 10 : 14;
-    const depth = pressed ? 2 : (this.isPortrait ? 5 : 6);
+    const depth = pressed ? 2 : (this.isPortrait ? 4 : 5);
     return { btnW, btnH, bx, by, r, depth };
   }
 
@@ -167,11 +173,11 @@ export default class DiceManager {
   /** Draw 3D physical cube dice with inset pips and bevel highlights */
   private draw3DDiceFace(face: number): void {
     this.diceGraphics.clear();
-    const s = this.isPortrait ? 36 : 44;
-    const r = this.isPortrait ? 12 : 14;
-    const cy = this.isPortrait ? -18 : -22;
+    const s = this.isPortrait ? 36 : 40;
+    const r = this.isPortrait ? 11 : 12;
+    const cy = 0;
     const depth = this.isPortrait ? 6 : 7;
-    const dotSpacingRatio = this.isPortrait ? 1.0 : (16 / 13);
+    const dotSpacingRatio = this.isPortrait ? 1.0 : (15 / 13);
 
     // ── 1. Soft Ambient Ground Shadow ──
     this.diceGraphics.fillStyle(0x000000, 0.2);
@@ -210,7 +216,7 @@ export default class DiceManager {
     for (const [dx, dy] of dots) {
       const pipX = dx * dotSpacingRatio;
       const pipY = dy * dotSpacingRatio + cy;
-      const pipRadius = clampedFace === 1 ? (this.isPortrait ? 8 : 10) : (this.isPortrait ? 5.5 : 7);
+      const pipRadius = clampedFace === 1 ? (this.isPortrait ? 8 : 10.5) : (this.isPortrait ? 5.5 : 7.2);
 
       // Inset drop shadow (simulates carved recess)
       this.diceGraphics.fillStyle(0x000000, 0.25);
@@ -322,9 +328,9 @@ export default class DiceManager {
       const temp = Phaser.Math.Between(1, 6);
       this.draw3DDiceFace(temp);
 
-      // 3D Tumbling rotation & lift
+      // 3D Tumbling rotation & lift on dice cube only
       this.scene.tweens.add({
-        targets: this.container,
+        targets: this.diceContainer,
         scale: count % 2 === 0 ? 1.12 : 0.94,
         angle: Phaser.Math.Between(-16, 16),
         duration: animDuration(45),
@@ -361,24 +367,24 @@ export default class DiceManager {
 
     const reduced = prefersReducedMotion();
     if (reduced) {
-      this.container.setScale(1);
-      this.container.setAngle(0);
+      this.diceContainer.setScale(1);
+      this.diceContainer.setAngle(0);
       this.rolling = false;
       this.scene.events.emit(GameEvents.DICE_ROLLED, this.value);
       return;
     }
 
-    // 3D Landing bounce with rotation reset
+    // 3D Landing bounce with rotation reset on dice cube only
     this.scene.tweens.add({
-      targets: this.container,
+      targets: this.diceContainer,
       scale: ANIM.diceLandingScale,
       angle: 0,
       duration: animDuration(ANIM.diceLandingDuration),
       ease: "Back.Out",
       yoyo: true,
       onComplete: () => {
-        this.container.setScale(1);
-        this.container.setAngle(0);
+        this.diceContainer.setScale(1);
+        this.diceContainer.setAngle(0);
         this.rolling = false;
         this.scene.events.emit(GameEvents.DICE_ROLLED, this.value);
       },
@@ -393,7 +399,8 @@ export default class DiceManager {
     this.rolling = false;
     this.value = 1;
     this.draw3DDiceFace(1);
-    this.container.setAngle(0);
+    this.diceContainer.setScale(1);
+    this.diceContainer.setAngle(0);
     this.enable();
   }
 }
