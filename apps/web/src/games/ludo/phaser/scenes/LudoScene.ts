@@ -103,12 +103,10 @@ export default class LudoScene extends Phaser.Scene {
 
     // 6. HUD & UI
     this.hud = new HUDManager(this);
-    this.hud.create(playerCount, isPortrait);
+    this.hud.create(playerCount, isPortrait, activeColors);
     this.hud.setMySeat(online ? (mySeat ?? 0) : 0);
-    if (online) {
-      if (names.length > 0) this.hud.setNames(names);
-      this.hud.applyColors(activeColors);
-    }
+    if (names.length > 0) this.hud.setNames(names);
+    this.hud.applyColors(activeColors);
 
     // Sound toggle
     this.hud.setSoundToggleCallback(() => {
@@ -117,7 +115,7 @@ export default class LudoScene extends Phaser.Scene {
 
     // 7. Dice
     this.dice = new DiceManager(this);
-    this.dice.create(isPortrait ? 182 : 1080, isPortrait ? 945 : 198, isPortrait);
+    this.dice.create(isPortrait ? 182 : 1080, isPortrait ? 945 : 198, isPortrait, activeColors);
 
     // 8. Feedback Text
     this.feedback = new FeedbackText(this);

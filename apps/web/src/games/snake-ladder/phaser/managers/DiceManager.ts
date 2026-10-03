@@ -20,6 +20,8 @@ export default class DiceManager {
   private container!: Phaser.GameObjects.Container;
   private diceContainer!: Phaser.GameObjects.Container;
   private diceGraphics!: Phaser.GameObjects.Graphics;
+  private pedestalGfx!: Phaser.GameObjects.Graphics;
+  private pedestalColor = 0x38bdf8;
   private valueText!: Phaser.GameObjects.Text;
   private rollBtn!: Phaser.GameObjects.Graphics;
   private rollBtnLabel!: Phaser.GameObjects.Text;
@@ -36,6 +38,17 @@ export default class DiceManager {
   create(x = 1080, y = 198, isPortrait = false): void {
     this.isPortrait = isPortrait;
     const reduced = prefersReducedMotion();
+
+    // ── Glowing Floor Dais / Pedestal (Stationary behind the dice) ────
+    this.pedestalGfx = this.scene.add.graphics();
+    this.drawPedestal(this.pedestalColor);
+
+    // Listen to TURN_CHANGED so the dice dais pulses with that player's neon color
+    this.scene.events.on(GameEvents.TURN_CHANGED, (playerId: number) => {
+      const colors = [0x38bdf8, 0xf43f5e, 0x10b981, 0xfbbf24];
+      const c = colors[(playerId - 1) % 4] ?? 0x38bdf8;
+      this.setPedestalColor(c);
+    });
 
     // ── 3D Dice Face Graphics & Dedicated Tumbling Container ────
     this.diceGraphics = this.scene.add.graphics();
@@ -100,11 +113,17 @@ export default class DiceManager {
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
       letterSpacing: this.isPortrait ? 0.5 : 2,
-      stroke: "#1e1b4b",
-      strokeThickness: 2,
+      shadow: {
+        offsetX: 0,
+        offsetY: 2,
+        color: "#1e1b4b",
+        blur: 3,
+        fill: true,
+      },
     }).setOrigin(0.5);
 
     this.container = this.scene.add.container(x, y, [
+      this.pedestalGfx,
       this.diceContainer,
       this.rollBtn,
       btnHitArea,
@@ -112,6 +131,33 @@ export default class DiceManager {
     ]);
 
     this.container.setDepth(100);
+  }
+
+  private drawPedestal(color: number): void {
+    this.pedestalGfx.clear();
+    const cubeCy = this.isPortrait ? -24 : -30;
+    const r = this.isPortrait ? 38 : 46;
+    const daisY = cubeCy + 24;
+
+    // Ambient radial floor glow
+    this.pedestalGfx.fillStyle(color, 0.16);
+    this.pedestalGfx.fillEllipse(0, daisY, r * 2.3, r * 1.15);
+
+    // Outer concentric sci-fi dais ring
+    this.pedestalGfx.lineStyle(1.6, color, 0.5);
+    this.pedestalGfx.strokeEllipse(0, daisY, r * 2.0, r * 0.96);
+
+    // Inner floor platform disk
+    this.pedestalGfx.fillStyle(0x0a1022, 0.92);
+    this.pedestalGfx.fillEllipse(0, daisY, r * 1.6, r * 0.76);
+
+    this.pedestalGfx.lineStyle(1.2, 0x1e2d4d, 0.85);
+    this.pedestalGfx.strokeEllipse(0, daisY, r * 1.6, r * 0.76);
+  }
+
+  setPedestalColor(color: number): void {
+    this.pedestalColor = color;
+    this.drawPedestal(color);
   }
 
   private getButtonDims(pressed = false) {
@@ -128,25 +174,33 @@ export default class DiceManager {
     this.rollBtn.clear();
     const { btnW, btnH, bx, by, r, depth } = this.getButtonDims(pressed);
 
+    // Ambient purple/indigo drop glow aura
+    this.rollBtn.fillStyle(0x6366f1, hover ? 0.28 : 0.18);
+    this.rollBtn.fillRoundedRect(bx - 3, by - 2, btnW + 6, btnH + 6, r + 2);
+
     // Button drop shadow
-    this.rollBtn.fillStyle(0x000000, 0.4);
-    this.rollBtn.fillRoundedRect(bx, by + depth + 2, btnW, btnH, r);
+    this.rollBtn.fillStyle(0x000000, 0.45);
+    this.rollBtn.fillRoundedRect(bx, by + depth + 3, btnW, btnH, r);
 
     // Button 3D bottom extrusion edge
-    this.rollBtn.fillStyle(0x312e81, 1); // Dark indigo base
+    this.rollBtn.fillStyle(0x2e1065, 1); // Dark royal violet extrusion
     this.rollBtn.fillRoundedRect(bx, by + depth, btnW, btnH, r);
 
     // Main 3D button face
-    const btnColor = hover ? 0x6366f1 : 0x4f46e5;
+    const btnColor = hover ? 0x7c3aed : 0x6366f1;
     this.rollBtn.fillStyle(btnColor, 1);
     this.rollBtn.fillRoundedRect(bx, by, btnW, btnH, r);
 
+    // Upper gradient highlight
+    this.rollBtn.fillStyle(0x8b5cf6, hover ? 0.45 : 0.35);
+    this.rollBtn.fillRoundedRect(bx, by, btnW, btnH * 0.55, { tl: r, tr: r, bl: 0, br: 0 });
+
     // Top specular bevel highlight
-    this.rollBtn.fillStyle(0xffffff, hover ? 0.35 : 0.22);
+    this.rollBtn.fillStyle(0xffffff, hover ? 0.42 : 0.28);
     this.rollBtn.fillRoundedRect(bx + 1, by + 1, btnW - 2, 6, { tl: r - 1, tr: r - 1, bl: 0, br: 0 });
 
-    // Metallic border outline
-    this.rollBtn.lineStyle(1.5, 0x818cf8, 0.8);
+    // Metallic luminous border outline
+    this.rollBtn.lineStyle(1.8, hover ? 0xc084fc : 0x818cf8, 0.95);
     this.rollBtn.strokeRoundedRect(bx, by, btnW, btnH, r);
   }
 
@@ -310,6 +364,16 @@ export default class DiceManager {
     this.scene.events.emit(GameEvents.DICE_ROLL_STARTED);
 
     const reduced = prefersReducedMotion();
+    if (!reduced && this.pedestalGfx) {
+      this.scene.tweens.add({
+        targets: this.pedestalGfx,
+        scaleX: 1.1,
+        scaleY: 1.1,
+        duration: animDuration(150),
+        yoyo: true,
+        ease: "Sine.InOut",
+      });
+    }
     if (reduced) {
       // Skip animation, go straight to result
       const value = forced ?? Phaser.Math.Between(1, 6);

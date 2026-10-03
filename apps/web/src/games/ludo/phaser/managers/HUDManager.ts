@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { LudoEvents } from "../events/LudoEvents";
 import type { PlayerColor } from "../types/ludo.types";
 import { LUDO_DESIGN_CONFIG, animDuration, prefersReducedMotion } from "../constants";
 
@@ -13,6 +14,7 @@ interface PlayerCardUI {
   cardBg: Phaser.GameObjects.Graphics;
   avatarRing: Phaser.GameObjects.Graphics;
   avatarGlow: Phaser.GameObjects.Graphics;
+  avatarDot: Phaser.GameObjects.Arc;
   nameText: Phaser.GameObjects.Text;
   progressText: Phaser.GameObjects.Text;
   tokenPips: Phaser.GameObjects.Arc[];
@@ -34,6 +36,7 @@ export default class HUDManager {
   private selectionBannerText!: Phaser.GameObjects.Text;
 
   private playerCards: PlayerCardUI[] = [];
+  private activeColors: PlayerColor[] = ["red", "green"];
   private logLines: Phaser.GameObjects.Text[] = [];
   private currentTurnIndex = 0;
   private totalPlayers = 4;
@@ -51,9 +54,12 @@ export default class HUDManager {
     this.scene = scene;
   }
 
-  create(totalPlayers = 4, isPortrait = false): void {
+  create(totalPlayers = 4, isPortrait = false, activeColors?: PlayerColor[]): void {
     this.totalPlayers = totalPlayers;
     this.isPortrait = isPortrait;
+    this.activeColors = activeColors && activeColors.length >= totalPlayers
+      ? [...activeColors]
+      : (totalPlayers === 2 ? ["red", "green"] : ["red", "blue", "green", "yellow"]);
     const depth = 10;
 
     if (isPortrait) {
@@ -85,35 +91,44 @@ export default class HUDManager {
       // Bottom Control Deck (y: 826..1060)
       const deckBg = this.scene.add.graphics();
       deckBg.setDepth(depth);
-      deckBg.fillStyle(0x000000, 0.45);
+
+      // Deck background slab with modern layered glass
+      deckBg.fillStyle(0x000000, 0.55);
       deckBg.fillRoundedRect(20, 830, 680, 230, 18);
-      deckBg.fillStyle(0x070b14, 0.96);
+      deckBg.fillStyle(0x080d1a, 0.98);
       deckBg.fillRoundedRect(20, 826, 680, 230, 18);
-      deckBg.lineStyle(1.5, 0x1e293b, 0.9);
+
+      // Top glass highlight line
+      deckBg.fillStyle(0x38bdf8, 0.35);
+      deckBg.fillRoundedRect(20, 826, 680, 2, { tl: 18, tr: 18, bl: 0, br: 0 });
+
+      deckBg.lineStyle(1.8, 0x1e2d4d, 0.9);
       deckBg.strokeRoundedRect(20, 826, 680, 230, 18);
 
       // Dice Area Title
-      this.scene.add.text(182, 844, "DICE CONTROLLER", {
-        fontSize: "13px",
-        color: "#64748b",
+      this.scene.add.text(182, 844, "✦ DICE CONTROLLER ✦", {
+        fontSize: "12px",
+        color: "#94a3b8",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
+        letterSpacing: 1.5,
       }).setOrigin(0.5).setDepth(depth + 1);
 
       // Action Log Title
-      this.scene.add.text(518, 844, "ACTION LOG", {
-        fontSize: "13px",
-        color: "#64748b",
+      this.scene.add.text(518, 844, "● ACTION LOG", {
+        fontSize: "12px",
+        color: "#38bdf8",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
+        letterSpacing: 1.5,
       }).setOrigin(0.5).setDepth(depth + 1);
 
       // Inset Action Log Box
       const logGfx = this.scene.add.graphics();
       logGfx.setDepth(depth);
-      logGfx.fillStyle(0x020617, 0.95);
+      logGfx.fillStyle(0x060a14, 0.96);
       logGfx.fillRoundedRect(355, 860, 325, 184, 12);
-      logGfx.lineStyle(1.2, 0x1e293b, 0.8);
+      logGfx.lineStyle(1.5, 0x1e2d4d, 0.85);
       logGfx.strokeRoundedRect(355, 860, 325, 184, 12);
 
       for (let i = 0; i < HUDManager.MAX_LOG; i++) {
@@ -123,7 +138,7 @@ export default class HUDManager {
           "",
           {
             fontSize: "12px",
-            color: "#94a3b8",
+            color: i === 0 ? "#38bdf8" : "#94a3b8",
             fontFamily: "Outfit, sans-serif",
             wordWrap: { width: 300 },
           },
@@ -138,24 +153,53 @@ export default class HUDManager {
       // 1. Sidebar Background Panel (x: 800..1360, width 560, center 1080)
       const bg = this.scene.add.graphics();
       bg.setDepth(depth);
-      bg.fillStyle(0x070b14, 0.98);
-      bg.fillRoundedRect(PANEL_X - PANEL_W / 2, 0, PANEL_W, PANEL_H, { tl: 0, tr: 20, bl: 0, br: 20 });
-      bg.lineStyle(2, 0x1e293b, 1.0);
+
+      // Deep panel shadow to the left
+      bg.fillStyle(0x000000, 0.55);
+      bg.fillRect(PANEL_X - PANEL_W / 2 - 8, 0, 8, PANEL_H);
+
+      // Deep obsidian-indigo glass slab
+      bg.fillStyle(0x080d1a, 0.98);
+      bg.fillRect(PANEL_X - PANEL_W / 2, 0, PANEL_W, PANEL_H);
+
+      // Subtle top ambient spotlight wash
+      bg.fillStyle(0x131d3d, 0.45);
+      bg.fillRect(PANEL_X - PANEL_W / 2, 0, PANEL_W, 220);
+
+      // Soft ambient warm glow behind title
+      bg.fillStyle(0xf59e0b, 0.035);
+      bg.fillCircle(PANEL_X, 36, 160);
+
+      // Luminous left divider neon pinstripe
+      bg.lineStyle(4, 0x6366f1, 0.18);
       bg.lineBetween(PANEL_X - PANEL_W / 2, 0, PANEL_X - PANEL_W / 2, PANEL_H);
-      bg.strokeRoundedRect(PANEL_X - PANEL_W / 2, 0, PANEL_W, PANEL_H, { tl: 0, tr: 20, bl: 0, br: 20 });
+
+      bg.lineStyle(2, 0x818cf8, 0.7);
+      bg.lineBetween(PANEL_X - PANEL_W / 2, 0, PANEL_X - PANEL_W / 2, 400);
+
+      bg.lineStyle(1.5, 0x1e2d4d, 0.85);
+      bg.lineBetween(PANEL_X - PANEL_W / 2, 400, PANEL_X - PANEL_W / 2, PANEL_H);
 
       // 2. Game Title & Header (Centered in 560px panel)
-      this.scene.add.text(PANEL_X, 28, "LUDO CHAMPION", {
-        fontSize: "26px",
-        color: "#f59e0b",
+      this.scene.add.text(PANEL_X, 13, "★ CLASSIC 4-WAY ARENA ★", {
+        fontSize: "10.5px",
+        color: "#38bdf8",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
         letterSpacing: 3,
+      }).setOrigin(0.5).setDepth(depth + 1);
+
+      this.scene.add.text(PANEL_X, 33, "LUDO CHAMPION", {
+        fontSize: "25px",
+        color: "#fbbf24",
+        fontFamily: "Outfit, sans-serif",
+        fontStyle: "bold",
+        letterSpacing: 2.5,
         shadow: {
           offsetX: 0,
           offsetY: 2,
-          color: "#d9770655",
-          blur: 10,
+          color: "#f59e0b66",
+          blur: 14,
           fill: true,
         },
       }).setOrigin(0.5).setDepth(depth + 1);
@@ -242,10 +286,17 @@ export default class HUDManager {
       color: "#ffffff",
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
-      letterSpacing: this.isPortrait ? 0 : 1.2,
+      letterSpacing: this.isPortrait ? 0.5 : 1.5,
+      shadow: {
+        offsetX: 0,
+        offsetY: 1,
+        color: "#00000088",
+        blur: 6,
+        fill: true,
+      },
     }).setOrigin(0.5);
 
-    this.turnSubText = this.scene.add.text(0, this.isPortrait ? 9 : 12, "Match starting", {
+    this.turnSubText = this.scene.add.text(0, this.isPortrait ? 9 : 12, "✦ Match starting", {
       fontSize: this.isPortrait ? "11px" : "13.5px",
       color: "#cbd5e1",
       fontFamily: "Outfit, sans-serif",
@@ -263,20 +314,33 @@ export default class HUDManager {
     this.turnBannerBg.clear();
     const r = 14;
 
-    this.turnBannerBg.fillStyle(0x000000, 0.3);
-    this.turnBannerBg.fillRoundedRect(-w / 2 + 2, -h / 2 + 3, w, h, r);
+    // Ambient soft drop shadow / outer glow
+    this.turnBannerBg.fillStyle(color, 0.16);
+    this.turnBannerBg.fillRoundedRect(-w / 2 - 3, -h / 2 - 1, w + 6, h + 5, r + 2);
 
-    this.turnBannerBg.fillStyle(0x0f172a, 0.95);
+    // Deep panel shadow
+    this.turnBannerBg.fillStyle(0x000000, 0.4);
+    this.turnBannerBg.fillRoundedRect(-w / 2, -h / 2 + 3, w, h, r);
+
+    // Dark glass base slab
+    this.turnBannerBg.fillStyle(0x0a1022, 0.96);
     this.turnBannerBg.fillRoundedRect(-w / 2, -h / 2, w, h, r);
 
-    this.turnBannerBg.fillStyle(color, 0.15);
+    // Glowing active color accent tint
+    this.turnBannerBg.fillStyle(color, 0.18);
     this.turnBannerBg.fillRoundedRect(-w / 2, -h / 2, w, h, r);
 
-    this.turnBannerBg.lineStyle(2, color, 0.9);
+    // Top specular sheen
+    this.turnBannerBg.fillStyle(0xffffff, 0.26);
+    this.turnBannerBg.fillRoundedRect(-w / 2 + 1, -h / 2 + 1, w - 2, 4.5, { tl: r - 1, tr: r - 1, bl: 0, br: 0 });
+
+    // Luminous neon border
+    this.turnBannerBg.lineStyle(2, color, 0.95);
     this.turnBannerBg.strokeRoundedRect(-w / 2, -h / 2, w, h, r);
 
-    this.turnBannerBg.fillStyle(0xffffff, 0.15);
-    this.turnBannerBg.fillRoundedRect(-w / 2, -h / 2, w, 4, { tl: r, tr: r, bl: 0, br: 0 });
+    // Inner subtle hairline
+    this.turnBannerBg.lineStyle(1, 0xffffff, 0.12);
+    this.turnBannerBg.strokeRoundedRect(-w / 2 + 1.5, -h / 2 + 1.5, w - 3, h - 3, r - 1);
   }
 
   // ─── Selection Banner ───────────────────────────────────────────────────────
@@ -336,7 +400,7 @@ export default class HUDManager {
 
     for (let i = 0; i < totalPlayers; i++) {
       const cx = startX + i * gapX;
-      const color = ORDERED_COLORS[i % 4]!;
+      const color = this.activeColors[i] ?? ORDERED_COLORS[i % 4]!;
       const c = LUDO_DESIGN_CONFIG.colors[color];
 
       const cardContainer = this.scene.add.container(cx, cy);
@@ -402,6 +466,7 @@ export default class HUDManager {
         cardBg,
         avatarRing,
         avatarGlow,
+        avatarDot: dot,
         nameText: nameTxt,
         progressText: progTxt,
         tokenPips: pips,
@@ -424,7 +489,7 @@ export default class HUDManager {
 
     for (let i = 0; i < totalPlayers; i++) {
       const cy = startY + i * gap;
-      const color = ORDERED_COLORS[i % 4]!;
+      const color = this.activeColors[i] ?? ORDERED_COLORS[i % 4]!;
       const c = LUDO_DESIGN_CONFIG.colors[color];
 
       const cardContainer = this.scene.add.container(PANEL_X, cy);
@@ -492,6 +557,7 @@ export default class HUDManager {
         cardBg,
         avatarRing,
         avatarGlow,
+        avatarDot: dot,
         nameText: nameTxt,
         progressText: progTxt,
         tokenPips: pips,
@@ -517,26 +583,36 @@ export default class HUDManager {
     const { w, h, avatarX } = geom;
     const r = 14;
 
+    if (isActive) {
+      // Outer colored neon glow
+      cardBg.fillStyle(color, 0.14);
+      cardBg.fillRoundedRect(-w / 2 - 3, -h / 2 - 2, w + 6, h + 6, r + 2);
+    }
+
     // Drop shadow
-    cardBg.fillStyle(0x000000, 0.25);
+    cardBg.fillStyle(0x000000, isActive ? 0.45 : 0.25);
     cardBg.fillRoundedRect(-w / 2 + 2, -h / 2 + 2, w, h, r);
 
+    // Card extruded base
+    cardBg.fillStyle(0x060a14, 1);
+    cardBg.fillRoundedRect(-w / 2, -h / 2 + 2, w, h, r);
+
     // Card background
-    cardBg.fillStyle(0x0f172a, isActive ? 0.98 : 0.85);
+    cardBg.fillStyle(isActive ? 0x0c162c : 0x0a1020, isActive ? 0.98 : 0.88);
     cardBg.fillRoundedRect(-w / 2, -h / 2, w, h, r);
 
     if (isActive) {
       // Team colored floor glow
-      cardBg.fillStyle(color, 0.14);
+      cardBg.fillStyle(color, 0.16);
       cardBg.fillRoundedRect(-w / 2, -h / 2, w, h, r);
 
       // Active vibrant border
-      cardBg.lineStyle(2.0, color, 1.0);
+      cardBg.lineStyle(2.2, color, 0.95);
       cardBg.strokeRoundedRect(-w / 2, -h / 2, w, h, r);
 
       // Top sheen
-      cardBg.fillStyle(0xffffff, 0.15);
-      cardBg.fillRoundedRect(-w / 2, -h / 2, w, 3.5, { tl: r, tr: r, bl: 0, br: 0 });
+      cardBg.fillStyle(0xffffff, 0.22);
+      cardBg.fillRoundedRect(-w / 2 + 1, -h / 2 + 1, w - 2, 4, { tl: r - 1, tr: r - 1, bl: 0, br: 0 });
 
       // Avatar active glowing ring
       const glowR = w > 400 ? 25 : (w > 250 ? 20 : 15);
@@ -548,8 +624,12 @@ export default class HUDManager {
       avatarRing.strokeCircle(avatarX, 0, ringR);
     } else {
       // Inactive subtle border
-      cardBg.lineStyle(1.2, 0x1e293b, 0.8);
+      cardBg.lineStyle(1.2, 0x1e2d4d, 0.65);
       cardBg.strokeRoundedRect(-w / 2, -h / 2, w, h, r);
+
+      // Top subtle sheen
+      cardBg.fillStyle(0xffffff, 0.08);
+      cardBg.fillRoundedRect(-w / 2 + 1, -h / 2 + 1, w - 2, 4, { tl: r - 1, tr: r - 1, bl: 0, br: 0 });
     }
   }
 
@@ -559,12 +639,19 @@ export default class HUDManager {
     const isTwoPlayer = totalPlayers <= 2;
     const logHeaderY = isTwoPlayer ? 506 : 614;
 
-    this.scene.add.text(PANEL_X, logHeaderY, "ACTION LOG", {
-      fontSize: "15px",
-      color: "#94a3b8",
+    this.scene.add.text(PANEL_X, logHeaderY, "● ACTION LOG", {
+      fontSize: "14.5px",
+      color: "#38bdf8",
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
       letterSpacing: 2,
+      shadow: {
+        offsetX: 0,
+        offsetY: 1,
+        color: "#38bdf855",
+        blur: 6,
+        fill: true,
+      },
     }).setOrigin(0.5).setDepth(depth + 1);
 
     const logBoxY = isTwoPlayer ? 524 : 630;
@@ -573,9 +660,21 @@ export default class HUDManager {
 
     const logGfx = this.scene.add.graphics();
     logGfx.setDepth(depth);
-    logGfx.fillStyle(0x0a101f, 0.92);
+
+    // Inset drop shadow
+    logGfx.fillStyle(0x000000, 0.45);
     logGfx.fillRoundedRect(PANEL_X - logBoxW / 2, logBoxY, logBoxW, logBoxH, 12);
-    logGfx.lineStyle(1.4, 0x1e293b, 0.9);
+
+    // Dark recessed log surface
+    logGfx.fillStyle(0x060a14, 0.96);
+    logGfx.fillRoundedRect(PANEL_X - logBoxW / 2, logBoxY, logBoxW, logBoxH, 12);
+
+    // Top cyan reflex line
+    logGfx.fillStyle(0x38bdf8, 0.25);
+    logGfx.fillRoundedRect(PANEL_X - logBoxW / 2 + 1, logBoxY + 1, logBoxW - 2, 2, { tl: 11, tr: 11, bl: 0, br: 0 });
+
+    // Bevel border
+    logGfx.lineStyle(1.4, 0x1e2d4d, 0.9);
     logGfx.strokeRoundedRect(PANEL_X - logBoxW / 2, logBoxY, logBoxW, logBoxH, 12);
 
     const lineGap = isTwoPlayer ? 34 : 25;
@@ -584,10 +683,10 @@ export default class HUDManager {
       const t = this.scene.add.text(
         PANEL_X - logBoxW / 2 + 20,
         logBoxY + 16 + i * lineGap,
-        i === 0 ? "Match started. Roll the dice to begin!" : "",
+        i === 0 ? "▸ Match started. Roll the dice to begin!" : "",
         {
           fontSize: isTwoPlayer ? "14px" : "12.5px",
-          color: i === 0 ? "#64748b" : "#94a3b8",
+          color: i === 0 ? "#38bdf8" : "#94a3b8",
           fontFamily: "Outfit, sans-serif",
           wordWrap: { width: logBoxW - 40 },
         },
@@ -600,9 +699,12 @@ export default class HUDManager {
 
   updateTurn(playerIndex: number): void {
     this.currentTurnIndex = playerIndex;
-    const activeColor = ORDERED_COLORS[playerIndex % 4]!;
-    const c = LUDO_DESIGN_CONFIG.colors[activeColor];
+    const activeColor = this.playerCards[playerIndex]?.color ?? this.activeColors[playerIndex] ?? (this.totalPlayers === 2 ? (playerIndex === 1 ? "green" : "red") : ORDERED_COLORS[playerIndex % 4]!);
+    const c = LUDO_DESIGN_CONFIG.colors[activeColor] ?? LUDO_DESIGN_CONFIG.colors.red;
     const isMyTurn = this.mySeat === playerIndex;
+
+    // Broadcast turn changed so Dice dais syncs
+    this.scene.events.emit(LudoEvents.TURN_CHANGED, { playerIndex, color: activeColor });
 
     // 1. Smooth Slide/Fade Turn Banner Transition
     this.scene.tweens.add({
@@ -619,11 +721,11 @@ export default class HUDManager {
         if (isMyTurn) {
           this.turnBannerText.setText("YOUR TURN");
           this.turnBannerText.setColor("#4ade80");
-          this.turnSubText.setText("Roll the dice");
+          this.turnSubText.setText("✦ Roll the dice");
         } else {
           this.turnBannerText.setText(`${pName.toUpperCase()}`);
           this.turnBannerText.setColor("#ffffff");
-          this.turnSubText.setText("Rolling dice...");
+          this.turnSubText.setText("✦ Rolling dice...");
         }
 
         this.drawTurnBannerBg(c.main);
@@ -679,10 +781,10 @@ export default class HUDManager {
     card.tokenPips.forEach((pip, idx) => {
       if (idx < doneCount) {
         pip.setFillStyle(c.main, 1.0);
-        pip.setStrokeStyle(1.5, 0xffffff, 1.0);
+        pip.setStrokeStyle(1.8, 0xffffff, 1.0);
       } else {
-        pip.setFillStyle(0x1e293b, 1.0);
-        pip.setStrokeStyle(1, c.main, 0.5);
+        pip.setFillStyle(0x0f172a, 1.0);
+        pip.setStrokeStyle(1.2, 0x334155, 0.7);
       }
     });
   }
@@ -706,11 +808,38 @@ export default class HUDManager {
   }
 
   applyColors(activeColors: PlayerColor[]): void {
+    this.activeColors = [...activeColors];
     this.playerCards.forEach((card, i) => {
-      if (activeColors[i]) {
-        card.color = activeColors[i];
+      const newColor = activeColors[i];
+      if (newColor && LUDO_DESIGN_CONFIG.colors[newColor]) {
+        card.color = newColor;
+        const c = LUDO_DESIGN_CONFIG.colors[newColor];
+        if (card.avatarDot) {
+          card.avatarDot.setFillStyle(c.main, 1.0);
+        }
+        if (card.tokenCountText) {
+          card.tokenCountText.setColor("#" + c.main.toString(16).padStart(6, "0"));
+        }
+        card.tokenPips.forEach((pip) => {
+          pip.setStrokeStyle(1.4, c.main, 0.7);
+        });
+        const isActive = i === this.currentTurnIndex;
+        this.drawPlayerCardGraphics(
+          card.cardBg,
+          card.avatarRing,
+          card.avatarGlow,
+          c.main,
+          isActive,
+          card.geom,
+        );
       }
     });
+
+    const activeColor = this.playerCards[this.currentTurnIndex]?.color ?? this.activeColors[this.currentTurnIndex] ?? "red";
+    const c = LUDO_DESIGN_CONFIG.colors[activeColor];
+    if (c) {
+      this.drawTurnBannerBg(c.main);
+    }
   }
 
   addLog(message: string): void {
@@ -719,16 +848,18 @@ export default class HUDManager {
     const trimmed = current.slice(0, HUDManager.MAX_LOG);
 
     this.logLines.forEach((line, i) => {
-      line.setText(trimmed[i] ?? "");
-      line.setColor(i === 0 ? "#f8fafc" : "#64748b");
+      const text = trimmed[i] ?? "";
+      line.setText(text ? `▸ ${text.replace(/^▸\s*/, "")}` : "");
+      line.setColor(i === 0 ? "#38bdf8" : (i === 1 ? "#cbd5e1" : (i === 2 ? "#94a3b8" : "#64748b")));
     });
   }
 
   setLogs(logs: string[]): void {
     const trimmed = logs.slice(-HUDManager.MAX_LOG).reverse();
     this.logLines.forEach((line, i) => {
-      line.setText(trimmed[i] ?? "");
-      line.setColor(i === 0 ? "#f8fafc" : "#64748b");
+      const text = trimmed[i] ?? "";
+      line.setText(text ? `▸ ${text.replace(/^▸\s*/, "")}` : "");
+      line.setColor(i === 0 ? "#38bdf8" : (i === 1 ? "#cbd5e1" : (i === 2 ? "#94a3b8" : "#64748b")));
     });
   }
 }

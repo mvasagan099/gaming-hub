@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { LudoEvents } from "../events/LudoEvents";
-import { ANIM, animDuration, prefersReducedMotion } from "../constants";
+import type { PlayerColor } from "../types/ludo.types";
+import { ANIM, LUDO_DESIGN_CONFIG, animDuration, prefersReducedMotion } from "../constants";
 
 const DOT_PATTERNS: Array<Array<[number, number]>> = [
   /* 1 */ [[0, 0]],
@@ -17,6 +18,9 @@ export default class DiceManager {
   private diceContainer!: Phaser.GameObjects.Container;
   private btnContainer!: Phaser.GameObjects.Container;
   private diceGfx!: Phaser.GameObjects.Graphics;
+  private pedestalGfx!: Phaser.GameObjects.Graphics;
+  private pedestalColor = 0xe11d48;
+  private activeColors: PlayerColor[] = ["red", "green"];
   private hitArea!: Phaser.GameObjects.Rectangle;
   private rollBtnGfx!: Phaser.GameObjects.Graphics;
   private rollLabel!: Phaser.GameObjects.Text;
@@ -34,8 +38,30 @@ export default class DiceManager {
     this.scene = scene;
   }
 
-  create(x = 1080, y = 198, isPortrait = false): void {
+  create(x = 1080, y = 198, isPortrait = false, activeColors?: PlayerColor[]): void {
     this.isPortrait = isPortrait;
+    if (activeColors && activeColors.length > 0) {
+      this.activeColors = [...activeColors];
+    }
+    const startingColor = this.activeColors[0] ?? "red";
+    this.pedestalColor = LUDO_DESIGN_CONFIG.colors[startingColor]?.main ?? 0xe11d48;
+
+    // ── Glowing Floor Dais / Pedestal (Stationary behind the dice) ────
+    this.pedestalGfx = this.scene.add.graphics();
+    this.drawPedestal(this.pedestalColor);
+
+    // Listen to TURN_CHANGED so the dice dais pulses with that player's neon color
+    this.scene.events.on(LudoEvents.TURN_CHANGED, (data: { playerIndex: number; color?: PlayerColor }) => {
+      let colorInt = 0xe11d48;
+      if (data.color && LUDO_DESIGN_CONFIG.colors[data.color]) {
+        colorInt = LUDO_DESIGN_CONFIG.colors[data.color].main;
+      } else {
+        const cName = this.activeColors[data.playerIndex % this.activeColors.length] ?? "red";
+        colorInt = LUDO_DESIGN_CONFIG.colors[cName]?.main ?? 0xe11d48;
+      }
+      this.setPedestalColor(colorInt);
+    });
+
     this.diceGfx = this.scene.add.graphics();
     this.draw3DDice(this.value);
 
@@ -95,9 +121,9 @@ export default class DiceManager {
       letterSpacing: this.isPortrait ? 0.5 : 2,
       shadow: {
         offsetX: 0,
-        offsetY: 1,
-        color: "#00000088",
-        blur: 2,
+        offsetY: 2,
+        color: "#1e1b4b",
+        blur: 3,
         fill: true,
       },
     }).setOrigin(0.5);
@@ -109,12 +135,40 @@ export default class DiceManager {
     ]);
 
     this.container = this.scene.add.container(x, y, [
+      this.pedestalGfx,
       this.diceContainer,
       this.btnContainer,
     ]);
     this.container.setDepth(100);
 
     this.startActiveHalo();
+  }
+
+  private drawPedestal(color: number): void {
+    this.pedestalGfx.clear();
+    const cubeCy = this.isPortrait ? -24 : -30;
+    const r = this.isPortrait ? 38 : 46;
+    const daisY = cubeCy + 24;
+
+    // Ambient radial floor glow
+    this.pedestalGfx.fillStyle(color, 0.16);
+    this.pedestalGfx.fillEllipse(0, daisY, r * 2.3, r * 1.15);
+
+    // Outer concentric sci-fi dais ring
+    this.pedestalGfx.lineStyle(1.6, color, 0.5);
+    this.pedestalGfx.strokeEllipse(0, daisY, r * 2.0, r * 0.96);
+
+    // Inner floor platform disk
+    this.pedestalGfx.fillStyle(0x0a1022, 0.92);
+    this.pedestalGfx.fillEllipse(0, daisY, r * 1.6, r * 0.76);
+
+    this.pedestalGfx.lineStyle(1.2, 0x1e2d4d, 0.85);
+    this.pedestalGfx.strokeEllipse(0, daisY, r * 1.6, r * 0.76);
+  }
+
+  setPedestalColor(color: number): void {
+    this.pedestalColor = color;
+    this.drawPedestal(color);
   }
 
   private handlePointerDown(): void {
@@ -189,14 +243,17 @@ export default class DiceManager {
     const y = 0;
     const r = this.isPortrait ? 10 : 14;
 
-    // Drop shadow
-    this.rollBtnGfx.fillStyle(0x000000, 0.25);
-    this.rollBtnGfx.fillRoundedRect(-w / 2 + 2, y - h / 2 + 3, w, h, r);
-
     if (!enabled || state === "disabled") {
       // Disabled Slate
-      this.rollBtnGfx.fillStyle(0x1e293b, 0.6);
+      this.rollBtnGfx.fillStyle(0x000000, 0.2);
+      this.rollBtnGfx.fillRoundedRect(-w / 2 + 2, y - h / 2 + 3, w, h, r);
+
+      this.rollBtnGfx.fillStyle(0x0f172a, 0.85);
+      this.rollBtnGfx.fillRoundedRect(-w / 2, y - h / 2 + 2, w, h, r);
+
+      this.rollBtnGfx.fillStyle(0x1e293b, 0.8);
       this.rollBtnGfx.fillRoundedRect(-w / 2, y - h / 2, w, h, r);
+
       this.rollBtnGfx.lineStyle(1.2, 0x334155, 0.5);
       this.rollBtnGfx.strokeRoundedRect(-w / 2, y - h / 2, w, h, r);
       return;
@@ -204,26 +261,57 @@ export default class DiceManager {
 
     if (state === "select") {
       // Golden Select State
+      this.rollBtnGfx.fillStyle(0xf59e0b, 0.25);
+      this.rollBtnGfx.fillRoundedRect(-w / 2 - 3, y - h / 2 - 2, w + 6, h + 6, r + 2);
+
+      this.rollBtnGfx.fillStyle(0x000000, 0.45);
+      this.rollBtnGfx.fillRoundedRect(-w / 2, y - h / 2 + 4, w, h, r);
+
+      this.rollBtnGfx.fillStyle(0x78350f, 1.0);
+      this.rollBtnGfx.fillRoundedRect(-w / 2, y - h / 2 + 3, w, h, r);
+
       this.rollBtnGfx.fillStyle(0xd97706, 1.0);
       this.rollBtnGfx.fillRoundedRect(-w / 2, y - h / 2, w, h, r);
+
       // Top sheen
-      this.rollBtnGfx.fillStyle(0xfef08a, 0.25);
-      this.rollBtnGfx.fillRoundedRect(-w / 2, y - h / 2, w, h * 0.45, { tl: r, tr: r, bl: 0, br: 0 });
+      this.rollBtnGfx.fillStyle(0xfef08a, 0.35);
+      this.rollBtnGfx.fillRoundedRect(-w / 2 + 1, y - h / 2 + 1, w - 2, 6, { tl: r - 1, tr: r - 1, bl: 0, br: 0 });
+
       this.rollBtnGfx.lineStyle(2, 0xfcd34d, 1.0);
       this.rollBtnGfx.strokeRoundedRect(-w / 2, y - h / 2, w, h, r);
       return;
     }
 
-    // Active / Hover State (Vibrant Purple Gradient)
-    const baseColor = state === "hover" ? 0x6d28d9 : 0x7c3aed;
+    // Active / Hover State (Vibrant Purple/Violet Gradient)
+    const hover = state === "hover";
+
+    // Ambient drop glow aura
+    this.rollBtnGfx.fillStyle(0x7c3aed, hover ? 0.3 : 0.2);
+    this.rollBtnGfx.fillRoundedRect(-w / 2 - 3, y - h / 2 - 2, w + 6, h + 6, r + 2);
+
+    // Deep drop shadow
+    this.rollBtnGfx.fillStyle(0x000000, 0.45);
+    this.rollBtnGfx.fillRoundedRect(-w / 2, y - h / 2 + 4, w, h, r);
+
+    // 3D Extrusion base edge
+    this.rollBtnGfx.fillStyle(0x2e1065, 1.0);
+    this.rollBtnGfx.fillRoundedRect(-w / 2, y - h / 2 + 3, w, h, r);
+
+    // Main 3D button face
+    const baseColor = hover ? 0x8b5cf6 : 0x7c3aed;
     this.rollBtnGfx.fillStyle(baseColor, 1.0);
     this.rollBtnGfx.fillRoundedRect(-w / 2, y - h / 2, w, h, r);
 
-    // Top sheen
-    this.rollBtnGfx.fillStyle(0xffffff, 0.22);
-    this.rollBtnGfx.fillRoundedRect(-w / 2, y - h / 2, w, h * 0.45, { tl: r, tr: r, bl: 0, br: 0 });
+    // Upper highlight fill
+    this.rollBtnGfx.fillStyle(0xa855f7, hover ? 0.45 : 0.35);
+    this.rollBtnGfx.fillRoundedRect(-w / 2, y - h / 2, w, h * 0.55, { tl: r, tr: r, bl: 0, br: 0 });
 
-    this.rollBtnGfx.lineStyle(2, 0xa78bfa, 0.9);
+    // Top specular glass sheen
+    this.rollBtnGfx.fillStyle(0xffffff, hover ? 0.45 : 0.3);
+    this.rollBtnGfx.fillRoundedRect(-w / 2 + 1, y - h / 2 + 1, w - 2, 6, { tl: r - 1, tr: r - 1, bl: 0, br: 0 });
+
+    // Metallic luminous border
+    this.rollBtnGfx.lineStyle(1.8, hover ? 0xd8b4fe : 0xc084fc, 0.95);
     this.rollBtnGfx.strokeRoundedRect(-w / 2, y - h / 2, w, h, r);
   }
 
@@ -333,6 +421,16 @@ export default class DiceManager {
     this.scene.events.emit(LudoEvents.DICE_ROLL_STARTED);
 
     const reduced = prefersReducedMotion();
+    if (!reduced && this.pedestalGfx) {
+      this.scene.tweens.add({
+        targets: this.pedestalGfx,
+        scaleX: 1.1,
+        scaleY: 1.1,
+        duration: animDuration(150),
+        yoyo: true,
+        ease: "Sine.InOut",
+      });
+    }
     let count = 0;
     const totalFrames = reduced ? 4 : ANIM.diceRollFrames;
 

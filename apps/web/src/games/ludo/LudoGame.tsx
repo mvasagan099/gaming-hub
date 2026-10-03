@@ -57,9 +57,9 @@ export const LudoGame: React.FC<LudoGameProps> = ({ mode: initialMode, stake, on
             {!isMultiplayer && (
               <button
                 onClick={handleReplay}
-                className="px-4 sm:px-6 py-2 sm:py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl font-bold text-rose-400 text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg transition-all hover:scale-105 active:scale-95"
+                className="px-5 sm:px-7 py-2.5 sm:py-3 bg-gradient-to-r from-rose-950/70 via-rose-900/50 to-slate-900/70 hover:from-rose-900/80 hover:to-rose-950/90 border border-rose-500/50 hover:border-rose-400/80 rounded-xl font-bold text-rose-300 hover:text-white text-xs tracking-widest uppercase flex items-center gap-2.5 shadow-[0_4px_20px_rgba(244,63,94,0.22)] hover:shadow-[0_4px_28px_rgba(244,63,94,0.4)] transition-all hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-md group"
               >
-                <RefreshCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Reset Match
+                <RefreshCcw className="w-4 h-4 text-rose-400 group-hover:rotate-180 transition-transform duration-500" /> Reset Match
               </button>
             )}
           </div>

@@ -7,18 +7,18 @@ const PANEL_W = 560;
 const PANEL_H = 800;
 
 const COLORS = {
-  p1:     0x3b82f6,
-  p2:     0xef4444,
-  p3:     0x10b981,
-  p4:     0xf59e0b,
-  accent: 0x6366f1,
-  bg:     0x090e1a,
-  card:   0x0f172a,
-  border: 0x1e293b,
+  p1:     0x0284c7, // Sky Cyan
+  p2:     0xe11d48, // Rose Crimson
+  p3:     0x059669, // Emerald Jade
+  p4:     0xd97706, // Amber Gold
+  accent: 0x6366f1, // Electric Indigo
+  bg:     0x080d1a, // Dark Midnight Glass
+  card:   0x0a1020, // Frosted Slate
+  border: 0x1e2d4d, // Bevel Border
 };
 
-const PLAYER_COLORS = [COLORS.p1, COLORS.p2, COLORS.p3, COLORS.p4];
-const PLAYER_HEX = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b"];
+const PLAYER_COLORS = [0x38bdf8, 0xf43f5e, 0x10b981, 0xfbbf24];
+const PLAYER_HEX = ["#38bdf8", "#f43f5e", "#10b981", "#fbbf24"];
 
 export class HUDManager {
   private scene: Phaser.Scene;
@@ -27,6 +27,7 @@ export class HUDManager {
   private turnBg!: Phaser.GameObjects.Graphics;
   private playerTileTexts: Phaser.GameObjects.Text[] = [];
   private playerStatusTexts: Phaser.GameObjects.Text[] = [];
+  private playerStatusBgs: Phaser.GameObjects.Graphics[] = [];
   private logLines: Phaser.GameObjects.Text[] = [];
   private static readonly MAX_LOG = 6;
   private soundGfx!: Phaser.GameObjects.Graphics;
@@ -68,12 +69,18 @@ export class HUDManager {
       // ═════════════════════════════════════════════════════════════════════
       // ── 1. Top Header Area (y: 10..130) ──────────────────────────────────
       this.scene.add.text(360, 18, "SNAKE & LADDER", {
-        fontSize: "16px",
-        color: "#f59e0b",
+        fontSize: "17px",
+        color: "#fbbf24",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
-        stroke: "#000000",
-        strokeThickness: 2,
+        letterSpacing: 2,
+        shadow: {
+          offsetX: 0,
+          offsetY: 2,
+          color: "#f59e0b55",
+          blur: 10,
+          fill: true,
+        },
       }).setOrigin(0.5).setDepth(depth + 1);
 
       // Sound button at top-right
@@ -82,13 +89,20 @@ export class HUDManager {
       // ── 2. Top Turn Banner ───────────────────────────────────────────────
       this.turnBg = this.scene.add.graphics();
       this.turnBg.setDepth(depth);
-      this.drawTurnBanner(0x3b82f6);
+      this.drawTurnBanner(0x38bdf8);
 
       this.turnText = this.scene.add.text(360, 52, "PLAYER 1'S TURN", {
         fontSize: "15px",
         color: "#38bdf8",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
+        shadow: {
+          offsetX: 0,
+          offsetY: 1,
+          color: "#38bdf888",
+          blur: 6,
+          fill: true,
+        },
       }).setOrigin(0.5).setDepth(depth + 1);
 
       // ── 3. Player Cards at Top (y: 96) ───────────────────────────────────
@@ -119,11 +133,14 @@ export class HUDManager {
         const badgeShadow = this.scene.add.circle(badgeX + 1, badgeY + 2, 12, 0x000000, 0.4);
         badgeShadow.setDepth(depth + 1);
 
+        const badgeGlow = this.scene.add.circle(badgeX, badgeY, 14, color, 0.35);
+        badgeGlow.setDepth(depth + 1);
+
         const badge = this.scene.add.circle(badgeX, badgeY, 11, color);
-        badge.setStrokeStyle(2, 0xffffff, 0.85);
+        badge.setStrokeStyle(2, 0xffffff, 0.95);
         badge.setDepth(depth + 1);
 
-        const badgeShine = this.scene.add.circle(badgeX - 3, badgeY - 3, 3, 0xffffff, 0.6);
+        const badgeShine = this.scene.add.circle(badgeX - 3, badgeY - 3, 3, 0xffffff, 0.7);
         badgeShine.setDepth(depth + 1);
 
         // Player Name
@@ -138,19 +155,27 @@ export class HUDManager {
         // Tile Position Indicator
         const tileText = this.scene.add.text(badgeX + 16, cy + 2, "Tile 1", {
           fontSize: "11px",
-          color: "#f1f5f9",
+          color: "#e2e8f0",
           fontFamily: "Outfit, sans-serif",
           fontStyle: "bold",
         }).setDepth(depth + 1);
         this.playerTileTexts.push(tileText);
 
+        // Status Pill Badge Background
+        const statusBg = this.scene.add.graphics();
+        statusBg.setDepth(depth + 1);
+        const pillX = cx + cardW / 2 - 44;
+        const pillY = cy;
+        this.drawStatusPill(statusBg, pillX, pillY, i === 0, true);
+        this.playerStatusBgs.push(statusBg);
+
         // Status Text (ACTIVE / WAITING)
-        const statusText = this.scene.add.text(cx + cardW / 2 - 12, cy - 12, i === 0 ? "ACTIVE" : "WAITING", {
+        const statusText = this.scene.add.text(pillX, pillY, i === 0 ? "● ACTIVE" : "WAITING", {
           fontSize: "9px",
           color: i === 0 ? "#4ade80" : "#64748b",
           fontFamily: "Outfit, sans-serif",
           fontStyle: "bold",
-        }).setOrigin(1, 0).setDepth(depth + 1);
+        }).setOrigin(0.5, 0.5).setDepth(depth + 2);
         this.playerStatusTexts.push(statusText);
       }
 
@@ -158,36 +183,43 @@ export class HUDManager {
       const deckBg = this.scene.add.graphics();
       deckBg.setDepth(depth);
 
-      // Deck background slab
-      deckBg.fillStyle(0x000000, 0.45);
+      // Deck background slab with modern layered glass
+      deckBg.fillStyle(0x000000, 0.55);
       deckBg.fillRoundedRect(20, 830, 680, 230, 18);
-      deckBg.fillStyle(COLORS.bg, 0.95);
+      deckBg.fillStyle(0x080d1a, 0.98);
       deckBg.fillRoundedRect(20, 826, 680, 230, 18);
-      deckBg.lineStyle(1.5, COLORS.border, 0.9);
+
+      // Top glass highlight line
+      deckBg.fillStyle(0x38bdf8, 0.35);
+      deckBg.fillRoundedRect(20, 826, 680, 2, { tl: 18, tr: 18, bl: 0, br: 0 });
+
+      deckBg.lineStyle(1.8, 0x1e2d4d, 0.9);
       deckBg.strokeRoundedRect(20, 826, 680, 230, 18);
 
       // Dice Area Title
-      this.scene.add.text(182, 844, "DICE CONTROLLER", {
-        fontSize: "13px",
-        color: "#64748b",
+      this.scene.add.text(182, 844, "✦ DICE CONTROLLER ✦", {
+        fontSize: "12px",
+        color: "#94a3b8",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
+        letterSpacing: 1.5,
       }).setOrigin(0.5).setDepth(depth + 1);
 
       // Match Activity Title
-      this.scene.add.text(518, 844, "MATCH ACTIVITY", {
-        fontSize: "13px",
-        color: "#64748b",
+      this.scene.add.text(518, 844, "● MATCH ACTIVITY", {
+        fontSize: "12px",
+        color: "#38bdf8",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
+        letterSpacing: 1.5,
       }).setOrigin(0.5).setDepth(depth + 1);
 
       // Inset Match Activity Surface
       const logBg = this.scene.add.graphics();
       logBg.setDepth(depth);
-      logBg.fillStyle(0x070b14, 1);
+      logBg.fillStyle(0x060a14, 0.96);
       logBg.fillRoundedRect(355, 860, 325, 184, 12);
-      logBg.lineStyle(1.5, 0x1e293b, 0.8);
+      logBg.lineStyle(1.5, 0x1e2d4d, 0.85);
       logBg.strokeRoundedRect(355, 860, 325, 184, 12);
 
       for (let i = 0; i < HUDManager.MAX_LOG; i++) {
@@ -196,7 +228,7 @@ export class HUDManager {
           "",
           {
             fontSize: "12px",
-            color: "#94a3b8",
+            color: i === 0 ? "#38bdf8" : "#94a3b8",
             fontFamily: "Outfit, sans-serif",
             wordWrap: { width: 300 },
           },
@@ -206,7 +238,7 @@ export class HUDManager {
 
     } else {
       // ═════════════════════════════════════════════════════════════════════
-      // LANDSCAPE DESKTOP HUD (Canvas: 1200 x 800)
+      // LANDSCAPE DESKTOP HUD (Canvas: 1360 x 800)
       // ═════════════════════════════════════════════════════════════════════
       const isTwoPlayer = totalPlayers <= 2;
 
@@ -214,32 +246,52 @@ export class HUDManager {
       const panelBg = this.scene.add.graphics();
       panelBg.setDepth(depth);
 
-      // Deep panel shadow
-      panelBg.fillStyle(0x000000, 0.45);
-      panelBg.fillRect(PANEL_X - PANEL_W / 2 - 6, 0, 6, PANEL_H);
+      // Deep panel shadow to the left
+      panelBg.fillStyle(0x000000, 0.55);
+      panelBg.fillRect(PANEL_X - PANEL_W / 2 - 8, 0, 8, PANEL_H);
 
-      // Panel background slab
-      panelBg.fillStyle(COLORS.bg, 0.98);
+      // Deep obsidian-indigo glass slab
+      panelBg.fillStyle(0x080d1a, 0.98);
       panelBg.fillRect(PANEL_X - PANEL_W / 2, 0, PANEL_W, PANEL_H);
 
-      // Left border bevel
-      panelBg.lineStyle(2, COLORS.border, 1.0);
+      // Subtle top ambient spotlight wash
+      panelBg.fillStyle(0x131d3d, 0.45);
+      panelBg.fillRect(PANEL_X - PANEL_W / 2, 0, PANEL_W, 220);
+
+      // Soft ambient warm glow behind title
+      panelBg.fillStyle(0xf59e0b, 0.035);
+      panelBg.fillCircle(PANEL_X, 36, 160);
+
+      // Luminous left divider neon pinstripe
+      panelBg.lineStyle(4, 0x6366f1, 0.18);
       panelBg.lineBetween(PANEL_X - PANEL_W / 2, 0, PANEL_X - PANEL_W / 2, PANEL_H);
-      panelBg.lineStyle(1, 0x334155, 0.4);
-      panelBg.lineBetween(PANEL_X - PANEL_W / 2 + 1, 0, PANEL_X - PANEL_W / 2 + 1, PANEL_H);
+
+      panelBg.lineStyle(2, 0x818cf8, 0.7);
+      panelBg.lineBetween(PANEL_X - PANEL_W / 2, 0, PANEL_X - PANEL_W / 2, 400);
+
+      panelBg.lineStyle(1.5, 0x1e2d4d, 0.85);
+      panelBg.lineBetween(PANEL_X - PANEL_W / 2, 400, PANEL_X - PANEL_W / 2, PANEL_H);
 
       // ── 2. Title & Header ───────────────────────────────────────────────
-      this.scene.add.text(PANEL_X, 28, "SNAKE & LADDER", {
-        fontSize: "26px",
-        color: "#f59e0b",
+      this.scene.add.text(PANEL_X, 13, "★ ARCADE ARENA ★", {
+        fontSize: "10.5px",
+        color: "#38bdf8",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
         letterSpacing: 3,
+      }).setOrigin(0.5).setDepth(depth + 1);
+
+      this.scene.add.text(PANEL_X, 33, "SNAKE & LADDER", {
+        fontSize: "25px",
+        color: "#fbbf24",
+        fontFamily: "Outfit, sans-serif",
+        fontStyle: "bold",
+        letterSpacing: 2.5,
         shadow: {
           offsetX: 0,
           offsetY: 2,
-          color: "#d9770655",
-          blur: 10,
+          color: "#f59e0b66",
+          blur: 14,
           fill: true,
         },
       }).setOrigin(0.5).setDepth(depth + 1);
@@ -250,7 +302,7 @@ export class HUDManager {
       // ── 3. 3D Turn Banner ───────────────────────────────────────────────
       this.turnBg = this.scene.add.graphics();
       this.turnBg.setDepth(depth);
-      this.drawTurnBanner(0x3b82f6);
+      this.drawTurnBanner(0x38bdf8);
 
       this.turnText = this.scene.add.text(PANEL_X, 74, "PLAYER 1'S TURN", {
         fontSize: "21px",
@@ -258,15 +310,22 @@ export class HUDManager {
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
         letterSpacing: 1.5,
+        shadow: {
+          offsetX: 0,
+          offsetY: 1,
+          color: "#38bdf888",
+          blur: 8,
+          fill: true,
+        },
       }).setOrigin(0.5).setDepth(depth + 1);
 
       // ── 4. Dice Area Subtitle ───────────────────────────────────────────
-      this.scene.add.text(PANEL_X, 118, "DICE CONTROLLER", {
-        fontSize: "13px",
-        color: "#64748b",
+      this.scene.add.text(PANEL_X, 118, "✦ DICE CONTROLLER ✦", {
+        fontSize: "12.5px",
+        color: "#94a3b8",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
-        letterSpacing: 1.8,
+        letterSpacing: 2,
       }).setOrigin(0.5).setDepth(depth + 1);
 
       // ── 5. 3D Player Cards ──────────────────────────────────────────────
@@ -296,12 +355,15 @@ export class HUDManager {
         const badgeShadow = this.scene.add.circle(badgeX + 1, badgeY + 2, badgeRadius + 1, 0x000000, 0.4);
         badgeShadow.setDepth(depth + 1);
 
+        const badgeGlow = this.scene.add.circle(badgeX, badgeY, badgeRadius + 4, color, 0.35);
+        badgeGlow.setDepth(depth + 1);
+
         const badge = this.scene.add.circle(badgeX, badgeY, badgeRadius, color);
-        badge.setStrokeStyle(2, 0xffffff, 0.85);
+        badge.setStrokeStyle(2, 0xffffff, 0.95);
         badge.setDepth(depth + 1);
 
         // Specular glint on avatar badge
-        const badgeShine = this.scene.add.circle(badgeX - 5, badgeY - 5, 5, 0xffffff, 0.6);
+        const badgeShine = this.scene.add.circle(badgeX - 5, badgeY - 5, 5, 0xffffff, 0.7);
         badgeShine.setDepth(depth + 1);
 
         // Player Name
@@ -317,32 +379,47 @@ export class HUDManager {
         // Tile Position Indicator
         const tileText = this.scene.add.text(badgeX + 30, isTwoPlayer ? cy + 6 : cy + 4, "Tile 1", {
           fontSize: isTwoPlayer ? "14px" : "12.5px",
-          color: "#f1f5f9",
+          color: "#e2e8f0",
           fontFamily: "Outfit, sans-serif",
           fontStyle: "bold",
         }).setDepth(depth + 1);
         this.playerTileTexts.push(tileText);
 
+        // Status Pill Badge Background
+        const statusBg = this.scene.add.graphics();
+        statusBg.setDepth(depth + 1);
+        const pillX = PANEL_X + cardW / 2 - 58;
+        const pillY = cy;
+        this.drawStatusPill(statusBg, pillX, pillY, i === 0, false);
+        this.playerStatusBgs.push(statusBg);
+
         // Status Text (ACTIVE / WAITING)
-        const statusText = this.scene.add.text(PANEL_X + cardW / 2 - 24, cy, i === 0 ? "ACTIVE" : "WAITING", {
-          fontSize: isTwoPlayer ? "13px" : "11.5px",
+        const statusText = this.scene.add.text(pillX, pillY, i === 0 ? "● ACTIVE" : "WAITING", {
+          fontSize: isTwoPlayer ? "12px" : "11px",
           color: i === 0 ? "#4ade80" : "#64748b",
           fontFamily: "Outfit, sans-serif",
           fontStyle: "bold",
           letterSpacing: 1.2,
-        }).setOrigin(1, 0.5).setDepth(depth + 1);
+        }).setOrigin(0.5, 0.5).setDepth(depth + 2);
         this.playerStatusTexts.push(statusText);
       }
 
       // ── 6. Inset 3D Move Log Tray ───────────────────────────────────────
       const logHeaderY = isTwoPlayer ? 506 : 614;
 
-      this.scene.add.text(PANEL_X, logHeaderY, "MATCH ACTIVITY", {
-        fontSize: "15px",
-        color: "#94a3b8",
+      this.scene.add.text(PANEL_X, logHeaderY, "● MATCH ACTIVITY", {
+        fontSize: "14.5px",
+        color: "#38bdf8",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
         letterSpacing: 2,
+        shadow: {
+          offsetX: 0,
+          offsetY: 1,
+          color: "#38bdf855",
+          blur: 6,
+          fill: true,
+        },
       }).setOrigin(0.5).setDepth(depth + 1);
 
       const logBg = this.scene.add.graphics();
@@ -353,13 +430,19 @@ export class HUDManager {
       const logBoxH = isTwoPlayer ? 246 : 140;
 
       // Inset drop shadow
-      logBg.fillStyle(0x000000, 0.4);
+      logBg.fillStyle(0x000000, 0.45);
       logBg.fillRoundedRect(PANEL_X - logBoxW / 2, logBoxY, logBoxW, logBoxH, 12);
+
       // Dark recessed log surface
-      logBg.fillStyle(0x070b14, 0.95);
+      logBg.fillStyle(0x060a14, 0.96);
       logBg.fillRoundedRect(PANEL_X - logBoxW / 2, logBoxY, logBoxW, logBoxH, 12);
+
+      // Top cyan reflex line
+      logBg.fillStyle(0x38bdf8, 0.25);
+      logBg.fillRoundedRect(PANEL_X - logBoxW / 2 + 1, logBoxY + 1, logBoxW - 2, 2, { tl: 11, tr: 11, bl: 0, br: 0 });
+
       // Bevel border
-      logBg.lineStyle(1.4, 0x1e293b, 0.9);
+      logBg.lineStyle(1.4, 0x1e2d4d, 0.9);
       logBg.strokeRoundedRect(PANEL_X - logBoxW / 2, logBoxY, logBoxW, logBoxH, 12);
 
       const lineGap = isTwoPlayer ? 34 : 25;
@@ -368,10 +451,10 @@ export class HUDManager {
         const t = this.scene.add.text(
           PANEL_X - logBoxW / 2 + 20,
           logBoxY + 16 + i * lineGap,
-          i === 0 ? "Match started. Roll the dice to begin!" : "",
+          i === 0 ? "▸ Match started. Roll the dice to begin!" : "",
           {
             fontSize: isTwoPlayer ? "14px" : "12.5px",
-            color: i === 0 ? "#64748b" : "#94a3b8",
+            color: i === 0 ? "#38bdf8" : "#94a3b8",
             fontFamily: "Outfit, sans-serif",
             wordWrap: { width: logBoxW - 40 },
           },
@@ -384,6 +467,34 @@ export class HUDManager {
     this.scene.events.on(GameEvents.MOVEMENT_FINISHED, (id: number, tile: number) => {
       this.updatePlayerTile(id, tile);
     });
+  }
+
+  private drawStatusPill(g: Phaser.GameObjects.Graphics, cx: number, cy: number, active: boolean, isPortrait = false): void {
+    g.clear();
+    const pw = isPortrait ? 66 : 82;
+    const ph = isPortrait ? 22 : 26;
+    const px = cx - pw / 2;
+    const py = cy - ph / 2;
+    const r = ph / 2;
+
+    if (active) {
+      // Glow aura
+      g.fillStyle(0x10b981, 0.18);
+      g.fillRoundedRect(px - 2, py - 2, pw + 4, ph + 4, r + 2);
+      // Pill fill
+      g.fillStyle(0x064e3b, 0.88);
+      g.fillRoundedRect(px, py, pw, ph, r);
+      // Neon stroke
+      g.lineStyle(1.4, 0x10b981, 0.95);
+      g.strokeRoundedRect(px, py, pw, ph, r);
+    } else {
+      // Pill fill
+      g.fillStyle(0x0f172a, 0.65);
+      g.fillRoundedRect(px, py, pw, ph, r);
+      // Subtle stroke
+      g.lineStyle(1.2, 0x334155, 0.55);
+      g.strokeRoundedRect(px, py, pw, ph, r);
+    }
   }
 
   private drawPlayerCard(
@@ -401,30 +512,36 @@ export class HUDManager {
     const r = w > 250 ? 14 : 10;
     const depth = active ? 4 : 2;
 
+    if (active) {
+      // Outer colored neon glow
+      g.fillStyle(borderColor, 0.14);
+      g.fillRoundedRect(bx - 3, by - 2, w + 6, h + 6, r + 2);
+    }
+
     // Card drop shadow
     g.fillStyle(0x000000, active ? 0.45 : 0.25);
-    g.fillRoundedRect(bx, by + depth, w, h, r);
+    g.fillRoundedRect(bx, by + depth + 1, w, h, r);
 
     // Card extruded base
-    g.fillStyle(0x070b14, 1);
-    g.fillRoundedRect(bx, by + depth - 1, w, h, r);
+    g.fillStyle(0x060a14, 1);
+    g.fillRoundedRect(bx, by + depth, w, h, r);
 
     // Card main surface
-    g.fillStyle(COLORS.card, 1);
+    g.fillStyle(active ? 0x0c162c : 0x0a1020, 0.96);
     g.fillRoundedRect(bx, by, w, h, r);
 
     // Active glow fill
     if (active) {
-      g.fillStyle(borderColor, 0.14);
+      g.fillStyle(borderColor, 0.16);
       g.fillRoundedRect(bx, by, w, h, r);
     }
 
     // Top specular highlight edge
-    g.fillStyle(0xffffff, active ? 0.2 : 0.08);
+    g.fillStyle(0xffffff, active ? 0.22 : 0.08);
     g.fillRoundedRect(bx + 1, by + 1, w - 2, 4, { tl: r - 1, tr: r - 1, bl: 0, br: 0 });
 
-    // Metallic border
-    g.lineStyle(active ? 2.5 : 1.5, borderColor, active ? 0.95 : 0.4);
+    // Metallic neon border
+    g.lineStyle(active ? 2.2 : 1.2, active ? borderColor : 0x1e2d4d, active ? 0.95 : 0.6);
     g.strokeRoundedRect(bx, by, w, h, r);
   }
 
@@ -451,9 +568,9 @@ export class HUDManager {
     const active = !this.soundMuted;
 
     // Glass circular base
-    this.soundGfx.fillStyle(0x0f172a, hover ? 0.98 : 0.85);
+    this.soundGfx.fillStyle(0x0b1328, hover ? 0.98 : 0.88);
     this.soundGfx.fillCircle(cx, cy, 16);
-    this.soundGfx.lineStyle(1.6, hover ? 0x6366f1 : 0x334155, 0.9);
+    this.soundGfx.lineStyle(1.8, hover ? 0x38bdf8 : (active ? 0xf59e0b : 0x334155), 0.9);
     this.soundGfx.strokeCircle(cx, cy, 16);
 
     // Vector speaker cone
@@ -485,25 +602,33 @@ export class HUDManager {
     const by = this.isPortrait ? 31 : 48;
     const r = this.isPortrait ? 10 : 14;
 
-    // Banner drop shadow
-    this.turnBg.fillStyle(0x000000, 0.35);
+    // Ambient soft drop shadow / outer glow
+    this.turnBg.fillStyle(color, 0.16);
+    this.turnBg.fillRoundedRect(bx - 3, by - 1, w + 6, h + 5, r + 2);
+
+    // Deep panel shadow
+    this.turnBg.fillStyle(0x000000, 0.4);
     this.turnBg.fillRoundedRect(bx, by + 3, w, h, r);
 
-    // Main surface
-    this.turnBg.fillStyle(COLORS.card, 1);
+    // Dark glass base slab
+    this.turnBg.fillStyle(0x0a1022, 0.96);
     this.turnBg.fillRoundedRect(bx, by, w, h, r);
 
     // Glowing active color accent tint
-    this.turnBg.fillStyle(color, 0.15);
+    this.turnBg.fillStyle(color, 0.18);
     this.turnBg.fillRoundedRect(bx, by, w, h, r);
 
     // Top specular sheen
-    this.turnBg.fillStyle(0xffffff, 0.25);
-    this.turnBg.fillRoundedRect(bx + 1, by + 1, w - 2, 4, { tl: r - 1, tr: r - 1, bl: 0, br: 0 });
+    this.turnBg.fillStyle(0xffffff, 0.26);
+    this.turnBg.fillRoundedRect(bx + 1, by + 1, w - 2, 4.5, { tl: r - 1, tr: r - 1, bl: 0, br: 0 });
 
-    // Border
-    this.turnBg.lineStyle(2, color, 0.85);
+    // Luminous neon border
+    this.turnBg.lineStyle(2, color, 0.95);
     this.turnBg.strokeRoundedRect(bx, by, w, h, r);
+
+    // Inner subtle hairline
+    this.turnBg.lineStyle(1, 0xffffff, 0.12);
+    this.turnBg.strokeRoundedRect(bx + 1.5, by + 1.5, w - 3, h - 3, r - 1);
   }
 
   updateTurn(playerId: number): void {
@@ -511,6 +636,9 @@ export class HUDManager {
     const color = PLAYER_HEX[(playerId - 1) % 4] ?? "#38bdf8";
     const colorInt = PLAYER_COLORS[(playerId - 1) % 4] ?? 0x38bdf8;
     const reduced = prefersReducedMotion();
+
+    // Broadcast turn changed so Dice dais syncs
+    this.scene.events.emit(GameEvents.TURN_CHANGED, playerId);
 
     if (reduced) {
       this.turnText.setText(`${name}'S TURN`);
@@ -552,6 +680,12 @@ export class HUDManager {
       const isActive = i === idx;
       const geom = this.playerCardGeoms[i] ?? { cx: PANEL_X, cy: 344 + i * 92, w: 490, h: 76 };
       this.drawPlayerCard(this.playerCardBgs[i], geom.cx, geom.cy, geom.w, geom.h, color, isActive);
+
+      if (this.playerStatusBgs[i]) {
+        const pillX = this.isPortrait ? (geom.cx + geom.w / 2 - 44) : (PANEL_X + geom.w / 2 - 58);
+        const pillY = geom.cy;
+        this.drawStatusPill(this.playerStatusBgs[i], pillX, pillY, isActive, this.isPortrait);
+      }
     }
 
     // Update status texts
@@ -559,7 +693,7 @@ export class HUDManager {
       const st = this.playerStatusTexts[i];
       if (!st) continue;
       if (i === idx) {
-        st.setText("ACTIVE");
+        st.setText("● ACTIVE");
         st.setColor("#4ade80");
       } else {
         st.setText("WAITING");
@@ -579,11 +713,15 @@ export class HUDManager {
     for (let i = this.logLines.length - 1; i > 0; i--) {
       const prev = this.logLines[i - 1];
       const curr = this.logLines[i];
-      if (prev && curr) curr.setText(prev.text);
+      if (prev && curr) {
+        curr.setText(prev.text);
+        curr.setColor(i === 1 ? "#cbd5e1" : (i === 2 ? "#94a3b8" : "#64748b"));
+      }
     }
     const first = this.logLines[0];
     if (first) {
-      first.setText(`> ${message}`);
+      first.setText(`▸ ${message}`);
+      first.setColor("#38bdf8");
       if (!reduced) {
         first.setAlpha(0);
         this.scene.tweens.add({ targets: first, alpha: 1, duration: animDuration(200) });
@@ -597,9 +735,13 @@ export class HUDManager {
     for (let i = 0; i < HUDManager.MAX_LOG; i++) {
       const line = lines[i];
       const target = this.logLines[i];
-      if (target) target.setText(line ? `> ${line}` : "");
+      if (target) {
+        target.setText(line ? `▸ ${line}` : "");
+        target.setColor(i === 0 ? "#38bdf8" : (i === 1 ? "#cbd5e1" : (i === 2 ? "#94a3b8" : "#64748b")));
+      }
     }
   }
 }
 
 export default HUDManager;
+
