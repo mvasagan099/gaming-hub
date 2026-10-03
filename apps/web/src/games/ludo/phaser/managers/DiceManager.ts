@@ -20,6 +20,7 @@ export default class DiceManager {
   private rollLabel!: Phaser.GameObjects.Text;
   private haloTween: Phaser.Tweens.Tween | null = null;
 
+  private isPortrait = false;
   private value = 1;
   private rolling = false;
   private enabled = true;
@@ -31,12 +32,15 @@ export default class DiceManager {
     this.scene = scene;
   }
 
-  create(x = 912, y = 220): void {
+  create(x = 1000, y = 205, isPortrait = false): void {
+    this.isPortrait = isPortrait;
     this.diceGfx = this.scene.add.graphics();
     this.draw3DDice(this.value);
 
     // Invisible click target over dice cube
-    this.hitArea = this.scene.add.rectangle(0, -18, 80, 80, 0xffffff, 0);
+    const cubeHit = this.isPortrait ? 80 : 104;
+    const cubeCy = this.isPortrait ? -18 : -22;
+    this.hitArea = this.scene.add.rectangle(0, cubeCy, cubeHit, cubeHit, 0xffffff, 0);
     this.hitArea.setInteractive({ useHandCursor: true });
     this.hitArea.on("pointerdown", () => this.handlePointerDown());
     this.hitArea.on("pointerover", () => {
@@ -52,7 +56,10 @@ export default class DiceManager {
     this.rollBtnGfx = this.scene.add.graphics();
     this.drawButton(true, "active");
 
-    const btnHit = this.scene.add.rectangle(0, 48, 172, 42, 0xffffff, 0);
+    const btnW = this.isPortrait ? 172 : 320;
+    const btnH = this.isPortrait ? 42 : 54;
+    const btnY = this.isPortrait ? 48 : 56;
+    const btnHit = this.scene.add.rectangle(0, btnY, btnW, btnH, 0xffffff, 0);
     btnHit.setInteractive({ useHandCursor: true });
     btnHit.on("pointerdown", () => {
       // Press micro-animation
@@ -72,11 +79,12 @@ export default class DiceManager {
       if (this.enabled) this.drawButton(true, "active");
     });
 
-    this.rollLabel = this.scene.add.text(0, 48, "ROLL DICE", {
-      fontSize: "13px",
+    this.rollLabel = this.scene.add.text(0, btnY, "ROLL DICE", {
+      fontSize: this.isPortrait ? "14px" : "20px",
       color: "#ffffff",
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
+      letterSpacing: this.isPortrait ? 0 : 1.5,
       shadow: {
         offsetX: 0,
         offsetY: 1,
@@ -110,10 +118,11 @@ export default class DiceManager {
 
   private draw3DDice(face: number, isGoldenSix = false, tiltX = 0, tiltY = 0): void {
     this.diceGfx.clear();
-    const s = 34; // Half-size of dice cube
-    const r = 10;
-    const dotR = 5.2;
-    const cy = -18;
+    const s = this.isPortrait ? 34 : 44; // Half-size of dice cube
+    const r = this.isPortrait ? 10 : 12;
+    const dotR = this.isPortrait ? 5.2 : 6.5;
+    const cy = this.isPortrait ? -18 : -22;
+    const dotSpacing = this.isPortrait ? 12 : 16;
 
     // 1. Soft 3D Ambient Drop Shadow under cube
     this.diceGfx.fillStyle(0x000000, 0.35);
@@ -139,11 +148,12 @@ export default class DiceManager {
 
     // 5. Engraved Pips (Dots with Inner Bevels)
     const clamp = Math.max(1, Math.min(face, 6));
-    const dots = DOT_PATTERNS[clamp - 1] ?? DOT_PATTERNS[0];
+    const baseDots = DOT_PATTERNS[clamp - 1] ?? DOT_PATTERNS[0];
+    const scale = dotSpacing / 12;
 
-    for (const [dx, dy] of dots) {
-      const px = dx + tiltX;
-      const py = cy + dy + tiltY;
+    for (const [dx, dy] of baseDots) {
+      const px = dx * scale + tiltX;
+      const py = cy + dy * scale + tiltY;
 
       // Pip top highlight (gives recessed engraved look)
       this.diceGfx.fillStyle(0xffffff, 0.4);
@@ -155,7 +165,7 @@ export default class DiceManager {
 
       // Inner pip specular glint
       this.diceGfx.fillStyle(0xffffff, 0.6);
-      this.diceGfx.fillCircle(px - 1.5, py - 1.5, 1.2);
+      this.diceGfx.fillCircle(px - 1.5, py - 1.5, this.isPortrait ? 1.2 : 1.6);
     }
   }
 
@@ -163,10 +173,10 @@ export default class DiceManager {
 
   private drawButton(enabled: boolean, state: "active" | "hover" | "disabled" | "select"): void {
     this.rollBtnGfx.clear();
-    const w = 172;
-    const h = 42;
-    const y = 48;
-    const r = 12;
+    const w = this.isPortrait ? 172 : 320;
+    const h = this.isPortrait ? 42 : 54;
+    const y = this.isPortrait ? 48 : 56;
+    const r = this.isPortrait ? 12 : 16;
 
     // Drop shadow
     this.rollBtnGfx.fillStyle(0x000000, 0.25);

@@ -204,16 +204,16 @@ export default class BoardManager {
       // ── Embossed Tile Numbers ──
       let numColor = "#ffffff";
       let numStroke = "rgba(0,0,0,0.65)";
-      let numFontSize = "12px";
+      let numFontSize = "15px";
 
       if (tile === 100) {
         numColor = "#451a03";
         numStroke = "rgba(254, 243, 199, 0.8)";
-        numFontSize = "13px";
+        numFontSize = "16px";
       } else if (tile === 1) {
         numColor = "#ffffff";
         numStroke = "rgba(6, 78, 59, 0.9)";
-        numFontSize = "13px";
+        numFontSize = "16px";
       }
 
       // Embossed number background drop shadow
@@ -231,7 +231,7 @@ export default class BoardManager {
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
         stroke: numStroke,
-        strokeThickness: 2,
+        strokeThickness: 2.5,
       }).setOrigin(0.5).setDepth(2);
 
       // ── START / FINISH Special Badges ─────────────────────────────────────
@@ -240,12 +240,12 @@ export default class BoardManager {
         const startBadge = this.scene.add.graphics();
         startBadge.setDepth(2);
         startBadge.fillStyle(0x064e3b, 0.8);
-        startBadge.fillRoundedRect(pos.x - 22, pos.y + 11, 44, 12, 4);
+        startBadge.fillRoundedRect(pos.x - 24, pos.y + 11, 48, 14, 4);
         startBadge.lineStyle(1, 0x34d399, 0.9);
-        startBadge.strokeRoundedRect(pos.x - 22, pos.y + 11, 44, 12, 4);
+        startBadge.strokeRoundedRect(pos.x - 24, pos.y + 11, 48, 14, 4);
 
-        this.scene.add.text(pos.x, pos.y + 17, "★ START ★", {
-          fontSize: "7.5px",
+        this.scene.add.text(pos.x, pos.y + 18, "★ START ★", {
+          fontSize: "9px",
           color: "#a7f3d0",
           fontFamily: "Outfit, sans-serif",
           fontStyle: "bold",
@@ -257,12 +257,12 @@ export default class BoardManager {
         const winBadge = this.scene.add.graphics();
         winBadge.setDepth(2);
         winBadge.fillStyle(0x78350f, 0.85);
-        winBadge.fillRoundedRect(pos.x - 23, pos.y + 11, 46, 12, 4);
+        winBadge.fillRoundedRect(pos.x - 25, pos.y + 11, 50, 14, 4);
         winBadge.lineStyle(1, 0xfde68a, 0.9);
-        winBadge.strokeRoundedRect(pos.x - 23, pos.y + 11, 46, 12, 4);
+        winBadge.strokeRoundedRect(pos.x - 25, pos.y + 11, 50, 14, 4);
 
-        this.scene.add.text(pos.x, pos.y + 17, "🏆 VICTORY", {
-          fontSize: "7.5px",
+        this.scene.add.text(pos.x, pos.y + 18, "🏆 VICTORY", {
+          fontSize: "9px",
           color: "#fef3c7",
           fontFamily: "Outfit, sans-serif",
           fontStyle: "bold",

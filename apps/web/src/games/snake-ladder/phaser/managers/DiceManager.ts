@@ -22,6 +22,7 @@ export default class DiceManager {
   private valueText!: Phaser.GameObjects.Text;
   private rollBtn!: Phaser.GameObjects.Graphics;
   private rollBtnLabel!: Phaser.GameObjects.Text;
+  private isPortrait = false;
   private value = 1;
   private rolling = false;
   private enabled = true;
@@ -31,15 +32,18 @@ export default class DiceManager {
     this.scene = scene;
   }
 
-  create(x = 912, y = 210): void {
+  create(x = 1000, y = 210, isPortrait = false): void {
+    this.isPortrait = isPortrait;
     const reduced = prefersReducedMotion();
 
-    // ── 3D Dice Face Graphics (72×72) ──────────────────────────────────
+    // ── 3D Dice Face Graphics ──────────────────────────────────
     this.diceGraphics = this.scene.add.graphics();
     this.draw3DDiceFace(this.value);
 
     // Hit area for clicking directly on the 3D dice
-    const diceHitArea = this.scene.add.rectangle(0, -18, DICE_SIZE * 2 + 10, DICE_SIZE * 2 + 14, 0xffffff, 0);
+    const s = this.isPortrait ? 36 : 44;
+    const cubeCy = this.isPortrait ? -18 : -22;
+    const diceHitArea = this.scene.add.rectangle(0, cubeCy, s * 2 + 16, s * 2 + 16, 0xffffff, 0);
     diceHitArea.setInteractive({ useHandCursor: true });
     diceHitArea.on("pointerdown", () => this.roll());
     diceHitArea.on("pointerover", () => {
@@ -54,7 +58,7 @@ export default class DiceManager {
     });
 
     // Hidden value text
-    this.valueText = this.scene.add.text(0, -18, "", {
+    this.valueText = this.scene.add.text(0, cubeCy, "", {
       fontSize: "0px",
       color: "#000000",
     }).setOrigin(0.5).setDepth(0);
@@ -63,7 +67,10 @@ export default class DiceManager {
     this.rollBtn = this.scene.add.graphics();
     this.draw3DRollButton(false, false);
 
-    const btnHitArea = this.scene.add.rectangle(0, 50, 172, 44, 0xffffff, 0);
+    const btnW = this.isPortrait ? 172 : 320;
+    const btnH = this.isPortrait ? 44 : 54;
+    const btnCenterY = this.isPortrait ? 50 : 58;
+    const btnHitArea = this.scene.add.rectangle(0, btnCenterY, btnW, btnH, 0xffffff, 0);
     btnHitArea.setInteractive({ useHandCursor: true });
     btnHitArea.on("pointerdown", () => {
       this.draw3DRollButton(true, true);
@@ -79,11 +86,12 @@ export default class DiceManager {
       if (this.enabled) this.draw3DRollButton(false, false);
     });
 
-    this.rollBtnLabel = this.scene.add.text(0, 50, "ROLL DICE", {
-      fontSize: "14px",
+    this.rollBtnLabel = this.scene.add.text(0, btnCenterY, "ROLL DICE", {
+      fontSize: this.isPortrait ? "14px" : "20px",
       color: "#ffffff",
       fontFamily: "Outfit, sans-serif",
       fontStyle: "bold",
+      letterSpacing: this.isPortrait ? 0 : 1.5,
       stroke: "#1e1b4b",
       strokeThickness: 2,
     }).setOrigin(0.5);
@@ -100,14 +108,19 @@ export default class DiceManager {
     this.container.setDepth(100);
   }
 
+  private getButtonDims(pressed = false) {
+    const btnW = this.isPortrait ? 172 : 320;
+    const btnH = this.isPortrait ? 44 : 54;
+    const bx = -btnW / 2;
+    const by = (this.isPortrait ? 28 : 31) + (pressed ? 3 : 0);
+    const r = this.isPortrait ? 10 : 14;
+    const depth = pressed ? 2 : (this.isPortrait ? 5 : 6);
+    return { btnW, btnH, bx, by, r, depth };
+  }
+
   private draw3DRollButton(hover: boolean, pressed: boolean): void {
     this.rollBtn.clear();
-    const btnW = 172;
-    const btnH = 44;
-    const bx = -btnW / 2;
-    const by = 28 + (pressed ? 3 : 0);
-    const r = 10;
-    const depth = pressed ? 2 : 5;
+    const { btnW, btnH, bx, by, r, depth } = this.getButtonDims(pressed);
 
     // Button drop shadow
     this.rollBtn.fillStyle(0x000000, 0.4);
@@ -133,11 +146,7 @@ export default class DiceManager {
 
   private drawDisabledButton(): void {
     this.rollBtn.clear();
-    const btnW = 172;
-    const btnH = 44;
-    const bx = -btnW / 2;
-    const by = 28;
-    const r = 10;
+    const { btnW, btnH, bx, by, r } = this.getButtonDims(false);
 
     // Disabled shadow
     this.rollBtn.fillStyle(0x000000, 0.2);
@@ -158,10 +167,11 @@ export default class DiceManager {
   /** Draw 3D physical cube dice with inset pips and bevel highlights */
   private draw3DDiceFace(face: number): void {
     this.diceGraphics.clear();
-    const s = DICE_SIZE;
-    const r = DICE_CORNER_RADIUS;
-    const cy = -18;
-    const depth = 6;
+    const s = this.isPortrait ? 36 : 44;
+    const r = this.isPortrait ? 12 : 14;
+    const cy = this.isPortrait ? -18 : -22;
+    const depth = this.isPortrait ? 6 : 7;
+    const dotSpacingRatio = this.isPortrait ? 1.0 : (16 / 13);
 
     // ── 1. Soft Ambient Ground Shadow ──
     this.diceGraphics.fillStyle(0x000000, 0.2);
@@ -198,9 +208,9 @@ export default class DiceManager {
     const isOneOrSix = clampedFace === 1;
 
     for (const [dx, dy] of dots) {
-      const pipX = dx;
-      const pipY = dy + cy;
-      const pipRadius = clampedFace === 1 ? 8 : 5.5;
+      const pipX = dx * dotSpacingRatio;
+      const pipY = dy * dotSpacingRatio + cy;
+      const pipRadius = clampedFace === 1 ? (this.isPortrait ? 8 : 10) : (this.isPortrait ? 5.5 : 7);
 
       // Inset drop shadow (simulates carved recess)
       this.diceGraphics.fillStyle(0x000000, 0.25);

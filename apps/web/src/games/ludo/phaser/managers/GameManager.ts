@@ -119,13 +119,17 @@ export default class GameManager {
     this.addLog(`${player.name} rolled a ${value}`);
 
     // Dice feedback
+    const isPortrait = this.scene.scale.height > this.scene.scale.width;
+    const diceFeedbackX = isPortrait ? 185 : 1000;
+    const diceFeedbackY = isPortrait ? 900 : 185;
+
     if (this.feedback) {
-      this.feedback.diceResult(value, 912, 190);
+      this.feedback.diceResult(value, diceFeedbackX, diceFeedbackY);
     }
 
     // Extra turn feedback for rolling 6
     if (value === 6 && this.feedback) {
-      this.feedback.extraTurn(912, 230);
+      this.feedback.extraTurn(diceFeedbackX, diceFeedbackY + 40);
     }
 
     this.legalMoves = this.ruleEngine.getLegalMoves(this.state, value);

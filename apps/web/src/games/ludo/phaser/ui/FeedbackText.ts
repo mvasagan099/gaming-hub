@@ -29,7 +29,7 @@ export class FeedbackText {
       color = "#ffffff",
       bgColor = 0x0f172a,
       borderColor = 0xf59e0b,
-      fontSize = "13px",
+      fontSize = "15px",
       duration = ANIM.feedbackFloatDuration,
       distance = ANIM.feedbackFloatDistance,
     } = options;
@@ -92,7 +92,7 @@ export class FeedbackText {
       color: isSix ? "#fbbf24" : "#ffffff",
       bgColor: isSix ? 0x451a03 : 0x0f172a,
       borderColor: isSix ? 0xf59e0b : 0x334155,
-      fontSize: isSix ? "13px" : "12px",
+      fontSize: isSix ? "16px" : "15px",
     });
   }
 
@@ -102,7 +102,7 @@ export class FeedbackText {
       color: "#f87171",
       bgColor: 0x450a0a,
       borderColor: 0xef4444,
-      fontSize: "13px",
+      fontSize: "15px",
       duration: 1100,
       distance: 45,
     });
@@ -114,7 +114,7 @@ export class FeedbackText {
       color: "#4ade80",
       bgColor: 0x052e16,
       borderColor: 0x22c55e,
-      fontSize: "12px",
+      fontSize: "14.5px",
       duration: 900,
     });
   }
@@ -125,7 +125,7 @@ export class FeedbackText {
       color: "#fbbf24",
       bgColor: 0x451a03,
       borderColor: 0xf59e0b,
-      fontSize: "13px",
+      fontSize: "16px",
       duration: 1200,
       distance: 50,
     });
@@ -137,7 +137,7 @@ export class FeedbackText {
       color: "#60a5fa",
       bgColor: 0x0f172a,
       borderColor: 0x3b82f6,
-      fontSize: "12px",
+      fontSize: "15px",
       duration: 950,
     });
   }
@@ -148,7 +148,7 @@ export class FeedbackText {
       color: "#a78bfa",
       bgColor: 0x0f172a,
       borderColor: 0x8b5cf6,
-      fontSize: "12px",
+      fontSize: "14.5px",
       duration: 850,
     });
   }

@@ -43,7 +43,7 @@ export default class SnakeLadderScene extends Phaser.Scene {
     const names = (this.registry.get("names") as string[] | undefined) ?? [];
     const reduced = prefersReducedMotion();
 
-    const canvasW = isPortrait ? 720 : 1024;
+    const canvasW = isPortrait ? 720 : 1200;
     const canvasH = isPortrait ? 1080 : 800;
 
     // ── 0. Atmospheric Ambient Backdrop & Vignette (depth -1) ───────────
@@ -59,6 +59,10 @@ export default class SnakeLadderScene extends Phaser.Scene {
     bgG.fillCircle(isPortrait ? 360 : 400, isPortrait ? 470 : 400, isPortrait ? 330 : 360);
     bgG.fillStyle(0x3b82f6, 0.08);
     bgG.fillCircle(isPortrait ? 360 : 400, isPortrait ? 470 : 400, isPortrait ? 220 : 240);
+    if (!isPortrait) {
+      bgG.fillStyle(0x312e81, 0.15);
+      bgG.fillCircle(1000, 400, 320);
+    }
 
     // ── 1. Board (depth 0–3) ─────────────────────────────────────────────
     const boardSize = isPortrait ? 660 : 680;
@@ -89,7 +93,7 @@ export default class SnakeLadderScene extends Phaser.Scene {
 
     // ── 6. Dice (depth 100) ─────────────────────────────────────────────
     this.dice = new DiceManager(this);
-    this.dice.create(isPortrait ? 185 : 912, isPortrait ? 950 : 210);
+    this.dice.create(isPortrait ? 185 : 1000, isPortrait ? 950 : 210, isPortrait);
 
     // ── 7. Feedback text ─────────────────────────────────────────────────
     this.feedback = new FeedbackText(this);

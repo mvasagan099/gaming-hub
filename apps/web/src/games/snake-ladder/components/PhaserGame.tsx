@@ -49,7 +49,7 @@ export default function PhaserGame({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const gameWidth = isPortrait ? 720 : 1024;
+    const gameWidth = isPortrait ? 720 : 1200;
     const gameHeight = isPortrait ? 1080 : 800;
 
     const config: Phaser.Types.Core.GameConfig = {
@@ -100,9 +100,12 @@ export default function PhaserGame({
       className={`relative mx-auto w-full ${
         isPortrait
           ? "max-w-[min(98vw,720px)] aspect-[720/1080] max-h-[calc(100dvh-5.5rem)]"
-          : "max-w-[min(96vw,calc((100dvh-5rem)*1.28),1280px)] aspect-[1024/800] max-h-[calc(100dvh-4.5rem)]"
-      } h-auto rounded-2xl overflow-hidden border border-slate-700/50 shadow-2xl flex justify-center items-center`}
+          : "max-w-[min(98vw,calc((100dvh-5rem)*1.5),1440px)] aspect-[1200/800] max-h-[calc(100dvh-4.5rem)]"
+      } h-auto rounded-2xl overflow-hidden border border-slate-700/50 shadow-2xl flex justify-center items-center backdrop-blur-md`}
     >
+      {/* Subtle ambient lighting flares behind the board */}
+      <div className="absolute -top-32 -left-32 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
       <div
         ref={containerRef}
         className="w-full h-full flex items-center justify-center overflow-hidden"

@@ -29,7 +29,7 @@ export class FeedbackText {
     const reduced = prefersReducedMotion();
     const {
       color = "#ffffff",
-      fontSize = "16px",
+      fontSize = "18px",
       stroke = "#000000",
       strokeThickness = 3,
       duration = ANIM.feedbackFloatDuration,
@@ -63,7 +63,7 @@ export class FeedbackText {
   diceResult(value: number, x: number, y: number): void {
     this.float(`+${value}`, x, y - 30, {
       color: "#fbbf24",
-      fontSize: "20px",
+      fontSize: "24px",
       stroke: "#78350f",
     });
   }
@@ -72,7 +72,7 @@ export class FeedbackText {
   snakeHit(x: number, y: number): void {
     this.float("SNAKE!", x, y, {
       color: "#ef4444",
-      fontSize: "18px",
+      fontSize: "22px",
       stroke: "#7f1d1d",
       duration: 1000,
       distance: 50,
@@ -83,7 +83,7 @@ export class FeedbackText {
   ladderClimb(x: number, y: number): void {
     this.float("LADDER!", x, y, {
       color: "#4ade80",
-      fontSize: "18px",
+      fontSize: "22px",
       stroke: "#14532d",
       duration: 1000,
       distance: 50,
@@ -94,7 +94,7 @@ export class FeedbackText {
   overshoot(x: number, y: number): void {
     this.float("Need exact!", x, y, {
       color: "#fbbf24",
-      fontSize: "14px",
+      fontSize: "17px",
       stroke: "#78350f",
       duration: 900,
     });
@@ -104,7 +104,7 @@ export class FeedbackText {
   extraTurn(x: number, y: number): void {
     this.float("EXTRA TURN!", x, y, {
       color: "#60a5fa",
-      fontSize: "14px",
+      fontSize: "17px",
       stroke: "#1e3a5f",
       duration: 900,
     });

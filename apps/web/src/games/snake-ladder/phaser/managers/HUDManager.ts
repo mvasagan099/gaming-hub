@@ -2,8 +2,8 @@ import Phaser from "phaser";
 import { GameEvents } from "../events/GameEvents";
 import { animDuration, prefersReducedMotion } from "../constants";
 
-const PANEL_X = 912;
-const PANEL_W = 224;
+const PANEL_X = 1000;
+const PANEL_W = 400;
 const PANEL_H = 800;
 
 const COLORS = {
@@ -28,7 +28,7 @@ export class HUDManager {
   private playerTileTexts: Phaser.GameObjects.Text[] = [];
   private playerStatusTexts: Phaser.GameObjects.Text[] = [];
   private logLines: Phaser.GameObjects.Text[] = [];
-  private static readonly MAX_LOG = 4;
+  private static readonly MAX_LOG = 6;
   private soundBtn!: Phaser.GameObjects.Text;
   private muteCallback: (() => void) | null = null;
   private playerCardBgs: Phaser.GameObjects.Graphics[] = [];
@@ -214,156 +214,47 @@ export class HUDManager {
 
     } else {
       // ═════════════════════════════════════════════════════════════════════
-      // LANDSCAPE DESKTOP HUD (Canvas: 1024 x 800)
+      // LANDSCAPE DESKTOP HUD (Canvas: 1200 x 800)
       // ═════════════════════════════════════════════════════════════════════
+      const isTwoPlayer = totalPlayers <= 2;
+
       // ── 1. 3D Sidebar Background Panel ──────────────────────────────────
       const panelBg = this.scene.add.graphics();
       panelBg.setDepth(depth);
 
       // Deep panel shadow
-      panelBg.fillStyle(0x000000, 0.4);
+      panelBg.fillStyle(0x000000, 0.45);
       panelBg.fillRect(PANEL_X - PANEL_W / 2 - 6, 0, 6, PANEL_H);
 
       // Panel background slab
-      panelBg.fillStyle(COLORS.bg, 0.95);
+      panelBg.fillStyle(COLORS.bg, 0.98);
       panelBg.fillRect(PANEL_X - PANEL_W / 2, 0, PANEL_W, PANEL_H);
 
       // Left border bevel
-      panelBg.lineStyle(1.5, COLORS.border, 0.9);
+      panelBg.lineStyle(2, COLORS.border, 1.0);
       panelBg.lineBetween(PANEL_X - PANEL_W / 2, 0, PANEL_X - PANEL_W / 2, PANEL_H);
       panelBg.lineStyle(1, 0x334155, 0.4);
       panelBg.lineBetween(PANEL_X - PANEL_W / 2 + 1, 0, PANEL_X - PANEL_W / 2 + 1, PANEL_H);
 
       // ── 2. Title & Header ───────────────────────────────────────────────
-      this.scene.add.text(PANEL_X, 22, "SNAKE & LADDER", {
-        fontSize: "14px",
+      this.scene.add.text(PANEL_X - 25, 28, "SNAKE & LADDER", {
+        fontSize: "23px",
         color: "#f59e0b",
         fontFamily: "Outfit, sans-serif",
         fontStyle: "bold",
-        stroke: "#000000",
-        strokeThickness: 1.5,
+        letterSpacing: 2.5,
+        shadow: {
+          offsetX: 0,
+          offsetY: 2,
+          color: "#d9770655",
+          blur: 8,
+          fill: true,
+        },
       }).setOrigin(0.5).setDepth(depth + 1);
 
-      // ── 3. 3D Turn Banner ───────────────────────────────────────────────
-      this.turnBg = this.scene.add.graphics();
-      this.turnBg.setDepth(depth);
-      this.drawTurnBanner(0x3b82f6);
-
-      this.turnText = this.scene.add.text(PANEL_X, 65, "PLAYER 1'S TURN", {
-        fontSize: "12px",
-        color: "#38bdf8",
-        fontFamily: "Outfit, sans-serif",
-        fontStyle: "bold",
-      }).setOrigin(0.5).setDepth(depth + 1);
-
-      // ── 4. Dice Area Subtitle ───────────────────────────────────────────
-      this.scene.add.text(PANEL_X, 134, "DICE CONTROLLER", {
-        fontSize: "10px",
-        color: "#64748b",
-        fontFamily: "Outfit, sans-serif",
-        fontStyle: "bold",
-      }).setOrigin(0.5).setDepth(depth + 1);
-
-      // ── 5. 3D Player Cards ──────────────────────────────────────────────
-      const cardStartY = 330;
-      const cardGap = 90;
-
-      for (let i = 0; i < totalPlayers; i++) {
-        const cy = cardStartY + i * cardGap;
-        const color = PLAYER_COLORS[i] ?? 0x94a3b8;
-        const hex = PLAYER_HEX[i] ?? "#94a3b8";
-
-        this.playerCardGeoms.push({ cx: PANEL_X, cy, w: 196, h: 78 });
-
-        // Card 3D background
-        const card = this.scene.add.graphics();
-        card.setDepth(depth);
-        this.drawPlayerCard(card, PANEL_X, cy, 196, 78, color, i === 0);
-        this.playerCardBgs.push(card);
-
-        // 3D Avatar Token Badge
-        const badgeX = PANEL_X - 74;
-        const badgeY = cy;
-
-        const badgeShadow = this.scene.add.circle(badgeX + 1, badgeY + 2, 14, 0x000000, 0.4);
-        badgeShadow.setDepth(depth + 1);
-
-        const badge = this.scene.add.circle(badgeX, badgeY, 13, color);
-        badge.setStrokeStyle(2, 0xffffff, 0.8);
-        badge.setDepth(depth + 1);
-
-        // Specular glint on avatar badge
-        const badgeShine = this.scene.add.circle(badgeX - 4, badgeY - 4, 3.5, 0xffffff, 0.6);
-        badgeShine.setDepth(depth + 1);
-
-        // Player Name
-        const labelText = this.scene.add.text(PANEL_X - 52, cy - 18, `Player ${i + 1}`, {
-          fontSize: "13px",
-          color: hex,
-          fontFamily: "Outfit, sans-serif",
-          fontStyle: "bold",
-        }).setDepth(depth + 1);
-        this.playerLabelTexts.push(labelText);
-
-        // Tile Position Indicator
-        const tileText = this.scene.add.text(PANEL_X - 52, cy + 2, "Tile 1", {
-          fontSize: "12px",
-          color: "#f1f5f9",
-          fontFamily: "Outfit, sans-serif",
-          fontStyle: "bold",
-        }).setDepth(depth + 1);
-        this.playerTileTexts.push(tileText);
-
-        // Status Text (YOUR TURN / WAITING)
-        const statusText = this.scene.add.text(PANEL_X + 86, cy - 18, i === 0 ? "ACTIVE" : "WAITING", {
-          fontSize: "9px",
-          color: i === 0 ? "#4ade80" : "#64748b",
-          fontFamily: "Outfit, sans-serif",
-          fontStyle: "bold",
-        }).setOrigin(1, 0).setDepth(depth + 1);
-        this.playerStatusTexts.push(statusText);
-      }
-
-      // ── 6. Inset 3D Move Log Tray ───────────────────────────────────────
-      const logY = cardStartY + totalPlayers * cardGap + 12;
-
-      this.scene.add.text(PANEL_X, logY, "MATCH ACTIVITY", {
-        fontSize: "10px",
-        color: "#64748b",
-        fontFamily: "Outfit, sans-serif",
-        fontStyle: "bold",
-      }).setOrigin(0.5).setDepth(depth + 1);
-
-      const logBg = this.scene.add.graphics();
-      logBg.setDepth(depth);
-
-      // Inset drop shadow
-      logBg.fillStyle(0x000000, 0.4);
-      logBg.fillRoundedRect(PANEL_X - 98, logY + 12, 196, 96, 8);
-      // Dark recessed log surface
-      logBg.fillStyle(0x070b14, 1);
-      logBg.fillRoundedRect(PANEL_X - 98, logY + 12, 196, 96, 8);
-      // Bevel border
-      logBg.lineStyle(1.5, 0x1e293b, 0.8);
-      logBg.strokeRoundedRect(PANEL_X - 98, logY + 12, 196, 96, 8);
-
-      for (let i = 0; i < HUDManager.MAX_LOG; i++) {
-        const t = this.scene.add.text(
-          PANEL_X - 88, logY + 20 + i * 21,
-          "",
-          {
-            fontSize: "10px",
-            color: "#94a3b8",
-            fontFamily: "Outfit, sans-serif",
-            wordWrap: { width: 176 },
-          },
-        ).setDepth(depth + 1);
-        this.logLines.push(t);
-      }
-
-      // ── 7. Sound Toggle Button ───────────────────────────────────────────
-      this.soundBtn = this.scene.add.text(PANEL_X + 80, PANEL_H - 30, "🔊", {
-        fontSize: "18px",
+      // Sound toggle button at top right
+      this.soundBtn = this.scene.add.text(PANEL_X + 160, 28, "🔊", {
+        fontSize: "20px",
         padding: { x: 4, y: 2 },
       }).setOrigin(0.5).setDepth(depth + 2).setInteractive({ useHandCursor: true });
 
@@ -372,6 +263,138 @@ export class HUDManager {
         const muted = this.soundBtn.text === "🔊";
         this.soundBtn.setText(muted ? "🔇" : "🔊");
       });
+
+      // ── 3. 3D Turn Banner ───────────────────────────────────────────────
+      this.turnBg = this.scene.add.graphics();
+      this.turnBg.setDepth(depth);
+      this.drawTurnBanner(0x3b82f6);
+
+      this.turnText = this.scene.add.text(PANEL_X, 72, "PLAYER 1'S TURN", {
+        fontSize: "18px",
+        color: "#38bdf8",
+        fontFamily: "Outfit, sans-serif",
+        fontStyle: "bold",
+        letterSpacing: 1.2,
+      }).setOrigin(0.5).setDepth(depth + 1);
+
+      // ── 4. Dice Area Subtitle ───────────────────────────────────────────
+      this.scene.add.text(PANEL_X, 138, "DICE CONTROLLER", {
+        fontSize: "13.5px",
+        color: "#64748b",
+        fontFamily: "Outfit, sans-serif",
+        fontStyle: "bold",
+        letterSpacing: 1.8,
+      }).setOrigin(0.5).setDepth(depth + 1);
+
+      // ── 5. 3D Player Cards ──────────────────────────────────────────────
+      const cardW = 360;
+      const cardH = isTwoPlayer ? 78 : 64;
+      const cardGap = isTwoPlayer ? 92 : 70;
+      const cardStartY = isTwoPlayer ? 338 : 324;
+
+      for (let i = 0; i < totalPlayers; i++) {
+        const cy = cardStartY + i * cardGap;
+        const color = PLAYER_COLORS[i] ?? 0x94a3b8;
+        const hex = PLAYER_HEX[i] ?? "#94a3b8";
+
+        this.playerCardGeoms.push({ cx: PANEL_X, cy, w: cardW, h: cardH });
+
+        // Card 3D background
+        const card = this.scene.add.graphics();
+        card.setDepth(depth);
+        this.drawPlayerCard(card, PANEL_X, cy, cardW, cardH, color, i === 0);
+        this.playerCardBgs.push(card);
+
+        // 3D Avatar Token Badge
+        const badgeX = PANEL_X - cardW / 2 + 38;
+        const badgeY = cy;
+
+        const badgeRadius = isTwoPlayer ? 16 : 14;
+        const badgeShadow = this.scene.add.circle(badgeX + 1, badgeY + 2, badgeRadius + 1, 0x000000, 0.4);
+        badgeShadow.setDepth(depth + 1);
+
+        const badge = this.scene.add.circle(badgeX, badgeY, badgeRadius, color);
+        badge.setStrokeStyle(2, 0xffffff, 0.85);
+        badge.setDepth(depth + 1);
+
+        // Specular glint on avatar badge
+        const badgeShine = this.scene.add.circle(badgeX - 4, badgeY - 4, 4, 0xffffff, 0.6);
+        badgeShine.setDepth(depth + 1);
+
+        // Player Name
+        const defaultName = this.playerNames[i] ?? `Player ${i + 1}`;
+        const labelText = this.scene.add.text(badgeX + 26, isTwoPlayer ? cy - 18 : cy - 14, defaultName, {
+          fontSize: isTwoPlayer ? "18px" : "15.5px",
+          color: hex,
+          fontFamily: "Outfit, sans-serif",
+          fontStyle: "bold",
+        }).setDepth(depth + 1);
+        this.playerLabelTexts.push(labelText);
+
+        // Tile Position Indicator
+        const tileText = this.scene.add.text(badgeX + 26, isTwoPlayer ? cy + 4 : cy + 2, "Tile 1", {
+          fontSize: isTwoPlayer ? "15px" : "13px",
+          color: "#f1f5f9",
+          fontFamily: "Outfit, sans-serif",
+          fontStyle: "bold",
+        }).setDepth(depth + 1);
+        this.playerTileTexts.push(tileText);
+
+        // Status Text (YOUR TURN / WAITING)
+        const statusText = this.scene.add.text(PANEL_X + cardW / 2 - 20, isTwoPlayer ? cy - 15 : cy - 12, i === 0 ? "ACTIVE" : "WAITING", {
+          fontSize: isTwoPlayer ? "12px" : "11px",
+          color: i === 0 ? "#4ade80" : "#64748b",
+          fontFamily: "Outfit, sans-serif",
+          fontStyle: "bold",
+          letterSpacing: 1.2,
+        }).setOrigin(1, 0).setDepth(depth + 1);
+        this.playerStatusTexts.push(statusText);
+      }
+
+      // ── 6. Inset 3D Move Log Tray ───────────────────────────────────────
+      const logHeaderY = cardStartY + totalPlayers * cardGap + (isTwoPlayer ? 12 : 6);
+
+      this.scene.add.text(PANEL_X, logHeaderY, "MATCH ACTIVITY", {
+        fontSize: "14px",
+        color: "#94a3b8",
+        fontFamily: "Outfit, sans-serif",
+        fontStyle: "bold",
+        letterSpacing: 2,
+      }).setOrigin(0.5).setDepth(depth + 1);
+
+      const logBg = this.scene.add.graphics();
+      logBg.setDepth(depth);
+
+      const logBoxY = logHeaderY + 14;
+      const logBoxW = 360;
+      const logBoxH = isTwoPlayer ? 190 : 140;
+
+      // Inset drop shadow
+      logBg.fillStyle(0x000000, 0.4);
+      logBg.fillRoundedRect(PANEL_X - logBoxW / 2, logBoxY, logBoxW, logBoxH, 12);
+      // Dark recessed log surface
+      logBg.fillStyle(0x070b14, 0.95);
+      logBg.fillRoundedRect(PANEL_X - logBoxW / 2, logBoxY, logBoxW, logBoxH, 12);
+      // Bevel border
+      logBg.lineStyle(1.4, 0x1e293b, 0.9);
+      logBg.strokeRoundedRect(PANEL_X - logBoxW / 2, logBoxY, logBoxW, logBoxH, 12);
+
+      const lineGap = isTwoPlayer ? 28 : 22;
+      const numLines = isTwoPlayer ? 6 : 5;
+      for (let i = 0; i < numLines; i++) {
+        const t = this.scene.add.text(
+          PANEL_X - logBoxW / 2 + 16,
+          logBoxY + 14 + i * lineGap,
+          "",
+          {
+            fontSize: isTwoPlayer ? "14px" : "12.5px",
+            color: "#94a3b8",
+            fontFamily: "Outfit, sans-serif",
+            wordWrap: { width: logBoxW - 32 },
+          },
+        ).setDepth(depth + 1);
+        this.logLines.push(t);
+      }
     }
 
     // ── Listen to movement events ────────────────────────────────────────
@@ -392,7 +415,7 @@ export class HUDManager {
     g.clear();
     const bx = cx - w / 2;
     const by = cy - h / 2;
-    const r = 10;
+    const r = w > 250 ? 14 : 10;
     const depth = active ? 4 : 2;
 
     // Card drop shadow
@@ -409,7 +432,7 @@ export class HUDManager {
 
     // Active glow fill
     if (active) {
-      g.fillStyle(borderColor, 0.12);
+      g.fillStyle(borderColor, 0.14);
       g.fillRoundedRect(bx, by, w, h, r);
     }
 
@@ -424,11 +447,11 @@ export class HUDManager {
 
   private drawTurnBanner(color: number): void {
     this.turnBg.clear();
-    const bx = this.isPortrait ? 180 : (PANEL_X - 98);
-    const by = this.isPortrait ? 32 : 43;
-    const w = this.isPortrait ? 360 : 196;
-    const h = this.isPortrait ? 32 : 44;
-    const r = 10;
+    const bx = this.isPortrait ? 180 : (PANEL_X - 180);
+    const by = this.isPortrait ? 32 : 46;
+    const w = 360;
+    const h = this.isPortrait ? 32 : 52;
+    const r = this.isPortrait ? 10 : 14;
 
     // Banner drop shadow
     this.turnBg.fillStyle(0x000000, 0.35);
@@ -495,7 +518,7 @@ export class HUDManager {
     for (let i = 0; i < this.playerCardBgs.length; i++) {
       const color = PLAYER_COLORS[i] ?? 0x94a3b8;
       const isActive = i === idx;
-      const geom = this.playerCardGeoms[i] ?? { cx: PANEL_X, cy: 330 + i * 90, w: 196, h: 78 };
+      const geom = this.playerCardGeoms[i] ?? { cx: PANEL_X, cy: 338 + i * 92, w: 360, h: 78 };
       this.drawPlayerCard(this.playerCardBgs[i], geom.cx, geom.cy, geom.w, geom.h, color, isActive);
     }
 
