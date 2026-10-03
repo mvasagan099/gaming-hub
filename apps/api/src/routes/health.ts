@@ -23,10 +23,10 @@ async function databaseCheck() {
 
 export async function healthRoutes(app: FastifyInstance) {
   // Liveness: the process is up and accepting requests.
-  app.get("/health/live", async () => liveness());
+  app.get("/health/live", { config: { rateLimit: false } }, async () => liveness());
 
   // Readiness: dependencies (database) are reachable. Used by orchestrators.
-  app.get("/health/ready", async (_request, reply) => {
+  app.get("/health/ready", { config: { rateLimit: false } }, async (_request, reply) => {
     const database = await databaseCheck();
     if (database !== "up") {
       return reply
@@ -37,7 +37,7 @@ export async function healthRoutes(app: FastifyInstance) {
   });
 
   // Backwards-compatible summary endpoint.
-  app.get("/health", async (_request, reply) => {
+  app.get("/health", { config: { rateLimit: false } }, async (_request, reply) => {
     const database = await databaseCheck();
     const body = { ...liveness(), checks: { database } };
     return database === "up" ? body : reply.status(503).send(body);

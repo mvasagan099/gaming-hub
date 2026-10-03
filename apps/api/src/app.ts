@@ -97,6 +97,7 @@ export function buildApp() {
     skipOnError: false,
     max: env.RATE_LIMIT_MAX,
     timeWindow: "1 minute",
+    allowList: (req) => req.url.startsWith("/health"),
     // The plugin throws whatever this builder returns, so return an AppError
     // for our error handler to translate into a proper 429 response.
     errorResponseBuilder: (_req, context) =>

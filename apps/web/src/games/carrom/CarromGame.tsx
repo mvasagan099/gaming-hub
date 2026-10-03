@@ -7,7 +7,7 @@ import { useGameLoop } from '../shared/hooks/useGameLoop';
 import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import CarromMultiplayerDriver, { type CarromRemoteState } from './CarromMultiplayerDriver';
-import type { CarromCoin, CarromStriker, CarromPlayer } from '@gaming-hub/game-engine';
+import { POCKET_CAPTURE_RADIUS, type CarromCoin, type CarromStriker, type CarromPlayer } from '@gaming-hub/game-engine';
 import CarromMultiplayer from './CarromMultiplayer';
 import { CarromBoardRenderer } from './rendering/CarromBoardRenderer';
 import { CarromPieceRenderer } from './rendering/CarromPieceRenderer';
@@ -81,11 +81,8 @@ const POCKETS = [
   { x: 30, y: BOARD_HEIGHT - 30 },
   { x: BOARD_WIDTH - 30, y: BOARD_HEIGHT - 30 },
 ];
-// Pocket capture must mirror the server's authoritative physics scaled 600→400 (×2/3):
-// server captures ≤12 (moving) / ≤6 (stationary) units; corner cutout zone ≤ 30+12 units.
-const POCKET_CAPTURE_MOVING = 8;
-const POCKET_CAPTURE_STATIONARY = 4;
-const POCKET_CUTOUT_ZONE = POCKET_RADIUS + 8;
+// Use the same capture area for slow and fast coins as the authoritative engine.
+const POCKET_CAPTURE = POCKET_CAPTURE_RADIUS * (BOARD_WIDTH / 600);
 
 const STRIKER_START_X = BOARD_WIDTH / 2;
 const STRIKER_START_Y = BOARD_HEIGHT - 62;
@@ -709,6 +706,55 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
     let anyMoving = false;
     const coins = coinsRef.current;
 
+    let scoredWhite = 0;
+    let scoredBlack = 0;
+
+    const capturePocketCoins = () => {
+      for (const c of coins) {
+        if (!c.active || c.pocketing) continue;
+
+        for (const p of POCKETS) {
+          if (Math.hypot(p.x - c.x, p.y - c.y) > POCKET_CAPTURE) continue;
+          c.pocketing = {
+            pocketX: p.x,
+            pocketY: p.y,
+            scale: 1,
+            opacity: 1,
+          };
+          c.vx = 0;
+          c.vy = 0;
+
+          const popText = c.type === 'queen' ? '👑 QUEEN!' : c.type === 'white' ? '⚪ +1 WHITE' : c.type === 'black' ? '⚫ +1 BLACK' : '❌ FOUL!';
+          const popColor = c.type === 'queen' ? '#f43f5e' : c.type === 'white' ? '#fbbf24' : c.type === 'black' ? '#38bdf8' : '#ef4444';
+          floatingPopsRef.current.push({
+            id: Math.random(), text: popText, color: popColor,
+            x: p.x, y: p.y - 12, opacity: 1, scale: 1.2,
+          });
+          pocketRipplesRef.current.push({
+            id: Math.random(), x: p.x, y: p.y,
+            radius: 12, maxRadius: 38, opacity: 0.95,
+            color: c.type === 'queen' ? '#f43f5e' : c.type === 'white' ? '#fbbf24' : '#38bdf8',
+          });
+
+          if (c.type === 'white') {
+            scoredWhite++;
+            turnScoreRef.current.white++;
+          } else if (c.type === 'black') {
+            scoredBlack++;
+            turnScoreRef.current.black++;
+          } else if (c.type === 'queen') {
+            turnScoreRef.current.queen = true;
+          } else if (c.type === 'striker') {
+            turnScoreRef.current.foul = true;
+          }
+          break;
+        }
+      }
+    };
+
+    // Drop resting coins before cushions or other pieces can push them out.
+    capturePocketCoins();
+
     // Run client physics only during active animation (isTurnActive) or in AI mode.
     // In multiplayer idle state, positions come exclusively from the server.
     if (mode === 'ai' || isTurnActive) {
@@ -723,7 +769,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
         // 1. Integrate positions using fixed stepFactor
         for (let i = 0; i < coins.length; i++) {
           const c = coins[i];
-          if (!c.active) continue;
+          if (!c.active || c.pocketing) continue;
 
           c.x += c.vx * stepFactor;
           c.y += c.vy * stepFactor;
@@ -775,7 +821,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
             // 2. Straight perimeter walls (only allow crossing if in capture zone)
             let inCaptureZone = false;
             for (const p of POCKETS) {
-              if (Math.hypot(coin.x - p.x, coin.y - p.y) <= POCKET_CAPTURE_MOVING) {
+              if (Math.hypot(coin.x - p.x, coin.y - p.y) <= POCKET_CAPTURE) {
                 inCaptureZone = true;
                 break;
               }
@@ -814,12 +860,15 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
         }
 
 
+        // Capture within each substep, so a fast coin cannot skip the hole.
+        capturePocketCoins();
+
         // 2. Circle-circle collisions with realistic momentum transfer and restitution
         for (let i = 0; i < coins.length; i++) {
           for (let j = i + 1; j < coins.length; j++) {
             const c1 = coins[i];
             const c2 = coins[j];
-            if (!c1.active || !c2.active) continue;
+            if (!c1.active || !c2.active || c1.pocketing || c2.pocketing) continue;
             if (!isTurnActive && (c1.type === 'striker' || c2.type === 'striker')) continue;
 
             const dx = c2.x - c1.x;
@@ -863,7 +912,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
                 const wallR = coin.type === 'striker' ? 0.75 : 0.70;
                 let inCaptureZone = false;
                 for (const p of POCKETS) {
-                  if (Math.hypot(coin.x - p.x, coin.y - p.y) <= POCKET_CAPTURE_MOVING) {
+                  if (Math.hypot(coin.x - p.x, coin.y - p.y) <= POCKET_CAPTURE) {
                     inCaptureZone = true;
                     break;
                   }
@@ -890,74 +939,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
       }
     }
 
-    // Check pocket collisions during animation loop (all modes)
-    let scoredWhite = 0;
-    let scoredBlack = 0;
-    let strikerFoulThisFrame = false;
-    
-    for (let i = 0; i < coins.length; i++) {
-      const c = coins[i];
-      if (!c.active) continue;
-
-      for (const p of POCKETS) {
-        const pdx = p.x - c.x;
-        const pdy = p.y - c.y;
-        const pdist = Math.hypot(pdx, pdy);
-        const isMovingTowards = c.vx * pdx + c.vy * pdy > 0 || Math.hypot(c.vx, c.vy) > 0.05;
-
-        if (pdist <= POCKET_CAPTURE_STATIONARY || (pdist <= POCKET_CAPTURE_MOVING && isMovingTowards)) {
-          if (!c.pocketing) {
-            c.pocketing = {
-              pocketX: p.x,
-              pocketY: p.y,
-              scale: 1.0,
-              opacity: 1.0,
-            };
-            c.vx = 0;
-            c.vy = 0;
-
-            const popText = c.type === 'queen' ? '👑 QUEEN!' : c.type === 'white' ? '⚪ +1 WHITE' : c.type === 'black' ? '⚫ +1 BLACK' : '❌ FOUL!';
-            const popColor = c.type === 'queen' ? '#f43f5e' : c.type === 'white' ? '#fbbf24' : c.type === 'black' ? '#38bdf8' : '#ef4444';
-            
-            floatingPopsRef.current.push({
-              id: Math.random(),
-              text: popText,
-              color: popColor,
-              x: p.x,
-              y: p.y - 12,
-              opacity: 1.0,
-              scale: 1.2,
-            });
-
-            pocketRipplesRef.current.push({
-              id: Math.random(),
-              x: p.x,
-              y: p.y,
-              radius: 12,
-              maxRadius: 38,
-              opacity: 0.95,
-              color: c.type === 'queen' ? '#f43f5e' : c.type === 'white' ? '#fbbf24' : '#38bdf8',
-            });
-
-            if (c.type === 'white') {
-               scoredWhite++;
-               turnScoreRef.current.white++;
-            }
-            else if (c.type === 'black') {
-               scoredBlack++;
-               turnScoreRef.current.black++;
-            }
-            else if (c.type === 'queen') {
-               turnScoreRef.current.queen = true;
-            }
-            else if (c.type === 'striker') {
-               turnScoreRef.current.foul = true;
-               strikerFoulThisFrame = true;
-            }
-          }
-        }
-      }
-    }
+    capturePocketCoins();
 
     // Step coin pocketing animations (pull-in, shrink, fade down)
     for (const c of coins) {
@@ -971,6 +953,9 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
           c.active = false;
           c.pocketing = undefined;
           setUiTrigger(t => t + 1);
+        } else {
+          // Finish the drop before turn/queen-cover rules inspect inactive coins.
+          anyMoving = true;
         }
       }
     }
@@ -984,17 +969,6 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
           const nb = prev.black + scoredBlack;
           return { white: nw, black: nb };
         });
-      }
-
-      if (strikerFoulThisFrame) {
-        const striker = coins.find(c => c.type === 'striker');
-        if (striker) {
-          striker.active = true;
-          striker.x = STRIKER_START_X;
-          striker.y = STRIKER_START_Y;
-          striker.vx = 0;
-          striker.vy = 0;
-        }
       }
 
       if (isTurnActive && !anyMoving) {
@@ -1087,6 +1061,9 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
 
         const striker = coins.find(c => c.type === 'striker');
         if (striker) {
+          striker.active = true;
+          striker.pocketing = undefined;
+          striker.trail = [];
           striker.x = BOARD_WIDTH / 2 + (nextPlayer === 'player' ? strikerPos : 0);
           striker.y = nextPlayer === 'player' ? STRIKER_START_Y : 62;
           striker.vx = 0;

@@ -29,7 +29,7 @@ import CarromMultiplayerDriver, {
   type PocketEventInfo,
 } from "./CarromMultiplayerDriver";
 import type { CarromRemoteState } from "./CarromMultiplayerDriver";
-import type { CarromTrajectoryKeyframe } from "@gaming-hub/game-engine";
+import { POCKET_CAPTURE_RADIUS, type CarromTrajectoryKeyframe } from "@gaming-hub/game-engine";
 import { Crown, Sparkles, CheckCircle2, AlertTriangle, Play, RefreshCw, X, MessageSquare, Clock } from "lucide-react";
 import { CarromBoardRenderer } from "./rendering/CarromBoardRenderer";
 import { CarromPieceRenderer } from "./rendering/CarromPieceRenderer";
@@ -133,10 +133,8 @@ function getViewPocket(pocketIndex: number, seat: number): { x: number; y: numbe
   return worldToView(sp.x, sp.y, seat);
 }
 
-// Pocket capture radius in client coords (server POCKET_RADIUS=30, scaled: 30×5/6 = 25)
-const POCKET_CAP = 25;
-// Inner pocket threshold (server uses 22px, scaled: 22×5/6 = 18.33)
-const POCKET_CAP_INNER = 18.33;
+// Local prediction must use the authoritative engine's capture area.
+const POCKET_CAP = POCKET_CAPTURE_RADIUS * (W / 600);
 // Pocket visual radius (server POCKET_RADIUS=30 × 5/6=25)
 const POCKET_DRAW_R = 25;
 // Matches server pocket hole: (POCKET_RADIUS 30) × 5/6 = 25
@@ -703,6 +701,54 @@ const CarromMultiplayer: React.FC<Props> = ({
     const coins = coinsRef.current;
     let anyMoving = false;
 
+    const capturePocketCoins = () => {
+      for (const c of coins) {
+        if (!c.active || c.pocketing) continue;
+
+        for (const p of POCKETS) {
+          const dx = p.x - c.x;
+          const dy = p.y - c.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist <= POCKET_CAP) {
+            c.pocketing = {
+              startX: c.x,
+              startY: c.y,
+              px: p.x,
+              py: p.y,
+              startTime: performance.now(),
+              durationMs: 140,
+              scale: 1,
+              alpha: 1,
+              progress: 0,
+            };
+            c.vx = 0; c.vy = 0;
+
+            const txt =
+              c.type === "queen" ? "👑 QUEEN!" :
+              c.type === "white" ? "⚪ +1" :
+              c.type === "black" ? "⚫ +1" : "❌ FOUL";
+            const col =
+              c.type === "queen" ? "#f43f5e" :
+              c.type === "white" ? "#facc15" :
+              c.type === "black" ? "#cbd5e1" : "#ef4444";
+
+            floatsRef.current.push({
+              id: Math.random(),
+              text: txt, color: col,
+              x: p.x, y: p.y - 12,
+              alpha: 1, scale: 1.2,
+            });
+            ripplesRef.current.push({
+              id: Math.random(),
+              x: p.x, y: p.y,
+              r: 10, maxR: 38, alpha: 0.9, color: col,
+            });
+            break;
+          }
+        }
+      }
+    };
+
     if (activeTrajectoryRef.current) {
       anyMoving = true;
       const traj = activeTrajectoryRef.current;
@@ -876,6 +922,7 @@ const CarromMultiplayer: React.FC<Props> = ({
         applyServerState(traj.targetState);
       }
     } else if (isTurnActiveRef.current) {
+      capturePocketCoins();
       turnFramesRef.current++;
       const stepFactor = 1 / SUB_STEPS;
       // Server uses innerMin=33 scaled to client: 33×(5/6)=27.5 ≈ BORDER=27.5
@@ -966,6 +1013,8 @@ const CarromMultiplayer: React.FC<Props> = ({
           if (Math.abs(c.vy) < MIN_VEL) c.vy = 0;
           if (c.vx !== 0 || c.vy !== 0) anyMoving = true;
         }
+
+        capturePocketCoins();
 
         for (let i = 0; i < coins.length; i++) {
           for (let j = i + 1; j < coins.length; j++) {
@@ -1060,64 +1109,7 @@ const CarromMultiplayer: React.FC<Props> = ({
         }
       }
 
-      // Pocket Capture
-      for (const c of coins) {
-        if (!c.active || c.pocketing) continue;
-
-        for (const p of POCKETS) {
-          const dx = p.x - c.x;
-          const dy = p.y - c.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist <= POCKET_CAP) {
-            let isPocketed = false;
-            if (dist <= POCKET_CAP_INNER) {
-              isPocketed = true;
-            } else {
-              const dotProduct = c.vx * dx + c.vy * dy;
-              if (dotProduct > 0 || Math.hypot(c.vx, c.vy) < 3.33) {
-                isPocketed = true;
-              }
-            }
-
-            if (isPocketed) {
-              c.pocketing = {
-                startX: c.x,
-                startY: c.y,
-                px: p.x,
-                py: p.y,
-                startTime: performance.now(),
-                durationMs: 140,
-                scale: 1,
-                alpha: 1,
-                progress: 0,
-              };
-              c.vx = 0; c.vy = 0;
-
-              const txt =
-                c.type === "queen" ? "👑 QUEEN!" :
-                c.type === "white" ? "⚪ +1" :
-                c.type === "black" ? "⚫ +1" : "❌ FOUL";
-              const col =
-                c.type === "queen" ? "#f43f5e" :
-                c.type === "white" ? "#facc15" :
-                c.type === "black" ? "#cbd5e1" : "#ef4444";
-
-              floatsRef.current.push({
-                id: Math.random(),
-                text: txt, color: col,
-                x: p.x, y: p.y - 12,
-                alpha: 1, scale: 1.2,
-              });
-              ripplesRef.current.push({
-                id: Math.random(),
-                x: p.x, y: p.y,
-                r: 10, maxR: 38, alpha: 0.9, color: col,
-              });
-              break;
-            }
-          }
-        }
-      }
+      capturePocketCoins();
     } else {
       for (const c of coins) {
         if (c.pocketing) anyMoving = true;
