@@ -48,4 +48,6 @@ COPY --from=build /app/packages/multiplayer ./packages/multiplayer
 COPY --from=build /app/apps/socket-server/dist ./apps/socket-server/dist
 USER nodeapp
 EXPOSE 4001
-CMD ["node", "apps/socket-server/dist/index.js"]
+# Hosting environment variables can override ENV above. Release images must
+# use production logging and security checks; exec preserves shutdown signals.
+CMD ["sh", "-c", "NODE_ENV=production exec node apps/socket-server/dist/index.js"]

@@ -53,4 +53,5 @@ COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/socket-server/dist ./apps/socket-server/dist
 USER nodeapp
 EXPOSE 4000
-CMD ["sh", "-c", "node apps/$SERVICE/dist/index.js"]
+# Pin release startup mode; exec keeps Node as PID 1 for graceful shutdown.
+CMD ["sh", "-c", "NODE_ENV=production exec node apps/$SERVICE/dist/index.js"]

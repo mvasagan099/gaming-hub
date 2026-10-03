@@ -50,4 +50,5 @@ USER nodeapp
 EXPOSE 4000
 # Start the API service directly. Migrations are managed by a dedicated migration
 # container / pre-deploy job (see docker-compose migrate service) to avoid concurrency races.
-CMD ["node", "apps/api/dist/index.js"]
+# Pin release startup mode even if hosting overrides the image's ENV default.
+CMD ["sh", "-c", "NODE_ENV=production exec node apps/api/dist/index.js"]

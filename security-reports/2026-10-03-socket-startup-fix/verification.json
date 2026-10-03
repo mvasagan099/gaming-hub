@@ -1,0 +1,20 @@
+{
+  "baselineCommit": "c1906f6",
+  "before": "Reproduced exact pino-pretty stack at dist/index.js:4604 with NODE_ENV=development",
+  "after": "Image startup forces production mode despite environment override",
+  "socketImageBuild": "PASS",
+  "socketTypecheck": "PASS",
+  "actualProcessMode": "production",
+  "developmentTransportInstalled": false,
+  "startupLogging": "JSON",
+  "health": "PASS",
+  "unsafeWildcardCors": "REJECTED",
+  "multiplayer": {
+    "files": 9,
+    "tests": 89,
+    "passed": 89,
+    "failed": 0
+  },
+  "productionDatabaseTouched": false,
+  "deploymentPerformed": false
+}
