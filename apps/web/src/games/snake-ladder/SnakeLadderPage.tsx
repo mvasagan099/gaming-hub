@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { MessageSquare, Users, X, Swords } from "lucide-react";
 import { GameWrapper } from "../../components/GameWrapper";
 import PhaserGame from "./components/PhaserGame";
@@ -20,11 +20,22 @@ export function SnakeLadderPage({ mode = 'ai', stake = 10, onBack = () => {} }: 
   const isMultiplayer = mode === "multiplayer";
   const participants = room?.players ?? [];
   const maxPlayers = room?.maxPlayers ?? 2;
-  const names = isMultiplayer
-    ? [...participants]
-        .sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0))
-        .map((p) => p.displayName)
-    : [];
+
+  const namesKey = isMultiplayer
+    ? participants
+        .map((p) => `${p.seat ?? 0}:${p.displayName}`)
+        .sort()
+        .join("|")
+    : "";
+
+  const names = useMemo(() => {
+    if (!isMultiplayer) return [];
+    return [...participants]
+      .sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0))
+      .map((p) => p.displayName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMultiplayer, namesKey]);
+
   const players = isMultiplayer && names.length > 0 ? names.length : (isMultiplayer ? maxPlayers : 2);
   const seat = isMultiplayer ? (isSpectator ? null : mySeat) : null;
 

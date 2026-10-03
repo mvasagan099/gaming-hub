@@ -38,6 +38,14 @@ export default function PhaserGame({
     };
   }, []);
 
+  // Stable serialized representation of names to prevent unnecessary syncs
+  const serializedNames = React.useMemo(() => JSON.stringify(names), [names]);
+
+  // Keep latest dynamic props in ref so game creation reads the freshest values on mount
+  const propsRef = useRef({ mode, players, seat, names });
+  propsRef.current = { mode, players, seat, names };
+
+  // 1. Lifecycle effect: only instantiate or destroy Phaser when orientation or mode changes
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -60,17 +68,32 @@ export default function PhaserGame({
     const game = new Phaser.Game(config);
     gameRef.current = game;
 
-    game.registry.set("mode", mode);
-    game.registry.set("players", players);
-    game.registry.set("seat", seat);
-    game.registry.set("names", names);
+    game.registry.set("mode", propsRef.current.mode);
+    game.registry.set("players", propsRef.current.players);
+    game.registry.set("seat", propsRef.current.seat);
+    game.registry.set("names", propsRef.current.names);
     game.registry.set("isPortrait", isPortrait);
 
     return () => {
       game.destroy(true);
       gameRef.current = null;
     };
-  }, [mode, players, seat, names, isPortrait]);
+  }, [mode, isPortrait]);
+
+  // 2. Dynamic prop sync: updates Phaser registry and active scene without tearing down the game
+  useEffect(() => {
+    const game = gameRef.current;
+    if (!game) return;
+
+    game.registry.set("players", players);
+    game.registry.set("seat", seat);
+    game.registry.set("names", names);
+
+    const scene = game.scene.getScene("SnakeLadderScene") as SnakeLadderScene | undefined;
+    if (scene && scene.scene.isActive() && typeof scene.updateNames === "function") {
+      scene.updateNames(names);
+    }
+  }, [players, seat, serializedNames]);
 
   return (
     <div

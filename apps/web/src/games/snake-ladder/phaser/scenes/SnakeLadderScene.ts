@@ -184,4 +184,14 @@ export default class SnakeLadderScene extends Phaser.Scene {
       this.board.highlightTile(tile, color);
     });
   }
+
+  public updateNames(names: string[]): void {
+    if (!names || names.length === 0) return;
+    if (this.playerManager) {
+      this.playerManager.setNames(names);
+    }
+    if (this.hud) {
+      this.hud.setNames(names);
+    }
+  }
 }
