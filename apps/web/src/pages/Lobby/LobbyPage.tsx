@@ -615,7 +615,7 @@ export const LobbyPage: React.FC = () => {
               >
                 {isJoiningMatch ? <Loader2 className="w-7 h-7 animate-spin" /> : <Swords className="w-7 h-7" />}
                 <span className="text-sm font-black">{isJoiningMatch ? "Joining..." : "Quick Match"}</span>
-                <span className="text-[10px] text-indigo-200">Auto-join an open game</span>
+                <span className="text-[10px] text-indigo-200">Find another online player</span>
               </button>
               <button
                 onClick={() => void handleCreatePrivate()}
@@ -693,6 +693,10 @@ export const LobbyPage: React.FC = () => {
             <Swords className="w-8 h-8 text-indigo-400 animate-pulse" />
           </div>
           <h3 className="relative z-10 text-lg font-black text-slate-900 dark:text-white">Finding opponents…</h3>
+          <p className="relative z-10 mt-2 max-w-sm text-xs text-slate-500 dark:text-slate-400">
+            Waiting for another player to choose the same game, entry stake, and mode.
+            To play alone, cancel this search and choose VS AI.
+          </p>
           <p className="relative z-10 text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-1">
             <span className="block inline-flex items-center gap-1 justify-center">
               {def.name} · <Coins className="w-3.5 h-3.5 text-amber-400 inline-block" /> {matchmaking.stake ?? stake} stake{matchmaking.settings?.playerCount ? ` · ${matchmaking.settings.playerCount} players` : ""}

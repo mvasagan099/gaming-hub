@@ -122,6 +122,10 @@ export const MatchmakingSearchModal: React.FC = () => {
         <p className="relative z-10 text-sm font-bold text-slate-600 dark:text-slate-300 mt-1">
           {def.name}
         </p>
+        <p className="relative z-10 mt-3 text-xs text-slate-500 dark:text-slate-400">
+          Waiting for another player to choose the same game, entry stake, and mode.
+          To play alone, cancel this search and choose VS AI.
+        </p>
 
         {/* Info Badges */}
         <div className="relative z-10 mt-3 flex flex-wrap items-center justify-center gap-2 text-xs">

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { MultiplayerFramework } from "../src/framework";
 import { createTestFramework, makeSocket } from "./helpers";
+import { GAME_IDS } from "@gaming-hub/shared";
 
 describe("MatchmakingManager", () => {
   let framework: MultiplayerFramework;
@@ -23,6 +24,42 @@ describe("MatchmakingManager", () => {
       mode: "quick",
     });
   }
+
+  it.each(GAME_IDS)("waits for a second distinct player in %s", async (gameId) => {
+    const result = await framework.matchmakingManager.joinQueue({
+      playerId: "p1", gameId, stake: 0, socket: makeSocket("s1"), mode: "casual",
+    });
+    expect(result).toMatchObject({ success: true, position: 1 });
+    expect(framework.roomManager.getRoomCount()).toBe(0);
+    expect(framework.matchmakingManager.isInQueue("p1")).toBe(true);
+
+    const duplicate = await framework.matchmakingManager.joinQueue({
+      playerId: "p1", gameId, stake: 0, socket: makeSocket("another-device"), mode: "casual",
+    });
+    expect(duplicate.success).toBe(false);
+    expect(framework.matchmakingManager.getQueueLength()).toBe(1);
+  });
+
+  it.each(GAME_IDS)("starts %s for two distinct players in the same queue", async (gameId) => {
+    const sockets = [makeSocket("s1"), makeSocket("s2")];
+    const found = sockets.map(socket => vi.spyOn(socket, "emit"));
+    for (let index = 0; index < sockets.length; index++) {
+      await framework.matchmakingManager.joinQueue({
+        playerId: `p${index + 1}`, gameId, stake: 0, socket: sockets[index], mode: "casual",
+      });
+    }
+    const room = framework.roomManager.getPlayerRoom("p1")!;
+    expect(room).toBeDefined();
+    expect(room.config.gameId).toBe(gameId);
+    expect(room.status).toBe("playing");
+    expect(room.match).not.toBeNull();
+    expect([...room.players.values()].map(player => player.seat).sort()).toEqual([0, 1]);
+    expect(framework.roomManager.getPlayerRoom("p2")).toBe(room);
+    expect(framework.matchmakingManager.getQueueLength()).toBe(0);
+    for (const emit of found) {
+      expect(emit).toHaveBeenCalledWith("matchmaking:found", { roomId: room.id, code: room.code });
+    }
+  });
 
   it("pairs enough players and auto-starts the match in a ready room", async () => {
     await joinChessQueue("p1", "s1");
