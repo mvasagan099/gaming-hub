@@ -1,5 +1,5 @@
 import { useMultiplayerStore, type WinnerInfo } from "../../store/multiplayerStore";
-import type { TableTennisState, TableTennisBall, TableTennisAction } from "@gaming-hub/game-engine";
+import type { TableTennisState, TableTennisBall } from "@gaming-hub/game-engine";
 
 export interface TableTennisRemoteState extends TableTennisState {}
 
@@ -11,32 +11,49 @@ interface TableTennisRemoteEvent {
 export default class TableTennisMultiplayerDriver {
   private readonly mySeat: number | null;
   private readonly names: string[];
+  private readonly matchId?: string;
+  private readonly roomId?: string;
   
   private lastState: TableTennisRemoteState | null = null;
   private destroyed = false;
+  private restoreInput = true;
+  private awaitingReconnect = false;
+  private pendingServe = false;
+  private completed = false;
+  private deliveredPoint = -1;
+  private moveRequest = 0;
   private unsubscribe: (() => void) | null = null;
   private physicsInterval: ReturnType<typeof setInterval> | null = null;
-  private onStateUpdate: ((state: TableTennisRemoteState) => void) | null = null;
+  private onStateUpdate: ((state: TableTennisRemoteState, restoreInput: boolean) => void) | null = null;
   private onServeNeeded: (() => void) | null = null;
   private onPointScored: ((winnerSeat: number, reason: string) => void) | null = null;
-  private onMatchComplete: ((winnerSeat: number) => void) | null = null;
+  private onMatchComplete: ((winnerSeat: number | null) => void) | null = null;
   
   private pendingPaddleMove: { y: number; velocity: number } | null = null;
   private lastPaddleSent: number = 0;
   private lastSentY: number = -999;
   private readonly paddleSendInterval: number = 40;
 
-  constructor(mySeat: number | null, names: string[]) {
+  constructor(mySeat: number | null, names: string[], matchId?: string, roomId?: string) {
     this.mySeat = mySeat;
     this.names = names;
+    this.matchId = matchId;
+    this.roomId = roomId;
   }
   
   start(): void {
-    console.log("[TableTennisMultiplayerDriver] Starting driver, mySeat:", this.mySeat);
+    if (this.destroyed || this.unsubscribe) return;
     
     this.unsubscribe = useMultiplayerStore.subscribe((state, prev) => {
       if (this.destroyed) return;
       
+      if ((this.matchId && state.matchId !== this.matchId) || (this.roomId && state.room?.id !== this.roomId)) return;
+      if (state.status !== prev.status && state.status !== 'connected') this.awaitingReconnect = true;
+      if (state.status === 'connected' && prev.status !== 'connected') {
+        this.restoreInput = true;
+        this.pendingPaddleMove = null;
+        void state.requestFullStateSync?.().catch(() => undefined);
+      }
       if (state.renderKey !== prev.renderKey || state.winner !== prev.winner) {
         this.applyState(state.gameState as unknown as TableTennisRemoteState | null, state.lastEvents, state.winner);
       }
@@ -55,11 +72,13 @@ export default class TableTennisMultiplayerDriver {
     }, 10);
     
     const current = useMultiplayerStore.getState();
-    this.applyState(current.gameState as unknown as TableTennisRemoteState | null, current.lastEvents, current.winner);
+    if ((!this.matchId || current.matchId === this.matchId) && (!this.roomId || current.room?.id === this.roomId)) {
+      this.applyState(current.gameState as unknown as TableTennisRemoteState | null, [], current.winner);
+    }
   }
   
   stop(): void {
-    console.log("[TableTennisMultiplayerDriver] Stop called");
+
     this.destroyed = true;
     this.unsubscribe?.();
     this.unsubscribe = null;
@@ -69,7 +88,7 @@ export default class TableTennisMultiplayerDriver {
     }
   }
   
-  setOnStateUpdate(handler: (state: TableTennisRemoteState) => void): void {
+  setOnStateUpdate(handler: (state: TableTennisRemoteState, restoreInput: boolean) => void): void {
     this.onStateUpdate = handler;
   }
   
@@ -81,7 +100,7 @@ export default class TableTennisMultiplayerDriver {
     this.onPointScored = handler;
   }
   
-  setOnMatchComplete(handler: (winnerSeat: number) => void): void {
+  setOnMatchComplete(handler: (winnerSeat: number | null) => void): void {
     this.onMatchComplete = handler;
   }
   
@@ -98,13 +117,19 @@ export default class TableTennisMultiplayerDriver {
     
     const s = state as TableTennisRemoteState;
     this.lastState = s;
+    const restoreInput = this.restoreInput;
+    if (restoreInput) this.lastSentY = this.mySeat == null ? -999 : s.players[this.mySeat]?.paddleY ?? -999;
+    this.restoreInput = false;
+    this.awaitingReconnect = false;
+    if (s.phase !== "serve" || s.ball?.inPlay || s.finished) this.pendingServe = false;
     
     if (this.onStateUpdate) {
-      this.onStateUpdate(s);
+      this.onStateUpdate(s, restoreInput);
     }
     
     for (const event of events) {
-      if (event.type === "point-scored") {
+      if (event.type === "point-scored" && s.totalPointsPlayed > this.deliveredPoint) {
+        this.deliveredPoint = s.totalPointsPlayed;
         const winnerSeat = (event as any).winnerSeat;
         const reason = (event as any).reason || "miss";
         if (this.onPointScored) {
@@ -117,16 +142,17 @@ export default class TableTennisMultiplayerDriver {
       this.onServeNeeded();
     }
     
-    if (s.finished || winner) {
+    if ((s.finished || winner) && !this.completed) {
+      this.completed = true;
       const winnerSeat = winner?.winnerSeats?.[0] ?? s.winnerSeats?.[0];
-      if (winnerSeat !== undefined && this.onMatchComplete) {
-        this.onMatchComplete(winnerSeat);
+      if (this.onMatchComplete) {
+        this.onMatchComplete(winnerSeat ?? null);
       }
     }
   }
   
   sendPaddleMove(y: number, velocity: number): void {
-    if (this.mySeat == null || this.destroyed) return;
+    if (this.mySeat == null || this.destroyed || this.awaitingReconnect || this.lastState?.paused || this.lastState?.finished) return;
     if (Math.abs(y - this.lastSentY) < 0.5) {
       this.pendingPaddleMove = null;
       return;
@@ -141,51 +167,37 @@ export default class TableTennisMultiplayerDriver {
   }
 
   private sendPaddleMoveImmediate(y: number, velocity: number): void {
-    if (this.mySeat == null || this.destroyed) return;
+    if (this.mySeat == null || this.destroyed || this.awaitingReconnect || this.lastState?.paused || this.lastState?.finished) return;
     if (Math.abs(y - this.lastSentY) < 0.5) return;
     this.lastSentY = y;
-    
+    const request = ++this.moveRequest;
+    const retry = () => { if (!this.destroyed && this.moveRequest === request) this.lastSentY = -999; };
     useMultiplayerStore.getState().sendGameAction({
       type: "paddle-move",
       y,
       velocity,
-    }).catch(() => {
-      // Catch rate-limit errors silently
-    });
+    }).then(result => { if (!result.ok) retry(); }).catch(retry);
   }
   
   sendServe(angle: number = 0, power: number = 5.25): void {
-    console.log("[TableTennisMultiplayerDriver] sendServe:", { angle, power, mySeat: this.mySeat });
-    
-    if (this.mySeat == null) {
-      console.error("[TableTennisMultiplayerDriver] Cannot serve: no seat assigned");
-      return;
-    }
-    
-    useMultiplayerStore.getState().sendGameAction({
-      type: "serve",
-      angle,
-      power,
-    }).then(res => {
-      if (!res.ok && res.error) {
-        console.error("[TableTennisMultiplayerDriver] Serve failed:", res.error);
-      }
-    });
+    if (!this.canServe() || this.pendingServe) return;
+    this.pendingServe = true;
+    useMultiplayerStore.getState().sendGameAction({ type: "serve", angle, power })
+      .then(result => { if (!result.ok) this.pendingServe = false; })
+      .catch(() => { this.pendingServe = false; });
   }
-  
+
   sendReady(): void {
-    if (this.mySeat == null) return;
-    
-    useMultiplayerStore.getState().sendGameAction({
-      type: "ready",
-    });
+    if (this.mySeat == null || this.destroyed || this.lastState?.finished) return;
+    void useMultiplayerStore.getState().sendGameAction({ type: "ready" }).catch(() => undefined);
   }
   
   canServe(): boolean {
     if (this.mySeat == null || this.destroyed) return false;
     const s = this.lastState;
     if (!s) return false;
-    return s.waitingForServe && s.servingSeat === this.mySeat && !s.finished;
+    return s.phase === "serve" && s.waitingForServe && s.servingSeat === this.mySeat
+      && !s.finished && !s.paused && !this.awaitingReconnect && s.players.every(p => p.isReady);
   }
   
   isMyTurn(): boolean {
@@ -242,7 +254,7 @@ export default class TableTennisMultiplayerDriver {
   }
   
   isMatchPoint(): boolean {
-    return this.lastState?.matchPointSeat !== null;
+    return this.lastState?.matchPointSeat != null;
   }
   
   isDeuce(): boolean {

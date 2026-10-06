@@ -42,7 +42,7 @@ export const TableTennisOverlays: React.FC<TableTennisOverlaysProps> = ({
   onReplay,
   onExit,
 }) => {
-  const isMyServe = currentServer === (mySeat === 0 ? 1 : mySeat === 1 ? 2 : 1);
+  const isMyServe = (!isMultiplayer && currentServer === 1) || (isMultiplayer && mySeat !== null && currentServer === (mySeat === 0 ? 1 : 2));
   const isMeWinner = winner !== null && winner === (mySeat === 0 ? 1 : 2);
   const isDraw = winner === null;
 

@@ -26,6 +26,8 @@ describe("gameConfigs", () => {
     expect(getGamePlayConfig("table-tennis").defaultMatchTimerMs).toBe(180_000);
     expect(getGamePlayConfig("table-tennis").actionCooldownMs).toBe(15);
     expect(getGamePlayConfig("table-tennis").pauseOnDisconnect).toBe(false);
+    expect(getGamePlayConfig("table-tennis").forfeitOnAfk).toBe(false);
+    expect(getGamePlayConfig("table-tennis").forfeitOnDisconnect).toBe(true);
     expect(getGamePlayConfig("chess").pauseOnDisconnect).toBe(true);
     expect(getGamePlayConfig("snake-ladder").minPlayersToStart).toBeGreaterThan(0);
   });

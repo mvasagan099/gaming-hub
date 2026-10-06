@@ -91,13 +91,20 @@ export class TableTennis3DRenderer {
    * Computes realistic parabolic bounce height (Z) for the ball during play.
    */
   static calculateBallZ(ball: { x: number; y: number; vx: number; vy: number; inPlay: boolean }): number {
-    if (!ball.inPlay) return 14; // Rest height on paddle
+    if (!ball.inPlay) return 32; // Rest height on paddle
 
-    // Bounce at the middle of each half (150/450); crest above the net (300).
-    // The old half-court modulo reset the height to 12 exactly at the net.
-    const phase = Math.PI * ball.x / 300;
-    const arc = TABLE_TENNIS_VISUAL_CONFIG.ball.maxApexHeight * Math.cos(phase) ** 2;
-    return 12 + arc;
+    // Paddle contact stays at bat height; the ball rises over the net between
+    // table bounces. A crest at each baseline made confirmed hits look airborne.
+    const keys = [[0, 32], [38, 32], [90, 50], [150, 12], [300, 80],
+      [450, 12], [510, 50], [562, 32], [600, 32]];
+    for (let i = 1; i < keys.length; i++) {
+      if (ball.x <= keys[i][0]) {
+        const t = Math.max(0, (ball.x - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0]));
+        const blend = (1 - Math.cos(Math.PI * t)) / 2;
+        return keys[i - 1][1] + (keys[i][1] - keys[i - 1][1]) * blend;
+      }
+    }
+    return 32;
   }
 
   /**
@@ -148,7 +155,7 @@ export class TableTennis3DRenderer {
 
     // ── 4. Far Opponent Paddle & Hand (Drawn Behind Net) ──
     const p2CenterY = p2Y + cfg.paddleHeight / 2;
-    this.drawFarPaddle(ctx, 580, p2CenterY, p2Vy, farColor);
+    this.drawFarPaddle(ctx, 600, p2CenterY, p2Vy, farColor);
 
     // ── 5. Horizontal 3D Woven Net ──
     this.renderHorizontalNet(ctx, cfg);
@@ -158,7 +165,7 @@ export class TableTennis3DRenderer {
 
     // ── 7. Near Player Paddle & Forearm (Foreground) ──
     const p1CenterY = p1Y + cfg.paddleHeight / 2;
-    this.drawNearPaddle(ctx, 20, p1CenterY, p1Vy, ball, nearColor);
+    this.drawNearPaddle(ctx, 26, p1CenterY, p1Vy, ball, nearColor);
 
     // ── 8. Particle Sparks & Hit Effects ──
     this.renderParticles(ctx, particles);
@@ -785,6 +792,11 @@ export class TableTennis3DRenderer {
     ctx.restore();
   }
 
+  /** Match the visible rubber width to the authoritative 80-unit paddle. */
+  static paddleRadius(lx: number, ly: number): number {
+    return Math.abs(this.project(lx, ly + 40, 15).x - this.project(lx, ly, 15).x);
+  }
+
   /**
    * Renders the Near Player's 3D paddle and holding forearm/hand in the foreground.
    */
@@ -797,16 +809,16 @@ export class TableTennis3DRenderer {
     color: 'red' | 'blue' = 'red'
   ): void {
     const { paddles } = TABLE_TENNIS_VISUAL_CONFIG;
-    const { x, y, scale } = this.project(lx, ly, 15);
+    const { x, y, scale } = this.project(lx, ly, 32);
     const s = scale * 1.30; // Foreground scale
 
     ctx.save();
     ctx.translate(x, y);
 
     // Dynamic swing tilt angle based on movement and ball proximity
-    let tiltAngle = (vy / 20) * 0.16;
+    let tiltAngle = Math.max(-0.08, Math.min(0.08, (vy / 20) * 0.16));
     if (ball.inPlay && ball.x < 100) {
-      tiltAngle += (ball.y < ly ? -0.20 : 0.20);
+      tiltAngle += (ball.y < ly ? -0.04 : 0.04);
     }
     ctx.rotate(tiltAngle);
 
@@ -869,7 +881,7 @@ export class TableTennis3DRenderer {
     ctx.fillRect(-handleW / 2 + 3, handleY + 12 * s, handleW - 6, 4 * s);
 
     // ── 4. Plywood Blade Edge Layer ──
-    const bladeR = 27 * s;
+    const bladeR = this.paddleRadius(lx, ly);
     ctx.fillStyle = paddles.woodBlade;
     ctx.beginPath();
     ctx.ellipse(0, 0, bladeR + 1.6, bladeR * 1.15 + 1.6, 0, 0, Math.PI * 2);
@@ -935,15 +947,15 @@ export class TableTennis3DRenderer {
     color: 'red' | 'blue' = 'blue'
   ): void {
     const { paddles } = TABLE_TENNIS_VISUAL_CONFIG;
-    const { x, y, scale } = this.project(lx, ly, 12);
+    const { x, y, scale } = this.project(lx, ly, 15);
     const s = scale * 1.05; // Background scale
 
     ctx.save();
     ctx.translate(x, y);
 
     // Opponent paddle dynamic tilt
-    const tiltAngle = (vy / 20) * 0.12;
-    ctx.rotate(tiltAngle);
+    const tiltAngle = Math.max(-0.08, Math.min(0.08, (vy / 20) * 0.12));
+    ctx.rotate(Math.PI + tiltAngle);
 
     // ── 1. Contact Drop Shadow ──
     ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
@@ -970,7 +982,7 @@ export class TableTennis3DRenderer {
     ctx.fill();
 
     // ── 4. Tournament Rubber Face (Blue for P2, Red for P1) ──
-    const bladeR = 20 * s;
+    const bladeR = this.paddleRadius(574, ly);
     ctx.fillStyle = paddles.woodBlade;
     ctx.beginPath();
     ctx.ellipse(0, 0, bladeR + 1.2, bladeR * 1.15 + 1.2, 0, 0, Math.PI * 2);

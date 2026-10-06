@@ -97,6 +97,10 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const room = useMultiplayerStore((s) => s.room);
+  const roomId = room?.id;
+  const matchId = useMultiplayerStore((s) => s.matchId);
+  const connectionStatus = useMultiplayerStore((s) => s.status);
+  const pointTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Derive player names
   const p1Name = mode === 'multiplayer'
@@ -165,7 +169,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
   // Multiplayer Driver Lifecycle
   useEffect(() => {
-    if (mode === 'multiplayer' && room && !multiplayerInitializedRef.current) {
+    if (mode === 'multiplayer' && room && matchId && !multiplayerInitializedRef.current) {
       const names = room.players.map((p) => p.displayName || `Player ${(p.seat ?? 0) + 1}`);
       names.sort((a, b) => {
         const seatA = room.players.find((p) => p.displayName === a)?.seat ?? 0;
@@ -173,24 +177,27 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         return seatA - seatB;
       });
 
-      const driver = new TableTennisMultiplayerDriver(mySeat, names);
+      const driver = new TableTennisMultiplayerDriver(mySeat, names, matchId, room.id);
+      setWinner(null);
+      stateRef.current.winner = null;
+      setEndReason(null);
+      setPointAnimation(null);
+      trailRef.current = [];
+      particlesRef.current = [];
       driverRef.current = driver;
       remoteTimelineRef.current = new TableTennisTimeline();
 
-      driver.setOnStateUpdate((state: TableTennisState) => {
+      driver.setOnStateUpdate((state: TableTennisState, restoreInput: boolean) => {
         if (!state || !state.players) return;
 
         const p1State = state.players[0];
         const p2State = state.players[1];
 
-        if (mySeat === 0 && p2State) {
-          p2Ref.current.y = p2State.paddleY;
-          p2Ref.current.vy = p2State.paddleVelocity;
-        } else if (mySeat === 1 && p1State) {
-          p1Ref.current.y = p1State.paddleY;
-          p1Ref.current.vy = p1State.paddleVelocity;
+        if (restoreInput && p1State && p2State) {
+          p1Ref.current.y = p1Ref.current.targetY = p1State.paddleY;
+          p2Ref.current.y = p2TargetYRef.current = p2State.paddleY;
+          p1Ref.current.vy = p2Ref.current.vy = 0;
         }
-
         if (p1State && p2State) {
           setP1Score(p1State.score);
           setP2Score(p2State.score);
@@ -210,6 +217,12 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         if (!state.ball?.inPlay || state.paused || state.finished) {
           ballRef.current.inPlay = false;
           trailRef.current = [];
+          if (state.waitingForServe && !state.finished) {
+            ballRef.current.x = state.servingSeat === 0 ? 43 : LOGICAL_WIDTH - 43;
+            ballRef.current.y = (state.players[state.servingSeat]?.paddleY ?? 160) + PADDLE_HEIGHT / 2;
+            ballRef.current.vx = 0;
+            ballRef.current.vy = 0;
+          }
         }
 
         setCurrentServer(state.servingSeat === 0 ? 1 : 2);
@@ -232,9 +245,11 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         if (state.matchStartedAtMs) {
           matchStartedAtMsRef.current = state.matchStartedAtMs;
         }
-        if (state.endReason) {
-          setEndReason(state.endReason);
-        }
+        setEndReason(state.endReason ?? null);
+        const winningSeat = state.winnerSeats?.[0];
+        const nextWinner = state.finished && winningSeat !== undefined ? (winningSeat === 0 ? 1 : 2) : null;
+        setWinner(nextWinner);
+        stateRef.current.winner = nextWinner;
 
         setIsMatchPoint(state.matchPointSeat !== null);
         setIsDeuce(!!state.deuce);
@@ -244,13 +259,15 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       driver.setOnPointScored((winnerSeat: number, reason: string) => {
         spawnParticles(ballRef.current.x, ballRef.current.y, winnerSeat === mySeat ? '#10b981' : '#f43f5e', 20, 1.5);
         setPointAnimation({ winner: winnerSeat, reason });
-        setTimeout(() => setPointAnimation(null), 1400);
+        if (pointTimeoutRef.current) clearTimeout(pointTimeoutRef.current);
+        pointTimeoutRef.current = setTimeout(() => setPointAnimation(null), 1400);
       });
 
-      driver.setOnMatchComplete((winnerSeat: number) => {
-        setWinner(winnerSeat === 0 ? 1 : 2);
+      driver.setOnMatchComplete((winnerSeat: number | null) => {
+        const nextWinner = winnerSeat === null ? null : winnerSeat === 0 ? 1 : 2;
+        setWinner(nextWinner);
         setGameState('gameover');
-        stateRef.current.winner = winnerSeat === 0 ? 1 : 2;
+        stateRef.current.winner = nextWinner;
         stateRef.current.gameState = 'gameover';
       });
 
@@ -260,11 +277,12 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
       return () => {
         driver.stop();
+        if (pointTimeoutRef.current) clearTimeout(pointTimeoutRef.current);
         driverRef.current = null;
         multiplayerInitializedRef.current = false;
       };
     }
-  }, [mode, room, mySeat, spawnParticles]);
+  }, [mode, roomId, matchId, mySeat, spawnParticles]);
 
   // Keyboard Handlers (Left/Right & Up/Down support)
   useEffect(() => {
@@ -314,9 +332,12 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       }
     };
 
+    const clearKeys = () => { keysRef.current = { w: false, s: false, up: false, down: false, space: false }; };
+    window.addEventListener('blur', clearKeys);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     return () => {
+      window.removeEventListener('blur', clearKeys);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
@@ -444,13 +465,15 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
     const paddleSpeed = 340 * dt;
 
     if (mode === 'multiplayer' && driverRef.current) {
-      if (mySeat === 0) {
+      const canMove = connectionStatus === 'connected' && !driverRef.current.getLatestState()?.paused
+        && !driverRef.current.getLatestState()?.finished;
+      if (canMove && mySeat === 0) {
         if (keys.up || keys.w) p1.targetY -= paddleSpeed;
         if (keys.down || keys.s) p1.targetY += paddleSpeed;
         p1.targetY = Math.max(0, Math.min(LOGICAL_HEIGHT - PADDLE_HEIGHT, p1.targetY));
         p1.vy = (p1.targetY - p1.y);
         p1.y += (p1.targetY - p1.y) * (1 - Math.exp(-dt * 60));
-      } else if (mySeat === 1) {
+      } else if (canMove && mySeat === 1) {
         // In Player 2's inverted camera, moving left on screen increases targetY
         if (keys.up || keys.w) p2TargetYRef.current += paddleSpeed;
         if (keys.down || keys.s) p2TargetYRef.current -= paddleSpeed;
@@ -461,12 +484,12 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
       const paddleY = mySeat === 0 ? p1.y : p2.y;
       const velocity = mySeat === 0 ? p1.vy : p2.vy;
-      driverRef.current.sendPaddleMove(paddleY, velocity);
+      if (canMove) driverRef.current.sendPaddleMove(paddleY, velocity);
 
       const remoteBall = remoteTimelineRef.current.ball(performance.now());
       if (remoteBall) Object.assign(ball, remoteBall);
       else ball.inPlay = false;
-      if (ball.inPlay) {
+      if (ball.inPlay && canMove) {
         trailRef.current.push({ x: ball.x, y: ball.y });
         if (trailRef.current.length > 8) trailRef.current.shift();
       }
@@ -585,9 +608,11 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
     // ── 3D Perspective Render (Flip to Near Side for Player 2) ──
     const isP2View = mode === 'multiplayer' && mySeat === 1;
 
-    const nearY = isP2View ? (LOGICAL_HEIGHT - PADDLE_HEIGHT) - p2.y : p1.y;
+    const playbackPaddles = mode === 'multiplayer'
+      ? remoteTimelineRef.current.paddles(performance.now()) : [p1.y, p2.y];
+    const nearY = isP2View ? (LOGICAL_HEIGHT - PADDLE_HEIGHT) - playbackPaddles[1] : playbackPaddles[0];
     const nearVy = isP2View ? -p2.vy : p1.vy;
-    const farY = isP2View ? (LOGICAL_HEIGHT - PADDLE_HEIGHT) - p1.y : p2.y;
+    const farY = isP2View ? (LOGICAL_HEIGHT - PADDLE_HEIGHT) - playbackPaddles[0] : playbackPaddles[1];
     const farVy = isP2View ? -p1.vy : p2.vy;
 
     const renderBall = isP2View
@@ -862,7 +887,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
               isMatchPoint={isMatchPoint}
               isDeuce={isDeuce}
               pointAnimation={pointAnimation}
-              isServing={gameState === 'serving'}
+              isServing={gameState === 'serving' && (mode !== 'multiplayer' || (connectionStatus === 'connected' && !driverRef.current?.getLatestState()?.paused))}
               currentServer={currentServer}
               rallyCount={rallyCount}
               onServe={handleCanvasClick}

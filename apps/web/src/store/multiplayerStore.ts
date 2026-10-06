@@ -314,7 +314,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         const current = get();
         if (current.room?.id !== payload.roomId || (current.room.matchId && current.room.matchId !== payload.matchId)) return;
         const newMatch = current.matchId !== payload.matchId;
-        console.log("[MultiplayerStore] game:state received", payload.matchId, "with", payload.events.length, "events");
+        const logUpdate = current.room.gameId !== "table-tennis" || payload.events.length > 0;
+        if (logUpdate) console.log("[MultiplayerStore] game:state received", payload.matchId, "with", payload.events.length, "events");
         const gameState = payload.state as any;
         if (gameState?.fen) {
           console.log("[MultiplayerStore] Chess FEN:", gameState.fen.substring(0, 20) + "...", "turn:", gameState.turn);
@@ -363,7 +364,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           matchId: payload.matchId,
           timestamp: Date.now(),
         });
-        console.log("[MultiplayerStore] Sent game:state:ack for match", payload.matchId);
+        if (logUpdate) console.log("[MultiplayerStore] Sent game:state:ack for match", payload.matchId);
       });
 
       // ── Centralized Authoritative State Sync Listener ──
@@ -933,7 +934,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const matchId = get().matchId;
     if (!matchId || (room.matchId && room.matchId !== matchId)) return { ok: false, error: "Waiting for the current match state" };
     
-    console.log("[MultiplayerStore] Client sending game:action to room", room.id, "with action:", action);
+    const logAction = room.gameId !== "table-tennis" || action.type !== "paddle-move";
+    if (logAction) console.log("[MultiplayerStore] Client sending game:action to room", room.id, "with action:", action);
     const res = await socket.emitWithAck("game:action", { roomId: room.id, matchId, action });
     
     if (!res.ok) {
@@ -946,7 +948,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       return { ok: false, error: res.data.error ?? "Action rejected" };
     }
     
-    console.log("[MultiplayerStore] Game action accepted by server, awaiting game:state broadcast");
+    if (logAction) console.log("[MultiplayerStore] Game action accepted by server, awaiting game:state broadcast");
     // State arrives via the `game:state` broadcast; applying it here too would
     // double-render the same event set on the acting client.
     return { ok: true };

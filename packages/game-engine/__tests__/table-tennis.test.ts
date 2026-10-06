@@ -145,6 +145,8 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
     eng.apply({ type: "ready" }, 1);
     
     const serverSeat = eng.state.servingSeat;
+    eng.apply({ type: 'ready' }, 0);
+    eng.apply({ type: 'ready' }, 1);
     const serveRes = eng.apply({ type: "serve", angle: 0 }, serverSeat);
     expect(serveRes.ok).toBe(true);
     expect(serveRes.state.ball?.speed).toBe(5.0);
@@ -198,6 +200,8 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
 
     (eng as any).updateState(next);
     const serverSeat = next.servingSeat;
+    eng.apply({ type: 'ready' }, 0);
+    eng.apply({ type: 'ready' }, 1);
     const serveRes = eng.apply({ type: "serve", angle: 0 }, serverSeat);
     expect(serveRes.ok).toBe(true);
     expect(serveRes.state.ball?.speed).toBe(5.0);
@@ -222,6 +226,8 @@ describe('Table Tennis synchronization regressions', () => {
   it('broadcasts consecutive points won by the same player, including the cleared ball', () => {
     const engine = new TableTennisEngine(players);
     for (let i = 0; i < 2; i++) {
+      engine.apply({ type: 'ready' }, 0);
+      engine.apply({ type: 'ready' }, 1);
       engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
       (engine as any).updateState({ ...engine.state, ball: { ...engine.state.ball, x: 620, vx: 5 } });
       const result = engine.tick();
@@ -234,6 +240,8 @@ describe('Table Tennis synchronization regressions', () => {
 describe('Table Tennis side exits', () => {
   it.each([{ y: 1, vy: -5, hitter: 0 }, { y: 399, vy: 5, hitter: 1 }])('ends a side exit without returning it into play ($y)', ({ y, vy, hitter }) => {
     const engine = new TableTennisEngine([{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }]);
+    engine.apply({ type: 'ready' }, 0);
+    engine.apply({ type: 'ready' }, 1);
     engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
     (engine as any).updateState({ ...engine.state, ball: { ...engine.state.ball, x: 300, y, vy, lastHitSeat: hitter } });
     const result = engine.tick();
@@ -253,6 +261,8 @@ describe('Table Tennis assisted returns', () => {
       const engine = new TableTennisEngine(players);
       (engine as any).updateState({ ...engine.state, servingSeat: seat });
       engine.apply({ type: 'paddle-move', y }, seat);
+      engine.apply({ type: 'ready' }, 0);
+      engine.apply({ type: 'ready' }, 1);
       engine.apply({ type: 'serve', angle }, seat);
       let state = engine.state;
       for (let frame = 0; frame < 150 && state.ball; frame++) state = engine.simulatePhysics(state);
@@ -263,6 +273,8 @@ describe('Table Tennis assisted returns', () => {
     for (const seat of [0, 1]) for (const y of [0, 160, 320]) {
       for (const offset of [-38, -20, 0, 20, 38]) for (const velocity of [-20, 0, 20]) {
         const engine = new TableTennisEngine(players);
+        engine.apply({ type: 'ready' }, 0);
+        engine.apply({ type: 'ready' }, 1);
         engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
         const state = { ...engine.state,
           players: engine.state.players.map(p => p.seat === seat ? { ...p, paddleY: y, paddleVelocity: velocity } : p),
@@ -281,5 +293,94 @@ describe('Table Tennis assisted returns', () => {
   it('rejects invalid serve directions instead of corrupting the ball', () => {
     const engine = new TableTennisEngine(players);
     expect(engine.apply({ type: 'serve', angle: NaN }, engine.state.servingSeat).ok).toBe(false);
+  });
+});
+
+describe('Table Tennis full match rules', () => {
+  const players = [{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }];
+  it('waits for both ready players, enforces serving ownership, and rejects duplicate serves', () => {
+    const engine = new TableTennisEngine(players);
+    const server = engine.state.servingSeat;
+    expect(engine.apply({ type: 'serve', angle: 0 }, server).ok).toBe(false);
+    engine.apply({ type: 'ready' }, server);
+    expect(engine.apply({ type: 'serve', angle: 0 }, server).ok).toBe(false);
+    engine.apply({ type: 'ready' }, 1 - server);
+    expect(engine.apply({ type: 'serve', angle: 0 }, 1 - server).ok).toBe(false);
+    expect(engine.apply({ type: 'serve', angle: 0 }, server).ok).toBe(true);
+    expect(engine.apply({ type: 'serve', angle: 0 }, server).ok).toBe(false);
+  });
+  it('marks a single-set match point and clears it on deuce', () => {
+    const engine = new TableTennisEngine(players);
+    engine.state.players[0].score = 3; engine.state.players[1].score = 3;
+    const matchPoint = (engine as any).awardPoint(engine.state, 0, 'miss');
+    expect(matchPoint.matchPointSeat).toBe(0);
+    const deuce = (engine as any).awardPoint(matchPoint, 1, 'miss');
+    expect(deuce.deuce).toBe(true); expect(deuce.matchPointSeat).toBeNull();
+  });
+  it('clears set scores and deuce when the next set starts', () => {
+    const engine = new TableTennisEngine(players, undefined, { rules: { setsToWin: 2 } });
+    engine.state.players[0].score = 5; engine.state.players[1].score = 4; engine.state.deuce = true;
+    const state = (engine as any).awardPoint(engine.state, 0, 'miss');
+    expect(state.finished).toBe(false); expect(state.players[0].setsWon).toBe(1);
+    expect(state.setScores).toEqual([0, 0]); expect(state.deuce).toBe(false); expect(state.matchPointSeat).toBeNull();
+  });
+  it('resolves the timeout using actual sets won before current points', () => {
+    const engine = new TableTennisEngine(players);
+    engine.state.players[0].setsWon = 1; engine.state.players[1].score = 4;
+    expect(engine.handleTimeout('match').winnerSeats).toEqual([0]);
+  });
+  it('holds the ball and clock during pause and resumes without a turn timer', () => {
+    let now = 1000;
+    const engine = new TableTennisEngine(players, undefined, { now: () => now });
+    engine.apply({ type: 'ready' }, 0); engine.apply({ type: 'ready' }, 1);
+    engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
+    now = 11000; expect(engine.apply({ type: 'pause' }, 0).ok).toBe(true);
+    const ball = structuredClone(engine.state.ball);
+    now = 61000; engine.tick(); expect(engine.state.ball).toEqual(ball);
+    expect(engine.serialize().matchRemainingMs).toBe(170000);
+    expect(engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat).ok).toBe(false);
+    expect(engine.apply({ type: 'resume' }, 0).ok).toBe(true);
+    expect(engine.currentMatchDeadline).toBe(231000); expect(engine.currentClockDeadline).toBeNull();
+    now += 1000; expect(engine.serialize().matchRemainingMs).toBe(169000);
+    engine.tick(); expect(engine.state.ball).not.toEqual(ball);
+  });
+  it('rejects non-finite paddle positions and preserves the state', () => {
+    const engine = new TableTennisEngine(players);
+    const before = engine.serialize();
+    for (const y of [NaN, Infinity, -Infinity]) expect(engine.apply({ type: 'paddle-move', y }, 0).ok).toBe(false);
+    expect(engine.serialize()).toMatchObject({ players: before.players });
+  });
+  it('rejects actions after the match ends and finalizes timeouts once', () => {
+    const engine = new TableTennisEngine(players);
+    expect(engine.handleTimeout('match').finished).toBe(true);
+    expect(engine.apply({ type: 'paddle-move', y: 0 }, 0).ok).toBe(false);
+    expect(engine.handleTimeout('match').ok).toBe(false);
+  });
+  it('requires the opponent to accept a draw and stops the rally on agreement', () => {
+    const engine = new TableTennisEngine(players);
+    engine.apply({ type: 'ready' }, 0); engine.apply({ type: 'ready' }, 1);
+    engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
+    expect(engine.apply({ type: 'draw-accept' }, 1).ok).toBe(false);
+    expect(engine.apply({ type: 'draw-offer' }, 0).ok).toBe(true);
+    expect(engine.apply({ type: 'draw-accept' }, 0).ok).toBe(false);
+    expect(engine.apply({ type: 'draw-decline' }, 1).ok).toBe(true);
+    expect(engine.state.finished).toBe(false);
+    engine.apply({ type: 'draw-offer' }, 0);
+    const result = engine.apply({ type: 'draw-accept' }, 1);
+    expect(result.finished).toBe(true); expect(result.winnerSeats).toEqual([]);
+    expect(result.state.phase).toBe('finished'); expect(result.state.ball).toBeNull();
+    expect(engine.tick().events).toEqual([]);
+  });
+  it('allows resigning or agreeing a draw while paused, without accepting paddle input', () => {
+    for (const ending of ['resign', 'draw-accept'] as const) {
+      const engine = new TableTennisEngine(players);
+      engine.apply({ type: 'pause' }, 0);
+      expect(engine.apply({ type: 'paddle-move', y: 10 }, 0).ok).toBe(false);
+      if (ending === 'draw-accept') expect(engine.apply({ type: 'draw-offer' }, 0).ok).toBe(true);
+      const result = engine.apply({ type: ending }, 1);
+      expect(result.finished).toBe(true);
+      expect(result.winnerSeats).toEqual(ending === 'resign' ? [0] : []);
+      expect(result.state.phase).toBe('finished'); expect(result.state.ball).toBeNull();
+    }
   });
 });

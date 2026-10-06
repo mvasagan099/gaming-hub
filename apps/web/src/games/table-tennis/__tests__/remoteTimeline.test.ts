@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TableTennisEngine } from '../../../../../../packages/game-engine/src/table-tennis/engine';
 import { TableTennisTimeline } from '../remoteTimeline';
 import type { TableTennisState } from '@gaming-hub/game-engine';
 
 function snapshot(time: number, x: number): TableTennisState {
   const engine = new TableTennisEngine([{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }], undefined, { now: () => time });
+  engine.apply({ type: 'ready' }, 0); engine.apply({ type: 'ready' }, 1);
   engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
   return { ...engine.state, ...engine.serialize(), ball: { ...engine.state.ball!, x, vx: 5, vy: 0 } } as TableTennisState;
 }
@@ -32,7 +33,7 @@ describe('Table Tennis remote playback', () => {
     expect(timeline.ball(5400)?.x).toBe(562);
     const hit = snapshot(1040, 561);
     hit.ball!.vx = -5;
-    hit.ball!.touchCount = 1;
+    hit.ball!.touchCount = 1; hit.ball!.lastHitSeat = 1;
     timeline.receive(hit, 5040);
     expect(timeline.ball(5110)?.vx).toBe(-5);
     expect(timeline.ball(5110)!.x).toBeLessThan(561);
@@ -54,7 +55,8 @@ describe('Table Tennis remote playback', () => {
     const timeline = new TableTennisTimeline();
     timeline.receive({ ...snapshot(1000, 100), paused: true, matchRemainingMs: 90000 }, 5000);
     expect(timeline.secondsRemaining(15000)).toBe(90);
-    expect(timeline.ball(15000)).toBeNull();
+    expect(timeline.ball(15000)?.x).toBe(100);
+    expect(timeline.ball(15000)?.inPlay).toBe(true);
   });
 });
 
@@ -74,5 +76,64 @@ describe('Table Tennis ball geometry', () => {
     expect(TableTennis3DRenderer.project(300, -20).x).toBeLessThan(TableTennis3DRenderer.project(300, 0).x);
     expect(TableTennis3DRenderer.project(300, 420).x).toBeGreaterThan(TableTennis3DRenderer.project(300, 400).x);
     expect(TableTennis3DRenderer.project(-20, 200).tableY).toBeGreaterThan(TableTennis3DRenderer.project(0, 200).tableY);
+  });
+});
+
+describe('Table Tennis bat contact alignment', () => {
+  it('keeps the opponent paddle on the far baseline and matches its hit width', () => {
+    const pose = TableTennis3DRenderer.project(600, 200, 15);
+    const edge = TableTennis3DRenderer.project(600, 200, 0);
+    expect(pose.y).toBeLessThan(edge.y);
+    expect(TableTennis3DRenderer.paddleRadius(574, 200)).toBeCloseTo(
+      TableTennis3DRenderer.project(574, 240, 15).x - TableTennis3DRenderer.project(574, 200, 15).x);
+    expect(TableTennis3DRenderer.paddleRadius(574, 200)).toBeGreaterThan(25);
+  });
+  it('draws the far bat outside the baseline with its handle pointing away from the table', () => {
+    const rotate = vi.fn(); const translate = vi.fn();
+    const gradient = { addColorStop: vi.fn() };
+    const ctx = new Proxy({ rotate, translate } as Record<string, unknown>, {
+      get: (target, key: string) => target[key] ?? (key.startsWith('create') ? () => gradient : vi.fn()),
+    }) as unknown as CanvasRenderingContext2D;
+    (TableTennis3DRenderer as unknown as { drawFarPaddle: (ctx: CanvasRenderingContext2D, x: number, y: number, vy: number) => void })
+      .drawFarPaddle(ctx, 600, 200, 0);
+    expect(translate).toHaveBeenCalledWith(400, 170);
+    expect(rotate).toHaveBeenCalledWith(Math.PI);
+  });
+  it.each([38, 562])('brings the ball down to bat height at contact x=%s', x => {
+    expect(TableTennis3DRenderer.calculateBallZ({ x, y: 200, vx: 5, vy: 0, inPlay: true })).toBe(32);
+  });
+  it.each([false, true])('keeps the ball within the visible far bat at contact in portrait=%s', portrait => {
+    const renderer = TableTennis3DRenderer as unknown as { isPortraitMode: boolean };
+    renderer.isPortraitMode = portrait;
+    try {
+      const bat = TableTennis3DRenderer.project(600, 200, 15);
+      const z = TableTennis3DRenderer.calculateBallZ({ x: 562, y: 200, vx: 5, vy: 0, inPlay: true });
+      const ball = TableTennis3DRenderer.project(562, 240, z);
+      const radius = TableTennis3DRenderer.paddleRadius(574, 200);
+      const ballRadius = Math.max(4, 6 * ball.scale);
+      expect(((ball.x - bat.x) / (radius + ballRadius)) ** 2 +
+        ((ball.y - bat.y) / (radius * 1.15 + ballRadius)) ** 2).toBeLessThan(1);
+    } finally { renderer.isPortraitMode = false; }
+  });
+  it('samples paddle and ball motion at the same playback time', () => {
+    const timeline = new TableTennisTimeline();
+    const a = snapshot(1000, 100); a.players[1].paddleY = 100;
+    const b = snapshot(1040, 112); b.players[1].paddleY = 200;
+    timeline.receive(a, 5000); timeline.receive(b, 5040);
+    expect(timeline.ball(5060)?.x).toBe(106);
+    expect(timeline.paddles(5060)[1]).toBe(150);
+  });
+  it.each([0, 1])('shows the ball reaching bat %s between snapshots before reversing', seat => {
+    const timeline = new TableTennisTimeline();
+    const a = snapshot(1000, seat === 0 ? 44 : 556);
+    a.ball!.vx = seat === 0 ? -5 : 5;
+    const b = snapshot(1040, seat === 0 ? 45 : 555);
+    b.ball!.vx = -a.ball!.vx; b.ball!.touchCount = 1; b.ball!.lastHitSeat = seat;
+    b.players[seat].paddleY = 180;
+    timeline.receive(a, 5000); timeline.receive(b, 5040);
+    expect(timeline.ball(5060)?.x).toBe(seat === 0 ? 38 : 562);
+    expect(timeline.paddles(5060)[seat]).toBe(180);
+    expect(Math.abs(timeline.ball(5070)!.x - (seat === 0 ? 38 : 562))).toBeGreaterThan(0);
+    expect(timeline.ball(5070)!.vx).toBe(b.ball!.vx);
   });
 });

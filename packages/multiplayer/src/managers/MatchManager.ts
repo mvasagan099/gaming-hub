@@ -44,6 +44,7 @@ export interface GameActionOptions {
 export class MatchManager {
   private readonly framework: MultiplayerFramework;
   private readonly activeMatches = new Map<string, MatchRuntime>();
+  private tableTennisTicks = new Set<string>();
   private physicsIntervals = new Map<string, ReturnType<typeof setInterval>>();
   private readonly PHYSICS_TICK_MS = 16;
   
@@ -95,26 +96,35 @@ export class MatchManager {
     const engine = room.match.engine as any;
     if (typeof engine.tick !== "function") return;
     
-    try {
+    const matchId = room.match.matchId;
+    const tick = async () => {
+      if (room.status !== "playing" || room.match?.matchId !== matchId || room.match.engine !== engine) return;
       const result = engine.tick();
       if (result && result.ok) {
         const hasEvents = result.events && result.events.length > 0;
         const isPhysicsActive = room.config.gameId === "table-tennis"
-          ? Boolean(result.state?.ball?.inPlay)
-          : true;
+          ? Boolean(result.state?.ball?.inPlay) : true;
         if (hasEvents || isPhysicsActive) {
           await this.framework.syncManager.broadcastGameState(room, result.events ?? []);
         }
-        
         if (result.state?.finished) {
-          this.stopPhysicsLoop(room.match.matchId);
-          // The engine finished the match on its own clock (e.g. fruit-ninja
-          // timer/bomb elimination) - finalize it like any other game-over.
+          this.stopPhysicsLoop(matchId);
           await this.finishMatch(room, result);
         }
       }
+    };
+    const serialized = room.config.gameId === "table-tennis";
+    if (serialized && this.tableTennisTicks.has(matchId)) return;
+    if (serialized) this.tableTennisTicks.add(matchId);
+    try {
+      // Share the action queue so anti-cheat rollback cannot undo an overlapping
+      // physics tick. Coalesce pending ticks instead of building a stale backlog.
+      if (serialized) await this.framework.gameStateManager.enqueue(room.id, tick);
+      else await tick();
     } catch (error) {
       this.framework.error("Physics tick error", error);
+    } finally {
+      if (serialized) this.tableTennisTicks.delete(matchId);
     }
   }
 
@@ -314,6 +324,11 @@ export class MatchManager {
       this.activeMatches.delete(room.match.matchId);
       this.framework.timerManager.clearRoomTimers(room.id);
       room.eventLog = [];
+    }
+    if (room.config.gameId === "table-tennis") {
+      (engine as EngineInstance & { startMatchClock: () => void }).startMatchClock();
+      match.startedAt = Date.now();
+      match.stateSnapshots[0] = { turnNumber: 0, timestamp: match.startedAt, state: engine.serialize() };
     }
     // Update room only after the lifecycle prerequisite succeeds.
     room.match = match;
@@ -729,42 +744,47 @@ export class MatchManager {
    * Handle clock expiry.
    */
   private async handleClockExpiry(room: RoomRuntime): Promise<void> {
-    if (!room.match || room.status !== "playing") return;
-    
-    const engine = room.match.engine as EngineInstance & { handleTimeout?: (kind: "turn" | "match", seat?: number) => EngineActionResult<JsonObject> };
-    
-    if (!engine.handleTimeout) return;
-    
-    // Check for turn timeout
-    const currentSeat = engine.currentSeat;
-    const turnDeadline = engine.currentClockDeadline;
-    
-    if (turnDeadline && turnDeadline <= Date.now()) {
-      const result = engine.handleTimeout("turn", currentSeat);
-      
-      if (result.ok) {
-        await this.framework.syncManager.broadcastGameState(room, result.events);
-        
-        if (result.finished) {
-          await this.finishMatch(room, result);
-        } else {
-          this.scheduleClockCheck(room);
+    const matchId = room.match?.matchId;
+    const expire = async () => {
+      if (!room.match || room.match.matchId !== matchId || room.status !== "playing") return;
+
+      const engine = room.match.engine as EngineInstance & { handleTimeout?: (kind: "turn" | "match", seat?: number) => EngineActionResult<JsonObject> };
+
+      if (!engine.handleTimeout) return;
+
+      // Check for turn timeout
+      const currentSeat = engine.currentSeat;
+      const turnDeadline = engine.currentClockDeadline;
+
+      if (turnDeadline && turnDeadline <= Date.now()) {
+        const result = engine.handleTimeout("turn", currentSeat);
+
+        if (result.ok) {
+          await this.framework.syncManager.broadcastGameState(room, result.events);
+
+          if (result.finished) {
+            await this.finishMatch(room, result);
+          } else {
+            this.scheduleClockCheck(room);
+          }
         }
       }
-    }
-    
-    // Check for match timeout
-    const matchDeadline = engine.currentMatchDeadline;
-    
-    if (matchDeadline && matchDeadline <= Date.now()) {
-      const result = engine.handleTimeout("match");
-      
-      if (result.ok) {
-        await this.finishMatch(room, result);
+
+      // Check for match timeout
+      const matchDeadline = engine.currentMatchDeadline;
+
+      if (matchDeadline && matchDeadline <= Date.now()) {
+        const result = engine.handleTimeout("match");
+
+        if (result.ok) {
+          await this.finishMatch(room, result);
+        }
       }
-    }
+    };
+    if (room.config.gameId === "table-tennis") await this.framework.gameStateManager.enqueue(room.id, expire);
+    else await expire();
   }
-  
+
   /**
    * Create error result.
    */

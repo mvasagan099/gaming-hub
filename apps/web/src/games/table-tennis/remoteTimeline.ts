@@ -2,7 +2,9 @@ import type { TableTennisBall, TableTennisState } from '@gaming-hub/game-engine'
 
 /** Render a short buffered history, instead of rewinding local prediction on every packet. */
 export class TableTennisTimeline {
-  private samples: { time: number; ball: TableTennisBall }[] = [];
+  private samples: { time: number; ball: TableTennisBall; paddles: number[] }[] = [];
+  private latestPaddles: number[] = [160, 160];
+  private heldBall: TableTennisBall | null = null;
   private rendered: TableTennisBall | null = null;
   private offset: number | null = null;
   private remainingMs = 0;
@@ -19,13 +21,28 @@ export class TableTennisTimeline {
       (state.matchStartedAtMs == null ? 0 : timestamp - state.matchStartedAtMs));
     this.clockReceivedAt = receivedAt;
     this.paused = state.paused || state.finished;
+    this.heldBall = state.paused && !state.finished && state.ball?.inPlay ? { ...state.ball } : null;
+    this.latestPaddles = state.players.map(p => p.paddleY);
     if (!state.ball?.inPlay || state.paused || state.finished) {
       this.samples = [];
       this.rendered = null;
       return;
     }
     if (this.samples.length && timestamp < this.samples[this.samples.length - 1].time) return;
-    const sample = { time: timestamp, ball: { ...state.ball } };
+    const sample = { time: timestamp, ball: { ...state.ball }, paddles: [...this.latestPaddles] };
+    const previous = this.samples.at(-1);
+    if (previous && sample.ball.touchCount === previous.ball.touchCount + 1
+      && previous.ball.vx * sample.ball.vx < 0 && timestamp > previous.time
+      && (sample.ball.lastHitSeat === 0 ? previous.ball.vx < 0 : previous.ball.vx > 0)) {
+      // Include the contact between snapshots, so interpolation reaches the bat
+      // instead of reversing early between two positions away from it.
+      const x = sample.ball.lastHitSeat === 0 ? 38 : 562;
+      const fraction = Math.max(0.05, Math.min(0.95,
+        Math.abs((x - previous.ball.x) / previous.ball.vx) * (1000 / 60) / (timestamp - previous.time)));
+      this.samples.push({ time: previous.time + (timestamp - previous.time) * fraction,
+        ball: { ...sample.ball, x, y: previous.ball.y + (x - previous.ball.x) * previous.ball.vy / previous.ball.vx },
+        paddles: [...sample.paddles] });
+    }
     if (this.samples.at(-1)?.time === timestamp) this.samples.pop();
     this.samples.push(sample);
     if (this.samples.length > 32) this.samples.shift();
@@ -35,8 +52,24 @@ export class TableTennisTimeline {
     return Math.ceil(Math.max(0, this.remainingMs - (this.paused ? 0 : now - this.clockReceivedAt)) / 1000);
   }
 
+  paddles(now: number): number[] {
+    if (!this.samples.length) return [...this.latestPaddles];
+    const target = now - (this.offset ?? 0) - 40;
+    let a = this.samples[0];
+    for (const b of this.samples.slice(1)) {
+      if (target < b.time) {
+        const t = Math.max(0, (target - a.time) / (b.time - a.time));
+        // At a confirmed contact the hit paddle belongs to the contact snapshot.
+        if (b.ball.x === 38 || b.ball.x === 562) return [...b.paddles];
+        return a.paddles.map((y, seat) => y + (b.paddles[seat] - y) * t);
+      }
+      a = b;
+    }
+    return [...a.paddles];
+  }
+
   ball(now: number): TableTennisBall | null {
-    if (!this.samples.length) return null;
+    if (!this.samples.length) return this.heldBall ? { ...this.heldBall } : null;
     const target = now - (this.offset ?? 0) - 40;
     while (this.samples.length > 2 && this.samples[1].time <= target) this.samples.shift();
     const a = this.samples[0];

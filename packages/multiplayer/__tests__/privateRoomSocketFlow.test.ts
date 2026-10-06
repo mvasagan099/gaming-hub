@@ -164,6 +164,83 @@ describe('private room Socket.IO lifecycle', () => {
     expect((await shoot(host, started.matchId!)).data.ok).toBe(false);
   });
 
+  it('gives Table Tennis the full three minutes after delayed funding completes', async () => {
+    let now = Date.now();
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const created = await create('table-tennis');
+    await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
+    await roomAck(guest, 'room:ready', { roomId: created.id, ready: true });
+    fund.mockImplementationOnce(async () => { now += 30000; });
+    await roomAck(host, 'room:start', { roomId: created.id });
+    const match = framework.roomManager.getRoom(created.id)!.match!;
+    expect(match.startedAt).toBe(now);
+    expect(match.engine.serialize().matchRemainingMs).toBe(180000);
+    expect((match.engine as any).currentMatchDeadline).toBe(now + 180000);
+  });
+
+  it('runs Table Tennis readiness, rally, pause, reconnect, timeout and rematch for two clients', async () => {
+    const created = await create('table-tennis');
+    await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
+    await roomAck(guest, 'room:ready', { roomId: created.id, ready: true });
+    const started = await roomAck(host, 'room:start', { roomId: created.id });
+    const room = framework.roomManager.getRoom(created.id)!;
+    const engine = room.match!.engine as any;
+    const states: any[] = [], guestStates: any[] = [], endings: any[] = [];
+    host.on('game:state', state => states.push(state));
+    guest.on('game:state', state => guestStates.push(state));
+    host.on('game:over', state => endings.push(state));
+    const action = async (socket: ClientSocket, value: any, matchId = room.match!.matchId) => {
+      // Respect the production action cooldown between intentional inputs.
+      await new Promise(resolve => setTimeout(resolve, 20));
+      return socket.timeout(4000).emitWithAck('game:action', { roomId: room.id, matchId, action: value });
+    };
+    const server = engine.state.servingSeat === 0 ? host : guest;
+    const receiver = server === host ? guest : host;
+    expect((await action(server, { type: 'serve', angle: 0 })).data.ok).toBe(false);
+    expect((await action(host, { type: 'ready' })).data.ok).toBe(true);
+    expect((await action(guest, { type: 'ready' })).data.ok).toBe(true);
+    expect((await action(receiver, { type: 'serve', angle: 0 })).data.ok).toBe(false);
+    expect((await action(server, { type: 'serve', angle: 0 })).data.ok).toBe(true);
+    await vi.waitFor(() => {
+      expect(states.at(-1)?.state.ball?.inPlay).toBe(true);
+      expect(guestStates.at(-1)?.state.ball?.inPlay).toBe(true);
+    });
+    const initialX = engine.state.ball.x;
+    await vi.waitFor(() => expect(engine.state.ball.x).not.toBe(initialX));
+    expect((await action(host, { type: 'pause' })).data.ok).toBe(true);
+    const pausedBall = structuredClone(engine.state.ball);
+    const remaining = engine.serialize().matchRemainingMs;
+    await new Promise(resolve => setTimeout(resolve, 70));
+    expect(engine.state.ball).toEqual(pausedBall);
+    expect(engine.serialize().matchRemainingMs).toBe(remaining);
+    expect((await action(host, { type: 'resume' })).data.ok).toBe(true);
+    expect(engine.currentClockDeadline).toBeNull();
+    // Advance one missed ball through the real physics loop and check both clients.
+    engine.state.ball.x = 620; engine.state.ball.vx = 5;
+    await vi.waitFor(() => {
+      expect(states.at(-1)?.state.players[0].score).toBe(1);
+      expect(guestStates.at(-1)?.state.players[0].score).toBe(1);
+      expect(states.at(-1)?.state.ball).toBeNull();
+      expect(guestStates.at(-1)?.events).toContainEqual(expect.objectContaining({ type: 'point-scored', winnerSeat: 0 }));
+    });
+    expect((await action(guest, { type: 'paddle-move', y: 240 })).data.ok).toBe(true);
+    guest.disconnect(); guest = await client('guest');
+    await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
+    expect(engine.state.players[1].paddleY).toBe(240);
+    // Force the authoritative deadline forward; test timeout without a three-minute wait.
+    engine.state.matchStartedAtMs = Date.now() - 180001;
+    await (framework.matchManager as any).handleClockExpiry(room);
+    await vi.waitFor(() => expect(endings).toHaveLength(1));
+    expect(room.status).toBe('ended');
+    await (framework.matchManager as any).handleClockExpiry(room);
+    expect(endings).toHaveLength(1);
+    await framework.matchManager.requestRematch(room.id, 'host');
+    await framework.matchManager.requestRematch(room.id, 'guest');
+    expect(room.match!.matchId).not.toBe(started.matchId);
+    expect(room.match!.engine.state).toMatchObject({ phase: 'waiting', totalPointsPlayed: 0, finished: false });
+    expect((await action(host, { type: 'paddle-move', y: 0 }, started.matchId!)).data.ok).toBe(false);
+  });
+
   it('keeps readiness, ownership, room-code and capacity checks enforced', async () => {
     const created = await create();
     expect((await host.timeout(4_000).emitWithAck('room:start', { roomId: created.id })).ok).toBe(false);

@@ -58,6 +58,9 @@ export const GAME_PLAY_CONFIGS: Record<GameId, GamePlayConfig> = {
     pauseOnDisconnect: false,
   }),
   "table-tennis": baseConfig("table-tennis", {
+    // Holding a steady bat or waiting for a serve is legitimate play.
+    // Disconnect forfeits and the three-minute match clock still apply.
+    forfeitOnAfk: false,
     defaultMatchTimerMs: 180_000,
     actionCooldownMs: 15,
     pauseOnDisconnect: false,

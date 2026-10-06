@@ -213,8 +213,8 @@ describe("GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS", (
 
     it("expired match during sleep/disconnect finalizes authoritatively upon resync", () => {
       const engine = new TableTennisEngine(testPlayers);
-      (engine as any).state.players[0].sets = 1;
-      (engine as any).state.players[1].sets = 0;
+      (engine as any).state.players[0].setsWon = 1;
+      (engine as any).state.players[1].setsWon = 0;
 
       // Deadline passes while player disconnected
       const res = engine.handleTimeout("match");
@@ -340,9 +340,9 @@ describe("GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS", (
 
     it("6. Table Tennis: handles equal sets & points with draw", () => {
       const engine = new TableTennisEngine(testPlayers);
-      (engine as any).state.players[0].sets = 1;
+      (engine as any).state.players[0].setsWon = 1;
       (engine as any).state.players[0].score = 5;
-      (engine as any).state.players[1].sets = 1;
+      (engine as any).state.players[1].setsWon = 1;
       (engine as any).state.players[1].score = 5;
 
       const res = engine.handleTimeout("match");

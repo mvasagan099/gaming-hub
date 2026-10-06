@@ -1,5 +1,5 @@
 import type { EngineActionResult, EngineEvent, EnginePlayer, RandomSource } from "../types";
-import { MultiplayerGameEngine, type BaseState } from "../base/MultiplayerGameEngine";
+import { MultiplayerGameEngine, type BaseState, type PlayerAction } from "../base/MultiplayerGameEngine";
 import type {
   TableTennisState,
   TableTennisAction,
@@ -38,13 +38,14 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
   private physicsInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: TableTennisEngineOptions) {
-    const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 5000 };
+    // Both players move continuously; resuming must not arm a turn forfeiture clock.
+    const turnTimer = undefined;
     const matchTimer = { matchDurationMs: 180000, warningThresholdMs: 30000 };
     super(players, rng, {
       turnTimer,
       matchTimer,
       enableResign: options?.enableResign ?? true,
-      enableDraw: false,
+      enableDraw: true,
       enablePause: options?.enablePause ?? true,
       enableRematch: true,
       now: options?.now,
@@ -62,8 +63,43 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     return state;
   }
 
+  /** Called once funding is confirmed, before the room becomes playable. */
+  startMatchClock(): void {
+    if (this.state.phase === "waiting" && this.state.totalPointsPlayed === 0 && !this.state.finished) {
+      this.startMatchTimer(this.state);
+    }
+  }
+
   override serialize() {
-    return { ...super.serialize(), serverTimestamp: this.now() };
+    const copy = super.serialize();
+    if (this.state.paused && this.state.matchStartedAtMs !== null && this.state.pausedAtMs !== null) {
+      copy.matchRemainingMs = Math.max(0, 180000 - (this.state.pausedAtMs - this.state.matchStartedAtMs));
+    }
+    return { ...copy, serverTimestamp: this.now() };
+  }
+
+  protected override validateAction(action: TableTennisAction, seat: number): string | null {
+    // Match controls remain available while rally movement is paused.
+    if (!this.state.finished && this.state.paused
+      && ["resign", "draw-offer", "draw-accept", "draw-decline"].includes(action.type)) {
+      return this.validateBaseAction(action as PlayerAction, seat, this.state);
+    }
+    return super.validateAction(action, seat);
+  }
+
+  protected override applyBaseAction(action: PlayerAction, seat: number, state: InternalState) {
+    const result = super.applyBaseAction(action, seat, state);
+    if (result?.ok && action.type === "resume" && state.pausedAtMs !== null
+      && state.matchStartedAtMs !== null) {
+      result.state.matchStartedAtMs = state.matchStartedAtMs + Math.max(0, this.now() - state.pausedAtMs);
+    }
+    if (result?.ok && result.finished) {
+      result.state.phase = "finished";
+      result.state.ball = null;
+      result.state.canServe = false;
+      result.state.waitingForServe = false;
+    }
+    return result;
   }
 
   protected getInitialSeat(): number {
@@ -115,11 +151,11 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
       case "paddle-move": {
         if (seat !== 0 && seat !== 1) return "Invalid seat";
         const y = action.y;
-        if (typeof y !== "number" || isNaN(y)) return "Invalid paddle position";
+        if (typeof y !== "number" || !Number.isFinite(y)) return "Invalid paddle position";
         return null;
       }
       case "serve": {
-        if (state.phase !== "serve" && state.phase !== "waiting") return "Cannot serve now";
+        if (state.phase !== "serve" || !state.players.every(p => p.isReady)) return "Wait for both players to be ready";
         if (seat !== state.servingSeat) return "Not your serve";
         if (state.ball && state.ball.inPlay) return "Ball already in play";
         if (!Number.isFinite(action.angle)) return "Invalid serve angle";
@@ -380,12 +416,14 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
       }
     }
 
+    next.matchPointSeat = null;
+    next.deuce = next.players.every(p => p.score >= this.rules.pointsPerSet - 1);
+    next.setScores = next.players.map(p => p.score);
     for (let i = 0; i < 2; i++) {
-      if (next.players[i].setsWon === this.rules.setsToWin - 1 && next.players[1 - i].setsWon < this.rules.setsToWin - 1) {
-        if (next.players[i].score >= this.rules.pointsPerSet - 1) {
-          next.matchPointSeat = i;
-          break;
-        }
+      if (next.players[i].setsWon === this.rules.setsToWin - 1
+        && next.players[i].score >= this.rules.pointsPerSet - 1
+        && next.players[i].score > next.players[1 - i].score) {
+        next.matchPointSeat = i;
       }
     }
 
@@ -456,7 +494,7 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     type PlayerRank = { seat: number; sets: number; score: number };
     const ranks: PlayerRank[] = state.players.map((p) => ({
       seat: p.seat,
-      sets: Number((p as any).sets ?? 0),
+      sets: Number(p.setsWon ?? 0),
       score: Number((p as any).score ?? 0),
     }));
 

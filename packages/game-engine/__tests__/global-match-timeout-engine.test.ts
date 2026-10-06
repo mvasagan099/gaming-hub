@@ -59,8 +59,8 @@ describe("GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS", () => {
   describe("3. Duplicate Timeout Handling & Idempotency", () => {
     it("handles multiple sequential timeout events idempotently without double-finalizing", () => {
       const engine = new TableTennisEngine(players);
-      (engine as any).state.players[0].sets = 2;
-      (engine as any).state.players[1].sets = 1;
+      (engine as any).state.players[0].setsWon = 2;
+      (engine as any).state.players[1].setsWon = 1;
 
       // First timeout event
       const res1 = engine.handleTimeout("match");
@@ -133,9 +133,9 @@ describe("GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS", () => {
 
     it("6. Table Tennis: resolves sets won -> current set points", () => {
       const engine = new TableTennisEngine(players);
-      (engine as any).state.players[0].sets = 1;
+      (engine as any).state.players[0].setsWon = 1;
       (engine as any).state.players[0].score = 6;
-      (engine as any).state.players[1].sets = 0;
+      (engine as any).state.players[1].setsWon = 0;
       (engine as any).state.players[1].score = 9;
 
       const res = engine.handleTimeout("match");

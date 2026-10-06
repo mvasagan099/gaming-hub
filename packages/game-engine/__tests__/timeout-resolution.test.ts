@@ -72,8 +72,8 @@ describe("Global 10-Minute Match Timeout Winner Resolution Across All 10 Games",
 
   it("6. Table Tennis: resolves winner by sets won, then current set points", () => {
     const engine = new TableTennisEngine(players);
-    (engine as any).state.players[0].sets = 1;
-    (engine as any).state.players[1].sets = 0;
+    (engine as any).state.players[0].setsWon = 1;
+    (engine as any).state.players[1].setsWon = 0;
 
     const res = engine.handleTimeout("match");
     expect(res.ok).toBe(true);

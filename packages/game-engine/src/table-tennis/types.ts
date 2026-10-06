@@ -70,6 +70,9 @@ export type TableTennisAction =
   | { type: "paddle-move"; y: number; velocity?: number }
   | { type: "serve"; angle: number; power?: number }
   | { type: "resign" }
+  | { type: "draw-offer" }
+  | { type: "draw-accept" }
+  | { type: "draw-decline" }
   | { type: "pause" }
   | { type: "resume" }
   | { type: "ready" };
