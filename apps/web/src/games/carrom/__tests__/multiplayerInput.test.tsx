@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CarromEngine } from '@gaming-hub/game-engine';
+import { predictCarromShot } from '../shotPreview';
 
 const fixture = vi.hoisted(() => ({
   slots: [] as any[], cursor: 0, effects: [] as Array<() => any>, driver: null as any,
-  state: null as any, seat: 0, animate: null as any, consume: vi.fn(), place: vi.fn(), strike: vi.fn(), live: vi.fn(),
+  worker: null as any, message: null as any, state: null as any, seat: 0, animate: null as any, consume: vi.fn(), place: vi.fn(), strike: vi.fn(), live: vi.fn(),
 }));
 vi.mock('react', async original => {
   const actual = await original<typeof import('react')>();
@@ -89,10 +90,10 @@ function striker() {
   return fixture.slots.find(slot => Array.isArray(slot?.current) && slot.current.some((coin: any) => coin.type === 'striker'))
     .current.find((coin: any) => coin.type === 'striker');
 }
-function receiveShot(finished = false) {
+function receiveShot(finished = false, trajectory?: any[], seat = 0) {
   const state = { ...fixture.state, turnNumber: 1, currentSeat: 1, finished, winnerSeats: finished ? [0] : [] };
-  fixture.consume.mockReturnValueOnce({ isNew: true, shotId: 123, bySeat: 0, angle: 0, power: 0.5,
-    pocketedCoinIds: [], pocketEvents: [], keyframes: [
+  fixture.consume.mockReturnValueOnce({ isNew: true, shotId: 123, bySeat: seat, angle: 0, power: 0.5,
+    pocketedCoinIds: [], pocketEvents: [], keyframes: trajectory ?? [
       { frame: 0, pieces: [{ id: 'striker', x: 300, y: 507 }] },
       { frame: 20, pieces: [{ id: 'striker', x: 300, y: 300 }] },
     ] });
@@ -101,28 +102,61 @@ function receiveShot(finished = false) {
 }
 beforeEach(() => {
   fixture.slots = []; fixture.cursor = 0; fixture.effects = []; vi.clearAllMocks(); vi.useFakeTimers();
+  fixture.worker = null; fixture.message = null;
+  vi.stubGlobal('Worker', class {
+    onmessage: any;
+    constructor() { fixture.worker = this; }
+    postMessage(message: any) { fixture.message = message; }
+    terminate() {}
+  });
   fixture.consume.mockReturnValue({ isNew: false });
   fixture.place.mockResolvedValue({ ok: true }); fixture.strike.mockResolvedValue({ ok: true });
 });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('Carrom multiplayer striker controls', () => {
-  it('holds the board while awaiting acceptance and plays one server animation', () => {
-    const game = setup(); const tick = frames();
+  it.each([0, 1])('starts seat %s immediately and confirms without rewinding', seat => {
+    const game = setup(seat); const tick = frames();
     const board = game.board();
     board.onPointerDown(game.pointer(250, 422.5)); board.onPointerMove(game.pointer(250, 485)); board.onPointerUp();
-    const start = { x: striker().x, y: striker().y };
-    for (let frame = 0; frame < 20; frame++) tick(frame * 16);
-    expect(striker().x).toBe(start.x); expect(striker().y).toBe(start.y);
+    const start = striker().y;
+    tick(16); expect(striker().y).toBeLessThan(start);
+    const trajectory = predictCarromShot(fixture.message.state, fixture.message.seat, fixture.message.action);
+    fixture.worker.onmessage({ data: { requestId: fixture.message.requestId, keyframes: trajectory } });
+    tick(200); const previewY = striker().y;
     expect(game.mover()).toBeUndefined();
-    const state = receiveShot();
-    tick(404);
-    expect(striker().y).toBeLessThan(start.y);
-    const movingY = striker().y;
-    fixture.driver.onStateUpdate(state, 2); // Duplicate snapshot must not rewind.
-    tick(420); expect(striker().y).toBeLessThan(movingY);
-    tick(1000);
+    const state = receiveShot(false, trajectory, seat);
+    tick(200); expect(striker().y).toBeCloseTo(previewY, 4);
+    fixture.driver.onStateUpdate(state, 2); tick(216);
     expect(fixture.strike).toHaveBeenCalledOnce();
+  });
+  it('starts immediately even when the browser cannot create a worker', () => {
+    vi.stubGlobal('Worker', class { constructor() { throw new Error('Workers unavailable'); } });
+    const game = setup(); const tick = frames(); const board = game.board();
+    board.onPointerDown(game.pointer(250, 422.5)); board.onPointerMove(game.pointer(250, 485)); board.onPointerUp();
+    const start = striker().y; tick(16); expect(striker().y).toBeLessThan(start);
+    receiveShot(true); fixture.driver.onWin(0); tick(500);
+    expect(find(game.render(), node => node.type === 'h2' && node.props.children === 'YOU WIN!')).toBeDefined();
+  });
+
+  it('ignores a worker result after server confirmation', () => {
+    const game = setup(); const tick = frames(); const board = game.board();
+    board.onPointerDown(game.pointer(250, 422.5)); board.onPointerMove(game.pointer(250, 485)); board.onPointerUp();
+    receiveShot(true); fixture.driver.onWin(0);
+    fixture.worker.onmessage({ data: { requestId: fixture.message.requestId, keyframes: [{ frame: 0, pieces: [] }, { frame: 600, pieces: [] }] } });
+    tick(500);
+    expect(find(game.render(), node => node.type === 'h2' && node.props.children === 'YOU WIN!')).toBeDefined();
+  });
+
+  it('holds the settled preview until a late confirmation without replaying it', () => {
+    const game = setup(); const tick = frames(); const board = game.board();
+    board.onPointerDown(game.pointer(250, 422.5)); board.onPointerMove(game.pointer(250, 485)); board.onPointerUp();
+    const trajectory = predictCarromShot(fixture.message.state, fixture.message.seat, fixture.message.action);
+    fixture.worker.onmessage({ data: { requestId: fixture.message.requestId, keyframes: trajectory } });
+    tick(3500); expect(game.mover()).toBeUndefined();
+    const state = receiveShot(true); fixture.driver.onWin(0); tick(3500);
+    expect(find(game.render(), node => node.type === 'h2' && node.props.children === 'YOU WIN!')).toBeDefined();
+    expect(fixture.driver.lastState).toBe(state);
   });
   it('ignores a delayed rejection from an earlier shot after the player retries', async () => {
     let first!: (result: any) => void, second!: (result: any) => void;

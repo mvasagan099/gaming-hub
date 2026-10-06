@@ -3,6 +3,7 @@ import type { GameAction } from "../types";
 
 export const CARROM_BOARD_WIDTH = 600;
 export const CARROM_BOARD_HEIGHT = 600;
+export const CARROM_MAX_SHOT_SPEED = 27;
 export const POCKET_RADIUS = 30;
 export const STRIKER_RADIUS = 18;
 export const COIN_RADIUS = 15;

@@ -2,6 +2,7 @@ import type { EngineActionResult, EngineEvent, EnginePlayer, RandomSource } from
 import { MultiplayerGameEngine } from "../base/MultiplayerGameEngine";
 import {
   BASE_LINE_Y,
+  CARROM_MAX_SHOT_SPEED,
   type CarromState,
   type CarromAction,
   type CarromEngineOptions,
@@ -338,8 +339,7 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     next.striker.y = seat === 0 ? BASE_LINE_Y : 93;
     next.strikerAtShotStart = { ...next.striker };
 
-    const maxSpeed = 27;
-    const speed = action.power * maxSpeed;
+    const speed = action.power * CARROM_MAX_SHOT_SPEED;
     next.striker.vx = Math.cos(action.angle) * speed;
     next.striker.vy = Math.sin(action.angle) * speed;
     next.striker.placed = true;
