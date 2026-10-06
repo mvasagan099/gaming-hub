@@ -41,15 +41,17 @@ export function SnakeLadderPage({ mode = 'ai', stake = 10, onBack = () => {} }: 
 
   return (
     <GameWrapper title="Snake & Ladder" gameId="snake-ladder" mode={mode} stake={stake} onBack={onBack} isFullscreen>
-      <div className="flex flex-col lg:flex-row items-center justify-center gap-4 w-full h-full p-0 sm:p-2 relative">
-        <div className="flex items-center justify-center overflow-hidden w-full h-full">
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-3 xl:gap-5 w-full h-full p-0 sm:p-2 lg:p-3 relative overflow-hidden">
+        <div className={`flex items-center justify-center overflow-hidden w-full h-full ${isMultiplayer ? "lg:flex-1 lg:min-w-0 lg:min-h-0" : ""}`}>
           <PhaserGame mode={isMultiplayer ? "pvp" : "ai"} players={players} seat={seat} names={names} />
         </div>
 
         {/* Desktop Sidebar Panel */}
         {isMultiplayer && (
-          <div className="hidden lg:block flex-shrink-0">
-            <MultiplayerMatchPanel compact />
+          <div className="hidden lg:flex flex-col flex-shrink-0 h-full max-h-[calc(100dvh-4.25rem)] justify-center py-1">
+            <div className="overflow-y-auto max-h-full pr-1.5 custom-scrollbar">
+              <MultiplayerMatchPanel compact />
+            </div>
           </div>
         )}
 

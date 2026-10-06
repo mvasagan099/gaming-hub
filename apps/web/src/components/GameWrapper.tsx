@@ -117,7 +117,7 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Exit</span>
               </button>
-              <span className="text-xs sm:text-sm font-black text-white truncate max-w-[80px] sm:max-w-[140px]">{title}</span>
+              <span className="text-xs sm:text-sm font-black text-white truncate max-w-[80px] sm:max-w-[140px] lg:max-w-none">{title}</span>
               <span className={`hidden md:inline-flex text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
                 isRanked
                   ? 'bg-violet-500/20 text-violet-300 border-violet-500/30'

@@ -31,6 +31,9 @@ export default function PhaserGame({
     const handleResize = () => {
       const portrait = checkIsPortrait();
       setIsPortrait((prev) => (prev !== portrait ? portrait : prev));
+      if (gameRef.current) {
+        gameRef.current.scale.refresh();
+      }
     };
     window.addEventListener("resize", handleResize);
     window.addEventListener("orientationchange", handleResize);
@@ -97,12 +100,16 @@ export default function PhaserGame({
     }
   }, [players, seat, serializedNames]);
 
+  const landscapeMaxWidth = mode === "pvp"
+    ? "max-w-[min(100%,calc((100dvh-4.5rem)*1.7))]"
+    : "max-w-[min(98vw,calc((100dvh-5rem)*1.7),1560px)]";
+
   return (
     <div
       className={`relative mx-auto w-full ${
         isPortrait
           ? "max-w-[min(98vw,520px)] aspect-[720/1080] max-h-[calc(100dvh-5.5rem)]"
-          : "max-w-[min(98vw,calc((100dvh-5rem)*1.7),1560px)] aspect-[1360/800] max-h-[calc(100dvh-4.5rem)]"
+          : `${landscapeMaxWidth} aspect-[1360/800] max-h-[calc(100dvh-4.5rem)]`
       } h-auto rounded-2xl overflow-hidden border border-slate-700/50 shadow-2xl flex justify-center items-center backdrop-blur-md`}
     >
       {/* Subtle ambient lighting flares behind the board */}

@@ -45,8 +45,8 @@ export const LudoGame: React.FC<LudoGameProps> = ({ mode: initialMode, stake, on
   if (isPlaying) {
     return (
       <GameWrapper title="Ludo Champion" gameId="ludo" mode={initialMode} stake={stake} onBack={onBack} isFullscreen>
-        <div className="relative flex flex-col lg:flex-row items-center justify-center gap-2 sm:gap-4 w-full h-full p-0 sm:p-2">
-          <div className="flex flex-col items-center gap-2 sm:gap-4 w-full h-full justify-center overflow-hidden">
+        <div className="relative flex flex-col lg:flex-row items-center justify-center gap-2 sm:gap-4 w-full h-full p-0 sm:p-2 lg:p-3 overflow-hidden">
+          <div className={`flex flex-col items-center gap-2 sm:gap-4 w-full h-full justify-center overflow-hidden ${isMultiplayer ? "lg:flex-1 lg:min-w-0 lg:min-h-0" : ""}`}>
             <LudoPhaserGame
               mode={playMode}
               players={onlinePlayers}
@@ -66,8 +66,10 @@ export const LudoGame: React.FC<LudoGameProps> = ({ mode: initialMode, stake, on
 
           {/* Desktop Multiplayer Sidebar */}
           {isMultiplayer && (
-            <div className="hidden lg:block flex-shrink-0">
-              <MultiplayerMatchPanel compact />
+            <div className="hidden lg:flex flex-col flex-shrink-0 h-full max-h-[calc(100dvh-4.25rem)] justify-center py-1">
+              <div className="overflow-y-auto max-h-full pr-1.5 custom-scrollbar">
+                <MultiplayerMatchPanel compact />
+              </div>
             </div>
           )}
 

@@ -123,7 +123,7 @@ function ProfileCard({
   return (
     <div
       className={`relative rounded-2xl border transition-all duration-300 ${
-        compact ? "p-2" : "p-3"
+        compact ? "p-2.5" : "p-3"
       } ${
         isMe
           ? `bg-gradient-to-br from-indigo-950/60 to-slate-900/80 ${seatColor.ring} shadow-lg ${seatColor.glow}`
@@ -131,12 +131,12 @@ function ProfileCard({
       }`}
     >
       {/* Top row: avatar + name block */}
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-center gap-2.5">
         {/* Avatar */}
         <div className="relative flex-shrink-0">
           <div
             className={`${
-              compact ? "w-10 h-10 text-lg" : "w-12 h-12 text-xl"
+              compact ? "w-10 h-10 text-base" : "w-12 h-12 text-xl"
             } rounded-xl overflow-hidden border-2 ${seatColor.ring} flex items-center justify-center bg-slate-800 font-black text-white`}
           >
             {roomPlayer.avatarUrl ? (
@@ -165,25 +165,28 @@ function ProfileCard({
 
         {/* Name + badges */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <p className="text-sm font-black text-white truncate">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span
+              className="text-xs sm:text-sm font-black text-white truncate min-w-0"
+              title={roomPlayer.displayName || roomPlayer.username}
+            >
               {roomPlayer.displayName || roomPlayer.username}
-            </p>
+            </span>
             {isMe && (
-              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 font-bold uppercase tracking-wide">
+              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 font-bold uppercase tracking-wide shrink-0">
                 You
               </span>
             )}
             {roomPlayer.isHost && (
-              <Crown className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+              <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             )}
             {isVerified && (
-              <span title="Verified" className="flex items-center">
-                <Shield className="w-3 h-3 text-sky-400 flex-shrink-0" />
+              <span title="Verified" className="flex items-center shrink-0">
+                <Shield className="w-3 h-3 text-sky-400" />
               </span>
             )}
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">
+          <p className="text-[10px] text-slate-400 mt-0.5 truncate">
             @{roomPlayer.username} {countryFlag(country)}
           </p>
 
@@ -204,15 +207,17 @@ function ProfileCard({
         </div>
 
         {/* Ping / ready status */}
-        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-          {roomPlayer.connectionStatus === "connected" ? (
-            <Wifi className="w-3.5 h-3.5 text-emerald-400" />
-          ) : (
-            <WifiOff className="w-3.5 h-3.5 text-rose-400" />
-          )}
-          <span className={`text-[9px] font-bold ${ping.color}`}>
-            {ping.text}
-          </span>
+        <div className="flex flex-col items-end justify-center gap-1 flex-shrink-0 text-right">
+          <div className="flex items-center gap-1">
+            {roomPlayer.connectionStatus === "connected" ? (
+              <Wifi className="w-3 h-3 text-emerald-400" />
+            ) : (
+              <WifiOff className="w-3 h-3 text-rose-400" />
+            )}
+            <span className={`text-[9px] font-bold ${ping.color}`}>
+              {ping.text}
+            </span>
+          </div>
           {roomPlayer.isReady ? (
             <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-black border border-emerald-500/40 animate-pulse">
               READY ✓
@@ -351,7 +356,7 @@ export function MultiplayerMatchPanel({
   const participants = room.players.slice().sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0));
 
   return (
-    <div className={`${className ?? (compact ? "w-full max-w-[240px]" : "w-full max-w-xs")} flex flex-col gap-2.5 text-xs select-none`}>
+    <div className={`${className ?? (compact ? "w-full max-w-[280px] xl:max-w-[320px]" : "w-full max-w-xs")} flex flex-col gap-2.5 text-xs select-none`}>
       <InGameNotificationBanner />
 
       {/* ── Match 10-Minute Safety Limit Timer ─────────────────── */}
@@ -495,7 +500,7 @@ export function MultiplayerMatchPanel({
 
       {/* In-match chat */}
       {showChat && room.status !== "waiting" && (
-        <div className="rounded-2xl bg-slate-900/80 border border-slate-700/60 p-3 h-56 flex flex-col">
+        <div className={`rounded-2xl bg-slate-900/80 border border-slate-700/60 p-3 ${compact ? "h-44 xl:h-52" : "h-56"} flex flex-col`}>
           <div className="flex-1 min-h-0">
             <MultiplayerMatchChat />
           </div>
