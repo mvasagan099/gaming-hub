@@ -1124,18 +1124,21 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
 
         {/* MULTIPLAYER / OPPONENT SIDE PANEL (DESKTOP >= lg) */}
         {isMultiplayer && (
-          <div className="hidden lg:flex flex-col flex-shrink-0 w-full max-w-[280px] xl:max-w-[320px] h-full max-h-[calc(100dvh-4.25rem)] justify-center py-1">
-            <div className="overflow-y-auto max-h-full pr-1.5 custom-scrollbar flex flex-col gap-3">
-              {/* Live Opponent Board Preview */}
-              <div className="w-full">
-                {serverPlayers
-                  .filter((p) => p.seat !== mySeat)
-                  .map((opp) => (
-                    <OpponentMiniBoard key={opp.seat} player={opp} name={namesBySeat[opp.seat] ?? opp.name} />
-                  ))}
-              </div>
+          <div className="hidden lg:flex flex-col xl:flex-row items-center xl:items-start justify-center gap-3.5 xl:gap-5 flex-shrink-0 h-full max-h-[calc(100dvh-4.25rem)] py-1">
+            {/* Live Opponent Board Preview */}
+            <div className="flex flex-col items-center flex-shrink-0 w-full max-w-[240px] xl:w-[220px]">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block text-center mb-1.5">
+                Live Opponent
+              </span>
+              {serverPlayers
+                .filter((p) => p.seat !== mySeat)
+                .map((opp) => (
+                  <OpponentMiniBoard key={opp.seat} player={opp} name={namesBySeat[opp.seat] ?? opp.name} />
+                ))}
+            </div>
 
-              {/* Match Controls & Chat */}
+            {/* Match Controls & Chat */}
+            <div className="overflow-y-auto max-h-full pr-1.5 custom-scrollbar flex-shrink-0 w-full max-w-[320px] xl:max-w-[340px]">
               <MultiplayerMatchPanel compact />
             </div>
           </div>

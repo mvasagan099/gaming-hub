@@ -358,7 +358,7 @@ export function MultiplayerMatchPanel({
   const participants = room.players.slice().sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0));
 
   return (
-    <div className={`${className ?? (compact ? "w-full max-w-[280px] xl:max-w-[320px]" : "w-full max-w-xs")} flex flex-col gap-2.5 text-xs select-none`}>
+    <div className={`${className ?? (compact ? "w-full max-w-[320px] xl:max-w-[340px]" : "w-full max-w-xs")} flex flex-col gap-2.5 text-xs select-none`}>
       <InGameNotificationBanner />
 
       {/* ── Match 10-Minute Safety Limit Timer ─────────────────── */}
