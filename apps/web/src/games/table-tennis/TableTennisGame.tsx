@@ -4,6 +4,7 @@ import { useGameLoop } from '../shared/hooks/useGameLoop';
 import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import TableTennisMultiplayerDriver from './TableTennisMultiplayerDriver';
+import { TableTennisTimeline } from './remoteTimeline';
 import type { TableTennisState } from '@gaming-hub/game-engine';
 import { TABLE_TENNIS_VISUAL_CONFIG, type CameraState } from './constants/tableTennisVisualConfig';
 import { TableTennis3DRenderer } from './utils/tableTennis3DRenderer';
@@ -72,6 +73,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
   const [endReason, setEndReason] = useState<string | null>(null);
   const [rallyCount, setRallyCount] = useState(0);
   const rallyCountRef = useRef(0);
+  const remoteTimelineRef = useRef(new TableTennisTimeline());
   const matchStartedAtMsRef = useRef<number | null>(null);
 
   const stateRef = useRef({
@@ -115,6 +117,10 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
   useEffect(() => {
     if (gameState === 'gameover') return;
     const interval = setInterval(() => {
+      if (mode === 'multiplayer') {
+        setRemainingTime(remoteTimelineRef.current.secondsRemaining(performance.now()));
+        return;
+      }
       if (matchStartedAtMsRef.current) {
         const elapsed = Math.max(0, Math.floor((Date.now() - matchStartedAtMsRef.current) / 1000));
         const rem = Math.max(0, 180 - elapsed);
@@ -131,7 +137,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       }
     }, 500);
     return () => clearInterval(interval);
-  }, [gameState]);
+  }, [gameState, mode]);
 
   useEffect(() => {
     stateRef.current.gameState = gameState;
@@ -169,6 +175,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
       const driver = new TableTennisMultiplayerDriver(mySeat, names);
       driverRef.current = driver;
+      remoteTimelineRef.current = new TableTennisTimeline();
 
       driver.setOnStateUpdate((state: TableTennisState) => {
         if (!state || !state.players) return;
@@ -198,21 +205,20 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
           setRallyCount(state.rallyCount);
         }
 
-        if (state.ball && state.ball.inPlay) {
-          ballRef.current = {
-            x: state.ball.x,
-            y: state.ball.y,
-            vx: state.ball.vx,
-            vy: state.ball.vy,
-            speed: state.ball.speed,
-            inPlay: true,
-          };
+        remoteTimelineRef.current.receive(state, performance.now());
+        setRemainingTime(remoteTimelineRef.current.secondsRemaining(performance.now()));
+        if (!state.ball?.inPlay || state.paused || state.finished) {
+          ballRef.current.inPlay = false;
+          trailRef.current = [];
         }
 
         setCurrentServer(state.servingSeat === 0 ? 1 : 2);
         stateRef.current.server = state.servingSeat === 0 ? 1 : 2;
 
-        if (state.phase === 'serve' && state.waitingForServe) {
+        if (state.phase === 'waiting') {
+          setGameState('waiting');
+          stateRef.current.gameState = 'waiting';
+        } else if (state.phase === 'serve' && state.waitingForServe) {
           setGameState('serving');
           stateRef.current.gameState = 'serving';
         } else if (state.phase === 'rally') {
@@ -451,11 +457,12 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       const velocity = mySeat === 0 ? p1.vy : p2.vy;
       driverRef.current.sendPaddleMove(paddleY, velocity);
 
+      const remoteBall = remoteTimelineRef.current.ball(performance.now());
+      if (remoteBall) Object.assign(ball, remoteBall);
+      else ball.inPlay = false;
       if (ball.inPlay) {
         trailRef.current.push({ x: ball.x, y: ball.y });
         if (trailRef.current.length > 8) trailRef.current.shift();
-        ball.x += ball.vx * (dt * 60);
-        ball.y += ball.vy * (dt * 60);
       }
     } else {
       // Single Player / AI Mode

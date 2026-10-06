@@ -204,3 +204,29 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
     expect(serveRes.state.ball?.touchCount).toBe(0);
   });
 });
+
+describe('Table Tennis synchronization regressions', () => {
+  const players = [{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }];
+  it('arms a fixed server deadline and serializes the actual configured remaining time', () => {
+    let now = 1000;
+    const engine = new TableTennisEngine(players, undefined, {
+      now: () => now,
+      matchTimer: { matchDurationMs: 600000, warningThresholdMs: 30000 },
+    });
+    expect(engine.currentMatchDeadline).toBe(601000);
+    now = 6500;
+    expect(engine.currentMatchDeadline).toBe(601000);
+    expect(engine.serialize().matchRemainingMs).toBe(594500);
+    expect(engine.serialize().serverTimestamp).toBe(6500);
+  });
+  it('broadcasts consecutive points won by the same player, including the cleared ball', () => {
+    const engine = new TableTennisEngine(players);
+    for (let i = 0; i < 2; i++) {
+      engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
+      (engine as any).updateState({ ...engine.state, ball: { ...engine.state.ball, x: 620, vx: 5 } });
+      const result = engine.tick();
+      expect(result.events).toContainEqual({ type: 'point-scored', winnerSeat: 0, reason: 'miss' });
+      expect(result.state.ball).toBeNull();
+    }
+  });
+});

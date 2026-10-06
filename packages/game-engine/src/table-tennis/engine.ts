@@ -54,6 +54,16 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     }
   }
 
+  protected override initState(): InternalState {
+    const state = super.initState();
+    this.startMatchTimer(state);
+    return state;
+  }
+
+  override serialize() {
+    return { ...super.serialize(), serverTimestamp: this.now() };
+  }
+
   protected getInitialSeat(): number {
     return 0;
   }
@@ -212,12 +222,12 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
       };
     }
 
-    const prevWinner = this.state.lastPointWinner;
+    const previousPoints = this.state.totalPointsPlayed;
     const nextState = this.simulatePhysics(this.state);
     this.updateState(nextState);
 
     const events: EngineEvent[] = [];
-    if (nextState.lastPointWinner !== null && nextState.lastPointWinner !== prevWinner) {
+    if (nextState.totalPointsPlayed > previousPoints) {
       events.push({
         type: "point-scored",
         winnerSeat: nextState.lastPointWinner,
