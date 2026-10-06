@@ -226,6 +226,18 @@ describe("FruitNinjaEngine slicing", () => {
 });
 
 describe("FruitNinjaEngine misses and lives", () => {
+  it.each([0, 1])("a reported bomb hit by seat %s ends the match and rejects subsequent slices", seat => {
+    const { eng, clock } = setup();
+    startPlaying(eng, clock);
+    const res = eng.apply({ type: "bomb-hit" }, seat);
+    expect(res.ok).toBe(true);
+    expect(res.finished).toBe(true);
+    expect(res.winnerSeats).toEqual([1 - seat]);
+    expect(eng.state).toMatchObject({ finished: true, phase: "finished", endReason: "bomb_elimination" });
+    expect(eng.apply({ type: "slice-fruit", points: 10 }, seat).ok).toBe(false);
+    expect(eng.state.scores).toEqual([0, 0]);
+  });
+
   it("charges a miss to each seat exactly once when a fruit expires", () => {
     const { eng, clock } = setup();
     startPlaying(eng, clock);

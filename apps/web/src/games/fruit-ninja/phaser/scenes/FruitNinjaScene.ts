@@ -25,6 +25,7 @@ export default class FruitNinjaScene extends Phaser.Scene {
   private multiplayerDriver?: FruitNinjaMultiplayerDriver;
   private isMultiplayer = false;
   private mySeat: number | null = null;
+  private activeMatchId: string | null = null;
 
   private mode!: string;
   private lives = 3;
@@ -94,21 +95,13 @@ export default class FruitNinjaScene extends Phaser.Scene {
     if (this.isMultiplayer) {
       const currentStore = useMultiplayerStore.getState();
       this.mySeat = currentStore.mySeat;
+      this.activeMatchId = currentStore.matchId;
       const names = currentStore.room?.players.map((p) => p.displayName) ?? [];
 
       this.multiplayerDriver = new FruitNinjaMultiplayerDriver(this.mySeat, names);
 
       this.multiplayerDriver.setOnStateUpdate((state: FruitNinjaState) => {
-        if (this.gameOver && !state.finished && !useMultiplayerStore.getState().winner) {
-          this.restartGameForRematch();
-          return;
-        }
-        if (this.gameOver) return;
-        const oppSeat = this.mySeat === 0 ? 1 : 0;
-        const oppPlayer = state.players[oppSeat];
-        if (oppPlayer) {
-          this.hud.updateOpponentScore(oppPlayer.score);
-        }
+        this.applyMultiplayerState(state);
       });
 
       this.multiplayerDriver.setOnGameOver((winner, state) => {
@@ -369,6 +362,21 @@ export default class FruitNinjaScene extends Phaser.Scene {
 
     this.fruitManager.update();
     this.sliceManager.update();
+  }
+
+  private applyMultiplayerState(state: FruitNinjaState): void {
+    const current = useMultiplayerStore.getState();
+    const newMatch = Boolean(current.matchId && current.matchId !== this.activeMatchId);
+    if (current.matchId) this.activeMatchId = current.matchId;
+    // A bomb ends play locally before its action reaches the server. An
+    // in-flight state packet for that same match must never restart the game.
+    if (newMatch && !state.finished && !current.winner) {
+      this.restartGameForRematch();
+    }
+    if (this.gameOver) return;
+    const oppSeat = this.mySeat === 0 ? 1 : 0;
+    const oppPlayer = state.players[oppSeat];
+    if (oppPlayer) this.hud.updateOpponentScore(oppPlayer.score);
   }
 
   private restartGameForRematch(): void {

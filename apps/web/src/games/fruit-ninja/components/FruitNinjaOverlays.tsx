@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Phaser from "phaser";
 import { FruitEvents } from "../phaser/events/FruitEvents";
 import { Trophy, Shield, XCircle, RotateCcw, Sparkles, Flame, Zap, Award, LogOut, Loader2 } from "lucide-react";
@@ -27,6 +27,8 @@ export const FruitNinjaOverlays: React.FC<FruitNinjaOverlaysProps> = ({
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const winner = useMultiplayerStore((s) => s.winner);
   const gameState = useMultiplayerStore((s) => s.gameState as unknown as FruitNinjaState | null);
+  const matchId = useMultiplayerStore((s) => s.matchId);
+  const previousMatchId = useRef(matchId);
   const room = useMultiplayerStore((s) => s.room);
   const rematchState = useMultiplayerStore((s) => s.rematchState);
   const requestRematch = useMultiplayerStore((s) => s.requestRematch);
@@ -65,12 +67,13 @@ export const FruitNinjaOverlays: React.FC<FruitNinjaOverlaysProps> = ({
 
   // Reset overlay when a multiplayer rematch starts
   useEffect(() => {
-    if (isMultiplayer && gameState && !gameState.finished && !winner) {
+    if (isMultiplayer && matchId && matchId !== previousMatchId.current) {
       setIsLocalGameOver(false);
       setLocalStats(null);
       setLocalEndReason(null);
     }
-  }, [isMultiplayer, gameState, winner]);
+    previousMatchId.current = matchId;
+  }, [isMultiplayer, matchId]);
 
   // Determine if the game over screen should be active
   const isMatchFinished = isMultiplayer

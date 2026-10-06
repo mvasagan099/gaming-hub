@@ -677,10 +677,10 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       hideFloatingExitOnMobile={true}
       hideFloatingExitOnDesktop={true}
     >
-      <div className="flex flex-col lg:flex-row items-center justify-center gap-0 lg:gap-4 w-full max-w-6xl relative mx-auto h-full p-1 sm:p-3 select-none overflow-hidden">
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-2 lg:gap-4 w-full h-full p-1 sm:p-3 relative select-none overflow-hidden">
         
         {/* CENTER 3D COURT CONTAINER */}
-        <div className="relative flex flex-col items-center justify-start sm:justify-center w-full h-full flex-1 max-w-[min(98vw,calc((100dvh-5rem)*1.54),1200px)] shrink-0 overflow-hidden">
+        <div className={`relative flex flex-col items-center justify-start sm:justify-center w-full h-full flex-1 max-w-[min(98vw,calc((100dvh-5rem)*1.54),1200px)] shrink-0 overflow-hidden ${mode === 'multiplayer' ? 'lg:min-w-0' : ''}`}>
           
           {/* TOP BROADCAST TOURNAMENT SCOREBOARD HUD */}
           <div className="relative w-full z-20 shrink-0 mb-1.5 sm:mb-2.5 bg-slate-950/90 backdrop-blur-xl border border-slate-800/80 rounded-xl sm:rounded-2xl p-1.5 sm:p-2.5 flex items-center justify-between shadow-2xl gap-1.5 sm:gap-3 pointer-events-auto select-none">

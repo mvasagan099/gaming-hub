@@ -36,8 +36,8 @@ export const FruitNinjaGame: React.FC<FruitNinjaProps> = ({ mode: initialMode, s
   if (isGameStarted) {
     return (
       <GameWrapper title="Fruit Ninja Blade" gameId="fruit-ninja" mode={initialMode} stake={stake} onBack={onBack} isFullscreen>
-        <div className="flex flex-col lg:flex-row items-center justify-center gap-0 lg:gap-6 w-full max-w-6xl h-full my-auto overflow-hidden select-none">
-          <div className="flex-1 flex flex-col items-center justify-center gap-0 lg:gap-4 w-full h-full lg:h-auto my-auto overflow-hidden">
+        <div className="flex flex-col lg:flex-row items-center justify-center gap-3 lg:gap-6 w-full h-full p-1 sm:p-2 lg:p-4 relative select-none overflow-hidden">
+          <div className={`flex flex-col items-center justify-center gap-0 lg:gap-4 w-full h-full overflow-hidden ${isMultiplayer ? "lg:flex-1 lg:min-w-0 lg:min-h-0" : ""}`}>
             <FruitNinjaPhaserGame
               mode={activePlayMode}
               isMultiplayer={isMultiplayer}
@@ -54,7 +54,7 @@ export const FruitNinjaGame: React.FC<FruitNinjaProps> = ({ mode: initialMode, s
             )}
           </div>
           {isMultiplayer && (
-            <div className="hidden lg:flex flex-col flex-shrink-0 w-80 h-full max-h-[calc(100dvh-4.25rem)] justify-center py-1">
+            <div className="hidden lg:flex flex-col flex-shrink-0 w-full max-w-[320px] xl:max-w-[340px] h-full max-h-[calc(100dvh-4.25rem)] justify-center py-1">
               <div className="overflow-y-auto max-h-full pr-1.5 custom-scrollbar">
                 <MultiplayerMatchPanel compact />
               </div>

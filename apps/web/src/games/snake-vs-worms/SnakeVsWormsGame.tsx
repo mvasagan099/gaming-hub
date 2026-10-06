@@ -657,7 +657,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
   return (
     <GameWrapper title="Snake vs Worms 3D" gameId="snake-vs-worms" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={gameOver}>
-      <div className="flex flex-col lg:flex-row items-center justify-center gap-0 lg:gap-6 w-full max-w-6xl relative mx-auto h-full p-0 lg:p-4 select-none overflow-hidden lg:overflow-y-auto">
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-2 lg:gap-6 w-full h-full p-0 lg:p-4 relative select-none overflow-hidden">
         
         {/* CENTER 3D ARENA CONTAINER */}
         <div className="relative flex flex-col items-center justify-center w-full h-full lg:h-auto flex-1 lg:flex-initial lg:max-w-[min(96vw,calc((100dvh-7rem)*1.5),1280px)] shrink-0 overflow-hidden">
@@ -774,8 +774,10 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
         {/* MULTIPLAYER PANEL */}
         {mode === 'multiplayer' && (
-          <div className="hidden xl:block flex-shrink-0 self-start">
-            <MultiplayerMatchPanel compact />
+          <div className="hidden xl:flex flex-col flex-shrink-0 h-full max-h-[calc(100dvh-4.25rem)] justify-center py-1">
+            <div className="overflow-y-auto max-h-full pr-1.5 custom-scrollbar">
+              <MultiplayerMatchPanel compact />
+            </div>
           </div>
         )}
       </div>

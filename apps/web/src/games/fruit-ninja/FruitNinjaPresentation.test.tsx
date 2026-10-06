@@ -1,7 +1,11 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const hooks = vi.hoisted(() => ({ values: [] as unknown[], setters: [] as ReturnType<typeof vi.fn>[] }));
+const hooks = vi.hoisted(() => ({
+  values: [] as unknown[], setters: [] as ReturnType<typeof vi.fn>[],
+  effects: [] as Array<() => void>, refs: [] as Array<{ current: unknown }>, refIndex: 0,
+  multiplayer: {} as Record<string, any>,
+}));
 vi.mock('react', async original => {
   const actual = await original<typeof import('react')>();
   const overrides = {
@@ -10,14 +14,17 @@ vi.mock('react', async original => {
       hooks.setters.push(setter);
       return [hooks.values.length ? hooks.values.shift() : initial, setter];
     },
-    useRef: (value: unknown) => ({ current: value }),
-    useEffect: vi.fn(),
+    useRef: (value: unknown) => {
+      const index = hooks.refIndex++;
+      return hooks.refs[index] ?? (hooks.refs[index] = { current: value });
+    },
+    useEffect: (effect: () => void) => hooks.effects.push(effect),
   };
   return { ...actual, ...overrides, default: { ...actual, ...overrides } };
 });
 vi.mock('phaser', () => ({ default: {} }));
 vi.mock('./phaser/scenes/FruitNinjaScene', () => ({ FruitNinjaScene: class {} }));
-vi.mock('../../store/multiplayerStore', () => ({ useMultiplayerStore: (select: any) => select({}) }));
+vi.mock('../../store/multiplayerStore', () => ({ useMultiplayerStore: (select: any) => select(hooks.multiplayer) }));
 
 import { FruitNinjaPhaserGame } from './FruitNinjaPhaserGame';
 import { FruitNinjaOverlays } from './components/FruitNinjaOverlays';
@@ -28,10 +35,33 @@ function find(root: any, predicate: (node: any) => boolean): any {
   return predicate(root) ? root : find(root.props.children, predicate);
 }
 
-beforeEach(() => { vi.clearAllMocks(); hooks.values = []; hooks.setters = []; });
+beforeEach(() => {
+  vi.clearAllMocks(); hooks.values = []; hooks.setters = []; hooks.effects = [];
+  hooks.refs = []; hooks.refIndex = 0; hooks.multiplayer = {};
+});
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('Fruit Ninja responsive result controls', () => {
+  it('preserves the local bomb result through old playing packets and clears it for a new match', () => {
+    hooks.multiplayer = { matchId: 'match-1', mySeat: 0, gameState: { finished: false }, winner: null };
+    const renderResult = () => {
+      hooks.values = [null, 'bomb_elimination', true];
+      hooks.setters = []; hooks.effects = []; hooks.refIndex = 0;
+      const result = FruitNinjaOverlays({ game: null, isMultiplayer: true, onClose: vi.fn(), onReplay: vi.fn() });
+      hooks.effects.forEach(effect => effect());
+      return result;
+    };
+    expect(renderResult()).not.toBeNull();
+    expect(hooks.setters.every(setter => setter.mock.calls.length === 0)).toBe(true);
+    hooks.multiplayer.gameState = { finished: false, scores: [10, 20] };
+    expect(renderResult()).not.toBeNull();
+    expect(hooks.setters.every(setter => setter.mock.calls.length === 0)).toBe(true);
+    hooks.multiplayer.matchId = 'match-2';
+    renderResult();
+    expect(hooks.setters[2]).toHaveBeenCalledWith(false);
+    expect(hooks.setters[0]).toHaveBeenCalledWith(null);
+  });
+
   it.each([[true, false], [true, true], [false, false], [false, true]])(
     'keeps results outside the arena and delegates exit to the shared HUD (portrait %s, online %s)',
     (portrait, isMultiplayer) => {
