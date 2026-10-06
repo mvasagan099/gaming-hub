@@ -882,6 +882,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     set({ error: null });
     const res = await socket.emitWithAck("matchmaking:join", { gameId, stake, settings });
     const data = unwrapAck<{ position: number }>(res);
+    // A match broadcast can arrive before the join ACK. Preserve that result.
+    if (get().socket !== socket || data.position <= 0 || get().room || get().matchFound || get().matchId) return;
     set({
       matchmaking: { queued: true, position: data.position, gameId, stake, settings: settings ?? {} },
       pendingRequeue: null,

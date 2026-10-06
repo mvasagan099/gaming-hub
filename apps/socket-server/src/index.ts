@@ -20,6 +20,7 @@ import { authenticateToken, type AuthenticatedUser } from "./auth";
 import { assertFeatureEnabled } from "./settings";
 import { requestSocketRematch, declineSocketRematch } from "./rematch";
 import { applySocketGameAction } from "./gameActions";
+import { registerRoomLifecycleHandlers } from "./roomHandlers";
 import { GameEventBus } from "./events/GameEventBus";
 import { GameStateSyncManager } from "./sync/GameStateSyncManager";
 import { createAndFundRoomMatch, settleMatch, cancelMatch } from "./apiClient";
@@ -589,82 +590,16 @@ async function main(): Promise<void> {
     };
 
     // Room Management
-    socket.on("room:create", (payload, ack) =>
-      void guard(ack, async () => {
-        await assertFeatureEnabled("games.enabled", "Games");
-        if (payload.stake > 0) {
-          await assertFeatureEnabled("games.realMoney", "Real-money play");
-        } else {
-          await assertFeatureEnabled("games.practice", "Practice mode");
-        }
-
-        // Remove from matchmaking if in queue
-        framework.matchmakingManager.removeFromQueue(user.userId);
-        
-        const room = await framework.roomManager.createRoom({
-          gameId: payload.gameId,
-          hostId: user.userId,
-          hostSocket: socket,
-          isPrivate: payload.isPrivate,
-          stake: payload.stake,
-          maxPlayers: payload.maxPlayers ?? 4,
-          settings: payload.settings,
-        });
-        
-        ack?.({ ok: true, data: room as unknown as import("@gaming-hub/shared").RoomFull });
-      }),
-    );
-
-    socket.on("room:join", (payload, ack) =>
-      void guard(ack, async () => {
-        await assertFeatureEnabled("games.enabled", "Games");
-        if (payload.asSpectator) {
-          await assertFeatureEnabled("games.spectator", "Spectator mode");
-        }
-
-        // Remove from matchmaking if in queue
-        framework.matchmakingManager.removeFromQueue(user.userId);
-        
-        const room = await framework.roomManager.joinRoom({
-          roomId: payload.roomId,
-          code: payload.code,
-          playerId: user.userId,
-          socket,
-          asSpectator: payload.asSpectator,
-        });
-        
-        logger.info(`[CARROM JOIN] User ${user.userId} joined room ${room.id}`);
-        const roomSockets = io.sockets.adapter.rooms.get(`room:${room.id}`);
-        logger.info(`[CARROM JOIN] Room room:${room.id} now has ${roomSockets?.size ?? 0} sockets`);
-        
-        ack?.({ ok: true, data: room as unknown as import("@gaming-hub/shared").RoomFull });
-      }),
-    );
+    registerRoomLifecycleHandlers(socket, framework, user.userId, guard, assertFeatureEnabled, (roomId) => {
+      logger.info(`[CARROM JOIN] User ${user.userId} joined room ${roomId}`);
+      const roomSockets = io.sockets.adapter.rooms.get(`room:${roomId}`);
+      logger.info(`[CARROM JOIN] Room room:${roomId} now has ${roomSockets?.size ?? 0} sockets`);
+    });
 
     socket.on("room:leave", (payload, ack) =>
       void guard(ack, async () => {
         await framework.roomManager.leaveRoom(payload.roomId, user.userId, socket);
         ack?.({ ok: true, data: { roomId: payload.roomId } });
-      }),
-    );
-
-    socket.on("room:ready", (payload, ack) =>
-      void guard(ack, async () => {
-        await framework.roomManager.setPlayerReady(payload.roomId, user.userId, payload.ready);
-        const room = framework.roomManager.getRoom(payload.roomId);
-        ack?.({ ok: true, data: room as unknown as import("@gaming-hub/shared").RoomFull });
-      }),
-    );
-
-    socket.on("room:start", (payload, ack) =>
-      void guard(ack, async () => {
-        await assertFeatureEnabled("games.enabled", "Games");
-        await framework.matchManager.startMatch({
-          roomId: payload.roomId,
-          startedBy: user.userId,
-        });
-        const room = framework.roomManager.getRoom(payload.roomId);
-        ack?.({ ok: true, data: room as unknown as import("@gaming-hub/shared").RoomFull });
       }),
     );
 
@@ -685,7 +620,7 @@ async function main(): Promise<void> {
         let room = framework.roomManager.getRoom(roomId) || framework.roomManager.getPlayerRoom(user.userId);
         if (room) {
           const joinedRoom = await framework.roomManager.joinRoom({ roomId: room.id, playerId: user.userId, socket });
-          ack?.({ ok: true, data: { room: joinedRoom, status: joinedRoom.status } });
+          ack?.({ ok: true, data: { room: framework.syncManager.serializeRoom(joinedRoom), status: joinedRoom.status } });
         } else {
           ack?.({ ok: true, data: { matchId, roomId, status: "waiting" } });
         }
@@ -697,7 +632,8 @@ async function main(): Promise<void> {
         const ready = payload.ready !== false;
         await framework.roomManager.setPlayerReady(payload.roomId, user.userId, ready);
         const room = framework.roomManager.getRoom(payload.roomId);
-        ack?.({ ok: true, data: room });
+        if (!room) throw new AppError("ROOM_NOT_FOUND", "Room not found");
+        ack?.({ ok: true, data: framework.syncManager.serializeRoom(room) });
       }),
     );
 
@@ -1065,12 +1001,16 @@ async function main(): Promise<void> {
           throw new AppError("MATCHMAKING_ERROR", result.error || "Failed to join matchmaking");
         }
         
-        (socket as any).emit("game:queue-joined", {
-          position: result.position ?? 1,
-          gameId: parsed.data.gameId,
-          entryFee: parsed.data.stake,
-          mode,
-        });
+        // Pairing can complete inside joinQueue before this handler resumes.
+        // Never put a matched player back into the searching UI.
+        if (framework.matchmakingManager.isInQueue(user.userId)) {
+          (socket as any).emit("game:queue-joined", {
+            position: framework.matchmakingManager.getQueuePosition(user.userId) ?? 1,
+            gameId: parsed.data.gameId,
+            entryFee: parsed.data.stake,
+            mode,
+          });
+        }
 
         ack?.({ ok: true, data: { position: result.position ?? 0 } });
       }),
@@ -1098,12 +1038,16 @@ async function main(): Promise<void> {
           throw new AppError("MATCHMAKING_ERROR", result.error || "Failed to join matchmaking");
         }
 
-        (socket as any).emit("game:queue-joined", {
-          position: result.position ?? 1,
-          gameId: parsed.data.gameId,
-          entryFee: parsed.data.stake,
-          mode,
-        });
+        // Pairing can complete inside joinQueue before this handler resumes.
+        // Never put a matched player back into the searching UI.
+        if (framework.matchmakingManager.isInQueue(user.userId)) {
+          (socket as any).emit("game:queue-joined", {
+            position: framework.matchmakingManager.getQueuePosition(user.userId) ?? 1,
+            gameId: parsed.data.gameId,
+            entryFee: parsed.data.stake,
+            mode,
+          });
+        }
 
         ack?.({ ok: true, data: { position: result.position ?? 0 } });
       }),

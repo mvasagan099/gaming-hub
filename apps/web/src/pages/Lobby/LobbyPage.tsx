@@ -287,16 +287,20 @@ export const LobbyPage: React.FC = () => {
   }, [session, connect, disconnect]);
 
   useEffect(() => {
-    if (room && slug && room.gameId === slug) {
-      if (room.status === "playing" || room.matchId) {
-        if (matchmaking.queued) {
-          useMultiplayerStore.setState({
-            matchmaking: { queued: false, position: 0, gameId: null, stake: null, settings: {} },
-            pendingRequeue: null,
-          });
-        }
-        navigate(`/games/${slug}`, { state: { mode: "multiplayer", stake: room.stake } });
+    if (!room || !slug) return;
+    // A room code can be entered from any game lobby. Follow the server room identity.
+    if (room.gameId !== slug) {
+      navigate(`/lobby/${room.gameId}`, { replace: true });
+      return;
+    }
+    if (room.status === "playing" || room.matchId) {
+      if (matchmaking.queued) {
+        useMultiplayerStore.setState({
+          matchmaking: { queued: false, position: 0, gameId: null, stake: null, settings: {} },
+          pendingRequeue: null,
+        });
       }
+      navigate(`/games/${slug}`, { state: { mode: "multiplayer", stake: room.stake } });
     }
   }, [room, slug, matchmaking.queued, navigate]);
 

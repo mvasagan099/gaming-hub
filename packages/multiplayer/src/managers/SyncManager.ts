@@ -26,7 +26,7 @@ import type {
   StateSyncPacket,
   ConnectionQuality,
 } from "../types";
-import type { JsonObject } from "@gaming-hub/shared";
+import type { JsonObject, RoomFull } from "@gaming-hub/shared";
 import type { EngineEvent, EngineInstance } from "@gaming-hub/game-engine";
 import type { Socket } from "socket.io";
 
@@ -330,7 +330,7 @@ export class SyncManager {
   /**
    * Serialize room for transmission.
    */
-  private serializeRoom(room: RoomRuntime): Record<string, unknown> {
+  serializeRoom(room: RoomRuntime): RoomFull {
     return {
       id: room.id,
       code: room.code,
@@ -360,8 +360,12 @@ export class SyncManager {
         username: p.username,
         displayName: p.displayName,
         avatarUrl: p.avatarUrl,
+        seat: p.seat,
+        isReady: p.isReady,
+        isHost: p.isHost,
         isSpectator: true,
         connectionStatus: p.connectionStatus,
+        joinedAt: new Date(p.joinedAt).toISOString(),
       })),
       settings: room.config.settings,
       matchId: room.match?.matchId ?? null,

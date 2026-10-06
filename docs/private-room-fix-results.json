@@ -1,0 +1,1297 @@
+{
+  "date": "2026-10-06",
+  "baselineCommit": "55c4536",
+  "scope": "Private-room creation, join by code, ready, start, reconnect, and lobby routing in the local working copy",
+  "deployed": false,
+  "productionDatabaseTouched": false,
+  "results": {
+    "multiplayer": {
+      "files": 13,
+      "tests": 149,
+      "passed": 149,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "file": "packages/multiplayer/__tests__/bubbleShooterGameplay.test.ts",
+          "tests": [
+            {
+              "name": "Bubble Shooter two-player authoritative gameplay accepts concurrent shots from both seats without turn gating and broadcasts both results",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter two-player authoritative gameplay rejects invalid and spectator shots without modifying the authoritative board",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/centralizedGameConfig.test.ts",
+          "tests": [
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) covers all 9 games with comprehensive default configurations",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 1. Enable game",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 2. Disable game rejects new joins without affecting running games",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 3. Enable online allows multiplayer matchmaking",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 4. Disable online rejects online multiplayer joins",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 5. Change entry fee updates allowed stakes list",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 6. Try old invalid entry fee is strictly rejected",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 7. Change turn timer updates configuration",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 8-11. Start match, change timer config, verify existing match keeps old timer, new match uses new timer",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 12-13. Change prize configuration, verify existing match keeps old prize configuration",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 14. Verify only authorized admin can change settings",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 15. Verify audit logs are created for every change",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 16. Verify cache invalidation produces fresh config immediately",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 17. Verify invalid configuration is rejected by validation schema",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 18. Verify frontend receives current configuration and allowed entry fees",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) handles draw refund policies correctly",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/clientMatchIdentity.test.ts",
+          "tests": [
+            {
+              "name": "shared multiplayer client match identity refuses actions before receiving authoritative match identity",
+              "status": "passed"
+            },
+            {
+              "name": "shared multiplayer client match identity sends the new match identity after a rematch",
+              "status": "passed"
+            },
+            {
+              "name": "shared multiplayer client match identity clears cached match identity on leave",
+              "status": "passed"
+            },
+            {
+              "name": "shared multiplayer client match identity clears cached match identity on closed",
+              "status": "passed"
+            },
+            {
+              "name": "shared multiplayer client match identity clears cached match identity on waiting",
+              "status": "passed"
+            },
+            {
+              "name": "shared multiplayer client match identity clears cached match identity on disconnect",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/disconnectReconnect.test.ts",
+          "tests": [
+            {
+              "name": "DisconnectHandler auto-pauses a turn-based match when a player disconnects",
+              "status": "passed"
+            },
+            {
+              "name": "DisconnectHandler arms a reconnect grace timer that forfeits the player on expiry",
+              "status": "passed"
+            },
+            {
+              "name": "DisconnectHandler does nothing when no match is running",
+              "status": "passed"
+            },
+            {
+              "name": "ReconnectHandler cancels the forfeit timer and auto-resumes a paused match",
+              "status": "passed"
+            },
+            {
+              "name": "ReconnectHandler does not auto-resume while other participants are still disconnected",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/gameConfigs.test.ts",
+          "tests": [
+            {
+              "name": "gameConfigs covers every registered game",
+              "status": "passed"
+            },
+            {
+              "name": "gameConfigs classifies turn-based games",
+              "status": "passed"
+            },
+            {
+              "name": "gameConfigs assigns sensible timers and cooldowns",
+              "status": "passed"
+            },
+            {
+              "name": "gameConfigs always has valid cooldowns and player counts",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/gameEventSystem.test.ts",
+          "tests": [
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 1. Standard event envelope conforms to required structure",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 2. Distinct events have globally unique eventIds",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 3. State versions increase monotonically per match",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 4. Different matches maintain independent state versions",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 5. Client correctly discards stale packets with stateVersion < currentVersion",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 6. Client detects stateVersion gaps (> currentVersion + 1) to trigger game:sync",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 7. MATCH_FOUND event generates valid envelope with match metadata",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 8. PLAYER_READY and PLAYER_UNREADY envelopes track player readiness",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 9. Authoritative countdown events emit correct step values",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 10. MATCH_STARTED envelope includes entryFee and snapshot",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 11. TURN_STARTED contains authoritative start and expiration timestamps",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 12. TURN_CHANGED records previous and next active players",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 13. GAME_ACTION_ACCEPTED and REJECTED envelopes contain actionId and actionType",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 14. GAME_STATE_UPDATED envelope contains serialized game state and event log",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 15. PLAYER_DISCONNECTED contains reconnectExpiresAt deadline",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 16. PLAYER_RECONNECTED contains reconnected player ID",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 17. PLAYER_FORFEITED records winnerId and reason for forfeit",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 18. GAME_FINISHED envelope contains authoritative final scores and resultType",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 19. SETTLEMENT_STARTED and SETTLEMENT_COMPLETED track coin distribution",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 20. In-game notifications correctly assign HIGH, MEDIUM, and LOW priority levels",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 21. Game specific event definitions cover all 9 active games",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 22. STANDARD_GAME_EVENT_TYPES includes all essential match lifecycle events",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/gameStateSync.test.ts",
+          "tests": [
+            {
+              "name": "Centralized Game State Sync + Recovery System 1. Authoritative State & Version Rules strictly rejects stale or duplicate state versions",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 1. Authoritative State & Version Rules accepts and applies exact consecutive next state versions",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 1. Authoritative State & Version Rules detects gaps in state versions to trigger full sync",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 1. Authoritative State & Version Rules calculates deterministic fast state hashes",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 2. GameStateSyncManager Authority & Rate Limiting initializes authoritative state at version 1 and action sequence 0",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 2. GameStateSyncManager Authority & Rate Limiting monotonically increments stateVersion and actionSequence upon accepted actions",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 2. GameStateSyncManager Authority & Rate Limiting rejects late actions once match status is finished with MATCH_FINISHED",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 2. GameStateSyncManager Authority & Rate Limiting enforces rate limits on sync requests (max 5 per 10s)",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 3. Carrom Authoritative State & Deduplication produces identical final coin positions on both clients from server physics",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 3. Carrom Authoritative State & Deduplication deduplicates pocket events using shotId + coinId",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 3. Carrom Authoritative State & Deduplication server determines queenState and extra turns, not client animation",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 4. Chess State Sync & Reconnect maintains identical board FEN and move history on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 4. Chess State Sync & Reconnect reconnect restores exact board snapshot and active clocks",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 5. Ludo State Sync produces identical dice roll and token positions for all players",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 7. Server Restart Match Recovery recovers active matches without resetting the board",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/gameplay.test.ts",
+          "tests": [
+            {
+              "name": "GameStateManager exposes the authoritative engine and initial snapshot",
+              "status": "passed"
+            },
+            {
+              "name": "GameStateManager records an applied action into history and snapshots",
+              "status": "passed"
+            },
+            {
+              "name": "GameStateManager serializes state mutations per room",
+              "status": "passed"
+            },
+            {
+              "name": "GameStateManager detects snapshot gaps when replay integrity is broken",
+              "status": "passed"
+            },
+            {
+              "name": "TurnManager gates turn-based games by the engine's current seat",
+              "status": "passed"
+            },
+            {
+              "name": "TurnManager never gates realtime games",
+              "status": "passed"
+            },
+            {
+              "name": "ActionValidator rejects actions when no match is in progress",
+              "status": "passed"
+            },
+            {
+              "name": "ActionValidator rejects spectator actions",
+              "status": "passed"
+            },
+            {
+              "name": "ActionValidator rejects out-of-turn moves in turn-based games",
+              "status": "passed"
+            },
+            {
+              "name": "ActionValidator rate-limits repeated realtime actions",
+              "status": "passed"
+            },
+            {
+              "name": "ActionValidator accepts a legal action",
+              "status": "passed"
+            },
+            {
+              "name": "WinnerCalculator resolves a decisive win",
+              "status": "passed"
+            },
+            {
+              "name": "WinnerCalculator resolves a draw",
+              "status": "passed"
+            },
+            {
+              "name": "WinnerCalculator marks an unfinished match as aborted",
+              "status": "passed"
+            },
+            {
+              "name": "WinnerCalculator extracts per-seat scores when the engine exposes them",
+              "status": "passed"
+            },
+            {
+              "name": "StatisticsCollector counts moves separately from base actions",
+              "status": "passed"
+            },
+            {
+              "name": "StatisticsCollector records turn time and disconnect/reconnect counters",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/matchManager.test.ts",
+          "tests": [
+            {
+              "name": "MatchManager pipeline starts a match and applies a legal move through the full pipeline",
+              "status": "passed"
+            },
+            {
+              "name": "MatchManager pipeline broadcasts a room update so non-host clients see the room move to playing",
+              "status": "passed"
+            },
+            {
+              "name": "MatchManager pipeline does not publish a playing match until funding succeeds",
+              "status": "passed"
+            },
+            {
+              "name": "MatchManager pipeline funds only one match when two start requests arrive together",
+              "status": "passed"
+            },
+            {
+              "name": "MatchManager pipeline does not cancel an uncreated database match when funding fails",
+              "status": "passed"
+            },
+            {
+              "name": "MatchManager pipeline rejects out-of-turn and spectator actions in the pipeline",
+              "status": "passed"
+            },
+            {
+              "name": "MatchManager pipeline resolves a finish through the winner calculator",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/matchmaking.test.ts",
+          "tests": [
+            {
+              "name": "MatchmakingManager waits for a second distinct player in snake-ladder",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in ludo",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in chess",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in carrom",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in fruit-ninja",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in bubble-shooter",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in table-tennis",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in snake-vs-worms",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in snooker",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts snake-ladder for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts ludo for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts chess for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts carrom for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts fruit-ninja for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts bubble-shooter for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts table-tennis for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts snake-vs-worms for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts snooker for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager pairs enough players and auto-starts the match in a ready room",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager closes the room instead of leaking it when auto-start fails",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/privateRoomSocketFlow.test.ts",
+          "tests": [
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private snake-ladder match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private ludo match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private chess match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private carrom match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private fruit-ninja match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private bubble-shooter match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private table-tennis match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private snake-vs-worms match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private snooker match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle keeps readiness, ownership, room-code and capacity checks enforced",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle serializes spectator metadata without exposing internal runtime or passwords",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle preserves feature checks and funding failure without publishing a playing match",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/rematch.test.ts",
+          "tests": [
+            {
+              "name": "authoritative rematches starts a fresh snake-ladder engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh ludo engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh chess engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh carrom engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh fruit-ninja engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh bubble-shooter engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh table-tennis engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh snake-vs-worms engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh snooker engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches serializes simultaneous votes and retries so only one match is funded",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches keeps the previous result and lets players retry after failed funding",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches does not count expired consent",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches cancels the offer without counting the previous votes on the next request",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches rejects spectators, outsiders, disconnected players, active games and tournament replay",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches does not reuse an earlier match's cached action after a rematch",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches does not give one participant another participant's cached action result",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches applies concurrent duplicate action IDs only once within the same match",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches rejects a queued action when its player leaves before execution",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches rejects a delayed action addressed to the previous match",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/roomCleanup.test.ts",
+          "tests": [
+            {
+              "name": "Room cleanup after a match ends closes the room after the linger window once the match finishes",
+              "status": "passed"
+            },
+            {
+              "name": "Room cleanup after a match ends closes the room after the linger window once the match is aborted",
+              "status": "passed"
+            },
+            {
+              "name": "Room cleanup after a match ends keeps the room open when a rematch resets it before the linger expires",
+              "status": "passed"
+            },
+            {
+              "name": "Room cleanup after a match ends does not expire a playing room when the creation expiration timer fires",
+              "status": "passed"
+            }
+          ]
+        }
+      ]
+    },
+    "web": {
+      "files": 14,
+      "tests": 110,
+      "passed": 110,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "file": "apps/web/src/components/GameWrapper.test.tsx",
+          "tests": [
+            {
+              "name": "shared game HUD controls multiplayer has one Exit even when practice owns its exit (false)",
+              "status": "passed"
+            },
+            {
+              "name": "shared game HUD controls multiplayer has one Exit even when practice owns its exit (true)",
+              "status": "passed"
+            },
+            {
+              "name": "shared game HUD controls does not offer a disconnected mute button (fullscreen true)",
+              "status": "passed"
+            },
+            {
+              "name": "shared game HUD controls does not offer a disconnected mute button (fullscreen false)",
+              "status": "passed"
+            },
+            {
+              "name": "shared game HUD controls practice games with their own exit do not receive floating exits",
+              "status": "passed"
+            },
+            {
+              "name": "shared game HUD controls does not block document Back, and clears its HUD timer on unmount",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/store/multiplayerStore.leave.test.ts",
+          "tests": [
+            {
+              "name": "leaving a multiplayer game clears local membership immediately and sends one leave for repeated requests",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/store/multiplayerStore.matchmaking.test.ts",
+          "tests": [
+            {
+              "name": "matchmaking join acknowledgement ordering keeps a waiting player queued",
+              "status": "passed"
+            },
+            {
+              "name": "matchmaking join acknowledgement ordering does not resume searching when pairing completes before the ACK",
+              "status": "passed"
+            },
+            {
+              "name": "matchmaking join acknowledgement ordering does not queue a player the server has already paired",
+              "status": "passed"
+            },
+            {
+              "name": "matchmaking join acknowledgement ordering ignores a join ACK after disconnecting",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/store/multiplayerStore.rematch.test.ts",
+          "tests": [
+            {
+              "name": "rematch consent and state synchronization binds an action to the current authoritative match",
+              "status": "passed"
+            },
+            {
+              "name": "rematch consent and state synchronization does not send an action before the new match state arrives",
+              "status": "passed"
+            },
+            {
+              "name": "rematch consent and state synchronization sends the room request and shows waiting feedback",
+              "status": "passed"
+            },
+            {
+              "name": "rematch consent and state synchronization shows funding/server errors without an unhandled rejection",
+              "status": "passed"
+            },
+            {
+              "name": "rematch consent and state synchronization resets the result and version for a new match and rejects old-match replay packets",
+              "status": "passed"
+            },
+            {
+              "name": "rematch consent and state synchronization ignores a reconnect snapshot that arrives after a rematch has started",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/games/fruit-ninja/FruitNinjaPresentation.test.tsx",
+          "tests": [
+            {
+              "name": "Fruit Ninja responsive result controls keeps results outside the arena and delegates exit to the shared HUD (portrait true, online false)",
+              "status": "passed"
+            },
+            {
+              "name": "Fruit Ninja responsive result controls keeps results outside the arena and delegates exit to the shared HUD (portrait true, online true)",
+              "status": "passed"
+            },
+            {
+              "name": "Fruit Ninja responsive result controls keeps results outside the arena and delegates exit to the shared HUD (portrait false, online false)",
+              "status": "passed"
+            },
+            {
+              "name": "Fruit Ninja responsive result controls keeps results outside the arena and delegates exit to the shared HUD (portrait false, online true)",
+              "status": "passed"
+            },
+            {
+              "name": "Fruit Ninja responsive result controls keeps the result visible while Exit asks for confirmation, so Cancel can return to it",
+              "status": "passed"
+            },
+            {
+              "name": "Fruit Ninja responsive result controls clears the finished presentation and delegates Play Again to the existing replay callback",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/pages/Games/GamePage.navigation.test.tsx",
+          "tests": [
+            {
+              "name": "game Exit versus router Back snake-ladder visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back ludo visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back chess visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back carrom visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back fruit-ninja visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back bubble-shooter visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back table-tennis visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back snake-vs-worms visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back snooker visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back leaves once on confirmed Exit, even when confirmed twice and unmounted",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back does not trap browser/gesture Back or push extra history; unmount leaves once",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back StrictMode replay keeps membership; the eventual real unmount leaves",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back Back during a pending confirmed leave does not navigate a second time after the ACK",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back does not leave a different room joined before deferred cleanup",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back leaves the old room when this route changes from multiplayer to practice",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back practice exit uses the root fallback without leaving multiplayer",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/pages/Games/GamePage.rematch.test.tsx",
+          "tests": [
+            {
+              "name": "rematch game presentation creates a fresh snake-ladder view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh ludo view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh chess view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh carrom view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh fruit-ninja view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh bubble-shooter view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh table-tennis view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh snake-vs-worms view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh snooker view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation table-tennis replay requests an online rematch instead of restarting locally",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation snake-vs-worms replay requests an online rematch instead of restarting locally",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation fruit-ninja replay requests an online rematch instead of restarting locally",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/pages/Home/Home.gameMode.test.tsx",
+          "tests": [
+            {
+              "name": "Home game launch selection all popular/grid cards preserve ai selection",
+              "status": "passed"
+            },
+            {
+              "name": "Home game launch selection all popular/grid cards preserve multiplayer selection",
+              "status": "passed"
+            },
+            {
+              "name": "Home game launch selection ai start follows the right route and stake",
+              "status": "passed"
+            },
+            {
+              "name": "Home game launch selection multiplayer start follows the right route and stake",
+              "status": "passed"
+            },
+            {
+              "name": "setup mode and authoritative game configuration initial ai mode is used by Start",
+              "status": "passed"
+            },
+            {
+              "name": "setup mode and authoritative game configuration initial multiplayer mode is used by Start",
+              "status": "passed"
+            },
+            {
+              "name": "setup mode and authoritative game configuration resets a reused modal to the newly requested mode and current server stake",
+              "status": "passed"
+            },
+            {
+              "name": "setup mode and authoritative game configuration disabled online games cannot be started but practice stays available",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/pages/Lobby/LobbyPage.privateRoom.test.tsx",
+          "tests": [
+            {
+              "name": "private room lobby navigation joins the authoritative game lobby when a code belongs to another game",
+              "status": "passed"
+            },
+            {
+              "name": "private room lobby navigation restores the correct lobby before opening an already-started room",
+              "status": "passed"
+            },
+            {
+              "name": "private room lobby navigation stays in the current lobby while waiting for readiness",
+              "status": "passed"
+            },
+            {
+              "name": "private room lobby navigation opens the matching game with the server room stake after start",
+              "status": "passed"
+            },
+            {
+              "name": "private room lobby navigation does not navigate before joining a room",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/services/native/capacitorAppService.back.test.ts",
+          "tests": [
+            {
+              "name": "native Back uses normal navigation immediately navigates back from a game with in-app history",
+              "status": "passed"
+            },
+            {
+              "name": "native Back uses normal navigation uses home fallback when there is no in-app history",
+              "status": "passed"
+            },
+            {
+              "name": "native Back uses normal navigation keeps the normal root/minimize behavior",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/games/bubble-shooter/__tests__/multiplayerControls.test.tsx",
+          "tests": [
+            {
+              "name": "Bubble Shooter component multiplayer controls shows the correct cannon/preview and submits one shot from seat 0",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls shows the correct cannon/preview and submits one shot from seat 1",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls preserves the flight on opponent updates and applies the server board only after landing",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls aims a mobile tap at its release location and blocks its duplicate click",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls recovers the controls after a rejection",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls recovers the controls after a network error",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls does not submit a synthetic mobile click after an immediate shot rejection",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls resyncs rather than leaving the cannon permanently locked after a missing broadcast",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls keeps solo play local and never submits a multiplayer action",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/games/bubble-shooter/utils/multiplayerPresentation.test.ts",
+          "tests": [
+            {
+              "name": "Bubble Shooter multiplayer presentation loads and fires the authoritative bubble for seat 0",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation loads and fires the authoritative bubble for seat 1",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation does not erase flight or unlock a shot when the opponent shoots",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation buffers a fast response until the cosmetic flight lands",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation uses the latest authoritative snapshot if opponent updates arrive during a flight",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation restores the server board after rejection and ignores an old acknowledgement",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation restores cannon and grid on reconnect without applying a move again",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation ignores duplicate state packets while flight is pending and never resubmits a shot",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation never permits shooting when paused, eliminated, or finished",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation separates pop particles from falling detached bubbles using the authoritative result",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation animates the same authoritative bounce path for angle -1.5707963267948966",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation animates the same authoritative bounce path for angle -0.5235987755982988",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation animates the same authoritative bounce path for angle -2.6179938779914944",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/games/carrom/__tests__/strikerPlacement.test.tsx",
+          "tests": [
+            {
+              "name": "Carrom striker placement recovery keeps the mover available after tapping a coin and allows moving away and shooting",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom striker placement recovery allows tapping a clear baseline position after an overlapping placement",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom striker placement recovery keeps repositioning available after entering aiming mode",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom striker placement recovery rechecks overlap on release, cancelling a blocked shot without trapping the mover",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom striker placement recovery moving the slider cancels an old drag rather than firing it",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom striker placement recovery pointer cancellation does not fire an aimed shot",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom striker placement recovery ignores pocketed coins during placement",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture captures a stationary coin resting inside the visible pocket at 30,30 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture captures a stationary coin resting inside the visible pocket at 370,30 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture captures a stationary coin resting inside the visible pocket at 30,370 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture captures a stationary coin resting inside the visible pocket at 370,370 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture leaves a coin on the board when it only touches the outside pocket rim",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture captures a coin approaching the pocket at speed 0.3",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture captures a coin approaching the pocket at speed 18",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture waits for a pocket drop to finish before settling a shot",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture restores a pocketed striker for the next turn and applies one foul",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture keeps a pocketed queen off the board while waiting for its cover shot",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/games/chess/utils/chessState.test.ts",
+          "tests": [
+            {
+              "name": "Chess client state resolves both colors by authoritative user ID, independent of array order or turn",
+              "status": "passed"
+            },
+            {
+              "name": "Chess client state orients each board to the local color without changing logical piece colors",
+              "status": "passed"
+            },
+            {
+              "name": "Chess client state uses the correct white and black piece glyphs",
+              "status": "passed"
+            },
+            {
+              "name": "Chess client state keeps white then black SAN turns identical for both viewers and repeated socket snapshots",
+              "status": "passed"
+            }
+          ]
+        }
+      ]
+    },
+    "privateRoomSocketFlow": {
+      "files": 1,
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "file": "packages/multiplayer/__tests__/privateRoomSocketFlow.test.ts",
+          "tests": [
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private snake-ladder match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private ludo match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private chess match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private carrom match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private fruit-ninja match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private bubble-shooter match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private table-tennis match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private snake-vs-worms match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle creates, joins by code, readies and starts a private snooker match on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle keeps readiness, ownership, room-code and capacity checks enforced",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle serializes spectator metadata without exposing internal runtime or passwords",
+              "status": "passed"
+            },
+            {
+              "name": "private room Socket.IO lifecycle preserves feature checks and funding failure without publishing a playing match",
+              "status": "passed"
+            }
+          ]
+        }
+      ]
+    },
+    "privateRoomLobby": {
+      "files": 1,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "file": "apps/web/src/pages/Lobby/LobbyPage.privateRoom.test.tsx",
+          "tests": [
+            {
+              "name": "private room lobby navigation joins the authoritative game lobby when a code belongs to another game",
+              "status": "passed"
+            },
+            {
+              "name": "private room lobby navigation restores the correct lobby before opening an already-started room",
+              "status": "passed"
+            },
+            {
+              "name": "private room lobby navigation stays in the current lobby while waiting for readiness",
+              "status": "passed"
+            },
+            {
+              "name": "private room lobby navigation opens the matching game with the server room stake after start",
+              "status": "passed"
+            },
+            {
+              "name": "private room lobby navigation does not navigate before joining a room",
+              "status": "passed"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "build": "PASS",
+  "typecheck": "PASS",
+  "diffCheck": "PASS"
+}
