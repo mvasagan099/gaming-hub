@@ -25,6 +25,8 @@ export interface GamePlayConfig {
   pauseOnDisconnect: boolean;
   /** Forfeit a disconnected player when the reconnect grace period expires. */
   forfeitOnDisconnect: boolean;
+  /** Forfeit a connected player for inactivity; turn clocks may handle this instead. */
+  forfeitOnAfk: boolean;
   /** Default per-turn timer in ms. 0 disables the per-turn clock. */
   defaultTurnTimerMs: number;
   /** Default whole-match timer in ms. 0 disables the match clock. */

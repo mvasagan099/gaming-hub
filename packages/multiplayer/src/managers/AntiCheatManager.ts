@@ -68,7 +68,7 @@ export class AntiCheatManager {
       gameOverrides: {
         // Carrom fires place-striker confirmations and a strike in rapid
         // succession; the generic realtime/turn-based limits would reject them.
-        carrom: { maxActionsPerSecond: 20, minActionIntervalMs: 20 },
+        carrom: { maxActionsPerSecond: 20, minActionIntervalMs: 0 },
         // Fruit ninja sends a burst of blade samples per swipe (begin + move +
         // end); the engine validates every sample itself, so loosen the gate.
         "fruit-ninja": { maxActionsPerSecond: 40, minActionIntervalMs: 10 },

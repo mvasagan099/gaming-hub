@@ -276,6 +276,8 @@ const CarromMultiplayer: React.FC<Props> = ({
 
   // Animation state
   const isTurnActiveRef = useRef(false);
+  const awaitingShotRef = useRef(false);
+  const shotRequestRef = useRef(0);
   const activeTrajectoryRef = useRef<ActiveTrajectory | null>(null);
   const turnFramesRef = useRef(0);
   const pendingStateRef = useRef<CarromRemoteState | null>(null);
@@ -357,6 +359,7 @@ const CarromMultiplayer: React.FC<Props> = ({
       } = strikeInfo;
 
       if (isNew) {
+        awaitingShotRef.current = false;
         const seat = mySeatRef.current;
         console.log("[CarromMultiplayer] REMOTE_SHOT_RECEIVED", {
           shotId,
@@ -401,6 +404,7 @@ const CarromMultiplayer: React.FC<Props> = ({
           clearSettleTimeout();
           settleTimeoutRef.current = setTimeout(() => {
             if (isTurnActiveRef.current) {
+              awaitingShotRef.current = false;
               isTurnActiveRef.current = false;
               turnFramesRef.current = 0;
               setIsTurnActive(false);
@@ -452,6 +456,7 @@ const CarromMultiplayer: React.FC<Props> = ({
         clearSettleTimeout();
         settleTimeoutRef.current = setTimeout(() => {
           if (isTurnActiveRef.current) {
+            awaitingShotRef.current = false;
             isTurnActiveRef.current = false;
             turnFramesRef.current = 0;
             setIsTurnActive(false);
@@ -502,7 +507,8 @@ const CarromMultiplayer: React.FC<Props> = ({
 
     driver.onWin = (seat) => {
       setWinnerSeat(seat);
-      setGameOver(true);
+      // Show the result after the final shot has finished playing on the board.
+      if (!isTurnActiveRef.current) setGameOver(true);
       if (seat === mySeat) {
         confetti({ particleCount: 140, spread: 85 });
       }
@@ -922,6 +928,7 @@ const CarromMultiplayer: React.FC<Props> = ({
           playerSeat: seat,
         });
         activeTrajectoryRef.current = null;
+        awaitingShotRef.current = false;
         isTurnActiveRef.current = false;
         turnFramesRef.current = 0;
         setIsTurnActive(false);
@@ -931,7 +938,7 @@ const CarromMultiplayer: React.FC<Props> = ({
         authoritativeShotRef.current = null;
         applyServerState(latest);
       }
-    } else if (isTurnActiveRef.current) {
+    } else if (isTurnActiveRef.current && !awaitingShotRef.current) {
       capturePocketCoins();
       turnFramesRef.current++;
       const stepFactor = 1 / SUB_STEPS;
@@ -1182,6 +1189,7 @@ const CarromMultiplayer: React.FC<Props> = ({
     if (
       isTurnActiveRef.current &&
       !activeTrajectoryRef.current &&
+      !awaitingShotRef.current &&
       !anyMoving &&
       turnFramesRef.current >= 10  // at least 10 frames with no movement
     ) {
@@ -1189,6 +1197,7 @@ const CarromMultiplayer: React.FC<Props> = ({
       const state = pendingStateRef.current || driverRef.current?.lastState;
       if (state) {
         clearSettleTimeout();
+        awaitingShotRef.current = false;
         isTurnActiveRef.current = false;
         setIsTurnActive(false);
         turnFramesRef.current = 0;
@@ -1550,9 +1559,12 @@ const CarromMultiplayer: React.FC<Props> = ({
     const power = Math.min(pullDist / 160, 1);
     const angle = Math.atan2(dy, dx);
 
-    // Immediately start local physics so the shot feels ultra-responsive.
-    striker.vx = Math.cos(angle) * power * SHOT_MAX_SPEED;
-    striker.vy = Math.sin(angle) * power * SHOT_MAX_SPEED;
+    // Lock input while the server accepts the shot. Play its trajectory once;
+    // predicting physics here would rewind and replay when confirmation arrives.
+    const shotRequest = ++shotRequestRef.current;
+    awaitingShotRef.current = true;
+    striker.vx = 0;
+    striker.vy = 0;
     striker.trail = [];
     isTurnActiveRef.current = true;
     turnFramesRef.current = 0;
@@ -1561,6 +1573,7 @@ const CarromMultiplayer: React.FC<Props> = ({
     clearSettleTimeout();
     settleTimeoutRef.current = setTimeout(() => {
       if (isTurnActiveRef.current) {
+        awaitingShotRef.current = false;
         isTurnActiveRef.current = false;
         turnFramesRef.current = 0;
         setIsTurnActive(false);
@@ -1574,6 +1587,9 @@ const CarromMultiplayer: React.FC<Props> = ({
       const driver = driverRef.current;
       if (!driver) return;
       const res = await driver.sendStrike(angle, power, striker.x);
+      // A server-confirmed shot takes precedence over a late transport reply.
+      // Replies to earlier requests must not cancel a newer shot either.
+      if (driverRef.current !== driver || shotRequestRef.current !== shotRequest || !awaitingShotRef.current) return;
       if (!res.ok) {
         // Shot rejected — cancel local animation and restore state.
         clearSettleTimeout();
@@ -1583,6 +1599,7 @@ const CarromMultiplayer: React.FC<Props> = ({
         activeTrajectoryRef.current = null;
         authoritativeShotRef.current = null;
         pendingStateRef.current = null;
+        awaitingShotRef.current = false;
         isTurnActiveRef.current = false;
         turnFramesRef.current = 0;
         setIsTurnActive(false);

@@ -71,9 +71,33 @@ function setup(seat = 0) {
   const canvas = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 500, height: 500 }), setPointerCapture: vi.fn() };
   fixture.slots[0].current = canvas;
   const board = () => find(render(), node => node.type === 'canvas').props;
-  const mover = () => find(render(), node => node.type === 'input' && node.props.type === 'range').props;
+  const mover = () => find(render(), node => node.type === 'input' && node.props.type === 'range')?.props;
   const pointer = (x: number, y: number) => ({ clientX: x, clientY: y, pointerId: 1, currentTarget: canvas });
   return { board, mover, pointer, render };
+}
+function frames() {
+  let time = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => time);
+  vi.stubGlobal('window', { devicePixelRatio: 1 });
+  vi.stubGlobal('requestAnimationFrame', vi.fn());
+  const canvas = fixture.slots[0].current;
+  canvas.getContext = () => new Proxy({}, { get: () => vi.fn(() => ({ addColorStop: vi.fn() })) });
+  canvas.width = 500; canvas.height = 500;
+  return (at: number) => { time = at; fixture.animate(); };
+}
+function striker() {
+  return fixture.slots.find(slot => Array.isArray(slot?.current) && slot.current.some((coin: any) => coin.type === 'striker'))
+    .current.find((coin: any) => coin.type === 'striker');
+}
+function receiveShot(finished = false) {
+  const state = { ...fixture.state, turnNumber: 1, currentSeat: 1, finished, winnerSeats: finished ? [0] : [] };
+  fixture.consume.mockReturnValueOnce({ isNew: true, shotId: 123, bySeat: 0, angle: 0, power: 0.5,
+    pocketedCoinIds: [], pocketEvents: [], keyframes: [
+      { frame: 0, pieces: [{ id: 'striker', x: 300, y: 507 }] },
+      { frame: 20, pieces: [{ id: 'striker', x: 300, y: 300 }] },
+    ] });
+  fixture.driver.lastState = state; fixture.driver.onStateUpdate(state, 2);
+  return state;
 }
 beforeEach(() => {
   fixture.slots = []; fixture.cursor = 0; fixture.effects = []; vi.clearAllMocks(); vi.useFakeTimers();
@@ -83,6 +107,59 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('Carrom multiplayer striker controls', () => {
+  it('holds the board while awaiting acceptance and plays one server animation', () => {
+    const game = setup(); const tick = frames();
+    const board = game.board();
+    board.onPointerDown(game.pointer(250, 422.5)); board.onPointerMove(game.pointer(250, 485)); board.onPointerUp();
+    const start = { x: striker().x, y: striker().y };
+    for (let frame = 0; frame < 20; frame++) tick(frame * 16);
+    expect(striker().x).toBe(start.x); expect(striker().y).toBe(start.y);
+    expect(game.mover()).toBeUndefined();
+    const state = receiveShot();
+    tick(404);
+    expect(striker().y).toBeLessThan(start.y);
+    const movingY = striker().y;
+    fixture.driver.onStateUpdate(state, 2); // Duplicate snapshot must not rewind.
+    tick(420); expect(striker().y).toBeLessThan(movingY);
+    tick(1000);
+    expect(fixture.strike).toHaveBeenCalledOnce();
+  });
+  it('ignores a delayed rejection from an earlier shot after the player retries', async () => {
+    let first!: (result: any) => void, second!: (result: any) => void;
+    fixture.strike.mockReturnValueOnce(new Promise(resolve => { first = resolve; }))
+      .mockReturnValueOnce(new Promise(resolve => { second = resolve; }));
+    const game = setup();
+    const shoot = () => {
+      const board = game.board();
+      board.onPointerDown(game.pointer(250, 422.5)); board.onPointerMove(game.pointer(250, 485)); board.onPointerUp();
+    };
+    shoot(); await vi.advanceTimersByTimeAsync(4001); shoot();
+    first({ ok: false, error: 'Old request failed' }); await Promise.resolve(); await Promise.resolve();
+    expect(game.mover()).toBeUndefined();
+    second({ ok: false, error: 'Current request failed' }); await Promise.resolve(); await Promise.resolve();
+    expect(game.mover()).toBeDefined();
+  });
+
+  it('keeps a confirmed final shot playing when its acknowledgement fails late', async () => {
+    let reply!: (result: any) => void;
+    fixture.strike.mockReturnValue(new Promise(resolve => { reply = resolve; }));
+    const game = setup(); const tick = frames(); const board = game.board();
+    board.onPointerDown(game.pointer(250, 422.5)); board.onPointerMove(game.pointer(250, 485)); board.onPointerUp();
+    receiveShot(true); fixture.driver.onWin(0); tick(100);
+    reply({ ok: false, error: 'Acknowledgement connection lost' });
+    await Promise.resolve(); await Promise.resolve();
+    const result = () => find(game.render(), node => node.type === 'h2' && node.props.children === 'YOU WIN!');
+    expect(result()).toBeUndefined();
+    tick(500); expect(result()).toBeDefined();
+  });
+
+  it('waits for the final shot animation before displaying the match result', () => {
+    const game = setup(); const tick = frames();
+    receiveShot(true); fixture.driver.onWin(0);
+    const result = () => find(game.render(), node => node.type === 'h2' && node.props.children === 'YOU WIN!');
+    expect(result()).toBeUndefined();
+    tick(500); expect(result()).toBeDefined();
+  });
   it('applies the latest buffered board when shot animation completes', () => {
     const game = setup();
     let time = 0;

@@ -16,6 +16,7 @@
  * - Achievement tracking
  */
 
+import { getGamePlayConfig } from "../gameplay/gameConfigs";
 import type { MultiplayerFramework } from "../framework";
 import type {
   PlayerId,
@@ -308,6 +309,8 @@ export class PlayerManager {
     
     // Clear existing timer
     this.clearAfkTimer(roomId, playerId);
+    const room = this.framework.roomManager.getRoom(roomId);
+    if (room && !getGamePlayConfig(room.config.gameId).forfeitOnAfk) return;
     
     const timer = setInterval(() => {
       this.checkAfkStatus(playerId, roomId);
@@ -390,7 +393,7 @@ export class PlayerManager {
     if (!player || player.connectionStatus !== "connected") return;
     
     const room = this.framework.roomManager.getRoom(roomId);
-    if (!room || room.status !== "playing") return;
+    if (!room || room.status !== "playing" || !getGamePlayConfig(room.config.gameId).forfeitOnAfk) return;
     
     const afkTime = Date.now() - player.lastActivityAt;
     const afkTimeout = room.config.settings.afkTimeoutMs ?? this.framework.config.afkTimeoutMs;

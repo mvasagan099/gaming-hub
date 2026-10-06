@@ -146,6 +146,14 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     };
   }
 
+  protected override initState(): CarromState {
+    const state = super.initState();
+    // Arm the server clock before the first shot, just like the displayed clock.
+    state.turnStartedAtMs = state.turnStartedAt;
+    state.matchStartedAtMs = state.turnStartedAt;
+    return state;
+  }
+
   protected getInitialSeat(): number {
     return 0;
   }

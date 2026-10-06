@@ -23,6 +23,7 @@ function baseConfig(gameId: GameId, overrides: Partial<GamePlayConfig>): GamePla
     actionCooldownMs: turnBased ? 150 : 50,
     pauseOnDisconnect: turnBased,
     forfeitOnDisconnect: true,
+    forfeitOnAfk: true,
     defaultTurnTimerMs: turnBased ? 30_000 : 0,
     defaultMatchTimerMs: 600_000,
     ...overrides,
@@ -34,6 +35,8 @@ export const GAME_PLAY_CONFIGS: Record<GameId, GamePlayConfig> = {
   ludo: baseConfig("ludo", {}),
   chess: baseConfig("chess", { defaultTurnTimerMs: 120_000 }),
   carrom: baseConfig("carrom", {
+    // Its own clock passes an expired turn; inactivity must not resign the match.
+    forfeitOnAfk: false,
     // Carrom's natural input is a rapid sequence: slider positioning ticks, a
     // confirm tap and a quick flick to shoot. A nonzero cooldown rejects these
     // legitimate bursts ("Action too frequent"), so the shot never reaches the
@@ -87,6 +90,7 @@ export function getGamePlayConfig(gameId: GameId): GamePlayConfig {
       actionCooldownMs: 0,
       pauseOnDisconnect: true,
       forfeitOnDisconnect: true,
+      forfeitOnAfk: true,
       defaultTurnTimerMs: 30_000,
       defaultMatchTimerMs: 0,
     };
