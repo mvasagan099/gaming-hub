@@ -58,6 +58,7 @@ export const GAME_PLAY_CONFIGS: Record<GameId, GamePlayConfig> = {
     pauseOnDisconnect: false,
   }),
   "table-tennis": baseConfig("table-tennis", {
+    defaultMatchTimerMs: 180_000,
     actionCooldownMs: 15,
     pauseOnDisconnect: false,
   }),

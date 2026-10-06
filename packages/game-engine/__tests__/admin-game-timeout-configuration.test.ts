@@ -210,11 +210,11 @@ describe("Global Game Time & Timeout Configuration System", () => {
     };
 
     for (const gameId of GAME_IDS) {
-      it(`configures ${gameId} with 600s max duration and ${expectedResolutions[gameId]} strategy`, () => {
+      it(`configures ${gameId} with its default duration and ${expectedResolutions[gameId]} strategy`, () => {
         const config = DEFAULT_GAME_CONFIGS[gameId];
         expect(config).toBeDefined();
         expect(config.enabled).toBe(true);
-        expect(config.matchDurationSeconds).toBe(600);
+        expect(config.matchDurationSeconds).toBe(gameId === "table-tennis" ? 180 : 600);
         expect(config.timeoutResolution).toBe(expectedResolutions[gameId]);
         expect(config.allowDraw).toBe(true);
         expect(config.configVersion).toBeGreaterThanOrEqual(1);
@@ -346,7 +346,7 @@ describe("Global Game Time & Timeout Configuration System", () => {
         // Active match remains strictly invariant
         const retrieved = activeMatches.get(matchId1)!;
         expect(retrieved.matchDeadline).toBe(deadline1);
-        expect(retrieved.snapshot.matchDurationSeconds).toBe(600);
+        expect(retrieved.snapshot.matchDurationSeconds).toBe(gameId === "table-tennis" ? 180 : 600);
 
         // New match adopts new 450s duration
         const matchId2 = `new-${gameId}-2`;

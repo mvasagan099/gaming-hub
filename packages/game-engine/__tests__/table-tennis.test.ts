@@ -207,16 +207,16 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
 
 describe('Table Tennis synchronization regressions', () => {
   const players = [{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }];
-  it('arms a fixed server deadline and serializes the actual configured remaining time', () => {
+  it('uses a three-minute deadline even with legacy ten-minute settings', () => {
     let now = 1000;
     const engine = new TableTennisEngine(players, undefined, {
       now: () => now,
       matchTimer: { matchDurationMs: 600000, warningThresholdMs: 30000 },
     });
-    expect(engine.currentMatchDeadline).toBe(601000);
+    expect(engine.currentMatchDeadline).toBe(181000);
     now = 6500;
-    expect(engine.currentMatchDeadline).toBe(601000);
-    expect(engine.serialize().matchRemainingMs).toBe(594500);
+    expect(engine.currentMatchDeadline).toBe(181000);
+    expect(engine.serialize().matchRemainingMs).toBe(174500);
     expect(engine.serialize().serverTimestamp).toBe(6500);
   });
   it('broadcasts consecutive points won by the same player, including the cleared ball', () => {
@@ -228,5 +228,20 @@ describe('Table Tennis synchronization regressions', () => {
       expect(result.events).toContainEqual({ type: 'point-scored', winnerSeat: 0, reason: 'miss' });
       expect(result.state.ball).toBeNull();
     }
+  });
+});
+
+describe('Table Tennis side exits', () => {
+  it.each([{ y: 1, vy: -5, hitter: 0 }, { y: 399, vy: 5, hitter: 1 }])('ends a side exit without returning it into play ($y)', ({ y, vy, hitter }) => {
+    const engine = new TableTennisEngine([{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }]);
+    engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
+    (engine as any).updateState({ ...engine.state, ball: { ...engine.state.ball, x: 300, y, vy, lastHitSeat: hitter } });
+    const result = engine.tick();
+    expect(result.state.ball).toBeNull();
+    expect(result.state.phase).toBe('serve');
+    expect(result.state.players[1 - hitter].score).toBe(1);
+    expect(result.events).toContainEqual({ type: 'point-scored', winnerSeat: 1 - hitter, reason: 'out' });
+    engine.tick();
+    expect(engine.state.totalPointsPlayed).toBe(1);
   });
 });

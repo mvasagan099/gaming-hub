@@ -406,7 +406,7 @@ describe("GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM", () => {
       countdownTick(room, 0); // Reaches 0
       expect(room.status).toBe("playing");
       expect(room.matchStartedAt).toBeGreaterThan(0);
-      expect(room.matchDeadline).toBe(room.matchStartedAt! + 600_000); // 10m timer starts HERE
+      expect(room.matchDeadline).toBe(room.matchStartedAt! + (room.gameId === "table-tennis" ? 180_000 : 600_000)); // 10m timer starts HERE
     });
 
     it("cancels countdown if a player disconnects during countdown", () => {
@@ -459,8 +459,8 @@ describe("GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM", () => {
         countdownTick(room, 0);
         expect(room.status).toBe("playing");
         expect(room.matchStartedAt).toBeDefined();
-        expect(room.matchDeadline).toBe(room.matchStartedAt! + 600_000);
-        expect(room.configSnapshot?.matchDurationSeconds).toBe(600);
+        expect(room.matchDeadline).toBe(room.matchStartedAt! + (room.gameId === "table-tennis" ? 180_000 : 600_000));
+        expect(room.configSnapshot?.matchDurationSeconds).toBe(gameId === "table-tennis" ? 180 : 600);
 
         // Reset for next game test
         userActiveRooms.clear();
@@ -566,7 +566,7 @@ describe("GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM", () => {
       countdownTick(room, 0);
       expect(room.status).toBe("playing");
       expect(room.matchStartedAt).toBeDefined();
-      expect(room.matchDeadline).toBe(room.matchStartedAt! + 600_000);
+      expect(room.matchDeadline).toBe(room.matchStartedAt! + (room.gameId === "table-tennis" ? 180_000 : 600_000));
     });
   });
 });

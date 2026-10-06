@@ -66,10 +66,10 @@ export class TableTennis3DRenderer {
     const { logicalWidth, logicalHeight } = TABLE_TENNIS_VISUAL_CONFIG;
 
     // u ∈ [0, 1] across table width (left to right)
-    const u = Math.max(0, Math.min(1, ly / logicalHeight));
+    const u = ly / logicalHeight;
 
     // v ∈ [0, 1] along table depth (0 = Far Baseline at top, 1 = Near Baseline at bottom)
-    const v = Math.max(0, Math.min(1, 1 - lx / logicalWidth));
+    const v = 1 - lx / logicalWidth;
 
     // Bilinear interpolation across trapezoid
     const topX = corners.topLeft.x + (corners.topRight.x - corners.topLeft.x) * u;
@@ -93,13 +93,11 @@ export class TableTennis3DRenderer {
   static calculateBallZ(ball: { x: number; y: number; vx: number; vy: number; inPlay: boolean }): number {
     if (!ball.inPlay) return 14; // Rest height on paddle
 
-    // Ball bounces on table half: 0..300 (near court) and 300..600 (far court)
-    const courtPhase = (ball.x % 300) / 300; // 0 to 1 across half-court
-    const apexHeight = TABLE_TENNIS_VISUAL_CONFIG.ball.maxApexHeight;
-
-    // Parabolic arc: 4 * apex * p * (1 - p) + minimum clearance
-    const arc = 4 * apexHeight * courtPhase * (1 - courtPhase);
-    return Math.max(8, arc + 12);
+    // Bounce at the middle of each half (150/450); crest above the net (300).
+    // The old half-court modulo reset the height to 12 exactly at the net.
+    const phase = Math.PI * ball.x / 300;
+    const arc = TABLE_TENNIS_VISUAL_CONFIG.ball.maxApexHeight * Math.cos(phase) ** 2;
+    return 12 + arc;
   }
 
   /**

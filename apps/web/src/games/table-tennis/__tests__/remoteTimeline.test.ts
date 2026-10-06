@@ -47,3 +47,22 @@ describe('Table Tennis remote playback', () => {
     expect(timeline.ball(15000)).toBeNull();
   });
 });
+
+import { TableTennis3DRenderer } from '../utils/tableTennis3DRenderer';
+import { TABLE_TENNIS_VISUAL_CONFIG } from '../constants/tableTennisVisualConfig';
+
+describe('Table Tennis ball geometry', () => {
+  it('clears the net continuously from both directions', () => {
+    for (const x of [290, 299, 300, 301, 310]) {
+      for (const vx of [-5, 5]) {
+        const z = TableTennis3DRenderer.calculateBallZ({ x, y: 200, vx, vy: 0, inPlay: true });
+        expect(z - TABLE_TENNIS_VISUAL_CONFIG.ballRadius * 1.35).toBeGreaterThan(TABLE_TENNIS_VISUAL_CONFIG.net.height);
+      }
+    }
+  });
+  it('projects out-of-board positions outside the table rather than clamping them back', () => {
+    expect(TableTennis3DRenderer.project(300, -20).x).toBeLessThan(TableTennis3DRenderer.project(300, 0).x);
+    expect(TableTennis3DRenderer.project(300, 420).x).toBeGreaterThan(TableTennis3DRenderer.project(300, 400).x);
+    expect(TableTennis3DRenderer.project(-20, 200).tableY).toBeGreaterThan(TableTennis3DRenderer.project(0, 200).tableY);
+  });
+});

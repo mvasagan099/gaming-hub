@@ -238,7 +238,7 @@ export const DEFAULT_GAME_CONFIGS: Record<GameId, GameConfig> = {
     defaultEntryFee: 100,
     reconnectWindowSeconds: 30,
     turnTimerSeconds: 0,
-    matchDurationSeconds: 600,
+    matchDurationSeconds: 180,
     timeoutResolution: "CURRENT_MATCH_SCORE",
     allowDraw: true,
     prizeMode: "WINNER_PERCENTAGE",

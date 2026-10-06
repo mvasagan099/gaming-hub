@@ -37,7 +37,7 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
 
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: TableTennisEngineOptions) {
     const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 5000 };
-    const matchTimer = options?.matchTimer ?? { matchDurationMs: 180000, warningThresholdMs: 30000 };
+    const matchTimer = { matchDurationMs: 180000, warningThresholdMs: 30000 };
     super(players, rng, {
       turnTimer,
       matchTimer,
@@ -261,15 +261,10 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     ball.x += ball.vx;
     ball.y += ball.vy;
 
-    if (ball.y <= BALL_RADIUS) {
-      ball.y = BALL_RADIUS;
-      ball.vy = Math.abs(ball.vy);
-      ball.bounceCount++;
-    }
-    if (ball.y >= CANVAS_HEIGHT - BALL_RADIUS) {
-      ball.y = CANVAS_HEIGHT - BALL_RADIUS;
-      ball.vy = -Math.abs(ball.vy);
-      ball.bounceCount++;
+    // There are no side cushions on a table tennis table. An off-table shot
+    // loses the point for the last hitter instead of bouncing back into play.
+    if (ball.y < 0 || ball.y > CANVAS_HEIGHT) {
+      return this.awardPoint(next, 1 - (ball.lastHitSeat ?? ball.servedBySeat), "out");
     }
 
     for (const player of next.players) {

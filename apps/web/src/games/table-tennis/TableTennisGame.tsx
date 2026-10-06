@@ -354,6 +354,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
   }, []);
 
   const handleScore = useCallback((player: 1 | 2) => {
+    ballRef.current.inPlay = false;
+    trailRef.current = [];
     const state = stateRef.current;
     if (player === 1) state.p1Score++;
     else state.p2Score++;
@@ -505,23 +507,16 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       ball.x += ball.vx * (dt * 60);
       ball.y += ball.vy * (dt * 60);
 
-      // Top and Bottom table boundary cushions
-      if (ball.y <= 6) {
-        ball.y = 6;
-        ball.vy *= -1;
-        spawnParticles(ball.x, 0, '#ffffff', 4, 0.5);
-      }
-      if (ball.y >= LOGICAL_HEIGHT - 6) {
-        ball.y = LOGICAL_HEIGHT - 6;
-        ball.vy *= -1;
-        spawnParticles(ball.x, LOGICAL_HEIGHT, '#ffffff', 4, 0.5);
+      // Side exits end the rally; a table has no walls to return the ball.
+      if (ball.y < 0 || ball.y > LOGICAL_HEIGHT) {
+        handleScore(ball.vx > 0 ? 2 : 1);
       }
 
       const ballRadius = 6;
 
       // P1 Paddle Collision (with anti-tunneling margin)
       if (
-        ball.vx < 0 &&
+        ball.inPlay && ball.vx < 0 &&
         ball.x - ballRadius <= 48 &&
         ball.x + ballRadius >= 10 &&
         ball.y >= p1.y - ballRadius - 6 &&
@@ -540,7 +535,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
       // P2 Paddle Collision (with anti-tunneling margin)
       if (
-        ball.vx > 0 &&
+        ball.inPlay && ball.vx > 0 &&
         ball.x + ballRadius >= LOGICAL_WIDTH - 48 &&
         ball.x - ballRadius <= LOGICAL_WIDTH - 10 &&
         ball.y >= p2.y - ballRadius - 6 &&
@@ -557,8 +552,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         setRallyCount(rallyCountRef.current);
       }
 
-      if (ball.x < -20) handleScore(2);
-      if (ball.x > LOGICAL_WIDTH + 20) handleScore(1);
+      if (ball.inPlay && ball.x < -20) handleScore(2);
+      if (ball.inPlay && ball.x > LOGICAL_WIDTH + 20) handleScore(1);
     }
 
     // Particle decay
