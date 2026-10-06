@@ -24,6 +24,7 @@ import { registerRoomLifecycleHandlers } from "./roomHandlers";
 import { GameEventBus } from "./events/GameEventBus";
 import { GameStateSyncManager } from "./sync/GameStateSyncManager";
 import { createAndFundRoomMatch, settleMatch, cancelMatch } from "./apiClient";
+import { checkInternalApiAuth } from "./internalApiCheck";
 
 const logger = pino({
   level: env.LOG_LEVEL,
@@ -1089,6 +1090,7 @@ async function main(): Promise<void> {
 
   httpServer.listen(env.PORT, "0.0.0.0", () => {
     logger.info(`Socket server listening on port ${env.PORT}`);
+    void checkInternalApiAuth(env.API_URL, env.INTERNAL_API_KEY, logger);
   });
 
   const shutdown = async () => {
