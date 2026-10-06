@@ -82,6 +82,54 @@ describe("MatchManager pipeline", () => {
     expect(broadcastRoom.match?.matchId).toBeTruthy();
   });
 
+  it("does not publish a playing match until funding succeeds", async () => {
+    const roomId = await setupChessRoom(framework);
+    const room = framework.roomManager.getRoom(roomId)!;
+    let finishFunding!: () => void;
+    const funding = new Promise<void>(resolve => { finishFunding = resolve; });
+    framework.config.onMatchStarting = vi.fn(async () => { await funding; });
+    const broadcast = vi.spyOn(framework.syncManager, "broadcastMatchStart");
+    const monitor = vi.spyOn(framework.playerManager, "startAfkMonitoring");
+    const starting = framework.matchManager.startMatch({ roomId, startedBy: "p1" });
+    await vi.waitFor(() => expect(framework.config.onMatchStarting).toHaveBeenCalledOnce());
+    expect(room.status).toBe("starting");
+    expect(room.match).toBeNull();
+    expect(broadcast).not.toHaveBeenCalled();
+    expect(monitor).not.toHaveBeenCalled();
+    await expect(framework.matchManager.startMatch({ roomId, startedBy: "p1" })).rejects.toThrow("Match already started");
+    finishFunding();
+    await starting;
+    expect(room.status).toBe("playing");
+    expect(broadcast).toHaveBeenCalledOnce();
+  });
+
+  it("funds only one match when two start requests arrive together", async () => {
+    const roomId = await setupChessRoom(framework);
+    const funding = vi.fn().mockResolvedValue(undefined);
+    framework.config.onMatchStarting = funding;
+    const results = await Promise.allSettled([
+      framework.matchManager.startMatch({ roomId, startedBy: "p1" }),
+      framework.matchManager.startMatch({ roomId, startedBy: "p1" }),
+    ]);
+    expect(funding).toHaveBeenCalledOnce();
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+  });
+
+  it("does not cancel an uncreated database match when funding fails", async () => {
+    const roomId = await setupChessRoom(framework);
+    const room = framework.roomManager.getRoom(roomId)!;
+    framework.config.onMatchStarting = vi.fn().mockRejectedValue(new Error("funding failed"));
+    const abort = vi.spyOn(framework.matchManager, "abortMatch");
+    const monitor = vi.spyOn(framework.playerManager, "startAfkMonitoring");
+    await expect(framework.matchManager.startMatch({ roomId, startedBy: "p1" })).rejects.toThrow("funding failed");
+    expect(room.status).toBe("waiting");
+    expect(room.match).toBeNull();
+    expect(monitor).not.toHaveBeenCalled();
+    framework.roomManager.closeRoom(roomId, "matchmaking_failed");
+    expect(abort).not.toHaveBeenCalled();
+  });
+
   it("rejects out-of-turn and spectator actions in the pipeline", async () => {
     const roomId = await setupChessRoom(framework);
     await framework.matchManager.startMatch({ roomId, startedBy: "p1" });

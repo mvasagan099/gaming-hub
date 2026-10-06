@@ -168,6 +168,11 @@ export class MatchManager {
     
     // Import and create game engine
     const { createEngine, secureRandomSource } = await import("@gaming-hub/game-engine");
+    // A second request can enter while the import yields. Recheck before the
+    // synchronous engine setup and the starting transition/funding hook.
+    if (room.status !== "waiting") {
+      throw new Error("Match already started");
+    }
     
     const engineOptions: Record<string, unknown> = {};
     
@@ -225,7 +230,19 @@ export class MatchManager {
       state: engine.serialize(),
     });
     
-    // Update room
+    // Keep the room unavailable to actions or another start until funding is
+    // confirmed. Failed funding must not register an active match or timers.
+    room.status = "starting";
+    try {
+      if (this.framework.config.onMatchStarting) {
+        await this.framework.config.onMatchStarting(room, matchId);
+      }
+    } catch (error) {
+      room.status = "waiting";
+      throw error;
+    }
+
+    // Update room only after the lifecycle prerequisite succeeds.
     room.match = match;
     room.status = "playing";
     
@@ -237,11 +254,6 @@ export class MatchManager {
       this.framework.playerManager.startAfkMonitoring(player.id, roomId);
     }
     
-    // Lifecycle hook before broadcasting match start (e.g. wagers/funding)
-    if (this.framework.config.onMatchStarting) {
-      await this.framework.config.onMatchStarting(room, matchId);
-    }
-
     // Schedule clock check
     this.scheduleClockCheck(room);
     

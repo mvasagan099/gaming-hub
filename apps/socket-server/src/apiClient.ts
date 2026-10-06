@@ -1,4 +1,6 @@
 import { env } from "./env";
+import type { MatchFundingRequest } from "@gaming-hub/shared";
+import type { RoomRuntime } from "@gaming-hub/multiplayer";
 
 interface ApiResponse<T> {
   ok: boolean;
@@ -32,18 +34,32 @@ async function internalRequest<T>(
 }
 
 /** Atomically creates the match record, player entries, and debits entry stakes. */
-export function createAndFundMatch(params: {
-  matchId: string;
-  roomId?: string | null;
-  gameId: string;
-  stake: number;
-  players: { userId: string; seat: number }[];
-}) {
+export function createAndFundMatch(params: MatchFundingRequest) {
   return internalRequest<{ ok: true; status: string; matchId: string }>(
     "POST",
     "/internal/matches/create-and-fund",
-    params as Record<string, unknown>,
+    { ...params },
   );
+}
+
+/** Include the framework's in-memory room so the API can persist its FK. */
+export function createAndFundRoomMatch(room: RoomRuntime, matchId: string) {
+  const participants = [...room.players.values()].filter(p => !p.isSpectator && p.seat !== null);
+  return createAndFundMatch({
+    matchId,
+    roomId: room.id,
+    gameId: room.config.gameId,
+    stake: room.config.stake,
+    players: participants.map(p => ({ userId: p.userId || p.id, seat: p.seat! })),
+    room: {
+      code: room.code,
+      hostId: room.hostId,
+      isPrivate: room.config.isPrivate,
+      minPlayers: room.config.minPlayers,
+      maxPlayers: room.config.maxPlayers,
+      settings: JSON.parse(JSON.stringify(room.config.settings)),
+    },
+  });
 }
 
 /** Debits every participant's entry stake and marks the match ACTIVE. */

@@ -20,7 +20,7 @@ import { authenticateToken, type AuthenticatedUser } from "./auth";
 import { assertFeatureEnabled } from "./settings";
 import { GameEventBus } from "./events/GameEventBus";
 import { GameStateSyncManager } from "./sync/GameStateSyncManager";
-import { createAndFundMatch, settleMatch, cancelMatch } from "./apiClient";
+import { createAndFundRoomMatch, settleMatch, cancelMatch } from "./apiClient";
 
 const logger = pino({
   level: env.LOG_LEVEL,
@@ -439,14 +439,7 @@ async function main(): Promise<void> {
     debug: env.LOG_LEVEL === "debug",
     onMatchStarting: async (room, matchId) => {
       if (room.config.stake > 0) {
-        const participants = [...room.players.values()].filter((p) => !p.isSpectator && p.seat !== null);
-        await createAndFundMatch({
-          matchId,
-          roomId: room.id,
-          gameId: room.config.gameId,
-          stake: room.config.stake,
-          players: participants.map((p) => ({ userId: p.userId || p.id, seat: p.seat! })),
-        });
+        await createAndFundRoomMatch(room, matchId);
       }
     },
     onMatchFinished: async (room, matchResult) => {

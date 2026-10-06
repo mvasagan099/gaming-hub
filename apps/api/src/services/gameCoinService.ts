@@ -1,6 +1,6 @@
 import { prisma } from "@gaming-hub/db";
 import { AppError, getGameDefinition, isGameId } from "@gaming-hub/shared";
-import type { GameId } from "@gaming-hub/shared";
+import type { GameId, MatchFundingRequest } from "@gaming-hub/shared";
 import { WalletTransactionService } from "./walletTransactionService";
 import { IdempotencyService } from "./idempotencyService";
 import { applyTransaction } from "./wallet";
@@ -91,18 +91,25 @@ export class GameCoinService {
    * If any participant lacks sufficient balance or if match creation fails,
    * the entire transaction rolls back cleanly with 0 coins deducted.
    */
-  static async createAndFundMatch(params: {
-    matchId: string;
-    roomId?: string | null;
-    gameId: GameId;
-    stake: number;
-    players: { userId: string; seat: number }[];
-  }) {
+  static async createAndFundMatch(params: MatchFundingRequest) {
     if (!isGameId(params.gameId)) {
       throw new AppError("VALIDATION_ERROR", `Invalid game ID: ${params.gameId}`, 400);
     }
     if (params.stake < 0) {
       throw new AppError("VALIDATION_ERROR", "Stake cannot be negative", 400);
+    }
+    if (params.room) {
+      const room = params.room;
+      const def = getGameDefinition(params.gameId);
+      if (!params.roomId || !room.code || !params.players.some(p => p.userId === room.hostId) ||
+          room.minPlayers !== def.minPlayers || !Number.isInteger(room.maxPlayers) ||
+          room.maxPlayers < room.minPlayers || room.maxPlayers > def.maxPlayers ||
+          params.players.length < room.minPlayers || params.players.length > room.maxPlayers ||
+          new Set(params.players.map(p => p.userId)).size !== params.players.length ||
+          new Set(params.players.map(p => p.seat)).size !== params.players.length ||
+          params.players.some(p => !Number.isInteger(p.seat) || p.seat < 0 || p.seat >= room.maxPlayers)) {
+        throw new AppError("VALIDATION_ERROR", "Invalid authoritative multiplayer room snapshot", 400);
+      }
     }
 
     // Authoritative check on game & entry fee
@@ -144,6 +151,36 @@ export class GameCoinService {
         });
         if (existing) {
           return existing;
+        }
+
+        // Framework rooms initially exist only in memory. Persist the trusted
+        // socket snapshot in the same transaction as the match and its debits.
+        // A funding failure therefore rolls back the room as well.
+        if (params.roomId) {
+          const existingRoom = await tx.room.findUnique({ where: { id: params.roomId } });
+          if (params.room) {
+            const room = params.room;
+            if (existingRoom && (existingRoom.gameId !== params.gameId ||
+                existingRoom.hostId !== room.hostId || existingRoom.code !== room.code ||
+                existingRoom.stake !== params.stake)) {
+              throw new AppError("VALIDATION_ERROR", "Multiplayer room identity does not match its persisted record", 400);
+            }
+            if (!existingRoom) {
+              await tx.room.create({ data: {
+                id: params.roomId, code: room.code, hostId: room.hostId,
+                gameId: params.gameId, stake: params.stake, status: "PLAYING",
+                isPrivate: room.isPrivate, minPlayers: room.minPlayers, maxPlayers: room.maxPlayers,
+                settings: room.settings,
+                players: { create: params.players.map(p => ({
+                  userId: p.userId, seat: p.seat, isReady: true, isHost: p.userId === room.hostId,
+                })) },
+              } });
+            } else {
+              await tx.room.update({ where: { id: params.roomId }, data: { status: "PLAYING" } });
+            }
+          } else if (!existingRoom) {
+            throw new AppError("NOT_FOUND", "Multiplayer room must exist or include its authoritative snapshot", 404);
+          }
         }
 
         // Create Match record with status ACTIVE

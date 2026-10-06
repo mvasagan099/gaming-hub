@@ -1,5 +1,23 @@
 import type { GameId } from "./games";
 import type { MatchSettings } from "./room";
+import type { JsonObject } from "./json";
+
+/** Trusted socket-to-API request; room and funding are persisted atomically. */
+export interface MatchFundingRequest {
+  matchId: string;
+  roomId?: string | null;
+  gameId: GameId;
+  stake: number;
+  players: { userId: string; seat: number }[];
+  room?: {
+    code: string;
+    hostId: string;
+    isPrivate: boolean;
+    minPlayers: number;
+    maxPlayers: number;
+    settings: JsonObject;
+  };
+}
 
 export type MatchmakingStatus = "WAITING" | "MATCHED" | "CANCELLED" | "EXPIRED";
 

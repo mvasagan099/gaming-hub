@@ -1,4 +1,4 @@
-import type { Server } from "socket.io";
+import type { Server, Socket } from "socket.io";
 import { MultiplayerFramework } from "../src/framework";
 import { createEngine } from "@gaming-hub/game-engine";
 import type { GameId } from "@gaming-hub/shared";

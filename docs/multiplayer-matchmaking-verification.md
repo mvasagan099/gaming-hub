@@ -1,5 +1,15 @@
 # Multiplayer matchmaking verification
 
+## Follow-up: paid startup failure confirmed
+
+The subsequent two-account logs on 2026-10-06 exposed a separate real defect:
+paid startup failed with Prisma `P2003` / `Match_roomId_fkey`. Framework rooms
+were in memory while the API expected a persisted room. The earlier zero-stake
+tests below did not cover that funding path. See
+[the funded startup fix and current verification](multiplayer-match-start-fix.md).
+Single-account waiting remains expected; two compatible funded accounts must
+start successfully.
+
 Date: 2026-10-06 (Asia/Kolkata). Baseline: `d04d907`.
 
 ## Reported behavior

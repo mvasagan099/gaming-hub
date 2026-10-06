@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { AppError } from "@gaming-hub/shared";
+import type { MatchFundingRequest } from "@gaming-hub/shared";
 import { env } from "../env";
 import { routeParams, queryString } from "../lib/http";
 import { holdMatchWagers, settleMatch, GameCoinService } from "../services/settlement";
@@ -23,13 +24,7 @@ export async function internalRoutes(app: FastifyInstance) {
 
   app.post("/internal/matches/create-and-fund", { config: INTERNAL_CONFIG }, async (request) => {
     try {
-      const body = (request.body ?? {}) as {
-        matchId: string;
-        roomId?: string | null;
-        gameId: import("@gaming-hub/shared").GameId;
-        stake: number;
-        players: { userId: string; seat: number }[];
-      };
+      const body = (request.body ?? {}) as MatchFundingRequest;
       const match = await GameCoinService.createAndFundMatch(body);
       return { ok: true, status: match.status, matchId: match.id };
     } catch (error) {
