@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useParams, useLocation, useNavigate, Navigate } from 'react-router-dom';
 const SnakeLadder = lazy(() => import("../../games/snake-ladder").then(m => ({ default: m.SnakeLadder })));
 const LudoGame = lazy(() => import("../../games/ludo/LudoGame").then(m => ({ default: m.LudoGame })));
@@ -25,26 +25,31 @@ export const GamePage: React.FC = () => {
   const stake = state?.stake !== undefined ? state.stake : (mode === 'multiplayer' ? 100 : 0);
 
   const room = useMultiplayerStore((s) => s.room);
+  const matchId = useMultiplayerStore((s) => s.matchId);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
 
-  // Trap browser/hardware back button or mobile swipe gesture during active match
+  const exitInProgress = useRef(false);
+  const activeRoute = useRef<{ gameId: string | undefined; mode: string } | null>(null);
+
+  // Back/gesture navigation is owned by the router, never by the Exit dialog.
+  // Drivers clean up their listeners on unmount; this route owns room membership.
   useEffect(() => {
-    if (mode !== 'multiplayer' || room?.status !== 'playing' || isExiting) return;
-
-    window.history.pushState({ matchGuarded: true }, '');
-
-    const handlePopState = (e: PopStateEvent) => {
-      e.preventDefault();
-      window.history.pushState({ matchGuarded: true }, '');
-      setShowExitConfirm(true);
-    };
-
-    window.addEventListener('popstate', handlePopState);
+    activeRoute.current = { gameId, mode };
+    const currentRoom = useMultiplayerStore.getState().room;
+    const roomId = mode === 'multiplayer' && currentRoom && currentRoom.gameId === gameId ? currentRoom.id : null;
     return () => {
-      window.removeEventListener('popstate', handlePopState);
+      activeRoute.current = null;
+      // React StrictMode replays effects without leaving the page. Let that
+      // immediate remount cancel the leave, but still leave on real navigation.
+      queueMicrotask(() => {
+        const replacement = activeRoute.current;
+        if (replacement?.gameId === gameId && replacement?.mode === mode) return;
+        const store = useMultiplayerStore.getState();
+        if (roomId && store.room?.id === roomId) void store.leaveRoom();
+      });
     };
-  }, [mode, room?.status, isExiting]);
+  }, [gameId, mode]);
 
   if (!gameId || !isGameId(gameId)) {
     return <Navigate to="/" replace />;
@@ -53,11 +58,16 @@ export const GamePage: React.FC = () => {
   const onBack = () => setShowExitConfirm(true);
 
   const confirmExit = async () => {
-    if (isExiting) return;
+    if (exitInProgress.current) return;
+    exitInProgress.current = true;
+    setShowExitConfirm(false);
     setIsExiting(true);
     if (mode === 'multiplayer') {
+      const owner = activeRoute.current;
       await useMultiplayerStore.getState().leaveRoom();
-      navigate(`/lobby/${gameId}`);
+      // Back may have already navigated while the leave ACK was in flight.
+      if (activeRoute.current !== owner) return;
+      goBackOrHome(navigate, `/lobby/${gameId}`);
     } else {
       goBackOrHome(navigate);
     }
@@ -85,7 +95,9 @@ export const GamePage: React.FC = () => {
   }
 
   return <>
-    <Suspense fallback={<div role="status" className="p-10 text-center">Loading game…</div>}>{game}</Suspense>
+    {/* A new authoritative match owns a fresh game instance, including its
+        animations, result modal and driver. Room membership remains intact. */}
+    <Suspense key={mode === 'multiplayer' ? matchId : gameId} fallback={<div role="status" className="p-10 text-center">Loading game…</div>}>{game}</Suspense>
     <ConfirmDialog
       isOpen={showExitConfirm}
       onClose={() => setShowExitConfirm(false)}

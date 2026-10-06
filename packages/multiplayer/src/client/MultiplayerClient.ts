@@ -38,6 +38,7 @@ export type GameOverListener = (payload: {
 
 export class MultiplayerClient {
   private socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
+  private readonly matchIds = new Map<string, string>();
   private config: MultiplayerClientConfig;
   private connectionState: ConnectionState = {
     connected: false,
@@ -107,6 +108,7 @@ export class MultiplayerClient {
    * Disconnect from the server.
    */
   disconnect(): void {
+    this.matchIds.clear();
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
@@ -186,6 +188,7 @@ export class MultiplayerClient {
       
       this.socket.emit("room:leave", { roomId }, (response) => {
         if (response.ok) {
+          this.matchIds.delete(roomId);
           resolve();
         } else {
           reject(new Error(response.error.message));
@@ -244,7 +247,9 @@ export class MultiplayerClient {
         return;
       }
       
-      this.socket.emit("game:action", { roomId, action }, (response) => {
+      const matchId = this.matchIds.get(roomId);
+      if (!matchId) { reject(new Error("No active match state")); return; }
+      this.socket.emit("game:action", { roomId, matchId, action }, (response) => {
         if (response.ok) {
           resolve(response.data);
         } else {
@@ -489,6 +494,7 @@ export class MultiplayerClient {
     
     // Game state updates
     this.socket.on("game:state", (payload) => {
+      this.matchIds.set(payload.roomId, payload.matchId);
       for (const listener of this.gameStateListeners) {
         listener(payload.state, payload.events);
       }
@@ -496,10 +502,13 @@ export class MultiplayerClient {
     
     // Room updates
     this.socket.on("room:update", (room) => {
+      if (room.matchId) this.matchIds.set(room.id, room.matchId);
+      else this.matchIds.delete(room.id);
       for (const listener of this.roomUpdateListeners) {
         listener(room);
       }
     });
+    this.socket.on("room:closed", ({ roomId }) => { this.matchIds.delete(roomId); });
     
     // Game over
     this.socket.on("game:over", (payload) => {

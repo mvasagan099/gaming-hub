@@ -55,7 +55,7 @@ export class AntiCheatManager {
   private readonly actionHistory = new Map<string, number[]>(); // playerId -> action timestamps
   private readonly suspiciousEvents = new Map<string, SuspiciousEvent[]>(); // playerId -> events
   private readonly actionSequences = new Map<string, number>(); // playerId -> last sequence number
-  private readonly processedActionCache = new Map<string, { timestamp: number; result: any }>(); // roomId:actionId -> cached result
+  private readonly processedActionCache = new Map<string, { timestamp: number; result: any }>(); // match/player scope + actionId
   private readonly playerRiskScores = new Map<string, number>(); // playerId -> internal fair play risk score (0-100)
   
   constructor(framework: MultiplayerFramework, config?: Partial<AntiCheatConfig>) {
@@ -98,9 +98,9 @@ export class AntiCheatManager {
   /**
    * Check if an actionId was already processed to guarantee idempotency.
    */
-  getCachedActionResult(roomId: string, actionId?: string): any | null {
+  getCachedActionResult(actionScope: string, actionId?: string): any | null {
     if (!actionId) return null;
-    const key = `${roomId}:${actionId}`;
+    const key = `${actionScope}:${actionId}`;
     const cached = this.processedActionCache.get(key);
     return cached ? cached.result : null;
   }
@@ -108,9 +108,9 @@ export class AntiCheatManager {
   /**
    * Cache a processed action result for idempotency.
    */
-  cacheActionResult(roomId: string, actionId: string | undefined, result: any): void {
+  cacheActionResult(actionScope: string, actionId: string | undefined, result: any): void {
     if (!actionId) return;
-    const key = `${roomId}:${actionId}`;
+    const key = `${actionScope}:${actionId}`;
     this.processedActionCache.set(key, { timestamp: Date.now(), result });
 
     // Prune entries older than 2 minutes if cache grows large

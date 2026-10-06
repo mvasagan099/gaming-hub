@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { GameId } from '../types';
-import { ArrowLeft, Copy, Check, Eye, Timer, Volume2, VolumeX, X, Zap, Users, Globe, Lock, Coins } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Eye, Timer, Zap, Users, Globe, Lock, Coins } from 'lucide-react';
 import { useMultiplayerStore } from '../store/multiplayerStore';
 
 interface GameWrapperProps {
@@ -34,29 +34,14 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
   hideFloatingExitOnMobile = false,
   hideFloatingExitOnDesktop = false,
 }) => {
-  const [isMuted, setIsMuted] = useState(false);
   const [copied, setCopied] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
   const room = useMultiplayerStore((s) => s.room);
-  const isMatchFinished = isGameOver || room?.status === 'ended';
   const startRef = useRef<number>(Date.now());
 
   // Visible exit controls request confirmation from the game route.
   const handleExitRequest = () => onBack();
-
-  // Prevent accidental tab reload / close during an active match
-  useEffect(() => {
-    if (isMatchFinished) return;
-
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isMatchFinished]);
 
   useEffect(() => {
     if (!room) return;
@@ -120,14 +105,17 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
         {/* Compact HUD bar — top in multiplayer */}
         {mode === 'multiplayer' && room && (
           <div className="z-[65] flex items-center justify-between px-3 sm:px-4 py-2 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 flex-shrink-0 gap-2">
-            {/* Left: back + game title */}
+            {/* Multiplayer uses one shared exit; practice games may own their exit. */}
             <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 shrink">
               <button
+                type="button"
+                aria-label="Exit Game"
+                title="Exit Game"
                 onClick={handleExitRequest}
                 className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition-colors border border-slate-700 shrink-0 cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Lobby</span>
+                <span className="hidden sm:inline">Exit</span>
               </button>
               <span className="text-xs sm:text-sm font-black text-white truncate max-w-[80px] sm:max-w-[140px]">{title}</span>
               <span className={`hidden md:inline-flex text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
@@ -180,22 +168,6 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
                 </span>
               </div>
 
-              {/* Sound toggle */}
-              <button
-                onClick={() => setIsMuted(!isMuted)}
-                className="p-1 sm:p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700 transition-colors shrink-0 cursor-pointer"
-                title={isMuted ? "Unmute" : "Mute"}
-              >
-                {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-indigo-400" />}
-              </button>
-              {/* Close / Leave */}
-              <button
-                onClick={handleExitRequest}
-                className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800/80 hover:bg-rose-500 hover:text-white text-slate-300 transition-all border border-slate-700/60 shrink-0 cursor-pointer"
-                title="Quit Game"
-              >
-                <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
             </div>
           </div>
         )}
@@ -215,11 +187,14 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
       <div className="w-full max-w-6xl flex flex-wrap sm:flex-nowrap items-center justify-between py-2.5 px-3 sm:px-6 rounded-2xl glass-panel border border-slate-200 dark:border-slate-800 shadow-xl mb-4 z-20 gap-2 shrink-0">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <button
+            type="button"
+            aria-label="Exit Game"
+            title="Exit Game"
             onClick={handleExitRequest}
             className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 transition-colors border border-slate-200 dark:border-slate-700 shrink-0 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
-            <span className="hidden sm:inline">Back to Lobby</span>
+            <span className="hidden sm:inline">Exit</span>
           </button>
           <div className="min-w-0">
             <h1 className="text-sm sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-1.5 sm:gap-2 truncate">
@@ -266,12 +241,6 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
             </span>
           </div>
 
-          <button
-            onClick={() => setIsMuted(!isMuted)}
-            className="p-1.5 sm:p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
-          >
-            {isMuted ? <VolumeX className="w-4 h-4 text-rose-500" /> : <Volume2 className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />}
-          </button>
         </div>
       </div>
 

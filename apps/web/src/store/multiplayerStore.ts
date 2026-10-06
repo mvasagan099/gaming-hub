@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import toast from "react-hot-toast";
 import type {
   ChatEmoji,
   ChatMessage,
@@ -181,6 +182,28 @@ function clearRoom(set: (partial: Partial<MultiplayerState>) => void) {
   });
 }
 
+async function sendRematchConsent(
+  event: "game:rematch-request" | "game:rematch-accept" | "game:rematch-decline",
+  get: () => MultiplayerState,
+  set: (partial: Partial<MultiplayerState>) => void,
+) {
+  const { socket, room, matchId } = get();
+  if (!socket || !room) return;
+  set({ error: null });
+  try {
+    const update = unwrapAck<RematchUpdate>(await socket.emitWithAck(event, { roomId: room.id }));
+    // A start broadcast can beat its ACK. Never restore the old vote ledger.
+    if (get().room?.id !== room.id || get().matchId !== matchId) return;
+    set({ rematchState: update.active ? { requestedBy: update.requestedBy, active: true } : null });
+    if (update.active && event !== "game:rematch-decline") toast.success("Rematch requested. Waiting for the other players.");
+  } catch (error) {
+    if (get().room?.id !== room.id || get().matchId !== matchId) return;
+    const message = error instanceof Error ? error.message : "Could not start the rematch. Please try again.";
+    set({ error: message });
+    toast.error(message);
+  }
+}
+
 export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   socket: null,
   status: "idle",
@@ -288,6 +311,9 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       socket.on("room:closed", () => clearRoom(set));
 
       socket.on("game:state", (payload) => {
+        const current = get();
+        if (current.room?.id !== payload.roomId || (current.room.matchId && current.room.matchId !== payload.matchId)) return;
+        const newMatch = current.matchId !== payload.matchId;
         console.log("[MultiplayerStore] game:state received", payload.matchId, "with", payload.events.length, "events");
         const gameState = payload.state as any;
         if (gameState?.fen) {
@@ -309,7 +335,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         }
         
         const incomingVersion = (payload as any).sequenceNumber ?? (gameState as any)?.turnNumber ?? 0;
-        if (incomingVersion > 0 && incomingVersion < get().lastStateVersion) {
+        if (!newMatch && incomingVersion > 0 && incomingVersion < get().lastStateVersion) {
           console.warn("[MultiplayerStore] Discarding stale game:state packet:", incomingVersion, "<", get().lastStateVersion);
           return;
         }
@@ -322,7 +348,12 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           winner: null,
           matchmaking: { ...IDLE_MATCHMAKING },
           pendingRequeue: null,
-          lastStateVersion: Math.max(get().lastStateVersion, incomingVersion),
+          lastStateVersion: newMatch ? incomingVersion : Math.max(get().lastStateVersion, incomingVersion),
+          ...(newMatch ? {
+            rematchState: null, authoritativeState: null, actionSequence: 0,
+            lastActionId: null, stateHash: null, disconnectGrace: null,
+            matchDeadline: null, matchTimeExpired: false, matchTimerWarning: null, countdown: null,
+          } : {}),
           renderKey: (get().renderKey || 0) + 1, // Always force re-render
         });
 
@@ -337,6 +368,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
       // ── Centralized Authoritative State Sync Listener ──
       socket.on("game:state:authoritative", (authoritativeState: AuthoritativeMatchState) => {
+        if (get().matchId && get().matchId !== authoritativeState.matchId) return;
         const currentVersion = get().lastStateVersion;
         const incomingVersion = authoritativeState.stateVersion;
 
@@ -385,6 +417,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("game:over", (payload) => {
+        if (get().matchId && get().matchId !== payload.matchId) return;
         set({
           winner: { winnerSeats: payload.winnerSeats, winnerIds: payload.winnerIds },
           gameState: payload.state,
@@ -399,6 +432,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("game:finished", (payload) => {
+        if (get().matchId && get().matchId !== payload.matchId) return;
         console.log("[MultiplayerStore] game:finished received", payload);
         set({
           winner: {
@@ -416,6 +450,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("game:player-disconnected" as any, (payload: { matchId: string; playerId: string; reconnectExpiresAt: number }) => {
+        if (get().matchId && get().matchId !== payload.matchId) return;
         console.log("[MultiplayerStore] game:player-disconnected received", payload);
         set({
           disconnectGrace: {
@@ -426,6 +461,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("game:player-reconnected" as any, (payload: { matchId: string; playerId: string }) => {
+        if (get().matchId && get().matchId !== payload.matchId) return;
         console.log("[MultiplayerStore] game:player-reconnected received", payload);
         const current = get().disconnectGrace;
         if (current && current.playerId === payload.playerId) {
@@ -453,6 +489,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("match:timer-warning" as any, (payload: { matchId: string; remainingSeconds: number; remainingMs: number }) => {
+        if (get().matchId && get().matchId !== payload.matchId) return;
         console.log("[MultiplayerStore] match:timer-warning received", payload);
         set({
           matchTimerWarning: {
@@ -463,6 +500,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("match:time-expired" as any, (payload: { matchId: string; expiredAt: number }) => {
+        if (get().matchId && get().matchId !== payload.matchId) return;
         console.log("[MultiplayerStore] match:time-expired received", payload);
         set({
           matchTimeExpired: true,
@@ -489,6 +527,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       const seenEventIds = new Set<string>();
 
       socket.on("game:event", (envelope: GameEventEnvelope<any>) => {
+        if (get().matchId && get().matchId !== envelope.matchId) return;
         console.log("[MultiplayerStore] game:event received:", envelope.eventType, "stateVersion:", envelope.stateVersion, "id:", envelope.eventId);
 
         // Deduplication
@@ -632,7 +671,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("rematch:update", (update: RematchUpdate) => {
-        set({ rematchState: { requestedBy: update.requestedBy, active: update.active } });
+        if (get().room?.id !== update.roomId) return;
+        set({ rematchState: update.active ? { requestedBy: update.requestedBy, active: true } : null });
       });
 
       socket.on("player:kicked", (payload) => {
@@ -821,30 +861,15 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   },
 
   requestRematch: async () => {
-    const socket = get().socket;
-    const room = get().room;
-    if (!socket || !room) return;
-    const res = await socket.emitWithAck("game:rematch-request", { roomId: room.id });
-    const update = unwrapAck<RematchUpdate>(res);
-    set({ rematchState: { requestedBy: update.requestedBy, active: update.active } });
+    await sendRematchConsent("game:rematch-request", get, set);
   },
 
   acceptRematch: async () => {
-    const socket = get().socket;
-    const room = get().room;
-    if (!socket || !room) return;
-    const res = await socket.emitWithAck("game:rematch-accept", { roomId: room.id });
-    const update = unwrapAck<RematchUpdate>(res);
-    set({ rematchState: { requestedBy: update.requestedBy, active: update.active } });
+    await sendRematchConsent("game:rematch-accept", get, set);
   },
 
   declineRematch: async () => {
-    const socket = get().socket;
-    const room = get().room;
-    if (!socket || !room) return;
-    const res = await socket.emitWithAck("game:rematch-decline", { roomId: room.id });
-    const update = unwrapAck<RematchUpdate>(res);
-    set({ rematchState: { requestedBy: update.requestedBy, active: update.active } });
+    await sendRematchConsent("game:rematch-decline", get, set);
   },
 
   rematch: async () => {
@@ -903,9 +928,11 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const socket = get().socket;
     const room = get().room;
     if (!socket || !room) return { ok: false, error: "You are not in a room" };
+    const matchId = get().matchId;
+    if (!matchId || (room.matchId && room.matchId !== matchId)) return { ok: false, error: "Waiting for the current match state" };
     
     console.log("[MultiplayerStore] Client sending game:action to room", room.id, "with action:", action);
-    const res = await socket.emitWithAck("game:action", { roomId: room.id, action });
+    const res = await socket.emitWithAck("game:action", { roomId: room.id, matchId, action });
     
     if (!res.ok) {
       const errMsg = (res as { error?: { message: string } }).error?.message ?? "Action failed";
@@ -946,6 +973,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       if (res.ok && res.data) {
+        if (get().matchId !== matchId || get().room?.id !== room?.id) return;
         const full = res.data.fullState;
         console.log("[STATE] SYNC_COMPLETED", {
           matchId,

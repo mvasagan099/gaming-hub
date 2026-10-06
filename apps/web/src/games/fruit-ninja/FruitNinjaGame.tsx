@@ -23,6 +23,10 @@ export const FruitNinjaGame: React.FC<FruitNinjaProps> = ({ mode: initialMode, s
   const resetGame = () => setIsPlaying(false);
 
   const handleReplay = () => {
+    if (isMultiplayer) {
+      void useMultiplayerStore.getState().rematch();
+      return;
+    }
     resetGame();
     setTimeout(startGame, 60);
   };

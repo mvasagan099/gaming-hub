@@ -1,0 +1,524 @@
+{
+  "date": "2026-10-06",
+  "baseCommit": "31ee31c",
+  "target": "current working tree",
+  "scope": "Fruit Ninja presentation follow-up",
+  "tests": {
+    "suite": "all web tests",
+    "files": 12,
+    "tests": 101,
+    "passed": 101,
+    "failed": 0,
+    "skipped": 0,
+    "filesExecuted": [
+      {
+        "file": "apps/web/src/components/GameWrapper.test.tsx",
+        "tests": 6,
+        "status": "passed",
+        "cases": [
+          {
+            "name": "shared game HUD controls multiplayer has one Exit even when practice owns its exit (false)",
+            "status": "passed"
+          },
+          {
+            "name": "shared game HUD controls multiplayer has one Exit even when practice owns its exit (true)",
+            "status": "passed"
+          },
+          {
+            "name": "shared game HUD controls does not offer a disconnected mute button (fullscreen true)",
+            "status": "passed"
+          },
+          {
+            "name": "shared game HUD controls does not offer a disconnected mute button (fullscreen false)",
+            "status": "passed"
+          },
+          {
+            "name": "shared game HUD controls practice games with their own exit do not receive floating exits",
+            "status": "passed"
+          },
+          {
+            "name": "shared game HUD controls does not block document Back, and clears its HUD timer on unmount",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "file": "apps/web/src/store/multiplayerStore.leave.test.ts",
+        "tests": 1,
+        "status": "passed",
+        "cases": [
+          {
+            "name": "leaving a multiplayer game clears local membership immediately and sends one leave for repeated requests",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "file": "apps/web/src/store/multiplayerStore.rematch.test.ts",
+        "tests": 6,
+        "status": "passed",
+        "cases": [
+          {
+            "name": "rematch consent and state synchronization binds an action to the current authoritative match",
+            "status": "passed"
+          },
+          {
+            "name": "rematch consent and state synchronization does not send an action before the new match state arrives",
+            "status": "passed"
+          },
+          {
+            "name": "rematch consent and state synchronization sends the room request and shows waiting feedback",
+            "status": "passed"
+          },
+          {
+            "name": "rematch consent and state synchronization shows funding/server errors without an unhandled rejection",
+            "status": "passed"
+          },
+          {
+            "name": "rematch consent and state synchronization resets the result and version for a new match and rejects old-match replay packets",
+            "status": "passed"
+          },
+          {
+            "name": "rematch consent and state synchronization ignores a reconnect snapshot that arrives after a rematch has started",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "file": "apps/web/src/games/fruit-ninja/FruitNinjaPresentation.test.tsx",
+        "tests": 6,
+        "status": "passed",
+        "cases": [
+          {
+            "name": "Fruit Ninja responsive result controls keeps results outside the arena and delegates exit to the shared HUD (portrait true, online false)",
+            "status": "passed"
+          },
+          {
+            "name": "Fruit Ninja responsive result controls keeps results outside the arena and delegates exit to the shared HUD (portrait true, online true)",
+            "status": "passed"
+          },
+          {
+            "name": "Fruit Ninja responsive result controls keeps results outside the arena and delegates exit to the shared HUD (portrait false, online false)",
+            "status": "passed"
+          },
+          {
+            "name": "Fruit Ninja responsive result controls keeps results outside the arena and delegates exit to the shared HUD (portrait false, online true)",
+            "status": "passed"
+          },
+          {
+            "name": "Fruit Ninja responsive result controls keeps the result visible while Exit asks for confirmation, so Cancel can return to it",
+            "status": "passed"
+          },
+          {
+            "name": "Fruit Ninja responsive result controls clears the finished presentation and delegates Play Again to the existing replay callback",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "file": "apps/web/src/pages/Games/GamePage.navigation.test.tsx",
+        "tests": 16,
+        "status": "passed",
+        "cases": [
+          {
+            "name": "game Exit versus router Back snake-ladder visible Exit confirms; Cancel stays in the game",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back ludo visible Exit confirms; Cancel stays in the game",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back chess visible Exit confirms; Cancel stays in the game",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back carrom visible Exit confirms; Cancel stays in the game",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back fruit-ninja visible Exit confirms; Cancel stays in the game",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back bubble-shooter visible Exit confirms; Cancel stays in the game",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back table-tennis visible Exit confirms; Cancel stays in the game",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back snake-vs-worms visible Exit confirms; Cancel stays in the game",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back snooker visible Exit confirms; Cancel stays in the game",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back leaves once on confirmed Exit, even when confirmed twice and unmounted",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back does not trap browser/gesture Back or push extra history; unmount leaves once",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back StrictMode replay keeps membership; the eventual real unmount leaves",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back Back during a pending confirmed leave does not navigate a second time after the ACK",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back does not leave a different room joined before deferred cleanup",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back leaves the old room when this route changes from multiplayer to practice",
+            "status": "passed"
+          },
+          {
+            "name": "game Exit versus router Back practice exit uses the root fallback without leaving multiplayer",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "file": "apps/web/src/pages/Games/GamePage.rematch.test.tsx",
+        "tests": 12,
+        "status": "passed",
+        "cases": [
+          {
+            "name": "rematch game presentation creates a fresh snake-ladder view only when the authoritative match changes",
+            "status": "passed"
+          },
+          {
+            "name": "rematch game presentation creates a fresh ludo view only when the authoritative match changes",
+            "status": "passed"
+          },
+          {
+            "name": "rematch game presentation creates a fresh chess view only when the authoritative match changes",
+            "status": "passed"
+          },
+          {
+            "name": "rematch game presentation creates a fresh carrom view only when the authoritative match changes",
+            "status": "passed"
+          },
+          {
+            "name": "rematch game presentation creates a fresh fruit-ninja view only when the authoritative match changes",
+            "status": "passed"
+          },
+          {
+            "name": "rematch game presentation creates a fresh bubble-shooter view only when the authoritative match changes",
+            "status": "passed"
+          },
+          {
+            "name": "rematch game presentation creates a fresh table-tennis view only when the authoritative match changes",
+            "status": "passed"
+          },
+          {
+            "name": "rematch game presentation creates a fresh snake-vs-worms view only when the authoritative match changes",
+            "status": "passed"
+          },
+          {
+            "name": "rematch game presentation creates a fresh snooker view only when the authoritative match changes",
+            "status": "passed"
+          },
+          {
+            "name": "rematch game presentation table-tennis replay requests an online rematch instead of restarting locally",
+            "status": "passed"
+          },
+          {
+            "name": "rematch game presentation snake-vs-worms replay requests an online rematch instead of restarting locally",
+            "status": "passed"
+          },
+          {
+            "name": "rematch game presentation fruit-ninja replay requests an online rematch instead of restarting locally",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "file": "apps/web/src/pages/Home/Home.gameMode.test.tsx",
+        "tests": 8,
+        "status": "passed",
+        "cases": [
+          {
+            "name": "Home game launch selection all popular/grid cards preserve ai selection",
+            "status": "passed"
+          },
+          {
+            "name": "Home game launch selection all popular/grid cards preserve multiplayer selection",
+            "status": "passed"
+          },
+          {
+            "name": "Home game launch selection ai start follows the right route and stake",
+            "status": "passed"
+          },
+          {
+            "name": "Home game launch selection multiplayer start follows the right route and stake",
+            "status": "passed"
+          },
+          {
+            "name": "setup mode and authoritative game configuration initial ai mode is used by Start",
+            "status": "passed"
+          },
+          {
+            "name": "setup mode and authoritative game configuration initial multiplayer mode is used by Start",
+            "status": "passed"
+          },
+          {
+            "name": "setup mode and authoritative game configuration resets a reused modal to the newly requested mode and current server stake",
+            "status": "passed"
+          },
+          {
+            "name": "setup mode and authoritative game configuration disabled online games cannot be started but practice stays available",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "file": "apps/web/src/services/native/capacitorAppService.back.test.ts",
+        "tests": 3,
+        "status": "passed",
+        "cases": [
+          {
+            "name": "native Back uses normal navigation immediately navigates back from a game with in-app history",
+            "status": "passed"
+          },
+          {
+            "name": "native Back uses normal navigation uses home fallback when there is no in-app history",
+            "status": "passed"
+          },
+          {
+            "name": "native Back uses normal navigation keeps the normal root/minimize behavior",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "file": "apps/web/src/games/bubble-shooter/__tests__/multiplayerControls.test.tsx",
+        "tests": 9,
+        "status": "passed",
+        "cases": [
+          {
+            "name": "Bubble Shooter component multiplayer controls shows the correct cannon/preview and submits one shot from seat 0",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter component multiplayer controls shows the correct cannon/preview and submits one shot from seat 1",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter component multiplayer controls preserves the flight on opponent updates and applies the server board only after landing",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter component multiplayer controls aims a mobile tap at its release location and blocks its duplicate click",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter component multiplayer controls recovers the controls after a rejection",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter component multiplayer controls recovers the controls after a network error",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter component multiplayer controls does not submit a synthetic mobile click after an immediate shot rejection",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter component multiplayer controls resyncs rather than leaving the cannon permanently locked after a missing broadcast",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter component multiplayer controls keeps solo play local and never submits a multiplayer action",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "file": "apps/web/src/games/bubble-shooter/utils/multiplayerPresentation.test.ts",
+        "tests": 13,
+        "status": "passed",
+        "cases": [
+          {
+            "name": "Bubble Shooter multiplayer presentation loads and fires the authoritative bubble for seat 0",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter multiplayer presentation loads and fires the authoritative bubble for seat 1",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter multiplayer presentation does not erase flight or unlock a shot when the opponent shoots",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter multiplayer presentation buffers a fast response until the cosmetic flight lands",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter multiplayer presentation uses the latest authoritative snapshot if opponent updates arrive during a flight",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter multiplayer presentation restores the server board after rejection and ignores an old acknowledgement",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter multiplayer presentation restores cannon and grid on reconnect without applying a move again",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter multiplayer presentation ignores duplicate state packets while flight is pending and never resubmits a shot",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter multiplayer presentation never permits shooting when paused, eliminated, or finished",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter multiplayer presentation separates pop particles from falling detached bubbles using the authoritative result",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter multiplayer presentation animates the same authoritative bounce path for angle -1.5707963267948966",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter multiplayer presentation animates the same authoritative bounce path for angle -0.5235987755982988",
+            "status": "passed"
+          },
+          {
+            "name": "Bubble Shooter multiplayer presentation animates the same authoritative bounce path for angle -2.6179938779914944",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "file": "apps/web/src/games/carrom/__tests__/strikerPlacement.test.tsx",
+        "tests": 17,
+        "status": "passed",
+        "cases": [
+          {
+            "name": "Carrom striker placement recovery keeps the mover available after tapping a coin and allows moving away and shooting",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom striker placement recovery allows tapping a clear baseline position after an overlapping placement",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom striker placement recovery keeps repositioning available after entering aiming mode",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom striker placement recovery rechecks overlap on release, cancelling a blocked shot without trapping the mover",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom striker placement recovery moving the slider cancels an old drag rather than firing it",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom striker placement recovery pointer cancellation does not fire an aimed shot",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom striker placement recovery ignores pocketed coins during placement",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom pocket capture captures a stationary coin resting inside the visible pocket at 30,30 exactly once",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom pocket capture captures a stationary coin resting inside the visible pocket at 370,30 exactly once",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom pocket capture captures a stationary coin resting inside the visible pocket at 30,370 exactly once",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom pocket capture captures a stationary coin resting inside the visible pocket at 370,370 exactly once",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom pocket capture leaves a coin on the board when it only touches the outside pocket rim",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom pocket capture captures a coin approaching the pocket at speed 0.3",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom pocket capture captures a coin approaching the pocket at speed 18",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom pocket capture waits for a pocket drop to finish before settling a shot",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom pocket capture restores a pocketed striker for the next turn and applies one foul",
+            "status": "passed"
+          },
+          {
+            "name": "Carrom pocket capture keeps a pocketed queen off the board while waiting for its cover shot",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "file": "apps/web/src/games/chess/utils/chessState.test.ts",
+        "tests": 4,
+        "status": "passed",
+        "cases": [
+          {
+            "name": "Chess client state resolves both colors by authoritative user ID, independent of array order or turn",
+            "status": "passed"
+          },
+          {
+            "name": "Chess client state orients each board to the local color without changing logical piece colors",
+            "status": "passed"
+          },
+          {
+            "name": "Chess client state uses the correct white and black piece glyphs",
+            "status": "passed"
+          },
+          {
+            "name": "Chess client state keeps white then black SAN turns identical for both viewers and repeated socket snapshots",
+            "status": "passed"
+          }
+        ]
+      }
+    ]
+  },
+  "gates": {
+    "typecheck": "PASS",
+    "build": "PASS",
+    "diffCheck": "PASS"
+  },
+  "browser": {
+    "portrait": [
+      "390x844",
+      "360x800"
+    ],
+    "desktop": "1280x720",
+    "landscape": "844x390 (scrollable results)",
+    "singleActiveExit": "PASS",
+    "resultExitCancelPreservesResult": "PASS",
+    "practiceReplay": "PASS",
+    "confirmedExitHome": "PASS",
+    "screenshot": "docs/screenshots/fruit-ninja-mobile-results.jpg"
+  },
+  "liveTwoAccountMultiplayer": "NOT VERIFIED",
+  "productionTouched": false
+}

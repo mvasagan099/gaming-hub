@@ -1,0 +1,15 @@
+import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+const hooks = vi.hoisted(() => ({ effects: [] as Array<() => unknown>, setters: [] as Array<ReturnType<typeof vi.fn>> }));
+vi.mock('react', async original => {
+ const actual=await original<typeof import('react')>();
+ return {...actual, useEffect:(effect:()=>unknown)=>hooks.effects.push(effect),useState:(value:unknown)=>{const setter=vi.fn();hooks.setters.push(setter);return[value,setter]}};
+});
+vi.mock('react-router-dom',()=>({useParams:()=>({slug:'chess'}),useLocation:()=>({state:{mode:'multiplayer',stake:0}}),useNavigate:()=>vi.fn(),Navigate:()=>null}));
+vi.mock('../../store/multiplayerStore',()=>({useMultiplayerStore:(select:any)=>select({room:{id:'room',gameId:'chess',status:'playing'},matchId:'new-match'})}));
+vi.mock('../../components/ui/ConfirmDialog',()=>({ConfirmDialog:()=>null}));
+import {GamePage} from './GamePage';
+let handlers:Map<string,(event:any)=>void>;
+beforeEach(()=>{hooks.effects=[];hooks.setters=[];handlers=new Map();vi.stubGlobal('window',{history:{pushState:vi.fn()},addEventListener:vi.fn((event,handler)=>handlers.set(event,handler)),removeEventListener:vi.fn()})});
+afterEach(()=>vi.unstubAllGlobals());
+it('visible Exit requests confirmation',()=>{const page:any=GamePage({});page.props.children[0].props.children.props.onBack();expect(hooks.setters[0]).toHaveBeenCalledWith(true)});
+it('system/browser Back must not open game exit confirmation',()=>{GamePage({});hooks.effects.forEach(effect=>effect());handlers.get('popstate')?.({preventDefault:vi.fn()});expect(hooks.setters[0]).not.toHaveBeenCalledWith(true)});

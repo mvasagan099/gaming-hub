@@ -179,35 +179,6 @@ describe('Confirmation Popups for Logout and Game Exit (Safety UI/UX)', () => {
     });
   });
 
-  describe('3. Android Hardware Back Button Interceptor Registration', () => {
-    it('intercepts hardware back button during active game and triggers confirmation', () => {
-      const handlers: Array<() => boolean> = [];
-
-      const registerBackButtonHandler = (fn: () => boolean) => {
-        handlers.push(fn);
-        return () => {
-          const idx = handlers.indexOf(fn);
-          if (idx !== -1) handlers.splice(idx, 1);
-        };
-      };
-
-      let dialogShown = false;
-      const unregister = registerBackButtonHandler(() => {
-        dialogShown = true;
-        return true; // handled, prevent app minimize
-      });
-
-      // Simulate Android back button event
-      const topHandler = handlers[handlers.length - 1];
-      expect(topHandler).toBeDefined();
-      const handled = topHandler ? topHandler() : false;
-
-      expect(handled).toBe(true);
-      expect(dialogShown).toBe(true);
-
-      // After game unmounts
-      unregister();
-      expect(handlers.length).toBe(0);
-    });
-  });
+  // Native Back behavior is exercised against the actual Capacitor listener in
+  // apps/web/src/services/native/capacitorAppService.back.test.ts.
 });

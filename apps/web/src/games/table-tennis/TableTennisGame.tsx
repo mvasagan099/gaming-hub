@@ -859,7 +859,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
               currentServer={currentServer}
               rallyCount={rallyCount}
               onServe={handleCanvasClick}
-              onReplay={resetGame}
+              onReplay={mode === 'multiplayer' ? () => void useMultiplayerStore.getState().rematch() : resetGame}
               onExit={onBack}
             />
           </div>

@@ -9,12 +9,13 @@ import type { GameConfig } from '@gaming-hub/shared';
 
 interface GameModalProps {
   game: GameMetadata | null;
+  initialMode?: 'ai' | 'multiplayer';
   onClose: () => void;
   onStartGame: (gameId: GameId, mode: 'ai' | 'multiplayer', stake: number) => void;
 }
 
-export const MatchSetupModal: React.FC<GameModalProps> = ({ game, onClose, onStartGame }) => {
-  const [selectedMode, setSelectedMode] = useState<'ai' | 'multiplayer'>('multiplayer');
+export const MatchSetupModal: React.FC<GameModalProps> = ({ game, initialMode = 'multiplayer', onClose, onStartGame }) => {
+  const [selectedMode, setSelectedMode] = useState<'ai' | 'multiplayer'>(initialMode);
   const [stake, setStake] = useState<number>(game?.minEntryFee ?? 100);
   const [serverConfig, setServerConfig] = useState<GameConfig | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(false);
@@ -22,6 +23,9 @@ export const MatchSetupModal: React.FC<GameModalProps> = ({ game, onClose, onSta
   useEffect(() => {
     if (!game) return;
     let isMounted = true;
+    setSelectedMode(initialMode);
+    setServerConfig(null);
+    setStake(game.minEntryFee ?? 100);
     setLoadingConfig(true);
 
     apiClient
@@ -44,7 +48,7 @@ export const MatchSetupModal: React.FC<GameModalProps> = ({ game, onClose, onSta
     return () => {
       isMounted = false;
     };
-  }, [game]);
+  }, [game, initialMode]);
 
   if (!game) return null;
 
@@ -71,6 +75,7 @@ export const MatchSetupModal: React.FC<GameModalProps> = ({ game, onClose, onSta
         </label>
         <div className="grid grid-cols-2 gap-3">
           <button
+            aria-pressed={selectedMode === 'multiplayer'}
             onClick={() => setSelectedMode('multiplayer')}
             disabled={serverConfig?.onlineEnabled === false}
             className={`p-4 rounded-2xl border flex flex-col items-center gap-2 transition-all ${
@@ -91,6 +96,7 @@ export const MatchSetupModal: React.FC<GameModalProps> = ({ game, onClose, onSta
           </button>
 
           <button
+            aria-pressed={selectedMode === 'ai'}
             onClick={() => setSelectedMode('ai')}
             className={`p-4 rounded-2xl border flex flex-col items-center gap-2 transition-all ${
               selectedMode === 'ai'
@@ -140,7 +146,8 @@ export const MatchSetupModal: React.FC<GameModalProps> = ({ game, onClose, onSta
         fullWidth
         size="lg"
         className="mt-6 bg-gradient-to-r from-accent-500 to-accent-600 hover:from-accent-600 hover:to-accent-700 shadow-xl shadow-accent-500/25"
-        onClick={() => onStartGame(game.id, selectedMode, stake)}
+        disabled={selectedMode === 'multiplayer' && serverConfig?.onlineEnabled === false}
+        onClick={() => onStartGame(game.id, selectedMode, selectedMode === 'ai' ? 0 : stake)}
       >
         {selectedMode === 'multiplayer' ? 'MATCH & PLAY NOW' : 'START PRACTICE GAME'}
       </Button>

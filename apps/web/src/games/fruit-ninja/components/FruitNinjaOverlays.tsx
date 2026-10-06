@@ -175,10 +175,7 @@ export const FruitNinjaOverlays: React.FC<FruitNinjaOverlaysProps> = ({
               <RotateCcw className="w-4 h-4" /> Play Again
             </button>
             <button
-              onClick={() => {
-                setIsLocalGameOver(false);
-                onClose();
-              }}
+              onClick={onClose}
               className="w-full py-3 bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-xs rounded-xl border border-slate-700/80 transition-colors uppercase tracking-wider flex items-center justify-center gap-2"
             >
               <LogOut className="w-3.5 h-3.5" /> Exit to Menu

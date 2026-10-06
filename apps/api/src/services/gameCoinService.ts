@@ -181,6 +181,19 @@ export class GameCoinService {
           } else if (!existingRoom) {
             throw new AppError("NOT_FOUND", "Multiplayer room must exist or include its authoritative snapshot", 404);
           }
+
+          // Room.match is the current match (a unique, nullable relation).
+          // Lock the room before replacing that pointer: different rematch IDs
+          // must not both fund a game in the same room. Retain the old match,
+          // players, replay, statistics and ledger records by their match ID.
+          await tx.$queryRaw`SELECT id FROM "Room" WHERE id = ${params.roomId} FOR UPDATE`;
+          const previous = await tx.match.findUnique({ where: { roomId: params.roomId } });
+          if (previous) {
+            if (previous.status !== "FINISHED" && previous.status !== "ABORTED") {
+              throw new AppError("CONFLICT", "The previous match must finish settlement before a rematch", 409);
+            }
+            await tx.match.update({ where: { id: previous.id }, data: { roomId: null } });
+          }
         }
 
         // Create Match record with status ACTIVE

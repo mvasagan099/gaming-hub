@@ -112,7 +112,10 @@ export const Home: React.FC = () => {
     const params = new URLSearchParams(location.search);
     return params.get('search') || '';
   });
-  const [modalGame, setModalGame] = useState<GameMetadata | null>(null);
+  const [gameSetup, setGameSetup] = useState<{ game: GameMetadata; mode: 'ai' | 'multiplayer' } | null>(null);
+  const openGameSetup = (game: GameMetadata, mode: 'ai' | 'multiplayer' = 'multiplayer') => {
+    setGameSetup({ game, mode });
+  };
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
 
   useEffect(() => {
@@ -155,7 +158,7 @@ export const Home: React.FC = () => {
   });
 
   const handleStartGame = (gameId: GameId, mode: 'ai' | 'multiplayer', stake: number) => {
-    setModalGame(null);
+    setGameSetup(null);
     if (disabledGames.has(gameId)) return;
     if (mode === 'multiplayer') {
       navigate(`/lobby/${gameId}`, { state: { mode, stake } });
@@ -214,7 +217,7 @@ export const Home: React.FC = () => {
               onClick={() => {
                 if (banners[currentBannerIndex].targetGame) {
                   const target = playableGamesList.find(g => g.id === banners[currentBannerIndex].targetGame);
-                  if (target) setModalGame(target);
+                  if (target) openGameSetup(target);
                 } else {
                   // For the browse all games button, scroll to games grid
                   document.getElementById('all-games-section')?.scrollIntoView({ behavior: 'smooth' });
@@ -281,7 +284,7 @@ export const Home: React.FC = () => {
             {recentlyPlayed.map((game) => (
               <div
                 key={game.id}
-                onClick={() => setModalGame(game)}
+                onClick={() => openGameSetup(game)}
                 className="p-4 rounded-2xl glass-panel bg-white dark:bg-transparent border border-slate-200 dark:border-slate-800 hover:border-indigo-500/50 cursor-pointer flex items-center justify-between group transition-all shadow-sm dark:shadow-none"
               >
                 <div className="flex items-center gap-3">
@@ -325,7 +328,7 @@ export const Home: React.FC = () => {
             >
               {popularGames.map((game) => (
                 <div key={game.id} className="w-[82%] sm:w-[46%] md:w-[32%] lg:w-[28%] shrink-0 snap-center">
-                  <GameCard game={game} onPlay={() => setModalGame(game)} />
+                  <GameCard game={game} onPlay={(_gameId, mode) => openGameSetup(game, mode)} />
                 </div>
               ))}
             </div>
@@ -350,15 +353,16 @@ export const Home: React.FC = () => {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
           {filteredGames.map((game) => (
-            <GameCard key={game.id} game={game} onPlay={() => setModalGame(game)} />
+            <GameCard key={game.id} game={game} onPlay={(_gameId, mode) => openGameSetup(game, mode)} />
           ))}
         </div>
       </div>
 
-      {modalGame && (
+      {gameSetup && (
         <MatchSetupModal
-          game={modalGame}
-          onClose={() => setModalGame(null)}
+          game={gameSetup.game}
+          initialMode={gameSetup.mode}
+          onClose={() => setGameSetup(null)}
           onStartGame={handleStartGame}
         />
       )}

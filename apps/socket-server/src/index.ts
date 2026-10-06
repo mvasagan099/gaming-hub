@@ -18,6 +18,8 @@ import pino from "pino";
 import { env } from "./env";
 import { authenticateToken, type AuthenticatedUser } from "./auth";
 import { assertFeatureEnabled } from "./settings";
+import { requestSocketRematch, declineSocketRematch } from "./rematch";
+import { applySocketGameAction } from "./gameActions";
 import { GameEventBus } from "./events/GameEventBus";
 import { GameStateSyncManager } from "./sync/GameStateSyncManager";
 import { createAndFundRoomMatch, settleMatch, cancelMatch } from "./apiClient";
@@ -713,12 +715,8 @@ async function main(): Promise<void> {
         const roomSockets = io.sockets.adapter.rooms.get(`room:${payload.roomId}`);
         logger.info(`[CARROM ACTION] Room room:${payload.roomId} has ${roomSockets?.size ?? 0} sockets before action`);
         
-        const result = await framework.matchManager.applyAction({
-          roomId: payload.roomId,
-          playerId: user.userId,
-          action: payload.action,
-        });
-        
+        const result = await applySocketGameAction(framework, user.userId, payload);
+
         logger.info(`[CARROM ACTION] game:action processed for user ${user.userId}, result: ${result.ok}`);
         
         ack?.({ 
@@ -932,75 +930,18 @@ async function main(): Promise<void> {
     });
 
     // Rematch
+    const handleRematchConsent = async (roomId: string) => {
+      const token = (socket.handshake.auth as { token?: string } | undefined)?.token;
+      return requestSocketRematch(framework, roomId, user.userId, token);
+    };
+
+    // Older clients use the same authoritative consent/funding flow.
     socket.on("game:rematch", (payload, ack) =>
       void guard(ack, async () => {
-        // Deprecated - use rematch-request instead
-        const room = framework.roomManager.getRoom(payload.roomId);
-        if (!room) throw new Error("Room not found");
-        // M-04 fix: only room participants can trigger rematch state
-        if (!room.players.has(user.userId) && room.hostId !== user.userId) {
-          throw new Error("UNAUTHORIZED");
-        }
-        // Clear rematch state
-        room.rematch = null;
-        framework.syncManager.broadcastToRoom(room, "rematch:update", {
-          roomId: payload.roomId,
-          requestedBy: [],
-          active: false,
-        });
-        ack?.({ ok: true, data: { roomId: payload.roomId, requestedBy: [], active: false } });
+        const data = await handleRematchConsent(payload.roomId);
+        ack?.({ ok: true, data });
       }),
     );
-
-    const handleRematchConsent = async (roomId: string) => {
-      const room = framework.roomManager.getRoom(roomId);
-      if (!room) throw new Error("Room not found");
-
-      // M-04 fix: only actual non-spectator participants may vote on rematch
-      const playerEntry = room.players.get(user.userId);
-      if (!playerEntry || playerEntry.isSpectator) {
-        throw new Error("UNAUTHORIZED");
-      }
-
-      await assertFeatureEnabled("games.enabled", "Games");
-
-      if (!room.rematch) {
-        room.rematch = {
-          requestedBy: [],
-          active: true,
-          expiresAt: Date.now() + 60000,
-        };
-      }
-
-      if (!room.rematch.requestedBy.includes(user.userId)) {
-        room.rematch.requestedBy.push(user.userId);
-      }
-
-      const requestedBy = [...room.rematch.requestedBy];
-      const active = room.rematch.active;
-
-      const participants = [...room.players.values()].filter((p) => !p.isSpectator).map((p) => p.userId);
-      const allAccepted = participants.length > 0 && participants.every((id) => requestedBy.includes(id));
-
-      framework.syncManager.broadcastToRoom(room, "rematch:update", {
-        roomId,
-        requestedBy,
-        active,
-      });
-
-      if (allAccepted) {
-        room.status = "waiting";
-        for (const p of room.players.values()) {
-          if (!p.isSpectator) p.isReady = true;
-        }
-        await framework.matchManager.startMatch({
-          roomId,
-          startedBy: room.hostId,
-        });
-      }
-
-      return { roomId, requestedBy, active };
-    };
 
     socket.on("game:rematch-request", (payload, ack) =>
       void guard(ack, async () => {
@@ -1018,20 +959,9 @@ async function main(): Promise<void> {
 
     socket.on("game:rematch-decline", (payload, ack) =>
       void guard(ack, async () => {
-        const room = framework.roomManager.getRoom(payload.roomId);
-        if (!room) throw new Error("Room not found");
-        // M-04 fix: only participants can decline rematch
-        const playerEntry = room.players.get(user.userId);
-        if (!playerEntry || playerEntry.isSpectator) {
-          throw new Error("UNAUTHORIZED");
-        }
-        room.rematch = null;
-        framework.syncManager.broadcastToRoom(room, "rematch:update", {
-          roomId: payload.roomId,
-          requestedBy: [],
-          active: false,
-        });
-        ack?.({ ok: true, data: { roomId: payload.roomId, requestedBy: [], active: false } });
+        const token = (socket.handshake.auth as { token?: string } | undefined)?.token;
+        const data = await declineSocketRematch(framework, payload.roomId, user.userId, token);
+        ack?.({ ok: true, data });
       }),
     );
 

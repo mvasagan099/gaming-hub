@@ -3,7 +3,7 @@ import Phaser from "phaser";
 import { FruitNinjaScene } from "./phaser/scenes/FruitNinjaScene";
 import { FRUIT_NINJA_VISUAL_CONFIG } from "./phaser/constants/fruitNinjaVisualConfig";
 import { FruitNinjaOverlays } from "./components/FruitNinjaOverlays";
-import { RotateCcw, X } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 interface FruitNinjaPhaserProps {
   mode: "classic" | "zen";
@@ -139,68 +139,62 @@ export const FruitNinjaPhaserGame: React.FC<FruitNinjaPhaserProps> = ({
   };
 
   return (
-    <div
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      style={
-        isMobilePortrait
-          ? {
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              width: "100dvh",
-              height: "100dvw",
-              transform: "translate(-50%, -50%) rotate(90deg)",
-              transformOrigin: "center center",
-            }
-          : undefined
-      }
-      className={`relative ${
-        isMobilePortrait
-          ? "w-[100dvh] h-[100dvw] flex-shrink-0 z-40"
-          : "mx-auto w-full max-w-[min(96vw,calc((100dvh-5rem)*1.6),1280px)] aspect-[8/5] max-h-[calc(100dvh-4.5rem)] h-auto rounded-3xl border border-amber-500/20 shadow-[0_20px_50px_rgba(0,0,0,0.85)]"
-      } bg-gradient-to-b from-[#070b14] via-[#090f1d] to-[#070b14] overflow-hidden flex justify-center items-center select-none touch-none`}
-    >
-      {/* Ambient background glow flares */}
-      <div className="pointer-events-none absolute -top-32 -left-32 w-80 h-80 bg-rose-500/10 rounded-full blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-32 -right-32 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl" />
-
-      {/* Phaser Canvas */}
+    <>
       <div
-        ref={containerRef}
-        className={`w-full h-full flex justify-center items-center pointer-events-auto ${
-          isMobilePortrait ? "[&>canvas]:!w-full [&>canvas]:!h-full [&>canvas]:!object-fill" : ""
-        }`}
-      />
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        style={
+          isMobilePortrait
+            ? {
+                position: "fixed",
+                top: "50%",
+                left: "50%",
+                width: "100dvh",
+                height: "100dvw",
+                transform: "translate(-50%, -50%) rotate(90deg)",
+                transformOrigin: "center center",
+              }
+            : undefined
+        }
+        className={`relative ${
+          isMobilePortrait
+            ? "w-[100dvh] h-[100dvw] flex-shrink-0 z-40"
+            : "mx-auto w-full max-w-[min(96vw,calc((100dvh-5rem)*1.6),1280px)] aspect-[8/5] max-h-[calc(100dvh-4.5rem)] h-auto rounded-3xl border border-amber-500/20 shadow-[0_20px_50px_rgba(0,0,0,0.85)]"
+        } bg-gradient-to-b from-[#070b14] via-[#090f1d] to-[#070b14] overflow-hidden flex justify-center items-center select-none touch-none`}
+      >
+        {/* Ambient background glow flares */}
+        <div className="pointer-events-none absolute -top-32 -left-32 w-80 h-80 bg-rose-500/10 rounded-full blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 -right-32 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl" />
 
-      {/* Floating In-Game Landscape Controls on Mobile Portrait */}
-      {isMobilePortrait && !isMultiplayer && (
-        <div className="absolute top-3 right-3 z-30 flex items-center gap-2 pointer-events-auto">
-          <button
-            onClick={onReplay}
-            className="p-2 rounded-xl bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-white shadow-lg active:scale-95 transition-all cursor-pointer"
-            title="Restart Match"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
-          <button
-            onClick={onBack}
-            className="p-2 rounded-xl bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-white shadow-lg active:scale-95 transition-all cursor-pointer"
-            title="Exit to Menu"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+        {/* Phaser Canvas */}
+        <div
+          ref={containerRef}
+          className={`w-full h-full flex justify-center items-center pointer-events-auto ${
+            isMobilePortrait ? "[&>canvas]:!w-full [&>canvas]:!h-full [&>canvas]:!object-fill" : ""
+          }`}
+        />
 
-      {/* Glassmorphic Victory / Defeat / Game Over Overlays */}
+        {/* Floating In-Game Landscape Controls on Mobile Portrait */}
+        {isMobilePortrait && !isMultiplayer && (
+          <div className="absolute top-3 right-3 z-30 flex items-center gap-2 pointer-events-auto">
+            <button
+              onClick={onReplay}
+              className="p-2 rounded-xl bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-white shadow-lg active:scale-95 transition-all cursor-pointer"
+              title="Restart Match"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
+      {/* Result controls stay upright, outside the rotated/clipped arena. */}
       <FruitNinjaOverlays
         game={gameInstance}
         isMultiplayer={isMultiplayer}
         onReplay={onReplay}
         onClose={onBack}
       />
-    </div>
+    </>
   );
 };
 

@@ -58,7 +58,7 @@ export interface ClientToServerEvents {
 
   "matchmaking:leave": (payload: Record<string, never>, ack: Ack<{ left: boolean }>) => void;
 
-  "game:action": (payload: { roomId: string; action: { type: string } & JsonObject }, ack: Ack<GameActionResult>) => void;
+  "game:action": (payload: { roomId: string; matchId: string; action: { type: string } & JsonObject }, ack: Ack<GameActionResult>) => void;
 
   "game:rematch": (payload: { roomId: string }, ack: Ack<RematchUpdate>) => void;
 

@@ -766,7 +766,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
               kills={kills}
               isMultiplayer={mode === 'multiplayer'}
               winnerName={mpWinner !== null ? `Player ${mpWinner + 1}` : null}
-              onReplay={initGame}
+              onReplay={mode === 'multiplayer' ? () => void useMultiplayerStore.getState().rematch() : initGame}
               onExit={onBack}
             />
           </div>

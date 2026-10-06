@@ -1,0 +1,324 @@
+{
+  "date": "2026-10-06",
+  "baseCommit": "31ee31c",
+  "source": "working tree, including prior rematch fixes",
+  "scope": "Rematch security and related regression checks; not a full production-readiness audit",
+  "suites": {
+    "api": {
+      "files": 12,
+      "tests": 156,
+      "passed": 156,
+      "failed": 0,
+      "skipped": 0,
+      "manifest": [
+        {
+          "file": "apps/api/src/routes/__tests__/multiplayerStartup.test.ts",
+          "tests": 26,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/adminSecurityHardeningEngine.test.ts",
+          "tests": 7,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/financialConcurrencyAndRecovery.test.ts",
+          "tests": 6,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/gameResultSecurity.test.ts",
+          "tests": 9,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/idorAndEconomyValidation.test.ts",
+          "tests": 9,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/kycSecurityHardening.test.ts",
+          "tests": 8,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/loginTimeMfa.test.ts",
+          "tests": 8,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/mfaSessionLifecycle.test.ts",
+          "tests": 1,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/securityAttackSimulation.test.ts",
+          "tests": 16,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/securityRemediation.unit.test.ts",
+          "tests": 10,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/securityRemediationHardening.test.ts",
+          "tests": 39,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/socketRematchSecurity.test.ts",
+          "tests": 17,
+          "status": "passed"
+        }
+      ]
+    },
+    "mp": {
+      "files": 12,
+      "tests": 137,
+      "passed": 137,
+      "failed": 0,
+      "skipped": 0,
+      "manifest": [
+        {
+          "file": "packages/multiplayer/__tests__/bubbleShooterGameplay.test.ts",
+          "tests": 2,
+          "status": "passed"
+        },
+        {
+          "file": "packages/multiplayer/__tests__/centralizedGameConfig.test.ts",
+          "tests": 16,
+          "status": "passed"
+        },
+        {
+          "file": "packages/multiplayer/__tests__/clientMatchIdentity.test.ts",
+          "tests": 6,
+          "status": "passed"
+        },
+        {
+          "file": "packages/multiplayer/__tests__/disconnectReconnect.test.ts",
+          "tests": 5,
+          "status": "passed"
+        },
+        {
+          "file": "packages/multiplayer/__tests__/gameConfigs.test.ts",
+          "tests": 4,
+          "status": "passed"
+        },
+        {
+          "file": "packages/multiplayer/__tests__/gameEventSystem.test.ts",
+          "tests": 22,
+          "status": "passed"
+        },
+        {
+          "file": "packages/multiplayer/__tests__/gameStateSync.test.ts",
+          "tests": 15,
+          "status": "passed"
+        },
+        {
+          "file": "packages/multiplayer/__tests__/gameplay.test.ts",
+          "tests": 17,
+          "status": "passed"
+        },
+        {
+          "file": "packages/multiplayer/__tests__/matchManager.test.ts",
+          "tests": 7,
+          "status": "passed"
+        },
+        {
+          "file": "packages/multiplayer/__tests__/matchmaking.test.ts",
+          "tests": 20,
+          "status": "passed"
+        },
+        {
+          "file": "packages/multiplayer/__tests__/rematch.test.ts",
+          "tests": 19,
+          "status": "passed"
+        },
+        {
+          "file": "packages/multiplayer/__tests__/roomCleanup.test.ts",
+          "tests": 4,
+          "status": "passed"
+        }
+      ]
+    },
+    "engine": {
+      "files": 24,
+      "tests": 334,
+      "passed": 334,
+      "failed": 0,
+      "skipped": 0,
+      "manifest": [
+        {
+          "file": "packages/game-engine/__tests__/admin-game-timeout-configuration.test.ts",
+          "tests": 22,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/bubble-shooter.test.ts",
+          "tests": 10,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/carrom.test.ts",
+          "tests": 22,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/carromPockets.test.ts",
+          "tests": 18,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/carromSync.test.ts",
+          "tests": 14,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/chess.test.ts",
+          "tests": 17,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/confirmation-popups-safety.test.ts",
+          "tests": 10,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/fruit-ninja-spawn-balancing.test.ts",
+          "tests": 8,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/fruit-ninja.test.ts",
+          "tests": 18,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/global-match-history-replay-stats.test.ts",
+          "tests": 7,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/global-match-qa-monitoring-edge-cases.test.ts",
+          "tests": 28,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/global-match-timeout-engine.test.ts",
+          "tests": 13,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/global-matchmaking-readiness-start.test.ts",
+          "tests": 13,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/global-multiplayer-security-anti-cheat.test.ts",
+          "tests": 10,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/global-realtime-game-events-notifications.test.ts",
+          "tests": 26,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/ludo.test.ts",
+          "tests": 6,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/snake-ladder.test.ts",
+          "tests": 6,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/snake-vs-worms.test.ts",
+          "tests": 9,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/snookerPhysics.test.ts",
+          "tests": 4,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/snookerRules.test.ts",
+          "tests": 20,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/table-tennis.test.ts",
+          "tests": 10,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/timeout-resolution.test.ts",
+          "tests": 9,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/universal-game-result-adapters.test.ts",
+          "tests": 20,
+          "status": "passed"
+        },
+        {
+          "file": "packages/game-engine/__tests__/universal-match-finalization.test.ts",
+          "tests": 14,
+          "status": "passed"
+        }
+      ]
+    },
+    "web": {
+      "files": 7,
+      "tests": 62,
+      "passed": 62,
+      "failed": 0,
+      "skipped": 0,
+      "manifest": [
+        {
+          "file": "apps/web/src/store/multiplayerStore.leave.test.ts",
+          "tests": 1,
+          "status": "passed"
+        },
+        {
+          "file": "apps/web/src/store/multiplayerStore.rematch.test.ts",
+          "tests": 6,
+          "status": "passed"
+        },
+        {
+          "file": "apps/web/src/pages/Games/GamePage.rematch.test.tsx",
+          "tests": 12,
+          "status": "passed"
+        },
+        {
+          "file": "apps/web/src/games/bubble-shooter/__tests__/multiplayerControls.test.tsx",
+          "tests": 9,
+          "status": "passed"
+        },
+        {
+          "file": "apps/web/src/games/bubble-shooter/utils/multiplayerPresentation.test.ts",
+          "tests": 13,
+          "status": "passed"
+        },
+        {
+          "file": "apps/web/src/games/carrom/__tests__/strikerPlacement.test.tsx",
+          "tests": 17,
+          "status": "passed"
+        },
+        {
+          "file": "apps/web/src/games/chess/utils/chessState.test.ts",
+          "tests": 4,
+          "status": "passed"
+        }
+      ]
+    }
+  },
+  "totalTests": 689,
+  "typecheck": "PASS (9 workspaces)",
+  "build": "PASS",
+  "productionDatabaseTouched": false,
+  "deployed": false
+}

@@ -133,4 +133,103 @@ describe("funded multiplayer startup through the socket-to-API HTTP route", () =
     expect((await prisma.match.findUniqueOrThrow({ where: { id: matchId } })).roomId).toBe(room.id);
     for (const user of users) expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } })).balance).toBe(900);
   });
+
+  it("funds a paid rematch in the same room without deleting the settled match or charging twice", async () => {
+    const users = [await player(), await player()];
+    const room = await framework.roomManager.createRoom({
+      gameId: "chess", hostId: users[0].id, hostSocket: makeSocket("host"), stake: 100, maxPlayers: 2,
+    });
+    await framework.roomManager.joinRoom({ roomId: room.id, playerId: users[1].id, socket: makeSocket("guest") });
+    const firstId = randomUUID();
+    await api.createAndFundRoomMatch(room, firstId);
+    await api.settleMatch(firstId, { winnerIds: [], resultType: "DRAW" });
+    const secondId = randomUUID();
+    await api.createAndFundRoomMatch(room, secondId);
+    await api.createAndFundRoomMatch(room, secondId);
+    expect(await prisma.match.findUniqueOrThrow({ where: { id: firstId }, include: { players: true } })).toMatchObject({
+      status: "FINISHED", players: expect.arrayContaining(users.map(user => expect.objectContaining({ userId: user.id }))),
+    });
+    expect(await prisma.match.findUniqueOrThrow({ where: { id: secondId } })).toMatchObject({ roomId: room.id, status: "ACTIVE" });
+    for (const user of users) {
+      expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } })).balance).toBe(900);
+      expect(await prisma.transaction.count({ where: { userId: user.id, referenceId: secondId, type: "DEBIT" } })).toBe(1);
+      expect(await prisma.transaction.count({ where: { userId: user.id, referenceId: firstId, referenceType: "MATCH_WAGER" } })).toBe(1);
+    }
+  });
+
+  it.each(GAME_IDS)("completes the paid %s consent -> HTTP funding -> fresh engine flow", async gameId => {
+    const users = [await player(), await player()];
+    framework.config.onMatchFinished = async (_room, result) => {
+      await api.settleMatch(result.matchId, { winnerIds: [], resultType: "DRAW" });
+    };
+    const room = await framework.roomManager.createRoom({ gameId, hostId: users[0].id, hostSocket: makeSocket("host"), stake: 100, maxPlayers: 2 });
+    await framework.roomManager.joinRoom({ roomId: room.id, playerId: users[1].id, socket: makeSocket("guest") });
+    room.players.get(users[1].id)!.isReady = true;
+    await framework.matchManager.startMatch({ roomId: room.id, startedBy: users[0].id });
+    const firstId = room.match!.matchId;
+    await framework.matchManager.finishMatch(room, {
+      ok: true, state: framework.gameStateManager.getState(room), events: [], finished: true, winnerSeats: [],
+    });
+    await framework.matchManager.requestRematch(room.id, users[0].id);
+    const votes = await Promise.allSettled([
+      framework.matchManager.requestRematch(room.id, users[1].id),
+      framework.matchManager.requestRematch(room.id, users[1].id),
+    ]);
+    expect(votes.filter(r => r.status === "fulfilled")).toHaveLength(1);
+    expect(room.status).toBe("playing");
+    const secondId = room.match!.matchId;
+    expect(secondId).not.toBe(firstId);
+    await api.createAndFundRoomMatch(room, secondId);
+    expect(await prisma.match.findUniqueOrThrow({ where: { id: firstId } })).toMatchObject({ status: "FINISHED" });
+    expect(await prisma.match.findUniqueOrThrow({ where: { id: secondId } })).toMatchObject({ status: "ACTIVE", roomId: room.id });
+    for (const user of users) {
+      expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } })).balance).toBe(900);
+      expect(await prisma.transaction.count({ where: { userId: user.id, referenceId: secondId, type: "DEBIT" } })).toBe(1);
+    }
+  });
+
+  it("rejects a rematch before the previous match settles, with no extra debit", async () => {
+    const users = [await player(), await player()];
+    const room = await framework.roomManager.createRoom({ gameId: "chess", hostId: users[0].id, hostSocket: makeSocket("host"), stake: 100, maxPlayers: 2 });
+    await framework.roomManager.joinRoom({ roomId: room.id, playerId: users[1].id, socket: makeSocket("guest") });
+    const firstId = randomUUID();
+    await api.createAndFundRoomMatch(room, firstId);
+    await expect(api.createAndFundRoomMatch(room, randomUUID())).rejects.toThrow("finish settlement");
+    expect((await prisma.match.findUniqueOrThrow({ where: { id: firstId } })).roomId).toBe(room.id);
+    for (const user of users) expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } })).balance).toBe(900);
+  });
+
+  it("rolls back the room pointer and all rematch debits on insufficient funds", async () => {
+    const users = [await player(), await player(100)];
+    const room = await framework.roomManager.createRoom({ gameId: "chess", hostId: users[0].id, hostSocket: makeSocket("host"), stake: 100, maxPlayers: 2 });
+    await framework.roomManager.joinRoom({ roomId: room.id, playerId: users[1].id, socket: makeSocket("guest") });
+    const firstId = randomUUID();
+    await api.createAndFundRoomMatch(room, firstId);
+    await api.settleMatch(firstId, { winnerIds: [users[0].id], resultType: "WIN" });
+    const before = await prisma.wallet.findUniqueOrThrow({ where: { userId: users[0].id } });
+    const secondId = randomUUID();
+    await expect(api.createAndFundRoomMatch(room, secondId)).rejects.toThrow("Insufficient balance");
+    expect((await prisma.match.findUniqueOrThrow({ where: { id: firstId } })).roomId).toBe(room.id);
+    expect(await prisma.match.count({ where: { id: secondId } })).toBe(0);
+    expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: users[0].id } })).balance).toBe(before.balance);
+    expect(await prisma.transaction.count({ where: { referenceId: secondId } })).toBe(0);
+  });
+
+  it("funds just one rematch when different match IDs race for the same settled room", async () => {
+    const users = [await player(), await player()];
+    const room = await framework.roomManager.createRoom({ gameId: "chess", hostId: users[0].id, hostSocket: makeSocket("host"), stake: 100, maxPlayers: 2 });
+    await framework.roomManager.joinRoom({ roomId: room.id, playerId: users[1].id, socket: makeSocket("guest") });
+    const firstId = randomUUID();
+    await api.createAndFundRoomMatch(room, firstId);
+    await api.settleMatch(firstId, { winnerIds: [], resultType: "DRAW" });
+    const newIds = [randomUUID(), randomUUID()];
+    const results = await Promise.allSettled(newIds.map(id => api.createAndFundRoomMatch(room, id)));
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+    expect(await prisma.match.count({ where: { id: { in: newIds } } })).toBe(1);
+    for (const user of users) {
+      expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } })).balance).toBe(900);
+      expect(await prisma.transaction.count({ where: { userId: user.id, referenceId: { in: newIds }, type: "DEBIT" } })).toBe(1);
+    }
+  });
 });

@@ -35,6 +35,8 @@ export interface StartMatchOptions {
 
 export interface GameActionOptions {
   roomId: RoomId;
+  /** Required at the socket boundary; optional for trusted internal callers. */
+  matchId?: string;
   playerId: string;
   action: GameAction;
 }
@@ -114,6 +116,70 @@ export class MatchManager {
     } catch (error) {
       this.framework.error("Physics tick error", error);
     }
+  }
+
+  async declineRematch(roomId: RoomId, playerId: string) {
+    return this.framework.gameStateManager.enqueue(roomId, async () => {
+      const room = this.framework.roomManager.getRoom(roomId);
+      if (!room) throw new Error("Room not found");
+      const player = room.players.get(playerId);
+      if (!player || player.isSpectator) throw new Error("UNAUTHORIZED");
+      if (room.status !== "ended") throw new Error("The rematch has already started");
+      room.rematch = null;
+      const update = { roomId, requestedBy: [], active: false };
+      this.framework.syncManager.broadcastToRoom(room, "rematch:update", update);
+      return update;
+    });
+  }
+
+  /** Rematches need unanimous consent and go through the normal funding hook. */
+  async requestRematch(roomId: RoomId, playerId: string) {
+    return this.framework.gameStateManager.enqueue(roomId, async () => {
+      const room = this.framework.roomManager.getRoom(roomId);
+      if (!room) throw new Error("Room not found");
+      const player = room.players.get(playerId);
+      if (!player || player.isSpectator) throw new Error("UNAUTHORIZED");
+      if (room.status !== "ended" || !room.match?.finishedAt) {
+        throw new Error("Rematch is available only after the match has ended");
+      }
+      if (room.config.settings.tournamentId) {
+        throw new Error("Tournament matches cannot be rematched in this room");
+      }
+      const participants = [...room.players.values()].filter(p => !p.isSpectator);
+      if (participants.length < room.config.minPlayers || participants.some(p => p.connectionStatus !== "connected")) {
+        throw new Error("All players must be present and connected for a rematch");
+      }
+      if (!room.rematch || room.rematch.expiresAt <= Date.now()) {
+        room.rematch = { requestedBy: [], active: true, expiresAt: Date.now() + 60_000 };
+      }
+      if (!room.rematch.requestedBy.includes(playerId)) room.rematch.requestedBy.push(playerId);
+      const publish = () => {
+        const update = { roomId, requestedBy: [...(room.rematch?.requestedBy ?? [])], active: !!room.rematch?.active };
+        this.framework.syncManager.broadcastToRoom(room, "rematch:update", update);
+        return update;
+      };
+      if (!participants.every(p => room.rematch!.requestedBy.includes(p.id))) return publish();
+
+      const previousMatch = room.match;
+      const readiness = participants.map(p => p.isReady);
+      room.status = "waiting";
+      participants.forEach(p => { p.isReady = true; });
+      try {
+        await this.startMatch({ roomId, startedBy: room.hostId });
+      } catch (error) {
+        // Failed funding leaves the original result available and no new game.
+        if (room.match === previousMatch) {
+          room.status = "ended";
+          participants.forEach((p, index) => { p.isReady = readiness[index]; });
+        }
+        room.rematch = null;
+        publish();
+        await this.framework.syncManager.broadcastRoomUpdate(room);
+        throw error;
+      }
+      room.rematch = null;
+      return publish();
+    });
   }
 
   async startMatch(options: StartMatchOptions): Promise<MatchRuntime> {
@@ -242,6 +308,13 @@ export class MatchManager {
       throw error;
     }
 
+    // Release the previous runtime only after the new match is funded.
+    if (room.match?.finishedAt) {
+      this.stopPhysicsLoop(room.match.matchId);
+      this.activeMatches.delete(room.match.matchId);
+      this.framework.timerManager.clearRoomTimers(room.id);
+      room.eventLog = [];
+    }
     // Update room only after the lifecycle prerequisite succeeds.
     room.match = match;
     room.status = "playing";
@@ -283,6 +356,9 @@ export class MatchManager {
     if (room.status !== "playing" || !room.match) {
       return this.createErrorResult(null, "Game not started");
     }
+    if (options.matchId && options.matchId !== room.match.matchId) {
+      return this.createErrorResult(null, "Action belongs to a different match");
+    }
     
     const player = room.players.get(playerId);
     if (!player) {
@@ -294,16 +370,21 @@ export class MatchManager {
     }
 
     const actionId = (action as any).actionId as string | undefined;
-    if (actionId) {
-      const cached = this.framework.antiCheatManager.getCachedActionResult(roomId, actionId);
-      if (cached) {
-        return cached;
-      }
-    }
+    const match = room.match;
+    // Action identities belong to one match and one authenticated player.
+    const actionScope = JSON.stringify([roomId, match.matchId, playerId]);
     
     // Serialize state mutations per room so concurrent actions never corrupt
     // the authoritative engine.
     return this.framework.gameStateManager.enqueue(roomId, async () => {
+      if (this.framework.roomManager.getRoom(roomId) !== room || room.match !== match ||
+          room.status !== "playing" || room.players.get(playerId) !== player) {
+        return this.createErrorResult(null, "Match or room membership changed");
+      }
+      // Recheck inside the queue: simultaneous retries can arrive before the
+      // first action has finished and populated its cache entry.
+      const cached = this.framework.antiCheatManager.getCachedActionResult(actionScope, actionId);
+      if (cached) return cached;
       // 10-Minute Hard Match Timer Limit
       const MATCH_LIMIT_MS = 10 * 60 * 1000;
       if (room!.match?.startedAt && Date.now() - room!.match.startedAt > MATCH_LIMIT_MS) {
@@ -408,7 +489,7 @@ export class MatchManager {
         }
 
         // Cache action result for idempotency
-        this.framework.antiCheatManager.cacheActionResult(roomId, actionId, result);
+        this.framework.antiCheatManager.cacheActionResult(actionScope, actionId, result);
       }
       
       return result;

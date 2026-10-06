@@ -1,0 +1,4042 @@
+{
+  "date": "2026-10-06",
+  "baseCommit": "31ee31c",
+  "target": "current dirty working tree; prior changes preserved",
+  "scope": "complete engine, multiplayer and web suites; 15 selected API game test files",
+  "suites": [
+    {
+      "suite": "engine",
+      "files": 24,
+      "tests": 333,
+      "passed": 333,
+      "failed": 0,
+      "skipped": 0,
+      "testFiles": [
+        {
+          "file": "packages/game-engine/__tests__/admin-game-timeout-configuration.test.ts",
+          "status": "passed",
+          "tests": 22,
+          "durationMs": 173.93212890625,
+          "cases": [
+            {
+              "name": "Global Game Time & Timeout Configuration System All 9 Available Games Default Configuration & Typed Strategies configures snake-ladder with 600s max duration and CURRENT_POSITION strategy",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System All 9 Available Games Default Configuration & Typed Strategies configures ludo with 600s max duration and CURRENT_PROGRESS strategy",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System All 9 Available Games Default Configuration & Typed Strategies configures chess with 600s max duration and CONFIGURED_CHESS_RESOLUTION strategy",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System All 9 Available Games Default Configuration & Typed Strategies configures carrom with 600s max duration and CURRENT_POINTS strategy",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System All 9 Available Games Default Configuration & Typed Strategies configures fruit-ninja with 600s max duration and CURRENT_SCORE strategy",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System All 9 Available Games Default Configuration & Typed Strategies configures bubble-shooter with 600s max duration and CURRENT_SCORE_PROGRESS strategy",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System All 9 Available Games Default Configuration & Typed Strategies configures table-tennis with 600s max duration and CURRENT_MATCH_SCORE strategy",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System All 9 Available Games Default Configuration & Typed Strategies configures snake-vs-worms with 600s max duration and CURRENT_SCORE strategy",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System All 9 Available Games Default Configuration & Typed Strategies configures snooker with 600s max duration and CURRENT_FRAME_SCORE strategy",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System Global Match Limit Validation reads default global match limit as 600 seconds (10 minutes)",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System Global Match Limit Validation rejects configuring a global match duration > 600 seconds",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System Global Match Limit Validation rejects configuring a non-positive duration",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System Global Match Limit Validation rejects warning times greater than or equal to the maximum match duration",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System Global Match Limit Validation allows valid global settings updates and increments version",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System Admin Game Configuration CRUD, RBAC & Audit rejects unauthorized admin modifications",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System Admin Game Configuration CRUD, RBAC & Audit rejects game match duration greater than platform maximum (600s)",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System Admin Game Configuration CRUD, RBAC & Audit updates turn timeout and match duration and increments configurationVersion",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System Admin Game Configuration CRUD, RBAC & Audit rejects invalid free-text winner rules (enforces strongly typed enum)",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System Active Match Protection & Snapshot Invariance preserves active match deadline and snapshot when admin changes game configuration",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System Active Match Protection & Snapshot Invariance verifies active match protection across all 9 available games",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System Game Disabling & Availability disabling a game prevents new matches but allows active matches to continue",
+              "status": "passed"
+            },
+            {
+              "name": "Global Game Time & Timeout Configuration System Financial & Entry Fee Safety changing match-time configuration does not alter entry fee or prize calculation",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/bubble-shooter.test.ts",
+          "status": "passed",
+          "tests": 10,
+          "durationMs": 209.753662109375,
+          "cases": [
+            {
+              "name": "BubbleShooterEngine initializes a 2-player multiplayer match",
+              "status": "passed"
+            },
+            {
+              "name": "BubbleShooterEngine processes a valid upward shot",
+              "status": "passed"
+            },
+            {
+              "name": "BubbleShooterEngine rejects invalid downward shots",
+              "status": "passed"
+            },
+            {
+              "name": "BubbleShooterEngine resets combo on a missed shot",
+              "status": "passed"
+            },
+            {
+              "name": "BubbleShooterEngine declares highest score player as winner on match timeout",
+              "status": "passed"
+            },
+            {
+              "name": "BubbleShooterEngine matches the solo playfield geometry and keeps every bubble inside it",
+              "status": "passed"
+            },
+            {
+              "name": "BubbleShooterEngine does not create a turn deadline or eliminate idle players after ten seconds",
+              "status": "passed"
+            },
+            {
+              "name": "BubbleShooterEngine cycles the displayed preview into the cannon and records a unique shot sequence",
+              "status": "passed"
+            },
+            {
+              "name": "BubbleShooterEngine keeps a ceiling shot at its impact x instead of snapping it into the left corner",
+              "status": "passed"
+            },
+            {
+              "name": "BubbleShooterEngine removes detached bubbles from the authoritative grid after popping their support",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/carrom.test.ts",
+          "status": "passed",
+          "tests": 22,
+          "durationMs": 2147.783447265625,
+          "cases": [
+            {
+              "name": "CarromEngine turn flow starts in striker placement phase for seat 0",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn flow accepts place-striker and ends the placement phase",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn flow rejects placement outside the valid baseline range",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn flow rejects a strike before the striker is placed",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn flow rejects actions from the wrong seat",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn flow advances the turn after a legal strike and records the action",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn flow lets the next player place and strike back",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn flow a full-power miss settles coins without pocketing the striker",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 1: Player 1 pockets own coin -> keeps turn",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 2: Player 1 pockets nothing -> loses turn (opponent gets turn)",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 3: Player 1 pockets opponent coin only -> loses turn",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 4: Player 1 pockets own + opponent coin -> keeps turn",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 5: Striker foul -> opponent gets turn and foul is recorded",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 6: Player 1 pockets two own coins -> keeps turn",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 7: TEST 1 - Queen captured alone enters PENDING_COVER, remains off-board, player keeps turn",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 7b: TEST 2 - Follow-up shot in PENDING_COVER pockets own coin -> COVERED and keeps turn",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 7c: TEST 3 - Follow-up shot in PENDING_COVER fails -> Queen returns to center, opponent gets turn",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 8: TEST 4 - Queen + own white coin in same shot -> immediate COVERED, extra turn",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 8b: Queen + own + opponent in same shot -> Queen covered, +1 score, keeps turn",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 8c: Win condition cases - 9 own coins + queen covered = WIN; otherwise NOT WIN",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 9: Turn timeout passes turn to Player 2 without ending match and updates engine state",
+              "status": "passed"
+            },
+            {
+              "name": "CarromEngine turn calculation scenarios Scenario 10: Subsequent timeout passes turn back to Player 1",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/carromPockets.test.ts",
+          "status": "passed",
+          "tests": 18,
+          "durationMs": 70.074951171875,
+          "cases": [
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 0 at speed 0 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 0 at speed 0.3 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 0 at speed 5 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 0 at speed 27 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 1 at speed 0 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 1 at speed 0.3 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 1 at speed 5 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 1 at speed 27 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 2 at speed 0 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 2 at speed 0.3 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 2 at speed 5 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 2 at speed 27 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 3 at speed 0 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 3 at speed 0.3 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 3 at speed 5 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture captures a coin over pocket 3 at speed 27 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture does not capture a coin merely touching the outside of the hole",
+              "status": "passed"
+            },
+            {
+              "name": "Authoritative Carrom pocket capture still identifies a striker entering the pocket as a foul event",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/carromSync.test.ts",
+          "status": "passed",
+          "tests": 14,
+          "durationMs": 1405.33935546875,
+          "cases": [
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 1. Striker placement validation within baseline bounds",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 2. Striker placement rejected outside baseline bounds",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 3. Striker placement overlap detection with coins",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 4. Opponent seat placement bounds (seat 1 baseline top, seat 0 bottom)",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 5. Out-of-turn placement rejection",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 6. Strike without placement rejection",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 7. Atomic placement with strike action",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 8. Monotonic turn number verification",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 9. Coordinate transforms preserve round-trip positions for Seat 0 and Seat 1",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 10. Angle transformations flip 180 deg for Seat 1 and are identity for Seat 0",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 11. Client state drops stale turn packets and respects monotonically increasing turns",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 12. Turn sequence keys by seat and turn",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 13. Border boundary rigor: unpocketed coins never escape onto or past the wooden frame",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom Striker Sync & Coordinate Rigor 14. Corner cushion rebound: piece travelling into the outer corner behind pocket rebounds towards board",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/chess.test.ts",
+          "status": "passed",
+          "tests": 17,
+          "durationMs": 239.634765625,
+          "cases": [
+            {
+              "name": "ChessEngine assigns white to seat 0 and black to seat 1 by user ID, regardless of input order",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine keeps SAN history chronological and unchanged by invalid moves or duplicate snapshot reads",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine restores the same participant colors and move history after reconnect",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine handles valid moves and piece captures",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine rejects out of turn moves",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine rejects illegal moves",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine starts a 10-minutes match with seeded clocks and a live deadline",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine checkmate mode has no clock",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine flags the current player when their clock hits zero",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine flags on move when the clock has already run out",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine handles match timeout with material evaluation and rejects wrong-turn turn timeout",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine handles checkmate (Fool's Mate)",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine handles resignation",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine handles draw offer, decline, and accept",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine handles castling",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine handles en passant capture",
+              "status": "passed"
+            },
+            {
+              "name": "ChessEngine handles pawn promotion",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/confirmation-popups-safety.test.ts",
+          "status": "passed",
+          "tests": 9,
+          "durationMs": 13.734619140625,
+          "cases": [
+            {
+              "name": "Confirmation Popups for Logout and Game Exit (Safety UI/UX) 1. Logout Confirmation Logic opens confirmation popup when user clicks Logout instead of immediately signing out",
+              "status": "passed"
+            },
+            {
+              "name": "Confirmation Popups for Logout and Game Exit (Safety UI/UX) 1. Logout Confirmation Logic cancels logout and keeps user logged in when Cancel is clicked",
+              "status": "passed"
+            },
+            {
+              "name": "Confirmation Popups for Logout and Game Exit (Safety UI/UX) 1. Logout Confirmation Logic executes existing signOut when Logout is confirmed",
+              "status": "passed"
+            },
+            {
+              "name": "Confirmation Popups for Logout and Game Exit (Safety UI/UX) 1. Logout Confirmation Logic prevents duplicate logout calls on accidental double-click while submitting",
+              "status": "passed"
+            },
+            {
+              "name": "Confirmation Popups for Logout and Game Exit (Safety UI/UX) 2. Active Game Exit Confirmation Logic opens \"Exit Game?\" confirmation dialog when attempting to exit during an active match",
+              "status": "passed"
+            },
+            {
+              "name": "Confirmation Popups for Logout and Game Exit (Safety UI/UX) 2. Active Game Exit Confirmation Logic closes dialog and remains in game when \"Continue Playing\" is clicked",
+              "status": "passed"
+            },
+            {
+              "name": "Confirmation Popups for Logout and Game Exit (Safety UI/UX) 2. Active Game Exit Confirmation Logic calls existing onBack / forfeit handler when \"Exit Game\" is confirmed",
+              "status": "passed"
+            },
+            {
+              "name": "Confirmation Popups for Logout and Game Exit (Safety UI/UX) 2. Active Game Exit Confirmation Logic does NOT show exit confirmation popup if the game/match is already finished",
+              "status": "passed"
+            },
+            {
+              "name": "Confirmation Popups for Logout and Game Exit (Safety UI/UX) 2. Active Game Exit Confirmation Logic prevents duplicate exit requests on rapid multi-click",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/fruit-ninja-spawn-balancing.test.ts",
+          "status": "passed",
+          "tests": 8,
+          "durationMs": 186.597900390625,
+          "cases": [
+            {
+              "name": "Fruit Ninja Spawning & Balancing Regressions 1. Game transitions to playing phase with controlled initial active fruits (<= 5)",
+              "status": "passed"
+            },
+            {
+              "name": "Fruit Ninja Spawning & Balancing Regressions 2. Enforces MAX_ACTIVE_FRUITS (<= 5) under continuous gameplay simulation",
+              "status": "passed"
+            },
+            {
+              "name": "Fruit Ninja Spawning & Balancing Regressions 3. Spawn interval is respected and does not fire uncontrollably fast",
+              "status": "passed"
+            },
+            {
+              "name": "Fruit Ninja Spawning & Balancing Regressions 4. Sliced fruits credit points and update player score",
+              "status": "passed"
+            },
+            {
+              "name": "Fruit Ninja Spawning & Balancing Regressions 5. Expired/fallen fruits past screen boundaries are cleaned up",
+              "status": "passed"
+            },
+            {
+              "name": "Fruit Ninja Spawning & Balancing Regressions 6. Difficulty scaling increases fruit wave burst size gradually without exceeding 5",
+              "status": "passed"
+            },
+            {
+              "name": "Fruit Ninja Spawning & Balancing Regressions 7. Long-running match never creates unbounded target memory growth",
+              "status": "passed"
+            },
+            {
+              "name": "Fruit Ninja Spawning & Balancing Regressions 8. Game rules, bomb hits, and score settlements remain intact",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/fruit-ninja.test.ts",
+          "status": "passed",
+          "tests": 18,
+          "durationMs": 169.651611328125,
+          "cases": [
+            {
+              "name": "FruitNinjaEngine lifecycle starts waiting with 3 lives and zero scores",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine lifecycle runs a 3s server-authoritative countdown before play starts",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine lifecycle rejects blade input outside the playing phase",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine lifecycle rejects malformed and out-of-range slice timestamps",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine lifecycle serializes a server clock reference and live match time",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine slicing scores +10 when a sweep hits a fruit trajectory",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine slicing rejects a sweep that never crossed the fruit",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine slicing cannot slice a fruit that already expired",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine slicing requires an open sweep before slice-move / slice-end",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine slicing awards combo bonuses and tracks the longest combo",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine misses and lives charges a miss to each seat exactly once when a fruit expires",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine misses and lives eliminates a player when lives hit zero and hands the win to the opponent",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine misses and lives bomb hit eliminates instantly without touching lives or score",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine misses and lives slicing a life target restores a life up to the cap",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine match resolution declares a draw when the timer expires with equal scores",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine match resolution awards the higher score on timer expiry",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine match resolution handles an explicit match timeout the same way",
+              "status": "passed"
+            },
+            {
+              "name": "FruitNinjaEngine match resolution resign ends the match with the opponent winning",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/global-match-history-replay-stats.test.ts",
+          "status": "passed",
+          "tests": 7,
+          "durationMs": 34.21923828125,
+          "cases": [
+            {
+              "name": "GLOBAL MATCH HISTORY, REPLAY & PLAYER STATISTICS SYSTEM 1. Match History Creation Across All 10 Games creates permanent match history records with correct result reasons for all 10 games",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH HISTORY, REPLAY & PLAYER STATISTICS SYSTEM 1. Match History Creation Across All 10 Games prevents duplicate match history records (idempotency)",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH HISTORY, REPLAY & PLAYER STATISTICS SYSTEM 2. Match Summary View Formatting formats match summary view accurately (Game, Result, Opponent, Score, Duration, Reason)",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH HISTORY, REPLAY & PLAYER STATISTICS SYSTEM 3. Game-Specific and Global Player Statistics computes separate stats for Snooker (Highest Break, Avg Break), Chess (Draws, Win Rate), Cricket (Runs), Carrom (Points)",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH HISTORY, REPLAY & PLAYER STATISTICS SYSTEM 4. Authoritative Replay System & Deterministic Reconstruction records strictly ordered sequence of authoritative events and verifies integrity",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH HISTORY, REPLAY & PLAYER STATISTICS SYSTEM 4. Authoritative Replay System & Deterministic Reconstruction detects missing, duplicate, or tampered event sequences in replay integrity verification",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH HISTORY, REPLAY & PLAYER STATISTICS SYSTEM 5. Time-Limit Analytics Across Games accurately computes normal vs time-limit completion percentages per game",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/global-match-qa-monitoring-edge-cases.test.ts",
+          "status": "passed",
+          "tests": 28,
+          "durationMs": 343.433837890625,
+          "cases": [
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 1. Audit & Data Integrity Validation detects valid 10-minute match configuration and active state fields",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 1. Audit & Data Integrity Validation identifies expired matches where serverTime > matchDeadline",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 2. Match Lifecycle State Machine Transitions permits valid transitions: ACTIVE -> TIME_EXPIRED -> FINALIZING -> COMPLETED",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 2. Match Lifecycle State Machine Transitions strictly prevents illegal backward transitions",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 3. Concurrency & Exactly-Once Finalization Worker A claims finalization lock, Worker B is rejected (no duplicate finalization)",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 3. Concurrency & Exactly-Once Finalization Normal result at 09:59.900 wins race over 10:00.000 timeout trigger",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 4. In-Flight Action Completion vs Late Action Rejection action accepted before deadline executes to completion",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 4. In-Flight Action Completion vs Late Action Rejection action received after deadline expiration is strictly rejected",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 5. Client Clock Manipulation & Network Delay Invariance server deadline is authoritative even if client clock is skewed by 1 hour",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 5. Client Clock Manipulation & Network Delay Invariance handles simulated network delays (100ms - 5000ms) authoritatively",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 6. Reconnection & Background Resync Invariance preserves identical matchDeadline and authoritative score across reconnects",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 6. Reconnection & Background Resync Invariance expired match during sleep/disconnect finalizes authoritatively upon resync",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 7. Idempotent Settlement & Tournament Safety prevents duplicate settlement calls using idempotency key",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 8. Precise 10-Minute Boundary Conditions 09:59.000 (599,000ms) is ACTIVE",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 8. Precise 10-Minute Boundary Conditions 09:59.900 (599,900ms) is ACTIVE",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 8. Precise 10-Minute Boundary Conditions 09:59.999 (599,999ms) is ACTIVE",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 8. Precise 10-Minute Boundary Conditions 10:00.000 (600,000ms) is EXPIRED",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 8. Precise 10-Minute Boundary Conditions 10:00.001 (600,001ms) is EXPIRED",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 8. Precise 10-Minute Boundary Conditions 10:01.000 (601,000ms) is EXPIRED",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 9. Deterministic Tie Handling Across All 10 Games 1. Snake & Ladder: handles position tie with standard draw (no random selection)",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 9. Deterministic Tie Handling Across All 10 Games 2. Ludo: handles identical tokens & steps with standard draw",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 9. Deterministic Tie Handling Across All 10 Games 3. Chess: handles equal material & clocks with standard draw",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 9. Deterministic Tie Handling Across All 10 Games 4. Fruit Ninja: handles equal scores with standard draw",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 9. Deterministic Tie Handling Across All 10 Games 5. Bubble Shooter: handles equal score & bubble count with draw",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 9. Deterministic Tie Handling Across All 10 Games 6. Table Tennis: handles equal sets & points with draw",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 9. Deterministic Tie Handling Across All 10 Games 7. Snake vs Worms: handles equal score & length with draw",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 9. Deterministic Tie Handling Across All 10 Games 9. Carrom: handles equal points & coins with draw",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS 9. Deterministic Tie Handling Across All 10 Games 10. Snooker: handles equal frame points & break in 15-red Snooker with draw",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/global-match-timeout-engine.test.ts",
+          "status": "passed",
+          "tests": 13,
+          "durationMs": 197.39404296875,
+          "cases": [
+            {
+              "name": "GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS 1. Central 10-Minute Deadline Configuration all games configure authoritative 600s (10-minute) maximum match deadline",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS 2. Normal Completion Has Priority if match naturally completes before deadline, timeout does not overwrite winner",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS 3. Duplicate Timeout Handling & Idempotency handles multiple sequential timeout events idempotently without double-finalizing",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS 4. Deterministic Winner Resolution Across All 10 Games 1. Snake & Ladder: resolves closest player to 100",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS 4. Deterministic Winner Resolution Across All 10 Games 2. Ludo: resolves finished tokens -> total forward progress -> nearest token",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS 4. Deterministic Winner Resolution Across All 10 Games 3. Chess: evaluates standard material balance (Q=9, R=5, B=3, N=3, P=1)",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS 4. Deterministic Winner Resolution Across All 10 Games 4. Fruit Ninja: resolves highest authoritative slice score",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS 4. Deterministic Winner Resolution Across All 10 Games 5. Bubble Shooter: resolves score -> fewest remaining bubbles",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS 4. Deterministic Winner Resolution Across All 10 Games 6. Table Tennis: resolves sets won -> current set points",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS 4. Deterministic Winner Resolution Across All 10 Games 7. Snake vs Worms: resolves mass/score -> body length",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS 4. Deterministic Winner Resolution Across All 10 Games 9. Carrom: resolves points -> pocketed assigned coins",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS 4. Deterministic Winner Resolution Across All 10 Games 10. Snooker: resolves frame points -> highest break in 15-red Snooker without changing format",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCH TIMEOUT ENGINE SPECIFICATION TESTS 5. Deterministic Tie Handling declares deterministic draw when scores and tiebreak metrics are equal",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/global-matchmaking-readiness-start.test.ts",
+          "status": "passed",
+          "tests": 13,
+          "durationMs": 26.624755859375,
+          "cases": [
+            {
+              "name": "GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM 1. Matchmaking & Eligibility Validation places valid player into matchmaking queue without deducting entry fee upfront",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM 1. Matchmaking & Eligibility Validation rejects player with insufficient balance from entering queue",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM 1. Matchmaking & Eligibility Validation rejects duplicate queue entry for the same player",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM 2. Duplicate Match Protection prevents a player in an active match from joining matchmaking or another room",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM 3. Player Readiness & Timeout tracks readiness and does NOT start match until all required players ready up",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM 3. Player Readiness & Timeout cancels room and does NOT start 10m timer if ready timeout expires",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM 4. Countdown & Pre-Start Disconnect progresses 3 -> 2 -> 1 -> 0 and launches match atomically",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM 4. Countdown & Pre-Start Disconnect cancels countdown if a player disconnects during countdown",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM 5. Critical 10-Minute Timer Start Rule timer starts ONLY at MATCH_STARTED across all 9 available games",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM 5. Critical 10-Minute Timer Start Rule reconnect after match start does NOT reset or extend the 10-minute deadline",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM 6. Financial & Entry Fee Processing deducts entry fee exactly once upon match launch",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM 6. Financial & Entry Fee Processing refunds entry fee if match fails to start or aborts before active gameplay",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MATCHMAKING, MATCH START & PLAYER READINESS SYSTEM 7. Tournament Match Flow runs tournament match through ready -> countdown -> match start with 10m limit",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/global-multiplayer-security-anti-cheat.test.ts",
+          "status": "passed",
+          "tests": 10,
+          "durationMs": 265.013427734375,
+          "cases": [
+            {
+              "name": "GLOBAL MULTIPLAYER SECURITY & ANTI-CHEAT SYSTEM 1. Score & Winner Forgery Rejection rejects client attempts to inject arbitrary score, coins, or winner",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER SECURITY & ANTI-CHEAT SYSTEM 2. Turn Order Protection rejects action from a player when it is not their turn",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER SECURITY & ANTI-CHEAT SYSTEM 3. Action Idempotency returns previously cached result for duplicate actionId without double-executing",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER SECURITY & ANTI-CHEAT SYSTEM 4. State Version & Stale Action Protection rejects stale action and provides latest authoritative state for resync",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER SECURITY & ANTI-CHEAT SYSTEM 5. Impossible Action & Numeric Sanity rejects actions with NaN, Infinity, or impossible negative power",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER SECURITY & ANTI-CHEAT SYSTEM 6. Room & Socket Identity Protection rejects actions from unauthenticated users or non-member spectators",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER SECURITY & ANTI-CHEAT SYSTEM 7. Timer Manipulation Immunity rejects actions after authoritative deadline even if client clock is lagging",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER SECURITY & ANTI-CHEAT SYSTEM 8. Authoritative Engine Enforcement Across All 10 Games enforces server rules and rejects illegal moves across all available games",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER SECURITY & ANTI-CHEAT SYSTEM 9. Financial Settlement Idempotency settles match exactly once and prevents duplicate payout requests",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER SECURITY & ANTI-CHEAT SYSTEM 10. Tournament Advancement Integrity advances winner strictly based on server-verified finished match",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/global-realtime-game-events-notifications.test.ts",
+          "status": "passed",
+          "tests": 26,
+          "durationMs": 48.06884765625,
+          "cases": [
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 1. Global Event Architecture & Standard Envelopes creates strictly formatted GameEventEnvelope with monotonic sequence and priority",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 1. Global Event Architecture & Standard Envelopes verifies standard events coverage in STANDARD_GAME_EVENT_TYPES",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 2. Match Start & Information Security MATCH_STARTED payload contains only sanitized public information",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 3. Countdown & Turn Management COUNTDOWN_STARTED allows local client animation while server timestamp remains authoritative",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 3. Countdown & Turn Management TURN_CHANGED provides authoritative current active player",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 4. Score Updates & Foul Tracking SCORE_UPDATED broadcasts server-authoritative scores",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 4. Score Updates & Foul Tracking FOUL_OCCURRED triggers foul event and penalty calculation",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 5. Time Warnings & Expiration TIME_WARNING fires only at designated thresholds without per-second spam",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 5. Time Warnings & Expiration TIME_EXPIRED disables client gameplay UI and awaits authoritative settlement",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 6. Match Completion & Result Distribution MATCH_COMPLETED provides final winner, scores, duration, and result reason",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 7. Disconnect, Reconnect & Authoritative Resync PLAYER_DISCONNECTED starts reconnect grace period without declaring instant winner",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 7. Disconnect, Reconnect & Authoritative Resync PLAYER_RECONNECTED followed by STATE_RESYNC restores complete authoritative state",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 8. Deduplication & Out-of-Order Handling client deduplicates events by eventId",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 8. Deduplication & Out-of-Order Handling client detects out-of-order sequence gap and triggers resync",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 9. Persistent Notifications & Backend Idempotency prevents duplicate persistent notifications using eventId or referenceId",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 9. Persistent Notifications & Backend Idempotency financial notifications are generated exclusively from authoritative backend services",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 10. Game-Specific Real-Time Events (All 10 Games) Snake & Ladder: DICE_ROLLED, PLAYER_MOVED, SNAKE_TRIGGERED, LADDER_TRIGGERED",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 10. Game-Specific Real-Time Events (All 10 Games) Ludo: DICE_ROLLED, TOKEN_MOVED, TOKEN_CAPTURED, TOKEN_COMPLETED",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 10. Game-Specific Real-Time Events (All 10 Games) Chess: MOVE_MADE, CHECK, CHECKMATE, STALEMATE, DRAW",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 10. Game-Specific Real-Time Events (All 10 Games) Fruit Ninja: SCORE_EVENT, COMBO_EVENT, ROUND_PROGRESS, FRUIT_SLICED",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 10. Game-Specific Real-Time Events (All 10 Games) Bubble Shooter: SHOT_RESOLVED, BUBBLE_MATCHED, COMBO_EVENT, LEVEL_PROGRESS",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 10. Game-Specific Real-Time Events (All 10 Games) Table Tennis: RALLY_STARTED, RALLY_COMPLETED, POINT_SCORED, SET_COMPLETED",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 10. Game-Specific Real-Time Events (All 10 Games) Snake vs Worms: PLAYER_MOVED, COLLISION, KILL, OBJECTIVE_COMPLETED",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 10. Game-Specific Real-Time Events (All 10 Games) Carrom: SHOT_STARTED, SHOT_COMPLETED, COIN_POCKETED, FOUL, QUEEN_COVERED",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 10. Game-Specific Real-Time Events (All 10 Games) Snooker: SHOT_STARTED, SHOT_COMPLETED, BALL_POTTED, FOUL, BREAK_UPDATED, TARGET_CHANGED, FREE_BALL, FRAME_COMPLETED",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL REAL-TIME GAME EVENTS & NOTIFICATION SYSTEM 11. Event Prioritization & Visual Grouping groups rapid in-game events to prevent popup flooding",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/ludo.test.ts",
+          "status": "passed",
+          "tests": 6,
+          "durationMs": 44.554443359375,
+          "cases": [
+            {
+              "name": "LudoEngine initializes 2 players with red and green tokens in yard",
+              "status": "passed"
+            },
+            {
+              "name": "LudoEngine rejects action from player out of turn",
+              "status": "passed"
+            },
+            {
+              "name": "LudoEngine auto-enters yard token on a 6 when all yard choices lead to start tile",
+              "status": "passed"
+            },
+            {
+              "name": "LudoEngine triggers selection phase when multiple distinct move destinations exist",
+              "status": "passed"
+            },
+            {
+              "name": "LudoEngine passes turn when rolling a non-6 with all tokens in yard",
+              "status": "passed"
+            },
+            {
+              "name": "LudoEngine auto-executes single legal move and declares winner when 4 tokens finish",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/snake-ladder.test.ts",
+          "status": "passed",
+          "tests": 6,
+          "durationMs": 43.197998046875,
+          "cases": [
+            {
+              "name": "SnakeLadderEngine initializes with players at tile 1 and waiting-for-roll phase",
+              "status": "passed"
+            },
+            {
+              "name": "SnakeLadderEngine rejects roll from player whose turn it is not",
+              "status": "passed"
+            },
+            {
+              "name": "SnakeLadderEngine advances player token on a normal dice roll",
+              "status": "passed"
+            },
+            {
+              "name": "SnakeLadderEngine climbs a ladder when landing on a ladder base",
+              "status": "passed"
+            },
+            {
+              "name": "SnakeLadderEngine grants extra turn on rolling a 6",
+              "status": "passed"
+            },
+            {
+              "name": "SnakeLadderEngine declares winner when a player reaches tile 100",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/snake-vs-worms.test.ts",
+          "status": "passed",
+          "tests": 9,
+          "durationMs": 122.573486328125,
+          "cases": [
+            {
+              "name": "SnakeVsWormsEngine - Shared World Arena Architecture initializes 2-player match in 2000x2000 shared world with Snake (Seat 0, 300,600) and Worm (Seat 1, 300,1400)",
+              "status": "passed"
+            },
+            {
+              "name": "SnakeVsWormsEngine - Shared World Arena Architecture validates direction changes and blocks 180-degree instant reversal",
+              "status": "passed"
+            },
+            {
+              "name": "SnakeVsWormsEngine - Shared World Arena Architecture handles boost activation, energy drain, and recovery",
+              "status": "passed"
+            },
+            {
+              "name": "SnakeVsWormsEngine - Shared World Arena Architecture awards food score, growth, and restores boost energy on food collection",
+              "status": "passed"
+            },
+            {
+              "name": "SnakeVsWormsEngine - Shared World Arena Architecture eliminates player on wall collision in 2000x2000 world",
+              "status": "passed"
+            },
+            {
+              "name": "SnakeVsWormsEngine - Shared World Arena Architecture ignores self collision completely per rule specification",
+              "status": "passed"
+            },
+            {
+              "name": "SnakeVsWormsEngine - Shared World Arena Architecture eliminates player on head-to-opponent-body collision",
+              "status": "passed"
+            },
+            {
+              "name": "SnakeVsWormsEngine - Shared World Arena Architecture resolves head-to-head collision in favor of longer player",
+              "status": "passed"
+            },
+            {
+              "name": "SnakeVsWormsEngine - Shared World Arena Architecture handles match timer expiration with score and length tiebreakers",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/snookerPhysics.test.ts",
+          "status": "passed",
+          "tests": 4,
+          "durationMs": 45.353271484375,
+          "cases": [
+            {
+              "name": "Snooker Physics Simulation initializes 22-ball snooker setup correctly (1 cue + 15 reds + 6 colors)",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Physics Simulation simulates elastic ball-to-ball collision with snooker balls",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Physics Simulation simulates cushion rail rebound",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Physics Simulation detects pocketing when ball enters pocket threshold",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/snookerRules.test.ts",
+          "status": "passed",
+          "tests": 20,
+          "durationMs": 2841.453857421875,
+          "cases": [
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite A1. Initial table setup: 15 reds, 6 colors, cue ball, target RED, scores 0",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite A2. Red phase scoring: potting legal red awards +1 pt, increments break, transitions to COLOR_PHASE",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite A3. Red phase miss: passing turn to opponent without foul resets break",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite B1. Color phase scoring: legally potting nominated Black awards +7 pts, respots Black, transitions to RED_PHASE",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite B2. Color respotting hierarchy: if home spot is occupied, respot to highest vacant spot",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite C1. Final Red -> Color -> Yellow Clearance sequence: missing color after final red transitions to YELLOW",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite D1. Color clearance sequence: colors are potted in strict order without respotting",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite E1. Foul penalty calculation: hitting Black first when RED is on awards 7 points to opponent",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite E2. In-off cue ball foul: awards minimum 4 points and gives ball in hand inside the D",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite F1. Free Ball on Yellow clearance: awards 2 points and retains Yellow on",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite G1. Final Black pot when leading: ends frame and determines frame winner",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite G2. Tied score on final Black: triggers WPBSA Respotted Black procedure",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite H1. Duplicate shot protection: identical shotId is processed once idempotently",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite H2. Stale state protection: rejects action when expectedStateVersion does not match",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite H3. Turn ownership: rejects action from player whose turn it is not",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite H4. Turn timeout: awards 4 points to opponent and enforces inBaulkOnly placement inside D",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite H5. Concede validation: rejects concession on already completed frame or match",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite H6. Multi-frame match alternates break-off seat each frame",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite I1. Invariant: redsRemaining is non-negative and never increases",
+              "status": "passed"
+            },
+            {
+              "name": "Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite I2. Invariant: completed frame cannot receive further strike action",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/table-tennis.test.ts",
+          "status": "passed",
+          "tests": 10,
+          "durationMs": 17.86865234375,
+          "cases": [
+            {
+              "name": "TableTennisEngine - Winning Score and Time Management initializes a 2-player table tennis match",
+              "status": "passed"
+            },
+            {
+              "name": "TableTennisEngine - Winning Score and Time Management handles 5-3 immediate Player 1 win",
+              "status": "passed"
+            },
+            {
+              "name": "TableTennisEngine - Winning Score and Time Management handles 5-4 continue (lead is only 1 point)",
+              "status": "passed"
+            },
+            {
+              "name": "TableTennisEngine - Winning Score and Time Management handles 6-4 immediate win after 5-4 lead extension",
+              "status": "passed"
+            },
+            {
+              "name": "TableTennisEngine - Winning Score and Time Management handles 5-5 and 6-5 deuce continue, and 7-5 win",
+              "status": "passed"
+            },
+            {
+              "name": "TableTennisEngine - Winning Score and Time Management handles match timer expiration with Player 1 leading",
+              "status": "passed"
+            },
+            {
+              "name": "TableTennisEngine - Winning Score and Time Management handles match timer expiration with Player 2 leading",
+              "status": "passed"
+            },
+            {
+              "name": "TableTennisEngine - Winning Score and Time Management handles match timer expiration with equal score as draw",
+              "status": "passed"
+            },
+            {
+              "name": "TableTennisEngine - Winning Score and Time Management progressively increases ball speed on paddle touch and caps at 12.0",
+              "status": "passed"
+            },
+            {
+              "name": "TableTennisEngine - Winning Score and Time Management resets speed to 5.0 and touchCount to 0 after point scored",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/timeout-resolution.test.ts",
+          "status": "passed",
+          "tests": 9,
+          "durationMs": 32.81787109375,
+          "cases": [
+            {
+              "name": "Global 10-Minute Match Timeout Winner Resolution Across All 10 Games 1. Snake & Ladder: resolves winner by highest board cell position",
+              "status": "passed"
+            },
+            {
+              "name": "Global 10-Minute Match Timeout Winner Resolution Across All 10 Games 2. Ludo: resolves winner by (1) finished tokens, (2) total forward progress",
+              "status": "passed"
+            },
+            {
+              "name": "Global 10-Minute Match Timeout Winner Resolution Across All 10 Games 3. Chess: resolves winner by material balance on timeout",
+              "status": "passed"
+            },
+            {
+              "name": "Global 10-Minute Match Timeout Winner Resolution Across All 10 Games 4. Fruit Ninja: resolves winner by authoritative slice score",
+              "status": "passed"
+            },
+            {
+              "name": "Global 10-Minute Match Timeout Winner Resolution Across All 10 Games 5. Bubble Shooter: resolves winner by score, then fewest bubbles",
+              "status": "passed"
+            },
+            {
+              "name": "Global 10-Minute Match Timeout Winner Resolution Across All 10 Games 6. Table Tennis: resolves winner by sets won, then current set points",
+              "status": "passed"
+            },
+            {
+              "name": "Global 10-Minute Match Timeout Winner Resolution Across All 10 Games 7. Snake vs Worms: resolves winner by mass/score, then length",
+              "status": "passed"
+            },
+            {
+              "name": "Global 10-Minute Match Timeout Winner Resolution Across All 10 Games 9. Carrom: resolves winner by score, then assigned pocketed coins",
+              "status": "passed"
+            },
+            {
+              "name": "Global 10-Minute Match Timeout Winner Resolution Across All 10 Games 10. Snooker: resolves winner by frame score, then highest match break",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/universal-game-result-adapters.test.ts",
+          "status": "passed",
+          "tests": 20,
+          "durationMs": 76.322509765625,
+          "cases": [
+            {
+              "name": "Universal Game Result Adapters Suite 1. Registry Resolution resolves a dedicated adapter for all 9 available games",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 1. Registry Resolution throws when requesting an unsupported gameId",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 2. Chess Result Adapter evaluates material score and time limit winner correctly",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 2. Chess Result Adapter evaluates clock times when material is equal",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 2. Chess Result Adapter returns draw when material and clocks are equal",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 3. Carrom Result Adapter resolves winner by score first",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 3. Carrom Result Adapter resolves tied score by pocketed assigned coins",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 3. Carrom Result Adapter resolves tied score and coins as a legitimate draw",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 4. Snooker Result Adapter resolves winner by frame points",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 4. Snooker Result Adapter resolves tied points by highest break",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 6. Ludo Result Adapter resolves winner by finished tokens first",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 6. Ludo Result Adapter resolves tied finished tokens by total track progress",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 7. Snake & Ladder Result Adapter resolves winner by highest board cell position",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 7. Snake & Ladder Result Adapter resolves tied positions as draw",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 8. Fruit Ninja Result Adapter resolves winner by sliced fruit points",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 9. Bubble Shooter Result Adapter resolves winner by score first",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 9. Bubble Shooter Result Adapter resolves tied score by fewest remaining bubbles on grid",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 10. Table Tennis Result Adapter resolves winner by sets won first, then points",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 11. Snake vs Worms Result Adapter resolves winner by mass/score first, then body length",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Game Result Adapters Suite 12. Client Result Tampering Validation rejects result containing an intruder or non-participant winner",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/game-engine/__tests__/universal-match-finalization.test.ts",
+          "status": "passed",
+          "tests": 14,
+          "durationMs": 51.797607421875,
+          "cases": [
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 1. Standard Result Structure Compliance Across All 9 Available Games produces standardized result structure for snake-ladder",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 1. Standard Result Structure Compliance Across All 9 Available Games produces standardized result structure for ludo",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 1. Standard Result Structure Compliance Across All 9 Available Games produces standardized result structure for chess",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 1. Standard Result Structure Compliance Across All 9 Available Games produces standardized result structure for fruit-ninja",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 1. Standard Result Structure Compliance Across All 9 Available Games produces standardized result structure for bubble-shooter",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 1. Standard Result Structure Compliance Across All 9 Available Games produces standardized result structure for table-tennis",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 1. Standard Result Structure Compliance Across All 9 Available Games produces standardized result structure for snake-vs-worms",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 1. Standard Result Structure Compliance Across All 9 Available Games produces standardized result structure for carrom",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 1. Standard Result Structure Compliance Across All 9 Available Games produces standardized result structure for snooker",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 2. 10-Minute Boundary & Late Action Guard accepts actions before deadline and rejects actions after 10-minute deadline",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 3. Client Result Tampering Protection derives winner authoritatively from engine state regardless of client claims",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 3. Client Result Tampering Protection rejects forged score values and validates against server state",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 4. Atomic Exactly-Once Finalization & Idempotency Simulation simulates atomic mutex so multiple finalize calls produce a single consistent result",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Match Result Validation & Finalization Pipeline 5. Draw Handling Preservation never invents a winner on a legitimate draw across games",
+              "status": "passed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "multiplayer",
+      "files": 12,
+      "tests": 137,
+      "passed": 137,
+      "failed": 0,
+      "skipped": 0,
+      "testFiles": [
+        {
+          "file": "packages/multiplayer/__tests__/bubbleShooterGameplay.test.ts",
+          "status": "passed",
+          "tests": 2,
+          "durationMs": 73.544189453125,
+          "cases": [
+            {
+              "name": "Bubble Shooter two-player authoritative gameplay accepts concurrent shots from both seats without turn gating and broadcasts both results",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter two-player authoritative gameplay rejects invalid and spectator shots without modifying the authoritative board",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/centralizedGameConfig.test.ts",
+          "status": "passed",
+          "tests": 16,
+          "durationMs": 121.669677734375,
+          "cases": [
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) covers all 9 games with comprehensive default configurations",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 1. Enable game",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 2. Disable game rejects new joins without affecting running games",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 3. Enable online allows multiplayer matchmaking",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 4. Disable online rejects online multiplayer joins",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 5. Change entry fee updates allowed stakes list",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 6. Try old invalid entry fee is strictly rejected",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 7. Change turn timer updates configuration",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 8-11. Start match, change timer config, verify existing match keeps old timer, new match uses new timer",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 12-13. Change prize configuration, verify existing match keeps old prize configuration",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 14. Verify only authorized admin can change settings",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 15. Verify audit logs are created for every change",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 16. Verify cache invalidation produces fresh config immediately",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 17. Verify invalid configuration is rejected by validation schema",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) 18. Verify frontend receives current configuration and allowed entry fees",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game Configuration + Admin Control System (All 18 Acceptance Criteria) handles draw refund policies correctly",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/clientMatchIdentity.test.ts",
+          "status": "passed",
+          "tests": 6,
+          "durationMs": 85.997314453125,
+          "cases": [
+            {
+              "name": "shared multiplayer client match identity refuses actions before receiving authoritative match identity",
+              "status": "passed"
+            },
+            {
+              "name": "shared multiplayer client match identity sends the new match identity after a rematch",
+              "status": "passed"
+            },
+            {
+              "name": "shared multiplayer client match identity clears cached match identity on leave",
+              "status": "passed"
+            },
+            {
+              "name": "shared multiplayer client match identity clears cached match identity on closed",
+              "status": "passed"
+            },
+            {
+              "name": "shared multiplayer client match identity clears cached match identity on waiting",
+              "status": "passed"
+            },
+            {
+              "name": "shared multiplayer client match identity clears cached match identity on disconnect",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/disconnectReconnect.test.ts",
+          "status": "passed",
+          "tests": 5,
+          "durationMs": 83.8828125,
+          "cases": [
+            {
+              "name": "DisconnectHandler auto-pauses a turn-based match when a player disconnects",
+              "status": "passed"
+            },
+            {
+              "name": "DisconnectHandler arms a reconnect grace timer that forfeits the player on expiry",
+              "status": "passed"
+            },
+            {
+              "name": "DisconnectHandler does nothing when no match is running",
+              "status": "passed"
+            },
+            {
+              "name": "ReconnectHandler cancels the forfeit timer and auto-resumes a paused match",
+              "status": "passed"
+            },
+            {
+              "name": "ReconnectHandler does not auto-resume while other participants are still disconnected",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/gameConfigs.test.ts",
+          "status": "passed",
+          "tests": 4,
+          "durationMs": 9.965087890625,
+          "cases": [
+            {
+              "name": "gameConfigs covers every registered game",
+              "status": "passed"
+            },
+            {
+              "name": "gameConfigs classifies turn-based games",
+              "status": "passed"
+            },
+            {
+              "name": "gameConfigs assigns sensible timers and cooldowns",
+              "status": "passed"
+            },
+            {
+              "name": "gameConfigs always has valid cooldowns and player counts",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/gameEventSystem.test.ts",
+          "status": "passed",
+          "tests": 22,
+          "durationMs": 59.043701171875,
+          "cases": [
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 1. Standard event envelope conforms to required structure",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 2. Distinct events have globally unique eventIds",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 3. State versions increase monotonically per match",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 4. Different matches maintain independent state versions",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 5. Client correctly discards stale packets with stateVersion < currentVersion",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 6. Client detects stateVersion gaps (> currentVersion + 1) to trigger game:sync",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 7. MATCH_FOUND event generates valid envelope with match metadata",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 8. PLAYER_READY and PLAYER_UNREADY envelopes track player readiness",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 9. Authoritative countdown events emit correct step values",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 10. MATCH_STARTED envelope includes entryFee and snapshot",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 11. TURN_STARTED contains authoritative start and expiration timestamps",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 12. TURN_CHANGED records previous and next active players",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 13. GAME_ACTION_ACCEPTED and REJECTED envelopes contain actionId and actionType",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 14. GAME_STATE_UPDATED envelope contains serialized game state and event log",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 15. PLAYER_DISCONNECTED contains reconnectExpiresAt deadline",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 16. PLAYER_RECONNECTED contains reconnected player ID",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 17. PLAYER_FORFEITED records winnerId and reason for forfeit",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 18. GAME_FINISHED envelope contains authoritative final scores and resultType",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 19. SETTLEMENT_STARTED and SETTLEMENT_COMPLETED track coin distribution",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 20. In-game notifications correctly assign HIGH, MEDIUM, and LOW priority levels",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 21. Game specific event definitions cover all 9 active games",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Real-Time Notification & Game Event System (22 Acceptance Tests) 22. STANDARD_GAME_EVENT_TYPES includes all essential match lifecycle events",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/gameStateSync.test.ts",
+          "status": "passed",
+          "tests": 15,
+          "durationMs": 756.0830078125,
+          "cases": [
+            {
+              "name": "Centralized Game State Sync + Recovery System 1. Authoritative State & Version Rules strictly rejects stale or duplicate state versions",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 1. Authoritative State & Version Rules accepts and applies exact consecutive next state versions",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 1. Authoritative State & Version Rules detects gaps in state versions to trigger full sync",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 1. Authoritative State & Version Rules calculates deterministic fast state hashes",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 2. GameStateSyncManager Authority & Rate Limiting initializes authoritative state at version 1 and action sequence 0",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 2. GameStateSyncManager Authority & Rate Limiting monotonically increments stateVersion and actionSequence upon accepted actions",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 2. GameStateSyncManager Authority & Rate Limiting rejects late actions once match status is finished with MATCH_FINISHED",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 2. GameStateSyncManager Authority & Rate Limiting enforces rate limits on sync requests (max 5 per 10s)",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 3. Carrom Authoritative State & Deduplication produces identical final coin positions on both clients from server physics",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 3. Carrom Authoritative State & Deduplication deduplicates pocket events using shotId + coinId",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 3. Carrom Authoritative State & Deduplication server determines queenState and extra turns, not client animation",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 4. Chess State Sync & Reconnect maintains identical board FEN and move history on both clients",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 4. Chess State Sync & Reconnect reconnect restores exact board snapshot and active clocks",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 5. Ludo State Sync produces identical dice roll and token positions for all players",
+              "status": "passed"
+            },
+            {
+              "name": "Centralized Game State Sync + Recovery System 7. Server Restart Match Recovery recovers active matches without resetting the board",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/gameplay.test.ts",
+          "status": "passed",
+          "tests": 17,
+          "durationMs": 315.222412109375,
+          "cases": [
+            {
+              "name": "GameStateManager exposes the authoritative engine and initial snapshot",
+              "status": "passed"
+            },
+            {
+              "name": "GameStateManager records an applied action into history and snapshots",
+              "status": "passed"
+            },
+            {
+              "name": "GameStateManager serializes state mutations per room",
+              "status": "passed"
+            },
+            {
+              "name": "GameStateManager detects snapshot gaps when replay integrity is broken",
+              "status": "passed"
+            },
+            {
+              "name": "TurnManager gates turn-based games by the engine's current seat",
+              "status": "passed"
+            },
+            {
+              "name": "TurnManager never gates realtime games",
+              "status": "passed"
+            },
+            {
+              "name": "ActionValidator rejects actions when no match is in progress",
+              "status": "passed"
+            },
+            {
+              "name": "ActionValidator rejects spectator actions",
+              "status": "passed"
+            },
+            {
+              "name": "ActionValidator rejects out-of-turn moves in turn-based games",
+              "status": "passed"
+            },
+            {
+              "name": "ActionValidator rate-limits repeated realtime actions",
+              "status": "passed"
+            },
+            {
+              "name": "ActionValidator accepts a legal action",
+              "status": "passed"
+            },
+            {
+              "name": "WinnerCalculator resolves a decisive win",
+              "status": "passed"
+            },
+            {
+              "name": "WinnerCalculator resolves a draw",
+              "status": "passed"
+            },
+            {
+              "name": "WinnerCalculator marks an unfinished match as aborted",
+              "status": "passed"
+            },
+            {
+              "name": "WinnerCalculator extracts per-seat scores when the engine exposes them",
+              "status": "passed"
+            },
+            {
+              "name": "StatisticsCollector counts moves separately from base actions",
+              "status": "passed"
+            },
+            {
+              "name": "StatisticsCollector records turn time and disconnect/reconnect counters",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/matchManager.test.ts",
+          "status": "passed",
+          "tests": 7,
+          "durationMs": 300.171630859375,
+          "cases": [
+            {
+              "name": "MatchManager pipeline starts a match and applies a legal move through the full pipeline",
+              "status": "passed"
+            },
+            {
+              "name": "MatchManager pipeline broadcasts a room update so non-host clients see the room move to playing",
+              "status": "passed"
+            },
+            {
+              "name": "MatchManager pipeline does not publish a playing match until funding succeeds",
+              "status": "passed"
+            },
+            {
+              "name": "MatchManager pipeline funds only one match when two start requests arrive together",
+              "status": "passed"
+            },
+            {
+              "name": "MatchManager pipeline does not cancel an uncreated database match when funding fails",
+              "status": "passed"
+            },
+            {
+              "name": "MatchManager pipeline rejects out-of-turn and spectator actions in the pipeline",
+              "status": "passed"
+            },
+            {
+              "name": "MatchManager pipeline resolves a finish through the winner calculator",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/matchmaking.test.ts",
+          "status": "passed",
+          "tests": 20,
+          "durationMs": 672.076416015625,
+          "cases": [
+            {
+              "name": "MatchmakingManager waits for a second distinct player in snake-ladder",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in ludo",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in chess",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in carrom",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in fruit-ninja",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in bubble-shooter",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in table-tennis",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in snake-vs-worms",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager waits for a second distinct player in snooker",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts snake-ladder for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts ludo for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts chess for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts carrom for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts fruit-ninja for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts bubble-shooter for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts table-tennis for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts snake-vs-worms for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager starts snooker for two distinct players in the same queue",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager pairs enough players and auto-starts the match in a ready room",
+              "status": "passed"
+            },
+            {
+              "name": "MatchmakingManager closes the room instead of leaking it when auto-start fails",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/rematch.test.ts",
+          "status": "passed",
+          "tests": 19,
+          "durationMs": 1218.578369140625,
+          "cases": [
+            {
+              "name": "authoritative rematches starts a fresh snake-ladder engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh ludo engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh chess engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh carrom engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh fruit-ninja engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh bubble-shooter engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh table-tennis engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh snake-vs-worms engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches starts a fresh snooker engine after both players consent, preserving seats",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches serializes simultaneous votes and retries so only one match is funded",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches keeps the previous result and lets players retry after failed funding",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches does not count expired consent",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches cancels the offer without counting the previous votes on the next request",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches rejects spectators, outsiders, disconnected players, active games and tournament replay",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches does not reuse an earlier match's cached action after a rematch",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches does not give one participant another participant's cached action result",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches applies concurrent duplicate action IDs only once within the same match",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches rejects a queued action when its player leaves before execution",
+              "status": "passed"
+            },
+            {
+              "name": "authoritative rematches rejects a delayed action addressed to the previous match",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "packages/multiplayer/__tests__/roomCleanup.test.ts",
+          "status": "passed",
+          "tests": 4,
+          "durationMs": 398.78564453125,
+          "cases": [
+            {
+              "name": "Room cleanup after a match ends closes the room after the linger window once the match finishes",
+              "status": "passed"
+            },
+            {
+              "name": "Room cleanup after a match ends closes the room after the linger window once the match is aborted",
+              "status": "passed"
+            },
+            {
+              "name": "Room cleanup after a match ends keeps the room open when a rematch resets it before the linger expires",
+              "status": "passed"
+            },
+            {
+              "name": "Room cleanup after a match ends does not expire a playing room when the creation expiration timer fires",
+              "status": "passed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "web",
+      "files": 11,
+      "tests": 95,
+      "passed": 95,
+      "failed": 0,
+      "skipped": 0,
+      "testFiles": [
+        {
+          "file": "apps/web/src/components/GameWrapper.test.tsx",
+          "status": "passed",
+          "tests": 6,
+          "durationMs": 70.836669921875,
+          "cases": [
+            {
+              "name": "shared game HUD controls multiplayer has one Exit even when practice owns its exit (false)",
+              "status": "passed"
+            },
+            {
+              "name": "shared game HUD controls multiplayer has one Exit even when practice owns its exit (true)",
+              "status": "passed"
+            },
+            {
+              "name": "shared game HUD controls does not offer a disconnected mute button (fullscreen true)",
+              "status": "passed"
+            },
+            {
+              "name": "shared game HUD controls does not offer a disconnected mute button (fullscreen false)",
+              "status": "passed"
+            },
+            {
+              "name": "shared game HUD controls practice games with their own exit do not receive floating exits",
+              "status": "passed"
+            },
+            {
+              "name": "shared game HUD controls does not block document Back, and clears its HUD timer on unmount",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/store/multiplayerStore.leave.test.ts",
+          "status": "passed",
+          "tests": 1,
+          "durationMs": 10.6865234375,
+          "cases": [
+            {
+              "name": "leaving a multiplayer game clears local membership immediately and sends one leave for repeated requests",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/store/multiplayerStore.rematch.test.ts",
+          "status": "passed",
+          "tests": 6,
+          "durationMs": 32.830322265625,
+          "cases": [
+            {
+              "name": "rematch consent and state synchronization binds an action to the current authoritative match",
+              "status": "passed"
+            },
+            {
+              "name": "rematch consent and state synchronization does not send an action before the new match state arrives",
+              "status": "passed"
+            },
+            {
+              "name": "rematch consent and state synchronization sends the room request and shows waiting feedback",
+              "status": "passed"
+            },
+            {
+              "name": "rematch consent and state synchronization shows funding/server errors without an unhandled rejection",
+              "status": "passed"
+            },
+            {
+              "name": "rematch consent and state synchronization resets the result and version for a new match and rejects old-match replay packets",
+              "status": "passed"
+            },
+            {
+              "name": "rematch consent and state synchronization ignores a reconnect snapshot that arrives after a rematch has started",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/pages/Games/GamePage.navigation.test.tsx",
+          "status": "passed",
+          "tests": 16,
+          "durationMs": 41.462890625,
+          "cases": [
+            {
+              "name": "game Exit versus router Back snake-ladder visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back ludo visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back chess visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back carrom visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back fruit-ninja visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back bubble-shooter visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back table-tennis visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back snake-vs-worms visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back snooker visible Exit confirms; Cancel stays in the game",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back leaves once on confirmed Exit, even when confirmed twice and unmounted",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back does not trap browser/gesture Back or push extra history; unmount leaves once",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back StrictMode replay keeps membership; the eventual real unmount leaves",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back Back during a pending confirmed leave does not navigate a second time after the ACK",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back does not leave a different room joined before deferred cleanup",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back leaves the old room when this route changes from multiplayer to practice",
+              "status": "passed"
+            },
+            {
+              "name": "game Exit versus router Back practice exit uses the root fallback without leaving multiplayer",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/pages/Games/GamePage.rematch.test.tsx",
+          "status": "passed",
+          "tests": 12,
+          "durationMs": 126.64453125,
+          "cases": [
+            {
+              "name": "rematch game presentation creates a fresh snake-ladder view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh ludo view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh chess view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh carrom view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh fruit-ninja view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh bubble-shooter view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh table-tennis view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh snake-vs-worms view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation creates a fresh snooker view only when the authoritative match changes",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation table-tennis replay requests an online rematch instead of restarting locally",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation snake-vs-worms replay requests an online rematch instead of restarting locally",
+              "status": "passed"
+            },
+            {
+              "name": "rematch game presentation fruit-ninja replay requests an online rematch instead of restarting locally",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/pages/Home/Home.gameMode.test.tsx",
+          "status": "passed",
+          "tests": 8,
+          "durationMs": 230.595458984375,
+          "cases": [
+            {
+              "name": "Home game launch selection all popular/grid cards preserve ai selection",
+              "status": "passed"
+            },
+            {
+              "name": "Home game launch selection all popular/grid cards preserve multiplayer selection",
+              "status": "passed"
+            },
+            {
+              "name": "Home game launch selection ai start follows the right route and stake",
+              "status": "passed"
+            },
+            {
+              "name": "Home game launch selection multiplayer start follows the right route and stake",
+              "status": "passed"
+            },
+            {
+              "name": "setup mode and authoritative game configuration initial ai mode is used by Start",
+              "status": "passed"
+            },
+            {
+              "name": "setup mode and authoritative game configuration initial multiplayer mode is used by Start",
+              "status": "passed"
+            },
+            {
+              "name": "setup mode and authoritative game configuration resets a reused modal to the newly requested mode and current server stake",
+              "status": "passed"
+            },
+            {
+              "name": "setup mode and authoritative game configuration disabled online games cannot be started but practice stays available",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/services/native/capacitorAppService.back.test.ts",
+          "status": "passed",
+          "tests": 3,
+          "durationMs": 10.698974609375,
+          "cases": [
+            {
+              "name": "native Back uses normal navigation immediately navigates back from a game with in-app history",
+              "status": "passed"
+            },
+            {
+              "name": "native Back uses normal navigation uses home fallback when there is no in-app history",
+              "status": "passed"
+            },
+            {
+              "name": "native Back uses normal navigation keeps the normal root/minimize behavior",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/games/bubble-shooter/__tests__/multiplayerControls.test.tsx",
+          "status": "passed",
+          "tests": 9,
+          "durationMs": 521.52880859375,
+          "cases": [
+            {
+              "name": "Bubble Shooter component multiplayer controls shows the correct cannon/preview and submits one shot from seat 0",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls shows the correct cannon/preview and submits one shot from seat 1",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls preserves the flight on opponent updates and applies the server board only after landing",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls aims a mobile tap at its release location and blocks its duplicate click",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls recovers the controls after a rejection",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls recovers the controls after a network error",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls does not submit a synthetic mobile click after an immediate shot rejection",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls resyncs rather than leaving the cannon permanently locked after a missing broadcast",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter component multiplayer controls keeps solo play local and never submits a multiplayer action",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/games/bubble-shooter/utils/multiplayerPresentation.test.ts",
+          "status": "passed",
+          "tests": 13,
+          "durationMs": 65.62255859375,
+          "cases": [
+            {
+              "name": "Bubble Shooter multiplayer presentation loads and fires the authoritative bubble for seat 0",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation loads and fires the authoritative bubble for seat 1",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation does not erase flight or unlock a shot when the opponent shoots",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation buffers a fast response until the cosmetic flight lands",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation uses the latest authoritative snapshot if opponent updates arrive during a flight",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation restores the server board after rejection and ignores an old acknowledgement",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation restores cannon and grid on reconnect without applying a move again",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation ignores duplicate state packets while flight is pending and never resubmits a shot",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation never permits shooting when paused, eliminated, or finished",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation separates pop particles from falling detached bubbles using the authoritative result",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation animates the same authoritative bounce path for angle -1.5707963267948966",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation animates the same authoritative bounce path for angle -0.5235987755982988",
+              "status": "passed"
+            },
+            {
+              "name": "Bubble Shooter multiplayer presentation animates the same authoritative bounce path for angle -2.6179938779914944",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/games/carrom/__tests__/strikerPlacement.test.tsx",
+          "status": "passed",
+          "tests": 17,
+          "durationMs": 1009.14892578125,
+          "cases": [
+            {
+              "name": "Carrom striker placement recovery keeps the mover available after tapping a coin and allows moving away and shooting",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom striker placement recovery allows tapping a clear baseline position after an overlapping placement",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom striker placement recovery keeps repositioning available after entering aiming mode",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom striker placement recovery rechecks overlap on release, cancelling a blocked shot without trapping the mover",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom striker placement recovery moving the slider cancels an old drag rather than firing it",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom striker placement recovery pointer cancellation does not fire an aimed shot",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom striker placement recovery ignores pocketed coins during placement",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture captures a stationary coin resting inside the visible pocket at 30,30 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture captures a stationary coin resting inside the visible pocket at 370,30 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture captures a stationary coin resting inside the visible pocket at 30,370 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture captures a stationary coin resting inside the visible pocket at 370,370 exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture leaves a coin on the board when it only touches the outside pocket rim",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture captures a coin approaching the pocket at speed 0.3",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture captures a coin approaching the pocket at speed 18",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture waits for a pocket drop to finish before settling a shot",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture restores a pocketed striker for the next turn and applies one foul",
+              "status": "passed"
+            },
+            {
+              "name": "Carrom pocket capture keeps a pocketed queen off the board while waiting for its cover shot",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/web/src/games/chess/utils/chessState.test.ts",
+          "status": "passed",
+          "tests": 4,
+          "durationMs": 16.565185546875,
+          "cases": [
+            {
+              "name": "Chess client state resolves both colors by authoritative user ID, independent of array order or turn",
+              "status": "passed"
+            },
+            {
+              "name": "Chess client state orients each board to the local color without changing logical piece colors",
+              "status": "passed"
+            },
+            {
+              "name": "Chess client state uses the correct white and black piece glyphs",
+              "status": "passed"
+            },
+            {
+              "name": "Chess client state keeps white then black SAN turns identical for both viewers and repeated socket snapshots",
+              "status": "passed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "api-lifecycle",
+      "files": 8,
+      "tests": 99,
+      "passed": 99,
+      "failed": 0,
+      "skipped": 0,
+      "testFiles": [
+        {
+          "file": "apps/api/src/routes/__tests__/multiplayerStartup.test.ts",
+          "status": "passed",
+          "tests": 26,
+          "durationMs": 8022.070556640625,
+          "cases": [
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route persists a new snake-ladder room before match funding and charges each player once",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route persists a new ludo room before match funding and charges each player once",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route persists a new chess room before match funding and charges each player once",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route persists a new carrom room before match funding and charges each player once",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route persists a new fruit-ninja room before match funding and charges each player once",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route persists a new bubble-shooter room before match funding and charges each player once",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route persists a new table-tennis room before match funding and charges each player once",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route persists a new snake-vs-worms room before match funding and charges each player once",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route persists a new snooker room before match funding and charges each player once",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route rolls back room, match, and prior player debit when another participant lacks funds",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route keeps room creation protected by the internal service key",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route refuses to overwrite an existing room belonging to a different host",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route continues to fund an already persisted room without a snapshot",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route funds a paid rematch in the same room without deleting the settled match or charging twice",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route completes the paid snake-ladder consent -> HTTP funding -> fresh engine flow",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route completes the paid ludo consent -> HTTP funding -> fresh engine flow",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route completes the paid chess consent -> HTTP funding -> fresh engine flow",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route completes the paid carrom consent -> HTTP funding -> fresh engine flow",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route completes the paid fruit-ninja consent -> HTTP funding -> fresh engine flow",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route completes the paid bubble-shooter consent -> HTTP funding -> fresh engine flow",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route completes the paid table-tennis consent -> HTTP funding -> fresh engine flow",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route completes the paid snake-vs-worms consent -> HTTP funding -> fresh engine flow",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route completes the paid snooker consent -> HTTP funding -> fresh engine flow",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route rejects a rematch before the previous match settles, with no extra debit",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route rolls back the room pointer and all rematch debits on insufficient funds",
+              "status": "passed"
+            },
+            {
+              "name": "funded multiplayer startup through the socket-to-API HTTP route funds just one rematch when different match IDs race for the same settled room",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/api/src/services/__tests__/financialConcurrencyAndRecovery.test.ts",
+          "status": "passed",
+          "tests": 6,
+          "durationMs": 850.927001953125,
+          "cases": [
+            {
+              "name": "Real PostgreSQL Financial Concurrency & Crash Recovery Requirement 3: Two users attempting the same coupon code simultaneously results in exactly one credit",
+              "status": "passed"
+            },
+            {
+              "name": "Real PostgreSQL Financial Concurrency & Crash Recovery Requirement 4: Recovers from local DB failure after EXTERNAL_CONFIRMED without re-calling CouponVault",
+              "status": "passed"
+            },
+            {
+              "name": "Real PostgreSQL Financial Concurrency & Crash Recovery Requirement 5: Withdrawal Concurrency & Stale Claim Recovery prevents double-spend under simultaneous withdrawals exceeding balance",
+              "status": "passed"
+            },
+            {
+              "name": "Real PostgreSQL Financial Concurrency & Crash Recovery Requirement 5: Withdrawal Concurrency & Stale Claim Recovery prevents duplicate action when two reconciliation workers race on the same record",
+              "status": "passed"
+            },
+            {
+              "name": "Real PostgreSQL Financial Concurrency & Crash Recovery Requirement 5: Withdrawal Concurrency & Stale Claim Recovery recovers stale PROCESSING state after simulated worker crash",
+              "status": "passed"
+            },
+            {
+              "name": "Real PostgreSQL Financial Concurrency & Crash Recovery Requirement 5: Withdrawal Concurrency & Stale Claim Recovery maintains UNCONFIRMED_HOLD and never blindly refunds when external service is unreachable",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/api/src/services/__tests__/gameCoinService.test.ts",
+          "status": "passed",
+          "tests": 3,
+          "durationMs": 39.24609375,
+          "cases": [
+            {
+              "name": "GameCoinService provides centralized configuration for all online games",
+              "status": "passed"
+            },
+            {
+              "name": "GameCoinService checkPlayerBalance accepts 0 entry fee (offline/practice) without error",
+              "status": "passed"
+            },
+            {
+              "name": "GameCoinService checkPlayerBalance rejects when player does not exist",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/api/src/services/__tests__/gameResultSecurity.test.ts",
+          "status": "passed",
+          "tests": 9,
+          "durationMs": 1611.834228515625,
+          "cases": [
+            {
+              "name": "Feature 8: Server-Authoritative Game Result Security 1. Fake winner: client directly declaring victory or settlement is rejected with FORBIDDEN",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 8: Server-Authoritative Game Result Security 2. Fake winner: reporting winner who is not in match is rejected with VALIDATION_ERROR",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 8: Server-Authoritative Game Result Security 3. Fake reward: client-supplied coinsWon is ignored, server calculates authoritative prize pool",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 8: Server-Authoritative Game Result Security 4. Opponent move: player attempting to move during opponent's turn is rejected with FORBIDDEN",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 8: Server-Authoritative Game Result Security 5. Stale move: action with obsolete sequenceNumber is rejected with STALE_ACTION",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 8: Server-Authoritative Game Result Security 6. Non-participant: action from user not seated in match is rejected with FORBIDDEN",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 8: Server-Authoritative Game Result Security 7. Forged internal API key: requests without valid internal key are rejected with UNAUTHORIZED",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 8: Server-Authoritative Game Result Security 8. Fake tournament bracket result: client advancing tournament bracket is rejected with FORBIDDEN",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 8: Server-Authoritative Game Result Security 9. Authoritative forfeit: player surrender settles match cleanly for remaining participants",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/api/src/services/__tests__/practiceMatchWalletBehavior.test.ts",
+          "status": "passed",
+          "tests": 6,
+          "durationMs": 1290.75634765625,
+          "cases": [
+            {
+              "name": "Practice Match Wallet Behavior & Financial Isolation 1 & 2. Starting and joining a practice match (stake = 0) does not debit wallet",
+              "status": "passed"
+            },
+            {
+              "name": "Practice Match Wallet Behavior & Financial Isolation 3 & 4. Winning or losing a practice match does not credit or change wallet",
+              "status": "passed"
+            },
+            {
+              "name": "Practice Match Wallet Behavior & Financial Isolation 5. Exiting or cancelling a practice match does not create a refund or penalty transaction",
+              "status": "passed"
+            },
+            {
+              "name": "Practice Match Wallet Behavior & Financial Isolation 6 & 7. Completing a practice match creates zero financial transactions and zero ledger entries",
+              "status": "passed"
+            },
+            {
+              "name": "Practice Match Wallet Behavior & Financial Isolation 8 & 9. Paid tournament match still deducts the correct entry fee and credits the winner prize",
+              "status": "passed"
+            },
+            {
+              "name": "Practice Match Wallet Behavior & Financial Isolation 10. Practice-match client input cannot bypass paid-match rules",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/api/src/services/__tests__/socketRematchSecurity.test.ts",
+          "status": "passed",
+          "tests": 17,
+          "durationMs": 21118.71337890625,
+          "cases": [
+            {
+              "name": "socket rematch security entry point revalidates the authenticated identity before recording a vote",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point rejects a revoked session on an already connected socket",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point rejects a expired session on an already connected socket",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point rejects a MFA pending session on an already connected socket",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point rejects a deleted session on an already connected socket",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point rejects a banned session on an already connected socket",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point rejects a invalid JWT session on an already connected socket",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point rejects a verified token that does not match the connection identity",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point rejects a missing token or spectator without recording consent",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point respects the games.realMoney shutdown flag before accepting a rematch",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point respects the games.practice shutdown flag before accepting a rematch",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point respects a disabled game enabled setting",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point respects a disabled game onlineEnabled setting",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point allows an authenticated participant to cancel without disabling the safety checks",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point does not let a revoked session cancel another participant's offer",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point requires current match identity at the socket action boundary",
+              "status": "passed"
+            },
+            {
+              "name": "socket rematch security entry point uses the authenticated actor rather than a player ID supplied in an action payload",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/api/src/services/__tests__/unifiedGameLifecycle.test.ts",
+          "status": "passed",
+          "tests": 15,
+          "durationMs": 3118.646728515625,
+          "cases": [
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 1. Successful paid entry: complete lifecycle CREATED -> FEE_PAID -> MATCH_READY -> MATCH_STARTED -> MATCH_FINISHED -> SETTLED",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 2. Insufficient balance: rejects entry, 0 coins debited, 0 match player entries",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 3. Duplicate entry: repeated initiateEntry calls for same match/user are idempotent and do not double charge",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 4. Concurrent entry: simultaneous join requests debit wallet exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 5. Room full: rejects entry beyond game capacity without debiting coins",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 6. Match ready: checkMatchReady validates exact server player count",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 7. Match start: startMatch transitions status to ACTIVE and prevents duplicate starts",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 8. Match finish: records final scores and transitions status to FINISHED",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 9. Settlement: draw outcome refunds 100% entry fee to all players",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 10. Failed initialization: abortAndRefundMatch refunds 100% of player wagers",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 11. Disconnect: handleDisconnect provides grace period without immediate forfeit",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 12. Reconnect: handleReconnect restores connection state within grace period",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 13. Abandoned match: handleAbandonment settles match in favor of remaining player",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 14. Duplicate finish: calling settleMatch multiple times never pays prizes twice",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 5: Unified Game Entry Lifecycle 15. Tournament match: progresses through lifecycle with 0 duplicate entry fee deduction",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/api/src/services/__tests__/universalMatchRoom.test.ts",
+          "status": "passed",
+          "tests": 17,
+          "durationMs": 1109.13623046875,
+          "cases": [
+            {
+              "name": "Universal Multiplayer Match Room & Ready System allows both assigned players to join universal match room",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System rejects unauthorized third player with 403 / ROOM_FULL",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System transitions match state to COUNTDOWN only when both players are ready",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System starts the 10-minute match deadline strictly on MATCH_STARTED",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System restores active match and remaining time on browser refresh without reset",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System increments monotonic stateVersion on authoritative state updates",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System authoritatively finalizes match when matchDeadline has passed (TIME_LIMIT)",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System maintains 0 stake and tournament metadata for tournament match rooms",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System All 10 Competitive Games Compatibility initializes universal match room for game: snake-ladder",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System All 10 Competitive Games Compatibility initializes universal match room for game: ludo",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System All 10 Competitive Games Compatibility initializes universal match room for game: chess",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System All 10 Competitive Games Compatibility initializes universal match room for game: fruit-ninja",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System All 10 Competitive Games Compatibility initializes universal match room for game: bubble-shooter",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System All 10 Competitive Games Compatibility initializes universal match room for game: table-tennis",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System All 10 Competitive Games Compatibility initializes universal match room for game: snake-vs-worms",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System All 10 Competitive Games Compatibility initializes universal match room for game: carrom",
+              "status": "passed"
+            },
+            {
+              "name": "Universal Multiplayer Match Room & Ready System All 10 Competitive Games Compatibility initializes universal match room for game: snooker",
+              "status": "passed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "api-features",
+      "files": 7,
+      "tests": 202,
+      "passed": 202,
+      "failed": 0,
+      "skipped": 0,
+      "testFiles": [
+        {
+          "file": "apps/api/src/routes/__tests__/tournaments.test.ts",
+          "status": "passed",
+          "tests": 61,
+          "durationMs": 68202.24047851562,
+          "cases": [
+            {
+              "name": "Tournament Engine Bracket utilities nextPowerOfTwo: correct values",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Bracket utilities computeByeCount: correct BYE counts",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Bracket utilities computeTotalRounds: log2(bracketSize)",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Bracket utilities generateFirstRoundSlots: 4 players produces 2 slots, no BYEs",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Bracket utilities generateFirstRoundSlots: 5 players produces 4 slots with 3 BYEs",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Bracket utilities generateFirstRoundSlots: 8 players produces 4 slots, no BYEs",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Registration registers a player for an open tournament",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Registration rejects duplicate registration (idempotency)",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Registration rejects registration when tournament is DRAFT",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Registration rejects registration for a full tournament",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Registration cancels registration and refunds entry fee",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Admin lifecycle follows DRAFT to REGISTRATION_OPEN to IN_PROGRESS",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Admin lifecycle rejects invalid state transition",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Bracket generation 4-player bracket: 2 R1 slots, 1 final",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Bracket generation 8-player bracket: 4 R1 slots, 3 rounds",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Bracket generation 5-player bracket: 3 BYEs auto-advanced",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Bracket generation all READY slots have both players",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Match result processing advancing a winner populates the next slot",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Match result processing processMatchResult is idempotent",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Match result processing loser is marked as eliminated",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Settlement settleTournament is idempotent",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Settlement prizes credited correctly for rank 1",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Cancellation refunds entry fees to all players on cancel",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Cancellation tournament status is CANCELLED after cancel",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Player status returns isRegistered=false for unregistered user",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Player status returns correct seed and not eliminated after registration",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine HTTP API GET bracket returns structured data",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine HTTP API GET state returns combined shape",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine HTTP API admin list requires ADMIN role",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine HTTP API admin can list tournaments",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 1. Tournament start creates first-round matches for all READY slots",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 2. Tournament start creates BYEs without matches",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 3. BYE winner advances and next match auto-created when opponent ready",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 4. Two players create exactly one match (idempotent)",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 5. Duplicate match creation is prevented",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 6. Match result creates next-round match",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 7. Second result does not create duplicate next-round match",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 8. Final match is automatically created when both finalists known",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 9. Final result completes tournament",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 10. Tournament match does not charge another entry fee",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 11. Tournament match contains correct tournament metadata",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 12. Notification sent once per match per player",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 13. WebSocket event sent once",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 14. Concurrent ensureTournamentRoundMatch calls create one match",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Match Orchestration 15. Missing Match is detected by recovery job",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 1. Expired registration is closed by scheduler",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 2. Missing match is recovered by scheduler",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 3. Completed match with unprocessed result is recovered",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 4. Dangling match reference is detected and cleaned",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 5. BYE slot is recovered if not advanced",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 6. Tournament health returns correct data",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 7. Tournament health detects missing matches as WARNING",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 8. Settlement is retried for completed but unsettled tournament",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 9. Scheduler does not create duplicate matches",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 10. Concurrent reconciliation does not cause duplicate state changes",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 11. Crash scenario: match exists, scheduler does not duplicate",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 12. Crash scenario: match finished, callback failed, scheduler recovers",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 13. Crash scenario: winner advanced, next match slot missing match",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 14. Admin health endpoint returns correct data",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 15. Admin reconcile endpoint triggers reconciliation",
+              "status": "passed"
+            },
+            {
+              "name": "Tournament Engine Tournament Recovery & Scheduler 16. Stale matches are detected by scheduler",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/api/src/services/__tests__/allGameTierCombinations.test.ts",
+          "status": "passed",
+          "tests": 93,
+          "durationMs": 10311.316650390625,
+          "cases": [
+            {
+              "name": "SUITE 1 — Game Registry Completeness GAME_IDS exports exactly 9 unique game identifiers",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 1 — Game Registry Completeness all 9 required games are present in GAME_IDS",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 1 — Game Registry Completeness isGameId() accepts all 9 games and rejects invalid values",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 1 — Game Registry Completeness DEFAULT_GAME_CONFIGS has a complete entry for every registered game",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 2 — Tier Configuration Correctness DEFAULT_TOURNAMENT_TIERS contains exactly 5 tiers",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 2 — Tier Configuration Correctness tier codes are exactly the canonical 5",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 2 — Tier Configuration Correctness tier 'mini' has correct entry fee, prize pool, and player limits",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 2 — Tier Configuration Correctness tier 'basic' has correct entry fee, prize pool, and player limits",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 2 — Tier Configuration Correctness tier 'standard' has correct entry fee, prize pool, and player limits",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 2 — Tier Configuration Correctness tier 'premium' has correct entry fee, prize pool, and player limits",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 2 — Tier Configuration Correctness tier 'pro' has correct entry fee, prize pool, and player limits",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 2 — Tier Configuration Correctness all tiers use the canonical 50/25/15/10 prize distribution",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 2 — Tier Configuration Correctness DEFAULT_TIER_PRIZE_DISTRIBUTION is a valid 4-position 50/25/15/10 split",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 3 — Prize Distribution Math tier 'mini' prize amounts are exactly correct",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 3 — Prize Distribution Math tier 'basic' prize amounts are exactly correct",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 3 — Prize Distribution Math tier 'standard' prize amounts are exactly correct",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 3 — Prize Distribution Math tier 'premium' prize amounts are exactly correct",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 3 — Prize Distribution Math tier 'pro' prize amounts are exactly correct",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 3 — Prize Distribution Math prize configuration is valid for all 5 tier prize pools",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 3 — Prize Distribution Math total prize amounts sum to exactly the full prize pool (no rounding loss > 1 coin per tier)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 4 — Game-Tier Availability Matrix matrix has an entry for all 9 games",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 4 — Game-Tier Availability Matrix all 45 game×tier combinations default to enabled (true)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 4 — Game-Tier Availability Matrix disabling a combination is reflected immediately without affecting others",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 4 — Game-Tier Availability Matrix re-enabling a combination restores it to true",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snake-ladder × mini",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snake-ladder × basic",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snake-ladder × standard",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snake-ladder × premium",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snake-ladder × pro",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for ludo × mini",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for ludo × basic",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for ludo × standard",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for ludo × premium",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for ludo × pro",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for chess × mini",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for chess × basic",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for chess × standard",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for chess × premium",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for chess × pro",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for carrom × mini",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for carrom × basic",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for carrom × standard",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for carrom × premium",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for carrom × pro",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for fruit-ninja × mini",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for fruit-ninja × basic",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for fruit-ninja × standard",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for fruit-ninja × premium",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for fruit-ninja × pro",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for bubble-shooter × mini",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for bubble-shooter × basic",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for bubble-shooter × standard",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for bubble-shooter × premium",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for bubble-shooter × pro",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for table-tennis × mini",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for table-tennis × basic",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for table-tennis × standard",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for table-tennis × premium",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for table-tennis × pro",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snake-vs-worms × mini",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snake-vs-worms × basic",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snake-vs-worms × standard",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snake-vs-worms × premium",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snake-vs-worms × pro",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snooker × mini",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snooker × basic",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snooker × standard",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snooker × premium",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 5 — Tournament Creation (all 45 game×tier combos) can create a REGISTRATION_OPEN tournament for snooker × pro",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 6 — Player Registration (representative sample) player can register for 'chess' × 'mini' (entry fee deducted once)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 6 — Player Registration (representative sample) player can register for 'ludo' × 'basic' (entry fee deducted once)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 6 — Player Registration (representative sample) player can register for 'fruit-ninja' × 'standard' (entry fee deducted once)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 6 — Player Registration (representative sample) player can register for 'table-tennis' × 'premium' (entry fee deducted once)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 6 — Player Registration (representative sample) player can register for 'snooker' × 'pro' (entry fee deducted once)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 6 — Player Registration (representative sample) player can register for 'snake-ladder' × 'mini' (entry fee deducted once)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 6 — Player Registration (representative sample) player can register for 'carrom' × 'standard' (entry fee deducted once)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 6 — Player Registration (representative sample) player can register for 'bubble-shooter' × 'basic' (entry fee deducted once)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 6 — Player Registration (representative sample) player can register for 'snake-vs-worms' × 'premium' (entry fee deducted once)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 6 — Player Registration (representative sample) player can register for 'ludo' × 'pro' (entry fee deducted once)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 7 — Bracket Generation (representative sample) bracket can be built for game 'chess' (standard tier, 8 players)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 7 — Bracket Generation (representative sample) bracket can be built for game 'ludo' (standard tier, 8 players)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 7 — Bracket Generation (representative sample) bracket can be built for game 'fruit-ninja' (standard tier, 8 players)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 7 — Bracket Generation (representative sample) bracket can be built for game 'table-tennis' (standard tier, 8 players)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 7 — Bracket Generation (representative sample) bracket can be built for game 'snooker' (standard tier, 8 players)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 8 — System Invariants MAX_MATCH_DURATION_SECONDS is exactly 600 (10 minutes)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 8 — System Invariants no game config exceeds the 10-minute match limit",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 8 — System Invariants prize distribution always sums to exactly 100%",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 8 — System Invariants all 9 games have entry fee 50 available in their default config",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 8 — System Invariants all 9 games have entry fee 100 available for the pro tier",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 8 — System Invariants scheduler matrix defaults do not gate any game or tier",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 9 — Hourly Scheduler: 45 slots per hour + idempotency first run creates exactly 45 tournaments (9 games × 5 active tiers)",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 9 — Hourly Scheduler: 45 slots per hour + idempotency second run is fully idempotent — creates 0 new tournaments",
+              "status": "passed"
+            },
+            {
+              "name": "SUITE 9 — Hourly Scheduler: 45 slots per hour + idempotency all 5 tiers have exactly 9 game slots in the DB for the current hour",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/api/src/services/__tests__/gameHistory.test.ts",
+          "status": "passed",
+          "tests": 6,
+          "durationMs": 2178.369384765625,
+          "cases": [
+            {
+              "name": "Feature 14: Complete User Game History 1. User game history: returns chronological matches with historical entryFee and payout",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 14: Complete User Game History 2. User isolation: user cannot inspect a match they did not participate in",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 14: Complete User Game History 3. Filtering: filters by game type and result (WIN, LOSS, CANCELLED)",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 14: Complete User Game History 4. Tournament reference: embeds tournamentId and roundId for bracket matches",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 14: Complete User Game History 5. User game statistics: aggregates wins, losses, winRate, and netCoins",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 14: Complete User Game History 6. Empty state: user with 0 matches returns empty items list cleanly",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/api/src/services/__tests__/matchAbandonmentEngine.test.ts",
+          "status": "passed",
+          "tests": 6,
+          "durationMs": 1904.45556640625,
+          "cases": [
+            {
+              "name": "Feature 11: Abandoned Match Detection & Handling 1. Disconnect + reconnect: temporary disconnect is not an immediate loss and match continues",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 11: Abandoned Match Detection & Handling 2. Disconnect + timeout: grace window expiration settles match for remaining player",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 11: Abandoned Match Detection & Handling 3. Reconnect after deadline: user sees finalized loss, match does not restart",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 11: Abandoned Match Detection & Handling 4. Duplicate abandonment: repeated triggers are idempotent with 0 extra payouts",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 11: Abandoned Match Detection & Handling 5. Malicious client: client cannot force-abandon an opponent",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 11: Abandoned Match Detection & Handling 6. Admin force-forfeit: executes forfeit settlement and records audit log",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/api/src/services/__tests__/matchTimeoutEngine.test.ts",
+          "status": "passed",
+          "tests": 6,
+          "durationMs": 1820.065185546875,
+          "cases": [
+            {
+              "name": "Feature 10: Server-Authoritative Match Timeout Engine 1. Normal turn: checkTurnTimeout returns expired: false and remaining seconds when before deadline",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 10: Server-Authoritative Match Timeout Engine 2. Turn expiration: server detects deadline expired, forfeits player, and settles match",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 10: Server-Authoritative Match Timeout Engine 3. Concurrency: multiple simultaneous timeout checks settle match and credit winner exactly once",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 10: Server-Authoritative Match Timeout Engine 4. Disconnect grace: within window is protected; after window expires match is forfeited",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 10: Server-Authoritative Match Timeout Engine 5. Match join timeout: unfilled match lobby is cancelled and 100% refunded",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 10: Server-Authoritative Match Timeout Engine 6. Admin timeout status: returns comprehensive diagnostics on active timers and turn owner",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/api/src/services/__tests__/matchmakingQueue.test.ts",
+          "status": "passed",
+          "tests": 24,
+          "durationMs": 2178.7421875,
+          "cases": [
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 1. Matchmaking Entry & Validation places authenticated eligible player into the matchmaking queue",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 1. Matchmaking Entry & Validation rejects non-existent user with UNAUTHORIZED",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 1. Matchmaking Entry & Validation rejects invalid game ID with VALIDATION_ERROR",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 1. Matchmaking Entry & Validation blocks entry when user has insufficient wallet balance",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 1. Matchmaking Entry & Validation blocks entry when user is already in an active playing match",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 2. Idempotency & Reconnection duplicate join requests return existing queue position without creating duplicate records",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 2. Idempotency & Reconnection switching to a different game automatically cancels the previous queue entry",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 3. Queue Status & Position Tracking computes accurate FIFO queue positions for multiple waiting players",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 4. Queue Cancellation & Wallet Safety cancels waiting queue safely and leaves wallet balance untouched",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 5. Queue Timeout & Expiration sweeps expired queue entries and transitions status to EXPIRED with zero deduction",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 6. Game & Stake Isolation never matches players waiting for different games",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 6. Game & Stake Isolation never matches players with incompatible entry stakes (e.g. 10 vs 100 coins)",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 7. Atomic Match Creation & Concurrency Guard pairs 2 compatible waiting players into an authoritative match",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 7. Atomic Match Creation & Concurrency Guard prevents double-matching when multiple workers try to match simultaneously",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 8. Server Boot & Recovery sweeps lingering WAITING records on startup recovery",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 9. Full Verification Across All 10 Games successfully queues and pairs players for snake-ladder",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 9. Full Verification Across All 10 Games successfully queues and pairs players for ludo",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 9. Full Verification Across All 10 Games successfully queues and pairs players for chess",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 9. Full Verification Across All 10 Games successfully queues and pairs players for fruit-ninja",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 9. Full Verification Across All 10 Games successfully queues and pairs players for bubble-shooter",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 9. Full Verification Across All 10 Games successfully queues and pairs players for table-tennis",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 9. Full Verification Across All 10 Games successfully queues and pairs players for snake-vs-worms",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 9. Full Verification Across All 10 Games successfully queues and pairs players for carrom",
+              "status": "passed"
+            },
+            {
+              "name": "GLOBAL MULTIPLAYER MATCHMAKING QUEUE 9. Full Verification Across All 10 Games successfully queues and pairs players for snooker",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "apps/api/src/services/__tests__/persistentMatchState.test.ts",
+          "status": "passed",
+          "tests": 6,
+          "durationMs": 891.108642578125,
+          "cases": [
+            {
+              "name": "Feature 12: Persistent Match State Recovery 1. State snapshot save: initializes stateVersion and advances atomically",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 12: Persistent Match State Recovery 2. Concurrency conflict: saving state with stale expectedVersion is rejected with 409",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 12: Persistent Match State Recovery 3. Load state: recovers full match metadata, player seats, timers, and moves",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 12: Persistent Match State Recovery 4. Distributed recovery lock: allows 1 instance to hold lock and blocks concurrent workers",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 12: Persistent Match State Recovery 5. Startup recovery worker: evaluates active matches and cleans up stalled lobbies",
+              "status": "passed"
+            },
+            {
+              "name": "Feature 12: Persistent Match State Recovery 6. Admin recovery overview: aggregates system-wide health and match statuses",
+              "status": "passed"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "files": 62,
+    "tests": 866,
+    "passed": 866,
+    "failed": 0,
+    "skipped": 0
+  },
+  "gates": {
+    "typecheck": "PASS",
+    "build": "PASS",
+    "diffCheck": "PASS"
+  },
+  "productionTouched": false,
+  "browser": {
+    "practiceLaunches": 9,
+    "viewport": "390x844 and desktop",
+    "cricketRoute": "redirects Home",
+    "findings": [
+      "Fruit Ninja portrait replay button partly outside viewport (left -20.796875)",
+      "Fruit Ninja portrait active practice has two visible exit controls"
+    ],
+    "liveTwoAccountMultiplayer": "NOT VERIFIED",
+    "physicalNativeBack": "NOT VERIFIED"
+  }
+}
