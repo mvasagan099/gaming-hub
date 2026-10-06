@@ -172,11 +172,6 @@ function ProfileCard({
             >
               {roomPlayer.displayName || roomPlayer.username}
             </span>
-            {isMe && (
-              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 font-bold uppercase tracking-wide shrink-0">
-                You
-              </span>
-            )}
             {roomPlayer.isHost && (
               <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             )}
@@ -186,9 +181,16 @@ function ProfileCard({
               </span>
             )}
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5 truncate">
-            @{roomPlayer.username} {countryFlag(country)}
-          </p>
+          <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+            <span className="text-[10px] text-slate-400 truncate min-w-0">
+              @{roomPlayer.username} {countryFlag(country)}
+            </span>
+            {isMe && (
+              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 font-bold uppercase tracking-wide shrink-0">
+                You
+              </span>
+            )}
+          </div>
 
           {/* Level + Rating row */}
           <div className="flex items-center gap-2 mt-1">

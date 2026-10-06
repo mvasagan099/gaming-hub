@@ -54,8 +54,10 @@ export const FruitNinjaGame: React.FC<FruitNinjaProps> = ({ mode: initialMode, s
             )}
           </div>
           {isMultiplayer && (
-            <div className="hidden lg:block flex-shrink-0 w-80">
-              <MultiplayerMatchPanel compact />
+            <div className="hidden lg:flex flex-col flex-shrink-0 w-80 h-full max-h-[calc(100dvh-4.25rem)] justify-center py-1">
+              <div className="overflow-y-auto max-h-full pr-1.5 custom-scrollbar">
+                <MultiplayerMatchPanel compact />
+              </div>
             </div>
           )}
         </div>

@@ -893,7 +893,7 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
       lastTouchShotAtRef.current = Date.now();
       const touch = event.changedTouches[0];
       if (touch) updateAimCoords(touch.clientX, touch.clientY);
-    } else if (event) {
+    } else if (event && 'clientX' in event) {
       // Some mobile browsers synthesize a click after touchend, even when a
       // very short flight/rejection has already released the input lock.
       if (Date.now() - lastTouchShotAtRef.current < 500) return;
@@ -983,10 +983,10 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
 
   return (
     <GameWrapper title="Bubble Shooter 3D" gameId="bubble-shooter" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={gameOver || win || lose}>
-      <div className="flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-6 w-full max-w-6xl relative mx-auto h-full p-1.5 sm:p-2 lg:p-4 select-none overflow-hidden lg:overflow-y-auto">
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-3 xl:gap-6 w-full h-full p-1 sm:p-2 lg:p-3 relative select-none overflow-hidden">
         
         {/* CENTER PLAYFIELD CONTAINER */}
-        <div className="relative flex flex-col items-center justify-center w-full max-w-[min(92vw,calc((100dvh-7rem)*0.66),480px)] shrink-0">
+        <div className="relative flex flex-col items-center justify-center w-full max-w-[min(92vw,calc((100dvh-5.5rem)*0.66),480px)] shrink-0">
           
           {/* ═══ LIVE MULTIPLAYER SCOREBOARD CARD ═══ */}
           {isMultiplayer ? (
@@ -1124,54 +1124,18 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
 
         {/* MULTIPLAYER / OPPONENT SIDE PANEL (DESKTOP >= lg) */}
         {isMultiplayer && (
-          <div className="hidden lg:flex w-full max-w-xs flex-col gap-4">
-            <div className="bg-slate-900/90 p-5 rounded-3xl border border-slate-800 shadow-2xl">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-3 text-center">Scoreboard</span>
-              <div className="space-y-2">
-                {serverPlayers.map((p) => {
-                  const isMe = p.seat === mySeat;
-                  const statusColor =
-                    p.status === 'won'
-                      ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/40'
-                      : p.status === 'eliminated'
-                        ? 'text-rose-400 border-rose-500/40 bg-rose-950/40'
-                        : 'text-slate-300 border-slate-700 bg-slate-800/60';
-                  const statusLabel =
-                    p.status === 'won' ? 'Won' : p.status === 'eliminated' ? 'Out' : 'Playing';
-                  return (
-                    <div
-                      key={p.seat}
-                      className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-left ${
-                        isMe ? 'border-indigo-500/50 bg-indigo-950/40' : 'border-slate-800 bg-slate-900/40'
-                      }`}
-                    >
-                      <span className="text-xs font-bold text-slate-200 truncate">
-                        {isMe ? 'You' : (namesBySeat[p.seat] ?? p.name)}
-                        {isMe && <span className="ml-1 text-indigo-400">•</span>}
-                      </span>
-                      <span className="flex items-center gap-2 shrink-0">
-                        <span className="text-xs font-black text-amber-400">{p.score}</span>
-                        <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${statusColor}`}>
-                          {statusLabel}
-                        </span>
-                      </span>
-                    </div>
-                  );
-                })}
+          <div className="hidden lg:flex flex-col flex-shrink-0 w-full max-w-[280px] xl:max-w-[320px] h-full max-h-[calc(100dvh-4.25rem)] justify-center py-1">
+            <div className="overflow-y-auto max-h-full pr-1.5 custom-scrollbar flex flex-col gap-3">
+              {/* Live Opponent Board Preview */}
+              <div className="w-full">
+                {serverPlayers
+                  .filter((p) => p.seat !== mySeat)
+                  .map((opp) => (
+                    <OpponentMiniBoard key={opp.seat} player={opp} name={namesBySeat[opp.seat] ?? opp.name} />
+                  ))}
               </div>
-            </div>
 
-            {/* Live Opponent Board Preview */}
-            <div className="w-full space-y-3">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block text-center">Live Opponent</span>
-              {serverPlayers
-                .filter((p) => p.seat !== mySeat)
-                .map((opp) => (
-                  <OpponentMiniBoard key={opp.seat} player={opp} name={namesBySeat[opp.seat] ?? opp.name} />
-                ))}
-            </div>
-
-            <div className="hidden xl:block">
+              {/* Match Controls & Chat */}
               <MultiplayerMatchPanel compact />
             </div>
           </div>

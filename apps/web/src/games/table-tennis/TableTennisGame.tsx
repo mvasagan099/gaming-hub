@@ -867,8 +867,10 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
         {/* MULTIPLAYER PANEL (DESKTOP >= xl) */}
         {mode === 'multiplayer' && (
-          <div className="hidden xl:block flex-shrink-0 self-start">
-            <MultiplayerMatchPanel compact />
+          <div className="hidden xl:flex flex-col flex-shrink-0 h-full max-h-[calc(100dvh-4.25rem)] justify-center py-1">
+            <div className="overflow-y-auto max-h-full pr-1.5 custom-scrollbar">
+              <MultiplayerMatchPanel compact />
+            </div>
           </div>
         )}
 
