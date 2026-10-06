@@ -1,5 +1,6 @@
 import { MultiplayerGameEngine } from "../base/MultiplayerGameEngine";
 import type { EngineActionResult, EngineEvent, EnginePlayer, RandomSource } from "../types";
+import { BUBBLE_SHOOTER_GEOMETRY, bubbleGridX as getGridX, bubbleGridY as getGridY, traceBubbleShot } from "./geometry";
 import type {
   BubbleShooterAction,
   BubbleShooterBubbleType,
@@ -11,34 +12,17 @@ import type {
 } from "./types";
 
 const COLORS = ["#fb7185", "#818cf8", "#34d399", "#fbbf24", "#c084fc"];
-const RADIUS = 11;
+const RADIUS = BUBBLE_SHOOTER_GEOMETRY.radius;
 const DIAMETER = RADIUS * 2;
-const COLS = 13;
-const ROW_HEIGHT = RADIUS * Math.sqrt(3);
-const CANVAS_WIDTH = COLS * DIAMETER;
-const CANVAS_HEIGHT = 460;
-const SHOOTER_X = CANVAS_WIDTH / 2;
-const SHOOTER_Y = CANVAS_HEIGHT - 25;
-const SPEED = 850;
-const OVERFLOW_LINE = SHOOTER_Y - 5;
+const COLS = BUBBLE_SHOOTER_GEOMETRY.cols;
+const OVERFLOW_LINE = BUBBLE_SHOOTER_GEOMETRY.shooterY - 10;
 const INITIAL_ROWS = 5;
 const SHOTS_PER_DROP = 2;
 const MAX_ROWS_TO_SNAP = 25;
-const SHOT_DT = 1 / 240;
-const MAX_TRAJECTORY_STEPS = 4000;
 
 interface GridCell {
   r: number;
   c: number;
-}
-
-function getGridX(row: number, col: number): number {
-  const xOffset = Math.abs(row % 2) === 0 ? RADIUS : DIAMETER;
-  return xOffset + col * DIAMETER;
-}
-
-function getGridY(row: number, topOffset: number): number {
-  return RADIUS + (row + topOffset) * ROW_HEIGHT;
 }
 
 function colsInRow(row: number): number {
@@ -62,10 +46,10 @@ export class BubbleShooterEngine extends MultiplayerGameEngine<
   readonly gameId = "bubble-shooter" as const;
 
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: BubbleShooterEngineOptions) {
-    const turnTimer = options?.turnTimer ?? { turnDurationMs: 10000, warningThresholdMs: 3000 };
     const matchTimer = options?.matchTimer ?? { matchDurationMs: 300000, warningThresholdMs: 30000 };
     super(players, rng, {
-      turnTimer,
+      // This is a simultaneous score race, not a turn-based game.
+      turnTimer: undefined,
       matchTimer,
       enableResign: options?.enableResign ?? true,
       enableDraw: options?.enableDraw ?? true,
@@ -88,6 +72,7 @@ export class BubbleShooterEngine extends MultiplayerGameEngine<
         topOffset: 0,
         shotsFired: 0,
         nextBubble: this.rollNextBubble(grid),
+        queuedBubble: this.rollNextBubble(grid),
         score: 0,
         combo: 0,
         status: "playing",
@@ -199,6 +184,7 @@ export class BubbleShooterEngine extends MultiplayerGameEngine<
       player.grid = grid.filter((b) => !removed.has(b));
       
       const drop = this.dropFloating(player.grid, topOffset);
+      player.grid = drop.grid;
       droppedCount = drop.dropped;
 
       // Spec scoring: 30 base for 3 bubbles + 10 for each extra bubble
@@ -236,9 +222,11 @@ export class BubbleShooterEngine extends MultiplayerGameEngine<
       }
     }
 
-    player.nextBubble = this.rollNextBubble(player.grid);
+    player.nextBubble = player.queuedBubble;
+    player.queuedBubble = this.rollNextBubble(player.grid);
 
     const lastShot: BubbleShooterLastShot = {
+      sequence: state.turnCount + 1,
       angle,
       row,
       col,
@@ -349,40 +337,7 @@ export class BubbleShooterEngine extends MultiplayerGameEngine<
     topOffset: number,
     angle: number,
   ): { x: number; y: number } {
-    let x = SHOOTER_X;
-    let y = SHOOTER_Y;
-    let vx = Math.cos(angle) * SPEED;
-    let vy = Math.sin(angle) * SPEED;
-
-    for (let i = 0; i < MAX_TRAJECTORY_STEPS; i++) {
-      x += vx * SHOT_DT;
-      y += vy * SHOT_DT;
-
-      if (x - RADIUS < 0) {
-        x = RADIUS;
-        vx *= -1;
-      }
-      if (x + RADIUS > CANVAS_WIDTH) {
-        x = CANVAS_WIDTH - RADIUS;
-        vx *= -1;
-      }
-      if (y - RADIUS < 0) {
-        x = RADIUS;
-        break;
-      }
-
-      let hit = false;
-      for (const b of grid) {
-        const dst = Math.hypot(x - getGridX(b.row, b.col), y - getGridY(b.row, topOffset));
-        if (dst < DIAMETER - 2) {
-          hit = true;
-          break;
-        }
-      }
-      if (hit) break;
-    }
-
-    return { x, y };
+    return traceBubbleShot(grid, topOffset, angle);
   }
 
   private snapCell(

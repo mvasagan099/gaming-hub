@@ -6,6 +6,9 @@ import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPane
 import { BUBBLE_SHOOTER_VISUAL_CONFIG, prefersReducedMotion } from './constants/bubbleShooterVisualConfig';
 import { Bubble3DRenderer } from './utils/bubble3DRenderer';
 import { BubbleShooterOverlays } from './components/BubbleShooterOverlays';
+import { BUBBLE_SHOOTER_GEOMETRY, bubbleGridX as getGridX, bubbleGridY as getGridY, traceBubbleShot } from '@gaming-hub/game-engine';
+import type { BubbleShooterPlayerState, BubbleShooterServerState } from '@gaming-hub/game-engine';
+import { BubbleMultiplayerPresentation, createBubbleFlight, advanceBubbleFlight, bubbleShotEffects } from './utils/multiplayerPresentation';
 import { Trophy, Zap, Flame, RefreshCcw, HelpCircle, Shield, Users, X, Swords } from 'lucide-react';
 
 interface BubbleShooterProps {
@@ -14,24 +17,8 @@ interface BubbleShooterProps {
   onBack: () => void;
 }
 
-// Server-authoritative state mirror
-type RemoteBubble = { row: number; col: number; color: string; type: 'normal' | 'bomb' | 'rainbow' };
-type RemotePlayer = {
-  seat: number;
-  name: string;
-  grid: RemoteBubble[];
-  topOffset: number;
-  shotsFired: number;
-  nextBubble: { color: string; type: 'normal' | 'bomb' | 'rainbow' };
-  score: number;
-  status: 'playing' | 'won' | 'eliminated';
-};
-type RemoteState = {
-  players: RemotePlayer[];
-  winnerSeats: number[];
-  finished: boolean;
-  result: 'none' | 'win' | 'draw';
-};
+type RemotePlayer = BubbleShooterPlayerState;
+type RemoteState = BubbleShooterServerState;
 
 const COLORS = ['#fb7185', '#818cf8', '#34d399', '#fbbf24', '#c084fc'];
 const RADIUS = BUBBLE_SHOOTER_VISUAL_CONFIG.radius; // 16
@@ -41,8 +28,8 @@ const COLS = BUBBLE_SHOOTER_VISUAL_CONFIG.cols;
 const ROW_HEIGHT = RADIUS * Math.sqrt(3); // ~27.7
 const CANVAS_WIDTH = BUBBLE_SHOOTER_VISUAL_CONFIG.canvasWidth; // 384
 const CANVAS_HEIGHT = BUBBLE_SHOOTER_VISUAL_CONFIG.canvasHeight; // 580
-const SHOOTER_X = CANVAS_WIDTH / 2;
-const SHOOTER_Y = CANVAS_HEIGHT - 36;
+const SHOOTER_X = BUBBLE_SHOOTER_GEOMETRY.shooterX;
+const SHOOTER_Y = BUBBLE_SHOOTER_GEOMETRY.shooterY;
 const SPEED = BUBBLE_SHOOTER_VISUAL_CONFIG.speed; // 1200
 
 type GridBubble = {
@@ -95,15 +82,6 @@ type FloatingText = {
   color: string;
   scale: number;
 };
-
-function getGridX(row: number, col: number) {
-  const xOffset = Math.abs(row % 2) === 0 ? RADIUS : DIAMETER;
-  return xOffset + col * DIAMETER;
-}
-
-function getGridY(row: number, topOffset: number) {
-  return RADIUS + (row + topOffset) * ROW_HEIGHT;
-}
 
 // ─── Multiplayer Opponent Mini-Board Preview ─────────────────────────────────
 const OpponentMiniBoard: React.FC<{ player: RemotePlayer; name: string }> = ({ player, name }) => {
@@ -158,6 +136,7 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const isSpectator = useMultiplayerStore((s) => s.isSpectator);
   const room = useMultiplayerStore((s) => s.room);
+  const matchId = useMultiplayerStore((s) => s.matchId);
   const roomPlayers = room?.players ?? [];
 
   const [score, setScore] = useState(0);
@@ -179,10 +158,17 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   const fallingBubblesRef = useRef<FallingBubble[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const floatingTextsRef = useRef<FloatingText[]>([]);
-  const mousePosRef = useRef({ x: SHOOTER_X, y: 0 });
+  const mousePosRef = useRef<{ x: number; y: number }>({ x: SHOOTER_X, y: 0 });
+  const lastTouchShotAtRef = useRef(-Infinity);
   const topOffsetRef = useRef(0);
   const screenShakeRef = useRef(0);
-  const shootingRef = useRef(false);
+  const multiplayerPresentationRef = useRef(new BubbleMultiplayerPresentation());
+  const remoteFlightRef = useRef<ReturnType<typeof createBubbleFlight> | null>(null);
+  const shotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const presentedSequenceRef = useRef(0);
+  const hasPresentedStateRef = useRef(false);
+  const [shotError, setShotError] = useState<string | null>(null);
+  const trajectoryCacheRef = useRef<{ grid: GridBubble[]; angle: number; points: { x: number; y: number }[] } | null>(null);
   const comboStreakRef = useRef(0);
 
   const getNextBubble = useCallback((): { color: string; type: 'normal' | 'bomb' | 'rainbow' } => {
@@ -232,45 +218,81 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
     }
   }, [initGrid, isMultiplayer]);
 
-  // Multiplayer State Synchronization
-  useEffect(() => {
-    if (!isMultiplayer || !gameState || mySeat == null) return;
-    const s = gameState as unknown as RemoteState;
-    const me = (s.players ?? []).find((p) => p.seat === mySeat);
+  const applyMultiplayerSnapshot = useCallback((s: RemoteState) => {
+    const me = s.players.find(p => p.seat === mySeat);
     if (!me) return;
-
-    gridRef.current = me.grid.map((b) => ({
-      ...b,
-      x: getGridX(b.row, b.col),
-      y: getGridY(b.row, me.topOffset),
-    }));
+    const shot = me.lastShot;
+    if (shot && hasPresentedStateRef.current && shot.sequence > presentedSequenceRef.current) {
+      presentedSequenceRef.current = shot.sequence;
+      const effects = bubbleShotEffects(gridRef.current, me);
+      if (shot.result !== 'miss' && shot.matchedCount > 0) {
+        effects.popped.forEach(b => {
+          for (let i = 0; i < 8; i++) particlesRef.current.push({
+            x: getGridX(b.row, b.col), y: getGridY(b.row, topOffsetRef.current), vx: (Math.random() - 0.5) * 550,
+            vy: (Math.random() - 0.5) * 550 - 80, life: 0.6, maxLife: 0.6,
+            color: b.color, size: 3,
+          });
+        });
+        effects.dropped.forEach(b => fallingBubblesRef.current.push({
+          x: getGridX(b.row, b.col), y: getGridY(b.row, topOffsetRef.current),
+          vx: (Math.random() - 0.5) * 160, vy: -Math.random() * 120,
+          rotation: 0, vRot: (Math.random() - 0.5) * 8, color: b.color, type: b.type,
+        }));
+        floatingTextsRef.current.push({
+          x: getGridX(shot.row, shot.col), y: getGridY(shot.row, topOffsetRef.current),
+          text: `+${shot.points}${me.combo > 1 ? ` · ${me.combo}x COMBO` : ''}`,
+          life: 1.2, maxLife: 1.2, color: '#34d399', scale: 1.3,
+        });
+        setPoppedCount(p => p + shot.matchedCount + shot.droppedCount);
+        setBestCombo(previous => Math.max(previous, me.combo));
+        if (!prefersReducedMotion()) screenShakeRef.current = shot.type === 'bomb' ? 14 : 5;
+      }
+    }
+    if (!hasPresentedStateRef.current) presentedSequenceRef.current = shot?.sequence ?? 0;
+    hasPresentedStateRef.current = true;
+    gridRef.current = me.grid.map(b => ({ ...b, x: getGridX(b.row, b.col), y: getGridY(b.row, me.topOffset) }));
     topOffsetRef.current = me.topOffset;
     shotsFiredRef.current = me.shotsFired;
     setShotsUntilDrop(2 - (me.shotsFired % 2));
-    nextBubbleRef.current = me.nextBubble;
+    // The server's nextBubble is the cannon's loaded bubble; queuedBubble is its preview.
+    loadedBubbleRef.current = me.nextBubble;
+    nextBubbleRef.current = me.queuedBubble ?? me.nextBubble;
     movingBubbleRef.current = null;
-    shootingRef.current = false;
+    remoteFlightRef.current = null;
+    if (shotTimeoutRef.current !== null) clearTimeout(shotTimeoutRef.current);
+    shotTimeoutRef.current = null;
     setScore(me.score);
+    const won = me.status === 'won' || s.winnerSeats.includes(mySeat!);
+    setWin(won);
+    setGameOver(!won && me.status === 'eliminated' && !s.finished);
+    setLose(!won && s.finished);
+  }, [mySeat]);
 
-    const won = me.status === 'won' || s.winnerSeats.includes(mySeat);
-    if (won) {
-      setWin(true);
-      setGameOver(false);
-      setLose(false);
-    } else if (me.status === 'eliminated' && !s.finished) {
-      setGameOver(true);
-      setWin(false);
-      setLose(false);
-    } else if (s.finished) {
-      setLose(true);
-      setWin(false);
-      setGameOver(false);
-    } else {
-      setWin(false);
-      setGameOver(false);
-      setLose(false);
-    }
-  }, [gameState, mySeat, isMultiplayer]);
+  // A rematch/rejoin gets a fresh presentation, but reconnect snapshots keep the server board.
+  useEffect(() => {
+    multiplayerPresentationRef.current = new BubbleMultiplayerPresentation();
+    remoteFlightRef.current = null;
+    movingBubbleRef.current = null;
+    presentedSequenceRef.current = 0;
+    hasPresentedStateRef.current = false;
+    fallingBubblesRef.current = [];
+    particlesRef.current = [];
+    floatingTextsRef.current = [];
+    setShotError(null);
+    setPoppedCount(0);
+    setBestCombo(0);
+    return () => {
+      multiplayerPresentationRef.current = new BubbleMultiplayerPresentation();
+      if (shotTimeoutRef.current !== null) clearTimeout(shotTimeoutRef.current);
+      shotTimeoutRef.current = null;
+    };
+  }, [matchId, mySeat, isMultiplayer]);
+
+  useEffect(() => {
+    if (!isMultiplayer || !gameState || mySeat == null) return;
+    const snapshot = multiplayerPresentationRef.current.receive(gameState as RemoteState, mySeat);
+    if (snapshot) applyMultiplayerSnapshot(snapshot);
+  }, [gameState, mySeat, isMultiplayer, matchId, applyMultiplayerSnapshot]);
 
   // ─── 60 FPS Game Loop ───────────────────────────────────────────────────────
   useGameLoop((dt) => {
@@ -560,7 +582,15 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
       }
 
       // Moving Bubble Physics
-      if (movingBubbleRef.current) {
+      if (isMultiplayer && remoteFlightRef.current) {
+        if (advanceBubbleFlight(remoteFlightRef.current, dt)) {
+          remoteFlightRef.current = null;
+          movingBubbleRef.current = null;
+          const snapshot = multiplayerPresentationRef.current.finishFlight();
+          if (snapshot) applyMultiplayerSnapshot(snapshot);
+        }
+      }
+      if (movingBubbleRef.current && !isMultiplayer) {
         const b = movingBubbleRef.current;
         b.x += b.vx * dt;
         b.y += b.vy * dt;
@@ -633,15 +663,25 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
 
     // ── Raycast Trajectory Math ──
     const getTrajectoryPoints = () => {
-      if (movingBubbleRef.current) return { points: [], phantom: undefined };
+      if (movingBubbleRef.current || (isMultiplayer && multiplayerPresentationRef.current.busy)) return { points: [], phantom: undefined };
 
       const points: Array<{ x: number; y: number }> = [{ x: SHOOTER_X, y: SHOOTER_Y }];
-      let tx = SHOOTER_X;
-      let ty = SHOOTER_Y;
+      let tx: number = SHOOTER_X;
+      let ty: number = SHOOTER_Y;
 
       const dx = mousePosRef.current.x - SHOOTER_X;
       const dy = mousePosRef.current.y - SHOOTER_Y;
       const angle = Math.atan2(dy, dx);
+
+      if (isMultiplayer) {
+        const cached = trajectoryCacheRef.current;
+        if (!cached || cached.grid !== gridRef.current || cached.angle !== angle) {
+          trajectoryCacheRef.current = { grid: gridRef.current, angle, points: traceBubbleShot(gridRef.current, topOffsetRef.current, angle).points };
+        }
+        const traced = trajectoryCacheRef.current!.points;
+        const hit = traced[traced.length - 1]!;
+        return { points: traced, phantom: { ...hit, ...loadedBubbleRef.current } };
+      }
 
       let tvx = Math.cos(angle);
       let tvy = Math.sin(angle);
@@ -843,12 +883,22 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
   const canShoot = useCallback(() => {
     if (mySeat == null || isSpectator) return false;
     const s = gameState as unknown as RemoteState | null;
-    if (!s || s.finished) return false;
+    if (!s || s.finished || s.paused) return false;
     const me = (s.players ?? []).find((p) => p.seat === mySeat);
     return !!me && me.status === 'playing';
   }, [gameState, mySeat, isSpectator]);
 
-  const handleShoot = () => {
+  const handleShoot = (event?: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (event && 'changedTouches' in event) {
+      lastTouchShotAtRef.current = Date.now();
+      const touch = event.changedTouches[0];
+      if (touch) updateAimCoords(touch.clientX, touch.clientY);
+    } else if (event) {
+      // Some mobile browsers synthesize a click after touchend, even when a
+      // very short flight/rejection has already released the input lock.
+      if (Date.now() - lastTouchShotAtRef.current < 500) return;
+      updateAimCoords(event.clientX, event.clientY);
+    }
     if (movingBubbleRef.current || gameOver || win || lose || showRules) return;
 
     const dx = mousePosRef.current.x - SHOOTER_X;
@@ -856,23 +906,30 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
     const angle = Math.atan2(dy, dx);
 
     if (isMultiplayer) {
-      if (shootingRef.current || !canShoot()) return;
-      shootingRef.current = true;
-      movingBubbleRef.current = {
-        x: SHOOTER_X,
-        y: SHOOTER_Y,
-        vx: Math.cos(angle) * SPEED,
-        vy: Math.sin(angle) * SPEED,
-        color: nextBubbleRef.current.color,
-        type: nextBubbleRef.current.type,
+      if (!canShoot()) return;
+      const presentation = multiplayerPresentationRef.current;
+      const shot = presentation.beginShot();
+      const player = (gameState as RemoteState).players.find(p => p.seat === mySeat);
+      if (!shot || !player) return;
+      setShotError(null);
+      const flight = createBubbleFlight(player, angle, shot.bubble);
+      remoteFlightRef.current = flight;
+      movingBubbleRef.current = flight;
+      const failed = (message: string) => {
+        const snapshot = presentation.cancel(shot.token);
+        if (!snapshot || presentation !== multiplayerPresentationRef.current) return;
+        setShotError(message);
+        applyMultiplayerSnapshot(snapshot);
       };
-
-      void useMultiplayerStore.getState().sendGameAction({ type: 'shoot', angle }).then((res) => {
-        if (!res.ok) {
-          shootingRef.current = false;
-          movingBubbleRef.current = null;
-        }
-      });
+      // Recover the controls if the connection/acknowledgement disappears.
+      shotTimeoutRef.current = setTimeout(() => {
+        if (!presentation.isPending(shot.token)) return;
+        failed('Connection delayed. Refreshing your board; please try again.');
+        void useMultiplayerStore.getState().syncGameState().catch(() => {});
+      }, 8000);
+      void useMultiplayerStore.getState().sendGameAction({ type: 'shoot', angle })
+        .then(res => { if (!res.ok) failed(res.error ?? 'Shot rejected. Please try again.'); })
+        .catch(() => failed('Could not send your shot. Please try again.'));
       return;
     }
 
@@ -1040,11 +1097,13 @@ export const BubbleShooterGame: React.FC<BubbleShooterProps> = ({ mode, stake, o
               height={CANVAS_HEIGHT}
               onMouseMove={handleMouseMove}
               onClick={handleShoot}
+              onTouchStart={handleTouchMove}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleShoot}
-              className="w-full h-full object-contain cursor-crosshair"
+              className="w-full h-full object-contain cursor-crosshair touch-none"
             />
 
+            {shotError && <div role="status" className="absolute bottom-20 inset-x-3 rounded-xl bg-slate-900/95 p-2 text-center text-sm text-amber-300">{shotError}</div>}
             {/* Glassmorphic Overlays */}
             <BubbleShooterOverlays
               isWin={win}

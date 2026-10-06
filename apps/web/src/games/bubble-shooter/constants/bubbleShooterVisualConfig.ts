@@ -3,15 +3,17 @@
  * and animation timings for Modernized 3D Bubble Shooter.
  */
 
+import { BUBBLE_SHOOTER_GEOMETRY } from '@gaming-hub/game-engine';
+
 export const BUBBLE_SHOOTER_VISUAL_CONFIG = {
   // Stage resolution & grid dimensions
-  radius: 16,
-  diameter: 32,
+  radius: BUBBLE_SHOOTER_GEOMETRY.radius,
+  diameter: BUBBLE_SHOOTER_GEOMETRY.radius * 2,
   rows: 14,
-  cols: 12,
-  canvasWidth: 384, // 12 * 32
-  canvasHeight: 580,
-  speed: 1200, // Launch velocity (px/sec)
+  cols: BUBBLE_SHOOTER_GEOMETRY.cols,
+  canvasWidth: BUBBLE_SHOOTER_GEOMETRY.canvasWidth,
+  canvasHeight: BUBBLE_SHOOTER_GEOMETRY.canvasHeight,
+  speed: BUBBLE_SHOOTER_GEOMETRY.speed,
 
   // 3D Glass / Gel Bubble Palettes (Specular, Core, Rim, Shadow)
   bubbleThemes: {

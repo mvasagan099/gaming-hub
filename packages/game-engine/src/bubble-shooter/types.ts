@@ -19,6 +19,7 @@ export type BubbleShooterNextBubble = JsonObject & {
 export type BubbleShooterShotResult = "pop" | "miss" | "win" | "eliminated";
 
 export type BubbleShooterLastShot = JsonObject & {
+  sequence: number;
   angle: number;
   row: number;
   col: number;
@@ -37,6 +38,7 @@ export type BubbleShooterPlayerState = JsonObject & {
   topOffset: number;
   shotsFired: number;
   nextBubble: BubbleShooterNextBubble;
+  queuedBubble: BubbleShooterNextBubble;
   score: number;
   combo: number;
   status: BubbleShooterStatus;
