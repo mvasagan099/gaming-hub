@@ -9,6 +9,8 @@ import type {
   TableTennisPhase,
 } from "./types";
 
+import { tableTennisShot } from "./shots";
+
 const CANVAS_WIDTH = 600;
 const CANVAS_HEIGHT = 400;
 const PADDLE_WIDTH = 12;
@@ -28,9 +30,9 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     pointsPerSet: 5,
     setsToWin: 1,
     winByTwo: true,
-    maxSpeed: 12.0,
+    maxSpeed: 10.0,
     minSpeed: 5.0,
-    speedIncreasePerTouch: 0.5,
+    speedIncreasePerTouch: 0.35,
   };
 
   private physicsInterval: ReturnType<typeof setInterval> | null = null;
@@ -120,6 +122,7 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
         if (state.phase !== "serve" && state.phase !== "waiting") return "Cannot serve now";
         if (seat !== state.servingSeat) return "Not your serve";
         if (state.ball && state.ball.inPlay) return "Ball already in play";
+        if (!Number.isFinite(action.angle)) return "Invalid serve angle";
         return null;
       }
       case "ready": {
@@ -157,13 +160,13 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
           : CANVAS_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH - BALL_RADIUS - 5;
         
         const baseSpeed = 5.0;
-        const angle = (action.angle * Math.PI) / 180;
+        const angle = Math.max(-15, Math.min(15, action.angle)) * Math.PI / 180;
+        const shot = tableTennisShot(startX, paddleCenterY, seat === 0 ? 1 : -1, baseSpeed, Math.tan(angle));
         
         next.ball = {
           x: startX,
           y: paddleCenterY,
-          vx: seat === 0 ? baseSpeed * Math.cos(angle) : -baseSpeed * Math.cos(angle),
-          vy: baseSpeed * Math.sin(angle),
+          ...shot,
           speed: baseSpeed,
           touchCount: 0,
           served: true,
@@ -291,29 +294,22 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
         ballTop <= paddleBottom
       ) {
         const hitPosition = (ball.y - (player.paddleY + PADDLE_HEIGHT / 2)) / (PADDLE_HEIGHT / 2);
-        const maxAngle = Math.PI / 3;
-        const angle = hitPosition * maxAngle;
+        const maxAngle = Math.PI / 9;
+        const angle = Math.max(-1, Math.min(1, hitPosition)) * maxAngle;
         
         const touchCount = (ball.touchCount || 0) + 1;
         const newSpeed = Math.min(ball.speed + this.rules.speedIncreasePerTouch, this.rules.maxSpeed);
         
-        const rawVx = (isLeftPaddle ? 1 : -1) * Math.cos(angle);
-        const rawVy = Math.sin(angle) + player.paddleVelocity * 0.05;
-        const len = Math.sqrt(rawVx * rawVx + rawVy * rawVy) || 1;
-        
+        ball.x = isLeftPaddle ? paddleRight + BALL_RADIUS + 1 : paddleLeft - BALL_RADIUS - 1;
+        const shot = tableTennisShot(ball.x, ball.y, isLeftPaddle ? 1 : -1, newSpeed,
+          Math.tan(angle) + Math.max(-0.06, Math.min(0.06, player.paddleVelocity * 0.02)));
         ball.touchCount = touchCount;
         ball.speed = newSpeed;
-        ball.vx = (rawVx / len) * newSpeed;
-        ball.vy = (rawVy / len) * newSpeed;
+        ball.vx = shot.vx;
+        ball.vy = shot.vy;
         ball.lastHitSeat = player.seat;
         next.rallyCount++;
         ball.bounceCount = 0;
-        
-        if (isLeftPaddle) {
-          ball.x = paddleRight + BALL_RADIUS + 1;
-        } else {
-          ball.x = paddleLeft - BALL_RADIUS - 1;
-        }
       }
     }
 

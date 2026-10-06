@@ -113,18 +113,14 @@ export class SyncManager {
       sequenceNumber,
     };
     
-    const socketCount = this.framework.io.sockets?.adapter?.rooms?.get?.(room.ioName)?.size ?? 0;
-    this.framework.log(`[CARROM SYNC] Broadcasting game state for room ${room.id} (turn ${room.match.turnNumber}, seq: ${sequenceNumber})`);
-    this.framework.log(`[CARROM SYNC] Room ${room.ioName} has ${socketCount} sockets connected`);
-    this.framework.log(`[CARROM SYNC] Events: ${events.map(e => e.type).join(", ")}`);
-    
-    if (state.coins) {
-      this.framework.log(`[CARROM SYNC] State: coins=${state.coins?.length}, active=${state.coins?.filter((c: any) => !c.pocketed).length}, currentSeat=${state.currentSeat}, strikerPlacement=${state.strikerPlacementPhase}`);
+    // A realtime rally broadcasts 60 times a second. Logging every packet
+    // creates hundreds of log writes per room and delays the physics loop.
+    if (room.config.gameId !== "table-tennis" || events.length > 0) {
+      this.framework.log(`Game state: ${room.config.gameId}, room ${room.id}, seq ${sequenceNumber}, events: ${events.map(e => e.type).join(", ")}`);
     }
-    
+
     this.framework.io.to(room.ioName).emit("game:state", packet);
     
-    this.framework.log(`[CARROM SYNC] Broadcast complete for room ${room.id}`);
   }
   
   /**

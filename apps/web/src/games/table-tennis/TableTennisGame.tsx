@@ -5,7 +5,7 @@ import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPane
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import TableTennisMultiplayerDriver from './TableTennisMultiplayerDriver';
 import { TableTennisTimeline } from './remoteTimeline';
-import type { TableTennisState } from '@gaming-hub/game-engine';
+import { tableTennisShot, type TableTennisState } from '@gaming-hub/game-engine';
 import { TABLE_TENNIS_VISUAL_CONFIG, type CameraState } from './constants/tableTennisVisualConfig';
 import { TableTennis3DRenderer } from './utils/tableTennis3DRenderer';
 import { TableTennisOverlays } from './components/TableTennisOverlays';
@@ -328,6 +328,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       state.gameState = 'playing';
       setGameState('playing');
       const ball = ballRef.current;
+      ball.x = state.server === 1 ? 44 : LOGICAL_WIDTH - 44;
+      ball.y = (state.server === 1 ? p1Ref.current.y : p2Ref.current.y) + 40;
       ball.speed = 5.8;
       ball.vx = state.server === 1 ? ball.speed : -ball.speed;
 
@@ -339,6 +341,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         ball.vy = (Math.random() - 0.5) * 3.5;
       }
 
+      Object.assign(ball, tableTennisShot(ball.x, ball.y, state.server === 1 ? 1 : -1,
+        ball.speed, ball.vy / ball.speed));
       ball.inPlay = true;
       trailRef.current = [];
       rallyCountRef.current = 0;
@@ -445,14 +449,14 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         if (keys.down || keys.s) p1.targetY += paddleSpeed;
         p1.targetY = Math.max(0, Math.min(LOGICAL_HEIGHT - PADDLE_HEIGHT, p1.targetY));
         p1.vy = (p1.targetY - p1.y);
-        p1.y += (p1.targetY - p1.y) * 0.55;
+        p1.y += (p1.targetY - p1.y) * (1 - Math.exp(-dt * 60));
       } else if (mySeat === 1) {
         // In Player 2's inverted camera, moving left on screen increases targetY
         if (keys.up || keys.w) p2TargetYRef.current += paddleSpeed;
         if (keys.down || keys.s) p2TargetYRef.current -= paddleSpeed;
         p2TargetYRef.current = Math.max(0, Math.min(LOGICAL_HEIGHT - PADDLE_HEIGHT, p2TargetYRef.current));
         p2.vy = (p2TargetYRef.current - p2.y);
-        p2.y += (p2TargetYRef.current - p2.y) * 0.55;
+        p2.y += (p2TargetYRef.current - p2.y) * (1 - Math.exp(-dt * 60));
       }
 
       const paddleY = mySeat === 0 ? p1.y : p2.y;
@@ -471,7 +475,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       if (keys.w) p1.targetY -= paddleSpeed;
       if (keys.s) p1.targetY += paddleSpeed;
       p1.vy = (p1.targetY - p1.y);
-      p1.y += (p1.targetY - p1.y) * 0.55;
+      p1.y += (p1.targetY - p1.y) * (1 - Math.exp(-dt * 60));
 
       if (state.gameState === 'playing' && ball.inPlay && ball.vx > 0) {
         const targetY = ball.y - 40;
@@ -523,11 +527,12 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         ball.y <= p1.y + 80 + ballRadius + 6
       ) {
         ball.x = 36 + ballRadius;
-        ball.speed = Math.min(ball.speed * 1.05, 13.0);
+        ball.speed = Math.min(ball.speed + 0.35, 10.0);
         ball.vx = Math.abs(ball.speed);
 
         const hitPos = (ball.y - (p1.y + 40)) / 40;
-        ball.vy = hitPos * 5.2 + (p1.vy * 0.03);
+        Object.assign(ball, tableTennisShot(ball.x, ball.y, 1, ball.speed,
+          hitPos * 0.3 + Math.max(-0.06, Math.min(0.06, p1.vy * 0.01))));
         spawnParticles(ball.x, ball.y, '#f43f5e', 12);
         rallyCountRef.current++;
         setRallyCount(rallyCountRef.current);
@@ -542,11 +547,11 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         ball.y <= p2.y + 80 + ballRadius + 6
       ) {
         ball.x = LOGICAL_WIDTH - 36 - ballRadius;
-        ball.speed = Math.min(ball.speed * 1.05, 13.0);
+        ball.speed = Math.min(ball.speed + 0.35, 10.0);
         ball.vx = -Math.abs(ball.speed);
 
         const hitPos = (ball.y - (p2.y + 40)) / 40;
-        ball.vy = hitPos * 5.2;
+        Object.assign(ball, tableTennisShot(ball.x, ball.y, -1, ball.speed, hitPos * 0.3));
         spawnParticles(ball.x, ball.y, '#3b82f6', 12);
         rallyCountRef.current++;
         setRallyCount(rallyCountRef.current);

@@ -3,6 +3,7 @@ import type { TableTennisBall, TableTennisState } from '@gaming-hub/game-engine'
 /** Render a short buffered history, instead of rewinding local prediction on every packet. */
 export class TableTennisTimeline {
   private samples: { time: number; ball: TableTennisBall }[] = [];
+  private rendered: TableTennisBall | null = null;
   private offset: number | null = null;
   private remainingMs = 0;
   private clockReceivedAt = 0;
@@ -20,6 +21,7 @@ export class TableTennisTimeline {
     this.paused = state.paused || state.finished;
     if (!state.ball?.inPlay || state.paused || state.finished) {
       this.samples = [];
+      this.rendered = null;
       return;
     }
     if (this.samples.length && timestamp < this.samples[this.samples.length - 1].time) return;
@@ -35,12 +37,32 @@ export class TableTennisTimeline {
 
   ball(now: number): TableTennisBall | null {
     if (!this.samples.length) return null;
-    const target = now - (this.offset ?? 0) - 80;
+    const target = now - (this.offset ?? 0) - 40;
     while (this.samples.length > 2 && this.samples[1].time <= target) this.samples.shift();
     const a = this.samples[0];
     const b = this.samples[1];
-    if (!b || target >= b.time) return { ...(this.samples.at(-1)!.ball) };
-    const t = Math.max(0, Math.min(1, (target - a.time) / (b.time - a.time)));
-    return { ...a.ball, x: a.ball.x + (b.ball.x - a.ball.x) * t, y: a.ball.y + (b.ball.y - a.ball.y) * t };
+    let ball: TableTennisBall;
+    if (!b || target >= b.time) {
+      const latest = this.samples.at(-1)!;
+      // Bridge brief jitter, but never predict a paddle bounce or a new point.
+      const frames = Math.max(0, Math.min(64, target - latest.time)) / (1000 / 60);
+      ball = { ...latest.ball };
+      const contactX = ball.vx > 0 ? (ball.x < 562 ? 562 : 612) : (ball.x > 38 ? 38 : -12);
+      ball.x = ball.vx > 0 ? Math.min(contactX, ball.x + ball.vx * frames)
+        : Math.max(contactX, ball.x + ball.vx * frames);
+      ball.y = Math.max(0, Math.min(400, ball.y + ball.vy * frames));
+    } else {
+      const t = Math.max(0, Math.min(1, (target - a.time) / (b.time - a.time)));
+      ball = { ...a.ball, x: a.ball.x + (b.ball.x - a.ball.x) * t, y: a.ball.y + (b.ball.y - a.ball.y) * t };
+    }
+    // A late snapshot must not rewind a ball still travelling on the same shot.
+    // A confirmed contact changes touchCount/direction and releases this guard.
+    const previous = this.rendered;
+    if (previous && previous.touchCount === ball.touchCount && previous.vx * ball.vx > 0
+      && Math.abs(previous.x - ball.x) < 40) {
+      ball.x = ball.vx > 0 ? Math.max(previous.x, ball.x) : Math.min(previous.x, ball.x);
+    }
+    this.rendered = ball;
+    return { ...ball };
   }
 }

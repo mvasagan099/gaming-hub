@@ -6,26 +6,36 @@ import type { TableTennisState } from '@gaming-hub/game-engine';
 function snapshot(time: number, x: number): TableTennisState {
   const engine = new TableTennisEngine([{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }], undefined, { now: () => time });
   engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
-  return { ...engine.state, ...engine.serialize(), ball: { ...engine.state.ball!, x } } as TableTennisState;
+  return { ...engine.state, ...engine.serialize(), ball: { ...engine.state.ball!, x, vx: 5, vy: 0 } } as TableTennisState;
 }
 
 describe('Table Tennis remote playback', () => {
-  it('smoothly interpolates packets without advancing or rewinding prediction', () => {
+  it('interpolates packets and bounds prediction during connection gaps', () => {
     const timeline = new TableTennisTimeline();
     timeline.receive(snapshot(1000, 100), 5000);
     timeline.receive(snapshot(1040, 112), 5040);
-    expect(timeline.ball(5100)?.x).toBe(106);
-    expect(timeline.ball(5110)?.x).toBe(109);
-    expect(timeline.ball(5400)?.x).toBe(112); // no runaway prediction on connection gaps
+    expect(timeline.ball(5060)?.x).toBe(106);
+    expect(timeline.ball(5070)?.x).toBe(109);
+    expect(timeline.ball(5400)?.x).toBeCloseTo(131.2); // no runaway prediction on connection gaps
   });
-  it('keeps playback moving forward when packet arrival times vary', () => {
+  it('bridges late updates without rewinding the same shot', () => {
     const timeline = new TableTennisTimeline();
     timeline.receive(snapshot(1000, 100), 5000);
-    timeline.receive(snapshot(1040, 112), 5070);
-    expect(timeline.ball(5100)?.x).toBe(106);
-    timeline.receive(snapshot(1080, 124), 5105);
-    expect(timeline.ball(5110)?.x).toBe(109);
-    expect(timeline.ball(5140)?.x).toBe(118);
+    expect(timeline.ball(5070)?.x).toBe(109);
+    timeline.receive(snapshot(1040, 112), 5075);
+    expect(timeline.ball(5075)?.x).toBe(110.5);
+    expect(timeline.ball(5080)?.x).toBe(112);
+  });
+  it('does not predict a paddle bounce or ignore a confirmed hit', () => {
+    const timeline = new TableTennisTimeline();
+    timeline.receive(snapshot(1000, 550), 5000);
+    expect(timeline.ball(5400)?.x).toBe(562);
+    const hit = snapshot(1040, 561);
+    hit.ball!.vx = -5;
+    hit.ball!.touchCount = 1;
+    timeline.receive(hit, 5040);
+    expect(timeline.ball(5110)?.vx).toBe(-5);
+    expect(timeline.ball(5110)!.x).toBeLessThan(561);
   });
   it('clears a finished rally immediately so the previous ball cannot keep moving', () => {
     const timeline = new TableTennisTimeline();

@@ -139,7 +139,7 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
     expect(res.state.endReason).toBe("TIME_EXPIRED");
   });
 
-  it("progressively increases ball speed on paddle touch and caps at 12.0", () => {
+  it("progressively increases ball speed on paddle touch and caps at 10.0", () => {
     const eng = new TableTennisEngine([p0, p1]);
     eng.apply({ type: "ready" }, 0);
     eng.apply({ type: "ready" }, 1);
@@ -166,12 +166,12 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
       };
       state = eng.simulatePhysics(state);
       expect(state.ball?.touchCount).toBe(touch);
-      expect(state.ball?.speed).toBe(5.0 + touch * 0.5);
+      expect(state.ball?.speed).toBeCloseTo(5.0 + touch * 0.35);
     }
     expect(state.ball?.touchCount).toBe(10);
-    expect(state.ball?.speed).toBe(10.0);
+    expect(state.ball?.speed).toBeCloseTo(8.5);
 
-    // Continue to touch 15 (capped at max speed 12.0)
+    // Continue to touch 15 (capped at max speed 10.0)
     for (let touch = 11; touch <= 15; touch++) {
       const isLeft = touch % 2 === 1;
       state = {
@@ -185,10 +185,10 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
       };
       state = eng.simulatePhysics(state);
       expect(state.ball?.touchCount).toBe(touch);
-      expect(state.ball?.speed).toBe(Math.min(5.0 + touch * 0.5, 12.0));
+      expect(state.ball?.speed).toBeCloseTo(Math.min(5.0 + touch * 0.35, 10.0));
     }
     expect(state.ball?.touchCount).toBe(15);
-    expect(state.ball?.speed).toBe(12.0);
+    expect(state.ball?.speed).toBe(10.0);
   });
 
   it("resets speed to 5.0 and touchCount to 0 after point scored", () => {
@@ -243,5 +243,43 @@ describe('Table Tennis side exits', () => {
     expect(result.events).toContainEqual({ type: 'point-scored', winnerSeat: 1 - hitter, reason: 'out' });
     engine.tick();
     expect(engine.state.totalPointsPlayed).toBe(1);
+  });
+});
+
+describe('Table Tennis assisted returns', () => {
+  const players = [{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }];
+  it('keeps serves on the table from edge and center positions in both directions', () => {
+    for (const seat of [0, 1]) for (const y of [0, 160, 320]) for (const angle of [-15, 0, 15]) {
+      const engine = new TableTennisEngine(players);
+      (engine as any).updateState({ ...engine.state, servingSeat: seat });
+      engine.apply({ type: 'paddle-move', y }, seat);
+      engine.apply({ type: 'serve', angle }, seat);
+      let state = engine.state;
+      for (let frame = 0; frame < 150 && state.ball; frame++) state = engine.simulatePhysics(state);
+      expect(state.lastPointReason).not.toBe('out');
+    }
+  });
+  it('keeps 90 edge/center paddle returns aimed within the opposite baseline', () => {
+    for (const seat of [0, 1]) for (const y of [0, 160, 320]) {
+      for (const offset of [-38, -20, 0, 20, 38]) for (const velocity of [-20, 0, 20]) {
+        const engine = new TableTennisEngine(players);
+        engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
+        const state = { ...engine.state,
+          players: engine.state.players.map(p => p.seat === seat ? { ...p, paddleY: y, paddleVelocity: velocity } : p),
+          ball: { ...engine.state.ball!, x: seat === 0 ? 30 : 570, y: y + 40 + offset, vx: seat === 0 ? -5 : 5, vy: 0 },
+        };
+        const result = engine.simulatePhysics(state);
+        const ball = result.ball!;
+        expect(ball.touchCount).toBe(1);
+        const baselineY = ball.y + Math.abs((seat === 0 ? 600 - ball.x : ball.x) / ball.vx) * ball.vy;
+        expect(baselineY).toBeGreaterThanOrEqual(27.999);
+        expect(baselineY).toBeLessThanOrEqual(372.001);
+        expect(Math.hypot(ball.vx, ball.vy)).toBeCloseTo(ball.speed);
+      }
+    }
+  });
+  it('rejects invalid serve directions instead of corrupting the ball', () => {
+    const engine = new TableTennisEngine(players);
+    expect(engine.apply({ type: 'serve', angle: NaN }, engine.state.servingSeat).ok).toBe(false);
   });
 });

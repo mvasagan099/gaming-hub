@@ -52,7 +52,7 @@ export default class TableTennisMultiplayerDriver {
           this.lastPaddleSent = now;
         }
       }
-    }, 40);
+    }, 10);
     
     const current = useMultiplayerStore.getState();
     this.applyState(current.gameState as unknown as TableTennisRemoteState | null, current.lastEvents, current.winner);
@@ -126,11 +126,20 @@ export default class TableTennisMultiplayerDriver {
   }
   
   sendPaddleMove(y: number, velocity: number): void {
-    if (Math.abs(y - this.lastSentY) >= 0.5) {
-      this.pendingPaddleMove = { y, velocity };
+    if (this.mySeat == null || this.destroyed) return;
+    if (Math.abs(y - this.lastSentY) < 0.5) {
+      this.pendingPaddleMove = null;
+      return;
+    }
+    this.pendingPaddleMove = { y, velocity };
+    const now = Date.now();
+    if (now - this.lastPaddleSent >= this.paddleSendInterval) {
+      this.pendingPaddleMove = null;
+      this.sendPaddleMoveImmediate(y, velocity);
+      this.lastPaddleSent = now;
     }
   }
-  
+
   private sendPaddleMoveImmediate(y: number, velocity: number): void {
     if (this.mySeat == null || this.destroyed) return;
     if (Math.abs(y - this.lastSentY) < 0.5) return;
