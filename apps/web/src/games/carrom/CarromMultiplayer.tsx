@@ -293,10 +293,13 @@ const CarromMultiplayer: React.FC<Props> = ({
   const shotDupCountRef = useRef<Record<string | number, number>>({});
   const lastAppliedStateVersionRef = useRef<number | null>(null);
   const localPlacementDirtyRef = useRef(false);
+  const placementInFlightRef = useRef(false);
+  const placementRevisionRef = useRef(0);
   const lastAuthoritativeStrikerXRef = useRef<number>(W / 2);
 
   // UI state
   const [dragState, setDragState] = useState<"idle" | "dragging" | "placing_striker">("idle");
+  const dragStateRef = useRef<"idle" | "dragging">("idle");
   const dragStartRef = useRef({ x: 0, y: 0 });
   const currentAimRef = useRef({ x: 0, y: 0 });
   const [dragAim, setDragAim] = useState({ sx: 0, sy: 0, ex: 0, ey: 0, power: 0 });
@@ -335,6 +338,11 @@ const CarromMultiplayer: React.FC<Props> = ({
     driverRef.current = driver;
 
     driver.onStateUpdate = (state, stateVersion) => {
+      // Sample the clock on receipt, before replaying the shot animation.
+      const serverTs = state.serverTimestamp;
+      if (typeof serverTs === "number" && Number.isFinite(serverTs)) {
+        serverOffsetRef.current = serverTs - Date.now();
+      }
       const strikeInfo = driver.consumeNewStrike();
       const {
         isNew,
@@ -553,6 +561,10 @@ const CarromMultiplayer: React.FC<Props> = ({
       }
 
       const seat = mySeatRef.current;
+      if (isNewTurn || state.currentSeat !== seat || state.finished) {
+        cancelAim();
+        localPlacementDirtyRef.current = false;
+      }
       // Sync coins and reposition striker to server-confirmed locations.
       syncCoinsToServer(state, true);
 
@@ -573,11 +585,6 @@ const CarromMultiplayer: React.FC<Props> = ({
       const myTurn = state.currentSeat === seat;
       isMyTurnRef.current = myTurn;
       setIsMyTurn(myTurn);
-
-      const serverTs = (state as any).serverTimestamp ?? state.lastActionAtMs ?? state.turnStartedAt;
-      if (serverTs) {
-        serverOffsetRef.current = serverTs - Date.now();
-      }
 
       const exp = state.turnExpiresAt ?? (state.turnStartedAtMs ? state.turnStartedAtMs + 30000 : null);
       turnExpiresAtRef.current = exp;
@@ -919,7 +926,10 @@ const CarromMultiplayer: React.FC<Props> = ({
         turnFramesRef.current = 0;
         setIsTurnActive(false);
         clearSettleTimeout();
-        applyServerState(traj.targetState);
+        const latest = pendingStateRef.current || driverRef.current?.lastState || traj.targetState;
+        pendingStateRef.current = null;
+        authoritativeShotRef.current = null;
+        applyServerState(latest);
       }
     } else if (isTurnActiveRef.current) {
       capturePocketCoins();
@@ -1445,7 +1455,7 @@ const CarromMultiplayer: React.FC<Props> = ({
     return () => cancelAnimationFrame(rafRef.current);
   }, [animate]);
 
-  // ── Pointer Handlers (Exclusively for Aiming & Shooting) ────────────────────
+  // ── Pointer Handlers ──────────────────────────────────────────────────────
 
   const getCanvasCoords = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -1466,23 +1476,29 @@ const CarromMultiplayer: React.FC<Props> = ({
 
     const { x, y } = getCanvasCoords(e);
 
-    // Canvas interaction is strictly for AIMING & SHOOTING from the current striker position.
-    // The striker cannot be dragged horizontally across the canvas to reposition it.
+    // A baseline tap positions the striker; pulling back from there aims.
+    // Other board gestures continue to aim from the current striker position.
+    const positionedOnBaseline = Math.abs(y - STRIKER_Y) <= striker.radius + 12 &&
+      Math.abs(x - striker.x) > striker.radius + 6;
+    if (positionedOnBaseline) {
+      updateStrikerPos(x - W / 2);
+    }
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
       /* ignore */
     }
 
+    dragStateRef.current = "dragging";
     setDragState("dragging");
     // Aim line always anchors to the fixed striker position
     dragStartRef.current = { x: striker.x, y: striker.y };
-    currentAimRef.current = { x, y };
-    setDragAim({ sx: striker.x, sy: striker.y, ex: x, ey: y, power: 0 });
+    currentAimRef.current = positionedOnBaseline ? { x: striker.x, y: striker.y } : { x, y };
+    setDragAim({ sx: striker.x, sy: striker.y, ex: currentAimRef.current.x, ey: currentAimRef.current.y, power: 0 });
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (dragState !== "dragging") return;
+    if (dragStateRef.current !== "dragging" || isTurnActiveRef.current || !isMyTurnRef.current) return;
 
     const striker = coinsRef.current.find((c) => c.type === "striker");
     if (!striker) return;
@@ -1498,11 +1514,14 @@ const CarromMultiplayer: React.FC<Props> = ({
   };
 
   const handlePointerUp = () => {
-    if (dragState !== "dragging") {
+    if (dragStateRef.current !== "dragging") {
       setDragState("idle");
       return;
     }
+    dragStateRef.current = "idle";
     setDragState("idle");
+
+    if (gameOver || showRules || isTurnActiveRef.current || !isMyTurnRef.current) return;
 
     const striker = coinsRef.current.find((c) => c.type === "striker");
     if (!striker || !driverRef.current?.canStrike()) return;
@@ -1561,6 +1580,9 @@ const CarromMultiplayer: React.FC<Props> = ({
         striker.vx = 0;
         striker.vy = 0;
         striker.trail = [];
+        activeTrajectoryRef.current = null;
+        authoritativeShotRef.current = null;
+        pendingStateRef.current = null;
         isTurnActiveRef.current = false;
         turnFramesRef.current = 0;
         setIsTurnActive(false);
@@ -1580,6 +1602,7 @@ const CarromMultiplayer: React.FC<Props> = ({
   function updateStrikerPos(val: number) {
     if (isTurnActiveRef.current || !isMyTurnRef.current) return;
     localPlacementDirtyRef.current = true;
+    placementRevisionRef.current++;
     const clampedVal = Math.max(STRIKER_SLIDER_MIN, Math.min(STRIKER_SLIDER_MAX, val));
     strikerPosRef.current = clampedVal;
     setStrikerPos(clampedVal);
@@ -1601,13 +1624,21 @@ const CarromMultiplayer: React.FC<Props> = ({
   }
 
   async function handleMoverRelease() {
-    if (isTurnActiveRef.current || !isMyTurnRef.current) return;
+    if (isTurnActiveRef.current || !isMyTurnRef.current || !localPlacementDirtyRef.current || placementInFlightRef.current) return;
     const striker = coinsRef.current.find((c) => c.type === "striker");
     if (!striker || !driverRef.current?.canPlaceStriker()) return;
 
     lastPlaceSentRef.current = Date.now();
     driverRef.current.sendLiveStrikerPosition(striker.x);
-    const res = await driverRef.current.sendPlaceStriker(striker.x);
+    const revision = placementRevisionRef.current;
+    const turn = turnNumberRef.current;
+    const driver = driverRef.current;
+    placementInFlightRef.current = true;
+    const res = await driver.sendPlaceStriker(striker.x);
+    placementInFlightRef.current = false;
+    // A delayed placement reply must not undo a newer move, a shot, or a turn.
+    if (driverRef.current !== driver || revision !== placementRevisionRef.current ||
+        turn !== turnNumberRef.current || isTurnActiveRef.current || !isMyTurnRef.current) return;
     if (!res.ok) {
       console.warn("[CARROM] place-striker rejected, rolling back", res.error);
       const s = driverRef.current.lastState;
@@ -1626,6 +1657,12 @@ const CarromMultiplayer: React.FC<Props> = ({
       lastAuthoritativeStrikerXRef.current = striker.x;
       localPlacementDirtyRef.current = false;
     }
+  }
+
+  function cancelAim() {
+    dragStateRef.current = "idle";
+    setDragState("idle");
+    setDragAim({ sx: 0, sy: 0, ex: 0, ey: 0, power: 0 });
   }
 
   function checkStrikerOverlap(): boolean {
@@ -1656,8 +1693,8 @@ const CarromMultiplayer: React.FC<Props> = ({
   const myColor = mySeat === 0 ? "white" : "black";
   const myScore = mySeat === 0 ? scores.seat0 : scores.seat1;
   const oppScore = mySeat === 0 ? scores.seat1 : scores.seat0;
-  // Queen gives +3 bonus points; pocketed coins count is capped at 9
-  const myPocketed = Math.min(9, myScore >= 3 && queenCovered ? Math.max(0, myScore - 3) : myScore);
+  // The authoritative score counts assigned coins; covering the queen adds no points.
+  const myPocketed = Math.min(9, myScore);
   const oppPocketed = Math.min(9, oppScore);
   const myName = driverRef.current?.getPlayerName(mySeat) ?? "You";
   const oppName = driverRef.current?.getPlayerName(1 - mySeat) ?? "Opponent";
@@ -1828,7 +1865,7 @@ const CarromMultiplayer: React.FC<Props> = ({
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
+              onPointerCancel={cancelAim}
               className={`w-full h-full object-contain touch-none rounded-[20px] sm:rounded-[28px] ${
                 dragState === "dragging"
                   ? "cursor-grabbing"

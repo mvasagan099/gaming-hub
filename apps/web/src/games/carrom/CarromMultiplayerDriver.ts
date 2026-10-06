@@ -140,17 +140,23 @@ export default class CarromMultiplayerDriver {
   }) => void;
 
   private handleRemoteStrikerPosition = (data: {
+    matchId?: string;
+    roomId?: string;
     seat: number;
     x: number;
     sequence: number;
     turnNumber?: number;
   }) => {
-    if (data.seat === this.mySeat) return;
+    const current = useMultiplayerStore.getState();
+    if (data.matchId && data.matchId !== current.matchId) return;
+    if (data.roomId && data.roomId !== current.room?.id) return;
+    if (data.seat === this.mySeat || data.seat !== this.lastState?.currentSeat) return;
+    if (!Number.isFinite(data.x) || !Number.isSafeInteger(data.sequence) || data.sequence < 0) return;
     const currentTurn = this.lastState?.turnNumber ?? 0;
     if (typeof data.turnNumber === "number" && data.turnNumber !== currentTurn) {
       return;
     }
-    const turnKey = `${data.seat}:${data.turnNumber ?? currentTurn}`;
+    const turnKey = `${current.matchId}:${data.seat}:${data.turnNumber ?? currentTurn}`;
     const lastSeq = this.lastReceivedSequenceByTurn.get(turnKey) ?? -1;
     if (typeof data.sequence === "number" && data.sequence <= lastSeq) return;
     if (typeof data.sequence === "number") {
@@ -162,6 +168,9 @@ export default class CarromMultiplayerDriver {
   start(): void {
     // Apply current state immediately so the board renders on mount.
     const s = useMultiplayerStore.getState();
+    // Mounts and reconnects should render the settled board immediately.
+    const initial = s.gameState as CarromRemoteState | null;
+    if (initial?.lastAction?.type === "strike") this.lastAnimatedMs = initial.lastActionAtMs;
     this._apply(
       s.gameState as CarromRemoteState | null,
       s.lastEvents,
@@ -284,8 +293,8 @@ export default class CarromMultiplayerDriver {
       const res = await useMultiplayerStore
         .getState()
         .sendGameAction({ type: "place-striker", x: serverX });
-      if (!res.ok && res.error) {
-        return { ok: false, error: res.error };
+      if (!res.ok) {
+        return { ok: false, error: res.error ?? "Failed to place striker" };
       }
       return { ok: true };
     } catch (err: any) {
@@ -314,13 +323,15 @@ export default class CarromMultiplayerDriver {
     if (serverX !== undefined) {
       action.x = serverX;
     }
-    const res = await useMultiplayerStore
-      .getState()
-      .sendGameAction(action);
-    if (!res.ok && res.error) {
-      return { ok: false, error: res.error };
+    try {
+      const res = await useMultiplayerStore.getState().sendGameAction(action);
+      if (!res.ok) {
+        return { ok: false, error: res.error ?? "Shot rejected" };
+      }
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Could not send shot" };
     }
-    return { ok: true };
   }
 
   // ── Internal state application ───────────────────────────────────────────────

@@ -43,6 +43,16 @@ function localAngleToServer(localAngle: number, seat: number): number {
 }
 
 describe("Carrom Striker Sync & Coordinate Rigor", () => {
+  it("serializes a fresh clock reference on reconnect without restarting the turn", () => {
+    let now = 1000;
+    const engine = new CarromEngine(players, () => 0.9, { now: () => now });
+    const initial = engine.serialize();
+    now += 15000;
+    const reconnect = engine.serialize();
+    expect(reconnect.serverTimestamp).toBe(now);
+    expect(initial.serverTimestamp).toBe(1000);
+    expect(reconnect.turnStartedAt).toBe(initial.turnStartedAt);
+  });
   it("1. Striker placement validation within baseline bounds", () => {
     const eng = setup();
     expect(isValidStrikerPlacement(300, 0, eng.state.coins)).toBe(true);

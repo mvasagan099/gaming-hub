@@ -25,6 +25,10 @@ import {
 export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromAction> {
   readonly gameId = "carrom" as const;
 
+  override serialize(): import("@gaming-hub/shared").JsonObject {
+    return { ...super.serialize(), serverTimestamp: this.now() };
+  }
+
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: CarromEngineOptions) {
     const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 10000 };
     const matchTimer = options?.matchTimer ?? { matchDurationMs: 600000, warningThresholdMs: 30000 };

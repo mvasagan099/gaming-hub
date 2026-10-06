@@ -3,8 +3,12 @@ import { Server } from 'socket.io';
 import { io as connectClient, type Socket as ClientSocket } from 'socket.io-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GAME_IDS, type GameId, type RoomFull } from '@gaming-hub/shared';
+import { registerCarromPreviewHandler } from '../../../apps/socket-server/src/carromHandlers';
+import { applySocketGameAction } from '../../../apps/socket-server/src/gameActions';
 import { MultiplayerFramework } from '../src/framework';
 import { registerRoomLifecycleHandlers } from '../../../apps/socket-server/src/roomHandlers';
+
+vi.mock('@gaming-hub/db', () => ({ prisma: { playerGameStats: { upsert: vi.fn().mockResolvedValue({}) } } }));
 
 describe('private room Socket.IO lifecycle', () => {
   let io: Server;
@@ -36,6 +40,11 @@ describe('private room Socket.IO lifecycle', () => {
       // Local fixture identity only. Production still supplies its authenticated user ID and guards.
       const userId = socket.handshake.auth.userId as string;
       socket.data.user = { username: userId, displayName: userId };
+      registerCarromPreviewHandler(socket, io, framework, userId);
+      socket.on('game:action', async (payload, ack) => {
+        try { ack({ ok: true, data: await applySocketGameAction(framework, userId, payload) }); }
+        catch (error) { ack({ ok: false, error: { message: (error as Error).message } }); }
+      });
       registerRoomLifecycleHandlers(socket, framework, userId, async (ack, task) => {
         try { await task(); }
         catch (error) { ack?.({ ok: false, error: { code: 'INTERNAL_ERROR', message: (error as Error).message } }); }
@@ -100,6 +109,59 @@ describe('private room Socket.IO lifecycle', () => {
     const reconnect = await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
     expect(reconnect.matchId).toBe(started.matchId);
     expect(reconnect.players.map(player => [player.id, player.seat])).toEqual([['host', 0], ['guest', 1]]);
+  });
+
+  it('synchronizes Carrom previews, shots, reconnects and rematches across two clients', async () => {
+    const created = await create('carrom');
+    await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
+    await roomAck(guest, 'room:ready', { roomId: created.id, ready: true });
+    const started = await roomAck(host, 'room:start', { roomId: created.id });
+    const room = framework.roomManager.getRoom(created.id)!;
+    const previews: any[] = [];
+    guest.on('carrom:striker-position', preview => previews.push(preview));
+    const preview = (matchId: string, sequence: number) => host.emit('carrom:striker-position', {
+      roomId: room.id, matchId, turnNumber: 0, x: 280, sequence,
+    });
+    expect(room).toMatchObject({ status: 'playing', config: { gameId: 'carrom' } });
+    expect(room.players.get('host')?.seat).toBe(0);
+    expect((room.match!.engine as any).state).toMatchObject({ currentSeat: 0, turnNumber: 0, isShotInProgress: false });
+    preview(started.matchId!, 50);
+    await vi.waitFor(() => expect(previews).toHaveLength(1));
+    expect(previews[0]).toMatchObject({ matchId: started.matchId, seat: 0, x: 280 });
+    expect((room.match!.engine.state as any).striker.x).toBe(300);
+    const hostStates: any[] = [], guestStates: any[] = [];
+    host.on('game:state', state => hostStates.push(state));
+    guest.on('game:state', state => guestStates.push(state));
+    const shoot = (socket: ClientSocket, matchId = started.matchId!) => socket.timeout(4_000).emitWithAck('game:action', {
+      roomId: room.id, matchId, action: { type: 'strike', x: 280, angle: -Math.PI / 2, power: 0 },
+    });
+    const rejected = await shoot(guest);
+    expect(rejected.data.ok).toBe(false);
+    expect((await shoot(host)).data.ok).toBe(true);
+    await vi.waitFor(() => {
+      expect(hostStates.at(-1)?.state.currentSeat).toBe(1);
+      expect(guestStates.at(-1)?.state.currentSeat).toBe(1);
+    });
+    expect(guestStates.at(-1)).toEqual(hostStates.at(-1));
+    // Allow the normal anti-cheat minimum action interval after the rejected shot.
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect((await shoot(guest)).data.ok).toBe(true);
+    await vi.waitFor(() => expect(hostStates.at(-1)?.state.currentSeat).toBe(0));
+    expect((room.match!.engine.state as any).turnNumber).toBe(2);
+    guest.disconnect();
+    guest = await client('guest');
+    const rejoined = await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
+    expect(rejoined.matchId).toBe(started.matchId);
+    await framework.matchManager.finishMatch(room, { ok: true, state: framework.gameStateManager.getState(room), events: [], finished: true, winnerSeats: [] });
+    await framework.matchManager.requestRematch(room.id, 'host');
+    await framework.matchManager.requestRematch(room.id, 'guest');
+    const nextMatch = room.match!.matchId;
+    expect(nextMatch).not.toBe(started.matchId);
+    guest.on('carrom:striker-position', value => previews.push(value));
+    preview(nextMatch, 1);
+    await vi.waitFor(() => expect(previews).toHaveLength(2));
+    expect(previews.at(-1)).toMatchObject({ matchId: nextMatch, sequence: 1, turnNumber: 0 });
+    expect((await shoot(host, started.matchId!)).data.ok).toBe(false);
   });
 
   it('keeps readiness, ownership, room-code and capacity checks enforced', async () => {

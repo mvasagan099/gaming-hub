@@ -13,7 +13,6 @@ import type {
   SocketErrorPayload,
 } from "@gaming-hub/socket";
 import { MultiplayerFramework } from "@gaming-hub/multiplayer";
-import { isValidStrikerPlacement } from "@gaming-hub/game-engine";
 import pino from "pino";
 import { env } from "./env";
 import { authenticateToken, type AuthenticatedUser } from "./auth";
@@ -21,6 +20,7 @@ import { assertFeatureEnabled } from "./settings";
 import { requestSocketRematch, declineSocketRematch } from "./rematch";
 import { applySocketGameAction } from "./gameActions";
 import { registerRoomLifecycleHandlers } from "./roomHandlers";
+import { registerCarromPreviewHandler } from "./carromHandlers";
 import { GameEventBus } from "./events/GameEventBus";
 import { GameStateSyncManager } from "./sync/GameStateSyncManager";
 import { createAndFundRoomMatch, settleMatch, cancelMatch } from "./apiClient";
@@ -758,68 +758,7 @@ async function main(): Promise<void> {
       }),
     );
 
-    // ── Carrom Live Striker Mover Position Sync ──
-    const lastStrikerSeqByTurn = new Map<number, number>();
-
-    socket.on("carrom:striker-position", (payload) => {
-      try {
-        const roomId =
-          payload.roomId ||
-          (payload.matchId ? framework.roomManager.getPlayerRoom(user.userId)?.id : undefined);
-        if (!roomId) return;
-        const room = framework.roomManager.getRoom(roomId);
-        if (!room || room.status !== "playing" || !room.match) return;
-
-        const player = room.players.get(user.userId);
-        if (!player || player.isSpectator || player.seat === null) return;
-
-        const engine = room.match.engine as any;
-        const state = engine?.state;
-        if (!state) return;
-
-        // 1. Verify player is currentTurnPlayer
-        if (state.currentSeat !== player.seat) return;
-
-        // 2. Verify turnNumber matches current authoritative game turn
-        const currentTurn = typeof state.turnNumber === "number" ? state.turnNumber : 0;
-        if (typeof payload.turnNumber === "number" && payload.turnNumber !== currentTurn) {
-          return;
-        }
-
-        // 3. Verify sequence number per turn — drop out-of-order/stale packets
-        const lastSeq = lastStrikerSeqByTurn.get(currentTurn) ?? -1;
-        if (typeof payload.sequence === "number" && payload.sequence <= lastSeq) {
-          return;
-        }
-        if (typeof payload.sequence === "number") {
-          lastStrikerSeqByTurn.set(currentTurn, payload.sequence);
-        }
-
-        // 4. Validate canonical board X
-        const canonicalX = payload.x;
-        if (typeof canonicalX !== "number" || isNaN(canonicalX)) return;
-        if (!isValidStrikerPlacement(canonicalX, player.seat, state.coins)) return;
-
-        // Note: carrom:striker-position is purely a high-frequency visual preview event.
-        // It must NEVER directly mutate authoritative engine state (which only changes via place-striker / strike actions).
-
-        // 5. Broadcast to BOTH players in room
-        const broadcastPayload = {
-          roomId: room.id,
-          matchId: room.match.matchId,
-          playerId: user.userId,
-          seat: player.seat,
-          turnNumber: currentTurn,
-          x: canonicalX,
-          sequence: payload.sequence,
-          timestamp: payload.timestamp ?? Date.now(),
-        };
-
-        io.to(room.ioName).emit("carrom:striker-position", broadcastPayload);
-      } catch (err) {
-        logger.error({ err }, "[carrom:striker-position] error");
-      }
-    });
+    registerCarromPreviewHandler(socket, io, framework, user.userId);
 
     // ── Snooker Live Aim & Power Sync ──
     let lastSnookerAimSeq = -1;

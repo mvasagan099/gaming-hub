@@ -66,9 +66,29 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
     };
   }, [mode, level, theme, online, players, seat, names]);
 
+  useEffect(() => {
+    const handleResize = () => {
+      if (gameInstance) {
+        gameInstance.scale.refresh();
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
+  }, [gameInstance]);
+
   return (
     /* ── Outer Arena Wrapper ── */
-    <div className="relative w-full max-w-7xl mx-auto h-full lg:h-auto flex flex-col lg:flex-row items-center justify-between lg:justify-center gap-1.5 sm:gap-4 px-2 py-1 sm:py-3 select-none">
+    <div
+      className={`relative w-full ${
+        online
+          ? "h-full flex flex-col lg:flex-row items-center justify-center gap-3 sm:gap-4 lg:gap-6 xl:gap-8 px-2 sm:px-4 py-1 sm:py-2 select-none overflow-hidden"
+          : "max-w-7xl mx-auto h-full lg:h-auto flex flex-col lg:flex-row items-center justify-between lg:justify-center gap-1.5 sm:gap-4 px-2 py-1 sm:py-3 select-none"
+      }`}
+    >
 
       {/* ── Deep Space Background & Board Halo ── */}
       {/* Top-left warm ambient */}
@@ -84,7 +104,13 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
       </div>
 
       {/* ── Mobile Layout Column (< lg) & Board ── */}
-      <div className="relative flex flex-col items-center justify-between lg:justify-center gap-1.5 sm:gap-2 w-full h-full max-h-[100dvh] max-w-[min(96vw,520px)] lg:max-w-none lg:w-auto">
+      <div
+        className={`relative flex flex-col items-center justify-between lg:justify-center gap-1.5 sm:gap-2 w-full h-full max-h-[100dvh] max-w-[min(96vw,520px)] ${
+          online
+            ? "lg:max-w-none lg:flex-1 lg:min-w-0 lg:min-h-0"
+            : "lg:max-w-none lg:w-auto"
+        }`}
+      >
         {/* Mobile Top HUD (Opponent Card & Clock) */}
         <div className="w-full lg:hidden flex justify-center">
           <ChessMobileTop game={gameInstance} online={online} />
@@ -101,7 +127,11 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
           {/* Phaser canvas mount */}
           <div
             ref={containerRef}
-            className="w-full max-w-[min(92vw,calc(100dvh-13.5rem),480px)] lg:max-w-[min(calc(100dvh-7rem),calc(100vw-360px),760px)] aspect-square rounded-2xl overflow-hidden shadow-2xl"
+            className={`aspect-square rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center ${
+              online
+                ? "w-[min(92vw,calc(100dvh-13.5rem),480px)] lg:w-[min(calc(100dvh-5.5rem),calc(100vw-380px),720px)]"
+                : "w-full max-w-[min(92vw,calc(100dvh-13.5rem),480px)] lg:max-w-[min(calc(100dvh-7rem),calc(100vw-360px),760px)]"
+            }`}
             style={{
               perspective: "1400px",
             }}
@@ -121,8 +151,20 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
       </div>
 
       {/* ── Desktop Unified Match Sidebar (>= lg) ── */}
-      <div className="hidden lg:flex w-[300px] xl:w-[320px] flex-shrink-0 justify-center">
-        <ChessDesktopSidebar game={gameInstance} online={online} />
+      <div
+        className={`hidden lg:flex flex-shrink-0 justify-center ${
+          online
+            ? "flex-col w-[300px] xl:w-[330px] h-full max-h-[calc(100dvh-4.5rem)] py-1"
+            : "w-[300px] xl:w-[320px]"
+        }`}
+      >
+        {online ? (
+          <div className="overflow-y-auto max-h-full pr-1.5 custom-scrollbar">
+            <ChessDesktopSidebar game={gameInstance} online={online} />
+          </div>
+        ) : (
+          <ChessDesktopSidebar game={gameInstance} online={online} />
+        )}
       </div>
 
       {/* ── Overlays (Promotion, Resign Confirm, Victory) ── */}

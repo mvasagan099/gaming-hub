@@ -330,7 +330,7 @@ export function ChessDesktopSidebar({ game, online }: ChessMatchPanelProps) {
 
   return (
     <div className="
-      w-full flex flex-col gap-3 p-4
+      w-full flex flex-col gap-2.5 xl:gap-3 p-3 xl:p-4
       bg-[#0b0f1a]/95 backdrop-blur-2xl
       border border-slate-800/80
       rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.7)]
@@ -435,10 +435,10 @@ export function ChessDesktopSidebar({ game, online }: ChessMatchPanelProps) {
 
         <div
           ref={moveHistoryRef}
-          className="overflow-y-auto max-h-[160px] min-h-[80px] scrollbar-thin scrollbar-thumb-slate-700/50"
+          className="overflow-y-auto max-h-[130px] xl:max-h-[160px] min-h-[64px] scrollbar-thin scrollbar-thumb-slate-700/50"
         >
           {movePairs.length === 0 ? (
-            <p className="text-slate-600 text-center py-5 italic text-[11px]">No moves yet</p>
+            <p className="text-slate-600 text-center py-3 italic text-[11px]">No moves yet</p>
           ) : (
             <div className="font-mono text-[11px]">
               {movePairs.map((pair, idx) => {

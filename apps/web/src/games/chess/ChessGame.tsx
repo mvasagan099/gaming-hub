@@ -48,7 +48,13 @@ export const ChessGame: React.FC<ChessGameProps> = ({ mode: initialMode, stake, 
   if (isPlaying) {
     return (
       <GameWrapper title="Chess Master" gameId="chess" mode={initialMode} stake={stake} onBack={onBack} isFullscreen>
-        <div className="relative flex flex-col items-center justify-center w-full max-w-6xl mx-auto h-full lg:h-auto my-0 lg:my-3">
+        <div
+          className={
+            isMultiplayer
+              ? "relative flex items-center justify-center w-full h-full overflow-hidden select-none"
+              : "relative flex flex-col items-center justify-center w-full max-w-6xl mx-auto h-full lg:h-auto my-0 lg:my-3"
+          }
+        >
           <ChessPhaserGame
             mode={playMode}
             level={aiLevel}
