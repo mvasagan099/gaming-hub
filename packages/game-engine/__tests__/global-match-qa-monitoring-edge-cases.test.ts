@@ -357,7 +357,7 @@ describe("GLOBAL 10-MINUTE MATCH QA, MONITORING & EDGE-CASE PROTECTION TESTS", (
 
       const res = engine.handleTimeout("match");
       expect(res.ok).toBe(true);
-      expect(res.winnerSeats).toEqual([0, 1]);
+      expect(res.winnerSeats).toEqual([]);
     });
 
     it("9. Carrom: handles equal points & coins with draw", () => {

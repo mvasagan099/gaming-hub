@@ -82,11 +82,14 @@ export class WinnerCalculator {
       score?: Record<number, number> | number[];
       team1Score?: number;
       team2Score?: number;
+      players?: Array<{ seat: number; score?: number }>;
     };
     const fromScores = s.scores?.[seat];
     if (typeof fromScores === "number") return fromScores;
     const fromScore = s.score?.[seat];
     if (typeof fromScore === "number") return fromScore;
+    const playerScore = Array.isArray(s.players) ? s.players.find(p => p.seat === seat)?.score : undefined;
+    if (typeof playerScore === "number") return playerScore;
     if (seat === 0 && typeof s.team1Score === "number") return s.team1Score;
     if (seat === 1 && typeof s.team2Score === "number") return s.team2Score;
     return undefined;

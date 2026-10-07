@@ -4,6 +4,8 @@ import { Trophy, XCircle, RotateCcw, Sparkles, Award, Zap, LogOut, Flame, Shield
 interface SnakeVsWormsOverlaysProps {
   isGameOver: boolean;
   isWin: boolean;
+  isDraw?: boolean;
+  isSpectator?: boolean;
   score: number;
   length: number;
   kills: number;
@@ -16,6 +18,8 @@ interface SnakeVsWormsOverlaysProps {
 export const SnakeVsWormsOverlays: React.FC<SnakeVsWormsOverlaysProps> = ({
   isGameOver,
   isWin,
+  isDraw = false,
+  isSpectator = false,
   score,
   length,
   kills,
@@ -26,8 +30,8 @@ export const SnakeVsWormsOverlays: React.FC<SnakeVsWormsOverlaysProps> = ({
 }) => {
   if (!isGameOver) return null;
 
-  const title = isWin ? 'ARENA CHAMPION!' : 'ELIMINATED!';
-  const subtitle = isWin
+  const title = isDraw ? 'MATCH DRAW!' : isSpectator ? 'MATCH COMPLETE!' : isWin ? 'ARENA CHAMPION!' : 'ELIMINATED!';
+  const subtitle = isDraw ? 'Neither player won this match.' : isWin
     ? 'All Rivals Defeated!'
     : winnerName
       ? `Winner: ${winnerName}`
@@ -125,12 +129,12 @@ export const SnakeVsWormsOverlays: React.FC<SnakeVsWormsOverlaysProps> = ({
 
         {/* Action Buttons */}
         <div className="flex flex-col gap-2.5 w-full">
-          <button
+          {!isSpectator && <button
             onClick={onReplay}
             className="w-full py-3.5 bg-gradient-to-r from-emerald-500 via-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.35)] transform hover:scale-[1.02] active:scale-[0.98] transition-all tracking-wider uppercase flex items-center justify-center gap-2"
           >
             <RotateCcw className="w-4 h-4" /> {isMultiplayer ? 'Request Rematch' : 'Play Again'}
-          </button>
+          </button>}
           <button
             onClick={onExit}
             className="w-full py-3 bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-xs rounded-xl border border-slate-700/80 transition-colors uppercase tracking-wider flex items-center justify-center gap-2"

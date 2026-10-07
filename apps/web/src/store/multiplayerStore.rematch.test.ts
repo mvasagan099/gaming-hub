@@ -77,4 +77,14 @@ describe('rematch consent and state synchronization', () => {
     await syncing;
     expect(useMultiplayerStore.getState()).toMatchObject({ gameState: { finished: false }, matchId: 'new-match', lastStateVersion: 1 });
   });
+  it.each(['snooker', 'snake-vs-worms'])('does not overwrite newer %s state with a delayed reconnect snapshot', async gameId => {
+    useMultiplayerStore.setState({ room: { id: 'room-1', matchId: 'old-match', gameId } as never });
+    let complete!: (result: any) => void;
+    socket.emitWithAck.mockReturnValue(new Promise(resolve => { complete = resolve; }));
+    const syncing = useMultiplayerStore.getState().requestFullStateSync();
+    useMultiplayerStore.setState({ gameState: { paused: false } as never, lastStateVersion: 101 });
+    complete({ ok: true, data: { stateVersion: 100, actionSequence: 8, fullState: { gameState: { paused: true } } } });
+    await syncing;
+    expect(useMultiplayerStore.getState()).toMatchObject({ gameState: { paused: false }, lastStateVersion: 101 });
+  });
 });

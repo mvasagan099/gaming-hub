@@ -40,6 +40,9 @@ export interface SnakeWormFood extends JsonObject {
 }
 
 export interface SnakeVsWormsState extends BaseState {
+  gameId: "snake-vs-worms";
+  serverTimestamp: number;
+  matchRemainingMs: number;
   gridWidth: number;
   gridHeight: number;
   players: SnakeWormPlayerEntity[];

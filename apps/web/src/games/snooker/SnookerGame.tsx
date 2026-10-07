@@ -5,6 +5,7 @@ import {
   createInitialSnookerSetup,
   SNOOKER_TABLE_WIDTH,
   SNOOKER_TABLE_HEIGHT,
+  SNOOKER_BAULK_X, SNOOKER_D_RADIUS, SNOOKER_TABLE_CENTER_Y,
   SnookerRulesEngine,
   type SnookerBall,
   type SnookerPlayer,
@@ -27,6 +28,7 @@ import {
   SnookerGameOverModal,
   ColorPickerModal,
 } from "./components/SnookerOverlays";
+import { SnookerShotPlayback } from "./shotPlayback";
 import { SnookerMultiplayerDriver } from "./SnookerMultiplayerDriver";
 import { useMultiplayerStore } from "../../store/multiplayerStore";
 import { GameWrapper } from "../../components/GameWrapper";
@@ -47,7 +49,10 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const room = useMultiplayerStore((s) => s.room);
-  const mySeat = useMultiplayerStore((s) => s.mySeat) ?? 0;
+  const mySeat = useMultiplayerStore((s) => s.mySeat);
+  const matchId = useMultiplayerStore(s => s.matchId);
+  const connectionStatus = useMultiplayerStore(s => s.status);
+  const roomId = room?.id;
 
   const player1Name = mode === "multiplayer" ? room?.players?.find((p) => p.seat === 0)?.displayName : undefined;
   const player2Name = mode === "multiplayer" ? room?.players?.find((p) => p.seat === 1)?.displayName : undefined;
@@ -119,15 +124,27 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     hasPulled: boolean;
   }>({ originX: 0, originY: 0, targetAngle: 0, isPulling: false, hasPulled: false });
 
+  const displayBallsRef = useRef(balls);
+  const authoritativeRef = useRef<SnookerState | null>(null);
+  const shotBusyRef = useRef(false);
+  const playbackRef = useRef<SnookerShotPlayback | null>(null);
+  const previewWorkerRef = useRef<Worker | null>(null);
+  const cueAnimationRef = useRef<number | null>(null);
+  const turnDeadlineRef = useRef({ localDeadline: Date.now() + 20000, duration: 20000, pausedRemaining: null as number | null });
+  const stateClockOffsetsRef = useRef(new WeakMap<SnookerState, number>());
+  const soundEnabledRef = useRef(soundEnabled);
+  soundEnabledRef.current = soundEnabled;
+
   // Web Audio Sound Effects
   const playSound = useCallback((type: "strike" | "pocket" | "cushion" | "foul") => {
-    if (!soundEnabled) return;
+    if (!soundEnabledRef.current) return;
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+      osc.onended = () => { void ctx.close(); };
       osc.connect(gain);
       gain.connect(ctx.destination);
 
@@ -156,10 +173,26 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     } catch {
       // AudioContext fallback
     }
-  }, [soundEnabled]);
+  }, []);
 
   // Apply Authoritative State Helper
+  const localTurnDeadline = useCallback((st: SnookerState) => {
+    let offset = stateClockOffsetsRef.current.get(st);
+    if (offset === undefined) {
+      offset = st.serverTimestamp ? Date.now() - st.serverTimestamp : 0;
+      stateClockOffsetsRef.current.set(st, offset);
+    }
+    return (st.turnDeadlineMs ?? st.turnStartedAtMs + (st.turnDurationMs ?? 20000)) + offset;
+  }, []);
+
   const syncAuthoritativeState = useCallback((st: SnookerState) => {
+    const previous = authoritativeRef.current;
+    authoritativeRef.current = st;
+    displayBallsRef.current = st.balls;
+    if (previous?.currentSeat !== st.currentSeat || previous?.frameNumber !== st.frameNumber) {
+      setIsAiming(false);
+      dragRef.current.isPulling = dragRef.current.hasPulled = false;
+    }
     setBalls(st.balls);
     setPlayers(st.players);
     setCurrentSeat(st.currentPlayer);
@@ -185,54 +218,50 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     setStateVersion(Number(st.stateVersion) || 1);
     setWinnerSeats(st.winnerSeats || []);
     setStrikeProgress(0);
-    setTimeLeft(20);
-  }, []);
+    const duration = st.turnDurationMs ?? 20000;
+    const localDeadline = localTurnDeadline(st);
+    turnDeadlineRef.current = { localDeadline, duration, pausedRemaining: st.paused ? Math.ceil((localDeadline - Date.now()) / 1000) : null };
+    setTimeLeft(Math.min(Math.ceil(duration / 1000), Math.max(0, Math.ceil((localDeadline - Date.now()) / 1000))));
+  }, [localTurnDeadline]);
 
-  const isMyTurn = (mode === "ai" && currentSeat === 0) || (mode === "multiplayer" && currentSeat === mySeat);
+  const isMyTurn = !["FRAME_END", "MATCH_END"].includes(frameStatus) &&
+    ((mode === "ai" && currentSeat === 0) || (mode === "multiplayer" && mySeat != null && currentSeat === mySeat
+      && connectionStatus === "connected" && !authoritativeRef.current?.paused));
 
-  // Keyframe Animation Replay Function
-  const playKeyframes = useCallback((keyframes: SnookerTrajectoryKeyframe[], finalState: SnookerState) => {
-    if (!keyframes || keyframes.length === 0) {
-      syncAuthoritativeState(finalState);
-      return;
-    }
-
-    setIsSimulating(true);
-    playSound("strike");
-    let frameIdx = 0;
-
-    const animate = () => {
-      if (frameIdx < keyframes.length) {
-        const kf = keyframes[frameIdx];
-        setBalls((prev) =>
-          prev.map((b) => {
-            const p = kf.pieces.find((pk) => pk.id === b.id);
-            if (!p) return b;
-            return {
-              ...b,
-              x: p.x,
-              y: p.y,
-              pocketed: p.pocketed,
-              pocketIndex: p.pocketIndex,
-            };
-          })
-        );
-        frameIdx++;
-        requestAnimationFrame(animate);
-      } else {
-        setIsSimulating(false);
-        syncAuthoritativeState(finalState);
-
-        if (finalState.lastFoul) playSound("foul");
-        else playSound("pocket");
+  if (!playbackRef.current) playbackRef.current = new SnookerShotPlayback({
+    render: nextBalls => { displayBallsRef.current = nextBalls; },
+    settle: state => {
+      if (shotBusyRef.current && state.lastShot) {
+        if (state.lastFoul) playSound("foul");
+        else if (state.lastShot.pointsEarned > 0) playSound("pocket");
       }
-    };
+      shotBusyRef.current = false;
+      setIsSimulating(false);
+      syncAuthoritativeState(state);
+    },
+  });
 
-    requestAnimationFrame(animate);
-  }, [playSound, syncAuthoritativeState]);
+  const playKeyframes = useCallback((_keyframes: SnookerTrajectoryKeyframe[], finalState: SnookerState) => {
+    if (playbackRef.current?.shotId !== finalState.lastProcessedShotId) playSound("strike");
+    shotBusyRef.current = true;
+    setIsSimulating(true);
+    const duration = finalState.turnDurationMs ?? 20000;
+    turnDeadlineRef.current = { duration, pausedRemaining: null, localDeadline: localTurnDeadline(finalState) };
+    playbackRef.current?.receive(finalState, performance.now());
+  }, [playSound, localTurnDeadline]);
 
   // Initialize Mode (AI vs Multiplayer)
   useEffect(() => {
+    playbackRef.current?.cancel(); shotBusyRef.current = false; setIsSimulating(false);
+    let worker: Worker | null = null;
+    if (mode === "multiplayer") {
+      if (!roomId || !matchId) return;
+      try {
+        worker = new Worker(new URL("./shotPreview.worker.ts", import.meta.url), { type: "module" });
+        worker.onmessage = ({ data }) => playbackRef.current?.preview(data.shotId, data.keyframes);
+      } catch { /* Authoritative animation remains available without workers. */ }
+      previewWorkerRef.current = worker;
+    }
     if (mode === "ai") {
       const engine = new SnookerEngine(
         [
@@ -244,11 +273,20 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
       );
       localEngineRef.current = engine;
       syncAuthoritativeState(engine.getState());
+      return () => {
+        if (cueAnimationRef.current != null) cancelAnimationFrame(cueAnimationRef.current);
+        playbackRef.current?.cancel(); shotBusyRef.current = false;
+      };
     } else {
       const driver = new SnookerMultiplayerDriver(
         mySeat,
-        (state) => {
-          syncAuthoritativeState(state);
+        (state, restore) => {
+          localTurnDeadline(state);
+          playbackRef.current?.receive(state, performance.now(), restore);
+          if (restore) {
+            if (cueAnimationRef.current != null) cancelAnimationFrame(cueAnimationRef.current);
+            setStrikeProgress(0);
+          }
         },
         (keyframes, targetState) => {
           playKeyframes(keyframes, targetState);
@@ -256,39 +294,34 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
         (angle, power) => {
           setAimAngle(angle);
           setCuePower(power);
-        }
+        },
+        { roomId: roomId!, matchId: matchId! }
       );
       driverRef.current = driver;
       driver.start();
-      return () => driver.stop();
+      return () => {
+        driver.stop(); driverRef.current = null;
+        worker?.terminate(); previewWorkerRef.current = null;
+        if (cueAnimationRef.current != null) cancelAnimationFrame(cueAnimationRef.current);
+        playbackRef.current?.cancel(); shotBusyRef.current = false;
+      };
     }
-  }, [mode, mySeat, bestOf, playKeyframes, syncAuthoritativeState]);
+  }, [mode, roomId, matchId, mySeat, bestOf, playKeyframes, syncAuthoritativeState, localTurnDeadline]);
 
-  // Turn Timer Interval (20s)
+  // Both devices derive their countdown from the server deadline; only the server expires multiplayer turns.
   useEffect(() => {
-    if (frameStatus === "FRAME_END" || frameStatus === "MATCH_END" || isSimulating) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          if (mode === "ai" && localEngineRef.current) {
-            const timeoutRes = localEngineRef.current.handleTimeout("turn");
-            if (timeoutRes.ok) {
-              const st = timeoutRes.state as unknown as SnookerState;
-              syncAuthoritativeState(st);
-              toast.error("Turn timed out! 4-point penalty awarded to opponent.", { id: "snooker-timeout" });
-            }
-          } else if (mode === "multiplayer" && driverRef.current && isMyTurn) {
-            driverRef.current.sendTimeout();
-          }
-          return 20;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
+    if (["FRAME_END", "MATCH_END"].includes(frameStatus)) return;
+    const updateClock = () => {
+      const remaining = turnDeadlineRef.current.pausedRemaining ?? Math.max(0, Math.ceil((turnDeadlineRef.current.localDeadline - Date.now()) / 1000));
+      setTimeLeft(Math.min(Math.ceil(turnDeadlineRef.current.duration / 1000), remaining));
+      if (mode === "ai" && remaining === 0 && !shotBusyRef.current && localEngineRef.current) {
+        const result = localEngineRef.current.handleTimeout("turn");
+        if (result.ok) syncAuthoritativeState(result.state as unknown as SnookerState);
+      }
+    };
+    const timer = setInterval(updateClock, 200);
     return () => clearInterval(timer);
-  }, [frameStatus, isSimulating, mode, isMyTurn, syncAuthoritativeState]);
+  }, [frameStatus, mode, syncAuthoritativeState]);
 
   // AI Turn Automated Move Handler
   useEffect(() => {
@@ -391,7 +424,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
   // Canvas Touch & Mouse Pointer Interaction (with 3D Unprojection)
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
-    if (isSimulating || (mode === "ai" && currentSeat !== 0) || (mode === "multiplayer" && currentSeat !== mySeat)) return;
+    if (shotBusyRef.current || isSimulating || !isMyTurn || (mode === "multiplayer" && !driverRef.current?.canAct())) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -409,9 +442,9 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 
     // Handle Ball-in-Hand placement in the "D" with auto-clamping & seamless aim transition
     if (cueBallInHand) {
-      const baulkX = 210; // SNOOKER_BAULK_X
-      const centerY = 240; // SNOOKER_TABLE_CENTER_Y
-      const dRadius = 58; // SNOOKER_D_RADIUS - 2
+      const baulkX = SNOOKER_BAULK_X;
+      const centerY = SNOOKER_TABLE_CENTER_Y;
+      const dRadius = SNOOKER_D_RADIUS - 2
 
       let placeX = clickX;
       let placeY = clickY;
@@ -435,8 +468,11 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
           syncAuthoritativeState(res.state as unknown as SnookerState);
         }
       } else if (mode === "multiplayer" && driverRef.current) {
-        driverRef.current.sendPlaceCueBall(placeX, placeY);
-        setCueBallInHand(false);
+        void driverRef.current.sendPlaceCueBall(placeX, placeY).then(result => {
+          if (!result.ok) toast.error(result.error ?? "Cue placement failed");
+        });
+        // Wait for the server to confirm placement before allowing a shot.
+        return;
       }
 
       // Enter active aim state immediately after placing cue ball
@@ -471,7 +507,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (isSimulating || (mode === "ai" && currentSeat !== 0) || (mode === "multiplayer" && currentSeat !== mySeat)) return;
+    if (shotBusyRef.current || isSimulating || !isMyTurn || (mode === "multiplayer" && !driverRef.current?.canAct())) return;
 
     const { clickX, clickY } = getPointerCoords(e);
 
@@ -534,6 +570,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
       // Fallback
     }
 
+    if (e.type === "pointercancel") { setIsAiming(false); dragRef.current.isPulling = dragRef.current.hasPulled = false; return; }
     if (!isAiming) return;
     setIsAiming(false);
 
@@ -553,60 +590,42 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     }
   };
 
-  // Shot Execution with Cue Forward Strike Impact Animation
+  // Send during the cue swing and predict motion in a worker while awaiting authority.
   const executeShotWithAnimation = (power: number) => {
-    if (isSimulating || cueBallInHand) return;
-    if ((mode === "ai" && currentSeat !== 0) || (mode === "multiplayer" && currentSeat !== mySeat)) return;
-
-    setIsSimulating(true); // Lock input immediately
-
-    // Animate Cue Forward Strike (0 to 1 over 90ms)
-    let startTime: number | null = null;
-    const strikeAnim = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const elapsed = timestamp - startTime;
-      const progress = Math.min(1, elapsed / 90);
-      setStrikeProgress(progress);
-
-      if (progress < 1) {
-        requestAnimationFrame(strikeAnim);
-      } else {
-        // Impact! Launch shot physics
-        setStrikeProgress(0);
-        const shotId = `shot-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-
-        if (mode === "ai" && localEngineRef.current) {
-          const res = localEngineRef.current.apply(
-            { type: "strike", angle: aimAngle, power, spinX, spinY, shotId },
-            currentSeat
-          );
-          if (res.ok) {
-            const nextState = res.state as unknown as SnookerState;
-            if (nextState.keyframes) {
-              playKeyframes(nextState.keyframes, nextState);
-            }
-          } else {
-            setIsSimulating(false);
-            toast.error(res.error || "Shot failed");
-          }
-        } else if (mode === "multiplayer" && driverRef.current) {
-          driverRef.current
-            .sendStrike(aimAngle, power, spinX, spinY, shotId)
-            .then((res) => {
-              if (!res.ok) {
-                setIsSimulating(false);
-                toast.error(res.error || "Shot rejected by server", { id: "snooker-shot-err" });
-              }
-            })
-            .catch((err) => {
-              setIsSimulating(false);
-              toast.error("Network error sending shot", { id: "snooker-shot-err" });
-            });
+    if (shotBusyRef.current || isSimulating || cueBallInHand || !isMyTurn) return;
+    const driver = driverRef.current;
+    if (mode === "multiplayer" && !driver?.canAct()) return;
+    shotBusyRef.current = true; setIsSimulating(true);
+    const shotId = `shot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const params = { angle: aimAngle, power, spinX, spinY };
+    const startAt = performance.now();
+    if (mode === "multiplayer" && driver) {
+      playbackRef.current?.begin(shotId, balls, startAt + 90);
+      previewWorkerRef.current?.postMessage({ shotId, balls, params });
+      void driver.sendStrike(aimAngle, power, spinX, spinY, shotId).then(result => {
+        if (!result.ok && playbackRef.current?.shotId === shotId) {
+          if (cueAnimationRef.current != null) cancelAnimationFrame(cueAnimationRef.current);
+          setStrikeProgress(0);
+          playbackRef.current.cancel(driver.lastState ?? undefined);
+          shotBusyRef.current = false; setIsSimulating(false);
+          toast.error(result.error ?? "Shot rejected", { id: "snooker-shot-err" });
         }
+      });
+    }
+    const strikeAnim = (timestamp: number) => {
+      const progress = Math.min(1, Math.max(0, (timestamp - startAt) / 90));
+      setStrikeProgress(progress);
+      if (progress < 1) cueAnimationRef.current = requestAnimationFrame(strikeAnim);
+      else {
+        setStrikeProgress(0);
+        if (mode === "ai" && localEngineRef.current) {
+          const result = localEngineRef.current.apply({ type: "strike", ...params, shotId }, currentSeat);
+          if (result.ok) { const state = result.state as unknown as SnookerState; playKeyframes(state.keyframes ?? [], state); }
+          else { shotBusyRef.current = false; setIsSimulating(false); toast.error(result.error ?? "Shot failed"); }
+        } else if (playbackRef.current?.shotId === shotId) playSound("strike");
       }
     };
-
-    requestAnimationFrame(strikeAnim);
+    cueAnimationRef.current = requestAnimationFrame(strikeAnim);
   };
 
   // Direct Shoot Button Execution (from sidebar)
@@ -616,14 +635,16 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 
   // Nominate Color Action
   const handleNominateColor = (color: SnookerBallType) => {
+    if (shotBusyRef.current || !isMyTurn) return;
     if (mode === "ai" && localEngineRef.current) {
       const res = localEngineRef.current.apply({ type: "nominate-color", color }, currentSeat);
       if (res.ok) {
         syncAuthoritativeState(res.state as unknown as SnookerState);
       }
     } else if (mode === "multiplayer" && driverRef.current) {
-      driverRef.current.sendNominateColor(color);
-      setNominatedBall(color);
+      void driverRef.current.sendNominateColor(color).then(result => {
+        if (!result.ok) toast.error(result.error ?? "Color nomination failed");
+      });
     }
   };
 
@@ -633,7 +654,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
       localEngineRef.current.startNextFrame();
       syncAuthoritativeState(localEngineRef.current.getState());
     } else if (mode === "multiplayer" && driverRef.current) {
-      driverRef.current.sendNextFrame();
+      void driverRef.current.sendNextFrame().then(result => { if (!result.ok) toast.error(result.error ?? "Could not start frame"); });
     }
   };
 
@@ -651,6 +672,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     cameraMode,
     isMyTurn,
     isRotated,
+    showCue: isMyTurn || (mode === "multiplayer" && connectionStatus === "connected" && !["FRAME_END", "MATCH_END"].includes(frameStatus)),
   });
 
   // Sync live render refs continuously without restarting the animation loop
@@ -668,6 +690,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
       cameraMode,
       isMyTurn,
       isRotated,
+      showCue: isMyTurn || (mode === "multiplayer" && connectionStatus === "connected" && !["FRAME_END", "MATCH_END"].includes(frameStatus)),
     };
   });
 
@@ -680,6 +703,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
     if (!ctx) return;
 
     const render = () => {
+      playbackRef.current?.advance(performance.now());
       const {
         balls: curBalls,
         aimAngle: curAimAngle,
@@ -691,9 +715,9 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
         freeBallAvailable: curFreeBallAvailable,
         nominatedBall: curNominatedBall,
         cameraMode: curCameraMode,
-        isMyTurn: curIsMyTurn,
+        showCue: curShowCue,
         isRotated: curIsRotated,
-      } = renderStateRef.current;
+      } = { ...renderStateRef.current, balls: displayBallsRef.current };
 
       const w = canvas.width;
       const h = canvas.height;
@@ -721,7 +745,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 
         // 3. Draw 3D Cue Stick and Laser Aim Guide (Only when it's your turn and not simulating)
         const shouldDrawCue =
-          curIsMyTurn &&
+          curShowCue &&
           cueBall &&
           !cueBall.pocketed &&
           !curCueBallInHand &&
@@ -751,7 +775,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 
         // Draw Cue Stick and Laser Aim Guide
         const shouldDrawCue =
-          curIsMyTurn &&
+          curShowCue &&
           cueBall &&
           !cueBall.pocketed &&
           !curCueBallInHand &&
@@ -783,9 +807,9 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
           player2Name={player2Name}
           players={players}
           currentSeat={currentSeat}
-          mySeat={mode === "ai" ? 0 : mySeat}
+          mySeat={mode === "ai" ? 0 : mySeat ?? -1}
           timeLeft={timeLeft}
-          maxTime={20}
+          maxTime={turnDeadlineRef.current.duration / 1000}
           balls={balls}
           targetBall={targetBall}
           frameStatus={frameStatus}
@@ -994,7 +1018,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
           <SnookerGameOverModal
             frameStatus={frameStatus}
             winnerSeats={winnerSeats}
-            mySeat={mode === "ai" ? 0 : mySeat}
+            mySeat={mode === "ai" ? 0 : mySeat ?? -1}
             player1Score={player1Score}
             player2Score={player2Score}
             player1FramesWon={player1FramesWon}
@@ -1002,7 +1026,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
             frameNumber={frameNumber}
             totalFrames={totalFrames}
             frameHistory={frameHistory}
-            onNextFrame={frameStatus === "FRAME_END" ? handleNextFrame : undefined}
+            onNextFrame={frameStatus === "FRAME_END" && (mode === "ai" || mySeat != null) ? handleNextFrame : undefined}
             onRematch={
               mode === "multiplayer"
                 ? () => void useMultiplayerStore.getState().rematch()

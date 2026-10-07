@@ -936,7 +936,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     
     const logAction = room.gameId !== "table-tennis" || action.type !== "paddle-move";
     if (logAction) console.log("[MultiplayerStore] Client sending game:action to room", room.id, "with action:", action);
-    const res = await socket.emitWithAck("game:action", { roomId: room.id, matchId, action });
+    const actionSocket = ["snooker", "snake-vs-worms"].includes(room.gameId) ? socket.timeout(8000) : socket;
+    const res = await actionSocket.emitWithAck("game:action", { roomId: room.id, matchId, action });
     
     if (!res.ok) {
       const errMsg = (res as { error?: { message: string } }).error?.message ?? "Action failed";
@@ -978,6 +979,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
       if (res.ok && res.data) {
         if (get().matchId !== matchId || get().room?.id !== room?.id) return;
+        if (["snooker", "snake-vs-worms"].includes(room?.gameId ?? '') && res.data.stateVersion < get().lastStateVersion) return;
         const full = res.data.fullState;
         console.log("[STATE] SYNC_COMPLETED", {
           matchId,

@@ -113,7 +113,7 @@ export class MatchManager {
         }
       }
     };
-    const serialized = room.config.gameId === "table-tennis";
+    const serialized = room.config.gameId === "table-tennis" || room.config.gameId === "snake-vs-worms";
     if (serialized && this.tableTennisTicks.has(matchId)) return;
     if (serialized) this.tableTennisTicks.add(matchId);
     try {
@@ -250,7 +250,7 @@ export class MatchManager {
       throw new Error("Match already started");
     }
     
-    const engineOptions: Record<string, unknown> = {};
+    const engineOptions: Record<string, unknown> = { matchId };
     
     // Add time control if configured for turn-based games
     const isTurnBased = getGamePlayConfig(room.config.gameId)?.turnBased ?? false;
@@ -325,7 +325,7 @@ export class MatchManager {
       this.framework.timerManager.clearRoomTimers(room.id);
       room.eventLog = [];
     }
-    if (room.config.gameId === "table-tennis") {
+    if (["table-tennis", "snooker", "snake-vs-worms"].includes(room.config.gameId)) {
       (engine as EngineInstance & { startMatchClock: () => void }).startMatchClock();
       match.startedAt = Date.now();
       match.stateSnapshots[0] = { turnNumber: 0, timestamp: match.startedAt, state: engine.serialize() };
@@ -402,7 +402,10 @@ export class MatchManager {
       if (cached) return cached;
       // 10-Minute Hard Match Timer Limit
       const MATCH_LIMIT_MS = 10 * 60 * 1000;
-      if (room!.match?.startedAt && Date.now() - room!.match.startedAt > MATCH_LIMIT_MS) {
+      const deadline = ["snooker", "snake-vs-worms"].includes(room.config.gameId)
+        ? (room.match.engine as EngineInstance).currentMatchDeadline
+        : room.match.startedAt ? room.match.startedAt + MATCH_LIMIT_MS : null;
+      if (!(["snooker", "snake-vs-worms"].includes(room.config.gameId) && action.type === "resign") && deadline && Date.now() > deadline) {
         return this.createErrorResult(null, "Match deadline exceeded (10-minute limit)");
       }
 
@@ -558,24 +561,34 @@ export class MatchManager {
       throw new Error("Not authorized to resume");
     }
     
-    room.match.pausedAt = null;
-    room.match.pausedBy = null;
-    
-    // Restart AFK monitoring
-    for (const player of room.players.values()) {
-      this.framework.playerManager.startAfkMonitoring(player.id, roomId);
-    }
-    
-    // Reschedule clock check
-    this.scheduleClockCheck(room);
-    
-    // Broadcast resume
-    await this.framework.syncManager.broadcastToRoom(room, "match:resumed", {
-      roomId,
-      resumedBy: playerId,
-    });
-    
-    this.framework.log(`Match resumed in room ${roomId} by ${playerId}`);
+    const match = room.match;
+    const resume = async () => {
+      if (!room.match || room.match !== match || room.status !== "playing") return;
+      if (room.config.gameId === "snooker") {
+        (room.match.engine as unknown as { resumeClocks(): void }).resumeClocks();
+        await this.framework.syncManager.broadcastGameState(room, []);
+      }
+      room.match.pausedAt = null;
+      room.match.pausedBy = null;
+
+      // Restart AFK monitoring
+      for (const player of room.players.values()) {
+        this.framework.playerManager.startAfkMonitoring(player.id, roomId);
+      }
+
+      // Reschedule clock check
+      this.scheduleClockCheck(room);
+
+      // Broadcast resume
+      await this.framework.syncManager.broadcastToRoom(room, "match:resumed", {
+        roomId,
+        resumedBy: playerId,
+      });
+
+      this.framework.log(`Match resumed in room ${roomId} by ${playerId}`);
+    };
+    if (room.config.gameId === "snooker") await this.framework.gameStateManager.enqueue(roomId, resume);
+    else await resume();
   }
   
   /**
@@ -781,7 +794,7 @@ export class MatchManager {
         }
       }
     };
-    if (room.config.gameId === "table-tennis") await this.framework.gameStateManager.enqueue(room.id, expire);
+    if (["table-tennis", "snooker", "snake-vs-worms"].includes(room.config.gameId)) await this.framework.gameStateManager.enqueue(room.id, expire);
     else await expire();
   }
 

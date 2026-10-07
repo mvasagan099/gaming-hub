@@ -311,8 +311,8 @@ export class SnakeVsWorms3DRenderer {
     canvasW: number,
     canvasH: number,
     players: Array<{ x: number; y: number; isMe: boolean; color: string; dead: boolean }>,
-    mapW = SNAKE_WORMS_VISUAL_CONFIG.mapWidth,
-    mapH = SNAKE_WORMS_VISUAL_CONFIG.mapHeight,
+    mapW: number = SNAKE_WORMS_VISUAL_CONFIG.mapWidth,
+    mapH: number = SNAKE_WORMS_VISUAL_CONFIG.mapHeight,
     radarAlignLeft = false
   ): void {
     const size = 95;

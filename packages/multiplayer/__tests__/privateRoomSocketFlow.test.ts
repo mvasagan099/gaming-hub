@@ -4,6 +4,7 @@ import { io as connectClient, type Socket as ClientSocket } from 'socket.io-clie
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GAME_IDS, type GameId, type RoomFull } from '@gaming-hub/shared';
 import { registerCarromPreviewHandler } from '../../../apps/socket-server/src/carromHandlers';
+import { registerSnookerPreviewHandler } from '../../../apps/socket-server/src/snookerHandlers';
 import { applySocketGameAction } from '../../../apps/socket-server/src/gameActions';
 import { MultiplayerFramework } from '../src/framework';
 import { registerRoomLifecycleHandlers } from '../../../apps/socket-server/src/roomHandlers';
@@ -40,7 +41,14 @@ describe('private room Socket.IO lifecycle', () => {
       // Local fixture identity only. Production still supplies its authenticated user ID and guards.
       const userId = socket.handshake.auth.userId as string;
       socket.data.user = { username: userId, displayName: userId };
+      const active = framework.roomManager.getPlayerRoom(userId);
+      if (active) void framework.playerManager.handleReconnect(userId, active.id, socket);
+      socket.on('disconnect', () => {
+        const room = framework.roomManager.getPlayerRoom(userId);
+        if (room) void framework.playerManager.handleDisconnect(userId, room.id, socket);
+      });
       registerCarromPreviewHandler(socket, io, framework, userId);
+      registerSnookerPreviewHandler(socket, io, framework, userId);
       socket.on('game:action', async (payload, ack) => {
         try { ack({ ok: true, data: await applySocketGameAction(framework, userId, payload) }); }
         catch (error) { ack({ ok: false, error: { message: (error as Error).message } }); }
@@ -164,10 +172,65 @@ describe('private room Socket.IO lifecycle', () => {
     expect((await shoot(host, started.matchId!)).data.ok).toBe(false);
   });
 
-  it('gives Table Tennis the full three minutes after delayed funding completes', async () => {
+  it('synchronizes Snooker aim, shots, settling time, cue placement, reconnects and rematches', async () => {
+    const created = await create('snooker');
+    await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
+    await roomAck(guest, 'room:ready', { roomId: created.id, ready: true });
+    await roomAck(host, 'room:start', { roomId: created.id });
+    const room = framework.roomManager.getRoom(created.id)!;
+    const engine = room.match!.engine as any;
+    const states: any[] = [], previews: any[] = [], endings: any[] = [];
+    guest.on('game:state', state => states.push(state));
+    guest.on('snooker:aim-position', preview => previews.push(preview));
+    guest.on('game:over', value => endings.push(value));
+    const action = (socket: ClientSocket, value: any, matchId = room.match!.matchId) => socket.timeout(4000).emitWithAck('game:action', {
+      roomId: room.id, matchId, action: { ...value, expectedStateVersion: room.match!.engine.state.stateVersion },
+    });
+    const aim = (matchId = room.match!.matchId) => host.emit('snooker:aim-position', { roomId: room.id, matchId,
+      turnNumber: room.match!.engine.state.turnNumber, angle: 0.2, power: 0.5, sequence: 1 });
+    aim(); await vi.waitFor(() => expect(previews).toHaveLength(1));
+    // Wall-clock age may exceed ten minutes after reconnect pauses; the engine owns active playing time.
+    room.match!.startedAt = Date.now() - 660000;
+    expect((await action(guest, { type: 'strike', angle: 0.1, power: 0.5 })).data.ok).toBe(false);
+    expect((await action(host, { type: 'strike', angle: 0.1, power: 0.5, shotId: 'snooker-shot' })).data.ok).toBe(true);
+    await vi.waitFor(() => expect(states.at(-1)?.state.lastProcessedShotId).toBe('snooker-shot'));
+    expect(states.at(-1).state.keyframes.length).toBeGreaterThan(1);
+    expect(engine.currentClockDeadline).toBe(engine.state.shotPlaybackEndsAtMs + 20000);
+    const receiver = engine.currentSeat === 0 ? host : guest;
+    expect((await action(receiver, { type: 'strike', angle: 0, power: 0.5, shotId: 'overlap' })).data.ok).toBe(false);
+    // Advance the authoritative settling boundary without waiting through a full shot.
+    engine.state.shotPlaybackEndsAtMs = Date.now() - 1;
+    engine.state.cueBallInHand = true; engine.state.inBaulkOnly = true;
+    expect((await action(receiver, { type: 'place-cue-ball', x: 150, y: 240 })).data.ok).toBe(true);
+    await vi.waitFor(() => expect(states.at(-1)?.state.keyframes).toEqual([]));
+    expect(states.at(-1).state.cueBallInHand).toBe(false);
+    guest.disconnect();
+    await vi.waitFor(() => expect(engine.state.paused).toBe(true));
+    expect(engine.currentClockDeadline).toBeNull();
+    guest = await client('guest');
+    await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
+    await vi.waitFor(() => expect(engine.state.paused).toBe(false));
+    expect(engine.state.balls.find((b: any) => b.type === 'cue')).toMatchObject({ x: 150, y: 240 });
+    guest.on('game:over', value => endings.push(value));
+    guest.on('snooker:aim-position', preview => previews.push(preview));
+    expect((await action(guest, { type: 'resign' })).data.ok).toBe(true);
+    await vi.waitFor(() => expect(endings).toHaveLength(1));
+    expect(endings[0].state).toMatchObject({ finished: true, frameStatus: 'MATCH_END', winnerSeats: [0] });
+    const oldMatch = room.match!.matchId;
+    await framework.matchManager.requestRematch(room.id, 'host');
+    await framework.matchManager.requestRematch(room.id, 'guest');
+    expect(room.match!.matchId).not.toBe(oldMatch);
+    expect(room.match!.engine.state).toMatchObject({ frameNumber: 1, shotNumber: 0, keyframes: [], finished: false });
+    aim(); await vi.waitFor(() => expect(previews).toHaveLength(2));
+    aim(oldMatch);
+    expect((await action(host, { type: 'strike', angle: 0, power: 0.5 }, oldMatch)).data.ok).toBe(false);
+    expect((await action(host, { type: 'strike', angle: 0.1, power: 0.5, shotId: 'fresh-rematch-shot' })).data.ok).toBe(true);
+  });
+
+  it.each(['table-tennis', 'snake-vs-worms'] as const)('gives %s the full three minutes after delayed funding completes', async gameId => {
     let now = Date.now();
     vi.spyOn(Date, 'now').mockImplementation(() => now);
-    const created = await create('table-tennis');
+    const created = await create(gameId);
     await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
     await roomAck(guest, 'room:ready', { roomId: created.id, ready: true });
     fund.mockImplementationOnce(async () => { now += 30000; });
@@ -176,6 +239,56 @@ describe('private room Socket.IO lifecycle', () => {
     expect(match.startedAt).toBe(now);
     expect(match.engine.serialize().matchRemainingMs).toBe(180000);
     expect((match.engine as any).currentMatchDeadline).toBe(now + 180000);
+  });
+
+  it('runs Snake vs Worms steering, boost, scoring, spectators, reconnect, rematch and timeout', async () => {
+    const created = await create('snake-vs-worms');
+    await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
+    await roomAck(guest, 'room:ready', { roomId: created.id, ready: true });
+    await roomAck(host, 'room:start', { roomId: created.id });
+    const room = framework.roomManager.getRoom(created.id)!;
+    const engine = room.match!.engine as any;
+    const states: any[] = [], endings: any[] = [];
+    host.on('game:state', value => states.push(value)); host.on('game:over', value => endings.push(value));
+    const action = (socket: ClientSocket, value: any, matchId = room.match!.matchId) => socket.timeout(4000).emitWithAck('game:action', { roomId: room.id, matchId, action: value });
+    expect(engine.currentMatchDeadline - room.match!.startedAt).toBe(180000);
+    expect((await action(host, { type: 'direction', direction: 'down' })).data.ok).toBe(true);
+    expect((await action(guest, { type: 'direction', direction: 'up' })).data.ok).toBe(true);
+    await vi.waitFor(() => {
+      expect(engine.state.players[0].direction).toBe('down');
+      expect(engine.state.players[1].direction).toBe('up');
+      expect(states.length).toBeGreaterThan(0);
+    });
+    expect((await action(guest, { type: 'direction', direction: 'down' })).data.ok).toBe(false);
+    expect((await action(host, { type: 'boost-start' })).data.ok).toBe(true);
+    engine.state.food = [{ id: 'test-food', x: engine.state.players[0].body[0].x, y: engine.state.players[0].body[0].y + 10, type: 'golden', score: 50, growth: 3 }];
+    await vi.waitFor(() => expect(engine.state.players[0].score).toBeGreaterThanOrEqual(50));
+    expect((await action(host, { type: 'pause' })).data.ok).toBe(true);
+    const paused = engine.serialize().matchRemainingMs;
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(engine.serialize().matchRemainingMs).toBe(paused);
+    expect((await action(guest, { type: 'resume' })).data.ok).toBe(true);
+    const viewer = await client('viewer');
+    await roomAck(viewer, 'room:join', { code: created.code, asSpectator: true });
+    expect((await action(viewer, { type: 'boost-start' })).data.ok).toBe(false);
+    expect((await action(guest, { type: 'boost-start' })).data.ok).toBe(true);
+    guest.disconnect(); await vi.waitFor(() => expect(engine.state.players[1].isBoosting).toBe(false));
+    expect(engine.state.paused).toBe(false);
+    guest = await client('guest'); await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
+    expect((await action(guest, { type: 'resign' })).data.ok).toBe(true);
+    await vi.waitFor(() => expect(endings).toHaveLength(1));
+    expect(endings[0].state).toMatchObject({ finished: true, gameStatus: 'finished', winnerSeats: [0] });
+    const oldMatch = room.match!.matchId;
+    await framework.matchManager.requestRematch(room.id, 'host'); await framework.matchManager.requestRematch(room.id, 'guest');
+    expect(room.match!.matchId).not.toBe(oldMatch);
+    expect((await action(host, { type: 'direction', direction: 'up' }, oldMatch)).data.ok).toBe(false);
+    expect((await action(host, { type: 'direction', direction: 'up' })).data.ok).toBe(true);
+    const rematch = room.match!.engine as any;
+    rematch.state.food = []; rematch.state.players.forEach((p: any) => { p.score = 0; p.pendingGrowth = 0; });
+    rematch.state.matchStartedAtMs = Date.now() - 180001;
+    await (framework.matchManager as any).handleClockExpiry(room);
+    await vi.waitFor(() => expect(endings).toHaveLength(2));
+    expect(endings[1].state).toMatchObject({ gameStatus: 'finished', endReason: 'TIME_EXPIRED', winnerSeats: [] });
   });
 
   it('runs Table Tennis readiness, rally, pause, reconnect, timeout and rematch for two clients', async () => {

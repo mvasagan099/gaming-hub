@@ -1,5 +1,6 @@
 import type { EngineActionResult, EngineEvent, EnginePlayer, RandomSource } from "../types";
-import { MultiplayerGameEngine, type BaseState } from "../base/MultiplayerGameEngine";
+import { MultiplayerGameEngine, type BaseState, type PlayerAction } from "../base/MultiplayerGameEngine";
+import type { JsonObject } from "@gaming-hub/shared";
 import type {
   SnakeVsWormsState,
   SnakeVsWormsAction,
@@ -26,10 +27,8 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
   private gridHeight = 2000;
 
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: SnakeVsWormsEngineOptions) {
-    const turnTimer = options?.turnTimer;
     const matchTimer = options?.matchTimer ?? { matchDurationMs: 180000, warningThresholdMs: 30000 };
     super(players, rng, {
-      turnTimer,
       matchTimer,
       enableResign: options?.enableResign ?? true,
       enableDraw: false,
@@ -63,7 +62,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
 
     const players: SnakeWormPlayerEntity[] = this.players.map((p, idx) => ({
       playerId: p.userId,
-      seat: idx,
+      seat: p.seat,
       type: idx === 0 ? "SNAKE" : "WORM",
       name: idx === 0 ? "Snake (P1)" : `Player ${idx + 1}`,
       body: idx === 0 ? p0Body : p1Body,
@@ -114,6 +113,9 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
     this.spawnInitialFood(food, players);
 
     return {
+      gameId: "snake-vs-worms",
+      serverTimestamp: 0,
+      matchRemainingMs: this.matchTimerConfig?.matchDurationMs ?? 180000,
       gridWidth: this.gridWidth,
       gridHeight: this.gridHeight,
       players,
@@ -121,6 +123,34 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
       gameStatus: "playing",
       stateVersion: 1,
     };
+  }
+
+  startMatchClock(): void { this.state.matchStartedAtMs = this.now(); }
+
+  override serialize(): JsonObject {
+    const state = this.cloneState(this.state);
+    const now = this.now();
+    const elapsed = Math.max(0, (state.pausedAtMs ?? now) - (state.matchStartedAtMs ?? now));
+    state.serverTimestamp = now;
+    state.matchRemainingMs = Math.max(0, (state.matchTimerConfig?.matchDurationMs ?? 180000) - elapsed);
+    return state;
+  }
+
+  protected override validateAction(action: SnakeVsWormsAction, seat: number): string | null {
+    if (action.type === "resign") return this.validateBaseAction(action, seat, this.state);
+    return super.validateAction(action, seat);
+  }
+
+  protected override applyBaseAction(action: PlayerAction, seat: number, state: InternalState): EngineActionResult<InternalState> | null {
+    const result = super.applyBaseAction(action, seat, state);
+    if (!result?.ok) return result;
+    result.state.stateVersion++;
+    if (action.type === "resume" && state.pausedAtMs != null && state.matchStartedAtMs != null) {
+      result.state.matchStartedAtMs = state.matchStartedAtMs + Math.max(0, this.now() - state.pausedAtMs);
+    }
+    if (action.type === "pause" || result.finished) result.state.players.forEach(p => { p.isBoosting = false; });
+    if (result.finished) result.state.gameStatus = "finished";
+    return result;
   }
 
   private spawnInitialFood(foodList: SnakeWormFood[], players: SnakeWormPlayerEntity[]) {
@@ -160,7 +190,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
     if (state.finished) return "Match is finished";
     if (state.paused && action.type !== "resume" && action.type !== "ready") return "Match is paused";
 
-    const player = state.players[seat];
+    const player = state.players.find(p => p.seat === seat);
     if (!player) return "Invalid player seat";
     if (player.status === "eliminated") return "Player is eliminated";
 
@@ -174,6 +204,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
         return null;
       }
       case "boost-start":
+        return player.boostEnergy > 0 ? null : "Boost energy is empty";
       case "boost-stop":
       case "ready":
         return null;
@@ -185,7 +216,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
   protected applyGameAction(action: SnakeVsWormsAction, seat: number, state: InternalState): EngineActionResult<InternalState> {
     const next = this.cloneState(state);
     const events: EngineEvent[] = [];
-    const player = next.players[seat];
+    const player = next.players.find(p => p.seat === seat)!;
 
     switch (action.type) {
       case "direction": {
@@ -225,6 +256,9 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
         winnerSeats: this.state.winnerSeats,
       };
     }
+
+    if (this.state.matchStartedAtMs == null) this.startMatchClock();
+    if (this.currentMatchDeadline != null && this.now() >= this.currentMatchDeadline) return this.handleTimeout("match");
 
     const nextState = this.simulatePhysics(this.state);
     this.updateState(nextState);
@@ -355,6 +389,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
     }
 
     // Head-to-Opponent-Body collision
+    const bodyHits: Array<{ victim: SnakeWormPlayerEntity; killer: SnakeWormPlayerEntity }> = [];
     for (const p of activePlayers) {
       if (p.status !== "active") continue;
       const pHead = p.body[0];
@@ -363,12 +398,14 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
         if (other.seat === p.seat || other.status !== "active") continue;
         const hitsOtherBody = other.body.slice(1).some((seg) => Math.hypot(seg.x - pHead.x, seg.y - pHead.y) < 18);
         if (hitsOtherBody) {
-          p.status = "eliminated";
-          other.score += 100;
-          other.kills++;
+          bodyHits.push({ victim: p, killer: other });
           break;
         }
       }
+    }
+    for (const { victim, killer } of bodyHits) {
+      victim.status = "eliminated";
+      killer.score += 100; killer.kills++;
     }
 
     // 4. Food Collection
@@ -409,7 +446,10 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
     const finalActive = next.players.filter((p) => p.status === "active");
     const humanActive = finalActive.filter((p) => !p.playerId.startsWith("ai-"));
 
-    if (humanActive.length === 0) {
+    if (finalActive.length === 0) {
+      next.finished = true; next.gameOver = true; next.gameStatus = "finished";
+      next.winnerSeats = []; next.endReason = "BOTH_ELIMINATED";
+    } else if (humanActive.length === 0) {
       next.finished = true;
       next.gameOver = true;
       next.gameStatus = "finished";
@@ -421,12 +461,6 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
       next.gameStatus = "finished";
       next.winnerSeats = [finalActive[0].seat];
       next.endReason = "PLAYER_ELIMINATED";
-    } else if (finalActive.length === 0) {
-      next.finished = true;
-      next.gameOver = true;
-      next.gameStatus = "finished";
-      next.winnerSeats = [];
-      next.endReason = "BOTH_ELIMINATED";
     }
 
     return next;
@@ -453,7 +487,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
     if (p1.score > p0.score) return [p1.seat];
     if (p0.body.length > p1.body.length) return [p0.seat];
     if (p1.body.length > p0.body.length) return [p1.seat];
-    return [p0.seat, p1.seat];
+    return [];
   }
 
   protected override onMatchTimerExpired(state: InternalState): EngineActionResult<InternalState> {
@@ -464,6 +498,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
     next.gameStatus = "finished";
     next.endReason = "TIME_EXPIRED";
     next.winnerSeats = winnerSeats;
+    next.stateVersion++;
 
     return { ok: true, state: next, events: [{ type: "match-timeout", winnerSeats }], finished: true, winnerSeats };
   }

@@ -375,20 +375,14 @@ export const ColorPickerModal: React.FC<ColorPickerModalProps> = ({
   isFreeBall = false,
 }) => {
   const [isMinimized, setIsMinimized] = useState(false);
-  const [localNominated, setLocalNominated] = useState<SnookerBallType | null>(nominatedColor);
-
-  useEffect(() => {
-    setLocalNominated(nominatedColor);
-  }, [nominatedColor]);
-
   // If nomination is cleared (e.g. new shot / turn / foul), restore expanded view
   useEffect(() => {
-    if (!nominatedColor && !localNominated) {
+    if (!nominatedColor) {
       setIsMinimized(false);
     }
-  }, [nominatedColor, localNominated]);
+  }, [nominatedColor]);
 
-  const effectiveNominated = nominatedColor || localNominated;
+  const effectiveNominated = nominatedColor;
 
   const colors: { type: SnookerBallType; label: string; bg: string; border: string; pts: number; key: string }[] = [
     { type: "yellow", label: "Yellow", bg: "bg-yellow-400 text-slate-950", border: "border-yellow-300", pts: 2, key: "1" },
@@ -458,7 +452,6 @@ export const ColorPickerModal: React.FC<ColorPickerModalProps> = ({
                 setIsMinimized(true);
                 return;
               }
-              setLocalNominated(c.type);
               onSelectColor(c.type);
             }}
             className={`px-3.5 py-2.5 rounded-2xl font-black text-xs shadow-lg transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center gap-1 cursor-pointer border ${
@@ -543,7 +536,7 @@ export const SnookerMobilePowerMeter: React.FC<SnookerMobilePowerMeterProps> = (
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
+      onPointerCancel={() => { isDraggingRef.current = false; }}
       className={`w-6 sm:w-7 h-[min(36vh,250px)] bg-slate-950/95 rounded-xl border transition-all ${
         disabled
           ? "border-slate-800 opacity-40 cursor-not-allowed"

@@ -66,12 +66,17 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
   const [isWin, setIsWin] = useState(false);
 
   // Multiplayer state
-  const [multiplayerState, setMultiplayerState] = useState<SnakeVsWormsState | null>(null);
+  const multiplayerStateRef = useRef<SnakeVsWormsState | null>(null);
+  const [timeLeft, setTimeLeft] = useState(180);
+  const matchClockRef = useRef({ deadline: Date.now() + 180000, pausedRemaining: null as number | null });
+  const [isDraw, setIsDraw] = useState(false);
   const [mpWinner, setMpWinner] = useState<number | null>(null);
   const driverRef = useRef<SnakeVsWormsMultiplayerDriver | null>(null);
 
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const room = useMultiplayerStore((s) => s.room);
+  const matchId = useMultiplayerStore(s => s.matchId);
+  const roomId = room?.id;
 
   const inputRef = useRef({
     mouseX: CANVAS_WIDTH / 2 + 100,
@@ -179,25 +184,40 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
   useEffect(() => {
     setGameOver(false);
     setMpWinner(null);
+    setIsDraw(false);
+    multiplayerStateRef.current = null;
+    mpRenderStateRef.current.clear();
+    inputRef.current.hasPointer = false; inputRef.current.isBoosting = false;
 
-    if (mode === 'multiplayer' && room && mySeat !== null) {
-      const names = room.players.map((p) => p.displayName || `Player ${(p.seat ?? 0) + 1}`);
+    if (mode === 'multiplayer' && roomId && matchId) {
+      const names = useMultiplayerStore.getState().room!.players.map((p) => p.displayName || `Player ${(p.seat ?? 0) + 1}`);
       const driver = new SnakeVsWormsMultiplayerDriver(mySeat, names);
       driverRef.current = driver;
 
       driver.setOnStateUpdate((state: SnakeVsWormsState) => {
-        setMultiplayerState(state);
-        if (state.finished && state.gameStatus === 'finished') {
+        const first = multiplayerStateRef.current === null;
+        multiplayerStateRef.current = state;
+        const me = state.players.find(p => p.seat === mySeat);
+        setScore(me?.score ?? 0); setLength(me?.body.length ?? 0); setKills(me?.kills ?? 0); setBoostEnergy(me?.boostEnergy ?? 0);
+        const remaining = state.matchRemainingMs ?? 180000;
+        matchClockRef.current = { deadline: Date.now() + remaining, pausedRemaining: state.paused ? remaining : null };
+        setTimeLeft(Math.ceil(remaining / 1000));
+        if (first) {
+          const head = (me ?? state.players[0])?.body[0];
+          if (head) gameStateRef.current.camera = { x: head.x - CANVAS_WIDTH / 2, y: head.y - CANVAS_HEIGHT / 2 };
+        }
+        if (state.finished) {
           setGameOver(true);
-          const winSeat = state.winnerSeats && state.winnerSeats.length > 0 ? state.winnerSeats[0]! : null;
+          const winSeat = state.winnerSeats.length === 1 ? state.winnerSeats[0] : null;
           setMpWinner(winSeat);
-          setIsWin(winSeat === mySeat);
+          setIsWin(mySeat != null && winSeat === mySeat);
+          setIsDraw(state.winnerSeats.length !== 1);
         }
       });
 
       driver.setOnMatchComplete((winSeat: number | null) => {
         setMpWinner(winSeat);
-        setIsWin(winSeat === mySeat);
+        setIsWin(mySeat != null && winSeat === mySeat);
         setGameOver(true);
       });
 
@@ -206,13 +226,26 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
       return () => {
         driver.stop();
         driverRef.current = null;
+        multiplayerStateRef.current = null;
       };
     }
-  }, [mode, room, mySeat]);
+  }, [mode, roomId, matchId, mySeat]);
+
+  useEffect(() => {
+    if (mode !== 'multiplayer' || gameOver) return;
+    const timer = setInterval(() => {
+      const remaining = matchClockRef.current.pausedRemaining ?? Math.max(0, matchClockRef.current.deadline - Date.now());
+      setTimeLeft(Math.ceil(remaining / 1000));
+    }, 250);
+    return () => clearInterval(timer);
+  }, [mode, gameOver]);
 
   // Keyboard Steering & Boost
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? '')) return;
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
       if (e.code === 'Space') {
         inputRef.current.isBoosting = true;
         if (mode === 'multiplayer' && driverRef.current) {
@@ -250,12 +283,18 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
         }
       }
     };
+    const releaseBoost = () => {
+      inputRef.current.isBoosting = false;
+      driverRef.current?.sendBoostStop();
+    };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', releaseBoost);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', releaseBoost);
     };
   }, [mode]);
 
@@ -300,8 +339,9 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     // ──────────────────────────────────────────────────────────────────────────
     // 1. MULTIPLAYER RENDERING MODE
     // ──────────────────────────────────────────────────────────────────────────
-    if (mode === 'multiplayer' && multiplayerState) {
-      const mpState = multiplayerState;
+    if (mode === 'multiplayer') {
+      const mpState = multiplayerStateRef.current;
+      if (!mpState || !mpState.players.length) return;
       const me = mpState.players.find((p) => p.seat === mySeat) || mpState.players[0]!;
       const meHeadTarget = me.body[0] || { x: 1000, y: 1000 };
 
@@ -325,12 +365,12 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
             (me.direction === 'left' && desiredDir === 'right') ||
             (me.direction === 'right' && desiredDir === 'left')
           ) {
-            if (Math.abs(dy) > 10) desiredDir = dy > 0 ? 'down' : 'up';
+            desiredDir = dy >= 0 ? 'down' : 'up';
           } else if (
             (me.direction === 'up' && desiredDir === 'down') ||
             (me.direction === 'down' && desiredDir === 'up')
           ) {
-            if (Math.abs(dx) > 10) desiredDir = dx > 0 ? 'right' : 'left';
+            desiredDir = dx >= 0 ? 'right' : 'left';
           }
 
           driverRef.current.sendDirection(desiredDir);
@@ -342,15 +382,17 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
       for (const p of mpState.players) {
         if (!p.body || p.body.length === 0) continue;
         let pState = renderMap.get(p.seat);
-        if (!pState || pState.body.length !== p.body.length) {
+        if (!pState) {
           pState = {
             body: p.body.map((pt) => ({ x: pt.x, y: pt.y })),
             angle: DIR_ANGLES[p.direction] ?? 0,
           };
           renderMap.set(p.seat, pState);
         }
+        while (pState.body.length < p.body.length) pState.body.push({ ...(pState.body.at(-1) ?? p.body[pState.body.length]) });
+        pState.body.length = p.body.length;
 
-        const lerpFactor = Math.min(1, 20 * dt);
+        const lerpFactor = 1 - Math.exp(-20 * dt);
         for (let i = 0; i < p.body.length; i++) {
           const targetPt = p.body[i]!;
           const currPt = pState.body[i] || { x: targetPt.x, y: targetPt.y };
@@ -364,18 +406,18 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
         let angleDiff = targetAngle - pState.angle;
         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        pState.angle += angleDiff * Math.min(1, 16 * dt);
+        pState.angle += angleDiff * (1 - Math.exp(-16 * dt));
       }
 
       const myRenderState = renderMap.get(me.seat);
       const head = (myRenderState && myRenderState.body[0]) || meHeadTarget;
 
       // Smooth Camera Follow
-      const targetCamX = Math.max(0, Math.min(MAP_WIDTH - CANVAS_WIDTH, head.x - CANVAS_WIDTH / 2));
-      const targetCamY = Math.max(0, Math.min(MAP_HEIGHT - CANVAS_HEIGHT, head.y - CANVAS_HEIGHT / 2));
+      const targetCamX = Math.max(0, Math.min(mpState.gridWidth - CANVAS_WIDTH, head.x - CANVAS_WIDTH / 2));
+      const targetCamY = Math.max(0, Math.min(mpState.gridHeight - CANVAS_HEIGHT, head.y - CANVAS_HEIGHT / 2));
       const cam = gameStateRef.current.camera;
-      cam.x += (targetCamX - cam.x) * 6.5 * dt;
-      cam.y += (targetCamY - cam.y) * 6.5 * dt;
+      cam.x += (targetCamX - cam.x) * (1 - Math.exp(-6.5 * dt));
+      cam.y += (targetCamY - cam.y) * (1 - Math.exp(-6.5 * dt));
 
       ctx.fillStyle = '#05070e';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -409,7 +451,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
           skinKey,
           isMe,
           p.isBoosting,
-          p.name,
+          room?.players.find(player => player.seat === p.seat)?.displayName || p.name,
           animTime,
           p.status === 'eliminated'
         );
@@ -425,7 +467,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
         color: p.seat === 0 ? '#10b981' : '#3b82f6',
         dead: p.status === 'eliminated',
       }));
-      SnakeVsWorms3DRenderer.drawRadar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, radarPlayers, MAP_WIDTH, MAP_HEIGHT, isPortrait);
+      SnakeVsWorms3DRenderer.drawRadar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, radarPlayers, mpState.gridWidth, mpState.gridHeight, isPortrait);
       return;
     }
 
@@ -665,6 +707,9 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
           {/* TOP MODERN ARCADE HUD */}
           <div className="absolute top-2 left-2 right-2 z-20 pointer-events-none lg:pointer-events-auto lg:relative lg:top-auto lg:left-auto lg:right-auto w-auto lg:w-full grid grid-cols-2 sm:grid-cols-4 lg:flex items-center justify-between gap-1.5 sm:gap-2 lg:gap-3 lg:mb-2.5 px-1">
             
+            {mode === 'multiplayer' && <div className="p-2 bg-slate-900/80 border border-indigo-500/40 rounded-xl text-white font-mono text-xs" aria-label="Match time remaining">
+              {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+            </div>}
             {/* Score & Length Pill */}
             <div className="p-1.5 sm:p-2.5 bg-slate-900/80 lg:bg-slate-900/90 backdrop-blur-md border border-emerald-500/40 rounded-xl sm:rounded-2xl flex items-center justify-between shadow-lg pointer-events-auto">
               <div className="flex items-center gap-1 sm:gap-2">
@@ -751,6 +796,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
                   driverRef.current.sendBoostStop();
                 }
               }}
+              onPointerCancel={() => { inputRef.current.isBoosting = false; driverRef.current?.sendBoostStop(); }}
               className="lg:hidden absolute bottom-6 right-6 z-20 w-16 h-16 rounded-full bg-gradient-to-tr from-amber-500/80 to-rose-500/80 active:from-amber-600 active:to-rose-600 border-2 border-white/40 shadow-2xl backdrop-blur-md flex flex-col items-center justify-center text-white active:scale-95 transition-transform select-none touch-none"
             >
               <Flame className="w-6 h-6 text-amber-200 animate-pulse" />
@@ -761,11 +807,13 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
             <SnakeVsWormsOverlays
               isGameOver={gameOver}
               isWin={isWin}
+              isDraw={isDraw}
+              isSpectator={mode === 'multiplayer' && mySeat == null}
               score={score}
               length={length}
               kills={kills}
               isMultiplayer={mode === 'multiplayer'}
-              winnerName={mpWinner !== null ? `Player ${mpWinner + 1}` : null}
+              winnerName={mpWinner !== null ? room?.players.find(p => p.seat === mpWinner)?.displayName || `Player ${mpWinner + 1}` : null}
               onReplay={mode === 'multiplayer' ? () => void useMultiplayerStore.getState().rematch() : initGame}
               onExit={onBack}
             />

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { SnookerEngine } from "../src/snooker/engine";
 import { SnookerRulesEngine } from "../src/snooker/rules";
 import {
@@ -155,7 +155,9 @@ describe("Snooker Rules & Engine WPBSA Comprehensive Audit Test Suite", () => {
     cue2.x = 500;
     cue2.y = 240;
 
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(engine.state.shotPlaybackEndsAtMs + 1);
     const res2 = engine.apply({ type: "strike", angle: Math.PI / 2, power: 0.2, shotId: "shot-miss-color" }, 0);
+    clock.mockRestore();
     expect(res2.ok).toBe(true);
 
     const stateAfterMiss = engine.getState();

@@ -307,6 +307,10 @@ export class SyncManager {
     this.sequenceNumbers.set(roomId, next);
     return next;
   }
+
+  getStateVersion(roomId: RoomId): number {
+    return this.sequenceNumbers.get(roomId) ?? 1;
+  }
   
   /**
    * Calculate simple checksum for state validation.

@@ -23,7 +23,7 @@ import {
   type SnookerBallType,
   type SnookerFrameHistoryItem,
 } from "./types";
-import { createInitialSnookerSetup, simulateSnookerShot } from "./physics";
+import { createInitialSnookerSetup, simulateSnookerShot, snookerShotDuration } from "./physics";
 import { SnookerRulesEngine } from "./rules";
 
 export class SnookerEngine implements EngineInstance {
@@ -125,6 +125,12 @@ export class SnookerEngine implements EngineInstance {
       lastActionAtMs: now,
       turnStartedAtMs: now,
       keyframes: [],
+      shotPlaybackEndsAtMs: 0,
+      serverTimestamp: 0,
+      turnDeadlineMs: null,
+      turnDurationMs: this.turnDurationMs,
+      paused: false,
+      pausedAtMs: null,
     };
   }
 
@@ -141,14 +147,14 @@ export class SnookerEngine implements EngineInstance {
   }
 
   get currentClockDeadline(): number | null {
-    if (this.state.finished) return null;
+    if (this.state.finished || this.state.paused) return null;
     if (this.state.frameStatus === "FRAME_END" || this.state.frameStatus === "MATCH_END") return null;
     const started = this.state.turnStartedAtMs || this.state.lastActionAtMs || Date.now();
     return started + this.turnDurationMs;
   }
 
   get currentMatchDeadline(): number | null {
-    if (this.state.finished) return null;
+    if (this.state.finished || this.state.paused) return null;
     return this.matchStartedAtMs + this.matchDurationMs;
   }
 
@@ -158,7 +164,32 @@ export class SnookerEngine implements EngineInstance {
   }
 
   public serialize(): JsonObject {
-    return this.state as unknown as JsonObject;
+    const pausedRemaining = this.state.pausedAtMs == null ? null : Math.max(0,
+      this.state.turnStartedAtMs + this.turnDurationMs - this.state.pausedAtMs);
+    return { ...structuredClone(this.state), serverTimestamp: Date.now(),
+      turnDeadlineMs: pausedRemaining == null ? this.currentClockDeadline : Date.now() + pausedRemaining,
+      turnDurationMs: this.turnDurationMs };
+  }
+
+  public pauseClocks(): void {
+    if (this.state.paused || this.state.finished) return;
+    this.state.paused = true; this.state.pausedAtMs = Date.now();
+  }
+
+  public resumeClocks(): void {
+    if (!this.state.paused || this.state.pausedAtMs == null) return;
+    const elapsed = Math.max(0, Date.now() - this.state.pausedAtMs);
+    this.matchStartedAtMs += elapsed;
+    this.state.turnStartedAtMs += elapsed;
+    if (this.state.shotPlaybackEndsAtMs) this.state.shotPlaybackEndsAtMs += elapsed;
+    this.state.paused = false; this.state.pausedAtMs = null;
+  }
+
+  public restoreState(state: SnookerState): void { this.state = structuredClone(state); }
+
+  public startMatchClock(): void {
+    this.matchStartedAtMs = Date.now();
+    this.state.turnStartedAtMs = this.matchStartedAtMs;
   }
 
   public setRandomSource(rng: RandomSource): void {
@@ -168,9 +199,16 @@ export class SnookerEngine implements EngineInstance {
   public apply(action: GameAction, seat: number): EngineActionResult<JsonObject> {
     const a = action as SnookerAction;
     const events: EngineEvent[] = [];
+    const reject = (error: string): EngineActionResult<JsonObject> => ({
+      ok: false, error, state: this.state, events: [], finished: this.finished, winnerSeats: this.winnerSeats,
+    });
+    if (!this.state.players.some(p => p.seat === seat)) return reject("Invalid seat");
+    if (!a || typeof a.type !== "string") return reject("Malformed action");
+    if (this.state.paused && a.type !== "resign") return reject("Match is paused while a player reconnects");
 
     // ── 1. Duplicate Shot Protection (Idempotency) ─────────────────────────
-    if (a.type === "strike" && a.shotId && a.shotId === this.state.lastProcessedShotId) {
+    if (a.type === "strike" && a.shotId && a.shotId === this.state.lastProcessedShotId
+      && this.state.lastShot?.shooterSeat === seat) {
       return {
         ok: true,
         state: this.state as unknown as JsonObject,
@@ -181,7 +219,7 @@ export class SnookerEngine implements EngineInstance {
     }
 
     // ── 2. Match Completion Check ──────────────────────────────────────────
-    if (this.state.finished && a.type !== "aim") {
+    if (this.state.finished) {
       return {
         ok: false,
         error: "Match has already finished",
@@ -206,6 +244,11 @@ export class SnookerEngine implements EngineInstance {
         winnerSeats: this.state.winnerSeats,
       };
     }
+
+    if (["strike", "place-cue-ball", "nominate-color"].includes(a.type)
+      && ["FRAME_END", "MATCH_END"].includes(this.state.frameStatus)) return reject("Frame has already concluded");
+    if (["strike", "place-cue-ball", "nominate-color", "next-frame", "timeout"].includes(a.type)
+      && (this.state.shotPlaybackEndsAtMs ?? 0) > Date.now()) return reject("Wait for the balls to settle");
 
     switch (a.type) {
       case "strike": {
@@ -233,10 +276,11 @@ export class SnookerEngine implements EngineInstance {
           };
         }
 
-        const angle = Number(a.angle) || 0;
-        const power = Math.max(0.05, Math.min(1.0, Number(a.power) || 0.5));
-        const spinX = Number(a.spinX) || 0;
-        const spinY = Number(a.spinY) || 0;
+        if (![a.angle, a.power, a.spinX ?? 0, a.spinY ?? 0].every(Number.isFinite)) return reject("Invalid shot parameters");
+        const angle = a.angle;
+        const power = Math.max(0.05, Math.min(1.0, a.power));
+        const spinX = Math.max(-1, Math.min(1, a.spinX ?? 0));
+        const spinY = Math.max(-1, Math.min(1, a.spinY ?? 0));
         const shotId = typeof a.shotId === "string" ? a.shotId : `shot-${Date.now()}`;
 
         const simResult = simulateSnookerShot(this.state.balls, {
@@ -254,6 +298,11 @@ export class SnookerEngine implements EngineInstance {
         );
 
         this.state = nextState;
+        nextState.lastShot!.angle = angle;
+        nextState.lastShot!.power = power;
+        nextState.lastActionAtMs = Date.now();
+        nextState.shotPlaybackEndsAtMs = nextState.lastActionAtMs + snookerShotDuration(simResult.keyframes);
+        nextState.turnStartedAtMs = nextState.shotPlaybackEndsAtMs;
 
         events.push({
           type: "SNOOKER_SHOT_RESOLVED",
@@ -279,6 +328,8 @@ export class SnookerEngine implements EngineInstance {
       }
 
       case "place-cue-ball": {
+        if (!this.state.cueBallInHand) return reject("Cue ball is not in hand");
+        if (![a.x, a.y].every(Number.isFinite)) return reject("Invalid cue ball position");
         if (this.state.currentPlayer !== seat) {
           return {
             ok: false,
@@ -341,6 +392,7 @@ export class SnookerEngine implements EngineInstance {
         this.state.inBaulkOnly = false;
         this.state.stateVersion += 1;
         this.state.lastActionAtMs = Date.now();
+        this.state.keyframes = [];
 
         events.push({
           type: "SNOOKER_BALL_PLACED",
@@ -359,6 +411,8 @@ export class SnookerEngine implements EngineInstance {
       }
 
       case "nominate-color": {
+        if (!["yellow", "green", "brown", "blue", "pink", "black"].includes(a.color)
+          || !this.state.balls.some(b => b.type === a.color && !b.pocketed)) return reject("Invalid color nomination");
         if (this.state.currentPlayer !== seat) {
           return {
             ok: false,
@@ -383,6 +437,7 @@ export class SnookerEngine implements EngineInstance {
         this.state.nominatedBall = a.color as SnookerBallType;
         this.state.stateVersion += 1;
         this.state.lastActionAtMs = Date.now();
+        this.state.keyframes = [];
 
         events.push({
           type: "SNOOKER_COLOR_NOMINATED",
@@ -401,6 +456,18 @@ export class SnookerEngine implements EngineInstance {
 
       case "next-frame": {
         return this.startNextFrame();
+      }
+
+      case "resign": {
+        this.state.finished = true;
+        this.state.matchStatus = "FINISHED";
+        this.state.frameStatus = "MATCH_END";
+        this.state.winnerSeats = [1 - seat];
+        this.state.winnerIds = [this.state.players[1 - seat].userId];
+        this.state.stateVersion++;
+        this.state.keyframes = [];
+        return { ok: true, state: this.state, events: [{ type: "SNOOKER_MATCH_RESIGNED", seat }],
+          finished: true, winnerSeats: this.state.winnerSeats };
       }
 
       case "concede": {
@@ -447,6 +514,7 @@ export class SnookerEngine implements EngineInstance {
 
         this.state.stateVersion += 1;
         this.state.lastActionAtMs = Date.now();
+        this.state.keyframes = [];
 
         events.push({
           type: "SNOOKER_FRAME_CONCEDED",
@@ -466,6 +534,7 @@ export class SnookerEngine implements EngineInstance {
       }
 
       case "timeout":
+        if (seat !== this.currentSeat || !this.currentClockDeadline || Date.now() < this.currentClockDeadline) return reject("Turn has not timed out");
         return this.handleTimeout("turn", seat);
 
       default:
@@ -481,6 +550,8 @@ export class SnookerEngine implements EngineInstance {
   }
 
   public handleTimeout(kind: "turn" | "match" = "turn", seat?: number): EngineActionResult<JsonObject> {
+    if (this.state.paused) return { ok: false, error: "Match is paused", state: this.state,
+      events: [], finished: this.finished, winnerSeats: this.winnerSeats };
     if (this.state.finished) {
       return {
         ok: false,
@@ -507,13 +578,14 @@ export class SnookerEngine implements EngineInstance {
         } else if (this.state.player2HighestBreak > this.state.player1HighestBreak) {
           winnerSeats = [1];
         } else {
-          winnerSeats = [0, 1];
+          winnerSeats = [];
         }
       }
 
       this.state.finished = true;
       this.state.matchStatus = "FINISHED";
-      this.state.frameStatus = "FRAME_END";
+      this.state.frameStatus = "MATCH_END";
+      this.state.keyframes = [];
       this.state.winnerSeats = winnerSeats;
       this.state.winnerIds = winnerSeats.map((s) => this.state.players[s]?.userId).filter(Boolean) as string[];
 
@@ -563,12 +635,21 @@ export class SnookerEngine implements EngineInstance {
     this.state.player2Break = 0;
     this.state.lastFoul = "Turn timeout (4 points awarded to opponent)";
     this.state.foulPoints = 4;
+    this.state.redsRemaining = this.state.balls.filter(b => b.type === "red" && !b.pocketed).length;
+    this.state.targetBall = this.state.redsRemaining > 0 ? "RED" : SnookerRulesEngine.getNextClearanceTarget(this.state.balls);
+    this.state.frameStatus = this.state.redsRemaining > 0 ? "RED_PHASE" : "COLOR_CLEARANCE";
+    this.state.nominatedBall = null;
+    this.state.freeBallAvailable = false;
+    this.state.freeBallTarget = null;
+    this.state.isColorAfterFinalRed = false;
     this.state.cueBallInHand = true;
     this.state.inBaulkOnly = true;
     this.state.turnNumber += 1;
     this.state.stateVersion += 1;
     this.state.lastActionAtMs = now;
     this.state.turnStartedAtMs = now;
+
+    this.state.keyframes = [];
 
     const events: EngineEvent[] = [
       {
@@ -596,6 +677,10 @@ export class SnookerEngine implements EngineInstance {
   }
 
   public startNextFrame(): EngineActionResult<JsonObject> {
+    if (this.state.frameStatus !== "FRAME_END") {
+      return { ok: false, error: "Current frame is not over", state: this.state,
+        events: [], finished: this.finished, winnerSeats: this.winnerSeats };
+    }
     if (this.state.finished) {
       return {
         ok: false,

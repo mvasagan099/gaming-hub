@@ -168,6 +168,7 @@ export type SnookerAction =
   | { type: "aim"; angle: number; power?: number; expectedStateVersion?: number }
   | { type: "next-frame"; expectedStateVersion?: number }
   | { type: "concede"; expectedStateVersion?: number }
+  | { type: "resign"; expectedStateVersion?: number }
   | { type: "timeout"; expectedStateVersion?: number };
 
 export interface SnookerState extends JsonObject {
@@ -220,5 +221,11 @@ export interface SnookerState extends JsonObject {
   shotNumber: number;
   lastActionAtMs: number;
   turnStartedAtMs: number;
-  keyframes?: any;
+  keyframes: SnookerTrajectoryKeyframe[];
+  shotPlaybackEndsAtMs: number;
+  serverTimestamp: number;
+  turnDeadlineMs: number | null;
+  turnDurationMs: number;
+  paused: boolean;
+  pausedAtMs: number | null;
 }

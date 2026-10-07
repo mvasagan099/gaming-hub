@@ -203,6 +203,13 @@ describe("WinnerCalculator", () => {
     expect(matchResult.players.find((p) => p.playerId === "p1")!.outcome).toBe("won");
     expect(matchResult.players.find((p) => p.playerId === "p2")!.outcome).toBe("lost");
   });
+  it('preserves Snake vs Worms scores in the final result sent for settlement', () => {
+    const room = createMatchRoom('snake-vs-worms', [makePlayer('p1', 0), makePlayer('p2', 1)]);
+    const outcome = framework.winnerCalculator.calculate(room, result(true, [1], {
+      players: [{ seat: 1, score: 150 }, { seat: 0, score: 50 }],
+    }));
+    expect(outcome.players.map(p => [p.seat, p.score])).toEqual([[0, 50], [1, 150]]);
+  });
 
   it("resolves a draw", () => {
     const p1 = makePlayer("p1", 0);

@@ -23,6 +23,11 @@ export const SNOOKER_BALL_RESTITUTION = 0.96;
 export const SNOOKER_CUSHION_RESTITUTION = 0.82;
 export const SNOOKER_SUB_STEPS = 6;
 export const SNOOKER_MAX_SIMULATION_STEPS = 900;
+export const SNOOKER_KEYFRAME_MS = 1000 / 60;
+
+export function snookerShotDuration(keyframes: SnookerTrajectoryKeyframe[]): number {
+  return Math.max(0, (keyframes.at(-1)?.frame ?? 0) * SNOOKER_KEYFRAME_MS);
+}
 
 export interface SnookerSimulationResult {
   balls: SnookerBall[];
@@ -140,6 +145,7 @@ export function simulateSnookerShot(
   let firstBallHit: SnookerBall | null = null;
   let totalCollisions = 0;
   let frameCounter = 0;
+  const frictionFactor = Math.pow(SNOOKER_TABLE_FRICTION, 1 / SNOOKER_SUB_STEPS);
 
   const recordKeyframe = () => {
     const pieces: SnookerPieceKeyframe[] = balls.map((b) => ({
@@ -171,11 +177,10 @@ export function simulateSnookerShot(
           b.spinY *= 0.998;
         }
 
-        const frictionFactor = Math.pow(SNOOKER_TABLE_FRICTION, 1 / SNOOKER_SUB_STEPS);
         b.vx *= frictionFactor;
         b.vy *= frictionFactor;
 
-        if (Math.hypot(b.vx, b.vy) < SNOOKER_MIN_VELOCITY) {
+        if (b.vx * b.vx + b.vy * b.vy < SNOOKER_MIN_VELOCITY * SNOOKER_MIN_VELOCITY) {
           b.vx = 0;
           b.vy = 0;
         }
@@ -189,10 +194,12 @@ export function simulateSnookerShot(
           const pocket = SNOOKER_POCKETS[pIdx];
           const dx = pocket.x - b.x;
           const dy = pocket.y - b.y;
-          const dist = Math.hypot(dx, dy);
+          const distanceSquared = dx * dx + dy * dy;
+          if (distanceSquared >= (pocket.radius + 10) ** 2) continue;
+          const dist = Math.sqrt(distanceSquared);
 
           // Gravitational suction toward pocket center
-          if (dist < pocket.radius + 10) {
+          if (dist > 0 && dist < pocket.radius + 10) {
             const pull = 1.2 / SNOOKER_SUB_STEPS;
             b.vx += (dx / dist) * pull;
             b.vy += (dy / dist) * pull;
@@ -225,10 +232,11 @@ export function simulateSnookerShot(
 
           const dx = b2.x - b1.x;
           const dy = b2.y - b1.y;
-          const dist = Math.hypot(dx, dy);
           const minDist = SNOOKER_BALL_RADIUS * 2;
+          const distanceSquared = dx * dx + dy * dy;
 
-          if (dist < minDist && dist > 0.0001) {
+          if (distanceSquared < minDist * minDist && distanceSquared > 0.00000001) {
+            const dist = Math.sqrt(distanceSquared);
             totalCollisions++;
 
             // Track first ball contacted by the cue ball
@@ -270,7 +278,7 @@ export function simulateSnookerShot(
         // Skip cushion check if ball is near any pocket throat
         let nearPocket = false;
         for (const pocket of SNOOKER_POCKETS) {
-          if (Math.hypot(b.x - pocket.x, b.y - pocket.y) < pocket.radius + 14) {
+          if ((b.x - pocket.x) ** 2 + (b.y - pocket.y) ** 2 < (pocket.radius + 14) ** 2) {
             nearPocket = true;
             break;
           }
@@ -333,6 +341,9 @@ export function simulateSnookerShot(
     }
   }
 
+  // The published settled board must agree with the last animation sample.
+  for (const ball of balls) { ball.vx = 0; ball.vy = 0; }
+  recordKeyframe();
   const cueBallPocketed = balls.some((b) => b.type === "cue" && b.pocketed);
 
   return {

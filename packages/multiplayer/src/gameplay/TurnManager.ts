@@ -67,6 +67,7 @@ export class TurnManager {
    */
   canAct(room: RoomRuntime, player: PlayerRuntime, action: GameAction): boolean {
     if (BASE_ACTIONS.has(action.type)) return true;
+    if (room.config.gameId === "snooker" && ["concede", "next-frame"].includes(action.type)) return true;
     if (!this.isTurnBased(room)) return true;
     const currentSeat = this.getCurrentSeat(room);
     if (currentSeat === null) return false;

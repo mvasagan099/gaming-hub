@@ -21,7 +21,7 @@ import type {
   ValidationResult,
   SuspiciousEvent,
 } from "../types";
-import type { EngineActionResult } from "@gaming-hub/game-engine";
+import type { EngineActionResult, EngineInstance } from "@gaming-hub/game-engine";
 import type { JsonObject } from "@gaming-hub/shared";
 
 export interface AntiCheatConfig {
@@ -144,7 +144,8 @@ export class AntiCheatManager {
     const MATCH_HARD_LIMIT_MS = 10 * 60 * 1000; // 10 minutes
     if (room.match && room.match.startedAt) {
       const elapsed = now - room.match.startedAt;
-      if (elapsed > MATCH_HARD_LIMIT_MS) {
+      const deadline = ["snooker", "snake-vs-worms"].includes(room.config.gameId) ? (room.match.engine as EngineInstance).currentMatchDeadline : room.match.startedAt + MATCH_HARD_LIMIT_MS;
+      if (!(["snooker", "snake-vs-worms"].includes(room.config.gameId) && action.type === "resign") && deadline && now > deadline) {
         this.logSuspiciousEvent({
           playerId: player.id,
           roomId: room.id,
@@ -246,7 +247,8 @@ export class AntiCheatManager {
     const MATCH_HARD_LIMIT_MS = 10 * 60 * 1000; // 10 minutes
     if (room.match && room.match.startedAt) {
       const elapsed = now - room.match.startedAt;
-      if (elapsed > MATCH_HARD_LIMIT_MS) {
+      const deadline = ["snooker", "snake-vs-worms"].includes(room.config.gameId) ? (room.match.engine as EngineInstance).currentMatchDeadline : room.match.startedAt + MATCH_HARD_LIMIT_MS;
+      if (!(["snooker", "snake-vs-worms"].includes(room.config.gameId) && action.type === "resign") && deadline && now > deadline) {
         this.logSuspiciousEvent({
           playerId: player.id,
           roomId: room.id,

@@ -66,11 +66,14 @@ export const GAME_PLAY_CONFIGS: Record<GameId, GamePlayConfig> = {
     pauseOnDisconnect: false,
   }),
   "snake-vs-worms": baseConfig("snake-vs-worms", {
+    forfeitOnAfk: false,
     actionCooldownMs: 0,
     defaultMatchTimerMs: 180_000,
     pauseOnDisconnect: false,
   }),
   snooker: baseConfig("snooker", {
+    // Watching an opponent's break is not inactivity; the turn clock handles missed shots.
+    forfeitOnAfk: false,
     defaultTurnTimerMs: 20_000,
     actionCooldownMs: 0,
   }),

@@ -233,4 +233,59 @@ describe("SnakeVsWormsEngine - Shared World Arena Architecture", () => {
     expect(res.winnerSeats).toEqual([0]);
     expect(res.state.endReason).toBe("TIME_EXPIRED");
   });
+  it('starts a fixed three-minute match clock and ends a tied match as a draw', () => {
+    let now = 1000;
+    const engine = new SnakeVsWormsEngine([p0, p1], undefined, { now: () => now });
+    engine.startMatchClock(); expect(engine.currentMatchDeadline).toBe(181000);
+    now += 10000; expect(engine.serialize().matchRemainingMs).toBe(170000);
+    expect(engine.currentMatchDeadline).toBe(181000);
+    now = 181000; expect(engine.tick()).toMatchObject({ finished: true, winnerSeats: [] });
+    expect(engine.state).toMatchObject({ gameStatus: 'finished', endReason: 'TIME_EXPIRED' });
+  });
+  it('freezes the match clock while paused and allows resignation while paused', () => {
+    let now = 1000;
+    const engine = new SnakeVsWormsEngine([p0, p1], undefined, { now: () => now });
+    engine.startMatchClock(); engine.apply({ type: 'boost-start' }, 1);
+    now += 10000; engine.apply({ type: 'pause' }, 0);
+    const snapshot = engine.getStateSnapshot();
+    now += 30000;
+    expect(engine.tick().state).toEqual(snapshot);
+    expect(engine.serialize().matchRemainingMs).toBe(170000);
+    expect(engine.apply({ type: 'resume' }, 1).ok).toBe(true);
+    expect(engine.currentMatchDeadline).toBe(211000);
+    expect(engine.state.players[1].isBoosting).toBe(false);
+    engine.apply({ type: 'pause' }, 0);
+    expect(engine.apply({ type: 'resign' }, 1)).toMatchObject({ finished: true, winnerSeats: [0] });
+    expect(engine.state.gameStatus).toBe('finished');
+  });
+  it('does not choose a winner by seat order when both heads hit the other body', () => {
+    const engine = new SnakeVsWormsEngine([p0, p1]);
+    engine.state.food = [];
+    const [a, b] = engine.state.players;
+    a.body = [{ x: 100, y: 100 }, { x: 190, y: 200 }, { x: 180, y: 200 }];
+    b.body = [{ x: 200, y: 200 }, { x: 110, y: 100 }, { x: 120, y: 100 }];
+    b.direction = b.targetDirection = 'left';
+    expect(engine.tick()).toMatchObject({ finished: true, winnerSeats: [] });
+    expect(engine.state.endReason).toBe('BOTH_ELIMINATED');
+    expect(engine.state.players.map(p => p.kills)).toEqual([1, 1]);
+  });
+  it('reports equal head-to-head elimination as a draw', () => {
+    const engine = new SnakeVsWormsEngine([p0, p1]);
+    engine.state.players[0].body[0] = { x: 990, y: 1000 };
+    engine.state.players[1].body[0] = { x: 1010, y: 1000 };
+    engine.state.players[1].direction = engine.state.players[1].targetDirection = 'left';
+    expect(engine.tick()).toMatchObject({ finished: true, winnerSeats: [] });
+    expect(engine.state.endReason).toBe('BOTH_ELIMINATED');
+  });
+  it('preserves an earlier snapshot and rejects invalid controls and empty boost', () => {
+    const engine = new SnakeVsWormsEngine([p0, p1]);
+    const before = engine.serialize();
+    expect(engine.apply({ type: 'direction', direction: 'up' }, 1).ok).toBe(true);
+    expect(engine.state.players[1].targetDirection).toBe('up');
+    expect((before.players as any[])[1].targetDirection).toBe('right');
+    expect(engine.apply({ type: 'direction', direction: 'diagonal' } as any, 1).ok).toBe(false);
+    expect(engine.apply({ type: 'boost-start' }, 5).ok).toBe(false);
+    engine.state.players[1].boostEnergy = 0;
+    expect(engine.apply({ type: 'boost-start' }, 1).ok).toBe(false);
+  });
 });
