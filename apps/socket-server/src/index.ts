@@ -33,6 +33,7 @@ import { registerCarromPreviewHandler } from "./carromHandlers";
 import { GameEventBus } from "./events/GameEventBus";
 import { createAndFundRoomMatch, settleMatch, cancelMatch, reportTournamentMatchResult } from "./apiClient";
 import { checkInternalApiAuth } from "./internalApiCheck";
+import { runStartupStep } from "./startupStep";
 
 const logger = pino({
   level: env.LOG_LEVEL,
@@ -531,9 +532,9 @@ async function main(): Promise<void> {
   if (env.distributedMatches) {
     coordinationRedis = new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1, commandTimeout: 2000, enableOfflineQueue: false });
     coordinationRedis.on("error", () => logger.error({ msg: "Coordination Redis unavailable" }));
-    await coordinationRedis.connect();
+    await runStartupStep("coordination_redis_connect", () => coordinationRedis!.connect(), logger);
     distributed = new DistributedRoomCoordinator(framework, coordinationRedis, durableStore);
-    await distributed.start(createCommandDispatcher(framework, distributed, assertFeatureEnabled));
+    await runStartupStep("distributed_room_start", () => distributed!.start(createCommandDispatcher(framework, distributed!, assertFeatureEnabled)), logger);
     sharedMatchmaking = new SharedMatchmaking(framework, distributed);
     matchmakingRecovery = setInterval(() => { void sharedMatchmaking!.recover().catch(() => logger.error("MATCHMAKING_RECOVERY_UNAVAILABLE")); }, 2000);
     resultWorker = new GameResultOutboxWorker(async event => {
@@ -1039,6 +1040,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  logger.error({ error }, "Fatal error starting socket server");
+  logger.error({ err: error }, "Fatal error starting socket server");
   process.exit(1);
 });

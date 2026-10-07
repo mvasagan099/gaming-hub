@@ -13,3 +13,29 @@ Upgrade policy: drain legacy processes and allow their existing matches to finis
 Use `TEST_DATABASE_URL` (database name must clearly indicate test), `TEST_REDIS_URL` and the recovery integration suite for local failure testing. Tests start real socket processes on ports 14007/14008 and the real HTTP API on 14006. Never point the test suite at production: its setup resets the isolated test database. Shut down test-owned processes only.
 
 Do not deploy automatically. Device certification remains separate.
+
+## Render startup failure after the recovery release
+
+The supplied 2026-10-07 17:34 UTC logs show INTERNAL_API_AUTH_OK (200), Redis adapter attachment and framework initialization, followed by a fatal error before port binding. The operator confirmed the new production migrations have not been applied. The socket startup requires LiveRoomCheckpoint, GameResultOutbox and match_owner_fencing_seq. API health/authentication does not prove this schema is installed. Missing schema is a required prerequisite to resolve; the original error object was not serialized, so Redis/database connectivity should also be checked if startup still fails after migration.
+
+Startup failures now log the original Error under Pino's `err` field, including its message/stack, plus a stage identifying Redis connection or distributed room startup. Missing-schema errors name the required objects and migration prerequisite. Startup remains fail-closed; it does not create schema, modify wallets or fall back to process-local paid play. Focused diagnostics/authentication regression: 10 passing tests across two files. Socket typecheck and production bundle: PASS, exit 0. The earlier complete 2,184-test result remains historical; the entire suite was not repeated for this diagnostic-only change.
+
+A Mac terminal can run the release migration tools against Render's External Database URL; the premium service shell is not needed. Use the intended production database connection privately, never paste it into chat. In zsh:
+
+```sh
+cd "/Users/lakoffice/Documents/gaming hub"
+read -r -s "DATABASE_URL?Paste the Render External Database URL: "
+echo
+export DATABASE_URL
+npm run db:preflight -- /tmp/gaming-hub-production-preflight.json
+```
+
+Inspect the report. Proceed only after CLEAN or approved reconciliation and after existing games are drained. The migration command applies all pending committed migrations, including the unique seat constraint; do not bypass duplicate-seat findings or use db push to conceal migration history.
+
+```sh
+npx prisma migrate status --schema packages/db/prisma/schema.prisma
+npx prisma migrate deploy --schema packages/db/prisma/schema.prisma
+unset DATABASE_URL
+```
+
+Restart/redeploy the API and socket services against the same migrated database. Confirm INTERNAL_API_AUTH_OK and Socket server listening on port 4001; if failure remains, inspect the new startupStage and err.message. This follow-up has not accessed or migrated production, refunded historical entries, or verified a successful running deployment.

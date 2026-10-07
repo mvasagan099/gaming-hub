@@ -10,7 +10,7 @@ export class PostgresMatchStore {
     const rows = await this.db.$queryRaw<Array<{ ready: boolean }>>`SELECT
       to_regclass('public."LiveRoomCheckpoint"') IS NOT NULL AND to_regclass('public."GameResultOutbox"') IS NOT NULL
       AND to_regclass('public.match_owner_fencing_seq') IS NOT NULL AS ready`;
-    if (!rows[0]?.ready) throw new Error('DURABLE_MATCH_SCHEMA_REQUIRED');
+    if (!rows[0]?.ready) throw new Error('DURABLE_MATCH_SCHEMA_REQUIRED: LiveRoomCheckpoint, GameResultOutbox and match_owner_fencing_seq must exist in the socket DATABASE_URL database. Complete the read-only migration preflight and apply the approved recovery migrations before restarting.');
   }
   async nextFencingToken(): Promise<string> {
     const rows = await this.db.$queryRaw<Array<{ token: bigint }>>`SELECT nextval('match_owner_fencing_seq') AS token`;
