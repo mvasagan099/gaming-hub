@@ -101,6 +101,26 @@ describe('Table Tennis bat contact alignment', () => {
     expect(translate).toHaveBeenCalledWith(pose.x, pose.y);
     expect(rotate).toHaveBeenCalledWith(Math.PI);
   });
+  it.each([false, true])('keeps the opponent handle visible and attached in portrait=%s', portrait => {
+    const renderer = TableTennis3DRenderer as unknown as { isPortraitMode: boolean;
+      drawFarPaddle: (ctx: CanvasRenderingContext2D, x: number, y: number, vy: number) => void };
+    renderer.isPortraitMode = portrait;
+    try {
+      const roundRect = vi.fn(); const gradient = { addColorStop: vi.fn() };
+      const ctx = new Proxy({ roundRect } as Record<string, unknown>, {
+        get: (target, key: string) => target[key] ?? (key.startsWith('create') ? () => gradient : vi.fn()),
+      }) as unknown as CanvasRenderingContext2D;
+      renderer.drawFarPaddle(ctx, 600, 200, 0);
+      const [, armY, , armHeight] = roundRect.mock.calls[0];
+      const [, handleY, , handleHeight] = roundRect.mock.calls[1];
+      const bladeEdge = TableTennis3DRenderer.paddleRadius(574, 200) * 1.15;
+      expect(handleY).toBeLessThan(bladeEdge);
+      expect(handleY + handleHeight - bladeEdge).toBeGreaterThan(10);
+      expect(armY).toBeGreaterThan(bladeEdge);
+      expect(armY).toBeLessThan(handleY + handleHeight);
+      expect(armY + armHeight).toBeGreaterThan(handleY + handleHeight);
+    } finally { renderer.isPortraitMode = false; }
+  });
   it.each([38, 562])('brings the ball down to bat height at contact x=%s', x => {
     const z = TableTennis3DRenderer.calculateBallZ({ x, y: 200, vx: 5, vy: 0, inPlay: true });
     if (x === 38) expect(z).toBe(32);

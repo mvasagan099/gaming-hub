@@ -958,6 +958,11 @@ export class TableTennis3DRenderer {
     const { paddles } = TABLE_TENNIS_VISUAL_CONFIG;
     const { x, y, scale } = this.farPaddlePose(ly);
     const s = scale * 0.95;
+    const bladeR = this.paddleRadius(574, ly);
+    const handleW = 9 * s;
+    const handleH = 26 * s;
+    // Anchor the handle at the blade rim so its visible length scales with the bat.
+    const handleY = bladeR * 1.15 - 4 * s;
 
     ctx.save();
     ctx.translate(x, y);
@@ -974,24 +979,20 @@ export class TableTennis3DRenderer {
 
     // ── 2. Opponent Hand Silhouette ──
     const armW = 12 * s;
-    const armH = 35 * s;
-    const armY = 16 * s;
+    const armH = 24 * s;
+    const armY = handleY + handleH - 8 * s;
     ctx.fillStyle = paddles.skinMid;
     ctx.beginPath();
     ctx.roundRect(-armW / 2, armY, armW, armH, 4 * s);
     ctx.fill();
 
     // ── 3. Handle ──
-    const handleW = 9 * s;
-    const handleH = 26 * s;
-    const handleY = 10 * s;
     ctx.fillStyle = paddles.woodHandleBase;
     ctx.beginPath();
     ctx.roundRect(-handleW / 2, handleY, handleW, handleH, 3 * s);
     ctx.fill();
 
     // ── 4. Tournament Rubber Face (Blue for P2, Red for P1) ──
-    const bladeR = this.paddleRadius(574, ly);
     ctx.fillStyle = paddles.woodBlade;
     ctx.beginPath();
     ctx.ellipse(0, 0, bladeR + 1.2, bladeR * 1.15 + 1.2, 0, 0, Math.PI * 2);
