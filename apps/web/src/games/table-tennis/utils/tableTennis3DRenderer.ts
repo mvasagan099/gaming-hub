@@ -969,7 +969,7 @@ export class TableTennis3DRenderer {
 
     // Opponent paddle dynamic tilt
     const tiltAngle = Math.max(-0.08, Math.min(0.08, (vy / 20) * 0.12));
-    ctx.rotate(Math.PI + tiltAngle);
+    ctx.rotate(tiltAngle);
 
     // ── 1. Contact Drop Shadow ──
     ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';

@@ -89,7 +89,7 @@ describe('Table Tennis bat contact alignment', () => {
     expect(TableTennis3DRenderer.paddleRadius(574, 200)).toBeGreaterThan(24);
     expect(TableTennis3DRenderer.paddleRadius(574, 200)).toBeLessThan(25);
   });
-  it('draws the far bat outside the baseline with its handle pointing away from the table', () => {
+  it('draws the far bat upright with its handle below the blade', () => {
     const rotate = vi.fn(); const translate = vi.fn();
     const gradient = { addColorStop: vi.fn() };
     const ctx = new Proxy({ rotate, translate } as Record<string, unknown>, {
@@ -99,7 +99,7 @@ describe('Table Tennis bat contact alignment', () => {
       .drawFarPaddle(ctx, 600, 200, 0);
     const pose = TableTennis3DRenderer.farPaddlePose(200);
     expect(translate).toHaveBeenCalledWith(pose.x, pose.y);
-    expect(rotate).toHaveBeenCalledWith(Math.PI);
+    expect(rotate).toHaveBeenCalledWith(0);
   });
   it.each([false, true])('keeps the opponent handle visible and attached in portrait=%s', portrait => {
     const renderer = TableTennis3DRenderer as unknown as { isPortraitMode: boolean;
