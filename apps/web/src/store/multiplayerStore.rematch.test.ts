@@ -19,6 +19,15 @@ beforeEach(() => {
 afterEach(() => { useMultiplayerStore.getState().disconnect(); });
 
 describe('rematch consent and state synchronization', () => {
+  it('publishes incoming physics state and the rendering marker in one notification', () => {
+    const received: any[] = [];
+    const unsubscribe = useMultiplayerStore.subscribe(state => received.push({ gameState: state.gameState, renderKey: state.renderKey }));
+    socket.listeners.get('game:event')!({ matchId: 'old-match', eventType: 'GAME_STATE_UPDATED',
+      payload: { state: { ball: { x: 123 } }, events: [] }, stateVersion: 100, eventId: 'atomic-physics' });
+    unsubscribe();
+    expect(received).toHaveLength(1);
+    expect(received[0].gameState).toEqual({ ball: { x: 123 } });
+  });
   it('binds an action to the current authoritative match', async () => {
     socket.emitWithAck.mockResolvedValue({ ok: true, data: { ok: true } });
     const action = { type: 'move', from: 'e2', to: 'e4' };

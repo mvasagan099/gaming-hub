@@ -314,16 +314,16 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         const current = get();
         if (current.room?.id !== payload.roomId || (current.room.matchId && current.room.matchId !== payload.matchId)) return;
         const newMatch = current.matchId !== payload.matchId;
-        const logUpdate = current.room.gameId !== "table-tennis" || payload.events.length > 0;
+        const logUpdate = import.meta.env.DEV && payload.events.length > 0;
         if (logUpdate) console.log("[MultiplayerStore] game:state received", payload.matchId, "with", payload.events.length, "events");
         const gameState = payload.state as any;
-        if (gameState?.fen) {
+        if (logUpdate && gameState?.fen) {
           console.log("[MultiplayerStore] Chess FEN:", gameState.fen.substring(0, 20) + "...", "turn:", gameState.turn);
         }
-        if (gameState?.history) {
+        if (logUpdate && gameState?.history) {
           console.log("[MultiplayerStore] Chess move count:", gameState.history.length, "last move:", gameState.lastMove);
         }
-        if (gameState?.coins) {
+        if (logUpdate && gameState?.coins) {
           console.log("[MultiplayerStore] Carrom state:", {
             coins: gameState.coins.length,
             activeCoins: gameState.coins.filter((c: any) => !c.pocketed).length,
@@ -375,7 +375,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
         // 1. If incomingStateVersion <= currentStateVersion -> IGNORE
         if (isStaleStateVersion(incomingVersion, currentVersion)) {
-          console.log("[STATE] IGNORED_STALE", {
+          if (import.meta.env.DEV) console.log("[STATE] IGNORED_STALE", {
             incomingVersion,
             currentVersion,
             matchId: authoritativeState.matchId,
@@ -385,7 +385,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
         // 2. If incomingStateVersion === currentStateVersion + 1 -> APPLY
         if (isSequentialStateVersion(incomingVersion, currentVersion) || currentVersion === 0) {
-          console.log("[STATE] APPLIED", {
+          if (import.meta.env.DEV) console.log("[STATE] APPLIED", {
             stateVersion: incomingVersion,
             actionSequence: authoritativeState.actionSequence,
             matchId: authoritativeState.matchId,
@@ -529,7 +529,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
       socket.on("game:event", (envelope: GameEventEnvelope<any>) => {
         if (get().matchId && get().matchId !== envelope.matchId) return;
-        console.log("[MultiplayerStore] game:event received:", envelope.eventType, "stateVersion:", envelope.stateVersion, "id:", envelope.eventId);
+        if (import.meta.env.DEV) console.log("[MultiplayerStore] game:event received:", envelope.eventType, "stateVersion:", envelope.stateVersion, "id:", envelope.eventId);
 
         // Deduplication
         if (seenEventIds.has(envelope.eventId)) {
@@ -555,6 +555,15 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           void get().syncGameState();
         }
 
+        // Publish physics state and its render marker together so drivers never
+        // render the previous snapshot before receiving the new one.
+        if (envelope.eventType === "GAME_STATE_UPDATED" && envelope.payload?.state) {
+          set({ lastStateVersion: Math.max(currentVersion, envelope.stateVersion),
+            renderKey: (get().renderKey || 0) + 1, gameState: envelope.payload.state,
+            lastEvents: envelope.payload.events || [], matchId: envelope.matchId });
+          return;
+        }
+
         // Apply state version
         set({
           lastStateVersion: Math.max(currentVersion, envelope.stateVersion),
@@ -562,13 +571,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         });
 
         // Event-specific handling
-        if (envelope.eventType === "GAME_STATE_UPDATED" && envelope.payload?.state) {
-          set({
-            gameState: envelope.payload.state,
-            lastEvents: envelope.payload.events || [],
-            matchId: envelope.matchId,
-          });
-        } else if (envelope.eventType === "COUNTDOWN_UPDATED" && envelope.payload?.countdown !== undefined) {
+        if (envelope.eventType === "COUNTDOWN_UPDATED" && envelope.payload?.countdown !== undefined) {
           set({ countdown: envelope.payload.countdown });
         } else if (envelope.eventType === "PLAYER_DISCONNECTED" && envelope.payload) {
           set({

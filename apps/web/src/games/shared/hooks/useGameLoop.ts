@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { startAnimationLoop } from './animationLoop';
 
 /**
  * A custom hook to manage a game loop with requestAnimationFrame.
@@ -11,8 +12,6 @@ export function useGameLoop(
   callback: (dt: number) => void,
   isRunning: boolean = true
 ) {
-  const requestRef = useRef<number>(undefined);
-  const previousTimeRef = useRef<number>(undefined);
   const savedCallback = useRef(callback);
 
   // Remember the latest callback
@@ -21,32 +20,7 @@ export function useGameLoop(
   }, [callback]);
 
   useEffect(() => {
-    if (!isRunning) {
-      if (requestRef.current !== undefined) {
-        cancelAnimationFrame(requestRef.current);
-      }
-      return;
-    }
-
-    const animate = (time: number) => {
-      if (previousTimeRef.current !== undefined) {
-        const deltaTime = time - previousTimeRef.current;
-        // Cap dt to prevent massive jumps if tab is inactive
-        const dtInSeconds = Math.min(deltaTime / 1000, 0.1); 
-        savedCallback.current(dtInSeconds);
-      }
-      previousTimeRef.current = time;
-      requestRef.current = requestAnimationFrame(animate);
-    };
-
-    requestRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      if (requestRef.current !== undefined) {
-        cancelAnimationFrame(requestRef.current);
-      }
-      // Reset previous time so dt doesn't spike when re-started
-      previousTimeRef.current = undefined;
-    };
+    if (!isRunning) return;
+    return startAnimationLoop(dt => savedCallback.current(dt));
   }, [isRunning]);
 }

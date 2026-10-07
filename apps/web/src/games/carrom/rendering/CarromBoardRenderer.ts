@@ -1,12 +1,17 @@
 import { CARROM_VISUAL_CONFIG } from "../constants/CarromVisualConfig";
+import { StaticCanvasLayer } from '../../shared/rendering/StaticCanvasLayer';
 
 export class CarromBoardRenderer {
+  private static layer = new StaticCanvasLayer();
+  public static drawBoard(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    this.layer.draw(ctx, w, h, 'board', layer => this.paintBoard(layer, w, h), 48);
+  }
   /**
    * Draw the entire 3D Carrom Board including frame, brass corners,
    * maple playing surface, painted markings, corner arrows, and 3D deep pockets with nets.
    * All geometry is mathematically scaled to server 600x600 space.
    */
-  public static drawBoard(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  private static paintBoard(ctx: CanvasRenderingContext2D, w: number, h: number): void {
     const scale = w / 600;
     const { colors } = CARROM_VISUAL_CONFIG;
 

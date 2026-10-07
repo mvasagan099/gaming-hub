@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GameWrapper } from '../../components/GameWrapper';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
+import { isInViewport } from '../shared/rendering/viewport';
 import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPanel';
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { SnakeVsWormsMultiplayerDriver } from './SnakeVsWormsMultiplayerDriver';
@@ -433,6 +434,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
       // Draw 3D Food
       for (const food of mpState.food) {
+        if (!isInViewport(food.x, food.y, cam, CANVAS_WIDTH, CANVAS_HEIGHT, currentZoom)) continue;
         SnakeVsWorms3DRenderer.drawFood(ctx, food.x, food.y, food.type, animTime);
       }
 
@@ -669,6 +671,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
     // Draw 3D Food Orbs
     state.orbs.forEach((orb) => {
+      if (!isInViewport(orb.x, orb.y, state.camera, CANVAS_WIDTH, CANVAS_HEIGHT, currentZoom)) return;
       SnakeVsWorms3DRenderer.drawFood(ctx, orb.x, orb.y, orb.type, animTime);
     });
 

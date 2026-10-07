@@ -1,4 +1,5 @@
 import { SNAKE_WORMS_VISUAL_CONFIG } from '../constants/snakeVsWormsVisualConfig';
+import { StaticCanvasLayer } from '../../shared/rendering/StaticCanvasLayer';
 
 export interface Point2D {
   x: number;
@@ -6,6 +7,7 @@ export interface Point2D {
 }
 
 export class SnakeVsWorms3DRenderer {
+  private static floorLayer = new StaticCanvasLayer();
   /**
    * Renders the 3D Arena Floor with Grid and Beveled Neon Danger Perimeter.
    */
@@ -19,6 +21,23 @@ export class SnakeVsWorms3DRenderer {
     const w = cfg.mapWidth;
     const h = cfg.mapHeight;
 
+    this.floorLayer.draw(ctx, w, h, 'floor', layer => this.drawFloor(layer, w, h));
+
+    const borderPulse = 0.55 + Math.sin(animTime * 4) * 0.35;
+    ctx.strokeStyle = `rgba(239, 68, 68, ${borderPulse})`;
+    ctx.lineWidth = 10;
+    ctx.shadowColor = '#ef4444';
+    ctx.shadowBlur = 18;
+    ctx.strokeRect(0, 0, w, h);
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([12, 12]);
+    ctx.strokeRect(12, 12, w - 24, h - 24);
+    ctx.setLineDash([]);
+  }
+
+  private static drawFloor(ctx: CanvasRenderingContext2D, w: number, h: number): void {
     // 1. Dark Arena Matte Background
     ctx.fillStyle = '#070b14';
     ctx.fillRect(0, 0, w, h);
@@ -51,21 +70,6 @@ export class SnakeVsWorms3DRenderer {
       }
     }
 
-    // 4. Outer Beveled Danger Perimeter Wall with Pulsing Glow
-    const borderPulse = 0.55 + Math.sin(animTime * 4) * 0.35;
-    ctx.strokeStyle = `rgba(239, 68, 68, ${borderPulse})`;
-    ctx.lineWidth = 10;
-    ctx.shadowColor = '#ef4444';
-    ctx.shadowBlur = 18;
-    ctx.strokeRect(0, 0, w, h);
-    ctx.shadowBlur = 0;
-
-    // Inner warning hazard line
-    ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([12, 12]);
-    ctx.strokeRect(12, 12, w - 24, h - 24);
-    ctx.setLineDash([]);
   }
 
   /**

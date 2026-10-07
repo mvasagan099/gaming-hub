@@ -1,4 +1,5 @@
 import { SNOOKER_VISUAL_CONFIG } from "../constants/SnookerVisualConfig";
+import { StaticCanvasLayer } from '../../shared/rendering/StaticCanvasLayer';
 import {
   SNOOKER_TABLE_WIDTH,
   SNOOKER_TABLE_HEIGHT,
@@ -11,7 +12,11 @@ import {
 } from "@gaming-hub/game-engine";
 
 export class SnookerTableRenderer {
-  public static drawTable(
+  private static layer = new StaticCanvasLayer();
+  public static drawTable(ctx: CanvasRenderingContext2D, width: number, height: number, is3D = true): void {
+    this.layer.draw(ctx, width, height, String(is3D), layer => this.paintTable(layer, width, height, is3D), 64);
+  }
+  private static paintTable(
     ctx: CanvasRenderingContext2D,
     width: number,
     height: number,

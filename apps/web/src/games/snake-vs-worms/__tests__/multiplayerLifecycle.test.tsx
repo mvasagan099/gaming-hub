@@ -57,6 +57,8 @@ beforeEach(() => {
 afterEach(() => { fixture.slots.forEach(slot => slot?.cleanup?.()); vi.useRealTimers(); vi.unstubAllGlobals(); });
 describe('Snake vs Worms multiplayer UI', () => {
   it('renders the human snakes and six coloured rivals with full-length bodies', () => {
+    fixture.store.gameState.food = [{ id: 'near', x: 300, y: 600, type: 'normal' },
+      { id: 'far', x: 1950, y: 1950, type: 'golden' }];
     render(); const tree = render(); const node = find(tree, n => n.type === 'canvas');
     node.props.ref.current = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 900, height: 600 }),
       getContext: () => ({ fillRect() {}, save() {}, restore() {}, translate() {}, scale() {} }) };
@@ -66,6 +68,7 @@ describe('Snake vs Worms multiplayer UI', () => {
     expect(calls.every(call => call[1].length === 15)).toBe(true);
     expect(new Set(calls.slice(2).map(call => call[3])).size).toBeGreaterThanOrEqual(4);
     expect(calls.slice(2).every(call => call[6].startsWith('Worm Bot'))).toBe(true);
+    expect(SnakeVsWorms3DRenderer.drawFood).toHaveBeenCalledOnce();
   });
   it('uses authoritative score, length, kills and boost data, without restarting on room metadata', () => {
     render(); const state = structuredClone(fixture.store.gameState);
