@@ -457,7 +457,9 @@ describe("Tournament Engine", () => {
       for (const slot of round1Slots) {
         if (!slot.isBye) {
           expect(slot.matchId).not.toBeNull();
-          expect(slot.status).toBe("IN_PROGRESS");
+          expect(slot.status).toBe("READY");
+          const job = await prisma.tournamentProvisionJob.findUnique({ where: { matchId: slot.matchId! } });
+          expect(job?.status).toBe("PENDING_PROVISION");
         }
       }
     });
@@ -666,27 +668,35 @@ describe("Tournament Engine", () => {
 
     it("12. Notification sent once per match per player", async () => {
       const id = await prepTournament(4);
-      
-      // Check notifications for player A
       const bracket = await getTournamentBracket(id);
       const slot = bracket.rounds[0].slots[0];
-      const notificationsA = await prisma.appNotification.findMany({
-        where: { userId: slot.playerAId!, type: "TOURNAMENT" },
+      const dbSlot = await prisma.tournamentRound.findUniqueOrThrow({ where: { id: slot.id } });
+      const readyNotifications = () => prisma.appNotification.count({
+        where: { userId: slot.playerAId!, type: "TOURNAMENT", title: "Tournament Match Ready" },
       });
-      const matchReadyNotifications = notificationsA.filter(n => n.title === "Tournament Match Ready");
-      expect(matchReadyNotifications.length).toBeGreaterThanOrEqual(1);
+      expect(await readyNotifications()).toBe(0);
+      await TournamentMatchService.notifyMatchCreated(dbSlot, slot.matchId!);
+      expect(await readyNotifications()).toBe(0);
+      await prisma.tournamentProvisionJob.update({ where: { matchId: slot.matchId! }, data: { status: "READY" } });
+      await TournamentMatchService.notifyMatchCreated(dbSlot, slot.matchId!);
+      await TournamentMatchService.notifyMatchCreated(dbSlot, slot.matchId!);
+      expect(await readyNotifications()).toBe(1);
     });
 
     it("13. WebSocket event sent once", async () => {
-      // This test verifies the event is emitted (socketBridge captures in test mode)
       const { socketBridge } = await import("../../services/socketBridge");
       const initialCalls = socketBridge.calls.length;
-      
       const id = await prepTournament(4);
-      
-      // Check that tournament:match-created events were emitted
-      const matchCreatedEvents = socketBridge.calls.filter(c => c.event === "tournament:match-created");
-      expect(matchCreatedEvents.length).toBeGreaterThanOrEqual(2); // At least 2 matches in round 1
+      const bracket = await getTournamentBracket(id);
+      const slot = bracket.rounds[0].slots[0];
+      const dbSlot = await prisma.tournamentRound.findUniqueOrThrow({ where: { id: slot.id } });
+      const events = () => socketBridge.calls.slice(initialCalls).filter(c => c.event === "tournament:match-created");
+      expect(events()).toHaveLength(0);
+      await TournamentMatchService.emitMatchCreatedEvent(dbSlot, slot.matchId!);
+      expect(events()).toHaveLength(0);
+      await prisma.tournamentProvisionJob.update({ where: { matchId: slot.matchId! }, data: { status: "READY" } });
+      await TournamentMatchService.emitMatchCreatedEvent(dbSlot, slot.matchId!);
+      expect(events()).toHaveLength(2); // One notification per participant after the live room exists.
     });
 
     it("14. Concurrent ensureTournamentRoundMatch calls create one match", async () => {
@@ -1120,7 +1130,9 @@ describe("Tournament Engine", () => {
       const readyWithPlayers = finalSlots.filter((s) => s.playerAId && s.playerBId && s.status === "READY");
       for (const s of readyWithPlayers) {
         // After reconciliation, this should have a match
-        expect(s.matchId).toBeNull(); // Before reconciliation, it was null
+        expect(s.matchId).not.toBeNull();
+        const job = await prisma.tournamentProvisionJob.findUnique({ where: { matchId: s.matchId! } });
+        expect(job?.status).toBe("PENDING_PROVISION");
       }
     });
 
@@ -1171,7 +1183,7 @@ describe("Tournament Engine", () => {
       const oldDate = new Date(Date.now() - 10 * 60 * 1000); // 10 minutes ago
       await prisma.tournamentRound.update({
         where: { id: slot.id },
-        data: { scheduledAt: oldDate },
+        data: { scheduledAt: oldDate, status: "IN_PROGRESS" },
       });
 
       const { getTournamentHealth } = await import("../../services/tournamentScheduler");

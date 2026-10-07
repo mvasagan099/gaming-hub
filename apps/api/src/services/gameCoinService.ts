@@ -98,6 +98,13 @@ export class GameCoinService {
     if (params.stake < 0) {
       throw new AppError("VALIDATION_ERROR", "Stake cannot be negative", 400);
     }
+    const definition = getGameDefinition(params.gameId);
+    if (params.players.length < definition.minPlayers || params.players.length > definition.maxPlayers ||
+        new Set(params.players.map(player => player.userId)).size !== params.players.length ||
+        new Set(params.players.map(player => player.seat)).size !== params.players.length ||
+        params.players.some(player => !Number.isInteger(player.seat) || player.seat < 0 || player.seat >= definition.maxPlayers)) {
+      throw new AppError("VALIDATION_ERROR", "Invalid match participant count or identity", 400);
+    }
     if (params.room) {
       const room = params.room;
       const def = getGameDefinition(params.gameId);
@@ -144,12 +151,27 @@ export class GameCoinService {
       operation: "CREATE_AND_FUND_MATCH",
       referenceId: params.matchId,
       handler: async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'game-match:' + params.matchId}))`;
+        const terminalIntent = await tx.gameResultOutbox.findUnique({ where: { matchId: params.matchId } });
+        if ((terminalIntent?.result as { kind?: string } | undefined)?.kind === "CANCEL") {
+          throw new AppError("CONFLICT", "The authoritative room has cancelled this funding intent", 409);
+        }
+
         // Idempotency: return existing match if already created
         const existing = await tx.match.findUnique({
           where: { id: params.matchId },
           include: { players: true },
         });
         if (existing) {
+          if (existing.gameId !== params.gameId || existing.stake !== params.stake || existing.players.length !== params.players.length ||
+            existing.players.some(p => !params.players.some(expected => expected.userId === p.userId && expected.seat === p.seat))) {
+            throw new AppError("CONFLICT", "Funding identity conflicts with the existing match", 409);
+          }
+          if (existing.status === "CREATED" && existing.stake === 0) {
+            await tx.tournamentRound.updateMany({ where: { matchId: existing.id, status: "READY" }, data: { status: "IN_PROGRESS" } });
+            await tx.tournamentProvisionJob.updateMany({ where: { matchId: existing.id, status: "READY" }, data: { status: "IN_PROGRESS" } });
+            return tx.match.update({ where: { id: existing.id }, data: { status: "ACTIVE", startedAt: new Date() } });
+          }
           return existing;
         }
 
@@ -314,14 +336,25 @@ export class GameCoinService {
    * 10. Match Cancellation / Abort:
    * If a match never started or is cancelled, safely releases/refunds reserved coins.
    */
-  static async cancelMatch(matchId: string, reason = "match_cancelled") {
+  static async cancelMatch(matchId: string, reason = "match_cancelled"): Promise<{ ok: boolean; matchId: string; status: string }> {
     const match = await prisma.match.findUnique({
       where: { id: matchId },
       include: { players: true },
     });
 
     if (!match) {
-      throw new AppError("NOT_FOUND", "Match not found", 404);
+      // Serialize with in-flight funding. A persisted cancellation tombstone
+      // also prevents a delayed funding request from creating a paid orphan.
+      const unfunded = await prisma.$transaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'game-match:' + matchId}))`;
+        if (await tx.match.findUnique({ where: { id: matchId } })) return false;
+        const intent = await tx.gameResultOutbox.findUnique({ where: { matchId } });
+        if ((intent?.result as { kind?: string } | undefined)?.kind !== "CANCEL")
+          throw new AppError("NOT_FOUND", "Match not found", 404);
+        return true;
+      });
+      if (unfunded) return { ok: true, matchId, status: "NO_FUNDED_MATCH" };
+      return this.cancelMatch(matchId, reason);
     }
     if (match.status === "FINISHED" || match.status === "ABORTED") {
       return { ok: true, matchId, status: "ALREADY_FINISHED" };
@@ -334,6 +367,8 @@ export class GameCoinService {
       operation: "MATCH_CANCEL",
       referenceId: matchId,
       handler: async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'game-match:' + matchId}))`;
+
         const currentMatch = await tx.match.findUnique({
           where: { id: matchId },
           include: { players: true },
@@ -344,6 +379,11 @@ export class GameCoinService {
         }
         if (currentMatch.status === "FINISHED" || currentMatch.status === "ABORTED") {
           return { ok: true, matchId, status: "ALREADY_FINISHED" };
+        }
+
+        const committedOutcome = await tx.gameResultOutbox.findUnique({ where: { matchId } });
+        if ((committedOutcome?.result as { matchResult?: unknown } | undefined)?.matchResult) {
+          throw new AppError("CONFLICT", "A committed game result must settle; it cannot be replaced by a cancellation", 409);
         }
 
         if ((currentMatch.status === "ACTIVE" || currentMatch.status === "CREATED") && currentMatch.stake > 0) {

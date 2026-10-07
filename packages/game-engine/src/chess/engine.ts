@@ -82,6 +82,8 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
   private readonly timeControl: ChessTimeControlConfig | null;
   private readonly now: () => number;
 
+  override persistenceOptions(): JsonObject { return { timeControl: this.timeControl }; }
+
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: ChessEngineOptions) {
     super(players, rng);
     if (players.length !== 2 || !this.players.some((p) => p.seat === 0) || !this.players.some((p) => p.seat === 1)) {

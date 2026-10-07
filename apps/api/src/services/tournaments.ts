@@ -13,6 +13,7 @@ import { notifyUserSocket, broadcastAdminAnalytics } from "./socketBridge";
 import { TournamentNotificationService } from "./tournamentNotificationService";
 import { isFeatureEnabled } from "./featureFlags";
 import { TournamentAnalyticsCache } from "./tournamentAnalyticsCache";
+import { registrationAdmission } from "./registrationAdmission";
 
 export interface CreateTournamentInput {
   gameId: string;
@@ -154,6 +155,10 @@ export async function getTournamentDetail(id: string, userId: string | null) {
 }
 
 export async function registerForTournament(userId: string, tournamentId: string, expectedFee?: number) {
+  return registrationAdmission.run(() => registerForTournamentAdmitted(userId, tournamentId, expectedFee));
+}
+
+async function registerForTournamentAdmitted(userId: string, tournamentId: string, expectedFee?: number) {
   // 0. Pre-checks: user restrictions
   const user = await prisma.user.findUnique({
     where: { id: userId },

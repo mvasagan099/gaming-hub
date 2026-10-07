@@ -92,7 +92,7 @@ export const GAME_DEFINITIONS: readonly GameDefinition[] = [
     category: "Board",
     mode: "turn-based",
     minPlayers: 2,
-    maxPlayers: 4,
+    maxPlayers: 2,
     defaultStake: 100,
     serverAuthoritative: true,
     online: true,

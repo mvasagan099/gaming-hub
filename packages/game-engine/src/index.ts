@@ -1,4 +1,5 @@
 export * from "./types";
+export * from "./checkpoint";
 export { ServerGameEngine } from "./base/ServerGameEngine";
 export { MultiplayerGameEngine, type TurnTimerConfig, type MatchTimerConfig, type PlayerAction, type BaseState } from "./base/MultiplayerGameEngine";
 export * from "./rng";

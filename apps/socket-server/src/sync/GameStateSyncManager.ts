@@ -348,8 +348,12 @@ export class GameStateSyncManager {
   /**
    * Rate limiter: enforces maximum 5 sync requests per 10-second window
    */
-  private static checkSyncRateLimit(clientKey: string): void {
+  public static checkSyncRateLimit(clientKey: string): void {
     const now = Date.now();
+    // Expired identities must not accumulate as users reconnect or leave matches.
+    for (const [key, times] of this.clientSyncRateLimits) {
+      if (!times.length || times[times.length - 1] <= now - SYNC_RATE_LIMIT_WINDOW_MS) this.clientSyncRateLimits.delete(key);
+    }
     const timestamps = this.clientSyncRateLimits.get(clientKey) || [];
     const windowStart = now - SYNC_RATE_LIMIT_WINDOW_MS;
 

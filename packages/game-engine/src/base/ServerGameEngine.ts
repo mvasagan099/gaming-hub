@@ -65,6 +65,9 @@ export abstract class ServerGameEngine<S extends JsonObject, A extends GameActio
     return structuredClone(this.state) as unknown as JsonObject;
   }
 
+  persistenceState(): JsonObject { return structuredClone(this.state); }
+  persistenceOptions(): JsonObject { return {}; }
+
   get finished(): boolean {
     return this.state.finished as boolean;
   }

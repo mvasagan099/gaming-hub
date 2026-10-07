@@ -205,11 +205,17 @@ describe("Requirement 8: Real PostgreSQL TOTP Encryption Migration Verification"
 
     // 6. tampered ciphertext fails
     const parts = updatedUser1.twoFactorSecretEncrypted!.split(":");
-    const tamperedCiphertext = `${parts[0]}:${parts[1]}:${parts[2]}:${parts[3].slice(0, -2)}AA`;
+    // Flip an actual decoded byte. Replacing base64 suffix characters can
+    // occasionally reproduce the same bytes (or change unused padding bits).
+    const changedCiphertext = Buffer.from(parts[3], "base64url");
+    changedCiphertext[0] = changedCiphertext[0]! ^ 1;
+    const tamperedCiphertext = `${parts[0]}:${parts[1]}:${parts[2]}:${changedCiphertext.toString("base64url")}`;
     expect(() => decryptTotpSecret(tamperedCiphertext)).toThrow();
 
     // 7. tampered auth tag fails
-    const tamperedTag = `${parts[0]}:${parts[1]}:${parts[2].slice(0, -2)}AA:${parts[3]}`;
+    const changedTag = Buffer.from(parts[2], "base64url");
+    changedTag[0] = changedTag[0]! ^ 1;
+    const tamperedTag = `${parts[0]}:${parts[1]}:${changedTag.toString("base64url")}:${parts[3]}`;
     expect(() => decryptTotpSecret(tamperedTag)).toThrow();
   });
 });

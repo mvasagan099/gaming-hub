@@ -26,6 +26,8 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
   private gridWidth = 2000;
   private gridHeight = 2000;
 
+  override persistenceOptions() { return { ...super.persistenceOptions(), gridWidth: this.gridWidth, gridHeight: this.gridHeight }; }
+
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: SnakeVsWormsEngineOptions) {
     const matchTimer = options?.matchTimer ?? { matchDurationMs: 180000, warningThresholdMs: 30000 };
     super(players, rng, {
@@ -51,7 +53,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
       seat: p.seat,
       type: idx === 0 ? "SNAKE" : "WORM",
       name: idx === 0 ? "Snake (P1)" : `Player ${idx + 1}`,
-      body: Array.from({ length: 15 }, (_, i) => ({ x: 300 - i * 11, y: idx === 0 ? 600 : 1400 })),
+      body: Array.from({ length: 15 }, (_, i) => ({ x: (idx < 2 ? 300 : 1900) - i * 11, y: idx === 0 ? 600 : idx === 1 ? 1400 : 250 + (idx - 2) * 300 })),
       direction: "right",
       targetDirection: "right",
       speed: 5.0,
@@ -504,15 +506,11 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
   protected override resolveTimeoutWinner(state: InternalState): number[] {
     if (!state.players || state.players.length === 0) return [state.currentSeat];
     const humans = state.players.filter(p => !p.playerId.startsWith('ai-'));
-    const p0 = humans[0];
-    const p1 = humans[1];
-    if (!p1) return p0 ? [p0.seat] : [0];
-
-    if (p0.score > p1.score) return [p0.seat];
-    if (p1.score > p0.score) return [p1.seat];
-    if (p0.body.length > p1.body.length) return [p0.seat];
-    if (p1.body.length > p0.body.length) return [p1.seat];
-    return [];
+    const leaders = humans.sort((a, b) => b.score - a.score || b.body.length - a.body.length);
+    const best = leaders[0];
+    if (!best) return [];
+    const tied = leaders.filter(p => p.score === best.score && p.body.length === best.body.length);
+    return tied.length === 1 ? [best.seat] : [];
   }
 
   protected override onMatchTimerExpired(state: InternalState): EngineActionResult<InternalState> {

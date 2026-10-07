@@ -57,6 +57,8 @@ export class LudoEngine extends MultiplayerGameEngine<
   readonly gameId = "ludo" as const;
   private readonly settings: LudoSettings;
 
+  override persistenceOptions() { return { ...super.persistenceOptions(), ...this.settings }; }
+
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: LudoEngineOptions) {
     const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 5000 };
     const matchTimer = options?.matchTimer ?? { matchDurationMs: 600000, warningThresholdMs: 30000 };

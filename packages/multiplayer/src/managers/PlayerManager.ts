@@ -53,6 +53,7 @@ export interface PlayerStatus {
 }
 
 export class PlayerManager {
+  registerRecoveredPlayer(player: PlayerRuntime): void { this.players.set(player.id, player); }
   private readonly framework: MultiplayerFramework;
   private readonly players = new Map<PlayerId, PlayerRuntime>();
   private readonly afkTimers = new Map<string, NodeJS.Timeout>(); // roomId:playerId
@@ -198,7 +199,14 @@ export class PlayerManager {
     
     // Start disconnect handling for active matches (grace period + forfeit),
     // or remove the player immediately from waiting rooms.
-    if (room.status === "playing") {
+    if (room.status === "starting" && room.match && this.framework.config.countdownDurationMs) {
+      player.isReady = false;
+      room.lifecyclePhase = "READY_CHECK";
+      room.countdownEndsAt = null;
+      this.framework.matchManager.scheduleCountdown(room);
+      this.framework.timerManager.startReconnectTimer(room.id, player.id, () => this.framework.roomManager.closeRoom(room.id, "countdown_disconnect_timeout"));
+      await this.framework.syncManager.broadcastRoomUpdate(room);
+    } else if (room.status === "playing") {
       await this.framework.disconnectHandler.handleDisconnect(room, player);
       this.framework.log(`Player ${playerId} disconnected, grace period started (${this.framework.config.reconnectGracePeriodMs}ms)`);
     } else {
@@ -239,6 +247,7 @@ export class PlayerManager {
     
     // Restore the player into the active match (cancel grace timer, rehydrate
     // state, auto-resume if everyone is connected).
+    this.framework.timerManager.clearTimer(`${room.id}:reconnect:${player.id}`);
     await this.framework.reconnectHandler.handleReconnect(room, player, socket);
     
     this.framework.log(`Player ${playerId} reconnected to room ${roomId}`);
@@ -313,7 +322,10 @@ export class PlayerManager {
     if (room && !getGamePlayConfig(room.config.gameId).forfeitOnAfk) return;
     
     const timer = setInterval(() => {
-      this.checkAfkStatus(playerId, roomId);
+      if (this.framework.config.executeRoomTask) {
+        void this.framework.config.executeRoomTask(roomId, async () => { await this.checkAfkStatus(playerId, roomId); })
+          .catch(error => this.framework.error('AFK owner unavailable', error));
+      } else void this.checkAfkStatus(playerId, roomId).catch(error => this.framework.error('AFK check failed', error));
     }, 5000); // Check every 5 seconds
     
     this.afkTimers.set(timerKey, timer);
@@ -388,7 +400,7 @@ export class PlayerManager {
   /**
    * Check if player is AFK.
    */
-  private checkAfkStatus(playerId: PlayerId, roomId: RoomId): void {
+  private async checkAfkStatus(playerId: PlayerId, roomId: RoomId): Promise<void> {
     const player = this.players.get(playerId);
     if (!player || player.connectionStatus !== "connected") return;
     
@@ -416,7 +428,7 @@ export class PlayerManager {
       // Forfeit if in active match
       if (room.match && player.seat !== null) {
         // This would trigger a forfeit action
-        this.framework.matchManager.handlePlayerForfeit(room, player, "afk");
+        await this.framework.matchManager.handlePlayerForfeit(room, player, "afk");
       }
     }
   }

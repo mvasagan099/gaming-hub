@@ -11,7 +11,6 @@ import {
   GRAVITY,
   MATCH_DURATION_MS,
   MAX_LIVES,
-  PHYSICS_TICK_MS,
   SLICE_TIME_TOLERANCE_MS,
   SLICE_TOLERANCE_PX,
 } from "./types";
@@ -73,6 +72,9 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
       lives: MAX_LIVES,
       combos: 0,
       longestCombo: 0,
+      slicedCount: 0,
+      missedCount: 0,
+      bombsHit: 0,
       connected: true,
       eliminated: false,
     }));
@@ -80,6 +82,8 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
     return {
       players,
       phase: "waiting",
+      serverTimeMs: this.now(),
+      matchRemainingMs: MATCH_DURATION_MS,
       countdownEndsAtMs: null,
       targets: [],
       spawnQueue: [],
@@ -90,7 +94,6 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
       scores: players.map(() => 0),
       lastSliceAtMs: players.map(() => 0),
       winnerSeat: null,
-      actionDriven: false,
     };
   }
 
@@ -166,7 +169,7 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
 
       this.processSpawns(next, now, events);
       this.spawnDueTargets(next, now, events);
-      this.integrateTargets(next, PHYSICS_TICK_MS / 1000);
+      this.integrateTargets(next, now);
 
       const finished = this.processExpiry(next, now, events);
       if (finished) {
@@ -258,6 +261,9 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
       slicedBy: [],
       missedBy: [],
       points: FRUIT_POINTS[entry.type],
+      originX: x,
+      originY: y,
+      originVy: vy,
     };
 
     state.targets.push(target);
@@ -266,44 +272,31 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
 
   // ─── Ballistics & expiry ───────────────────────────────────────────────────
 
-  private integrateTargets(state: FruitNinjaState, dtSeconds: number): void {
+  private integrateTargets(state: FruitNinjaState, now: number): void {
     for (const tg of state.targets) {
-      tg.x += tg.vx * dtSeconds;
-      tg.y += tg.vy * dtSeconds;
-      tg.vy += GRAVITY * dtSeconds;
-      tg.rotation += tg.spin * dtSeconds;
+      tg.originX ??= tg.x;
+      tg.originY ??= tg.y;
+      tg.originVy ??= tg.vy;
+      const pos = this.positionAt(tg, now);
+      tg.x = pos.x;
+      tg.y = pos.y;
+      tg.vy = tg.originVy + GRAVITY * Math.max(0, now - tg.spawnTime) / 1000;
+      tg.rotation = tg.spin * Math.max(0, now - tg.spawnTime) / 1000;
     }
   }
 
-  /**
-   * Continuous ballistic position (used for slice validation so a client's
-   * past sweep stamps map onto the fruit's path).
-   */
+  /** Immutable launch coordinates also validate delayed blade samples. */
   private positionAt(tg: Target, tMs: number): { x: number; y: number } {
     const dt = Math.max(0, tMs - tg.spawnTime) / 1000;
     return {
-      x: tg.x + tg.vx * dt,
-      y: tg.y + tg.vy * dt + 0.5 * GRAVITY * dt * dt,
+      x: (tg.originX ?? tg.x) + tg.vx * dt,
+      y: (tg.originY ?? tg.y) + (tg.originVy ?? tg.vy) * dt + 0.5 * GRAVITY * dt * dt,
     };
   }
 
   /** Expire out-of-reach targets; returns true when a player was eliminated. */
   private processExpiry(state: FruitNinjaState, now: number, events: EngineEvent[]): boolean {
     const remaining: Target[] = [];
-
-    // If the match is driven by client actions (slice-fruit / miss-fruit / bomb-hit),
-    // clients manage their own misses and slicing locally. Do not penalize lives on background targets.
-    if (state.actionDriven) {
-      for (const tg of state.targets) {
-        if (now >= tg.expiresAt || tg.y > FIELD_HEIGHT + 100) {
-          events.push({ type: "target-expired", targetId: tg.id });
-        } else {
-          remaining.push(tg);
-        }
-      }
-      state.targets = remaining;
-      return false;
-    }
 
     for (const tg of state.targets) {
       const expired = now >= tg.expiresAt || tg.y > FIELD_HEIGHT + 100;
@@ -322,21 +315,13 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
 
         const p = state.players[seat];
         p.lives = Math.max(0, p.lives - 1);
+        p.missedCount = (p.missedCount ?? 0) + 1;
         p.combos = 0;
         events.push({ type: "target-missed", targetId: tg.id, seat, livesRemaining: p.lives });
 
         if (p.lives === 0) {
           p.eliminated = true;
-          const winnerSeat = seat === 0 ? 1 : 0;
-          state.finished = true;
-          state.gameOver = true;
-          state.phase = "finished";
-          state.endReason = "player_eliminated";
-          state.winnerSeat = winnerSeat;
-          state.winnerSeats = [winnerSeat];
-          events.push({ type: "player-eliminated", seat, winnerSeat });
-          events.push({ type: "target-expired", targetId: tg.id });
-          return true;
+          events.push({ type: "player-eliminated", seat });
         }
       }
 
@@ -344,6 +329,17 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
     }
 
     state.targets = remaining;
+    if (state.players.some(p => p.eliminated)) {
+      const survivors = state.players.filter(p => !p.eliminated);
+      const winnerSeats = survivors.length === 1 ? [survivors[0]!.seat] : [];
+      state.finished = true;
+      state.gameOver = true;
+      state.phase = "finished";
+      state.endReason = "player_eliminated";
+      state.winnerSeat = winnerSeats[0] ?? null;
+      state.winnerSeats = winnerSeats;
+      return true;
+    }
     return false;
   }
 
@@ -355,6 +351,7 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
       case "slice-fruit":
       case "miss-fruit":
       case "bomb-hit":
+        return "Client outcomes are not accepted; send blade input";
       case "resign":
       case "draw-offer":
       case "draw-accept":
@@ -400,60 +397,6 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
     });
 
     switch (action.type) {
-      case "slice-fruit": {
-        next.actionDriven = true;
-        const pts = action.points ?? 10;
-        next.scores[seat] = (next.scores[seat] ?? 0) + pts;
-        const p = next.players[seat];
-        if (p) {
-          p.score = next.scores[seat];
-          p.combos = (p.combos ?? 0) + 1;
-          p.longestCombo = Math.max(p.longestCombo ?? 0, p.combos);
-        }
-        events.push({ type: "fruit-sliced", seat, points: pts, score: next.scores[seat] });
-        break;
-      }
-
-      case "miss-fruit": {
-        next.actionDriven = true;
-        const p = next.players[seat];
-        if (p) {
-          p.combos = 0;
-          p.lives = Math.max(0, p.lives - 1);
-          events.push({ type: "target-missed", seat, livesRemaining: p.lives });
-
-          if (p.lives === 0) {
-            p.eliminated = true;
-            const winnerSeat = seat === 0 ? 1 : 0;
-            next.finished = true;
-            next.gameOver = true;
-            next.phase = "finished";
-            next.endReason = "player_eliminated";
-            next.winnerSeat = winnerSeat;
-            next.winnerSeats = [winnerSeat];
-            events.push({ type: "player-eliminated", seat, winnerSeat });
-          }
-        }
-        break;
-      }
-
-      case "bomb-hit": {
-        next.actionDriven = true;
-        const p = next.players[seat];
-        if (p) {
-          p.combos = 0;
-        }
-        const winnerSeat = seat === 0 ? 1 : 0;
-        next.finished = true;
-        next.gameOver = true;
-        next.phase = "finished";
-        next.endReason = "bomb_elimination";
-        next.winnerSeat = winnerSeat;
-        next.winnerSeats = [winnerSeat];
-        events.push({ type: "bomb-hit", seat, winnerSeat });
-        break;
-      }
-
       case "resign": {
         const winnerSeat = seat === 0 ? 1 : 0;
         next.finished = true;
@@ -491,6 +434,10 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
         const dy = action.y - last.y;
         if (dx * dx + dy * dy >= 4) {
           blade.points.push({ x: action.x, y: action.y, t: action.time });
+          this.finalizeBlade(next, seat, events, now);
+          // Completed segments are already checked. Retain the endpoint for
+          // the next segment instead of broadcasting an ever-growing trail.
+          blade.points = [blade.points[blade.points.length - 1]!];
         }
         break;
       }
@@ -527,22 +474,28 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
       if (tg.spawnTime > endT) continue;
 
       let hit = false;
-      for (const p of blade.points) {
-        if (p.t < tg.spawnTime) continue;
-        if (p.t > tg.expiresAt) break;
-        const pos = this.positionAt(tg, p.t);
-        const dx = p.x - pos.x;
-        const dy = p.y - pos.y;
-        const rr = this.targetRadius(tg.type) + SLICE_TOLERANCE_PX;
-        if (dx * dx + dy * dy <= rr * rr) {
-          hit = true;
-          break;
+      for (let i = 0; i < blade.points.length; i++) {
+        const p = blade.points[i]!;
+        const previous = blade.points[Math.max(0, i - 1)]!;
+        // Sample the swept segment so a quick swipe cannot jump over a fruit.
+        const steps = Math.min(128, Math.max(1, Math.ceil(Math.hypot(p.x - previous.x, p.y - previous.y) / 12)));
+        for (let step = 0; step <= steps; step++) {
+          const u = step / steps;
+          const t = previous.t + (p.t - previous.t) * u;
+          if (t < tg.spawnTime || t > tg.expiresAt) continue;
+          const pos = this.positionAt(tg, t);
+          const dx = previous.x + (p.x - previous.x) * u - pos.x;
+          const dy = previous.y + (p.y - previous.y) * u - pos.y;
+          const rr = this.targetRadius(tg.type) + SLICE_TOLERANCE_PX;
+          if (dx * dx + dy * dy <= rr * rr) { hit = true; break; }
         }
+        if (hit) break;
       }
       if (!hit) continue;
 
       if (tg.type === "bomb") {
         tg.slicedBy.push(seat);
+        state.players[seat]!.bombsHit = (state.players[seat]!.bombsHit ?? 0) + 1;
         const winnerSeat = seat === 0 ? 1 : 0;
         state.finished = true;
         state.gameOver = true;
@@ -567,6 +520,7 @@ export class FruitNinjaEngine extends MultiplayerGameEngine<FruitNinjaState, Fru
       const player = state.players[seat];
       state.scores[seat] = (state.scores[seat] ?? 0) + tg.points;
       player.score = state.scores[seat];
+      player.slicedCount = (player.slicedCount ?? 0) + 1;
 
       const prev = state.lastSliceAtMs[seat] ?? 0;
       player.combos = endT - prev <= COMBO_WINDOW_MS ? (player.combos ?? 0) + 1 : 1;

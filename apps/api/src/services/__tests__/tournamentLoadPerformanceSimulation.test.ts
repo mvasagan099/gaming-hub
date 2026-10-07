@@ -169,6 +169,7 @@ describe("TOURNAMENT LOAD, CONCURRENCY & PERFORMANCE AUDIT", () => {
       const totalDuration = t1 - t0;
 
       const fulfilled = results.filter((r) => r.status === "fulfilled");
+      expect(results.filter(r => r.status === "rejected").map(r => (r as PromiseRejectedResult).reason?.message)).toEqual([]);
       expect(fulfilled.length).toBe(200);
 
       const count = await prisma.tournamentPlayer.count({ where: { tournamentId: tourn.id } });

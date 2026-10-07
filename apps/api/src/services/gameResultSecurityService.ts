@@ -93,7 +93,7 @@ export class GameResultSecurityService {
       throw new AppError("NOT_FOUND", "Match not found", 404);
     }
 
-    if (match.status !== "ACTIVE" && match.status !== "CREATED") {
+    if (match.status !== "ACTIVE" && match.status !== "CREATED" && match.status !== "FINISHED") {
       throw new AppError("INVALID_ACTION", `Match is not active for settlement (status: ${match.status})`, 409);
     }
 
@@ -103,6 +103,13 @@ export class GameResultSecurityService {
     for (const wid of winnerIds) {
       if (!playerUserIds.has(wid)) {
         throw new AppError("VALIDATION_ERROR", `Reported winner ${wid} is not a player in this match`, 422);
+      }
+    }
+
+    if (match.status === "FINISHED") {
+      const committed = (match.winnerIds as string[]).slice().sort();
+      if (JSON.stringify(committed) !== JSON.stringify([...new Set(winnerIds)].sort())) {
+        throw new AppError("CONFLICT", "Result conflicts with the committed match winners", 409);
       }
     }
 

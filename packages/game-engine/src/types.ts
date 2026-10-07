@@ -46,6 +46,10 @@ export interface EngineInstance {
   readonly winnerSeats: number[];
   seatOf(userId: string): number | null;
   serialize(): JsonObject;
+  /** Canonical checkpoint, without live-clock presentation adjustments. */
+  persistenceState(): JsonObject;
+  persistenceOptions(): JsonObject;
+  restoreState(state: JsonObject): void;
   setRandomSource(rng: RandomSource): void;
   /** Wall-clock deadline for the current seat's flag, for clock-capable games. */
   readonly currentClockDeadline?: number | null;

@@ -25,6 +25,7 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default("*"),
   REDIS_URL: z.string().optional().default(""),
   LOG_LEVEL: z.string().default("info"),
+  DISTRIBUTED_MATCHES: z.enum(["true", "false"]).optional(),
   // "true" (default in production) rejects sockets whose email is unverified.
   REQUIRE_EMAIL_VERIFICATION: z
     .enum(["true", "false"])
@@ -40,6 +41,13 @@ const envSchema = z.object({
         message: "REDIS_URL must start with redis:// or rediss://",
       });
     }
+  }
+
+  if (data.NODE_ENV === "production") {
+    if (!data.REDIS_URL || data.DISTRIBUTED_MATCHES === "false") ctx.addIssue({ code: z.ZodIssueCode.custom,
+      path: ["REDIS_URL"], message: "Production games require Redis and fenced distributed ownership" });
+    if (new URL(data.API_URL).protocol !== "https:") ctx.addIssue({ code: z.ZodIssueCode.custom,
+      path: ["API_URL"], message: "Production internal API must use HTTPS" });
   }
 
   // Validate CORS_ORIGIN in production (must not be wildcard "*")
@@ -87,6 +95,7 @@ if (!parsed.success) {
 
 export const env = {
   ...parsed.data,
+  distributedMatches: parsed.data.DISTRIBUTED_MATCHES === "true" || parsed.data.NODE_ENV === "production",
   requireEmailVerification:
     parsed.data.REQUIRE_EMAIL_VERIFICATION ?? parsed.data.NODE_ENV === "production",
 };

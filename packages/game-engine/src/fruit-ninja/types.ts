@@ -48,6 +48,9 @@ export interface Target extends JsonObject {
   /** Seats that already missed this target (life already lost). */
   missedBy: number[];
   points: number;
+  originX: number | null;
+  originY: number | null;
+  originVy: number | null;
 }
 
 /** A target queued to launch at a future server-clock time. */
@@ -79,6 +82,9 @@ export interface FruitNinjaPlayer extends JsonObject {
   /** Current combo streak. */
   combos: number;
   longestCombo: number;
+  slicedCount: number;
+  missedCount: number;
+  bombsHit: number;
   connected: boolean;
   eliminated: boolean;
 }
@@ -86,6 +92,8 @@ export interface FruitNinjaPlayer extends JsonObject {
 export interface FruitNinjaState extends BaseState {
   players: FruitNinjaPlayer[];
   phase: FruitNinjaPhase;
+  serverTimeMs: number;
+  matchRemainingMs: number;
   countdownEndsAtMs: number | null;
   targets: Target[];
   spawnQueue: SpawnEntry[];
@@ -100,8 +108,6 @@ export interface FruitNinjaState extends BaseState {
   /** Per-seat server-clock time of the last scored slice, ms. */
   lastSliceAtMs: number[];
   winnerSeat: number | null;
-  /** Whether the match is driven by client actions (slice-fruit / miss-fruit / bomb-hit). */
-  actionDriven: boolean;
 }
 
 export type FruitNinjaAction =

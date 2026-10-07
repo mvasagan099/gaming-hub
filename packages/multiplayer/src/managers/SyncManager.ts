@@ -115,11 +115,11 @@ export class SyncManager {
     
     // A realtime rally broadcasts 60 times a second. Logging every packet
     // creates hundreds of log writes per room and delays the physics loop.
-    if (room.config.gameId !== "table-tennis" || events.length > 0) {
+    if (!["table-tennis", "snake-vs-worms", "fruit-ninja"].includes(room.config.gameId) || events.length > 0) {
       this.framework.log(`Game state: ${room.config.gameId}, room ${room.id}, seq ${sequenceNumber}, events: ${events.map(e => e.type).join(", ")}`);
     }
 
-    this.framework.io.to(room.ioName).emit("game:state", packet);
+    this.broadcastToRoom(room, "game:state", packet);
     
   }
   
@@ -144,7 +144,7 @@ export class SyncManager {
       sequenceNumber,
     };
     
-    socket.emit("game:state", packet);
+    this.publish(room, "game:state", packet, socket.id);
   }
   
   /**
@@ -153,7 +153,7 @@ export class SyncManager {
   async syncFullStateToPlayer(room: RoomRuntime, playerId: PlayerId, socket: Socket): Promise<void> {
     // Room state
     const roomUpdate = this.serializeRoom(room);
-    socket.emit("room:update", roomUpdate);
+    this.publish(room, "room:update", roomUpdate, socket.id);
     
     // If match is active, sync match state
     if (room.match) {
@@ -161,10 +161,10 @@ export class SyncManager {
     }
     
     // Send chat history
-    socket.emit("chat:history", {
+    this.publish(room, "chat:history", {
       roomId: room.id,
       messages: room.chatHistory,
-    });
+    }, socket.id);
     
     // Start ping monitoring
     this.startPingMonitoring(playerId, socket);
@@ -199,13 +199,25 @@ export class SyncManager {
    * Broadcast to all room participants (players + spectators).
    */
   broadcastToRoom(room: RoomRuntime, event: string, payload: unknown): void {
-    this.framework.io.to(room.ioName).emit(event, payload);
+    this.publish(room, event, payload, room.ioName);
   }
+
+  private publish(room: RoomRuntime, event: string, payload: unknown, destination: string): void {
+    if (this.framework.config?.publish) this.framework.config?.publish(room, event, payload, destination);
+    else this.framework.io.to(destination).emit(event, payload);
+  }
+
+  restoreStateVersion(roomId: string, version: number): void { this.sequenceNumbers.set(roomId, version); }
   
   /**
    * Send to a specific player.
    */
   sendToPlayer(player: PlayerRuntime, event: string, payload: unknown): void {
+    if (this.framework.config?.publish) {
+      const room = this.framework.roomManager.getPlayerRoom(player.id);
+      if (room) for (const socketId of player.socketIds) this.publish(room, event, payload, socketId);
+      return;
+    }
     for (const socketId of player.socketIds) {
       const socket = this.framework.io.sockets.sockets.get(socketId);
       if (socket && socket.connected) {
@@ -341,8 +353,12 @@ export class SyncManager {
       stake: room.config.stake,
       minPlayers: room.config.minPlayers,
       maxPlayers: room.config.maxPlayers,
-      hasStarted: room.status !== "waiting",
+      hasStarted: room.match?.gameplayStartedAt != null ||
+        (room.match?.gameplayStartedAt === undefined && ["playing", "ended"].includes(room.status) &&
+          !this.framework.matchManager?.isAwaitingGameLoad(room)),
+      awaitingGameLoad: this.framework.matchManager?.isAwaitingGameLoad(room) ?? false,
       createdAt: new Date(room.createdAt).toISOString(),
+      ...(room.lifecyclePhase ? { lifecyclePhase: room.lifecyclePhase, countdownEndsAt: room.countdownEndsAt ?? null, serverTimeMs: Date.now() } : {}),
       players: [...room.players.values()].map(p => ({
         id: p.id,
         username: p.username,
@@ -354,6 +370,7 @@ export class SyncManager {
         isSpectator: p.isSpectator,
         connectionStatus: p.connectionStatus,
         joinedAt: new Date(p.joinedAt).toISOString(),
+        ...(this.framework.config?.executeRoomTask ? { lastAcceptedActionSequence: p.packetSequenceNumber } : {}),
       })),
       spectators: [...room.spectators.values()].map(p => ({
         id: p.id,

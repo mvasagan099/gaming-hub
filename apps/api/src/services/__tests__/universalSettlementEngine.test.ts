@@ -218,11 +218,12 @@ describe("Feature 7: Universal Game & Tournament Settlement Engine", () => {
     const u4 = await createTestUser("u-4p-4", 1000);
     const matchId = `match-4p-${Date.now()}`;
 
-    // 4 players in Carrom stake 100 each (total pot 400, prize pool 360)
-    await GameEntryLifecycleService.initiateEntry({ userId: u1, gameId: "carrom", stake: 100, matchId });
-    await GameEntryLifecycleService.initiateEntry({ userId: u2, gameId: "carrom", stake: 100, matchId });
-    await GameEntryLifecycleService.initiateEntry({ userId: u3, gameId: "carrom", stake: 100, matchId });
-    await GameEntryLifecycleService.initiateEntry({ userId: u4, gameId: "carrom", stake: 100, matchId });
+    // Bubble Shooter supports four real player seats; Carrom now correctly permits two.
+    // 4 players in Bubble Shooter stake 100 each (total pot 400, prize pool 360)
+    await GameEntryLifecycleService.initiateEntry({ userId: u1, gameId: "bubble-shooter", stake: 100, matchId });
+    await GameEntryLifecycleService.initiateEntry({ userId: u2, gameId: "bubble-shooter", stake: 100, matchId });
+    await GameEntryLifecycleService.initiateEntry({ userId: u3, gameId: "bubble-shooter", stake: 100, matchId });
+    await GameEntryLifecycleService.initiateEntry({ userId: u4, gameId: "bubble-shooter", stake: 100, matchId });
     await GameEntryLifecycleService.startMatch(matchId);
 
     // Two winners tie for first place: u1 and u2 split 360 (180 each)

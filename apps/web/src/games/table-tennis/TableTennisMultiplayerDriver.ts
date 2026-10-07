@@ -22,6 +22,7 @@ export default class TableTennisMultiplayerDriver {
   private completed = false;
   private deliveredPoint = -1;
   private moveRequest = 0;
+  private moveInFlight = false;
   private unsubscribe: (() => void) | null = null;
   private physicsInterval: ReturnType<typeof setInterval> | null = null;
   private onStateUpdate: ((state: TableTennisRemoteState, restoreInput: boolean) => void) | null = null;
@@ -60,9 +61,9 @@ export default class TableTennisMultiplayerDriver {
     });
     
     this.physicsInterval = setInterval(() => {
-      if (this.pendingPaddleMove && !this.destroyed) {
+      if (this.pendingPaddleMove && !this.destroyed && !this.moveInFlight) {
         const now = Date.now();
-        if (now - this.lastPaddleSent >= this.paddleSendInterval) {
+        if (now - this.lastPaddleSent >= this.paddleSendInterval && !this.moveInFlight) {
           const move = this.pendingPaddleMove;
           this.pendingPaddleMove = null;
           this.sendPaddleMoveImmediate(move.y, move.velocity);
@@ -159,7 +160,7 @@ export default class TableTennisMultiplayerDriver {
     }
     this.pendingPaddleMove = { y, velocity };
     const now = Date.now();
-    if (now - this.lastPaddleSent >= this.paddleSendInterval) {
+    if (now - this.lastPaddleSent >= this.paddleSendInterval && !this.moveInFlight) {
       this.pendingPaddleMove = null;
       this.sendPaddleMoveImmediate(y, velocity);
       this.lastPaddleSent = now;
@@ -169,6 +170,7 @@ export default class TableTennisMultiplayerDriver {
   private sendPaddleMoveImmediate(y: number, velocity: number): void {
     if (this.mySeat == null || this.destroyed || this.awaitingReconnect || this.lastState?.paused || this.lastState?.finished) return;
     if (Math.abs(y - this.lastSentY) < 0.5) return;
+    this.moveInFlight = true;
     this.lastSentY = y;
     const request = ++this.moveRequest;
     const retry = () => { if (!this.destroyed && this.moveRequest === request) this.lastSentY = -999; };
@@ -176,7 +178,7 @@ export default class TableTennisMultiplayerDriver {
       type: "paddle-move",
       y,
       velocity,
-    }).then(result => { if (!result.ok) retry(); }).catch(retry);
+    }).then(result => { if (!result.ok) retry(); }).catch(retry).finally(() => { this.moveInFlight = false; });
   }
   
   sendServe(angle: number = 0, power: number = 5.25): void {

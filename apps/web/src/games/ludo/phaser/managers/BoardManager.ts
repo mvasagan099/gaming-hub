@@ -327,10 +327,10 @@ export default class BoardManager {
     ];
 
     const triangleColors: number[] = [
-      LUDO_DESIGN_CONFIG.colors.red.main,
-      LUDO_DESIGN_CONFIG.colors.blue.main,
-      LUDO_DESIGN_CONFIG.colors.green.main,
       LUDO_DESIGN_CONFIG.colors.yellow.main,
+      LUDO_DESIGN_CONFIG.colors.blue.main,
+      LUDO_DESIGN_CONFIG.colors.red.main,
+      LUDO_DESIGN_CONFIG.colors.green.main,
     ];
 
     // 1. Triangular Home Quadrants
@@ -427,10 +427,10 @@ export default class BoardManager {
 
   private drawStartArrows(): void {
     const arrows: Record<PlayerColor, string> = {
-      red: "→",
-      blue: "↑",
-      green: "←",
+      green: "→",
       yellow: "↓",
+      blue: "←",
+      red: "↑",
     };
 
     for (const color of PLAYER_COLORS) {

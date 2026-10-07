@@ -74,7 +74,7 @@ export class DisconnectHandler {
     // Arm the reconnect grace timer that forfeits on expiry.
     if (config.forfeitOnDisconnect) {
       this.framework.timerManager.startReconnectTimer(room.id, player.id, () => {
-        void this.framework.matchManager.handlePlayerForfeit(room, player, "disconnect_timeout");
+        return this.framework.matchManager.handlePlayerForfeit(room, player, "disconnect_timeout");
       });
     }
   }

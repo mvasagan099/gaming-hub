@@ -1,3 +1,4 @@
+import { useRoomCountdown } from "../../hooks/useRoomCountdown";
 import React, { useState, useEffect } from 'react';
 import {
   Swords,
@@ -41,7 +42,8 @@ export const UniversalMatchRoom: React.FC<UniversalMatchRoomProps> = ({
 }) => {
   const user = useAuthStore((s) => s.user);
   const room = useMultiplayerStore((s) => s.room);
-  const countdown = useMultiplayerStore((s) => s.countdown);
+  const legacyCountdown = useMultiplayerStore((s) => s.countdown);
+  const countdown = useRoomCountdown(room, legacyCountdown);
   const setReady = useMultiplayerStore((s) => s.setReady);
   const leaveRoom = useMultiplayerStore((s) => s.leaveRoom);
 
@@ -276,7 +278,7 @@ export const UniversalMatchRoom: React.FC<UniversalMatchRoomProps> = ({
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-left text-xs text-slate-400 space-y-0.5">
                   <p className="font-bold text-white flex items-center gap-1.5">
-                    <Shield className="size-3.5 text-emerald-400" /> Server-Authoritative 10-Minute Limit
+                    <Shield className="size-3.5 text-emerald-400" /> Server-Timed Match
                   </p>
                   <p className="text-slate-500 text-[11px]">
                     Match clock begins strictly after both players ready up.

@@ -78,6 +78,8 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
   const room = useMultiplayerStore((s) => s.room);
   const matchId = useMultiplayerStore(s => s.matchId);
   const roomId = room?.id;
+  const [renderedMatchId, setRenderedMatchId] = useState<string | null>(null);
+  const renderedMatchRef = useRef<string | null>(null);
 
   const inputRef = useRef({
     mouseX: CANVAS_WIDTH / 2 + 100,
@@ -473,6 +475,10 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
         dead: p.status === 'eliminated',
       }));
       SnakeVsWorms3DRenderer.drawRadar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, radarPlayers, mpState.gridWidth, mpState.gridHeight, isPortrait);
+      if (matchId && renderedMatchRef.current !== matchId && mpState.players.some(p => p.seat === mySeat && p.body.length > 0)) {
+        renderedMatchRef.current = matchId;
+        setRenderedMatchId(matchId);
+      }
       return;
     }
 
@@ -704,7 +710,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
   }, true);
 
   return (
-    <GameWrapper title="Snake vs Worms 3D" gameId="snake-vs-worms" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={gameOver}>
+    <GameWrapper readyForMultiplayer={renderedMatchId === matchId && matchId !== null} title="Snake vs Worms 3D" gameId="snake-vs-worms" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={gameOver}>
       <div className="flex flex-col lg:flex-row items-center justify-center gap-2 lg:gap-6 w-full h-full p-0 lg:p-4 relative select-none overflow-hidden">
         
         {/* CENTER 3D ARENA CONTAINER */}

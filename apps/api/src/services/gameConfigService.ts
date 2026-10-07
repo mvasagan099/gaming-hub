@@ -38,7 +38,7 @@ export class GameConfigService {
       where: { category: "game_config" },
     });
 
-    const result: Record<string, GameConfig> = { ...DEFAULT_GAME_CONFIGS };
+    const result: Record<string, GameConfig> = structuredClone(DEFAULT_GAME_CONFIGS);
 
     for (const row of rows) {
       if (row.key.startsWith("game_config.")) {
@@ -52,6 +52,12 @@ export class GameConfigService {
       }
     }
 
+    // Stored legacy limits cannot enable seats the current engine cannot play.
+    for (const definition of GAME_DEFINITIONS) {
+      const config = result[definition.id];
+      config.maxPlayers = Math.min(definition.maxPlayers, Math.max(definition.minPlayers, config.maxPlayers));
+      config.minPlayers = Math.min(config.maxPlayers, Math.max(definition.minPlayers, config.minPlayers));
+    }
     configsCache = result as Record<GameId, GameConfig>;
     cacheExpiresAt = Date.now() + CACHE_TTL_MS;
     return configsCache;
@@ -385,6 +391,11 @@ export class GameConfigService {
       updatedAt: new Date().toISOString(),
       updatedBy: adminId,
     };
+
+    const definition = GAME_DEFINITIONS.find(game => game.id === gameId)!;
+    if (candidate.minPlayers < definition.minPlayers || candidate.maxPlayers > definition.maxPlayers) {
+      throw new AppError("VALIDATION_ERROR", `Unsupported player limits for ${gameId}`, 422);
+    }
 
     // Validate with zod schema
     const parseResult = gameConfigSchema.safeParse(candidate);

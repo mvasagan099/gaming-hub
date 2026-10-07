@@ -1,0 +1,143 @@
+Gaming Hub paid-room initialization and Table Tennis verification — 2026-10-07
+Latest follow-up; previous recovery and gameplay runs retained below as historical evidence.
+Local isolated PostgreSQL + Redis + real API + two real socket processes.
+No production deployment, database mutation, historical refund, migration, commit or push.
+
+Complete final suites, each exit 0:
+Game engine: 421 passed, 27 files; gaming-room-engine-all.log
+Multiplayer: 205 passed, 19 files; gaming-room-mp6.log
+Web/game/navigation: 244 passed, 33 files; gaming-room-web4.log
+API/PostgreSQL: 1314 passed, 95 files; gaming-room-api-full2.log
+Total: 2184 passed, 174 files, 0 failed, 0 skipped.
+19 new tests above the preceding 2165-test run:
+  Board initialization admission / loading recovery: 6.
+  Idle Table Tennis physics queue: 1.
+  Table Tennis elapsed-time/collision/checkpoint simulation: 3.
+  Slow paddle acknowledgement/latest-position delivery: 1.
+  Real two-replica failed paid private-room start/refund: 2.
+  Canonical paid start/settlement/refund guard: 6.
+New/changed test files contain no .skip/.only markers.
+
+Workspace typecheck: PASS, exit 0; gaming-room-typecheck5.log
+Production build: PASS, exit 0; gaming-room-build3.log
+Android sync: PASS, exit 0; gaming-room-android-sync-final.log
+ iOS sync: PASS, exit 0; gaming-room-ios-sync-final.log
+Native compilation and installed-device tests not repeated in this follow-up.
+Change whitespace: PASS; unrelated permissions.ts blank EOF preserved.
+
+Focused real integration: 52 passed, 3 files; gaming-room-api-target1.log.
+Focused fixture corrections: 23 passed, 3 files; gaming-room-api-target2.log.
+These focused runs are subsets, not additional tests in the complete total.
+Initial full API run: 1310 passed, 4 failed; three played fixtures omitted
+startedAt, and one ciphertext-tampering assertion could decode unchanged bytes.
+Fixtures were corrected; payment and encryption guards were not relaxed.
+Final complete API run: 1314 passed, 95 files, 591.89 seconds, exit 0.
+
+Production migration preflight/deployed auth: still unverified; release BLOCKED.
+Hardware FPS/WAN/device certification: PENDING.
+Historical owner credits: not attributed without production match/ledger evidence.
+Report: 2026-10-07-room-start-payment-and-table-tennis.md
+Log basenames refer to temporary local /tmp files.
+
+--- Historical recovery architecture evidence ---
+
+Gaming Hub recovery architecture verification — 2026-10-07
+Current follow-up; historical gameplay baseline retained below.
+Local isolated PostgreSQL + Redis + real API + two real socket processes.
+No production database mutation, deployment, commit or push.
+
+Complete final suites:
+Game engine: 418 passed, 27 files; gaming-recovery-engine-all1.log
+Multiplayer: 198 passed, 18 files; gaming-recovery-mp-all6.log
+Web/game/navigation: 243 passed, 33 files; gaming-recovery-web-all5.log
+API/PostgreSQL: 1306 passed, 94 files; gaming-recovery-api-all3.log
+Total: 2165 passed, 172 files, 0 failed, 0 skipped.
+New distributed/recovery: 35 tests above the historical 2130 baseline.
+  Engine versioned checkpoints, all nine games: 10.
+  Ownership/fencing/participant reservation/outbox: 7.
+  Real two-replica paid recovery/countdown/tournament/network/auth: 17.
+  SELECT-only preflight/no fixture mutation: 1.
+No .skip/.only in the four new test files.
+
+Workspace typecheck: PASS, exit 0; gaming-recovery-typecheck-all9.log
+Production build: PASS, exit 0; gaming-recovery-build-all4.log
+Android sync: PASS, exit 0; gaming-recovery-android-sync2.log
+ iOS sync: PASS, exit 0; gaming-recovery-ios-sync2.log
+Android debug compile: PASS, exit 0; gaming-recovery-android-build.log
+ iOS generic simulator compile: PASS, exit 0; gaming-recovery-ios-build.log
+Native toolchain deprecation warnings were not build failures.
+Responsive board/Exit/overflow: 54/54 local practice viewport cases.
+Shared explicit Exit modal bounds and Cancel: six viewport cases.
+Canvas HUD/touch/WAN/FPS evidence is not implied by DOM bounds.
+Recovery-change diff whitespace: PASS.
+Unrelated concurrent permissions.ts blank line at EOF preserved.
+
+Final integration rerun against latest coordinator source: PASS, exit 0.
+25/25 tests, 3/3 files, 0 failed, 0 skipped; 207.86 seconds.
+Source: gaming-recovery-final-primary.log
+Includes all-nine real owner-death/reconnect/continue/paid settlement,
+countdown races, shared matchmaking, tournament recovery, real Redis/API
+failure, lost funding/settlement ACK, ownership/outbox and read-only preflight.
+These 25 tests are a subset of the 2165 total and are not counted twice.
+Earlier 83/83 architecture target run passed; not added to suite total.
+Earlier focused funding/countdown: 3 selected pass, 21 intentionally filtered;
+not described as a full suite or added to final skipped-test count.
+
+Production migration preflight: BLOCKED, no production report/access supplied.
+Real local internal service auth: valid accepted; missing/wrong rejected;
+startup authentication probe fails closed.
+Deployed Render service authentication: unverified, release gate BLOCKED.
+Hardware/device certification: PENDING.
+Verdict: software release gate BLOCKED; no production-ready/RC claim.
+
+Source log basenames above refer to temporary local /tmp files.
+This file is the durable sanitized summary; it contains no credentials.
+
+--- Historical completed gameplay baseline (superseded counts) ---
+
+Gaming Hub audit verification — 2026-10-07
+Baseline: dca91fc
+Local isolated verification; no production deployment.
+
+gaming-audit-engine-final4.log
+ Test Files  26 passed (26)
+      Tests  408 passed (408)
+   Start at  15:49:54
+   Duration  25.96s (transform 18.40s, setup 0ms, import 50.93s, tests 39.07s, environment 50ms)
+
+gaming-audit-multiplayer-final5.log
+ Test Files  18 passed (18)
+      Tests  198 passed (198)
+   Start at  15:49:59
+   Duration  28.70s (transform 32.88s, setup 0ms, import 79.47s, tests 35.09s, environment 8ms)
+
+gaming-audit-web-final4.log
+ Test Files  33 passed (33)
+      Tests  243 passed (243)
+   Start at  15:51:29
+   Duration  33.26s (transform 42.89s, setup 0ms, import 122.73s, tests 32.45s, environment 17ms)
+
+gaming-audit-admission.log
+ Test Files  2 passed (2)
+      Tests  8 passed (8)
+   Start at  15:49:11
+   Duration  92.87s (transform 852ms, setup 1.42s, import 417ms, tests 86.89s, environment 0ms)
+
+gaming-audit-ios-build-elevated.log
+** BUILD SUCCEEDED **
+
+gaming-audit-android-build-online.log
+BUILD SUCCESSFUL in 28s
+
+gaming-audit-api-final3.log
+ Test Files  91 passed (91)
+      Tests  1281 passed (1281)
+   Start at  15:51:04
+   Duration  628.39s (transform 7.44s, setup 32.15s, import 16.39s, tests 554.31s, environment 15ms)
+
+Workspace typecheck: PASS (exit 0), gaming-audit-typecheck-final5.log
+Production build: PASS (exit 0), gaming-audit-build-final4.log
+Final Android/iOS sync: PASS (exit 0)
+Diff whitespace check: PASS
+Complete suite total: 2130 tests, 168 files, no failed/skipped tests reported
+Production verdict: NOT PRODUCTION READY; see the audit report blockers.

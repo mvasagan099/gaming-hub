@@ -14,7 +14,7 @@ beforeEach(() => {
   socket.listeners.clear();
   useMultiplayerStore.getState().disconnect();
   useMultiplayerStore.getState().connect();
-  useMultiplayerStore.setState({ room: { id: 'room-1', matchId: 'old-match' } as never, matchId: 'old-match', lastStateVersion: 99, rematchState: null });
+  useMultiplayerStore.setState({ room: { id: 'room-1', matchId: 'old-match', players: [{ id: 'p1', lastAcceptedActionSequence: 0 }] } as never, matchId: 'old-match', lastStateVersion: 99, rematchState: null });
 });
 afterEach(() => { useMultiplayerStore.getState().disconnect(); });
 
@@ -32,7 +32,7 @@ describe('rematch consent and state synchronization', () => {
     socket.emitWithAck.mockResolvedValue({ ok: true, data: { ok: true } });
     const action = { type: 'move', from: 'e2', to: 'e4' };
     expect(await useMultiplayerStore.getState().sendGameAction(action)).toEqual({ ok: true });
-    expect(socket.emitWithAck).toHaveBeenCalledExactlyOnceWith('game:action', { roomId: 'room-1', matchId: 'old-match', action });
+    expect(socket.emitWithAck).toHaveBeenCalledExactlyOnceWith('game:action', { roomId: 'room-1', matchId: 'old-match', action: { ...action, actionId: expect.any(String), clientSequence: 1 } });
   });
 
   it('does not send an action before the new match state arrives', async () => {
@@ -86,7 +86,7 @@ describe('rematch consent and state synchronization', () => {
     await syncing;
     expect(useMultiplayerStore.getState()).toMatchObject({ gameState: { finished: false }, matchId: 'new-match', lastStateVersion: 1 });
   });
-  it.each(['snooker', 'snake-vs-worms'])('does not overwrite newer %s state with a delayed reconnect snapshot', async gameId => {
+  it.each(['snake-ladder', 'ludo', 'chess', 'carrom', 'fruit-ninja', 'bubble-shooter', 'table-tennis', 'snake-vs-worms', 'snooker'])('does not overwrite newer %s state with a delayed reconnect snapshot', async gameId => {
     useMultiplayerStore.setState({ room: { id: 'room-1', matchId: 'old-match', gameId } as never });
     let complete!: (result: any) => void;
     socket.emitWithAck.mockReturnValue(new Promise(resolve => { complete = resolve; }));

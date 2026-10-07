@@ -72,6 +72,9 @@ function manualTarget(
     y,
     vx: 0,
     vy: 0,
+    originX: x,
+    originY: y,
+    originVy: 0,
     rotation: 0,
     spin: 0,
     spawnTime,
@@ -84,12 +87,13 @@ function manualTarget(
 
 function sliceAt(eng: FruitNinjaEngine, seat: number, t: number, pts: [number, number][]): ReturnType<typeof eng.apply> {
   const first = pts[0]!;
-  eng.apply({ type: "slice-begin", x: first[0], y: first[1], time: t }, seat);
+  const events = [...eng.apply({ type: "slice-begin", x: first[0], y: first[1], time: t }, seat).events];
   for (const [x, y] of pts.slice(1, -1)) {
-    eng.apply({ type: "slice-move", x, y, time: t }, seat);
+    events.push(...eng.apply({ type: "slice-move", x, y, time: t }, seat).events);
   }
   const last = pts[pts.length - 1]!;
-  return eng.apply({ type: "slice-end", x: last[0], y: last[1], time: t }, seat);
+  const result = eng.apply({ type: "slice-end", x: last[0], y: last[1], time: t }, seat);
+  return { ...result, events: [...events, ...result.events] };
 }
 
 describe("FruitNinjaEngine lifecycle", () => {
@@ -225,11 +229,67 @@ describe("FruitNinjaEngine slicing", () => {
   });
 });
 
-describe("FruitNinjaEngine misses and lives", () => {
-  it.each([0, 1])("a reported bomb hit by seat %s ends the match and rejects subsequent slices", seat => {
+describe("Fruit Ninja client authority regressions", () => {
+  it.each([
+    { type: "slice-fruit", points: 1_000_000 },
+    { type: "miss-fruit" },
+    { type: "bomb-hit" },
+  ] as FruitNinjaAction[])("rejects forged $type outcomes without changing state", action => {
     const { eng, clock } = setup();
     startPlaying(eng, clock);
-    const res = eng.apply({ type: "bomb-hit" }, seat);
+    const before = structuredClone(eng.state);
+    expect(eng.apply(action, 0).ok).toBe(false);
+    expect(eng.state).toEqual(before);
+  });
+
+  it("scores a swipe crossing between sparse samples before release, once per target", () => {
+    const { eng, clock } = setup();
+    startPlaying(eng, clock);
+    silenceSpawns(eng);
+    const t = clock.now();
+    eng.state.targets.push(manualTarget(1, t));
+    eng.apply({ type: "slice-begin", x: 200, y: 400, time: t }, 0);
+    eng.apply({ type: "slice-move", x: 600, y: 400, time: t }, 0);
+    expect(eng.state.players[0].score).toBe(10);
+    eng.apply({ type: "slice-end", x: 600, y: 400, time: t }, 0);
+    expect(eng.state.players[0].score).toBe(10);
+  });
+
+  it("keeps long continuous sweeps bounded and still hits newly spawned fruit", () => {
+    const { eng, clock } = setup();
+    startPlaying(eng, clock);
+    silenceSpawns(eng);
+    eng.state.targets.push(manualTarget(1, clock.now()));
+    eng.apply({ type: "slice-begin", x: 200, y: 400, time: clock.now() }, 0);
+    for (let i = 0; i < 600; i++) {
+      clock.advance(40);
+      expect(eng.apply({ type: "slice-move", x: i % 2 === 0 ? 600 : 200, y: 400, time: clock.now() }, 0).ok).toBe(true);
+      expect(eng.state.blades[0]!.points.length).toBeLessThanOrEqual(2);
+    }
+    eng.state.targets.push(manualTarget(2, clock.now()));
+    eng.apply({ type: "slice-move", x: 600, y: 400, time: clock.now() }, 0);
+    expect(eng.state.players[0].score).toBe(20);
+  });
+
+  it("uses the rendered moving target position rather than integrating its age twice", () => {
+    const { eng, clock } = setup();
+    startPlaying(eng, clock);
+    const target = eng.state.targets[0]!;
+    clock.advance(500);
+    eng.tick();
+    const displayed = eng.state.targets.find(t => t.id === target.id)!;
+    const result = sliceAt(eng, 0, clock.now(), [[displayed.x, displayed.y]]);
+    expect(result.events.some(e => e.type === "fruit-sliced" && e.targetId === target.id)).toBe(true);
+  });
+});
+
+describe("FruitNinjaEngine misses and lives", () => {
+  it.each([0, 1])("a server-validated bomb slice by seat %s ends the match and rejects subsequent slices", seat => {
+    const { eng, clock } = setup();
+    startPlaying(eng, clock);
+    silenceSpawns(eng);
+    eng.state.targets.push(manualTarget(1, clock.now(), "bomb"));
+    const res = sliceAt(eng, seat, clock.now(), [[400, 400]]);
     expect(res.ok).toBe(true);
     expect(res.finished).toBe(true);
     expect(res.winnerSeats).toEqual([1 - seat]);
@@ -258,13 +318,13 @@ describe("FruitNinjaEngine misses and lives", () => {
     expect(again.filter((e) => e.type === "target-missed")).toHaveLength(0);
   });
 
-  it("eliminates a player when lives hit zero and hands the win to the opponent", () => {
+  it("draws when both players lose their final life on the same expiry tick", () => {
     const { eng, clock } = setup();
     startPlaying(eng, clock);
     silenceSpawns(eng);
 
-    // Three expiry events cost every seat all three lives; the first player
-    // to reach zero (seat 0) is eliminated.
+    // The same missed targets cost both seats all lives simultaneously.
+    // Iteration order must not choose a winner.
     for (let wave = 0; wave < 3; wave++) {
       const t = clock.now();
       eng.state.targets.push(manualTarget(100 + wave, t));
@@ -274,8 +334,8 @@ describe("FruitNinjaEngine misses and lives", () => {
 
     expect(eng.state.finished).toBe(true);
     expect(eng.state.endReason).toBe("player_eliminated");
-    expect(eng.state.winnerSeats).toEqual([1]);
-    expect(eng.state.players[0].eliminated).toBe(true);
+    expect(eng.state.winnerSeats).toEqual([]);
+    expect(eng.state.players.every(p => p.eliminated)).toBe(true);
   });
 
   it("bomb hit eliminates instantly without touching lives or score", () => {

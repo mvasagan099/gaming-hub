@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { FruitNinjaPlayer } from "@gaming-hub/game-engine";
 import type { FruitDef, FruitStats } from "../types/fruit.types";
 import { FRUIT_NINJA_VISUAL_CONFIG } from "../constants/fruitNinjaVisualConfig";
 
@@ -73,6 +74,15 @@ export class ScoreManager {
       bombsHit: this.bombsHit,
       missedCount: this.missedCount,
     };
+  }
+
+  applyAuthoritativePlayer(player: FruitNinjaPlayer): void {
+    this.score = player.score;
+    this.comboCount = player.combos;
+    this.longestCombo = player.longestCombo;
+    this.slicedCount = player.slicedCount ?? 0;
+    this.bombsHit = player.bombsHit ?? 0;
+    this.missedCount = player.missedCount ?? 0;
   }
 
   reset(): void {

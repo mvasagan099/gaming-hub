@@ -1,0 +1,405 @@
+{
+  "date": "2026-10-07",
+  "environment": "Local Vite preview, in-app Chromium, free AI/practice routes",
+  "scope": "DOM/canvas bounds, visible Exit, horizontal document overflow. Shared Exit confirmation measured at six sizes; Cancel returned to play.",
+  "results": [
+    {
+      "game": "table-tennis",
+      "viewport": "360x800",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "table-tennis",
+      "viewport": "390x844",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "table-tennis",
+      "viewport": "412x915",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "table-tennis",
+      "viewport": "768x1024",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "table-tennis",
+      "viewport": "1366x768",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "table-tennis",
+      "viewport": "1920x1080",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "carrom",
+      "viewport": "360x800",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "carrom",
+      "viewport": "390x844",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "carrom",
+      "viewport": "412x915",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "carrom",
+      "viewport": "768x1024",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "carrom",
+      "viewport": "1366x768",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "carrom",
+      "viewport": "1920x1080",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "ludo",
+      "viewport": "360x800",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "ludo",
+      "viewport": "390x844",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "ludo",
+      "viewport": "412x915",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "ludo",
+      "viewport": "768x1024",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "ludo",
+      "viewport": "1366x768",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "ludo",
+      "viewport": "1920x1080",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snake-ladder",
+      "viewport": "360x800",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snake-ladder",
+      "viewport": "390x844",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snake-ladder",
+      "viewport": "412x915",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snake-ladder",
+      "viewport": "768x1024",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snake-ladder",
+      "viewport": "1366x768",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snake-ladder",
+      "viewport": "1920x1080",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "bubble-shooter",
+      "viewport": "360x800",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "bubble-shooter",
+      "viewport": "390x844",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "bubble-shooter",
+      "viewport": "412x915",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "bubble-shooter",
+      "viewport": "768x1024",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "bubble-shooter",
+      "viewport": "1366x768",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "bubble-shooter",
+      "viewport": "1920x1080",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snake-vs-worms",
+      "viewport": "360x800",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snake-vs-worms",
+      "viewport": "390x844",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snake-vs-worms",
+      "viewport": "412x915",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snake-vs-worms",
+      "viewport": "768x1024",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snake-vs-worms",
+      "viewport": "1366x768",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snake-vs-worms",
+      "viewport": "1920x1080",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snooker",
+      "viewport": "360x800",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snooker",
+      "viewport": "390x844",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snooker",
+      "viewport": "412x915",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snooker",
+      "viewport": "768x1024",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snooker",
+      "viewport": "1366x768",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "snooker",
+      "viewport": "1920x1080",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "chess",
+      "viewport": "360x800",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "chess",
+      "viewport": "390x844",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "chess",
+      "viewport": "412x915",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "chess",
+      "viewport": "768x1024",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "chess",
+      "viewport": "1366x768",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "chess",
+      "viewport": "1920x1080",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "fruit-ninja",
+      "viewport": "360x800",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "fruit-ninja",
+      "viewport": "390x844",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "fruit-ninja",
+      "viewport": "412x915",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "fruit-ninja",
+      "viewport": "768x1024",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "fruit-ninja",
+      "viewport": "1366x768",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    },
+    {
+      "game": "fruit-ninja",
+      "viewport": "1920x1080",
+      "horizontalClip": false,
+      "boardWithinViewport": true,
+      "exitWithinViewport": true
+    }
+  ],
+  "sharedExitModal": {
+    "viewports": [
+      "360x800",
+      "390x844",
+      "412x915",
+      "768x1024",
+      "1366x768",
+      "1920x1080"
+    ],
+    "dialogWithinViewport": true,
+    "cancelAndExitWithinViewport": true
+  },
+  "observations": [
+    "Fruit Ninja retained the initial mobile NONE scale mode on desktop resize and clipped the stage. Fixed scale mode/centering refresh after rotated parent resize; all six sizes rechecked.",
+    "Canvas HUDs cannot be certified by DOM bounds alone. Narrow-screen Chess, Snake & Ladder, Fruit Ninja and Snooker were visually inspected; physical controls, WAN smoothness and native gestures remain pending.",
+    "Free AI Bubble/Snake modes use their game-specific counters; absence of a DOM timer does not establish a multiplayer timer failure.",
+    "Small Table Tennis Exit control fits but touch target comfort needs hardware testing."
+  ],
+  "hardwareCertification": "PENDING",
+  "multiplayerUiHardwareCertification": "PENDING"
+}

@@ -120,6 +120,8 @@ export class GameEntryLifecycleService {
       userId: params.userId,
       referenceId: params.matchId,
       handler: async (tx) => {
+        // Different user idempotency keys still share one match capacity/seat lock.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'game-match:' + params.matchId}))`;
         // Ensure user exists and wallet is funded
         const wallet = await tx.wallet.findUnique({
           where: { userId: params.userId },
@@ -162,6 +164,11 @@ export class GameEntryLifecycleService {
           });
         }
 
+        if (match.gameId !== params.gameId || match.stake !== effectiveStake ||
+            (params.roomId != null && match.roomId !== params.roomId)) {
+          throw new AppError("VALIDATION_ERROR", "Match identity does not match the requested game, fee or room", 400);
+        }
+
         // Check if player is already joined
         const existingPlayer = match.players.find((p) => p.userId === params.userId);
         if (existingPlayer) {
@@ -175,6 +182,12 @@ export class GameEntryLifecycleService {
           };
         }
 
+        if (match.status !== "CREATED" || match.players.length >= gameConfig.maxPlayers) {
+          throw new AppError("ROOM_FULL", "Match is started, completed or at capacity", 409);
+        }
+        if (params.seat != null && (!Number.isInteger(params.seat) || params.seat < 0)) {
+          throw new AppError("VALIDATION_ERROR", "Invalid participant seat", 400);
+        }
         // Assign seat
         const takenSeats = new Set(match.players.map((p) => p.seat));
         let assignedSeat = params.seat ?? 0;
@@ -262,6 +275,7 @@ export class GameEntryLifecycleService {
    */
   static async startMatch(matchId: string) {
     return prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"game-match:" + matchId}))`;
       const match = await tx.match.findUnique({
         where: { id: matchId },
         include: { players: true },
@@ -280,7 +294,7 @@ export class GameEntryLifecycleService {
       }
 
       const gameConfig = await GameConfigService.getGameConfig(match.gameId as GameId);
-      if (match.players.length < gameConfig.minPlayers) {
+      if (match.players.length < gameConfig.minPlayers || match.players.length > gameConfig.maxPlayers) {
         throw new AppError(
           "INVALID_ACTION",
           `Cannot start match: Need at least ${gameConfig.minPlayers} players, have ${match.players.length}`,

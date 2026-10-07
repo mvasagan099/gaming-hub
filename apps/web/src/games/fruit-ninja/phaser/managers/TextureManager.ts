@@ -22,6 +22,8 @@ export class TextureManager {
     this.generateFruitTexture("banana");
     this.generateFruitTexture("coconut");
     this.generateFruitTexture("kiwi");
+    this.generateFruitTexture("pear");
+    this.generateFruitTexture("life");
     this.generateBombTexture();
     this.generateParticleTextures();
   }
@@ -205,6 +207,31 @@ export class TextureManager {
         ctx.beginPath();
         ctx.ellipse(lx, ly, 12, 7, -Math.PI / 4, 0, Math.PI * 2);
         ctx.fill();
+        break;
+      }
+
+      case "pear": {
+        ctx.fillStyle = "#a3e635";
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - r);
+        ctx.bezierCurveTo(cx + r * 0.5, cy - r, cx + r * 0.25, cy - r * 0.2, cx + r * 0.8, cy + r * 0.2);
+        ctx.bezierCurveTo(cx + r * 1.2, cy + r, cx - r * 1.2, cy + r, cx - r * 0.8, cy + r * 0.2);
+        ctx.bezierCurveTo(cx - r * 0.25, cy - r * 0.2, cx - r * 0.5, cy - r, cx, cy - r);
+        ctx.fill();
+        ctx.fillStyle = "#713f12";
+        ctx.fillRect(cx - 3, cy - r - 10, 6, 15);
+        break;
+      }
+      case "life": {
+        ctx.fillStyle = "#22c55e";
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 56px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("♥", cx, cy + 2);
         break;
       }
 

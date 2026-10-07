@@ -31,9 +31,6 @@ export const FruitNinjaPhaserGame: React.FC<FruitNinjaPhaserProps> = ({
   useEffect(() => {
     const handleResize = () => {
       setIsMobilePortrait(window.innerWidth < 1024 && window.innerHeight > window.innerWidth);
-      if (gameInstance) {
-        gameInstance.scale.refresh();
-      }
     };
     window.addEventListener("resize", handleResize);
     window.addEventListener("orientationchange", handleResize);
@@ -67,7 +64,7 @@ export const FruitNinjaPhaserGame: React.FC<FruitNinjaPhaserProps> = ({
       backgroundColor: "#23140a",
       scale: {
         mode: isMobile ? Phaser.Scale.NONE : Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
+        autoCenter: isMobilePortrait ? Phaser.Scale.NO_CENTER : Phaser.Scale.CENTER_BOTH,
       },
       scene: [FruitNinjaScene],
       physics: {
@@ -96,6 +93,21 @@ export const FruitNinjaPhaserGame: React.FC<FruitNinjaPhaserProps> = ({
       gameInstance.registry.set("isMobilePortrait", isMobilePortrait);
     }
   }, [isMobilePortrait, gameInstance]);
+
+  useEffect(() => {
+    if (!gameInstance || !containerRef.current) return;
+    const refresh = () => {
+      // Recompute fitting after the rotated parent has its new dimensions.
+      // Keep the canonical stage and live game intact during orientation changes.
+      gameInstance.scale.scaleMode = isMobilePortrait ? Phaser.Scale.NONE : Phaser.Scale.FIT;
+      gameInstance.scale.autoCenter = isMobilePortrait ? Phaser.Scale.NO_CENTER : Phaser.Scale.CENTER_BOTH;
+      gameInstance.scale.refresh();
+    };
+    const observer = new ResizeObserver(refresh);
+    observer.observe(containerRef.current);
+    refresh();
+    return () => observer.disconnect();
+  }, [gameInstance, isMobilePortrait]);
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!isMobilePortrait || !gameInstance) return;
@@ -146,6 +158,16 @@ export const FruitNinjaPhaserGame: React.FC<FruitNinjaPhaserProps> = ({
       <div
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
+        onTouchEnd={() => {
+          if (isMobilePortrait && gameInstance) {
+            (gameInstance.scene.getScene("FruitNinjaScene") as FruitNinjaScene | undefined)?.endCustomSlice();
+          }
+        }}
+        onTouchCancel={() => {
+          if (isMobilePortrait && gameInstance) {
+            (gameInstance.scene.getScene("FruitNinjaScene") as FruitNinjaScene | undefined)?.endCustomSlice();
+          }
+        }}
         style={
           isMobilePortrait
             ? {

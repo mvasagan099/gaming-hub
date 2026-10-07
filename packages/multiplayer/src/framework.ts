@@ -68,6 +68,15 @@ export interface MultiplayerFrameworkConfig {
   onMatchStarting?: (room: RoomRuntime, matchId: string) => Promise<void>;
   onMatchFinished?: (room: RoomRuntime, matchResult: MatchResult) => Promise<void>;
   onMatchAborted?: (room: RoomRuntime, reason: string) => Promise<void>;
+  /** Optional distributed host. It fences/checkpoints mutations before delivery. */
+  executeRoomTask?: <T>(roomId: string, task: () => Promise<T>) => Promise<T>;
+  publish?: (room: RoomRuntime, event: string, payload: unknown, destination: string) => void;
+  persistFinalResult?: (room: RoomRuntime, result: MatchResult) => Promise<void>;
+  countdownDurationMs?: number;
+  requireGameLoadAck?: boolean;
+  gameLoadTimeoutMs?: number;
+  closeRoom?: (room: RoomRuntime, reason: string) => Promise<void>;
+  persistAbortedResult?: (room: RoomRuntime, reason: string) => Promise<void>;
 }
 
 /**
@@ -124,6 +133,14 @@ export class MultiplayerFramework {
       onMatchStarting: config.onMatchStarting,
       onMatchFinished: config.onMatchFinished,
       onMatchAborted: config.onMatchAborted,
+      executeRoomTask: config.executeRoomTask,
+      publish: config.publish,
+      persistFinalResult: config.persistFinalResult,
+      countdownDurationMs: config.countdownDurationMs,
+      requireGameLoadAck: config.requireGameLoadAck,
+      gameLoadTimeoutMs: config.gameLoadTimeoutMs,
+      closeRoom: config.closeRoom,
+      persistAbortedResult: config.persistAbortedResult,
     };
     
     // Initialize managers (lazy initialization)

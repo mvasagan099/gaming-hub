@@ -41,12 +41,13 @@ function startPlaying(eng: FruitNinjaEngine, clock: TestClock): void {
 
 function sliceAt(eng: FruitNinjaEngine, seat: number, t: number, pts: [number, number][]) {
   const first = pts[0]!;
-  eng.apply({ type: "slice-begin", x: first[0], y: first[1], time: t }, seat);
+  const events = [...eng.apply({ type: "slice-begin", x: first[0], y: first[1], time: t }, seat).events];
   for (const [x, y] of pts.slice(1, -1)) {
-    eng.apply({ type: "slice-move", x, y, time: t }, seat);
+    events.push(...eng.apply({ type: "slice-move", x, y, time: t }, seat).events);
   }
   const last = pts[pts.length - 1]!;
-  return eng.apply({ type: "slice-end", x: last[0], y: last[1], time: t }, seat);
+  const result = eng.apply({ type: "slice-end", x: last[0], y: last[1], time: t }, seat);
+  return { ...result, events: [...events, ...result.events] };
 }
 
 describe("Fruit Ninja Spawning & Balancing Regressions", () => {
@@ -100,7 +101,8 @@ describe("Fruit Ninja Spawning & Balancing Regressions", () => {
     const { eng, clock } = setup();
     startPlaying(eng, clock);
 
-    const res = eng.apply({ type: "slice-fruit", points: 10 }, 0);
+    const target = eng.state.targets[0]!;
+    const res = sliceAt(eng, 0, clock.now(), [[target.x, target.y]]);
     expect(res.ok).toBe(true);
     expect(eng.state.scores[0]).toBe(10);
     expect(eng.state.players[0]?.score).toBe(10);
@@ -151,8 +153,11 @@ describe("Fruit Ninja Spawning & Balancing Regressions", () => {
     const { eng, clock } = setup();
     startPlaying(eng, clock);
 
-    // Direct bomb hit action eliminates player
-    const res = eng.apply({ type: "bomb-hit" }, 0);
+    // A real server bomb and intersecting blade eliminate the player.
+    const target = eng.state.targets[0]!;
+    target.type = "bomb";
+    target.points = 0;
+    const res = sliceAt(eng, 0, clock.now(), [[target.x, target.y]]);
     expect(res.ok).toBe(true);
     expect(eng.state.finished).toBe(true);
     expect(eng.state.winnerSeat).toBe(1);

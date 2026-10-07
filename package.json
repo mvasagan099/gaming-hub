@@ -29,7 +29,8 @@
     "cap:build": "npm run cap:build -w @gaming-hub/web",
     "cap:sync:ios": "npm run cap:sync:ios -w @gaming-hub/web",
     "cap:open:ios": "npm run cap:open:ios -w @gaming-hub/web",
-    "cap:build:ios": "npm run cap:build:ios -w @gaming-hub/web"
+    "cap:build:ios": "npm run cap:build:ios -w @gaming-hub/web",
+    "db:preflight": "tsx scripts/migration-preflight.ts"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

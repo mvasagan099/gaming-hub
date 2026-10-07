@@ -427,6 +427,8 @@ export async function processMatchResult(params: ProcessMatchResultParams): Prom
       },
     });
 
+    await tx.tournamentProvisionJob.updateMany({ where: { matchId }, data: { status: "COMPLETED" } });
+
     // Mark loser as eliminated
     if (loserId) {
       await tx.tournamentPlayer.updateMany({

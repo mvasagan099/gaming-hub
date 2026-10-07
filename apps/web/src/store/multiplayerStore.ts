@@ -23,6 +23,8 @@ import { useWalletStore } from "./walletStore";
 import { notifyWalletChanged } from "../services/api/practiceReward";
 import { isNativePlatform } from "../services/native/platform";
 
+const actionSequences = new Map<string, number>();
+
 function getSocketUrl(): string {
   const envUrl = (import.meta.env.VITE_SOCKET_URL as string | undefined) || "http://localhost:4001";
   if (isNativePlatform()) {
@@ -415,6 +417,14 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           });
           void get().requestFullStateSync(authoritativeState.matchId);
         }
+      });
+
+      socket.on("match:aborted", (payload) => {
+        if (get().room?.id !== payload.roomId || get().matchId !== payload.matchId) return;
+        const message = "Match cancelled. Reserved entry fees are being refunded; no player wins.";
+        set({ error: message, countdown: null, winner: null });
+        toast.error(message);
+        void useWalletStore.getState().fetchWallet();
       });
 
       socket.on("game:over", (payload) => {
@@ -934,13 +944,20 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const socket = get().socket;
     const room = get().room;
     if (!socket || !room) return { ok: false, error: "You are not in a room" };
+    if (room.awaitingGameLoad) return { ok: false, error: "Waiting for both game boards to load" };
     const matchId = get().matchId;
     if (!matchId || (room.matchId && room.matchId !== matchId)) return { ok: false, error: "Waiting for the current match state" };
     
-    const logAction = room.gameId !== "table-tennis" || action.type !== "paddle-move";
+    const logAction = !["table-tennis", "fruit-ninja", "snake-vs-worms"].includes(room.gameId);
     if (logAction) console.log("[MultiplayerStore] Client sending game:action to room", room.id, "with action:", action);
     const actionSocket = ["snooker", "snake-vs-worms"].includes(room.gameId) ? socket.timeout(8000) : socket;
-    const res = await actionSocket.emitWithAck("game:action", { roomId: room.id, matchId, action });
+    const userId = useAuthStore.getState().user?.id ?? "";
+    const scope = `${matchId}:${userId}`;
+    const accepted = room.players.find(p => p.id === userId)?.lastAcceptedActionSequence ?? 0;
+    const sequence = Math.max(actionSequences.get(scope) ?? 0, accepted) + 1;
+    actionSequences.set(scope, sequence);
+    const orderedAction = { ...action, actionId: action.actionId ?? crypto.randomUUID(), clientSequence: sequence };
+    const res = await actionSocket.emitWithAck("game:action", { roomId: room.id, matchId, action: orderedAction });
     
     if (!res.ok) {
       const errMsg = (res as { error?: { message: string } }).error?.message ?? "Action failed";
@@ -982,7 +999,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
       if (res.ok && res.data) {
         if (get().matchId !== matchId || get().room?.id !== room?.id) return;
-        if (["snooker", "snake-vs-worms"].includes(room?.gameId ?? '') && res.data.stateVersion < get().lastStateVersion) return;
+        if (res.data.stateVersion < get().lastStateVersion) return;
         const full = res.data.fullState;
         console.log("[STATE] SYNC_COMPLETED", {
           matchId,

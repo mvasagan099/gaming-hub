@@ -403,3 +403,45 @@ describe("SnakeVsWormsEngine - Shared World Arena Architecture", () => {
     expect(engine.state.winnerSeats.every(seat => seat === 0 || seat === 1)).toBe(true);
   }, 15000);
 });
+
+describe('Snake vs Worms supported multiplayer player counts', () => {
+  const players = Array.from({ length: 8 }, (_, seat) => ({ userId: `human-${seat}`, seat }));
+
+  it.each([3, 4, 8])('spawns %i humans and bots without overlapping bodies or immediate eliminations', (count) => {
+    const engine = new SnakeVsWormsEngine(players.slice(0, count), seededRandomSource(42));
+    const entities = engine.state.players;
+    for (let i = 0; i < entities.length; i++) {
+      for (let j = i + 1; j < entities.length; j++) {
+        expect(entities[i].body.every(a => entities[j].body.every(b => Math.hypot(a.x - b.x, a.y - b.y) >= 30))).toBe(true);
+      }
+    }
+    engine.tick();
+    expect(engine.state.players.filter(p => !p.playerId.startsWith('ai-')).every(p => p.status === 'active')).toBe(true);
+    expect(engine.finished).toBe(false);
+  });
+
+  it('considers every human seat for timeout scoring and excludes bots', () => {
+    const engine = new SnakeVsWormsEngine(players, seededRandomSource(42));
+    const snapshot = engine.getStateSnapshot();
+    snapshot.players.forEach(p => { p.score = p.playerId.startsWith('ai-') ? 9999 : p.seat === 7 ? 500 : 0; });
+    engine.restoreState(snapshot);
+    expect(engine.handleTimeout('match').winnerSeats).toEqual([7]);
+  });
+
+  it('resolves a tie for the leading score by body length across all human seats', () => {
+    const engine = new SnakeVsWormsEngine(players, seededRandomSource(42));
+    const snapshot = engine.getStateSnapshot();
+    snapshot.players[5].score = snapshot.players[7].score = 500;
+    snapshot.players[7].body.push({ ...snapshot.players[7].body.at(-1)! });
+    engine.restoreState(snapshot);
+    expect(engine.handleTimeout('match').winnerSeats).toEqual([7]);
+  });
+
+  it('returns a draw when multiple human leaders have the same score and body length', () => {
+    const engine = new SnakeVsWormsEngine(players, seededRandomSource(42));
+    const snapshot = engine.getStateSnapshot();
+    snapshot.players[5].score = snapshot.players[7].score = 500;
+    engine.restoreState(snapshot);
+    expect(engine.handleTimeout('match').winnerSeats).toEqual([]);
+  });
+});

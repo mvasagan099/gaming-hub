@@ -16,6 +16,7 @@ export class SliceManager {
 
   private isComboActive = false;
   private comboTier = 0;
+  private onBladeInput?: (type: "slice-begin" | "slice-move" | "slice-end", x: number, y: number) => void;
 
   constructor(scene: Phaser.Scene, fruitManager: FruitManager) {
     this.scene = scene;
@@ -27,6 +28,10 @@ export class SliceManager {
     this.comboTier = tier;
   }
 
+  setAuthoritativeInput(handler: NonNullable<SliceManager["onBladeInput"]>): void {
+    this.onBladeInput = handler;
+  }
+
   create(): void {
     // Swipe trail overlay (depth 40)
     this.trailGraphics = this.scene.add.graphics();
@@ -36,11 +41,16 @@ export class SliceManager {
     this.scene.input.on("pointerdown", this.onPointerDown, this);
     this.scene.input.on("pointermove", this.onPointerMove, this);
     this.scene.input.on("pointerup", this.onPointerUp, this);
+    this.scene.events.once("shutdown", () => {
+      this.scene.input.off("pointerdown", this.onPointerDown, this);
+      this.scene.input.off("pointermove", this.onPointerMove, this);
+      this.scene.input.off("pointerup", this.onPointerUp, this);
+    });
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
     if (this.scene.registry.get("isMobilePortrait")) return;
-    this.points = [{ x: pointer.x, y: pointer.y, time: this.scene.time.now }];
+    this.startSlicePoint(pointer.x, pointer.y);
   }
 
   private onPointerMove(pointer: Phaser.Input.Pointer): void {
@@ -55,12 +65,13 @@ export class SliceManager {
       this.points.shift();
     }
 
-    // Check intersection with all active fruits
-    this.checkSliceCollisions();
+    this.onBladeInput?.("slice-move", pointer.x, pointer.y);
+    if (!this.onBladeInput) this.checkSliceCollisions();
   }
 
   public startSlicePoint(x: number, y: number): void {
     this.points = [{ x, y, time: this.scene.time.now }];
+    this.onBladeInput?.("slice-begin", x, y);
   }
 
   public addSlicePoint(x: number, y: number): void {
@@ -70,12 +81,18 @@ export class SliceManager {
     if (this.points.length > FRUIT_NINJA_VISUAL_CONFIG.trail.maxPoints) {
       this.points.shift();
     }
-    this.checkSliceCollisions();
+    this.onBladeInput?.("slice-move", x, y);
+    if (!this.onBladeInput) this.checkSliceCollisions();
+  }
+
+  public endSlicePoint(): void {
+    const last = this.points[this.points.length - 1];
+    if (last) this.onBladeInput?.("slice-end", last.x, last.y);
   }
 
   private onPointerUp(): void {
     if (this.scene.registry.get("isMobilePortrait")) return;
-    // Smoothly clear tail
+    this.endSlicePoint();
   }
 
   update(): void {

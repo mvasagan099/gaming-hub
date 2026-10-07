@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// This membership test must not initialize live authentication/realtime clients.
+vi.mock('./authStore', () => ({ useAuthStore: { getState: () => ({ session: null, user: null }) } }));
+vi.mock('./walletStore', () => ({ useWalletStore: { getState: () => ({ fetchWallet: vi.fn() }) } }));
+vi.mock('../services/api/practiceReward', () => ({ notifyWalletChanged: vi.fn() }));
 import { useMultiplayerStore } from './multiplayerStore';
 
 describe('leaving a multiplayer game', () => {

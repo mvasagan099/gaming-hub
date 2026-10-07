@@ -1,3 +1,4 @@
+import { useRoomCountdown } from "../../hooks/useRoomCountdown";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { goBackOrHome } from "../../utils/navigation";
@@ -270,7 +271,8 @@ export const LobbyPage: React.FC = () => {
   const leaveRoom = useMultiplayerStore((s) => s.leaveRoom);
   const setReady = useMultiplayerStore((s) => s.setReady);
   const startGame = useMultiplayerStore((s) => s.startGame);
-  const countdown = useMultiplayerStore((s) => s.countdown);
+  const legacyCountdown = useMultiplayerStore((s) => s.countdown);
+  const countdown = useRoomCountdown(room, legacyCountdown);
   const joinMatchmaking = useMultiplayerStore((s) => s.joinMatchmaking);
   const leaveMatchmaking = useMultiplayerStore((s) => s.leaveMatchmaking);
   const sendMessage = useMultiplayerStore((s) => s.sendMessage);
@@ -293,7 +295,7 @@ export const LobbyPage: React.FC = () => {
       navigate(`/lobby/${room.gameId}`, { replace: true });
       return;
     }
-    if (room.status === "playing" || room.matchId) {
+    if (room.status === "playing") {
       if (matchmaking.queued) {
         useMultiplayerStore.setState({
           matchmaking: { queued: false, position: 0, gameId: null, stake: null, settings: {} },

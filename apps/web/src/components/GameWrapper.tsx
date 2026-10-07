@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { GameId } from '../types';
 import { ArrowLeft, Copy, Check, Eye, Timer, Zap, Users, Globe, Lock, Coins } from 'lucide-react';
 import { useMultiplayerStore } from '../store/multiplayerStore';
+import { useGameLoadAck } from '../hooks/useGameLoadAck';
 
 interface GameWrapperProps {
   title: string;
@@ -10,6 +11,7 @@ interface GameWrapperProps {
   stake: number;
   onBack: () => void;
   children: React.ReactNode;
+  readyForMultiplayer?: boolean;
   isFullscreen?: boolean;
   isGameOver?: boolean;
   hideFloatingExitOnMobile?: boolean;
@@ -29,15 +31,24 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
   stake,
   onBack,
   children,
+  readyForMultiplayer = true,
   isFullscreen = false,
   isGameOver = false,
   hideFloatingExitOnMobile = false,
   hideFloatingExitOnDesktop = false,
 }) => {
+  useGameLoadAck(gameId, mode, readyForMultiplayer);
   const [copied, setCopied] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
   const room = useMultiplayerStore((s) => s.room);
+  const matchError = useMultiplayerStore(s => s.error);
+  const cancelledNotice = room?.status === 'ended' && matchError?.startsWith('Match cancelled.') ? matchError : null;
+  const loadingNotice = mode === 'multiplayer' && (room?.awaitingGameLoad || cancelledNotice) ? (
+    <div role="status" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] rounded-xl bg-slate-900/95 border border-slate-600 px-4 py-2 text-sm text-white text-center pointer-events-none">
+      {cancelledNotice || 'Waiting for both game boards to load…'}
+    </div>
+  ) : null;
   const startRef = useRef<number>(Date.now());
 
   // Visible exit controls request confirmation from the game route.
@@ -68,6 +79,7 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
   if (isFullscreen) {
     return (
       <div className="game-text-scale fixed inset-0 z-50 bg-[#060913] text-white flex flex-col overflow-hidden">
+        {loadingNotice}
         {/* Floating Back / Exit button for Single Player & AI Fullscreen */}
         {!(mode === 'multiplayer' && room) && (
           <>
@@ -246,6 +258,7 @@ export const GameWrapper: React.FC<GameWrapperProps> = ({
 
       {/* Game canvas/board container */}
       <div className="w-full max-w-6xl flex-1 flex items-center justify-center relative my-auto py-2">
+        {loadingNotice}
         {children}
       </div>
 

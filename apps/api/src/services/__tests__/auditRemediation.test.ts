@@ -100,6 +100,10 @@ describe('Audit negative security probes',()=>{
       process.env.NODE_ENV='production';delete process.env.REQUIRE_EMAIL_VERIFICATION;
       process.env.EMAIL_PROVIDER='brevo';process.env.BREVO_API_KEY='audit-dummy-key';
       process.env.COUPON_API_URL='https://coupon-audit.example/api/v1';
+      // Production validation now requires these integrations even in this isolated config probe.
+      process.env.COUPON_API_KEY='test-only-coupon-key';
+      process.env.SUPABASE_SERVICE_ROLE_KEY='test-only-service-role';
+      process.env.TOTP_ENCRYPTION_KEY=Buffer.alloc(32, 7).toString('base64');
       vi.resetModules();vi.doMock('dotenv',()=>({default:{config:()=>({})}}));
       const {env}=await import('../../env');
       expect(env.requireEmailVerification).toBe(true);

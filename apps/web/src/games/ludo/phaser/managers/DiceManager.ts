@@ -20,7 +20,7 @@ export default class DiceManager {
   private diceGfx!: Phaser.GameObjects.Graphics;
   private pedestalGfx!: Phaser.GameObjects.Graphics;
   private pedestalColor = 0xe11d48;
-  private activeColors: PlayerColor[] = ["red", "green"];
+  private activeColors: PlayerColor[] = ["green", "blue"];
   private hitArea!: Phaser.GameObjects.Rectangle;
   private rollBtnGfx!: Phaser.GameObjects.Graphics;
   private rollLabel!: Phaser.GameObjects.Text;

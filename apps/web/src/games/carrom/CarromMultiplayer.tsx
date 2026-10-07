@@ -337,6 +337,8 @@ const CarromMultiplayer: React.FC<Props> = ({
   const [turnNumber, setTurnNumber] = useState<number>(1);
 
   const room = useMultiplayerStore((s) => s.room);
+  const [renderedMatchId, setRenderedMatchId] = useState<string | null>(null);
+  const renderedMatchRef = useRef<string | null>(null);
 
   // ── Driver setup ──────────────────────────────────────────────────────────
 
@@ -1499,6 +1501,12 @@ const CarromMultiplayer: React.FC<Props> = ({
       ctx.restore();
     }
 
+    const currentMatchId = useMultiplayerStore.getState().matchId;
+    if (currentMatchId && renderedMatchRef.current !== currentMatchId && latestState?.coins.length &&
+        latestState.players.some(p => p.seat === mySeatRef.current)) {
+      renderedMatchRef.current = currentMatchId;
+      setRenderedMatchId(currentMatchId);
+    }
     rafRef.current = requestAnimationFrame(animate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragState, dragAim, gameOver]);
@@ -1789,6 +1797,7 @@ const CarromMultiplayer: React.FC<Props> = ({
 
   return (
     <GameWrapper
+      readyForMultiplayer={renderedMatchId === room?.matchId && renderedMatchId !== null}
       title="Carrom"
       gameId="carrom"
       mode="multiplayer"

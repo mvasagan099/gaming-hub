@@ -31,7 +31,7 @@ export class LudoRuleEngine {
 
   createInitialState(playerCount: 2 | 4 = 4): LudoGameState {
     const activeColors: PlayerColor[] =
-      playerCount === 2 ? ["red", "green"] : ["red", "blue", "green", "yellow"];
+      playerCount === 2 ? ["green", "blue"] : ["green", "yellow", "blue", "red"];
 
     const players: Player[] = activeColors.map((color, idx) => ({
       id: idx,

@@ -10,7 +10,7 @@ import { FruitEvents } from "../events/FruitEvents";
 import type { FruitDef } from "../types/fruit.types";
 import FruitNinjaMultiplayerDriver from "../managers/FruitNinjaMultiplayerDriver";
 import { useMultiplayerStore, type WinnerInfo } from "../../../../store/multiplayerStore";
-import type { FruitNinjaState } from "@gaming-hub/game-engine";
+import { FIELD_WIDTH, FIELD_HEIGHT, type FruitNinjaState } from "@gaming-hub/game-engine";
 import { FRUIT_NINJA_VISUAL_CONFIG } from "../constants/fruitNinjaVisualConfig";
 
 export default class FruitNinjaScene extends Phaser.Scene {
@@ -108,6 +108,10 @@ export default class FruitNinjaScene extends Phaser.Scene {
         this.triggerGameOver(winner, state);
       });
 
+      this.sliceManager.setAuthoritativeInput((type, x, y) => {
+        this.multiplayerDriver?.sendSlice(type, x * FIELD_WIDTH / this.scale.width,
+          y * FIELD_HEIGHT / this.scale.height);
+      });
       this.multiplayerDriver.start();
 
       this.events.once("shutdown", () => {
@@ -130,11 +134,9 @@ export default class FruitNinjaScene extends Phaser.Scene {
     this.events.on(FruitEvents.FRUIT_SLICED, (def: FruitDef) => {
       if (this.gameOver) return;
       this.audio.play("move");
+      if (this.isMultiplayer) return;
       this.scoreManager.registerSlice(def);
 
-      if (this.multiplayerDriver) {
-        this.multiplayerDriver.sendFruitSliced(def.points);
-      }
 
       // Combo Tracking
       const now = this.time.now;
@@ -159,18 +161,16 @@ export default class FruitNinjaScene extends Phaser.Scene {
     this.events.on(FruitEvents.BOMB_EXPLODED, () => {
       if (this.gameOver) return;
       this.audio.play("snake");
+      if (this.isMultiplayer) return;
       this.scoreManager.registerBomb();
       this.comboCount = 0;
       this.sliceManager.setComboActive(false);
 
-      if (this.multiplayerDriver) {
-        this.multiplayerDriver.sendBombHit();
-      }
       this.triggerGameOver();
     });
 
     this.events.on(FruitEvents.LIFE_LOST, () => {
-      if (this.mode === "zen" || this.gameOver) return;
+      if (this.isMultiplayer || this.mode === "zen" || this.gameOver) return;
 
       this.scoreManager.registerMiss();
       this.comboCount = 0;
@@ -178,9 +178,6 @@ export default class FruitNinjaScene extends Phaser.Scene {
       this.lives--;
       this.hud.updateLives(this.lives);
 
-      if (this.multiplayerDriver) {
-        this.multiplayerDriver.sendMissedFruit();
-      }
 
       if (this.lives <= 0) {
         this.triggerGameOver();
@@ -189,6 +186,7 @@ export default class FruitNinjaScene extends Phaser.Scene {
 
     // 8. Start with Cinematic 3-2-1 SLICE intro
     this.hud.playStartIntro(() => {
+      if (this.isMultiplayer) return;
       this.isStarted = true;
       this.fruitManager.spawnFruit(1);
       this.scheduleNextSpawn();
@@ -345,6 +343,7 @@ export default class FruitNinjaScene extends Phaser.Scene {
 
   update(): void {
     if (this.gameOver) return;
+    if (this.isMultiplayer) { this.sliceManager.update(); return; }
 
     const now = this.time.now;
     if (this.comboCount >= 3 && now - this.lastSliceTime > 300) {
@@ -368,12 +367,22 @@ export default class FruitNinjaScene extends Phaser.Scene {
     const current = useMultiplayerStore.getState();
     const newMatch = Boolean(current.matchId && current.matchId !== this.activeMatchId);
     if (current.matchId) this.activeMatchId = current.matchId;
-    // A bomb ends play locally before its action reaches the server. An
-    // in-flight state packet for that same match must never restart the game.
+    // Only a new authoritative match may restart a completed scene.
     if (newMatch && !state.finished && !current.winner) {
       this.restartGameForRematch();
     }
     if (this.gameOver) return;
+    this.isStarted = state.phase === "playing";
+    this.fruitManager.syncAuthoritativeTargets(state, this.mySeat);
+    const player = state.players.find(p => p.seat === this.mySeat);
+    if (player) {
+      this.scoreManager.applyAuthoritativePlayer(player);
+      this.hud.updateScore(player.score);
+      this.lives = player.lives;
+      this.hud.updateLives(this.lives);
+    }
+    this.matchTimeLeft = Math.ceil((state.matchRemainingMs ?? 60000) / 1000);
+    this.hud.updateTimer(this.matchTimeLeft);
     const oppSeat = this.mySeat === 0 ? 1 : 0;
     const oppPlayer = state.players[oppSeat];
     if (oppPlayer) this.hud.updateOpponentScore(oppPlayer.score);
@@ -402,6 +411,7 @@ export default class FruitNinjaScene extends Phaser.Scene {
     this.hud.updateTimer(60);
 
     this.hud.playStartIntro(() => {
+      if (this.isMultiplayer) return;
       this.isStarted = true;
       this.fruitManager.spawnFruit(1);
       this.scheduleNextSpawn();
@@ -410,7 +420,7 @@ export default class FruitNinjaScene extends Phaser.Scene {
   }
 
   private triggerGameOver(winner?: WinnerInfo | null, finalState?: FruitNinjaState): void {
-    if (this.gameOver && !winner && this.isMultiplayer) {
+    if (this.gameOver) {
       return;
     }
     this.gameOver = true;
@@ -437,6 +447,10 @@ export default class FruitNinjaScene extends Phaser.Scene {
   public startCustomSlice(x: number, y: number): void {
     if (this.gameOver) return;
     this.sliceManager.startSlicePoint(x, y);
+  }
+
+  public endCustomSlice(): void {
+    if (!this.gameOver) this.sliceManager.endSlicePoint();
   }
 
   public handleCustomSlice(x: number, y: number): void {

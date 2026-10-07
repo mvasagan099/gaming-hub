@@ -89,7 +89,7 @@ export default class LudoScene extends Phaser.Scene {
     // 5. Token Manager
     this.tokenManager = new TokenManager(this);
     const activeColors: PlayerColor[] =
-      playerCount === 2 ? ["red", "green"] : PLAYER_COLORS_ORDER.slice(0, playerCount);
+      playerCount === 2 ? ["green", "blue"] : PLAYER_COLORS_ORDER.slice(0, playerCount);
     const initialTokens = activeColors.flatMap((color) =>
       Array.from({ length: 4 }, (_, ti) => ({
         id: `${color}-${ti}`,

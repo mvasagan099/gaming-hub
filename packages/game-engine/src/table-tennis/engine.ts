@@ -37,6 +37,8 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
 
   private physicsInterval: ReturnType<typeof setInterval> | null = null;
 
+  override persistenceOptions() { return { ...super.persistenceOptions(), rules: { ...this.rules } }; }
+
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: TableTennisEngineOptions) {
     // Both players move continuously; resuming must not arm a turn forfeiture clock.
     const turnTimer = undefined;
@@ -240,7 +242,7 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     }
   }
 
-  tick(): EngineActionResult<InternalState> {
+  tick(elapsedMs: number = 1000 / 60): EngineActionResult<InternalState> {
     if (this.state.finished || this.state.paused) {
       return {
         ok: true,
@@ -262,7 +264,15 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     }
 
     const previousPoints = this.state.totalPointsPlayed;
-    const nextState = this.simulatePhysics(this.state);
+    // Persistence and packet processing can delay callbacks. Advance in fixed,
+    // collision-safe steps using elapsed time, rather than slowing the rally.
+    const frameMs = 1000 / 60;
+    const remainder = (this.state as InternalState & { physicsRemainderMs?: number }).physicsRemainderMs ?? 0;
+    const available = remainder + (Number.isFinite(elapsedMs) ? Math.max(0, Math.min(250, elapsedMs)) : frameMs);
+    const steps = Math.floor((available + 1e-7) / frameMs);
+    let nextState = this.state;
+    for (let i = 0; i < steps && !nextState.finished && nextState.ball?.inPlay; i++) nextState = this.simulatePhysics(nextState);
+    (nextState as InternalState & { physicsRemainderMs?: number }).physicsRemainderMs = available - steps * frameMs;
     this.updateState(nextState);
 
     const events: EngineEvent[] = [];

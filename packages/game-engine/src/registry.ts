@@ -1,4 +1,4 @@
-import type { GameId } from "@gaming-hub/shared";
+import { getGameDefinition, type GameId } from "@gaming-hub/shared";
 import type { EngineInstance, EngineOptions, EnginePlayer, RandomSource } from "./types";
 import { SnakeLadderEngine } from "./snake-ladder/engine";
 import { ChessEngine } from "./chess/engine";
@@ -55,6 +55,13 @@ export function createEngine(
   const Ctor = ENGINES[gameId];
   if (!Ctor) {
     throw new Error(`Game engine for "${gameId}" is not available yet`);
+  }
+  const definition = getGameDefinition(gameId);
+  if (players.length < definition.minPlayers || players.length > definition.maxPlayers ||
+      new Set(players.map(player => player.userId)).size !== players.length ||
+      new Set(players.map(player => player.seat)).size !== players.length ||
+      players.some(player => !player.userId || !Number.isInteger(player.seat) || player.seat < 0 || player.seat >= definition.maxPlayers)) {
+    throw new Error(`Invalid participants for ${gameId}: supports ${definition.minPlayers}–${definition.maxPlayers} distinct players`);
   }
   return new Ctor(players, rng, options as never);
 }

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GAME_IDS, type GameId, type RoomFull } from '@gaming-hub/shared';
 import { registerCarromPreviewHandler } from '../../../apps/socket-server/src/carromHandlers';
 import { registerSnookerPreviewHandler } from '../../../apps/socket-server/src/snookerHandlers';
+import { authenticatedEngineStateSync } from '../../../apps/socket-server/src/currentEngineStateSync';
 import { applySocketGameAction } from '../../../apps/socket-server/src/gameActions';
 import { MultiplayerFramework } from '../src/framework';
 import { registerRoomLifecycleHandlers } from '../../../apps/socket-server/src/roomHandlers';
@@ -49,6 +50,10 @@ describe('private room Socket.IO lifecycle', () => {
       });
       registerCarromPreviewHandler(socket, io, framework, userId);
       registerSnookerPreviewHandler(socket, io, framework, userId);
+      socket.on('game:state-sync', (payload, ack) => {
+        try { ack({ ok: true, data: authenticatedEngineStateSync(framework, userId, payload.matchId) }); }
+        catch (error) { ack({ ok: false, error: { message: (error as Error).message } }); }
+      });
       socket.on('game:action', async (payload, ack) => {
         try { ack({ ok: true, data: await applySocketGameAction(framework, userId, payload) }); }
         catch (error) { ack({ ok: false, error: { message: (error as Error).message } }); }
@@ -89,6 +94,27 @@ describe('private room Socket.IO lifecycle', () => {
     return roomAck(host, 'room:create', { gameId, isPrivate: true, stake: 100, maxPlayers: 2 });
   }
 
+  it('preserves the prepared tournament match identity when both players start', async () => {
+    const created = await create('chess');
+    await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
+    await roomAck(guest, 'room:ready', { roomId: created.id, ready: true });
+    const room = framework.roomManager.getRoom(created.id)!;
+    room.config.settings.tournamentId = 'bracket-tournament';
+    // The tournament endpoint registers a waiting room with an existing match.
+    const { createEngine, secureRandomSource } = await import('@gaming-hub/game-engine');
+    room.match = {
+      matchId: 'prepared-bracket-match',
+      engine: createEngine('chess', [{ userId: 'host', seat: 0 }, { userId: 'guest', seat: 1 }], secureRandomSource()),
+      turnNumber: 0, startedAt: Date.now(), pausedAt: null, pausedBy: null,
+      finishedAt: null, winnerIds: [], winnerSeats: [], stateSnapshots: [], actionHistory: [],
+    };
+    const started = await roomAck(host, 'room:start', { roomId: room.id });
+    expect(started.matchId).toBe('prepared-bracket-match');
+    expect(room.match.matchId).toBe('prepared-bracket-match');
+    expect(fund.mock.calls[0][1]).toBe('prepared-bracket-match');
+    expect((await authenticatedEngineStateSync(framework, 'guest', 'prepared-bracket-match')).matchId).toBe('prepared-bracket-match');
+  });
+
   it.each(GAME_IDS)('creates, joins by code, readies and starts a private %s match on both clients', async gameId => {
     const created = await create(gameId);
     expect(created).toMatchObject({ gameId, isPrivate: true, hostId: 'host', status: 'waiting', stake: 100, maxPlayers: 2, matchId: null });
@@ -117,6 +143,85 @@ describe('private room Socket.IO lifecycle', () => {
     const reconnect = await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
     expect(reconnect.matchId).toBe(started.matchId);
     expect(reconnect.players.map(player => [player.id, player.seat])).toEqual([['host', 0], ['guest', 1]]);
+  });
+
+  it.each(['chess', 'ludo', 'snake-ladder', 'bubble-shooter', 'fruit-ninja'] as const)(
+    'runs %s intents, authorization, duplicate protection, reconnect, end and rematch on two sockets', async gameId => {
+      const created = await create(gameId);
+      await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
+      await roomAck(guest, 'room:ready', { roomId: created.id, ready: true });
+      await roomAck(host, 'room:start', { roomId: created.id });
+      const room = framework.roomManager.getRoom(created.id)!;
+      const engine = room.match!.engine as any;
+      const oldMatch = room.match!.matchId;
+      const a: any[] = [], b: any[] = [], endsA: any[] = [], endsB: any[] = [];
+      host.on('game:state', value => a.push(value)); guest.on('game:state', value => b.push(value));
+      host.on('game:over', value => endsA.push(value)); guest.on('game:over', value => endsB.push(value));
+      const action = (socket: ClientSocket, value: any, matchId = room.match!.matchId) => socket.timeout(4000).emitWithAck('game:action', { roomId: room.id, matchId, action: value });
+      const stranger = await client('outside');
+      expect((await action(stranger, { type: 'resign' })).data.ok).toBe(false);
+      const unauthorized = await stranger.timeout(4000).emitWithAck('game:state-sync', { matchId: oldMatch });
+      expect(unauthorized.ok).toBe(false);
+      if (gameId === 'fruit-ninja') {
+        await vi.waitFor(() => expect(engine.state.phase).toBe('playing'), { timeout: 4500 });
+        expect((await action(host, { type: 'slice-fruit', points: 999999 })).data.ok).toBe(false);
+        const begin = { type: 'slice-begin', x: 1, y: 1, time: Date.now(), actionId: 'blade-begin' };
+        expect((await action(host, begin)).data.ok).toBe(true);
+        const duplicate = await action(host, begin); expect(duplicate.data.ok).toBe(true);
+        expect((await action(host, { type: 'slice-end', x: 2, y: 2, time: Date.now(), actionId: 'blade-end' })).data.ok).toBe(true);
+        expect(engine.state.scores).toEqual([0, 0]);
+      } else {
+        const intent = gameId === 'chess' ? { type: 'move', from: 'e2', to: 'e4' }
+          : gameId === 'bubble-shooter' ? { type: 'shoot', angle: -Math.PI / 2 } : { type: 'roll' };
+        const request = { ...intent, actionId: 'first-intent' };
+        expect((await action(host, request)).data.ok).toBe(true);
+        const before = structuredClone(engine.state);
+        expect((await action(host, request)).data.ok).toBe(true);
+        expect(engine.state).toEqual(before);
+        if (gameId === 'chess') {
+          expect((await action(host, { type: 'move', from: 'd2', to: 'd4' })).data.ok).toBe(false);
+          expect((await action(guest, { type: 'move', from: 'e7', to: 'e5', actionId: 'black-move' })).data.ok).toBe(true);
+          expect(engine.state.history).toEqual(['e4', 'e5']);
+        }
+      }
+      await vi.waitFor(() => { expect(a.length).toBeGreaterThan(0); expect(b.at(-1)).toEqual(a.at(-1)); });
+      const stateBeforeReconnect = engine.serialize();
+      guest.disconnect(); guest = await client('guest');
+      await roomAck(guest, 'room:join', { code: created.code, asSpectator: false });
+      const sync = await guest.timeout(4000).emitWithAck('game:state-sync', { matchId: oldMatch });
+      expect(sync.ok).toBe(true); expect(sync.data.matchId).toBe(oldMatch);
+      const restored = sync.data.fullState.gameState;
+      if (gameId === 'chess') { expect(restored.fen).toBe(stateBeforeReconnect.fen); expect(restored.history).toEqual(['e4', 'e5']); }
+      if (gameId === 'ludo') expect(restored.players).toEqual(stateBeforeReconnect.players);
+      guest.on('game:over', value => endsB.push(value));
+      await new Promise(resolve => setTimeout(resolve, 170));
+      expect((await action(guest, { type: 'resign', actionId: 'resignation' })).data.ok).toBe(true);
+      await vi.waitFor(() => { expect(endsA).toHaveLength(1); expect(endsB).toHaveLength(1); });
+      expect(endsA[0]).toEqual(endsB[0]); expect(endsA[0].state.winnerSeats).toEqual([0]);
+      await framework.matchManager.requestRematch(room.id, 'host');
+      await framework.matchManager.requestRematch(room.id, 'guest');
+      expect(room.match!.matchId).not.toBe(oldMatch); expect(room.match!.engine.state.finished).toBe(false);
+      expect((await action(host, { type: 'resign' }, oldMatch)).data.ok).toBe(false);
+      expect(fund).toHaveBeenCalledTimes(2);
+    });
+
+  it.each(['bubble-shooter', 'snake-vs-worms'] as const)('%s retains eight distinct participants and rejects a ninth', async gameId => {
+    const created = await roomAck(host, 'room:create', { gameId, isPrivate: true, stake: 100, maxPlayers: 8 });
+    const participants = [host, guest];
+    for (let i = 2; i < 8; i++) participants.push(await client(`player-${i}`));
+    for (const socket of participants.slice(1)) {
+      await roomAck(socket, 'room:join', { code: created.code, asSpectator: false });
+      await roomAck(socket, 'room:ready', { roomId: created.id, ready: true });
+    }
+    const extra = await client('ninth-player');
+    expect((await extra.timeout(4000).emitWithAck('room:join', { code: created.code, asSpectator: false })).ok).toBe(false);
+    const roomState = await roomAck(host, 'room:start', { roomId: created.id });
+    expect(roomState.players.map(player => player.seat).sort((a, b) => a! - b!)).toEqual([0,1,2,3,4,5,6,7]);
+    const room = framework.roomManager.getRoom(created.id)!;
+    const sync = await participants[7]!.timeout(4000).emitWithAck('game:state-sync', { matchId: room.match!.matchId });
+    expect(sync.ok).toBe(true);
+    expect(sync.data.fullState.gameState.players.filter((p: any) => roomState.players.some(participant => participant.seat === p.seat)).map((p: any) => p.seat).sort()).toEqual([0,1,2,3,4,5,6,7]);
+    expect(fund).toHaveBeenCalledOnce();
   });
 
   it('synchronizes Carrom previews, shots, reconnects and rematches across two clients', async () => {

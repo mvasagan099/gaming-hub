@@ -1,5 +1,12 @@
+import { SharedMatchmaking } from "./distributed/matchmaking";
+import { provisionTournamentRoom } from "./distributed/provision";
+import { DistributedRoomCoordinator } from "./distributed/coordinator";
+import { createCommandDispatcher, DISTRIBUTED_ROOM_EVENTS } from "./distributed/commands";
+import { PostgresMatchStore } from "./distributed/store";
+import { GameResultOutboxWorker } from "./distributed/outbox";
+import type { MatchResult } from "@gaming-hub/multiplayer";
 import { registerSnookerPreviewHandler } from "./snookerHandlers";
-import { currentEngineStateSync } from "./currentEngineStateSync";
+import { authenticatedEngineStateSync } from "./currentEngineStateSync";
 import { createServer, type Server as HttpServer } from "node:http";
 import { Server, type Socket } from "socket.io";
 import { Redis } from "ioredis";
@@ -24,8 +31,7 @@ import { applySocketGameAction } from "./gameActions";
 import { registerRoomLifecycleHandlers } from "./roomHandlers";
 import { registerCarromPreviewHandler } from "./carromHandlers";
 import { GameEventBus } from "./events/GameEventBus";
-import { GameStateSyncManager } from "./sync/GameStateSyncManager";
-import { createAndFundRoomMatch, settleMatch, cancelMatch } from "./apiClient";
+import { createAndFundRoomMatch, settleMatch, cancelMatch, reportTournamentMatchResult } from "./apiClient";
 import { checkInternalApiAuth } from "./internalApiCheck";
 
 const logger = pino({
@@ -49,6 +55,9 @@ function toErrorPayload(error: unknown): SocketErrorPayload {
 let io!: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents>;
 
 async function main(): Promise<void> {
+  if (!await checkInternalApiAuth(env.API_URL, env.INTERNAL_API_KEY, logger) && env.distributedMatches) {
+    throw new Error("INTERNAL_API_AUTH_REQUIRED_FOR_DURABLE_MATCHES");
+  }
   // Create Socket.IO server first so it's available for internal API handlers
   io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents>(undefined as any, {
     cors: { origin: parseOrigins(env.CORS_ORIGIN), credentials: true },
@@ -65,7 +74,7 @@ async function main(): Promise<void> {
     if (req.url === "/health/ready") {
       // Check framework health
       const framework = MultiplayerFramework.getInstance({ io });
-      const health = framework.isInitialized() ? { status: "ok" } : { status: "not_ready" };
+      const health = framework.isInitialized() && (!distributed || distributed.isReady()) ? { status: "ok" } : { status: "not_ready" };
       res.writeHead(health.status === "ok" ? 200 : 503, { "Content-Type": "application/json" });
       res.end(JSON.stringify(health));
       return;
@@ -159,6 +168,7 @@ async function main(): Promise<void> {
       req.on("end", async () => {
         try {
           const parsed = JSON.parse(body) as {
+            matchId?: string;
             playerIds?: string[];
             gameId?: string;
             tournamentId?: string;
@@ -180,6 +190,14 @@ async function main(): Promise<void> {
           if (!isGameId(gameId)) {
             res.writeHead(400, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ ok: false, error: "VALIDATION_ERROR: Invalid gameId" }));
+            return;
+          }
+
+          if (distributed) {
+            const result = await provisionTournamentRoom(framework, distributed, { matchId: String(parsed.matchId ?? ""),
+              playerIds, gameId, tournamentId, tournamentRoundId, tournamentMatchNumber });
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ ok: true, ...result }));
             return;
           }
 
@@ -433,9 +451,25 @@ async function main(): Promise<void> {
     logger.info("Redis adapter attached with fault-tolerant reconnects");
   }
 
+  let distributed: DistributedRoomCoordinator | null = null;
+  let sharedMatchmaking: SharedMatchmaking | null = null;
+  let matchmakingRecovery: ReturnType<typeof setInterval> | null = null;
+  let coordinationRedis: Redis | null = null;
+  let resultWorker: GameResultOutboxWorker | null = null;
+  const durableStore = new PostgresMatchStore();
+
   // Initialize Multiplayer Framework
   const framework = MultiplayerFramework.getInstance({
     io: io,
+    ...(env.distributedMatches ? {
+      countdownDurationMs: 3000,
+      requireGameLoadAck: true,
+      executeRoomTask: <T>(roomId: string, task: () => Promise<T>) => distributed!.local(roomId, task),
+      publish: (room: import("@gaming-hub/multiplayer").RoomRuntime, event: string, payload: unknown, destination: string) => distributed!.publish(room, event, payload, destination),
+      persistFinalResult: (room: import("@gaming-hub/multiplayer").RoomRuntime, result: MatchResult) => distributed!.finalResult(room, result),
+      persistAbortedResult: (room: import("@gaming-hub/multiplayer").RoomRuntime, reason: string) => distributed!.abortedResult(room, reason),
+      closeRoom: (room: import("@gaming-hub/multiplayer").RoomRuntime, reason: string) => distributed!.close(room, reason),
+    } : {}),
     reconnectGracePeriodMs: 90_000,
     afkTimeoutMs: 60_000,
     roomExpirationMs: 30 * 60 * 1000,
@@ -444,7 +478,8 @@ async function main(): Promise<void> {
     enableReplay: true,
     debug: env.LOG_LEVEL === "debug",
     onMatchStarting: async (room, matchId) => {
-      if (room.config.stake > 0) {
+      if (distributed) await distributed.prepareFunding(room, matchId);
+      if (env.distributedMatches || room.config.stake > 0) {
         await createAndFundRoomMatch(room, matchId);
       }
     },
@@ -493,6 +528,35 @@ async function main(): Promise<void> {
   await framework.initialize();
   logger.info("Multiplayer Framework initialized");
 
+  if (env.distributedMatches) {
+    coordinationRedis = new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1, commandTimeout: 2000, enableOfflineQueue: false });
+    coordinationRedis.on("error", () => logger.error({ msg: "Coordination Redis unavailable" }));
+    await coordinationRedis.connect();
+    distributed = new DistributedRoomCoordinator(framework, coordinationRedis, durableStore);
+    await distributed.start(createCommandDispatcher(framework, distributed, assertFeatureEnabled));
+    sharedMatchmaking = new SharedMatchmaking(framework, distributed);
+    matchmakingRecovery = setInterval(() => { void sharedMatchmaking!.recover().catch(() => logger.error("MATCHMAKING_RECOVERY_UNAVAILABLE")); }, 2000);
+    resultWorker = new GameResultOutboxWorker(async event => {
+      const payload = event.result as { kind?: string; reason?: string; matchResult?: MatchResult; rated?: boolean; stake?: number; tournamentId?: string; tournamentRoundId?: string };
+      if (payload.kind === "CANCEL") { await cancelMatch(event.matchId, payload.reason); return; }
+      const result = payload.matchResult;
+      if (!result || result.matchId !== event.matchId) throw new Error("INVALID_DURABLE_RESULT");
+      const scores = Object.fromEntries(result.players.filter(p => p.score != null).map(p => [p.playerId, p.score!]));
+      const settled = await settleMatch(event.matchId, { winnerIds: result.winnerIds, scores,
+        resultType: result.draw ? "DRAW" : "WIN", rated: payload.rated, reason: result.endReason ?? "NORMAL" });
+      if (payload.tournamentId && payload.tournamentRoundId && result.winnerIds.length === 1) {
+        await reportTournamentMatchResult({ matchId: event.matchId, tournamentId: payload.tournamentId,
+          roundId: payload.tournamentRoundId, winnerId: result.winnerIds[0]!, loserId: result.players.find(p => !result.winnerIds.includes(p.playerId))?.playerId });
+      }
+      io.to(`room:${event.roomId}`).emit("game:settlement-completed" as any, {
+        matchId: event.matchId, resultType: result.draw ? "DRAW" : "WIN", payouts: settled.result.payouts,
+        coinsWon: settled.result.payouts.find(p => result.winnerIds.includes(p.userId))?.amount ?? 0,
+        isDraw: result.draw, refundPerPlayer: result.draw ? payload.stake ?? 0 : 0,
+      });
+    });
+    resultWorker.start();
+  }
+
   // ---- Authentication -------------------------------------------------------
   io.use(async (socket, next) => {
     const token = (socket.handshake.auth as { token?: string } | undefined)?.token;
@@ -516,6 +580,33 @@ async function main(): Promise<void> {
     socket.data.tokenHash = user.tokenHash;
 
 
+    if (distributed) {
+      socket.use((packet, next) => {
+        const [event, payload, ack] = packet;
+        const queueEvent = ["matchmaking:join", "game:join-queue", "matchmaking:leave", "game:leave-queue"].includes(event);
+        if (!DISTRIBUTED_ROOM_EVENTS.has(event) && !queueEvent) { next(); return; }
+        const command = { event, payload: payload ?? {}, playerId: user.userId, socketId: socket.id,
+          user: { username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl },
+          roomId: payload?.roomId, code: payload?.code };
+        void (async () => {
+          if (event.startsWith("game:rematch")) {
+            const refreshed = await authenticateToken(socket.handshake.auth.token);
+            if (refreshed.userId !== user.userId) throw new Error("UNAUTHORIZED");
+          }
+          if (queueEvent) return event.endsWith("join") || event.endsWith("join-queue")
+            ? sharedMatchmaking!.join(command) : sharedMatchmaking!.leave(user.userId);
+          return distributed!.route(command);
+        })().then(data => {
+          if (data && typeof data === "object" && "id" in data) socket.data.distributedRoomId = (data as { id: string }).id;
+          if (typeof ack === "function") ack({ ok: true, data });
+        }, error => { if (typeof ack === "function") ack({ ok: false, error: toErrorPayload(error) }); });
+      });
+      void durableStore.findPlayer(user.userId).then(room => room ? distributed!.route({ event: "room:join",
+        roomId: room.id, playerId: user.userId, socketId: socket.id,
+        user: { username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl }, payload: {} }) : undefined)
+        .catch(() => logger.info({ userId: user.userId }, "Reconnect recovery waiting for owner lease"));
+    }
+
     // Single-active-session: Evict any existing socket for this user that has an older/different tokenHash
     const userSockets = io.sockets.adapter.rooms.get(`user:${user.userId}`);
     if (userSockets) {
@@ -535,7 +626,7 @@ async function main(): Promise<void> {
 
     // Handle reconnection - check if user is in an active room
     const activeRoom = framework.roomManager.getPlayerRoom(user.userId);
-    if (activeRoom) {
+    if (activeRoom && !distributed) {
       void framework.playerManager.handleReconnect(user.userId, activeRoom.id, socket).catch(() => {
         // No active room to reconnect to
       });
@@ -683,84 +774,14 @@ async function main(): Promise<void> {
 
     socket.on("game:sync", (payload, ack) =>
       void guard(ack, async () => {
-        // H-04 fix: verify this socket's user belongs to the requested match
-        const syncRoom = framework.roomManager.getPlayerRoom(user.userId);
-        if (!syncRoom || syncRoom.match?.matchId !== payload.matchId) {
-          ack?.({ ok: false, error: { code: "UNAUTHORIZED", message: "Not a participant in this match" } } as any);
-          return;
-        }
-        let fullState: any = null;
-        let stateVersion = 1;
-        try {
-          const syncRes = GameStateSyncManager.handleStateSyncRequest(
-            socket.id,
-            payload.matchId,
-            payload.lastStateVersion,
-          );
-          fullState = syncRes.fullState.gameState;
-          stateVersion = syncRes.stateVersion;
-        } catch {
-          if (syncRoom.match?.engine) {
-            fullState = (syncRoom.match.engine as any).serialize();
-            stateVersion = syncRoom.match.turnNumber || 1;
-          } else {
-            throw new AppError("NOT_FOUND", `No authoritative state available for match ${payload.matchId}`);
-          }
-        }
-        ack?.({ ok: true, data: { stateVersion, fullState } });
+        const snapshot = authenticatedEngineStateSync(framework, user.userId, payload?.matchId);
+        ack?.({ ok: true, data: { stateVersion: snapshot.stateVersion, fullState: snapshot.fullState.gameState } });
       }),
     );
 
     socket.on("game:state-sync", (payload, ack) =>
       void guard(ack, async () => {
-        // H-04 fix: verify this socket's user belongs to the requested match
-        const syncRoom = framework.roomManager.getPlayerRoom(user.userId);
-        if (!syncRoom || syncRoom.match?.matchId !== payload.matchId) {
-          ack?.({ ok: false, error: { code: "UNAUTHORIZED", message: "Not a participant in this match" } } as any);
-          return;
-        }
-        if (["snooker", "snake-vs-worms"].includes(syncRoom.config.gameId) && syncRoom.match) {
-          ack?.({ ok: true, data: currentEngineStateSync(framework, syncRoom) });
-          return;
-        }
-        try {
-          const syncRes = GameStateSyncManager.handleStateSyncRequest(
-            socket.id,
-            payload.matchId,
-            payload.lastStateVersion,
-          );
-          ack?.({ ok: true, data: syncRes });
-        } catch {
-          if (syncRoom.match?.engine) {
-            const fullState = (syncRoom.match.engine as any).serialize();
-            const stateVersion = syncRoom.match.turnNumber || 1;
-            ack?.({
-              ok: true,
-              data: {
-                matchId: payload.matchId,
-                stateVersion,
-                actionSequence: stateVersion,
-                fullState: {
-                  matchId: payload.matchId,
-                  gameId: syncRoom.config.gameId,
-                  stateVersion,
-                  actionSequence: stateVersion,
-                  status: syncRoom.status === "playing" ? "playing" : "waiting",
-                  currentPlayerId: (syncRoom.match as any).currentPlayerId ?? null,
-                  turnNumber: syncRoom.match.turnNumber || 1,
-                  turnStartedAt: null,
-                  turnExpiresAt: null,
-                  gameState: fullState,
-                  lastActionId: null,
-                  lastActionSequence: stateVersion,
-                  updatedAt: Date.now(),
-                },
-              },
-            });
-          } else {
-            throw new AppError("NOT_FOUND", `No authoritative state available for match ${payload.matchId}`);
-          }
-        }
+        ack?.({ ok: true, data: authenticatedEngineStateSync(framework, user.userId, payload?.matchId) });
       }),
     );
 
@@ -977,6 +998,12 @@ async function main(): Promise<void> {
       // Remove from matchmaking
       framework.matchmakingManager.removeFromQueue(user.userId);
       
+      if (distributed) {
+        void durableStore.findPlayer(user.userId).then(room => room ? distributed!.route({ event: "disconnect", roomId: room.id,
+          playerId: user.userId, socketId: socket.id, user: {}, payload: {} }) : undefined)
+          .catch(() => logger.warn({ userId: user.userId }, "Disconnect awaiting owner recovery"));
+        return;
+      }
       // Handle disconnect from room
       const room = framework.roomManager.getPlayerRoom(user.userId);
       if (room) {
@@ -992,12 +1019,15 @@ async function main(): Promise<void> {
 
   httpServer.listen(env.PORT, "0.0.0.0", () => {
     logger.info(`Socket server listening on port ${env.PORT}`);
-    void checkInternalApiAuth(env.API_URL, env.INTERNAL_API_KEY, logger);
   });
 
   const shutdown = async () => {
     logger.info("Shutting down socket server…");
+    resultWorker?.stop();
+    if (matchmakingRecovery) clearInterval(matchmakingRecovery);
     await framework.shutdown();
+    await distributed?.stop();
+    await coordinationRedis?.quit();
     io.close();
     httpServer.close();
     await new Promise((resolve) => setTimeout(resolve, 300));

@@ -7,7 +7,7 @@ const PANEL_X = 1080;
 const PANEL_W = 560;
 const PANEL_H = 800;
 
-const ORDERED_COLORS: PlayerColor[] = ["red", "blue", "green", "yellow"];
+const ORDERED_COLORS: PlayerColor[] = ["green", "yellow", "blue", "red"];
 
 interface PlayerCardUI {
   container: Phaser.GameObjects.Container;
@@ -36,7 +36,7 @@ export default class HUDManager {
   private selectionBannerText!: Phaser.GameObjects.Text;
 
   private playerCards: PlayerCardUI[] = [];
-  private activeColors: PlayerColor[] = ["red", "green"];
+  private activeColors: PlayerColor[] = ["green", "blue"];
   private logLines: Phaser.GameObjects.Text[] = [];
   private currentTurnIndex = 0;
   private totalPlayers = 4;
@@ -59,7 +59,7 @@ export default class HUDManager {
     this.isPortrait = isPortrait;
     this.activeColors = activeColors && activeColors.length >= totalPlayers
       ? [...activeColors]
-      : (totalPlayers === 2 ? ["red", "green"] : ["red", "blue", "green", "yellow"]);
+      : (totalPlayers === 2 ? ["green", "blue"] : ["green", "yellow", "blue", "red"]);
     const depth = 10;
 
     if (isPortrait) {
@@ -699,7 +699,7 @@ export default class HUDManager {
 
   updateTurn(playerIndex: number): void {
     this.currentTurnIndex = playerIndex;
-    const activeColor = this.playerCards[playerIndex]?.color ?? this.activeColors[playerIndex] ?? (this.totalPlayers === 2 ? (playerIndex === 1 ? "green" : "red") : ORDERED_COLORS[playerIndex % 4]!);
+    const activeColor = this.playerCards[playerIndex]?.color ?? this.activeColors[playerIndex] ?? (this.totalPlayers === 2 ? (playerIndex === 1 ? "blue" : "green") : ORDERED_COLORS[playerIndex % 4]!);
     const c = LUDO_DESIGN_CONFIG.colors[activeColor] ?? LUDO_DESIGN_CONFIG.colors.red;
     const isMyTurn = this.mySeat === playerIndex;
 

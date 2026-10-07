@@ -5,7 +5,9 @@ export type FruitType =
   | "banana"
   | "coconut"
   | "kiwi"
-  | "bomb";
+  | "bomb"
+  | "pear"
+  | "life";
 
 export type FruitNinjaMode = "classic" | "zen" | "arcade";
 
@@ -38,5 +40,7 @@ export const FRUIT_DEFS: Record<FruitType, FruitDef> = {
   banana:     { type: "banana",     color: 0xfacc15, mistColor: 0xfef08a, radius: 32, points: 10, displayName: "Banana" },
   coconut:    { type: "coconut",    color: 0xffffff, mistColor: 0xe2e8f0, radius: 38, points: 10, displayName: "Coconut" },
   kiwi:       { type: "kiwi",       color: 0x84cc16, mistColor: 0xbef264, radius: 30, points: 10, displayName: "Kiwi" },
+  pear:       { type: "pear", color: 0x84cc16, mistColor: 0xbef264, radius: 32, points: 10, displayName: "Pear" },
+  life:       { type: "life", color: 0x22c55e, mistColor: 0xbbf7d0, radius: 30, points: 0, displayName: "Extra life" },
   bomb:       { type: "bomb",       color: 0x3b82f6, mistColor: 0x60a5fa, radius: 34, points: 0,  displayName: "Bomb" },
 };

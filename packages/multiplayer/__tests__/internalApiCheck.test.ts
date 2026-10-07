@@ -37,10 +37,10 @@ describe("startup internal API authentication check", () => {
     expect(log.error).not.toHaveBeenCalled();
   });
 
-  it("handles network failures without interrupting startup or leaking error details", async () => {
+  it("reports network failure as unconfirmed without leaking error details", async () => {
     const log = logger();
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error(`failed: ${key}`)));
-    await expect(checkInternalApiAuth("https://api.example", key, log)).resolves.toBeUndefined();
+    await expect(checkInternalApiAuth("https://api.example", key, log)).resolves.toBe(false);
     expect(log.warn).toHaveBeenCalledWith({}, expect.stringContaining("INTERNAL_API_AUTH_UNREACHABLE"));
     expect(JSON.stringify(log.warn.mock.calls)).not.toContain(key);
   });

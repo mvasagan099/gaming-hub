@@ -187,6 +187,14 @@ export class SnookerEngine implements EngineInstance {
 
   public restoreState(state: SnookerState): void { this.state = structuredClone(state); }
 
+  public persistenceState(): JsonObject { return structuredClone(this.state); }
+  public persistenceOptions(): JsonObject {
+    return { turnDurationMs: this.turnDurationMs, matchDurationMs: this.matchDurationMs,
+      persistedMatchStartedAtMs: this.matchStartedAtMs };
+  }
+
+  public restoreMatchEpoch(epoch: number): void { this.matchStartedAtMs = epoch; }
+
   public startMatchClock(): void {
     this.matchStartedAtMs = Date.now();
     this.state.turnStartedAtMs = this.matchStartedAtMs;

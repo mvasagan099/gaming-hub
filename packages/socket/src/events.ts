@@ -58,6 +58,8 @@ export interface ClientToServerEvents {
 
   "matchmaking:leave": (payload: Record<string, never>, ack: Ack<{ left: boolean }>) => void;
 
+  "game:loaded": (payload: { roomId: string; matchId: string }, ack: Ack<{ started: boolean }>) => void;
+
   "game:action": (payload: { roomId: string; matchId: string; action: { type: string } & JsonObject }, ack: Ack<GameActionResult>) => void;
 
   "game:rematch": (payload: { roomId: string }, ack: Ack<RematchUpdate>) => void;
@@ -118,6 +120,7 @@ export interface ClientToServerEvents {
 }
 
 export interface ServerToClientEvents {
+  "match:aborted": (payload: { roomId: string; matchId: string; reason: string }) => void;
   "room:update": (room: RoomFull) => void;
   "room:updated": (room: RoomFull) => void;
   "room:player-joined": (player: RoomPlayer) => void;

@@ -82,8 +82,12 @@ export class TimerManager {
       ownerSeat: playerId ? this.getPlayerSeat(roomId, playerId) : null,
     };
     
+    const scheduledRoom = this.framework.roomManager.getRoom(roomId);
     this.timers.set(timerId, timer);
-    this.timerCallbacks.set(timerId, callback);
+    this.timerCallbacks.set(timerId, this.framework.config.executeRoomTask
+      ? () => { void this.framework.config.executeRoomTask!(roomId, async () => { if (this.framework.roomManager.getRoom(roomId) === scheduledRoom) await callback(); })
+        .catch(error => this.framework.error('Timer owner unavailable', error)); }
+      : callback);
     
     // Schedule expiration
     const handle = setTimeout(() => {
@@ -160,7 +164,7 @@ export class TimerManager {
    * Clear all timers for a room.
    */
   clearRoomTimers(roomId: RoomId): void {
-    for (const [timerId, timer] of this.timers) {
+    for (const timerId of new Set([...this.timers.keys(), ...this.timerHandles.keys()])) {
       if (timerId.startsWith(`${roomId}:`)) {
         this.clearTimer(timerId);
       }
@@ -178,6 +182,11 @@ export class TimerManager {
     }
   }
   
+  checkpointReconnectTimers(roomId: string): Array<{ playerId: string; expiresAt: number }> {
+    return [...this.timers.entries()].filter(([id, t]) => id.startsWith(`${roomId}:`) && t.type === 'reconnect')
+      .map(([id, t]) => ({ playerId: id.split(':')[2]!, expiresAt: t.expiresAt }));
+  }
+
   /**
    * Get remaining time for a timer.
    */

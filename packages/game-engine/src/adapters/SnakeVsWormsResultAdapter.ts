@@ -23,7 +23,8 @@ export class SnakeVsWormsResultAdapter implements IGameResultAdapter {
 
   public getCurrentScore(state: JsonObject, seat: number): number {
     const s = state as any;
-    if (s.players && s.players[seat]?.score !== undefined) return Number(s.players[seat].score) || 0;
+    const player = s.players?.find((p: any) => p.seat === seat);
+    if (player?.score !== undefined) return Number(player.score) || 0;
     if (s.scores && s.scores[seat] !== undefined) return Number(s.scores[seat]) || 0;
     return 0;
   }
@@ -41,7 +42,7 @@ export class SnakeVsWormsResultAdapter implements IGameResultAdapter {
     const scores = this.getAllScores(state, players);
 
     type PlayerRank = { seat: number; score: number; bodyLength: number };
-    const ranks: PlayerRank[] = (s.players || []).map((p: any) => ({
+    const ranks: PlayerRank[] = (s.players || []).filter((p: any) => players.some(participant => participant.seat === p.seat)).map((p: any) => ({
       seat: p.seat,
       score: Number(p.score) || 0,
       bodyLength: Array.isArray(p.body) ? p.body.length : 0,

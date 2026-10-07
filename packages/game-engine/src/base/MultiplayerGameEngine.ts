@@ -91,11 +91,26 @@ export abstract class MultiplayerGameEngine<
     return state.turnStartedAtMs + state.turnTimerConfig.turnDurationMs;
   }
 
+  override persistenceOptions(): JsonObject {
+    return {
+      turnTimer: this.state.turnTimerConfig,
+      matchTimer: this.state.matchTimerConfig,
+      enableResign: this.enableResign, enableDraw: this.enableDraw,
+      enablePause: this.enablePause, enableRematch: this.enableRematch,
+    };
+  }
+
   get currentMatchDeadline(): number | null {
     const state = this.state;
     if (!state.matchTimerConfig || state.finished || state.paused) return null;
-    const start = state.matchStartedAtMs ?? (this.now ? this.now() : Date.now());
+    // Anchor an unstarted legacy clock once; never slide its deadline on reads.
+    if (state.matchStartedAtMs === null) state.matchStartedAtMs = this.now();
+    const start = state.matchStartedAtMs;
     return start + state.matchTimerConfig.matchDurationMs;
+  }
+
+  startMatchClock(): void {
+    if (!this.state.finished && this.state.matchStartedAtMs === null) this.startMatchTimer(this.state);
   }
 
   protected abstract initBaseState(): Omit<S, keyof BaseState>;

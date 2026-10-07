@@ -101,6 +101,7 @@ export interface RoomSettings {
 
 /** Room runtime state */
 export interface RoomRuntime {
+  pendingMatchId?: string | null;
   id: RoomId;
   code: string;
   ioName: string;
@@ -114,6 +115,8 @@ export interface RoomRuntime {
   locked: boolean;
   match: MatchRuntime | null;
   rematch: RematchState | null;
+  lifecyclePhase?: "WAITING" | "READY_CHECK" | "COUNTDOWN" | "PLAYING" | "COMPLETED";
+  countdownEndsAt?: number | null;
   chatHistory: ChatMessage[];
   eventLog: GameEvent[];
 }
@@ -141,6 +144,12 @@ export interface RoomSummary {
 /** Match runtime state */
 export interface MatchRuntime {
   matchId: MatchId;
+  participants?: Array<{ userId: string; seat: number }>;
+  pendingResult?: import("./gameplay/types").MatchResult;
+  startConfirmationRequired?: boolean;
+  loadedPlayerIds?: string[];
+  loadDeadline?: number | null;
+  gameplayStartedAt?: number | null;
   engine: unknown; // EngineInstance from game-engine
   turnNumber: number;
   startedAt: TimestampMs;

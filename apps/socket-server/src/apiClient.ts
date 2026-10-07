@@ -30,7 +30,7 @@ async function internalRequest<T>(
     throw new Error(message);
   }
 
-  return body.data as T;
+  return (body.data ?? body) as T;
 }
 
 /** Atomically creates the match record, player entries, and debits entry stakes. */
@@ -57,7 +57,7 @@ export function createAndFundRoomMatch(room: RoomRuntime, matchId: string) {
       isPrivate: room.config.isPrivate,
       minPlayers: room.config.minPlayers,
       maxPlayers: room.config.maxPlayers,
-      settings: JSON.parse(JSON.stringify(room.config.settings)),
+      settings: JSON.parse(JSON.stringify({ ...room.config.settings, ...(room.lifecyclePhase ? { requiresGameStartValidation: true } : {}) })),
     },
   });
 }
@@ -128,18 +128,13 @@ export async function reportTournamentMatchResult(params: {
       );
       return; // Success
     } catch (error) {
-      console.error(
-        `[TOURNAMENT] match-result report attempt ${attempt}/${MAX_RETRIES} failed for ${params.matchId}:`,
-        error,
-      );
+      console.error("TOURNAMENT_RESULT_DELIVERY_RETRY");
       if (attempt < MAX_RETRIES) {
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * attempt));
       }
     }
   }
 
-  console.error(
-    `[TOURNAMENT] match-result report gave up after ${MAX_RETRIES} attempts for ${params.matchId}. Scheduler will recover.`,
-  );
+  throw new Error("TOURNAMENT_RESULT_DELIVERY_PENDING");
 }
 

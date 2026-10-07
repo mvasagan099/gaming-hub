@@ -40,8 +40,12 @@ export class GameStateManager {
    * settled, guaranteeing per-room serial execution of state mutations.
    */
   enqueue<T>(roomId: string, task: () => Promise<T>): Promise<T> {
+    // A distributed host owns the only serial queue. Layering two queues can
+    // deadlock a timer against an action waiting for the owner transaction.
+    if (this.framework.config.executeRoomTask) return this.framework.config.executeRoomTask(roomId, task);
     const previous = this.queues.get(roomId) ?? Promise.resolve();
-    const next = previous.then(task, task);
+    const execute = () => task();
+    const next = previous.then(execute, execute);
     this.queues.set(
       roomId,
       next.then(

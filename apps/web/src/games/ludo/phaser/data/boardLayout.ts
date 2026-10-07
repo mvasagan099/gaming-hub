@@ -24,10 +24,10 @@ export const CELL_SIZE     = BOARD_PX / BOARD_CELLS;  // ≈ 53.33 px
 // ─── Yard corner regions (col/row extents, inclusive) ────────────────────────
 // Each yard occupies a 6×6 block in a corner.
 export const YARDS: Record<PlayerColor, { col: number; row: number }> = {
-  red:    { col: 0, row: 0  },   // top-left     → cols 0-5, rows 0-5
-  blue:   { col: 9, row: 0  },   // top-right    → cols 9-14, rows 0-5
-  green:  { col: 9, row: 9  },   // bottom-right → cols 9-14, rows 9-14
-  yellow: { col: 0, row: 9  },   // bottom-left  → cols 0-5,  rows 9-14
+  green:    { col: 0, row: 0  },   // top-left     → cols 0-5, rows 0-5
+  yellow:   { col: 9, row: 0  },   // top-right    → cols 9-14, rows 0-5
+  blue:  { col: 9, row: 9  },   // bottom-right → cols 9-14, rows 9-14
+  red: { col: 0, row: 9  },   // bottom-left  → cols 0-5,  rows 9-14
 };
 
 // 4 token spawn circles per yard (relative to yard top-left corner)
@@ -42,19 +42,19 @@ export const YARD_TOKEN_OFFSETS: Array<{ col: number; row: number }> = [
 // When a token's position equals this value AND the dice move lands here,
 // the token enters the home column instead of continuing main path.
 export const HOME_COLUMN_ENTRY: Record<PlayerColor, number> = {
-  red:    50,   // position 50 (0,7) on main path → next step enters home column (1,7)
-  blue:   11,   // position 11 (7,0) on main path → next step enters home column (7,1)
-  green:  24,   // position 24 (14,7) on main path → next step enters home column (13,7)
-  yellow: 37,   // position 37 (7,14) on main path → next step enters home column (7,13)
+  green:    50,   // position 50 (0,7) on main path → next step enters home column (1,7)
+  yellow:   11,   // position 11 (7,0) on main path → next step enters home column (7,1)
+  blue:  24,   // position 24 (14,7) on main path → next step enters home column (13,7)
+  red: 37,   // position 37 (7,14) on main path → next step enters home column (7,13)
 };
 
 // ─── Start positions on main path ────────────────────────────────────────────
 // When a token rolls 6 in the yard, it enters here.
 export const START_POSITION: Record<PlayerColor, number> = {
-  red:    0,
-  blue:   13,
-  green:  26,
-  yellow: 39,
+  green:    0,
+  yellow:   13,
+  blue:  26,
+  red: 39,
 };
 
 // ─── Safe tiles on main path (0–51) ──────────────────────────────────────────
@@ -68,10 +68,10 @@ export const SAFE_TILES = new Set<number>([
 // Global positions 52–57 are the home-column tiles (6 per color).
 // We encode as: homeColBase(color) + step (0–5, where 5 = home/finished).
 export const HOME_COL_BASE: Record<PlayerColor, number> = {
-  red:    52,
-  blue:   58,
-  green:  64,
-  yellow: 70,
+  green:    52,
+  yellow:   58,
+  blue:  64,
+  red: 70,
 };
 export const HOME_FINISHED_POSITION = 5; // offset from base = "home"
 
@@ -194,19 +194,19 @@ export const MAIN_PATH = buildMainPath();
 // ─── Home column grid coordinates (per color) ────────────────────────────────
 // 6 tiles from entry toward center "home" triangle.
 export const HOME_COL_COORDS: Record<PlayerColor, Array<{ col: number; row: number }>> = {
-  red:    [
+  green:    [
     { col: 1, row: 7 }, { col: 2, row: 7 }, { col: 3, row: 7 },
     { col: 4, row: 7 }, { col: 5, row: 7 }, { col: 6, row: 7 },
   ],
-  blue:   [
+  yellow:   [
     { col: 7, row: 1 }, { col: 7, row: 2 }, { col: 7, row: 3 },
     { col: 7, row: 4 }, { col: 7, row: 5 }, { col: 7, row: 6 },
   ],
-  green:  [
+  blue:  [
     { col: 13, row: 7 }, { col: 12, row: 7 }, { col: 11, row: 7 },
     { col: 10, row: 7 }, { col: 9, row: 7 },  { col: 8, row: 7 },
   ],
-  yellow: [
+  red: [
     { col: 7, row: 13 }, { col: 7, row: 12 }, { col: 7, row: 11 },
     { col: 7, row: 10 }, { col: 7, row: 9 },  { col: 7, row: 8 },
   ],
@@ -280,4 +280,4 @@ export const ZONE_COLORS: Record<PlayerColor, { main: number; light: number; dar
   yellow: { main: 0xeab308, light: 0xfde047, dark: 0xa16207 },
 };
 
-export const PLAYER_COLORS_ORDER: PlayerColor[] = ["red", "blue", "green", "yellow"];
+export const PLAYER_COLORS_ORDER: PlayerColor[] = ["green", "yellow", "blue", "red"];

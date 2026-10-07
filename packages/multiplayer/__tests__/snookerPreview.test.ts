@@ -37,7 +37,7 @@ describe('Snooker aiming preview validation', () => {
     const engine = new SnookerEngine([{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }]);
     engine.pauseClocks();
     const framework = { syncManager: { getStateVersion: () => 12 } } as any;
-    const room = { id: 'room', config: { gameId: 'snooker' }, status: 'playing', match: { matchId: 'match', turnNumber: 2, engine } } as any;
+    const room = { id: 'room', players: new Map([['a', { id: 'a', seat: 0 }], ['b', { id: 'b', seat: 1 }]]), config: { gameId: 'snooker' }, status: 'playing', match: { matchId: 'match', turnNumber: 2, engine } } as any;
     const paused = currentEngineStateSync(framework, room);
     expect(paused).toMatchObject({ stateVersion: 12, actionSequence: 2, fullState: { gameState: { paused: true } } });
     engine.resumeClocks(); expect(paused.fullState.gameState.paused).toBe(true);
@@ -46,7 +46,7 @@ describe('Snooker aiming preview validation', () => {
   it('syncs the current Snake vs Worms positions with a current broadcast version and clock', () => {
     const engine = new SnakeVsWormsEngine([{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }]);
     engine.startMatchClock(); engine.tick();
-    const room = { id: 'room', config: { gameId: 'snake-vs-worms' }, status: 'playing', match: { matchId: 'match', turnNumber: 0, engine } } as any;
+    const room = { id: 'room', players: new Map([['a', { id: 'a', seat: 0 }], ['b', { id: 'b', seat: 1 }]]), config: { gameId: 'snake-vs-worms' }, status: 'playing', match: { matchId: 'match', turnNumber: 0, engine } } as any;
     const synced = currentEngineStateSync({ syncManager: { getStateVersion: () => 50 } } as any, room);
     expect(synced.fullState.gameState.gameId).toBe('snake-vs-worms');
     expect((synced.fullState.gameState.players as any[])[0].body[0]).toEqual({ x: 305, y: 600 });

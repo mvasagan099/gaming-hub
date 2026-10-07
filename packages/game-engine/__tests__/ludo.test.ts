@@ -15,14 +15,14 @@ describe("LudoEngine", () => {
   const p0 = { userId: "user-1", seat: 0 };
   const p1 = { userId: "user-2", seat: 1 };
 
-  it("initializes 2 players with red and green tokens in yard", () => {
+  it("initializes 2 players with green and blue tokens in yard", () => {
     const eng = new LudoEngine([p0, p1]);
     const state = eng.state;
     expect(state.phase).toBe("rolling");
     expect(state.currentSeat).toBe(0);
     expect(state.players).toHaveLength(2);
-    expect(state.players[0].color).toBe("red");
-    expect(state.players[1].color).toBe("green");
+    expect(state.players[0].color).toBe("green");
+    expect(state.players[1].color).toBe("blue");
     expect(state.players[0].tokens.every((t) => t.state === "yard")).toBe(true);
   });
 
@@ -50,7 +50,7 @@ describe("LudoEngine", () => {
     const rng = mockRng([0.0]); // roll 1
     const eng = new LudoEngine([p0, p1], rng);
 
-    // Place 2 red tokens at different active positions on the board
+    // Place 2 green tokens at different active positions on the board
     (eng.state as any).players[0].tokens[0].state = "active";
     (eng.state as any).players[0].tokens[0].position = 2;
     (eng.state as any).players[0].tokens[1].state = "active";
@@ -60,10 +60,10 @@ describe("LudoEngine", () => {
     expect(rollRes.ok).toBe(true);
     expect(rollRes.state.dice).toBe(1);
     expect(rollRes.state.phase).toBe("selecting");
-    expect(rollRes.state.legalMoves).toHaveLength(2); // red-0 to 3, red-1 to 11
+    expect(rollRes.state.legalMoves).toHaveLength(2); // green-0 to 3, green-1 to 11
 
-    // Move token red-1 to position 11
-    const moveRes = eng.apply({ type: "move", tokenId: "red-1" }, 0);
+    // Move token green-1 to position 11
+    const moveRes = eng.apply({ type: "move", tokenId: "green-1" }, 0);
     expect(moveRes.ok).toBe(true);
     expect(moveRes.state.players[0].tokens[1].position).toBe(11);
   });

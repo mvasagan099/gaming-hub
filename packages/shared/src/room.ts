@@ -13,6 +13,7 @@ export interface RoomPlayer extends Pick<User, "id" | "username" | "displayName"
   isSpectator: boolean;
   connectionStatus: ConnectionStatus;
   joinedAt: string;
+  lastAcceptedActionSequence?: number;
 }
 
 export interface RoomSummary {
@@ -34,6 +35,10 @@ export interface RoomSummary {
 export interface RoomFull extends RoomSummary {
   settings: Record<string, unknown>;
   matchId: string | null;
+  lifecyclePhase?: "WAITING" | "READY_CHECK" | "COUNTDOWN" | "PLAYING" | "COMPLETED";
+  countdownEndsAt?: number | null;
+  awaitingGameLoad?: boolean;
+  serverTimeMs?: number;
 }
 
 export type MatchSettings = {

@@ -50,6 +50,11 @@ async function main() {
     .then(({ runScheduledJobs }) => runScheduledJobs())
     .catch((error) => app.log.error({ error }, "scheduled jobs: initial run failed"));
 
+  const provisionScheduler = setInterval(() => {
+    void import("./services/tournamentProvisioningWorker").then(m => m.runTournamentProvisioning())
+      .catch(() => app.log.error("TOURNAMENT_PROVISION_STORE_UNAVAILABLE"));
+  }, 1000);
+
   // Tournament scheduler runs more frequently for recovery/reconciliation
   const tournamentScheduler = setInterval(() => {
     void import("./services/automation")
@@ -64,6 +69,7 @@ async function main() {
     app.log.info({ signal }, "Shutting down");
     clearInterval(scheduler);
     clearInterval(tournamentScheduler);
+    clearInterval(provisionScheduler);
     await app.close();
     await prisma.$disconnect();
     process.exit(0);

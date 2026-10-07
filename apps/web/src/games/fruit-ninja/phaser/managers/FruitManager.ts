@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { FIELD_WIDTH, FIELD_HEIGHT, type FruitNinjaState } from "@gaming-hub/game-engine";
 import type { FruitType, FruitDef } from "../types/fruit.types";
 import { FRUIT_DEFS } from "../types/fruit.types";
 import { FruitEvents } from "../events/FruitEvents";
@@ -152,11 +153,12 @@ export class FruitManager {
     const currentAngle = item.sprite.angle;
 
     item.sliced = true;
-    const velocity = item.sprite.body?.velocity || { x: 0, y: 0 };
+    const velocity = { x: item.sprite.body?.velocity.x ?? 0, y: item.sprite.body?.velocity.y ?? 0 };
 
     // Disable and hide original whole fruit
     item.sprite.disableBody(true, true);
     this.activeFruits.delete(id);
+    item.sprite.destroy();
 
     if (type === "bomb") {
       this.particles.bombExplosion(x, y);
@@ -204,6 +206,41 @@ export class FruitManager {
   }
 
   // ─── Boundaries update check ───────────────────────────────────────────────
+
+  /** Multiplayer targets and hit flags come exclusively from the engine. */
+  syncAuthoritativeTargets(state: FruitNinjaState, seat: number | null): void {
+    const retained = new Set<string>();
+    for (const target of state.targets) {
+      const id = `server-${target.id}`;
+      if (seat !== null && (target.slicedBy.includes(seat) || target.missedBy.includes(seat))) {
+        if (target.slicedBy.includes(seat)) this.splitFruit(id);
+        continue;
+      }
+      retained.add(id);
+      let item = this.activeFruits.get(id);
+      if (!item) {
+        const def = FRUIT_DEFS[target.type];
+        const sprite = this.fruitsGroup.create(0, 0, `fn-${target.type}`) as Phaser.Physics.Arcade.Sprite;
+        sprite.setDepth(20);
+        // Texture padding must not enlarge the visible fruit beyond engine geometry.
+        const radius = target.type === "banana" || target.type === "life" ? 30 : target.type === "orange" ? 34 : 32;
+        sprite.setDisplaySize(140 * radius / 53 * this.scene.scale.width / FIELD_WIDTH,
+          140 * radius / 53 * this.scene.scale.height / FIELD_HEIGHT);
+        if (sprite.body) sprite.body.enable = false;
+        item = { id, type: target.type, sprite, def, sliced: false, spawnTime: this.scene.time.now };
+        this.activeFruits.set(id, item);
+      }
+      item.sprite.setPosition(target.x * this.scene.scale.width / FIELD_WIDTH,
+        target.y * this.scene.scale.height / FIELD_HEIGHT);
+      item.sprite.setAngle(target.rotation);
+    }
+    for (const [id, item] of this.activeFruits) {
+      if (!retained.has(id)) {
+        item.sprite.destroy();
+        this.activeFruits.delete(id);
+      }
+    }
+  }
 
   update(): void {
     const h = this.scene.scale.height;

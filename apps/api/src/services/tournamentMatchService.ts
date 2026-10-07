@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "@gaming-hub/db";
 import type { Prisma } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
@@ -70,25 +71,15 @@ export class TournamentMatchService {
       return null;
     }
 
-    // Call socket server to create tournament match room with metadata
-    const matchId = await this.createTournamentMatchOnSocketServer({
-      id: slot.id,
-      tournamentId: slot.tournamentId,
-      tournament: { gameId: slot.tournament.gameId },
-      playerAId: slot.playerAId!,
-      playerBId: slot.playerBId!,
-      roundNumber: slot.roundNumber,
-      matchNumber: slot.matchNumber,
-    });
-    if (!matchId) {
-      throw new AppError("INTERNAL_ERROR", "Failed to create tournament match on socket server", 500);
-    }
-
-    // Update the tournament round with matchId and status
-    await tx.tournamentRound.update({
-      where: { id: roundId },
-      data: { matchId, status: "IN_PROGRESS" },
-    });
+    // Persist the identity and retry intent together, without a network request
+    // inside the bracket lock. A failed socket provision can never orphan a slot.
+    const matchId = randomUUID();
+    await tx.match.create({ data: { id: matchId, gameId: slot.tournament.gameId, stake: 0, status: "CREATED",
+      players: { create: [{ userId: slot.playerAId, seat: 0 }, { userId: slot.playerBId, seat: 1 }] } } });
+    await tx.tournamentProvisionJob.create({ data: { matchId, context: { matchId,
+      playerIds: [slot.playerAId, slot.playerBId], gameId: slot.tournament.gameId,
+      tournamentId: slot.tournamentId, tournamentRoundId: slot.id, tournamentMatchNumber: slot.matchNumber } } });
+    await tx.tournamentRound.update({ where: { id: roundId }, data: { matchId, status: "READY" } });
 
     // Increment tournament stateVersion for bracket updates
     await tx.tournament.update({
@@ -98,70 +89,6 @@ export class TournamentMatchService {
 
     return matchId;
     }, { maxWait: 30_000, timeout: 30_000 });
-  }
-
-  /**
-   * Create tournament match on socket server via internal API
-   */
-  private static async createTournamentMatchOnSocketServer(slot: {
-    id: string;
-    tournamentId: string;
-    tournament: { gameId: string };
-    playerAId: string;
-    playerBId: string;
-    roundNumber: number;
-    matchNumber: number;
-  }): Promise<string | null> {
-    const socketServerUrl = process.env.SOCKET_SERVER_URL ?? "http://localhost:4001";
-    const internalKey = env.INTERNAL_API_KEY;
-
-    try {
-      const response = await fetch(`${socketServerUrl}/internal/tournament/create-match`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-internal-key": internalKey,
-        },
-        body: JSON.stringify({
-          playerIds: [slot.playerAId, slot.playerBId],
-          gameId: slot.tournament.gameId,
-          tournamentId: slot.tournamentId,
-          tournamentRoundId: slot.id,
-          tournamentMatchNumber: slot.matchNumber,
-        }),
-        signal: AbortSignal.timeout(1_000),
-      });
-
-      const result = await response.json() as { ok: boolean; matchId?: string; error?: string };
-
-      if (result.ok && result.matchId) {
-        return result.matchId;
-      }
-      console.warn(`[TOURNAMENT] Socket server match creation returned not ok, using DB fallback:`, result.error);
-    } catch (error) {
-      console.warn(`[TOURNAMENT] Socket server unavailable, using direct DB match creation:`, (error as Error).message);
-    }
-
-    // Direct DB match creation fallback
-    try {
-      const dbMatch = await prisma.match.create({
-        data: {
-          gameId: slot.tournament.gameId,
-          status: "CREATED",
-          stake: 0,
-          players: {
-            create: [
-              { userId: slot.playerAId, seat: 0 },
-              { userId: slot.playerBId, seat: 1 },
-            ],
-          },
-        },
-      });
-      return dbMatch.id;
-    } catch (dbErr) {
-      console.error(`[TOURNAMENT] Direct DB match creation error:`, dbErr);
-      return null;
-    }
   }
 
   /**
@@ -258,6 +185,8 @@ export class TournamentMatchService {
    */
   static async notifyMatchCreated(slot: { id: string; tournamentId: string; playerAId: string | null; playerBId: string | null; roundNumber: number; matchNumber: number }, matchId: string): Promise<void> {
     if (!slot.playerAId || !slot.playerBId) return;
+    const provision = await prisma.tournamentProvisionJob.findUnique({ where: { matchId } });
+    if (provision && provision.status !== "READY") return;
 
     const tournament = await prisma.tournament.findUnique({
       where: { id: slot.tournamentId },
@@ -288,6 +217,8 @@ export class TournamentMatchService {
    * Emit WebSocket event for match creation.
    */
   static async emitMatchCreatedEvent(slot: { tournamentId: string; id: string; playerAId: string | null; playerBId: string | null; roundNumber: number }, matchId: string): Promise<void> {
+    const provision = await prisma.tournamentProvisionJob.findUnique({ where: { matchId } });
+    if (provision && provision.status !== "READY") return;
     const payload = {
       tournamentId: slot.tournamentId,
       roundId: slot.id,
@@ -413,6 +344,8 @@ export class TournamentMatchService {
       include: { tournament: true },
     });
 
+    const { runTournamentProvisioning } = await import("./tournamentProvisioningWorker");
+    await runTournamentProvisioning();
     let created = 0;
     for (const slot of missingMatchSlots) {
       try {

@@ -71,7 +71,7 @@ export class AntiCheatManager {
         carrom: { maxActionsPerSecond: 20, minActionIntervalMs: 0 },
         // Fruit ninja sends a burst of blade samples per swipe (begin + move +
         // end); the engine validates every sample itself, so loosen the gate.
-        "fruit-ninja": { maxActionsPerSecond: 40, minActionIntervalMs: 10 },
+        "fruit-ninja": { maxActionsPerSecond: 40, minActionIntervalMs: 0 },
         // Snooker sends aim updates and strike actions
         snooker: { maxActionsPerSecond: 25, minActionIntervalMs: 0 },
         // Table Tennis sends frequent paddle positions
@@ -98,6 +98,13 @@ export class AntiCheatManager {
   /**
    * Check if an actionId was already processed to guarantee idempotency.
    */
+  clearRoomActionCache(roomId: string): void {
+    for (const key of this.processedActionCache.keys()) {
+      // Scope is a JSON array [roomId, matchId, playerId], followed by action ID.
+      if (key.startsWith(`[${JSON.stringify(roomId)},`)) this.processedActionCache.delete(key);
+    }
+  }
+
   getCachedActionResult(actionScope: string, actionId?: string): any | null {
     if (!actionId) return null;
     const key = `${actionScope}:${actionId}`;

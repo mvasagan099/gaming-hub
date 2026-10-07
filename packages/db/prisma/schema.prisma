@@ -300,7 +300,7 @@ model User {
   tournamentDisputes TournamentDispute[]
   matchmakingQueues  MatchmakingQueue[]
   referralsMade      Referral[]           @relation("Referrer")
-  referralsReceived  Referral[]           @relation("ReferredUser")
+  referralsReceived             Referral?               @relation("ReferredUser")
   affiliateCommissionsEarned    AffiliateCommission[] @relation("AffiliateReferrer")
   affiliateCommissionsGenerated AffiliateCommission[] @relation("AffiliateReferee")
   couponRedemptions  CouponRedemption[]
@@ -327,7 +327,7 @@ model User {
   kycReviewedRequests KycRequest[] @relation("KycReviewer")
   
   // Custom Role Relation
-  customRole         CustomRole?         @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
+  customRole                    CustomRole?             @relation(fields: [customRoleId], references: [id])
 
   @@index([role])
   @@index([deletedAt])
@@ -502,7 +502,7 @@ model Match {
   resultReason  String?
   createdAt     DateTime    @default(now())
   
-  room      Room?         @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  room          Room?            @relation(fields: [roomId], references: [id])
   players   MatchPlayer[]
   moves     Move[]
   gameState GameState?
@@ -565,6 +565,7 @@ model MatchPlayer {
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([matchId, userId])
+  @@unique([matchId, seat])
 }
 
 model GameState {
@@ -680,7 +681,7 @@ model WalletRequest {
   updatedAt  DateTime            @updatedAt
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  admin User? @relation("WalletRequestAdmin", fields: [adminId], references: [id], onDelete: SetNull)
+  admin               User?               @relation("WalletRequestAdmin", fields: [adminId], references: [id])
 
   @@index([userId, kind, createdAt])
   @@index([kind, status, createdAt])
@@ -754,7 +755,7 @@ model ChatMessage {
   createdAt  DateTime @default(now())
 
   room Room  @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user       User?    @relation(fields: [userId], references: [id])
 
   @@index([roomId, createdAt])
 }
@@ -1413,7 +1414,7 @@ model AffiliateCommission {
 
   referrer     User      @relation("AffiliateReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
   referredUser User      @relation("AffiliateReferee", fields: [referredUserId], references: [id], onDelete: Cascade)
-  referral     Referral? @relation(fields: [referralId], references: [id], onDelete: SetNull)
+  referral          Referral? @relation(fields: [referralId], references: [id])
 
   @@unique([sourceType, sourceId])
   @@index([referrerId])
@@ -1437,7 +1438,7 @@ model ReferralRiskEvent {
   reviewedAt     DateTime?
   reviewedBy     String?
 
-  referral     Referral? @relation(fields: [referralId], references: [id], onDelete: SetNull)
+  referral   Referral? @relation(fields: [referralId], references: [id])
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -1669,7 +1670,7 @@ model ErrorEvent {
   resolvedAt DateTime?
   createdAt  DateTime      @default(now())
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user       User?         @relation(fields: [userId], references: [id])
 
   @@index([status, severity])
   @@index([code, createdAt])
@@ -2349,4 +2350,54 @@ model RateLimitWindow {
   expiresAt DateTime
 
   @@index([expiresAt])
+}
+
+
+model LiveRoomCheckpoint {
+  id String @id
+  code String @unique
+  matchId String? @unique
+  schemaVersion Int @default(1)
+  snapshot Json
+  revision Int @default(0)
+  ownerId String?
+  fencingToken BigInt @default(0)
+  leaseExpiresAt DateTime?
+  closed Boolean @default(false)
+  updatedAt DateTime @default(now()) @updatedAt
+  @@index([closed, leaseExpiresAt])
+}
+
+
+model GameResultOutbox {
+  id String @id
+  matchId String @unique
+  roomId String
+  result Json
+  status String @default("PENDING")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  claimedBy String?
+  claimExpiresAt DateTime?
+  deliveredAt DateTime?
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  @@index([status, nextAttemptAt, claimExpiresAt])
+}
+
+
+model TournamentProvisionJob {
+  matchId String @id
+  context Json
+  status String @default("PENDING_PROVISION")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  claimedBy String?
+  claimExpiresAt DateTime?
+  lastError String?
+  readyAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  @@index([status, nextAttemptAt, claimExpiresAt])
 }

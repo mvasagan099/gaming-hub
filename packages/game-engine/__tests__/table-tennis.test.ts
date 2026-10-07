@@ -423,3 +423,38 @@ describe('Table Tennis full match rules', () => {
     }
   });
 });
+
+
+describe('Table Tennis elapsed-time physics', () => {
+  function rally() {
+    const engine = new TableTennisEngine([{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }], () => 0.5);
+    engine.apply({ type: 'ready' }, 0); engine.apply({ type: 'ready' }, 1);
+    engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
+    return engine;
+  }
+  it('preserves rally speed when persistence delays a callback by 100ms', () => {
+    const regular = rally(), delayed = rally();
+    for (let i = 0; i < 6; i++) regular.tick();
+    delayed.tick(100);
+    expect(delayed.state.ball).toEqual(regular.state.ball);
+    expect(delayed.state.totalPointsPlayed).toBe(regular.state.totalPointsPlayed);
+  });
+  it('uses collision-safe substeps through a delayed paddle contact', () => {
+    const regular = rally(), delayed = rally();
+    const state = { ...regular.state, ball: { ...regular.state.ball!, x: 50, y: 200, vx: -10, vy: 0 } };
+    regular.restoreState(structuredClone(state)); delayed.restoreState(structuredClone(state));
+    for (let i = 0; i < 9; i++) regular.tick();
+    delayed.tick(150);
+    expect(delayed.state.ball).toEqual(regular.state.ball);
+    expect(delayed.state.ball!.vx).toBeGreaterThan(0);
+  });
+  it('retains fractional physics time across a checkpoint and bounds long stalls', () => {
+    const regular = rally(), restored = rally();
+    regular.tick(10); restored.restoreState(regular.persistenceState());
+    regular.tick(10); restored.tick(10);
+    expect(restored.state.ball).toEqual(regular.state.ball);
+    const long = rally(), bounded = rally();
+    long.tick(5000); bounded.tick(250);
+    expect(long.state.ball).toEqual(bounded.state.ball);
+  });
+});

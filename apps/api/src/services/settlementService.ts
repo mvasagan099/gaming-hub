@@ -14,6 +14,7 @@ import { AchievementService } from "./achievementService";
 import { createNotification } from "./notifications";
 import { audit } from "./audit";
 import { GameConfigService } from "./gameConfigService";
+import { assertPaidMatchResultReady } from "./matchStartValidation";
 
 export interface SettlementSummary {
   matchId: string;
@@ -62,6 +63,7 @@ export class SettlementService {
       operation: "UNIVERSAL_MATCH_SETTLEMENT",
       referenceId: params.matchId,
       handler: async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"game-match:" + params.matchId}))`;
         const match = await tx.match.findUnique({
           where: { id: params.matchId },
           include: { players: true, room: true },
@@ -91,6 +93,8 @@ export class SettlementService {
         if (match.status !== "ACTIVE" && match.status !== "CREATED") {
           throw new AppError("INVALID_ACTION", `Cannot settle match with status ${match.status}`, 409);
         }
+
+        await assertPaidMatchResultReady(tx, match, params.winnerIds);
 
         // Retrieve or generate match config snapshot
         const roomSettings = (match.room?.settings ?? {}) as Record<string, unknown>;

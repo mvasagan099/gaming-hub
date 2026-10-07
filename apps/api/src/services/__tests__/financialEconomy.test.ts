@@ -264,6 +264,7 @@ describe("Financial Economy & Settlement Full Audit Test Suite", () => {
         id: matchId,
         gameId: "ludo",
         status: "ACTIVE",
+        startedAt: new Date(), // This fixture represents a game that actually began.
         stake: 100,
         players: {
           create: [
@@ -309,6 +310,7 @@ describe("Financial Economy & Settlement Full Audit Test Suite", () => {
         id: matchId,
         gameId: "chess",
         status: "ACTIVE",
+        startedAt: new Date(), // This fixture represents a game that actually began.
         stake: 100,
         players: {
           create: [
@@ -346,6 +348,7 @@ describe("Financial Economy & Settlement Full Audit Test Suite", () => {
         id: matchId,
         gameId: "ludo",
         status: "ACTIVE",
+        startedAt: new Date(), // This fixture represents a game that actually began.
         stake: 100,
         players: {
           create: [

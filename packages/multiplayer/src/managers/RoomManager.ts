@@ -94,7 +94,7 @@ export class RoomManager {
   async shutdown(): Promise<void> {
     // Clean up all rooms
     for (const roomId of this.rooms.keys()) {
-      this.closeRoom(roomId, "server_shutdown");
+      await this.closeRoom(roomId, "server_shutdown");
     }
     this.rooms.clear();
     this.roomsByCode.clear();
@@ -315,6 +315,12 @@ export class RoomManager {
     const player = room.players.get(playerId) || room.spectators.get(playerId);
     if (!player) return;
     
+    // Initialization failures refund everyone; they cannot declare the room host a winner.
+    if (player.seat !== null && !player.isSpectator && room.match &&
+        (room.status === "starting" || this.framework.matchManager.isAwaitingGameLoad(room))) {
+      await this.closeRoom(roomId, "game_initialization_player_left");
+      return;
+    }
     // Remove player from room
     room.players.delete(playerId);
     room.spectators.delete(playerId);
@@ -340,7 +346,7 @@ export class RoomManager {
     
     // Close room if empty
     if (room.players.size === 0 && room.spectators.size === 0) {
-      this.closeRoom(roomId, "all_players_left");
+      await this.closeRoom(roomId, "all_players_left");
       return;
     }
     
@@ -450,10 +456,10 @@ export class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) throw new Error("Room not found");
     
-    if (room.status !== "waiting") {
+    if (room.status !== "waiting" && !(room.status === "starting" && room.lifecyclePhase === "READY_CHECK")) {
       throw new Error("Game has already started");
     }
-    
+
     const player = room.players.get(playerId);
     if (!player) throw new Error("Player not in room");
     
@@ -520,6 +526,10 @@ export class RoomManager {
   registerRoom(room: RoomRuntime): void {
     this.rooms.set(room.id, room);
     this.roomsByCode.set(room.code, room);
+    for (const player of [...room.players.values(), ...room.spectators.values()]) {
+      this.playerRoomMap.set(player.id, room.id);
+      this.framework.playerManager.registerRecoveredPlayer(player);
+    }
   }
 
   /**
@@ -529,6 +539,13 @@ export class RoomManager {
     const room = this.rooms.get(roomId);
     if (room) {
       this.roomsByCode.delete(room.code);
+      for (const player of [...room.players.values(), ...room.spectators.values()]) {
+        this.framework.playerManager.stopAfkMonitoring(player.id, roomId);
+        if (this.playerRoomMap.get(player.id) === roomId) this.playerRoomMap.delete(player.id);
+      }
+      const expiry = this.roomExpirationTimers.get(roomId);
+      if (expiry) clearTimeout(expiry);
+      this.roomExpirationTimers.delete(roomId);
       this.rooms.delete(roomId);
     }
   }
@@ -536,10 +553,11 @@ export class RoomManager {
   /**
    * Close a room.
    */
-  closeRoom(roomId: RoomId, reason: string): void {
+  closeRoom(roomId: RoomId, reason: string): void | Promise<void> {
     const room = this.rooms.get(roomId);
     if (!room) return;
-    
+    if (this.framework.config.closeRoom) return this.framework.config.closeRoom(room, reason);
+
     // Cancel expiration timer
     const timer = this.roomExpirationTimers.get(roomId);
     if (timer) {

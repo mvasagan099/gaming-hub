@@ -14,14 +14,24 @@ beforeEach(() => {
 });
 afterEach(() => { driver.stop(); vi.useRealTimers(); });
 describe('Table Tennis paddle delivery', () => {
-  it('sends first movement immediately and coalesces following input at a safe rate', () => {
+  it('keeps one request in flight and replaces stale queued paddle input', async () => {
+    let resolve!: (result: { ok: boolean }) => void;
+    actions.send.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    driver.sendPaddleMove(160, 0);
+    for (let y = 170; y <= 250; y += 10) { driver.sendPaddleMove(y, 1); await vi.advanceTimersByTimeAsync(50); }
+    expect(actions.send).toHaveBeenCalledOnce();
+    resolve({ ok: true }); await vi.advanceTimersByTimeAsync(20);
+    expect(actions.send).toHaveBeenCalledTimes(2);
+    expect(actions.send).toHaveBeenLastCalledWith({ type: 'paddle-move', y: 250, velocity: 1 });
+  });
+  it('sends first movement immediately and coalesces following input at a safe rate', async () => {
     driver.sendPaddleMove(160, 0);
     expect(actions.send).toHaveBeenCalledOnce();
     driver.sendPaddleMove(170, 1);
     vi.advanceTimersByTime(15);
     driver.sendPaddleMove(180, 1);
     expect(actions.send).toHaveBeenCalledOnce();
-    vi.advanceTimersByTime(25);
+    await vi.advanceTimersByTimeAsync(25);
     expect(actions.send).toHaveBeenLastCalledWith({ type: 'paddle-move', y: 180, velocity: 1 });
     expect(actions.send).toHaveBeenCalledTimes(2);
   });
@@ -61,7 +71,7 @@ describe('Table Tennis multiplayer action and result guards', () => {
     driver.applyState(readyState().state);
     actions.send.mockRejectedValueOnce(new Error('Network gap'));
     driver.sendPaddleMove(180, 1); await Promise.resolve(); await Promise.resolve();
-    vi.advanceTimersByTime(40); driver.sendPaddleMove(180, 0);
+    await vi.advanceTimersByTimeAsync(40); driver.sendPaddleMove(180, 0);
     expect(actions.send).toHaveBeenCalledTimes(2);
   });
   it('emits point effects and a drawn result only once for repeated snapshots', () => {

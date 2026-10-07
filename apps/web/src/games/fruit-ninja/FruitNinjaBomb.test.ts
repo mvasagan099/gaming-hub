@@ -13,11 +13,13 @@ describe('Fruit Ninja bomb and rematch state ordering', () => {
     scene.gameOver = true;
     scene.activeMatchId = 'match-1';
     scene.mySeat = 0;
-    scene.hud = { updateOpponentScore: vi.fn() };
+    scene.hud = { updateOpponentScore: vi.fn(), updateScore: vi.fn(), updateLives: vi.fn(), updateTimer: vi.fn() };
+    scene.fruitManager = { syncAuthoritativeTargets: vi.fn() };
+    scene.scoreManager = { applyAuthoritativePlayer: vi.fn() };
     scene.restartGameForRematch = vi.fn(() => { scene.gameOver = false; });
     return scene;
   }
-  const playing = { finished: false, players: [{ score: 10 }, { score: 20 }] };
+  const playing = { finished: false, phase: "playing", targets: [], players: [{ seat: 0, score: 10, lives: 3 }, { seat: 1, score: 20, lives: 3 }] };
 
   it('stays stopped when an in-flight playing packet arrives after a bomb', () => {
     const scene = stoppedScene();

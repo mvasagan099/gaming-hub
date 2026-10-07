@@ -6,13 +6,13 @@ import type { RoomRuntime } from '../src/types';
 import { MultiplayerFramework as Framework } from '../src/framework';
 import { createMatchRoom, createTestFramework, makePlayer } from './helpers';
 
-it('broadcasts every Table Tennis frame without per-frame logging and preserves point events', async () => {
+it.each(['table-tennis', 'fruit-ninja', 'snake-vs-worms'] as const)('broadcasts %s frames without per-frame logging and preserves scoring events', async gameId => {
   const emit = vi.fn();
   const log = vi.fn();
   const framework = { log, io: { to: () => ({ emit }) } } as unknown as MultiplayerFramework;
   const sync = new SyncManager(framework);
   const engine = new TableTennisEngine([{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }]);
-  const room = { id: 'room', ioName: 'room:room', config: { gameId: 'table-tennis' },
+  const room = { id: 'room', ioName: 'room:room', config: { gameId },
     match: { matchId: 'match', turnNumber: 0, engine } } as unknown as RoomRuntime;
   for (let frame = 0; frame < 60; frame++) await sync.broadcastGameState(room, []);
   expect(emit).toHaveBeenCalledTimes(60);
@@ -25,10 +25,31 @@ it('broadcasts every Table Tennis frame without per-frame logging and preserves 
 });
 
 describe('Table Tennis physics scheduling', () => {
-  it('waits for an action and coalesces overlapping physics frames', async () => {
+  it('does not queue or checkpoint idle and paused rallies', async () => {
     Framework.resetInstance();
     const framework = createTestFramework({ enableReplay: false });
     const room = createMatchRoom('table-tennis', [makePlayer('a', 0), makePlayer('b', 1)]);
+    const enqueue = vi.spyOn(framework.gameStateManager, 'enqueue');
+    const manager = framework.matchManager as unknown as { runPhysicsTick(room: RoomRuntime): Promise<void> };
+    try {
+      await manager.runPhysicsTick(room);
+      const engine = room.match!.engine as TableTennisEngine;
+      engine.apply({ type: 'ready' }, 0); engine.apply({ type: 'ready' }, 1);
+      engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
+      engine.apply({ type: 'pause' }, 0);
+      await manager.runPhysicsTick(room);
+      expect(enqueue).not.toHaveBeenCalled();
+    } finally { await framework.shutdown(); }
+  });
+  it.each(['table-tennis', 'fruit-ninja', 'snake-vs-worms'] as const)('%s waits for an action and coalesces overlapping physics frames', async gameId => {
+    Framework.resetInstance();
+    const framework = createTestFramework({ enableReplay: false });
+    const room = createMatchRoom(gameId, [makePlayer('a', 0), makePlayer('b', 1)]);
+    if (room.config.gameId === 'table-tennis') {
+      const engine = room.match!.engine as TableTennisEngine;
+      engine.apply({ type: 'ready' }, 0); engine.apply({ type: 'ready' }, 1);
+      engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
+    }
     const tick = vi.spyOn(room.match!.engine as TableTennisEngine, 'tick');
     let release!: () => void;
     const blocker = framework.gameStateManager.enqueue(room.id, () => new Promise<void>(resolve => { release = resolve; }));
@@ -49,6 +70,11 @@ describe('Table Tennis physics scheduling', () => {
     Framework.resetInstance();
     const framework = createTestFramework({ enableReplay: false });
     const room = createMatchRoom('table-tennis', [makePlayer('a', 0), makePlayer('b', 1)]);
+    if (room.config.gameId === 'table-tennis') {
+      const engine = room.match!.engine as TableTennisEngine;
+      engine.apply({ type: 'ready' }, 0); engine.apply({ type: 'ready' }, 1);
+      engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
+    }
     const tick = vi.spyOn(room.match!.engine as TableTennisEngine, 'tick');
     let release!: () => void;
     const blocker = framework.gameStateManager.enqueue(room.id, () => new Promise<void>(resolve => { release = resolve; }));
@@ -60,5 +86,29 @@ describe('Table Tennis physics scheduling', () => {
       release(); await blocker; await pending;
       expect(tick).not.toHaveBeenCalled();
     } finally { release(); await framework.shutdown(); }
+  });
+});
+
+describe('authoritative reconnect snapshots', () => {
+  it.each(['ludo', 'chess', 'carrom', 'snake-ladder', 'fruit-ninja', 'bubble-shooter', 'table-tennis', 'snake-vs-worms', 'snooker'] as const)('recovers %s from the running engine and enforces authenticated rate limits', async gameId => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    const { authenticatedEngineStateSync } = await import('../../../apps/socket-server/src/currentEngineStateSync');
+    Framework.resetInstance();
+    const framework = createTestFramework({ enableReplay: false });
+    const room = createMatchRoom(gameId, [makePlayer(`a-${gameId}`, 0), makePlayer(`b-${gameId}`, 1)]);
+    room.id = `sync-${gameId}`;
+    room.match!.matchId = `match-${gameId}`;
+    (framework.roomManager as any).rooms.set(room.id, room);
+    (framework.roomManager as any).playerRoomMap.set(`a-${gameId}`, room.id);
+    try {
+      const playerId = `a-${gameId}`;
+      expect(() => authenticatedEngineStateSync(framework, 'foreign-user', room.match!.matchId)).toThrow('Not a participant');
+      expect(() => authenticatedEngineStateSync(framework, playerId, 'previous-match')).toThrow('Not a participant');
+      const state = room.match!.engine.serialize();
+      for (let i = 0; i < 5; i++) {
+        expect(authenticatedEngineStateSync(framework, playerId, room.match!.matchId).fullState.gameState).toMatchObject(state);
+      }
+      expect(() => authenticatedEngineStateSync(framework, playerId, room.match!.matchId)).toThrow('Too many state sync');
+    } finally { await framework.shutdown(); nowSpy.mockRestore(); }
   });
 });

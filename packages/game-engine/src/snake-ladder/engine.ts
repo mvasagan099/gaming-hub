@@ -30,6 +30,8 @@ export class SnakeLadderEngine extends MultiplayerGameEngine<SnakeLadderState, R
   readonly gameId = "snake-ladder" as const;
   private readonly settings: Required<SnakeLadderSettings>;
 
+  override persistenceOptions() { return { ...super.persistenceOptions(), settings: { ...this.settings } }; }
+
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: SnakeLadderEngineOptions) {
     const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 5000 };
     const matchTimer = options?.matchTimer ?? { matchDurationMs: 600000, warningThresholdMs: 30000 };
