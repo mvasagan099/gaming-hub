@@ -91,12 +91,14 @@ export class TableTennis3DRenderer {
    * Computes realistic parabolic bounce height (Z) for the ball during play.
    */
   static calculateBallZ(ball: { x: number; y: number; vx: number; vy: number; inPlay: boolean }): number {
-    if (!ball.inPlay) return 32; // Rest height on paddle
+    const farBat = this.farPaddlePose(200);
+    const farContactZ = this.project(562, 200).tableY - farBat.y;
+    if (!ball.inPlay) return ball.x > 300 ? farContactZ : 32;
 
     // Paddle contact stays at bat height; the ball rises over the net between
     // table bounces. A crest at each baseline made confirmed hits look airborne.
     const keys = [[0, 32], [38, 32], [90, 50], [150, 12], [300, 80],
-      [450, 12], [510, 50], [562, 32], [600, 32]];
+      [450, 12], [510, 50], [562, farContactZ], [600, farContactZ]];
     for (let i = 1; i < keys.length; i++) {
       if (ball.x <= keys[i][0]) {
         const t = Math.max(0, (ball.x - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0]));
@@ -104,7 +106,7 @@ export class TableTennis3DRenderer {
         return keys[i - 1][1] + (keys[i][1] - keys[i - 1][1]) * blend;
       }
     }
-    return 32;
+    return farContactZ;
   }
 
   /**
@@ -792,9 +794,16 @@ export class TableTennis3DRenderer {
     ctx.restore();
   }
 
-  /** Match the visible rubber width to the authoritative 80-unit paddle. */
+  /** Slightly inset rubber face; the ball radius covers the contact at its rim. */
   static paddleRadius(lx: number, ly: number): number {
-    return Math.abs(this.project(lx, ly + 40, 15).x - this.project(lx, ly, 15).x);
+    return Math.abs(this.project(lx, ly + 40, 15).x - this.project(lx, ly, 15).x) * 0.9;
+  }
+
+  static farPaddlePose(ly: number): ReturnType<typeof TableTennis3DRenderer.project> {
+    const lift = this.paddleRadius(574, ly) * 1.15 + 3;
+    const pose = this.project(600, ly, lift);
+    // Keep lateral contact aligned with the ball even at the tapered table edges.
+    return { ...pose, x: this.project(562, ly).x };
   }
 
   /**
@@ -810,7 +819,7 @@ export class TableTennis3DRenderer {
   ): void {
     const { paddles } = TABLE_TENNIS_VISUAL_CONFIG;
     const { x, y, scale } = this.project(lx, ly, 32);
-    const s = scale * 1.30; // Foreground scale
+    const s = scale * 1.10;
 
     ctx.save();
     ctx.translate(x, y);
@@ -947,8 +956,8 @@ export class TableTennis3DRenderer {
     color: 'red' | 'blue' = 'blue'
   ): void {
     const { paddles } = TABLE_TENNIS_VISUAL_CONFIG;
-    const { x, y, scale } = this.project(lx, ly, 15);
-    const s = scale * 1.05; // Background scale
+    const { x, y, scale } = this.farPaddlePose(ly);
+    const s = scale * 0.95;
 
     ctx.save();
     ctx.translate(x, y);

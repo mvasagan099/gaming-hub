@@ -1,5 +1,43 @@
 import { describe, expect, it } from "vitest";
 import { TableTennisEngine } from "../src/table-tennis/engine";
+import { tableTennisShot } from "../src/table-tennis/shots";
+
+describe('Table Tennis return angles', () => {
+  it('keeps edge and centered shots from becoming a flat repeating lane', () => {
+    for (const direction of [-1, 1] as const) for (const y of [2, 28, 40, 200, 360, 372, 398]) {
+      for (const slope of [-0.36, 0, 0.36]) {
+        const x = direction === 1 ? 42 : 558;
+        const shot = tableTennisShot(x, y, direction, 10, slope);
+        const target = y + shot.vy * Math.abs((direction === 1 ? 600 - x : x) / shot.vx);
+        expect(Math.abs(target - y)).toBeGreaterThanOrEqual(39.999);
+        expect(target).toBeGreaterThanOrEqual(27.999);
+        expect(target).toBeLessThanOrEqual(372.001);
+        expect(Math.hypot(shot.vx, shot.vy)).toBeCloseTo(10);
+      }
+    }
+  });
+  it('preserves deliberate paddle angles when there is enough lateral travel', () => {
+    const shot = tableTennisShot(42, 200, 1, 7, -0.2);
+    expect(shot.vy / Math.abs(shot.vx)).toBeCloseTo(-0.2);
+  });
+  it.each([28, 372])('breaks a repeated edge rally with stationary paddles at %s', y => {
+    const engine = new TableTennisEngine([{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }]);
+    engine.apply({ type: 'ready' }, 0); engine.apply({ type: 'ready' }, 1);
+    engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
+    let state = { ...engine.state,
+      players: engine.state.players.map(p => ({ ...p, paddleY: y === 28 ? 0 : 320, paddleVelocity: 0 })),
+      ball: { ...engine.state.ball!, x: 30, y, vx: -5, vy: 0 },
+    } as typeof engine.state;
+    let lateralTravel = 0;
+    for (let frame = 0; frame < 1000 && state.ball; frame++) {
+      state = engine.simulatePhysics(state);
+      if (state.ball) lateralTravel = Math.max(lateralTravel, Math.abs(state.ball.y - y));
+    }
+    expect(lateralTravel).toBeGreaterThan(40);
+    expect(state.totalPointsPlayed).toBe(1);
+    expect(state.rallyCount).toBeLessThan(10);
+  });
+});
 
 describe("TableTennisEngine - Winning Score and Time Management", () => {
   const p0 = { userId: "user-1", seat: 0 };
@@ -286,6 +324,7 @@ describe('Table Tennis assisted returns', () => {
         const baselineY = ball.y + Math.abs((seat === 0 ? 600 - ball.x : ball.x) / ball.vx) * ball.vy;
         expect(baselineY).toBeGreaterThanOrEqual(27.999);
         expect(baselineY).toBeLessThanOrEqual(372.001);
+        expect(Math.abs(baselineY - ball.y)).toBeGreaterThanOrEqual(39.999);
         expect(Math.hypot(ball.vx, ball.vy)).toBeCloseTo(ball.speed);
       }
     }

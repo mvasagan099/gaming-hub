@@ -81,12 +81,13 @@ describe('Table Tennis ball geometry', () => {
 
 describe('Table Tennis bat contact alignment', () => {
   it('keeps the opponent paddle on the far baseline and matches its hit width', () => {
-    const pose = TableTennis3DRenderer.project(600, 200, 15);
+    const pose = TableTennis3DRenderer.farPaddlePose(200);
     const edge = TableTennis3DRenderer.project(600, 200, 0);
     expect(pose.y).toBeLessThan(edge.y);
     expect(TableTennis3DRenderer.paddleRadius(574, 200)).toBeCloseTo(
-      TableTennis3DRenderer.project(574, 240, 15).x - TableTennis3DRenderer.project(574, 200, 15).x);
-    expect(TableTennis3DRenderer.paddleRadius(574, 200)).toBeGreaterThan(25);
+      (TableTennis3DRenderer.project(574, 240, 15).x - TableTennis3DRenderer.project(574, 200, 15).x) * 0.9);
+    expect(TableTennis3DRenderer.paddleRadius(574, 200)).toBeGreaterThan(24);
+    expect(TableTennis3DRenderer.paddleRadius(574, 200)).toBeLessThan(25);
   });
   it('draws the far bat outside the baseline with its handle pointing away from the table', () => {
     const rotate = vi.fn(); const translate = vi.fn();
@@ -96,23 +97,30 @@ describe('Table Tennis bat contact alignment', () => {
     }) as unknown as CanvasRenderingContext2D;
     (TableTennis3DRenderer as unknown as { drawFarPaddle: (ctx: CanvasRenderingContext2D, x: number, y: number, vy: number) => void })
       .drawFarPaddle(ctx, 600, 200, 0);
-    expect(translate).toHaveBeenCalledWith(400, 170);
+    const pose = TableTennis3DRenderer.farPaddlePose(200);
+    expect(translate).toHaveBeenCalledWith(pose.x, pose.y);
     expect(rotate).toHaveBeenCalledWith(Math.PI);
   });
   it.each([38, 562])('brings the ball down to bat height at contact x=%s', x => {
-    expect(TableTennis3DRenderer.calculateBallZ({ x, y: 200, vx: 5, vy: 0, inPlay: true })).toBe(32);
+    const z = TableTennis3DRenderer.calculateBallZ({ x, y: 200, vx: 5, vy: 0, inPlay: true });
+    if (x === 38) expect(z).toBe(32);
+    else expect(TableTennis3DRenderer.project(x, 200, z).y).toBeCloseTo(TableTennis3DRenderer.farPaddlePose(200).y);
   });
   it.each([false, true])('keeps the ball within the visible far bat at contact in portrait=%s', portrait => {
     const renderer = TableTennis3DRenderer as unknown as { isPortraitMode: boolean };
     renderer.isPortraitMode = portrait;
     try {
-      const bat = TableTennis3DRenderer.project(600, 200, 15);
-      const z = TableTennis3DRenderer.calculateBallZ({ x: 562, y: 200, vx: 5, vy: 0, inPlay: true });
-      const ball = TableTennis3DRenderer.project(562, 240, z);
-      const radius = TableTennis3DRenderer.paddleRadius(574, 200);
-      const ballRadius = Math.max(4, 6 * ball.scale);
-      expect(((ball.x - bat.x) / (radius + ballRadius)) ** 2 +
-        ((ball.y - bat.y) / (radius * 1.15 + ballRadius)) ** 2).toBeLessThan(1);
+      for (const center of [40, 200, 360]) for (const offset of [-40, 40]) {
+        const bat = TableTennis3DRenderer.farPaddlePose(center);
+        expect(bat.y + TableTennis3DRenderer.paddleRadius(574, center) * 1.15 + 1.2)
+          .toBeLessThan(TableTennis3DRenderer.project(600, center).y);
+        const z = TableTennis3DRenderer.calculateBallZ({ x: 562, y: center + offset, vx: 5, vy: 0, inPlay: true });
+        const ball = TableTennis3DRenderer.project(562, center + offset, z);
+        const radius = TableTennis3DRenderer.paddleRadius(574, center);
+        const ballRadius = Math.max(4, 6 * ball.scale);
+        expect(((ball.x - bat.x) / (radius + ballRadius)) ** 2 +
+          ((ball.y - bat.y) / (radius * 1.15 + ballRadius)) ** 2).toBeLessThan(1);
+      }
     } finally { renderer.isPortraitMode = false; }
   });
   it('samples paddle and ball motion at the same playback time', () => {
