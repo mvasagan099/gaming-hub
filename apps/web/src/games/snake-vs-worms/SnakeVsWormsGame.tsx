@@ -382,7 +382,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
       for (const p of mpState.players) {
         if (!p.body || p.body.length === 0) continue;
         let pState = renderMap.get(p.seat);
-        if (!pState) {
+        if (!pState || Math.hypot(pState.body[0].x - p.body[0].x, pState.body[0].y - p.body[0].y) > 250) {
           pState = {
             body: p.body.map((pt) => ({ x: pt.x, y: pt.y })),
             angle: DIR_ANGLES[p.direction] ?? 0,
@@ -439,7 +439,9 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
       // Draw 3D Players
       for (const p of mpState.players) {
         const isMe = p.seat === mySeat;
-        const skinKey = p.seat === 0 ? 'player' : 'p2';
+        const botSkins = ['ruby', 'amethyst', 'gold', 'cyan', 'p2'];
+        const skinKey = p.playerId.startsWith('ai-') ? botSkins[p.seat % botSkins.length]!
+          : p.seat === 0 ? 'player' : 'p2';
         const renderState = renderMap.get(p.seat);
         const pBody = renderState ? renderState.body : p.body;
         const pAngle = renderState ? renderState.angle : DIR_ANGLES[p.direction] ?? 0;
@@ -464,7 +466,8 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
         x: p.body[0]?.x || 0,
         y: p.body[0]?.y || 0,
         isMe: p.seat === mySeat,
-        color: p.seat === 0 ? '#10b981' : '#3b82f6',
+        color: p.playerId.startsWith('ai-') ? ['#f43f5e', '#a855f7', '#f59e0b', '#06b6d4'][p.seat % 4]
+          : p.seat === 0 ? '#10b981' : '#3b82f6',
         dead: p.status === 'eliminated',
       }));
       SnakeVsWorms3DRenderer.drawRadar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, radarPlayers, mpState.gridWidth, mpState.gridHeight, isPortrait);

@@ -35,6 +35,7 @@ vi.mock('../../shared/hooks/useGameLoop', () => ({ useGameLoop: (fn: any) => { f
 vi.mock('../utils/snakeVsWorms3DRenderer', () => ({ SnakeVsWorms3DRenderer: { drawArena: vi.fn(), drawFood: vi.fn(), drawCreature: vi.fn(), drawRadar: vi.fn() } }));
 import Game from '../SnakeVsWormsGame';
 import { SnakeVsWormsOverlays } from '../components/SnakeVsWormsOverlays';
+import { SnakeVsWorms3DRenderer } from '../utils/snakeVsWorms3DRenderer';
 function find(root: any, test: (node: any) => boolean): any {
   if (Array.isArray(root)) return root.map(child => find(child, test)).find(Boolean);
   if (!root?.props) return undefined;
@@ -55,11 +56,22 @@ beforeEach(() => {
 });
 afterEach(() => { fixture.slots.forEach(slot => slot?.cleanup?.()); vi.useRealTimers(); vi.unstubAllGlobals(); });
 describe('Snake vs Worms multiplayer UI', () => {
+  it('renders the human snakes and six coloured rivals with full-length bodies', () => {
+    render(); const tree = render(); const node = find(tree, n => n.type === 'canvas');
+    node.props.ref.current = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 900, height: 600 }),
+      getContext: () => ({ fillRect() {}, save() {}, restore() {}, translate() {}, scale() {} }) };
+    fixture.loop(1 / 60);
+    const calls = vi.mocked(SnakeVsWorms3DRenderer.drawCreature).mock.calls;
+    expect(calls).toHaveLength(8);
+    expect(calls.every(call => call[1].length === 15)).toBe(true);
+    expect(new Set(calls.slice(2).map(call => call[3])).size).toBeGreaterThanOrEqual(4);
+    expect(calls.slice(2).every(call => call[6].startsWith('Worm Bot'))).toBe(true);
+  });
   it('uses authoritative score, length, kills and boost data, without restarting on room metadata', () => {
     render(); const state = structuredClone(fixture.store.gameState);
     Object.assign(state.players[0], { score: 150, kills: 2, boostEnergy: 45 }); state.stateVersion++;
     let tree = update({ gameState: state, renderKey: 2 });
-    expect(overlay(tree)).toMatchObject({ score: 150, length: 4, kills: 2 });
+    expect(overlay(tree)).toMatchObject({ score: 150, length: 15, kills: 2 });
     tree = update({ room: { ...fixture.store.room, code: 'ABCDEF' } });
     expect(overlay(tree).score).toBe(150); expect(fixture.listeners.size).toBe(1);
   });

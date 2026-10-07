@@ -26,6 +26,7 @@ export interface SnakeWormPlayerEntity extends JsonObject {
   status: "active" | "eliminated";
   pendingGrowth: number;
   connected: boolean;
+  respawnAtMs: number | null;
 }
 
 export type FoodType = "normal" | "golden" | "boost";

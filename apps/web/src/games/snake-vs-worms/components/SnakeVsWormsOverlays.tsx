@@ -32,7 +32,7 @@ export const SnakeVsWormsOverlays: React.FC<SnakeVsWormsOverlaysProps> = ({
 
   const title = isDraw ? 'MATCH DRAW!' : isSpectator ? 'MATCH COMPLETE!' : isWin ? 'ARENA CHAMPION!' : 'ELIMINATED!';
   const subtitle = isDraw ? 'Neither player won this match.' : isWin
-    ? 'All Rivals Defeated!'
+    ? isMultiplayer ? 'You won this match!' : 'All Rivals Defeated!'
     : winnerName
       ? `Winner: ${winnerName}`
       : 'You collided with a rival worm!';
