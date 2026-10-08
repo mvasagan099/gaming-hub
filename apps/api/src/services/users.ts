@@ -342,6 +342,10 @@ export async function updateUserProfile(
   },
 ) {
   return prisma.$transaction(async (tx) => {
+    const registered = await tx.profile.findUniqueOrThrow({ where: { userId }, select: { country: true } });
+    if (data.country !== undefined && data.country !== registered.country) {
+      throw new AppError("VALIDATION_ERROR", "Country is permanent and cannot be changed after registration", 400);
+    }
     const user = await tx.user.update({
       where: { id: userId },
       data: {
@@ -353,7 +357,6 @@ export async function updateUserProfile(
       where: { userId },
       data: {
         bio: data.bio,
-        country: data.country,
         phone: data.phone,
         dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
         streetAddress: data.streetAddress,

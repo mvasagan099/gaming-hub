@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   MessageCircle,
   Send,
@@ -41,6 +42,10 @@ export const MessagesPage: React.FC = () => {
   const [friendshipStatus, setFriendshipStatus] = useState<FriendshipStatusResponse | null>(null);
   const [loadingFriendship, setLoadingFriendship] = useState(false);
   const [actionInProgress, setActionInProgress] = useState(false);
+
+  const [searchParams] = useSearchParams();
+  const targetUserId = searchParams.get('userId');
+  const targetUserHandledRef = useRef<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -226,6 +231,13 @@ export const MessagesPage: React.FC = () => {
       setStartingUserId(null);
     }
   };
+
+  // Automatically open or start conversation if userId URL query param is present
+  useEffect(() => {
+    if (!targetUserId || targetUserHandledRef.current === targetUserId) return;
+    targetUserHandledRef.current = targetUserId;
+    void handleStart(targetUserId);
+  }, [targetUserId]);
 
 
   return (

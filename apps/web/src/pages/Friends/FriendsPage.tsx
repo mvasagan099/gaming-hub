@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, UserPlus, Users, X, Ban, Loader2, UserCheck, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Check, UserPlus, Users, X, Ban, Loader2, UserCheck, Sparkles, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { friendsApi, messagesApi, usersApi, type FriendEntry, type UserSearchResult } from '../../services/api/enterprise';
 import type { BlockedUser, FriendRequest } from '@gaming-hub/shared';
@@ -7,6 +8,7 @@ import { Skeleton } from '../../components/Skeleton';
 import { Button } from '../../components/ui/Button';
 
 export const FriendsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [friends, setFriends] = useState<FriendEntry[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [blocked, setBlocked] = useState<BlockedUser[]>([]);
@@ -416,9 +418,26 @@ export const FriendsPage: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => void handleRemove(entry.friend.userId)} disabled={busyId === entry.friend.userId} className="shrink-0">
-                      Remove
-                    </Button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => navigate(`/messages?userId=${entry.friend.userId}`)}
+                        className="gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        <span>Message</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void handleRemove(entry.friend.userId)}
+                        disabled={busyId === entry.friend.userId}
+                        className="text-xs text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl"
+                      >
+                        Remove
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>

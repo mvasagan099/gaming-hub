@@ -91,7 +91,6 @@ export const ProfilePage: React.FC = () => {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [postcode, setPostcode] = useState("");
-  const [country, setCountry] = useState("IN");
   const [savingProfile, setSavingProfile] = useState(false);
 
   // Security Form States
@@ -141,7 +140,6 @@ export const ProfilePage: React.FC = () => {
       setCity(me.profile?.city || "");
       setState(me.profile?.state || "");
       setPostcode(me.profile?.postcode || "");
-      setCountry(me.profile?.country || "IN");
       setTwoFactorEnabled(Boolean(me.profile?.twoFactorEnabled));
     }
   }, [me]);
@@ -205,7 +203,6 @@ export const ProfilePage: React.FC = () => {
       const fullName = `${firstName} ${lastName}`.trim();
       await apiClient.patch("/users/me", {
         displayName: fullName || undefined,
-        country: country || undefined,
         phone: phone.trim() || undefined,
         dateOfBirth: dob ? new Date(dob).toISOString() : undefined,
         streetAddress: street.trim() || undefined,
@@ -383,9 +380,9 @@ export const ProfilePage: React.FC = () => {
   }
 
   const emailDisplay = me.user.email || "";
-  const countryCode = country || me.profile?.country || "IN";
+  const countryCode = me.profile?.country || "";
   const matchedCountry = COUNTRIES.find((c) => c.code === countryCode);
-  const countryNameDisplay = matchedCountry ? `${matchedCountry.name} (${matchedCountry.code})` : countryCode;
+  const countryNameDisplay = matchedCountry ? `${matchedCountry.name} (${matchedCountry.code})` : countryCode || "Not provided at registration";
 
   return (
     <div className="max-w-5xl w-full min-w-0 mx-auto space-y-6 sm:space-y-8 px-0 sm:px-4 py-2 sm:py-6">
@@ -665,32 +662,15 @@ export const ProfilePage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Country</label>
-                {editing && kycStatus !== "APPROVED" ? (
-                  <select
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  >
-                    {COUNTRIES.map((c) => (
-                      <option key={c.code} value={c.code} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                        {c.name} ({c.code})
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={countryNameDisplay}
-                    disabled
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/30 text-slate-500 dark:text-slate-400 font-bold text-sm outline-none cursor-not-allowed"
-                  />
-                )}
+                <input
+                  type="text"
+                  value={countryNameDisplay}
+                  readOnly
+                  aria-readonly="true"
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/30 text-slate-500 dark:text-slate-400 font-bold text-sm outline-none cursor-not-allowed"
+                />
                 <p className="mt-1 text-[11px] text-slate-400">
-                  {kycStatus === "APPROVED"
-                    ? "Country cannot be changed after KYC approval"
-                    : editing
-                    ? "Select your country of residence"
-                    : "Click 'Edit Profile' to change country"}
+                  Country is permanent and cannot be changed after registration.
                 </p>
               </div>
             </div>

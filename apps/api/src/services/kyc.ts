@@ -82,6 +82,10 @@ export interface UploadDocumentInput {
 }
 
 export async function createKycRequest(data: CreateKycRequestInput): Promise<KycRequestWithDocuments> {
+  const profile = await prisma.profile.findUnique({ where: { userId: data.userId }, select: { country: true } });
+  if (profile?.country && data.country !== profile.country) {
+    throw new AppError("VALIDATION_ERROR", "KYC country must match the country selected at registration", 400);
+  }
   let request = await prisma.kycRequest.findUnique({
     where: { userId: data.userId },
   });
@@ -146,7 +150,6 @@ export async function createKycRequest(data: CreateKycRequestInput): Promise<Kyc
     data: {
       phone: data.mobileNumber || undefined,
       dateOfBirth: data.dateOfBirth || undefined,
-      country: data.country || undefined,
       streetAddress: data.streetAddress || undefined,
       city: data.city || undefined,
       state: data.state || undefined,
@@ -498,7 +501,6 @@ export async function approveKycRequest(
     where: { userId: request.userId },
     data: {
       kycStatus: "approved",
-      country: request.country ?? undefined,
       phone: request.mobileNumber ?? request.user.profile?.phone,
       streetAddress: request.streetAddress ?? request.user.profile?.streetAddress,
       city: request.city ?? request.user.profile?.city,
@@ -651,7 +653,6 @@ export async function adminOverrideKycLevel(
     where: { userId: request.userId },
     data: {
       kycStatus: "approved",
-      country: request.country ?? undefined,
       phone: request.mobileNumber ?? undefined,
       streetAddress: request.streetAddress ?? undefined,
       city: request.city ?? undefined,

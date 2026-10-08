@@ -50,11 +50,11 @@ export async function usersRoutes(app: FastifyInstance) {
     const user = requireUser(request);
     const data = parseSchema(updateProfileSchema, request.body);
 
+    // Validate immutable fields before performing any separate privacy write.
+    const result = await updateUserProfile(user.id, data);
     if (data.isPrivate !== undefined) {
       await PlayerProfileService.setProfilePrivacy(user.id, data.isPrivate);
     }
-
-    const result = await updateUserProfile(user.id, data);
     return { user: result.user, profile: result.profile };
   });
 

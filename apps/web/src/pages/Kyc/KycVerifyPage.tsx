@@ -196,13 +196,7 @@ export function KycVerifyPage() {
   }>>([]);
   const [selfie, setSelfie] = useState<File | null>(null);
 
-  const supportedCountries = [
-    { code: 'IN', name: 'India' },
-    { code: 'US', name: 'United States' },
-    { code: 'UK', name: 'United Kingdom' },
-    { code: 'CA', name: 'Canada' },
-    { code: 'AU', name: 'Australia' },
-  ];
+  const supportedCountries = COUNTRIES;
 
   const getDocumentsForCountry = (countryCode: string): KycDocumentType[] => {
     return COUNTRY_DOCUMENTS[countryCode] || COUNTRY_DOCUMENTS['DEFAULT'];
@@ -347,6 +341,7 @@ export function KycVerifyPage() {
                 <label className="block text-xs font-semibold mb-1.5">Country of Residence</label>
                 <select
                   value={country}
+                  disabled={!!me?.profile?.country}
                   onChange={(e) => setCountry(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
                 >
@@ -354,6 +349,7 @@ export function KycVerifyPage() {
                     <option key={c.code} value={c.code}>{c.name}</option>
                   ))}
                 </select>
+                {me?.profile?.country && <p className="mt-1 text-xs text-slate-500">Country is fixed at registration.</p>}
               </div>
 
               <div>
