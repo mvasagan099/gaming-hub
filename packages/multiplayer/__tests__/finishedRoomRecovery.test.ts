@@ -61,3 +61,80 @@ describe('shared search cleanup gate', () => {
     expect(tx.matchmakingQueue.create).toHaveBeenCalledOnce();
   });
 });
+
+describe('private room creation and join cleanup gates', () => {
+  function dispatcher(status = 'ended') {
+    const recovery = setup(status);
+    const room = { id: 'new-room', status: 'waiting' };
+    const createRoom = vi.fn().mockResolvedValue(room);
+    const joinRoom = vi.fn().mockResolvedValue(room);
+    const framework = {
+      io: {}, roomManager: { getRoom: () => room, createRoom, joinRoom },
+      syncManager: { serializeRoom: (value: unknown) => value },
+      matchManager: { resumeReadyCountdown: vi.fn() },
+    };
+    vi.spyOn(recovery.coordinator, 'create').mockImplementation(async fn => fn());
+    return { ...recovery, room, createRoom, joinRoom,
+      dispatch: createCommandDispatcher(framework as never, recovery.coordinator, vi.fn()) };
+  }
+  function request(event: string) {
+    return { ...command, event, roomId: event === 'room:create' ? undefined : 'new-room',
+      payload: { gameId: 'table-tennis', stake: 0, isPrivate: true } };
+  }
+
+  it.each(['room:create', 'room:join', 'match:join'])('%s releases the old completed room through its owner', async event => {
+    const fixture = dispatcher();
+    await expect(fixture.dispatch(request(event))).resolves.toEqual(event === 'match:join'
+      ? { room: fixture.room, status: 'waiting' } : fixture.room);
+    expect(fixture.route).toHaveBeenCalledExactlyOnceWith({ ...request(event),
+      event: 'room:leave', roomId: 'old-room', payload: { onlyIfEnded: true } });
+    expect(event === 'room:create' ? fixture.createRoom : fixture.joinRoom).toHaveBeenCalledOnce();
+  });
+
+  for (const event of ['room:create', 'room:join', 'match:join']) {
+    it.each(['waiting', 'starting', 'playing'])(`${event} never auto-leaves a %s room`, async status => {
+      const fixture = dispatcher(status);
+      await expect(fixture.dispatch(request(event))).rejects.toThrow('Leave your current room');
+      expect(fixture.route).not.toHaveBeenCalled();
+      expect(fixture.createRoom).not.toHaveBeenCalled();
+      expect(fixture.joinRoom).not.toHaveBeenCalled();
+    });
+    it(`${event} blocks when completed membership remains reserved`, async () => {
+      const fixture = dispatcher(); fixture.route.mockResolvedValue(undefined);
+      await expect(fixture.dispatch(request(event))).rejects.toThrow('Leave your current room');
+      expect(fixture.createRoom).not.toHaveBeenCalled();
+      expect(fixture.joinRoom).not.toHaveBeenCalled();
+    });
+    it(`${event} blocks when the old owner cannot confirm cleanup`, async () => {
+      const fixture = dispatcher(); fixture.route.mockRejectedValue(new Error('Owner unavailable'));
+      await expect(fixture.dispatch(request(event))).rejects.toThrow('Owner unavailable');
+      expect(fixture.createRoom).not.toHaveBeenCalled();
+      expect(fixture.joinRoom).not.toHaveBeenCalled();
+    });
+  }
+
+  it.each(['room:join', 'match:join'])('%s reconnects to the same active room without leaving it', async event => {
+    const fixture = dispatcher('playing');
+    fixture.store.findPlayer.mockResolvedValue({ id: 'new-room' });
+    await fixture.dispatch(request(event));
+    expect(fixture.route).not.toHaveBeenCalled();
+    expect(fixture.joinRoom).toHaveBeenCalledOnce();
+  });
+
+  it('waits for the old owner acknowledgement before creating a new room', async () => {
+    const fixture = dispatcher();
+    let release!: () => void;
+    fixture.route.mockImplementation(async () => {
+      await new Promise<void>(resolve => { release = resolve; });
+      fixture.store.findPlayer.mockResolvedValue(null);
+    });
+    const creating = fixture.dispatch(request('room:create'));
+    // Keep a regression rejection observed while checking acknowledgement order.
+    void creating.catch(() => undefined);
+    await vi.waitFor(() => expect(fixture.route).toHaveBeenCalledOnce());
+    expect(fixture.createRoom).not.toHaveBeenCalled();
+    release();
+    await creating;
+    expect(fixture.createRoom).toHaveBeenCalledOnce();
+  });
+});

@@ -1,0 +1,371 @@
+{
+  "date": "2026-10-08",
+  "baselineCommit": "52b5a94",
+  "productionDatabaseTouched": false,
+  "deployed": false,
+  "beforeFix": {
+    "files": 1,
+    "tests": 32,
+    "passed": 25,
+    "failed": 7,
+    "skipped": 0,
+    "success": false,
+    "filesExecuted": [
+      "packages/multiplayer/__tests__/finishedRoomRecovery.test.ts"
+    ],
+    "cases": [
+      {
+        "name": "completed durable room membership recovery releases completed membership through the owner before another search",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery never auto-leaves a waiting room",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery never auto-leaves a starting room",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery never auto-leaves a playing room",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery fails safely when the owner cannot acknowledge cleanup",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery does not accept cleanup while membership remains reserved",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery owner recheck rejects a rematch that became waiting",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery owner recheck rejects a rematch that became starting",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery owner recheck rejects a rematch that became playing",
+        "status": "passed"
+      },
+      {
+        "name": "shared search cleanup gate does not touch the queue or wallet when active membership cannot be released",
+        "status": "passed"
+      },
+      {
+        "name": "shared search cleanup gate acknowledges ended-room cleanup before reserving a new queue slot",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:create releases the old completed room through its owner",
+        "status": "failed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join releases the old completed room through its owner",
+        "status": "failed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join releases the old completed room through its owner",
+        "status": "failed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:create never auto-leaves a waiting room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:create never auto-leaves a starting room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:create never auto-leaves a playing room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:create blocks when completed membership remains reserved",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:create blocks when the old owner cannot confirm cleanup",
+        "status": "failed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join never auto-leaves a waiting room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join never auto-leaves a starting room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join never auto-leaves a playing room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join blocks when completed membership remains reserved",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join blocks when the old owner cannot confirm cleanup",
+        "status": "failed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join never auto-leaves a waiting room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join never auto-leaves a starting room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join never auto-leaves a playing room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join blocks when completed membership remains reserved",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join blocks when the old owner cannot confirm cleanup",
+        "status": "failed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join reconnects to the same active room without leaving it",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join reconnects to the same active room without leaving it",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates waits for the old owner acknowledgement before creating a new room",
+        "status": "failed"
+      }
+    ]
+  },
+  "afterFix": {
+    "files": 1,
+    "tests": 32,
+    "passed": 32,
+    "failed": 0,
+    "skipped": 0,
+    "success": true,
+    "filesExecuted": [
+      "packages/multiplayer/__tests__/finishedRoomRecovery.test.ts"
+    ],
+    "cases": [
+      {
+        "name": "completed durable room membership recovery releases completed membership through the owner before another search",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery never auto-leaves a waiting room",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery never auto-leaves a starting room",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery never auto-leaves a playing room",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery fails safely when the owner cannot acknowledge cleanup",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery does not accept cleanup while membership remains reserved",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery owner recheck rejects a rematch that became waiting",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery owner recheck rejects a rematch that became starting",
+        "status": "passed"
+      },
+      {
+        "name": "completed durable room membership recovery owner recheck rejects a rematch that became playing",
+        "status": "passed"
+      },
+      {
+        "name": "shared search cleanup gate does not touch the queue or wallet when active membership cannot be released",
+        "status": "passed"
+      },
+      {
+        "name": "shared search cleanup gate acknowledges ended-room cleanup before reserving a new queue slot",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:create releases the old completed room through its owner",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join releases the old completed room through its owner",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join releases the old completed room through its owner",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:create never auto-leaves a waiting room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:create never auto-leaves a starting room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:create never auto-leaves a playing room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:create blocks when completed membership remains reserved",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:create blocks when the old owner cannot confirm cleanup",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join never auto-leaves a waiting room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join never auto-leaves a starting room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join never auto-leaves a playing room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join blocks when completed membership remains reserved",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join blocks when the old owner cannot confirm cleanup",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join never auto-leaves a waiting room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join never auto-leaves a starting room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join never auto-leaves a playing room",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join blocks when completed membership remains reserved",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join blocks when the old owner cannot confirm cleanup",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates room:join reconnects to the same active room without leaving it",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates match:join reconnects to the same active room without leaving it",
+        "status": "passed"
+      },
+      {
+        "name": "private room creation and join cleanup gates waits for the old owner acknowledgement before creating a new room",
+        "status": "passed"
+      }
+    ]
+  },
+  "web": {
+    "files": 38,
+    "tests": 315,
+    "passed": 315,
+    "failed": 0,
+    "skipped": 0,
+    "success": true,
+    "filesExecuted": [
+      "apps/web/src/components/GameWrapper.test.tsx",
+      "apps/web/src/data/games.test.ts",
+      "apps/web/src/store/multiplayerStore.leave.test.ts",
+      "apps/web/src/store/multiplayerStore.matchmaking.test.ts",
+      "apps/web/src/store/multiplayerStore.rematch.test.ts",
+      "apps/web/src/store/multiplayerStore.roomLifecycle.test.ts",
+      "apps/web/src/utils/roomReadiness.test.ts",
+      "apps/web/src/components/Replay/CarromReplayBoard.test.tsx",
+      "apps/web/src/components/Replay/ReplayModal.test.tsx",
+      "apps/web/src/components/Replay/replayPresentation.test.ts",
+      "apps/web/src/games/fruit-ninja/FruitNinjaAuthority.test.ts",
+      "apps/web/src/games/fruit-ninja/FruitNinjaBomb.test.ts",
+      "apps/web/src/games/fruit-ninja/FruitNinjaPresentation.test.tsx",
+      "apps/web/src/pages/Home/Home.gameMode.test.tsx",
+      "apps/web/src/pages/Games/GamePage.navigation.test.tsx",
+      "apps/web/src/pages/Games/GamePage.rematch.test.tsx",
+      "apps/web/src/pages/Lobby/LobbyPage.privateRoom.test.tsx",
+      "apps/web/src/services/native/capacitorAppService.back.test.ts",
+      "apps/web/src/games/bubble-shooter/__tests__/multiplayerControls.test.tsx",
+      "apps/web/src/games/bubble-shooter/utils/multiplayerPresentation.test.ts",
+      "apps/web/src/games/carrom/__tests__/multiplayerDriver.test.ts",
+      "apps/web/src/games/carrom/__tests__/multiplayerInput.test.tsx",
+      "apps/web/src/games/carrom/__tests__/shotPreview.test.ts",
+      "apps/web/src/games/carrom/__tests__/strikerPlacement.test.tsx",
+      "apps/web/src/games/chess/utils/chessState.test.ts",
+      "apps/web/src/games/shared/hooks/animationLoop.test.ts",
+      "apps/web/src/games/shared/rendering/StaticCanvasLayer.test.ts",
+      "apps/web/src/games/shared/rendering/sceneryCache.test.ts",
+      "apps/web/src/games/shared/rendering/viewport.test.ts",
+      "apps/web/src/games/snake-vs-worms/__tests__/multiplayerDriver.test.ts",
+      "apps/web/src/games/snake-vs-worms/__tests__/multiplayerLifecycle.test.tsx",
+      "apps/web/src/games/snooker/__tests__/multiplayerDriver.test.ts",
+      "apps/web/src/games/snooker/__tests__/multiplayerInput.test.tsx",
+      "apps/web/src/games/snooker/__tests__/shotPlayback.test.ts",
+      "apps/web/src/games/table-tennis/__tests__/multiplayerDriver.test.ts",
+      "apps/web/src/games/table-tennis/__tests__/multiplayerLifecycle.test.tsx",
+      "apps/web/src/games/table-tennis/__tests__/remoteTimeline.test.ts",
+      "apps/web/src/games/ludo/phaser/data/boardLayout.test.ts"
+    ]
+  },
+  "multiplayer": {
+    "files": 23,
+    "tests": 334,
+    "passed": 334,
+    "failed": 0,
+    "skipped": 0,
+    "success": true,
+    "filesExecuted": [
+      "packages/multiplayer/__tests__/bubbleShooterGameplay.test.ts",
+      "packages/multiplayer/__tests__/carromLifecycle.test.ts",
+      "packages/multiplayer/__tests__/carromPreview.test.ts",
+      "packages/multiplayer/__tests__/centralizedGameConfig.test.ts",
+      "packages/multiplayer/__tests__/clientMatchIdentity.test.ts",
+      "packages/multiplayer/__tests__/disconnectReconnect.test.ts",
+      "packages/multiplayer/__tests__/finishedRoomRecovery.test.ts",
+      "packages/multiplayer/__tests__/gameConfigs.test.ts",
+      "packages/multiplayer/__tests__/gameEventSystem.test.ts",
+      "packages/multiplayer/__tests__/gameLoadSafety.test.ts",
+      "packages/multiplayer/__tests__/gameStateSync.test.ts",
+      "packages/multiplayer/__tests__/gameplay.test.ts",
+      "packages/multiplayer/__tests__/internalApiCheck.test.ts",
+      "packages/multiplayer/__tests__/matchManager.test.ts",
+      "packages/multiplayer/__tests__/matchmaking.test.ts",
+      "packages/multiplayer/__tests__/playerExit.test.ts",
+      "packages/multiplayer/__tests__/privateRoomSocketFlow.test.ts",
+      "packages/multiplayer/__tests__/realtimeSync.test.ts",
+      "packages/multiplayer/__tests__/rematch.test.ts",
+      "packages/multiplayer/__tests__/roomCleanup.test.ts",
+      "packages/multiplayer/__tests__/snookerPreview.test.ts",
+      "packages/multiplayer/__tests__/startupStep.test.ts",
+      "packages/multiplayer/__tests__/tournamentRoomAccess.test.ts"
+    ]
+  },
+  "build": "PASS",
+  "typecheck": "PASS"
+}

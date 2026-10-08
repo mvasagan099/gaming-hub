@@ -41,8 +41,7 @@ export function createCommandDispatcher(framework: MultiplayerFramework, coordin
         await assertFeatureEnabled(Number(payload.stake) > 0 ? 'games.realMoney' : 'games.practice', 'Games');
         if ((typeof payload.gameId !== "string" || !isGameId(payload.gameId)) || !Number.isSafeInteger(payload.stake ?? 0) || Number(payload.stake ?? 0) < 0) throw new AppError('VALIDATION_ERROR', 'Invalid room game or stake', 400);
         if (payload.settings && typeof payload.settings === 'object' && Object.keys(payload.settings).some(k => k.startsWith('tournament') || ['configSnapshot','pendingMatchId','engineVersion','requiresGameStartValidation'].includes(k))) throw new AppError('VALIDATION_ERROR', 'Reserved room settings cannot be supplied by clients', 400);
-        const previous = await coordinator.findPlayer(playerId);
-        if (previous) throw new AppError('INVALID_ACTION', 'Leave your current room before creating another', 409);
+        if (!await coordinator.leaveEndedRoom(command)) throw new AppError('INVALID_ACTION', 'Leave your current room before creating another', 409);
         const created = await coordinator.create(() => framework.roomManager.createRoom({
           gameId: payload.gameId as Parameters<typeof framework.roomManager.createRoom>[0]['gameId'],
           hostId: playerId, hostSocket: socket, isPrivate: !!payload.isPrivate,
@@ -56,7 +55,7 @@ export function createCommandDispatcher(framework: MultiplayerFramework, coordin
         await assertFeatureEnabled('games.enabled', 'Games');
         if (payload.asSpectator) await assertFeatureEnabled('games.spectator', 'Spectator mode');
         const previous = await coordinator.findPlayer(playerId);
-        if (previous && previous.id !== roomId) throw new AppError('INVALID_ACTION', 'Leave your current room before joining another', 409);
+        if (previous && previous.id !== roomId && !await coordinator.leaveEndedRoom(command)) throw new AppError('INVALID_ACTION', 'Leave your current room before joining another', 409);
         const joined = await framework.roomManager.joinRoom({ roomId, playerId, socket, asSpectator: !!payload.asSpectator, password: typeof payload.password === "string" ? payload.password : undefined });
         await framework.matchManager.resumeReadyCountdown(joined);
         return event === 'match:join' ? { room: framework.syncManager.serializeRoom(joined), status: joined.status } : framework.syncManager.serializeRoom(joined);

@@ -132,7 +132,7 @@ export class DistributedRoomCoordinator {
 
   findPlayer(playerId: string) { return this.store.findPlayer(playerId); }
 
-  /** Searching again may release a completed room, never forfeit an active match. */
+  /** Entering another room may release a completed room, never forfeit an active match. */
   async leaveEndedRoom(command: RoutedCommand): Promise<boolean> {
     const previous = await this.store.findPlayer(command.playerId);
     if (!previous) return true;
