@@ -1,0 +1,1198 @@
+{
+  "scope": "local runtime + actual Socket.IO; no Redis/PG/financial writes",
+  "lifecycleGames": 100,
+  "reconnectCycles": 500,
+  "concurrentGames": [
+    10,
+    25,
+    50
+  ],
+  "peakSockets": 100,
+  "peakRss": 384319488,
+  "peakHeap": 174822936,
+  "actionLatencyMs": {
+    "carrom": {
+      "p50": 110.61036500000046,
+      "p95": 211.9062879999983,
+      "p99": 290.3874799999976
+    },
+    "table-tennis": {
+      "p50": 112.30703799999901,
+      "p95": 212.25574300000153,
+      "p99": 292.00829800000065
+    },
+    "snake-vs-worms": {
+      "p50": 111.12370100000044,
+      "p95": 211.8164919999981,
+      "p99": 292.012273999997
+    }
+  },
+  "socketLatencyMs": {
+    "p50": 0.19659500000125263,
+    "p95": 0.34531000000060885,
+    "p99": 0.47922900000048685
+  },
+  "redisLatencyMs": null,
+  "eventLoopDelayMs": {
+    "p50": 10.084351,
+    "p95": 19.496959,
+    "p99": 4886.364159
+  },
+  "samples": [
+    {
+      "label": "baseline",
+      "rss": 106393600,
+      "heapTotal": 61947904,
+      "heapUsed": 24841296,
+      "external": 6698271,
+      "arrayBuffers": 2407823,
+      "cpuPercent": 336.9868385382912,
+      "statePayloadBytes": {},
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 0
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 0,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "lifecycle-20",
+      "rss": 173510656,
+      "heapTotal": 105463808,
+      "heapUsed": 25765136,
+      "external": 8700520,
+      "arrayBuffers": 2538895,
+      "cpuPercent": 111.43416818777641,
+      "statePayloadBytes": {
+        "carrom": 150469,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5084
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 40,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "lifecycle-40",
+      "rss": 173658112,
+      "heapTotal": 108085248,
+      "heapUsed": 28303304,
+      "external": 8503915,
+      "arrayBuffers": 2407823,
+      "cpuPercent": 102.9168649944654,
+      "statePayloadBytes": {
+        "carrom": 150469,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5084
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 80,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "lifecycle-60",
+      "rss": 173932544,
+      "heapTotal": 106774528,
+      "heapUsed": 25839488,
+      "external": 6960455,
+      "arrayBuffers": 2538895,
+      "cpuPercent": 103.8722270156819,
+      "statePayloadBytes": {
+        "carrom": 150469,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5084
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 120,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "lifecycle-80",
+      "rss": 174567424,
+      "heapTotal": 108609536,
+      "heapUsed": 25843544,
+      "external": 8527207,
+      "arrayBuffers": 2407823,
+      "cpuPercent": 102.15779917576097,
+      "statePayloadBytes": {
+        "carrom": 150469,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5084
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 160,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "lifecycle-100",
+      "rss": 174403584,
+      "heapTotal": 111493120,
+      "heapUsed": 28334176,
+      "external": 8592799,
+      "arrayBuffers": 2407823,
+      "cpuPercent": 103.12064346049235,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5084
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 200,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "after-100-lifecycles",
+      "rss": 174432256,
+      "heapTotal": 98910208,
+      "heapUsed": 28317880,
+      "external": 6436167,
+      "arrayBuffers": 2407823,
+      "cpuPercent": 414.89049151312935,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5084
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 200,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "active-10-games",
+      "rss": 196534272,
+      "heapTotal": 134299648,
+      "heapUsed": 64732648,
+      "external": 7266893,
+      "arrayBuffers": 2424417,
+      "cpuPercent": 104.79252944628514,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5086
+      },
+      "sockets": 20,
+      "adapterRooms": 20,
+      "counters": {
+        "roomManager": {
+          "rooms": 10,
+          "roomsByCode": 10,
+          "playerRoomMap": 20,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 20,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 20,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 10,
+          "acknowledgedSequences": 20,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 256,
+          "idlePlayers": 200,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "cleaned-10-games",
+      "rss": 196829184,
+      "heapTotal": 107298816,
+      "heapUsed": 29808552,
+      "external": 6584153,
+      "arrayBuffers": 2424223,
+      "cpuPercent": 131.06838627928084,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5086
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 220,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "active-25-games",
+      "rss": 310636544,
+      "heapTotal": 245710848,
+      "heapUsed": 107245192,
+      "external": 9742593,
+      "arrayBuffers": 2424657,
+      "cpuPercent": 103.09451229494539,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5086
+      },
+      "sockets": 50,
+      "adapterRooms": 50,
+      "counters": {
+        "roomManager": {
+          "rooms": 25,
+          "roomsByCode": 25,
+          "playerRoomMap": 50,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 50,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 50,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 25,
+          "acknowledgedSequences": 50,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 256,
+          "idlePlayers": 220,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "cleaned-25-games",
+      "rss": 310702080,
+      "heapTotal": 183058432,
+      "heapUsed": 30041696,
+      "external": 6584873,
+      "arrayBuffers": 2424337,
+      "cpuPercent": 166.81340749880204,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5086
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 270,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "active-50-games",
+      "rss": 384180224,
+      "heapTotal": 317276160,
+      "heapUsed": 174822936,
+      "external": 10243009,
+      "arrayBuffers": 2733820,
+      "cpuPercent": 101.97546122363094,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5086
+      },
+      "sockets": 100,
+      "adapterRooms": 100,
+      "counters": {
+        "roomManager": {
+          "rooms": 50,
+          "roomsByCode": 50,
+          "playerRoomMap": 100,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 100,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 100,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 50,
+          "acknowledgedSequences": 100,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 256,
+          "idlePlayers": 270,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "cleaned-50-games",
+      "rss": 383930368,
+      "heapTotal": 193806336,
+      "heapUsed": 30219488,
+      "external": 6586073,
+      "arrayBuffers": 2425067,
+      "cpuPercent": 212.0257291364906,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5086
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 370,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "reconnect-100",
+      "rss": 384196608,
+      "heapTotal": 167591936,
+      "heapUsed": 30432400,
+      "external": 6646739,
+      "arrayBuffers": 2458313,
+      "cpuPercent": 122.64315665453651,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5086
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 370,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "reconnect-200",
+      "rss": 384237568,
+      "heapTotal": 168116224,
+      "heapUsed": 30372104,
+      "external": 6654931,
+      "arrayBuffers": 2470922,
+      "cpuPercent": 112.3911768186564,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5086
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 370,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "reconnect-300",
+      "rss": 384200704,
+      "heapTotal": 168116224,
+      "heapUsed": 30421624,
+      "external": 6646739,
+      "arrayBuffers": 2453233,
+      "cpuPercent": 111.01726500793521,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5086
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 370,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "reconnect-400",
+      "rss": 384311296,
+      "heapTotal": 168378368,
+      "heapUsed": 30518544,
+      "external": 6646739,
+      "arrayBuffers": 2457021,
+      "cpuPercent": 110.7644899126047,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5086
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 370,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "reconnect-500",
+      "rss": 384319488,
+      "heapTotal": 168378368,
+      "heapUsed": 30502656,
+      "external": 6720467,
+      "arrayBuffers": 2528964,
+      "cpuPercent": 117.10333967185991,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5086
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 370,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    },
+    {
+      "label": "final",
+      "rss": 384319488,
+      "heapTotal": 168378368,
+      "heapUsed": 30473072,
+      "external": 6583639,
+      "arrayBuffers": 2424223,
+      "cpuPercent": 58.023811121823734,
+      "statePayloadBytes": {
+        "carrom": 150470,
+        "table-tennis": 1085,
+        "snake-vs-worms": 5086
+      },
+      "sockets": 0,
+      "adapterRooms": 0,
+      "counters": {
+        "roomManager": {
+          "rooms": 0,
+          "roomsByCode": 0,
+          "playerRoomMap": 0,
+          "roomExpirationTimers": 0,
+          "roomLocks": 0
+        },
+        "playerManager": {
+          "players": 0,
+          "afkTimers": 0,
+          "pingIntervals": 0,
+          "activityLog": 0,
+          "playerStats": 0
+        },
+        "syncManager": {
+          "sequenceNumbers": 0,
+          "acknowledgedSequences": 0,
+          "connectionQuality": 0,
+          "pingIntervals": 0,
+          "statePayloadBytes": 3
+        },
+        "gameStateManager": {
+          "queues": 0
+        },
+        "antiCheatManager": {
+          "actionHistory": 0,
+          "suspiciousEvents": 0,
+          "actionSequences": 0,
+          "processedActionCache": 0,
+          "idlePlayers": 370,
+          "playerRiskScores": 0
+        },
+        "timerManager": {
+          "timers": 0,
+          "timerCallbacks": 0,
+          "timerHandles": 0
+        },
+        "spectatorManager": {
+          "spectators": 0,
+          "delayBuffers": 0,
+          "delayTimers": 0,
+          "spectatorConfigs": 0
+        }
+      }
+    }
+  ]
+}
