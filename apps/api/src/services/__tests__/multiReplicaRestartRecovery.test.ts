@@ -293,6 +293,39 @@ describe('private room initialization never awards an unstarted prize', () => {
 });
 
 describe('uniformCountdownRecovery / shared matchmaking / tournamentProvisioningRecovery', () => {
+  it('releases the remaining account into a new room after a completed opponent departure and owner restart', async () => {
+    if (a.exitCode != null || a.signalCode != null) a = await server(aPort);
+    const players = await Promise.all([createTestUser(), createTestUser()]);
+    for (const player of players) await prisma.$transaction(tx => WalletTransactionService.createCredit(tx,
+      { userId: player.id, amount: 1000, referenceType: 'ADMIN', referenceId: crypto.randomUUID() }));
+    const first = await connect(aPort, players[0]!.id), second = await connect(bPort, players[1]!.id);
+    const created = await command(first, 'room:create', { gameId: 'table-tennis', stake: 100, maxPlayers: 2, isPrivate: true });
+    await command(second, 'room:join', { code: created.code });
+    await command(second, 'room:ready', { roomId: created.id, ready: true });
+    await command(first, 'room:start', { roomId: created.id });
+    const load = () => prisma.liveRoomCheckpoint.findUniqueOrThrow({ where: { id: created.id } });
+    await until(async () => ((await load()).snapshot as any).room.status === 'playing');
+    const matchId = (await load()).matchId!;
+    await command(second, 'game:action', { roomId: created.id, matchId, action: { type: 'resign', actionId: crypto.randomUUID() } });
+    await until(async () => (await prisma.gameResultOutbox.findUnique({ where: { matchId } }))?.status === 'DELIVERED');
+    await command(first, 'room:leave', { roomId: created.id });
+    const checkpoint = await load();
+    expect((checkpoint.snapshot as any).players.map((p: any) => p.id)).toEqual([players[1]!.id]);
+    expect((checkpoint.snapshot as any).match.engine.participants).toHaveLength(2);
+    const balances = await Promise.all(players.map(player => prisma.wallet.findUniqueOrThrow({ where: { userId: player.id } })));
+    await kill(a); first.disconnect();
+    await until(async () => { const saved = await load(); return saved.ownerId !== checkpoint.ownerId && saved.fencingToken > checkpoint.fencingToken; }, 25000);
+    const next = await command(second, 'room:create', { gameId: 'table-tennis', stake: 100, maxPlayers: 2, isPrivate: true });
+    expect(next.id).not.toBe(created.id);
+    expect(next.players.map((p: any) => p.id)).toEqual([players[1]!.id]);
+    expect((await load()).closed).toBe(true);
+    for (const [index, player] of players.entries()) {
+      expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: player.id } })).balance).toBe(balances[index]!.balance);
+    }
+    expect(await prisma.gameResultOutbox.count({ where: { matchId } })).toBe(1);
+    await command(second, 'room:leave', { roomId: next.id }); second.disconnect();
+  }, 60000);
+
   it('restores an expired countdown deadline after owner death, funds once and starts once', async () => {
     const players = await Promise.all([createTestUser(), createTestUser()]);
     const first = await connect(aPort, players[0]!.id), second = await connect(bPort, players[1]!.id);

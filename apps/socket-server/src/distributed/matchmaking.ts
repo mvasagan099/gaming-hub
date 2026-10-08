@@ -21,9 +21,14 @@ export class SharedMatchmaking {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('shared-matchmaking'))`;
       await tx.matchmakingQueue.updateMany({ where: { status: 'WAITING', expiresAt: { lte: new Date() } }, data: { status: 'EXPIRED' } });
       const existing = await tx.matchmakingQueue.findFirst({ where: { userId: command.playerId, status: { in: ['WAITING','MATCHED'] }, expiresAt: { gt: new Date() } } });
-      if (existing) return existing.matchId;
       const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId: command.playerId } });
       if (wallet.isFrozen || wallet.balance < parsed.stake) throw new Error('Wallet unavailable or insufficient balance');
+      if (existing?.status === 'MATCHED') return existing.matchId;
+      if (existing && existing.gameId === parsed.gameId && existing.entryFee === parsed.stake && existing.gameMode === gameMode) {
+        await tx.matchmakingQueue.update({ where: { id: existing.id }, data: { socketId: command.socketId } });
+        return null;
+      }
+      if (existing) await tx.matchmakingQueue.update({ where: { id: existing.id }, data: { status: 'CANCELLED' } });
       await tx.matchmakingQueue.create({ data: { userId: command.playerId, gameId: parsed.gameId, entryFee: parsed.stake,
         gameMode, socketId: command.socketId, expiresAt: new Date(Date.now() + 120000) } });
       const group = await tx.matchmakingQueue.findMany({ where: { status: 'WAITING', gameId: parsed.gameId, entryFee: parsed.stake, gameMode }, orderBy: { joinedAt: 'asc' }, take: getGameDefinition(parsed.gameId).minPlayers });

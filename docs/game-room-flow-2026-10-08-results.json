@@ -1,0 +1,236 @@
+{
+  "date": "2026-10-08",
+  "baselineCommit": "79a429677dbf13fca696c3828939f0a466357f64",
+  "includesUncommittedQueueFixes": true,
+  "scope": "All nine games and room flow; targeted API tests, not full API aggregation",
+  "supportedGames": [
+    "ludo",
+    "chess",
+    "carrom",
+    "snake-ladder",
+    "fruit-ninja",
+    "bubble-shooter",
+    "table-tennis",
+    "snake-vs-worms",
+    "snooker"
+  ],
+  "testInfrastructure": {
+    "postgresHost": "127.0.0.1",
+    "postgresPort": 5540,
+    "databases": [
+      "gaming_room_flow_test",
+      "gaming_room_queue_test"
+    ],
+    "redisHost": "127.0.0.1",
+    "redisPort": 56480,
+    "temporaryRedisRemoved": true
+  },
+  "productionDatabaseTouched": false,
+  "deployed": false,
+  "pushed": false,
+  "suites": {
+    "multiplayer": {
+      "files": 24,
+      "discoveredTests": 357,
+      "passed": 357,
+      "failed": 0,
+      "skippedOrFiltered": 0,
+      "success": true,
+      "fileManifest": [
+        "packages/multiplayer/__tests__/bubbleShooterGameplay.test.ts",
+        "packages/multiplayer/__tests__/carromLifecycle.test.ts",
+        "packages/multiplayer/__tests__/carromPreview.test.ts",
+        "packages/multiplayer/__tests__/centralizedGameConfig.test.ts",
+        "packages/multiplayer/__tests__/clientMatchIdentity.test.ts",
+        "packages/multiplayer/__tests__/completedRoomCheckpoint.test.ts",
+        "packages/multiplayer/__tests__/disconnectReconnect.test.ts",
+        "packages/multiplayer/__tests__/finishedRoomRecovery.test.ts",
+        "packages/multiplayer/__tests__/gameConfigs.test.ts",
+        "packages/multiplayer/__tests__/gameEventSystem.test.ts",
+        "packages/multiplayer/__tests__/gameLoadSafety.test.ts",
+        "packages/multiplayer/__tests__/gameStateSync.test.ts",
+        "packages/multiplayer/__tests__/gameplay.test.ts",
+        "packages/multiplayer/__tests__/internalApiCheck.test.ts",
+        "packages/multiplayer/__tests__/matchManager.test.ts",
+        "packages/multiplayer/__tests__/matchmaking.test.ts",
+        "packages/multiplayer/__tests__/playerExit.test.ts",
+        "packages/multiplayer/__tests__/privateRoomSocketFlow.test.ts",
+        "packages/multiplayer/__tests__/realtimeSync.test.ts",
+        "packages/multiplayer/__tests__/rematch.test.ts",
+        "packages/multiplayer/__tests__/roomCleanup.test.ts",
+        "packages/multiplayer/__tests__/snookerPreview.test.ts",
+        "packages/multiplayer/__tests__/startupStep.test.ts",
+        "packages/multiplayer/__tests__/tournamentRoomAccess.test.ts"
+      ],
+      "fileDurationSeconds": 19.216
+    },
+    "gameEngine": {
+      "files": 27,
+      "discoveredTests": 421,
+      "passed": 421,
+      "failed": 0,
+      "skippedOrFiltered": 0,
+      "success": true,
+      "fileManifest": [
+        "packages/game-engine/__tests__/admin-game-timeout-configuration.test.ts",
+        "packages/game-engine/__tests__/bubble-shooter.test.ts",
+        "packages/game-engine/__tests__/carrom.test.ts",
+        "packages/game-engine/__tests__/carromPockets.test.ts",
+        "packages/game-engine/__tests__/carromSync.test.ts",
+        "packages/game-engine/__tests__/checkpointRecovery.test.ts",
+        "packages/game-engine/__tests__/chess.test.ts",
+        "packages/game-engine/__tests__/confirmation-popups-safety.test.ts",
+        "packages/game-engine/__tests__/fruit-ninja-spawn-balancing.test.ts",
+        "packages/game-engine/__tests__/fruit-ninja.test.ts",
+        "packages/game-engine/__tests__/global-match-history-replay-stats.test.ts",
+        "packages/game-engine/__tests__/global-match-qa-monitoring-edge-cases.test.ts",
+        "packages/game-engine/__tests__/global-match-timeout-engine.test.ts",
+        "packages/game-engine/__tests__/global-matchmaking-readiness-start.test.ts",
+        "packages/game-engine/__tests__/global-multiplayer-security-anti-cheat.test.ts",
+        "packages/game-engine/__tests__/global-realtime-game-events-notifications.test.ts",
+        "packages/game-engine/__tests__/ludo.test.ts",
+        "packages/game-engine/__tests__/production-player-limits.test.ts",
+        "packages/game-engine/__tests__/snake-ladder.test.ts",
+        "packages/game-engine/__tests__/snake-vs-worms.test.ts",
+        "packages/game-engine/__tests__/snookerMultiplayer.test.ts",
+        "packages/game-engine/__tests__/snookerPhysics.test.ts",
+        "packages/game-engine/__tests__/snookerRules.test.ts",
+        "packages/game-engine/__tests__/table-tennis.test.ts",
+        "packages/game-engine/__tests__/timeout-resolution.test.ts",
+        "packages/game-engine/__tests__/universal-game-result-adapters.test.ts",
+        "packages/game-engine/__tests__/universal-match-finalization.test.ts"
+      ],
+      "fileDurationSeconds": 22.323
+    },
+    "web": {
+      "files": 38,
+      "discoveredTests": 315,
+      "passed": 315,
+      "failed": 0,
+      "skippedOrFiltered": 0,
+      "success": true,
+      "fileManifest": [
+        "apps/web/src/components/GameWrapper.test.tsx",
+        "apps/web/src/data/games.test.ts",
+        "apps/web/src/store/multiplayerStore.leave.test.ts",
+        "apps/web/src/store/multiplayerStore.matchmaking.test.ts",
+        "apps/web/src/store/multiplayerStore.rematch.test.ts",
+        "apps/web/src/store/multiplayerStore.roomLifecycle.test.ts",
+        "apps/web/src/utils/roomReadiness.test.ts",
+        "apps/web/src/components/Replay/CarromReplayBoard.test.tsx",
+        "apps/web/src/components/Replay/ReplayModal.test.tsx",
+        "apps/web/src/components/Replay/replayPresentation.test.ts",
+        "apps/web/src/games/fruit-ninja/FruitNinjaAuthority.test.ts",
+        "apps/web/src/games/fruit-ninja/FruitNinjaBomb.test.ts",
+        "apps/web/src/games/fruit-ninja/FruitNinjaPresentation.test.tsx",
+        "apps/web/src/pages/Games/GamePage.navigation.test.tsx",
+        "apps/web/src/pages/Games/GamePage.rematch.test.tsx",
+        "apps/web/src/pages/Home/Home.gameMode.test.tsx",
+        "apps/web/src/pages/Lobby/LobbyPage.privateRoom.test.tsx",
+        "apps/web/src/services/native/capacitorAppService.back.test.ts",
+        "apps/web/src/games/bubble-shooter/__tests__/multiplayerControls.test.tsx",
+        "apps/web/src/games/bubble-shooter/utils/multiplayerPresentation.test.ts",
+        "apps/web/src/games/carrom/__tests__/multiplayerDriver.test.ts",
+        "apps/web/src/games/carrom/__tests__/multiplayerInput.test.tsx",
+        "apps/web/src/games/carrom/__tests__/shotPreview.test.ts",
+        "apps/web/src/games/carrom/__tests__/strikerPlacement.test.tsx",
+        "apps/web/src/games/chess/utils/chessState.test.ts",
+        "apps/web/src/games/shared/rendering/StaticCanvasLayer.test.ts",
+        "apps/web/src/games/shared/rendering/sceneryCache.test.ts",
+        "apps/web/src/games/shared/rendering/viewport.test.ts",
+        "apps/web/src/games/shared/hooks/animationLoop.test.ts",
+        "apps/web/src/games/snake-vs-worms/__tests__/multiplayerDriver.test.ts",
+        "apps/web/src/games/snake-vs-worms/__tests__/multiplayerLifecycle.test.tsx",
+        "apps/web/src/games/snooker/__tests__/multiplayerDriver.test.ts",
+        "apps/web/src/games/snooker/__tests__/multiplayerInput.test.tsx",
+        "apps/web/src/games/snooker/__tests__/shotPlayback.test.ts",
+        "apps/web/src/games/table-tennis/__tests__/multiplayerDriver.test.ts",
+        "apps/web/src/games/table-tennis/__tests__/multiplayerLifecycle.test.tsx",
+        "apps/web/src/games/table-tennis/__tests__/remoteTimeline.test.ts",
+        "apps/web/src/games/ludo/phaser/data/boardLayout.test.ts"
+      ],
+      "fileDurationSeconds": 20.223
+    },
+    "apiRoomCore": {
+      "files": 4,
+      "discoveredTests": 63,
+      "passed": 63,
+      "failed": 0,
+      "skippedOrFiltered": 0,
+      "success": true,
+      "fileManifest": [
+        "apps/api/src/services/__tests__/matchmakingQueue.test.ts",
+        "apps/api/src/services/__tests__/multiplayerRecovery.test.ts",
+        "apps/api/src/services/__tests__/unifiedGameLifecycle.test.ts",
+        "apps/api/src/services/__tests__/universalMatchRoom.test.ts"
+      ],
+      "fileDurationSeconds": 6.152
+    },
+    "apiFinancialSecurityQueue": {
+      "files": 6,
+      "discoveredTests": 59,
+      "passed": 59,
+      "failed": 0,
+      "skippedOrFiltered": 0,
+      "success": true,
+      "fileManifest": [
+        "apps/api/src/services/__tests__/distributedOwnershipOutbox.test.ts",
+        "apps/api/src/services/__tests__/financialConcurrencyAndRecovery.test.ts",
+        "apps/api/src/services/__tests__/gameResultSecurity.test.ts",
+        "apps/api/src/services/__tests__/roomStartSettlementSafety.test.ts",
+        "apps/api/src/services/__tests__/sharedQueueRoomFlow.test.ts",
+        "apps/api/src/services/__tests__/socketRematchSecurity.test.ts"
+      ],
+      "fileDurationSeconds": 27.495
+    },
+    "apiRestart": {
+      "files": 1,
+      "discoveredTests": 28,
+      "passed": 28,
+      "failed": 0,
+      "skippedOrFiltered": 0,
+      "success": true,
+      "fileManifest": [
+        "apps/api/src/services/__tests__/multiReplicaRestartRecovery.test.ts"
+      ],
+      "fileDurationSeconds": 247.357
+    },
+    "apiRemainingAccountRecovery": {
+      "files": 1,
+      "discoveredTests": 29,
+      "passed": 1,
+      "failed": 0,
+      "skippedOrFiltered": 28,
+      "success": true,
+      "fileManifest": [
+        "apps/api/src/services/__tests__/multiReplicaRestartRecovery.test.ts"
+      ],
+      "fileDurationSeconds": 13.461
+    }
+  },
+  "uniqueTargetedApiAggregate": {
+    "files": 11,
+    "executedTests": 151,
+    "passed": 151,
+    "failed": 0,
+    "note": "28 filtered cases in the selected account test were executed in the preceding complete restart file run. Cases deduplicated by file and full test name."
+  },
+  "gates": {
+    "workspaceTypecheck": "PASS",
+    "apiTypecheckAfterFinalTestAddition": "PASS",
+    "build": "PASS",
+    "diffWhitespaceCheck": "PASS"
+  },
+  "openFindings": [
+    {
+      "priority": "P2",
+      "issue": "Distributed Quick Match drops selected Chess clock/rated settings"
+    },
+    {
+      "priority": "P2",
+      "issue": "Lobby-generated stakes can differ from allowed server configuration"
+    }
+  ],
+  "manualDeployedAccountVerification": "NOT RUN",
+  "verdict": "Executed core flow tests PASS; two configuration findings remain open. No production-readiness certification."
+}
