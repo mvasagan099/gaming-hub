@@ -1,0 +1,45 @@
+Environment variables loaded from .env
+Prisma schema loaded from packages/db/prisma/schema.prisma
+Datasource "db": PostgreSQL database "gaming_phase2_migration_20261008", schema "public" at "127.0.0.1:5540"
+
+11 migrations found in prisma/migrations
+
+Applying migration `20260801000000_init`
+Applying migration `20260828_add_gameid_to_schedule_log`
+Applying migration `20260831_add_app_version_config`
+Applying migration `20260915_security_schema_v1`
+Applying migration `20260918_affiliate_fraud_and_risk`
+Applying migration `20260918_finalize_affiliate_wallet_commissions`
+Applying migration `20261003000000_shared_security_limits_and_schema_guard`
+Applying migration `20261007100000_unique_match_seats`
+Applying migration `20261007120000_distributed_match_recovery`
+Applying migration `20261007130000_live_participant_lookup`
+Applying migration `20261008140000_matchmaking_settings`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20260801000000_init/
+    └─ migration.sql
+  └─ 20260828_add_gameid_to_schedule_log/
+    └─ migration.sql
+  └─ 20260831_add_app_version_config/
+    └─ migration.sql
+  └─ 20260915_security_schema_v1/
+    └─ migration.sql
+  └─ 20260918_affiliate_fraud_and_risk/
+    └─ migration.sql
+  └─ 20260918_finalize_affiliate_wallet_commissions/
+    └─ migration.sql
+  └─ 20261003000000_shared_security_limits_and_schema_guard/
+    └─ migration.sql
+  └─ 20261007100000_unique_match_seats/
+    └─ migration.sql
+  └─ 20261007120000_distributed_match_recovery/
+    └─ migration.sql
+  └─ 20261007130000_live_participant_lookup/
+    └─ migration.sql
+  └─ 20261008140000_matchmaking_settings/
+    └─ migration.sql
+      
+All migrations have been successfully applied.

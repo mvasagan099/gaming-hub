@@ -366,8 +366,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         }
         
         const incomingVersion = (payload as any).sequenceNumber ?? (gameState as any)?.turnNumber ?? 0;
-        if (!newMatch && incomingVersion > 0 && incomingVersion < get().lastStateVersion) {
-          console.warn("[MultiplayerStore] Discarding stale game:state packet:", incomingVersion, "<", get().lastStateVersion);
+        if (!newMatch && incomingVersion > 0 && incomingVersion <= get().lastStateVersion) {
+          if (logUpdate) console.debug("[MultiplayerStore] Discarding duplicate/stale game:state packet:", incomingVersion);
           return;
         }
 

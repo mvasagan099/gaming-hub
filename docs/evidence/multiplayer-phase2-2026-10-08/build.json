@@ -1,0 +1,5 @@
+{
+  "result": "PASS",
+  "exitCode": 0,
+  "warning": "Frontend chunks above 500 KiB, including AudioManager 1375.14 kB (gzip 357.75 kB)"
+}

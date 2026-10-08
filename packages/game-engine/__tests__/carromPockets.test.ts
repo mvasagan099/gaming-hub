@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { checkPocketCollision, createInitialCoins, createInitialStriker, simulatePhysics } from '../src/carrom/physics';
+import { checkPocketCollision, createInitialCoins, createInitialStriker, simulatePhysics, POCKET_CAPTURE_RADIUS } from '../src/carrom/physics';
 import { POCKETS } from '../src/carrom/types';
 
 describe('Authoritative Carrom pocket capture', () => {
+  it('preserves circular capture geometry across the board and at the boundary', () => {
+    for (let x = 0; x <= 600; x += 3) {
+      for (let y = 0; y <= 600; y += 3) {
+        const expected = POCKETS.findIndex(p => Math.hypot(p.x - x, p.y - y) <= POCKET_CAPTURE_RADIUS);
+        expect(checkPocketCollision(x, y)).toBe(expected < 0 ? null : expected);
+      }
+    }
+    for (const [index, pocket] of POCKETS.entries()) {
+      expect(checkPocketCollision(pocket.x + POCKET_CAPTURE_RADIUS, pocket.y)).toBe(index);
+      expect(checkPocketCollision(pocket.x + POCKET_CAPTURE_RADIUS + 0.00001, pocket.y)).toBeNull();
+    }
+  });
   for (const [index, pocket] of POCKETS.entries()) {
     it.each([0, 0.3, 5, 27])(`captures a coin over pocket ${index} at speed %s exactly once`, speed => {
       const coin = createInitialCoins().find(c => c.type === 'white')!;

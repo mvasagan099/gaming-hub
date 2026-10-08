@@ -112,7 +112,8 @@ export class SyncManager {
     if (!room.match) return;
     
     const engine = room.match.engine as EngineInstance;
-    const state = engine.serialize() as any;
+    const includesShot = events.some(e => ['shot-trajectory', 'carrom:shot-start'].includes(e.type));
+    const state = (engine.serializeForSync?.(includesShot) ?? engine.serialize()) as any;
     const sequenceNumber = this.getNextSequenceNumber(room.id);
     
     const packet: StateSyncPacket = {

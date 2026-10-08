@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-const socket = vi.hoisted(() => ({ listeners: new Map<string, (data: any) => void>(), emitWithAck: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), timeout: vi.fn() }));
+const socket = vi.hoisted(() => ({ listeners: new Map<string, (data: any) => void>(), emit: vi.fn(), emitWithAck: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), timeout: vi.fn() }));
 vi.mock('@gaming-hub/socket', () => ({ createTypedSocket: () => Object.assign(socket, { on: (event: string, callback: any) => socket.listeners.set(event, callback) }) }));
 vi.mock('./authStore', () => ({ useAuthStore: { getState: () => ({ session: { access_token: 'test' }, user: { id: 'p1' } }) } }));
 vi.mock('./walletStore', () => ({ useWalletStore: { getState: () => ({ fetchWallet: vi.fn() }) } }));
@@ -13,6 +13,21 @@ beforeEach(() => {
 });
 afterEach(() => useMultiplayerStore.getState().disconnect());
 describe('finished room cleanup before another game', () => {
+  it.each(['carrom', 'table-tennis', 'snake-vs-worms'])('does not replay %s events or render duplicate/older state versions', gameId => {
+    useMultiplayerStore.setState({ room: { ...ended, gameId, status: 'playing' }, lastStateVersion: 0 });
+    const receive = socket.listeners.get('game:state')!;
+    const packet = { roomId: ended.id, matchId: ended.matchId, sequenceNumber: 2,
+      state: { score: 1 }, events: [{ type: 'point-scored' }] };
+    receive(packet);
+    const applied = useMultiplayerStore.getState();
+    receive(packet);
+    receive({ ...packet, sequenceNumber: 1, state: { score: 0 } });
+    expect(useMultiplayerStore.getState().renderKey).toBe(applied.renderKey);
+    expect(useMultiplayerStore.getState().gameState).toEqual({ score: 1 });
+    receive({ ...packet, sequenceNumber: 3, state: { score: 2 } });
+    expect(useMultiplayerStore.getState().renderKey).toBe(applied.renderKey + 1);
+    expect(useMultiplayerStore.getState().gameState).toEqual({ score: 2 });
+  });
   it('waits for the outstanding leave ACK before starting a new search', async () => {
     let acknowledge!: (response: any) => void;
     socket.emitWithAck.mockImplementation(event => event === 'room:leave' ? new Promise(resolve => { acknowledge = resolve; }) : Promise.resolve({ ok: true, data: { position: 1 } }));

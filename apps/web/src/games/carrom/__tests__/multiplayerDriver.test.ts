@@ -77,6 +77,46 @@ describe('Carrom multiplayer action delivery', () => {
 
 
 describe('Carrom authoritative shot ordering', () => {
+  it('does not animate a completed shot from a compact metadata update', () => {
+    const engine = new CarromEngine([{ seat: 0, userId: 'p0' }, { seat: 1, userId: 'p1' }]);
+    actions.state.gameState = engine.state;
+    const driver = new Driver(0, []);
+    const animations = vi.fn();
+    driver.onStateUpdate = () => { if (driver.consumeNewStrike().isNew) animations(); };
+    driver.start();
+    engine.apply({ type: 'strike', x: 280, angle: 0, power: 0 }, 0);
+    (driver as any)._apply(engine.serializeForSync(false), [], null, 3);
+    (driver as any)._apply(engine.serialize(), [], null, 2);
+    expect(animations).not.toHaveBeenCalled();
+    expect(driver.lastState?.coins).toEqual(engine.state.coins);
+    driver.stop();
+  });
+  it.each([100, 300, 500])('renders delayed and replayed shots once at %sms simulated delivery delay', async delay => {
+    vi.useFakeTimers();
+    const driver = new Driver(0, []);
+    try {
+      const engine = new CarromEngine([{ seat: 0, userId: 'p0' }, { seat: 1, userId: 'p1' }]);
+      actions.state.gameState = engine.state;
+      const shots: number[] = [];
+      driver.onStateUpdate = () => { const shot = driver.consumeNewStrike(); if (shot.isNew) shots.push(shot.shotId!); };
+      driver.start();
+      engine.apply({ type: 'strike', x: 280, angle: 0, power: 0 }, 0);
+      const first = structuredClone(engine.state);
+      engine.apply({ type: 'strike', x: 280, angle: Math.PI, power: 0 }, 1);
+      const second = structuredClone(engine.state);
+      setTimeout(() => (driver as any)._apply(first, [], null, 2), delay);
+      setTimeout(() => (driver as any)._apply(first, [], null, 2), delay + 20);
+      setTimeout(() => (driver as any)._apply(second, [], null, 3), delay + 40);
+      setTimeout(() => (driver as any)._apply(first, [], null, 2), delay + 60);
+      await vi.advanceTimersByTimeAsync(delay + 80);
+      expect(shots).toEqual([first.turnNumber, second.turnNumber]);
+      expect(driver.lastState?.coins).toEqual(second.coins);
+      expect(driver.lastState?.turnNumber).toBe(second.turnNumber);
+    } finally {
+      driver.stop();
+      vi.useRealTimers();
+    }
+  });
   it('plays distinct shots with the same timestamp once each and ignores older replay packets', () => {
     const engine = new CarromEngine([{ seat: 0, userId: 'p0' }, { seat: 1, userId: 'p1' }], () => 0.5, { now: () => 1000 });
     actions.state.gameState = engine.state;

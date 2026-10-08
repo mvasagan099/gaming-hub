@@ -463,6 +463,7 @@ export default class CarromMultiplayerDriver {
 
     if (
       action?.type === "strike" &&
+      !(s as CarromState & { trajectoryOmitted?: boolean })?.trajectoryOmitted &&
       actionAt !== null &&
       s!.turnNumber > this.lastAnimatedTurn
     ) {

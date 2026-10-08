@@ -1,0 +1,9 @@
+{
+  "scope": "deterministic synthetic Carrom shot, UTF-8 JSON bytes",
+  "originalReceiptBytes": 664778,
+  "compactReceiptBytes": 8428,
+  "fullSnapshotBytes": 222841,
+  "metadataSnapshotBytes": 4094,
+  "rpcReplyBytes": 8475,
+  "rpcLimitBytes": 65536
+}

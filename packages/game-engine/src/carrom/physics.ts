@@ -197,8 +197,7 @@ export function checkPocketCollision(x: number, y: number, _vx: number = 0, _vy:
     const pocket = POCKETS[i];
     const dx = pocket.x - x;
     const dy = pocket.y - y;
-    const distance = Math.hypot(dx, dy);
-    if (distance <= POCKET_CAPTURE_RADIUS) {
+    if (dx * dx + dy * dy <= POCKET_CAPTURE_RADIUS * POCKET_CAPTURE_RADIUS) {
       return i;
     }
   }
@@ -388,13 +387,7 @@ export function simulatePhysics(
     // 2. Straight perimeter walls
     // Crossing the straight innerMin/innerMax boundary is only permitted if the piece is within
     // the pocket capture radius (where it is immediately pocketed).
-    let inCaptureZone = false;
-    for (const p of POCKETS) {
-      if (Math.hypot(b.x - p.x, b.y - p.y) <= POCKET_CAPTURE_RADIUS) {
-        inCaptureZone = true;
-        break;
-      }
-    }
+    const inCaptureZone = checkPocketCollision(b.x, b.y) !== null;
 
     if (!inCaptureZone) {
       if (b.x - r < innerMin) {
@@ -469,10 +462,11 @@ export function simulatePhysics(
 
           const dx = b2.x - b1.x;
           const dy = b2.y - b1.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          const distanceSquared = dx * dx + dy * dy;
           const minDist = b1.radius + b2.radius;
 
-          if (dist < minDist && dist > 0) {
+          if (distanceSquared < minDist * minDist && distanceSquared > 0) {
+            const dist = Math.sqrt(distanceSquared);
             const nx = dx / dist;
             const ny = dy / dist;
 

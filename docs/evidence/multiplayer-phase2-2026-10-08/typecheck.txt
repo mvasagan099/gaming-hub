@@ -1,0 +1,41 @@
+
+> gaming-hub@1.0.0 typecheck
+> npm run typecheck -ws --if-present
+
+npm warn -ws is not a valid single-hyphen cli flag and will be removed in the future
+
+> @gaming-hub/api@0.0.0 typecheck
+> tsc --noEmit
+
+
+> @gaming-hub/socket-server@0.0.0 typecheck
+> tsc --noEmit
+
+
+> @gaming-hub/web@1.0.0 typecheck
+> tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json
+
+
+> @gaming-hub/db@0.0.0 typecheck
+> tsc --noEmit
+
+
+> @gaming-hub/enterprise@1.0.0 typecheck
+> tsc --noEmit
+
+
+> @gaming-hub/game-engine@0.0.0 typecheck
+> tsc --noEmit
+
+
+> @gaming-hub/multiplayer@1.0.0 typecheck
+> tsc --noEmit
+
+
+> @gaming-hub/shared@0.0.0 typecheck
+> tsc --noEmit
+
+
+> @gaming-hub/socket@0.0.0 typecheck
+> tsc --noEmit
+

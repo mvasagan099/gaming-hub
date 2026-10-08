@@ -30,6 +30,16 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
     return { ...super.serialize(), serverTimestamp: this.now() };
   }
 
+  serializeForSync(includeTrajectory: boolean): import("@gaming-hub/shared").JsonObject {
+    if (includeTrajectory) return this.serialize();
+    // Exclude the settled trajectory before cloning a metadata update, while
+    // retaining it in engine state, recovery snapshots and historical replays.
+    return {
+      ...this.serializeWithLiveTimers({ ...this.state, lastTrajectory: null }),
+      serverTimestamp: this.now(), trajectoryOmitted: true,
+    } as unknown as import("@gaming-hub/shared").JsonObject;
+  }
+
   constructor(players: EnginePlayer[], rng?: RandomSource, options?: CarromEngineOptions) {
     const turnTimer = options?.turnTimer ?? { turnDurationMs: 30000, warningThresholdMs: 10000 };
     const matchTimer = options?.matchTimer ?? { matchDurationMs: 600000, warningThresholdMs: 30000 };

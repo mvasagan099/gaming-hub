@@ -1,0 +1,54 @@
+{
+  "scope": "Synthetic local baseline CPU profile; exclusive sample shares, not duration guarantees",
+  "sampleCount": 34172,
+  "functions": [
+    {
+      "name": "structuredClone",
+      "percent": 25.286784501931407
+    },
+    {
+      "name": "simulatePhysics",
+      "percent": 24.640056186351398
+    },
+    {
+      "name": "checkPocketCollision",
+      "percent": 14.348004213976354
+    },
+    {
+      "name": "anonymous",
+      "percent": 8.401615357602715
+    },
+    {
+      "name": "encodeAsString",
+      "percent": 5.741542783565492
+    },
+    {
+      "name": "calculateChecksum",
+      "percent": 4.758281634086386
+    },
+    {
+      "name": "(garbage collector)",
+      "percent": 1.9489640641460846
+    },
+    {
+      "name": "findUnoccupiedPosition",
+      "percent": 1.6972960318389325
+    },
+    {
+      "name": "hasBinary",
+      "percent": 1.6651059346833665
+    },
+    {
+      "name": "(idle)",
+      "percent": 1.0037457567599204
+    },
+    {
+      "name": "consoleCall",
+      "percent": 0.9510710523235397
+    },
+    {
+      "name": "(program)",
+      "percent": 0.8632798782629053
+    }
+  ]
+}

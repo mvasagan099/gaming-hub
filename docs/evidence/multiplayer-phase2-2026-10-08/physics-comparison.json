@@ -1,0 +1,22 @@
+{
+  "scope": "isolated local Carrom physics, alternating baseline/final order; not network or staging latency",
+  "baselineCommit": "b4529a3",
+  "simulationsEach": 60,
+  "mismatches": 0,
+  "cpuMicros": {
+    "before": 2992230,
+    "after": 1756165
+  },
+  "latencyMs": {
+    "before": {
+      "p50": 32.364410000000134,
+      "p95": 68.9245269999999,
+      "p99": 82.77894700000002
+    },
+    "after": {
+      "p50": 19.010226000000102,
+      "p95": 34.19390999999996,
+      "p99": 66.9907619999999
+    }
+  }
+}

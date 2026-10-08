@@ -46,6 +46,8 @@ export interface EngineInstance {
   readonly winnerSeats: number[];
   seatOf(userId: string): number | null;
   serialize(): JsonObject;
+  /** Optional compact presentation snapshot; canonical checkpoints remain complete. */
+  serializeForSync?(includeTrajectory: boolean): JsonObject;
   /** Canonical checkpoint, without live-clock presentation adjustments. */
   persistenceState(): JsonObject;
   persistenceOptions(): JsonObject;

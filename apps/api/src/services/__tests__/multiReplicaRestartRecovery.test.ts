@@ -106,6 +106,38 @@ afterAll(async () => {
 });
 
 describe('restartRecovery / crossReplicaOwnership / multiReplicaPaidMatch — real socket processes and HTTP API', () => {
+  it('acknowledges a large Carrom shot through the non-owner replica once without losing recovery trajectory', async () => {
+    const players = await Promise.all([createTestUser(), createTestUser()]);
+    for (const player of players) await prisma.$transaction(tx => WalletTransactionService.createCredit(tx,
+      { userId: player.id, amount: 1000, referenceType: 'ADMIN', referenceId: crypto.randomUUID() }));
+    const first = await connect(aPort, players[0]!.id), second = await connect(bPort, players[1]!.id);
+    const room = await command(first, 'room:create', { gameId: 'carrom', stake: 100, maxPlayers: 2, isPrivate: true });
+    await command(second, 'room:join', { code: room.code });
+    await Promise.all([command(first, 'room:ready', { roomId: room.id, ready: true }), command(second, 'room:ready', { roomId: room.id, ready: true })]);
+    await command(first, 'room:start', { roomId: room.id });
+    const load = () => prisma.liveRoomCheckpoint.findUniqueOrThrow({ where: { id: room.id } });
+    await until(async () => ((await load()).snapshot as any).room.status === 'playing');
+    const matchId = (await load()).matchId!;
+    await command(first, 'game:loaded', { roomId: room.id, matchId });
+    await command(second, 'game:loaded', { roomId: room.id, matchId });
+    expect((await command(first, 'game:action', { roomId: room.id, matchId,
+      action: { type: 'strike', x: 300, angle: 0, power: 0, actionId: crypto.randomUUID() } })).ok).toBe(true);
+    const payload = { roomId: room.id, matchId, action: { type: 'strike', x: 300, angle: Math.PI / 2, power: 0.8, actionId: crypto.randomUUID() } };
+    const receipt = await command(second, 'game:action', payload);
+    expect(receipt.ok, receipt.error).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(receipt))).toBeLessThan(60 * 1024);
+    const checkpoint = (await load()).snapshot as any;
+    expect(checkpoint.match.actionHistory).toHaveLength(2);
+    expect(checkpoint.match.engine.state.lastTrajectory.length).toBeGreaterThan(0);
+    const duplicate = await command(second, 'game:action', payload);
+    expect(duplicate.ok).toBe(true);
+    expect(((await load()).snapshot as any).match.actionHistory).toHaveLength(2);
+    await command(first, 'game:action', { roomId: room.id, matchId, action: { type: 'resign', actionId: crypto.randomUUID() } });
+    await until(async () => (await prisma.gameResultOutbox.findUnique({ where: { matchId } }))?.status === 'DELIVERED');
+    expect(await prisma.transaction.count({ where: { referenceId: matchId, referenceType: 'MATCH_PAYOUT' } })).toBe(1);
+    first.disconnect(); second.disconnect();
+  }, 60000);
+
   it('internalApiAuthentication accepts valid and rejects missing/wrong service credentials', async () => {
     for (const [key, status] of [[env.INTERNAL_API_KEY, 200], ['', 401], ['incorrect-service-key', 401]] as const) {
       const response = await fetch(`http://127.0.0.1:${apiPort}/metrics`, { headers: key ? { 'x-internal-key': key } : {} });
