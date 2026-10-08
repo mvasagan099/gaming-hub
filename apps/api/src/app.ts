@@ -9,6 +9,7 @@ import { registerErrorHandler } from "./plugins/errors";
 import { healthRoutes } from "./routes/health";
 import { authRoutes } from "./routes/auth";
 import { usersRoutes } from "./routes/users";
+import { roomInvitationsRoutes } from "./routes/roomInvitations";
 import { friendsRoutes } from "./routes/friends";
 import { roomsRoutes } from "./routes/rooms";
 import { matchesRoutes } from "./routes/matches";
@@ -149,6 +150,7 @@ export function buildApp() {
   void app.register(authRoutes);
   void app.register(usersRoutes);
   void app.register(friendsRoutes);
+  void app.register(roomInvitationsRoutes);
   void app.register(roomsRoutes);
   void app.register(matchesRoutes);
   void app.register(leaderboardRoutes);

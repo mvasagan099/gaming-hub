@@ -120,6 +120,7 @@ export interface ClientToServerEvents {
 }
 
 export interface ServerToClientEvents {
+  "room:invitation": (payload: { invitationId: string }) => void;
   "match:aborted": (payload: { roomId: string; matchId: string; reason: string }) => void;
   "room:update": (room: RoomFull) => void;
   "room:updated": (room: RoomFull) => void;

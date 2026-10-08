@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-08",
+  "baselineCommit": "51ab426",
+  "workingCopy": true,
+  "productionDatabaseTouched": false,
+  "deployed": false,
+  "suites": {
+    "carromWeb": {
+      "files": 4,
+      "passed": 59,
+      "failed": 0,
+      "skippedOrFiltered": 0,
+      "success": true
+    },
+    "fullWeb": {
+      "files": 41,
+      "passed": 367,
+      "failed": 0,
+      "skippedOrFiltered": 0,
+      "success": true
+    },
+    "fullMultiplayer": {
+      "files": 24,
+      "passed": 358,
+      "failed": 0,
+      "skippedOrFiltered": 0,
+      "success": true
+    },
+    "twoServerCarromOwnerRestart": {
+      "files": 1,
+      "passed": 1,
+      "failed": 0,
+      "skippedOrFiltered": 29,
+      "success": true,
+      "note": "One selected Carrom case; 29 other cases intentionally filtered. Uses real local API, two socket processes, PostgreSQL and isolated Redis."
+    }
+  },
+  "fixes": [
+    "No checkpoint writes for validated Carrom visual striker previews; real actions still persist under owner fencing",
+    "Preview listener follows socket replacement and removes the old listener",
+    "One authoritative shot trajectory in game-state packets rather than three copies; event metadata retained"
+  ],
+  "isolatedRedisRemoved": true,
+  "gates": {
+    "build": "PASS",
+    "diffWhitespace": "PASS",
+    "affectedWebSocketMultiplayerWorkspacesTypecheck": "PASS",
+    "rootTypecheck": "FAIL: two unrelated Prisma JSON fixture errors in apps/api/src/routes/__tests__/roomInvitations.test.ts:17 and :21"
+  }
+}

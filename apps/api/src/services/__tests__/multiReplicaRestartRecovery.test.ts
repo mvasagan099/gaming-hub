@@ -131,6 +131,24 @@ describe('restartRecovery / crossReplicaOwnership / multiReplicaPaidMatch — re
       await command(second, 'game:loaded', { roomId: room.id, matchId });
       expect(((await load()).snapshot as any).match.gameplayStartedAt).toBeTypeOf('number');
     }
+    if (gameId === 'carrom') {
+      const baseline = await load();
+      const preview = socketOnce(second, 'carrom:striker-position');
+      // Use the non-owner replica: previews must still use membership/turn validation,
+      // but cannot produce any durable mutation or block a real strike behind writes.
+      for (let sequence = 1; sequence <= 12; sequence++) await command(second, 'carrom:striker-position',
+        { roomId: room.id, matchId, turnNumber: 0, x: 300, sequence });
+      expect((await load()).revision).toBe(baseline.revision);
+      // The wrong-turn player never gets a preview broadcast.
+      const validPreview = socketOnce(second, 'carrom:striker-position');
+      for (let sequence = 1; sequence <= 12; sequence++) await command(first, 'carrom:striker-position',
+        { roomId: room.id, matchId, turnNumber: 0, x: 300 + sequence, sequence });
+      expect((await validPreview)[0]).toMatchObject({ matchId, seat: 0, sequence: 1 });
+      expect((await preview)[0]).toMatchObject({ seat: 0 });
+      const afterPreview = await load();
+      expect(afterPreview.revision).toBe(baseline.revision);
+      expect(afterPreview.snapshot).toEqual(baseline.snapshot);
+    }
     const action = { ...actions[gameId], actionId: crypto.randomUUID(), ...(gameId === 'fruit-ninja' ? { time: Date.now() } : {}) };
     const applied = await command(first, 'game:action', { roomId: room.id, matchId, action });
     expect(applied.ok, applied.error).toBe(true);

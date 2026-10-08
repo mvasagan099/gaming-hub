@@ -54,7 +54,7 @@ export class DistributedRoomCoordinator {
         const request = JSON.parse(data) as RpcMessage;
         // Only this exact reply namespace is accepted. Redis must be private/ACL protected.
         if (!request.command?.roomId || !request.requestId || !request.replyChannel.startsWith(`${this.namespace}:reply:`)) return;
-        void this.local(request.command.roomId!, () => this.dispatch(request.command)).then(
+        void this.local(request.command.roomId!, () => this.dispatch(request.command), request.command.event === "carrom:striker-position").then(
           value => this.redis.publish(request.replyChannel, JSON.stringify({ requestId: request.requestId, ok: true, value })),
           error => this.redis.publish(request.replyChannel, JSON.stringify({ requestId: request.requestId, ok: false, error: (error as Error).message })),
         ).catch(() => this.framework.error("Owner reply transport unavailable", "RPC_REPLY_FAILED"));
@@ -161,7 +161,7 @@ export class DistributedRoomCoordinator {
     if (!stored || stored.closed) throw new Error('Room not found');
     command = { ...command, roomId: stored.id };
     const lease = await this.ownership.inspect(stored.id);
-    if (!lease || lease.ownerId === this.instanceId) return this.local(stored.id, () => this.dispatch(command));
+    if (!lease || lease.ownerId === this.instanceId) return this.local(stored.id, () => this.dispatch(command), command.event === "carrom:striker-position");
     const requestId = randomUUID();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { this.pending.delete(requestId); reject(new Error('MATCH_OWNER_TEMPORARILY_UNAVAILABLE')); }, 5000);
@@ -204,7 +204,7 @@ export class DistributedRoomCoordinator {
     });
   }
 
-  async local<T>(roomId: string, task: () => Promise<T>): Promise<T> {
+  async local<T>(roomId: string, task: () => Promise<T>, presentationOnly = false): Promise<T> {
     const transaction = this.context.getStore();
     if (transaction?.active && transaction.roomId === roomId) return task();
     const previous = this.queues.get(roomId) ?? Promise.resolve();
@@ -222,9 +222,15 @@ export class DistributedRoomCoordinator {
           if (!room) throw new Error('Room closed without a durable transition');
           const context = this.context.getStore()!;
           await this.ownership.assert(roomId, this.instanceId, owner.token);
-          const snapshot = serializeRoomCheckpoint(this.framework, room);
-          owner.revision = await this.store.commit(roomId, this.instanceId, owner.token, owner.revision,
-            room.match?.matchId ?? null, snapshot as unknown as Prisma.InputJsonValue, context.result, context.closed ?? false);
+          // Carrom striker previews are validated, turn-scoped presentation only.
+          // Keep owner serialization/fencing, but do not rewrite the full shot history
+          // 30 times a second. Placement and strike actions still commit durably.
+          if (presentationOnly && (context.result || context.closed)) throw new Error('INVALID_PREVIEW_MUTATION');
+          if (!presentationOnly) {
+            const snapshot = serializeRoomCheckpoint(this.framework, room);
+            owner.revision = await this.store.commit(roomId, this.instanceId, owner.token, owner.revision,
+              room.match?.matchId ?? null, snapshot as unknown as Prisma.InputJsonValue, context.result, context.closed ?? false);
+          }
           await this.ownership.assert(roomId, this.instanceId, owner.token);
           for (const event of context.publications) this.framework.io.to(event.destination).emit(event.event, event.payload);
           if (context.closed) { this.framework.io.in(room.ioName).socketsLeave(room.ioName); this.fenceOff(roomId); }

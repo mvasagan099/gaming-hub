@@ -7,6 +7,7 @@ import PageHeader from "../components/layout/PageHeader";
 import AnimatedOutlet from "../components/layout/AnimatedOutlet";
 import { SupportAssistant } from "../components/SupportAssistant";
 import { MatchmakingSearchModal } from "../components/Matchmaking/MatchmakingSearchModal";
+import { RoomInvitationPopup } from "../components/RoomInvitations/RoomInvitationPopup";
 import { MatchFoundModal } from "../components/Matchmaking/MatchFoundModal";
 import { useFeatureFlagsStore } from "../store/featureFlagsStore";
 import { useMe } from "../services/api/useMe";
@@ -100,6 +101,7 @@ export default function MainLayout() {
       {/* Global Multiplayer Matchmaking Modals */}
       <MatchmakingSearchModal />
       <MatchFoundModal />
+      <RoomInvitationPopup />
     </div>
   );
 }

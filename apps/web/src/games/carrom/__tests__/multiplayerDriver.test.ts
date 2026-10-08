@@ -1,12 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CarromEngine } from '@gaming-hub/game-engine';
-const actions = vi.hoisted(() => ({ send: vi.fn(), state: {} as any }));
-vi.mock('../../../store/multiplayerStore', () => ({ useMultiplayerStore: { subscribe: vi.fn(() => vi.fn()), getState: () => ({ ...actions.state, sendGameAction: actions.send }) } }));
+const actions = vi.hoisted(() => ({ send: vi.fn(), subscribe: vi.fn((_listener: (state: any, prev: any) => void) => vi.fn()), state: {} as any }));
+vi.mock('../../../store/multiplayerStore', () => ({ useMultiplayerStore: { subscribe: actions.subscribe, getState: () => ({ ...actions.state, sendGameAction: actions.send }) } }));
 vi.mock('../../../store/authStore', () => ({ useAuthStore: { getState: () => ({ user: { id: 'test' } }) } }));
 import Driver from '../CarromMultiplayerDriver';
 beforeEach(() => { vi.clearAllMocks(); actions.state = { matchId: 'match', room: { id: 'room' } }; });
 
 describe('Carrom multiplayer action delivery', () => {
+  it('moves the preview listener to a replaced socket and removes it on stop', () => {
+    const oldSocket = { on: vi.fn(), off: vi.fn() };
+    const newSocket = { on: vi.fn(), off: vi.fn() };
+    actions.state.socket = oldSocket;
+    const driver = new Driver(0, []);
+    driver.start();
+    const listener = oldSocket.on.mock.calls[0][1];
+    const notify = actions.subscribe.mock.calls[0][0] as any;
+    const previous = { ...actions.state };
+    actions.state.socket = newSocket;
+    notify(actions.state, previous);
+    expect(oldSocket.off).toHaveBeenCalledWith('carrom:striker-position', listener);
+    expect(newSocket.on).toHaveBeenCalledExactlyOnceWith('carrom:striker-position', listener);
+    notify(actions.state, actions.state);
+    expect(newSocket.on).toHaveBeenCalledOnce();
+    driver.stop();
+    expect(newSocket.off).toHaveBeenCalledExactlyOnceWith('carrom:striker-position', listener);
+  });
+
   it('renders a reconnect snapshot without replaying a completed shot', () => {
     const engine = new CarromEngine([{ seat: 0, userId: 'p0' }, { seat: 1, userId: 'p1' }]);
     expect(engine.apply({ type: 'strike', x: 280, angle: 0, power: 0 }, 0).ok).toBe(true);

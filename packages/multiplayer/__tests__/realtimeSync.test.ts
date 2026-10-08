@@ -112,3 +112,27 @@ describe('authoritative reconnect snapshots', () => {
     } finally { await framework.shutdown(); nowSpy.mockRestore(); }
   });
 });
+
+it('sends the Carrom trajectory once without changing history or pocket-event metadata', async () => {
+  const emit = vi.fn();
+  const sync = new SyncManager({ log: vi.fn(), io: { to: () => ({ emit }) } } as unknown as MultiplayerFramework);
+  const keyframes = [{ frame: 0, coins: [] }, { frame: 60, coins: [] }];
+  const state = { lastActionAtMs: 123, lastTrajectory: keyframes };
+  const events = [
+    { type: 'carrom:shot-start', shotId: 123, keyframes },
+    { type: 'shot-trajectory', shotId: 123, keyframes, pocketEvents: [{ coinId: 'white-1', pocketIndex: 0 }] },
+    { type: 'coin-pocketed', coinId: 'white-1', pocketIndex: 0 },
+  ];
+  const original = structuredClone(events);
+  const room = { id: 'room', ioName: 'room:room', config: { gameId: 'carrom' },
+    match: { matchId: 'match', turnNumber: 1, engine: { serialize: () => state } } } as unknown as RoomRuntime;
+  await sync.broadcastGameState(room, events);
+  const packet = emit.mock.calls[0][1];
+  expect(packet.state.lastTrajectory).toEqual(keyframes);
+  expect(packet.events[0].keyframes).toBeUndefined();
+  expect(packet.events[1].keyframes).toBeUndefined();
+  expect(packet.events[1].pocketEvents).toEqual(events[1].pocketEvents);
+  expect(packet.events[2]).toMatchObject(events[2]);
+  expect(events).toEqual(original);
+  expect(JSON.stringify(packet).length).toBeLessThan(JSON.stringify({ ...packet, events: original }).length);
+});

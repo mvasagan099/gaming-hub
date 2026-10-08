@@ -107,7 +107,16 @@ export class SyncManager {
       matchId: room.match.matchId,
       turnNumber: room.match.turnNumber,
       state,
-      events: events.map(e => ({ ...e, timestamp: Date.now() })),
+      // Carrom's settled state already carries the authoritative trajectory.
+      // Sending it in both shot events as well triples the largest payload.
+      events: events.map(e => {
+        const event: EngineEvent & { timestamp: number } = { ...e, timestamp: Date.now() };
+        if (room.config.gameId === 'carrom' && Array.isArray(state.lastTrajectory) &&
+            e.shotId === state.lastActionAtMs && ['shot-trajectory', 'carrom:shot-start'].includes(e.type)) {
+          delete event.keyframes;
+        }
+        return event;
+      }),
       timestamp: Date.now(),
       checksum: this.calculateChecksum(state),
       sequenceNumber,

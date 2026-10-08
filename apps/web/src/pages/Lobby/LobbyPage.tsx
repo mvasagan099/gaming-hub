@@ -40,6 +40,7 @@ import { useWalletStore } from "../../store/walletStore";
 import { apiClient } from "../../services/api/client";
 import { useMe } from "../../services/api/useMe";
 import { usePublicProfile } from "../../services/api/usePublicProfile";
+import { InviteFriendsDialog } from "../../components/RoomInvitations/InviteFriendsDialog";
 import { RoomChat } from "./RoomChat";
 
 const SEAT_COLORS = [
@@ -290,6 +291,7 @@ export const LobbyPage: React.FC = () => {
   const messages = useMultiplayerStore((s) => s.messages);
   const emojis = useMultiplayerStore((s) => s.emojis);
   const createRoom = useMultiplayerStore((s) => s.createRoom);
+  const [showInviteFriends, setShowInviteFriends] = useState(false);
   const joinRoom = useMultiplayerStore((s) => s.joinRoom);
   const leaveRoom = useMultiplayerStore((s) => s.leaveRoom);
   const setReady = useMultiplayerStore((s) => s.setReady);
@@ -925,6 +927,10 @@ export const LobbyPage: React.FC = () => {
                 )}
               </div>
 
+              {!isSpectator && room.isPrivate && room.status === "waiting" && room.players.length < room.maxPlayers && <>
+                <button onClick={() => setShowInviteFriends(true)} className="mt-4 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white">Invite a Friend</button>
+                <InviteFriendsDialog key={room.id} roomId={room.id} isOpen={showInviteFriends} onClose={() => setShowInviteFriends(false)} />
+              </>}
               <p className="mt-4 text-[11px] text-slate-500 dark:text-slate-400">
                 Share code <span className="font-mono font-bold text-indigo-400">{room.code}</span> with
                 friends to invite them. The match starts automatically when everyone is ready and the

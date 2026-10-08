@@ -118,6 +118,7 @@ export default class CarromMultiplayerDriver {
   public onWin: ((winnerSeat: number) => void) | null = null;
 
   private destroyed = false;
+  private previewSocket: ReturnType<typeof useMultiplayerStore.getState>["socket"] = null;
   private unsubscribe: (() => void) | null = null;
   private winFired = false;
 
@@ -179,14 +180,12 @@ export default class CarromMultiplayerDriver {
     );
 
     // Attach socket listener for live striker position
-    const socket = s.socket;
-    if (socket) {
-      socket.on("carrom:striker-position", this.handleRemoteStrikerPosition);
-    }
+    this.bindPreviewSocket(s.socket);
 
     // Subscribe to future updates.
     this.unsubscribe = useMultiplayerStore.subscribe((state, prev) => {
       if (this.destroyed) return;
+      if (state.socket !== prev.socket) this.bindPreviewSocket(state.socket);
       if (
         state.renderKey !== prev.renderKey ||
         state.winner !== prev.winner ||
@@ -202,12 +201,16 @@ export default class CarromMultiplayerDriver {
     });
   }
 
+  private bindPreviewSocket(socket: ReturnType<typeof useMultiplayerStore.getState>["socket"]): void {
+    if (socket === this.previewSocket) return;
+    this.previewSocket?.off("carrom:striker-position", this.handleRemoteStrikerPosition);
+    this.previewSocket = socket;
+    socket?.on("carrom:striker-position", this.handleRemoteStrikerPosition);
+  }
+
   stop(): void {
     this.destroyed = true;
-    const socket = useMultiplayerStore.getState().socket;
-    if (socket) {
-      socket.off("carrom:striker-position", this.handleRemoteStrikerPosition);
-    }
+    this.bindPreviewSocket(null);
     this.unsubscribe?.();
     this.unsubscribe = null;
   }
