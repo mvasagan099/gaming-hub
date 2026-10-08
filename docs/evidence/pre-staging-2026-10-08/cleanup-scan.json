@@ -1,0 +1,26 @@
+[
+  {
+    "file": "memory-report.json",
+    "embeddedCredentialPatternMatches": {
+      "credential_url": 0,
+      "private_key": 0,
+      "api_token": 0
+    }
+  },
+  {
+    "file": "scratch/check.ts",
+    "embeddedCredentialPatternMatches": {
+      "credential_url": 0,
+      "private_key": 0,
+      "api_token": 0
+    }
+  },
+  {
+    "file": "scratch/check2.ts",
+    "embeddedCredentialPatternMatches": {
+      "credential_url": 0,
+      "private_key": 0,
+      "api_token": 0
+    }
+  }
+]
