@@ -1,0 +1,17 @@
+{
+  "changes": [
+    {
+      "file": "docs/evidence/pre-staging-2026-10-08/security/group-03.json",
+      "redactedCredentialSyntaxOccurrences": 8,
+      "classification": "Dummy credentials inside negative test names, not live credentials"
+    },
+    {
+      "file": "docs/evidence/pre-staging-2026-10-08/api/group-17.json",
+      "redactedCredentialSyntaxOccurrences": 8,
+      "classification": "Dummy credentials inside negative test names, not live credentials"
+    }
+  ],
+  "testCountsAltered": false,
+  "privateKeyOrApiTokenPatternsDetected": false,
+  "scope": "Pattern scan of verification artifacts; not a comprehensive repository secret audit"
+}

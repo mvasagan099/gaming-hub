@@ -1,0 +1,17 @@
+{
+  "discovered": 4,
+  "grouped": 4,
+  "missing": [],
+  "duplicates": [],
+  "groups": [
+    {
+      "id": "01",
+      "files": [
+        "src/services/__tests__/financialConcurrencyAndRecovery.test.ts",
+        "src/services/__tests__/financialEconomy.test.ts",
+        "src/services/__tests__/financialIdempotency.test.ts",
+        "src/services/__tests__/financialReconciliationEngine.test.ts"
+      ]
+    }
+  ]
+}

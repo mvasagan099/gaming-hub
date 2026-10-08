@@ -1,0 +1,23 @@
+{
+  "expectedFiles": 4,
+  "executedFiles": 4,
+  "tests": 48,
+  "passed": 48,
+  "failed": 0,
+  "skipped": 0,
+  "complete": true,
+  "results": [
+    {
+      "group": "01",
+      "expectedFiles": 4,
+      "executedFiles": 4,
+      "tests": 48,
+      "passed": 48,
+      "failed": 0,
+      "skipped": 0,
+      "exit": 0,
+      "durationMs": 41666,
+      "complete": true
+    }
+  ]
+}

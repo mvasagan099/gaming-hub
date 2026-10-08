@@ -1,0 +1,222 @@
+{
+  "discovered": 99,
+  "grouped": 99,
+  "missing": [],
+  "duplicates": [],
+  "groups": [
+    {
+      "id": "01",
+      "files": [
+        "src/services/__tests__/automaticTournamentManagement.test.ts"
+      ]
+    },
+    {
+      "id": "02",
+      "files": [
+        "src/services/__tests__/multiReplicaRestartRecovery.test.ts"
+      ]
+    },
+    {
+      "id": "03",
+      "files": [
+        "src/services/__tests__/tournamentLifecycleConcurrency.test.ts"
+      ]
+    },
+    {
+      "id": "04",
+      "files": [
+        "src/services/__tests__/tournamentLoadPerformanceSimulation.test.ts"
+      ]
+    },
+    {
+      "id": "05",
+      "files": [
+        "src/routes/__tests__/multiplayerStartup.test.ts",
+        "src/routes/__tests__/roomInvitations.test.ts",
+        "src/routes/__tests__/tournaments.test.ts",
+        "src/routes/__tests__/wallet.test.ts",
+        "src/routes/__tests__/withdrawalVerificationSmoke.test.ts"
+      ]
+    },
+    {
+      "id": "06",
+      "files": [
+        "src/services/__tests__/achievementSystem.test.ts",
+        "src/services/__tests__/adminAuditLogEngine.test.ts",
+        "src/services/__tests__/adminFinanceDashboard.test.ts",
+        "src/services/__tests__/adminGameStatsEngine.test.ts",
+        "src/services/__tests__/adminSecurityHardeningEngine.test.ts"
+      ]
+    },
+    {
+      "id": "07",
+      "files": [
+        "src/services/__tests__/adminWalletManagement.test.ts",
+        "src/services/__tests__/affiliateFraud.test.ts",
+        "src/services/__tests__/affiliateReconciliation.test.ts",
+        "src/services/__tests__/affiliateSystem.test.ts",
+        "src/services/__tests__/allGameTierCombinations.test.ts"
+      ]
+    },
+    {
+      "id": "08",
+      "files": [
+        "src/services/__tests__/atomicEntryFee.test.ts",
+        "src/services/__tests__/auditRemediation.test.ts",
+        "src/services/__tests__/brevoEmailProvider.test.ts",
+        "src/services/__tests__/centralRefundEngine.test.ts",
+        "src/services/__tests__/coinWorkflowAudit.unit.test.ts"
+      ]
+    },
+    {
+      "id": "09",
+      "files": [
+        "src/services/__tests__/concurrentJoinProtection.test.ts",
+        "src/services/__tests__/couponVaultIntegration.unit.test.ts",
+        "src/services/__tests__/couponVaultLiveIntegration.test.ts",
+        "src/services/__tests__/deepLinkValidation.unit.test.ts",
+        "src/services/__tests__/distributedOwnershipOutbox.test.ts"
+      ]
+    },
+    {
+      "id": "10",
+      "files": [
+        "src/services/__tests__/emailDeliverySafety.test.ts",
+        "src/services/__tests__/entryFeeConfirmationEngine.test.ts",
+        "src/services/__tests__/financialConcurrencyAndRecovery.test.ts",
+        "src/services/__tests__/financialEconomy.test.ts",
+        "src/services/__tests__/financialIdempotency.test.ts"
+      ]
+    },
+    {
+      "id": "11",
+      "files": [
+        "src/services/__tests__/financialReconciliationEngine.test.ts",
+        "src/services/__tests__/gameCoinService.test.ts",
+        "src/services/__tests__/gameHistory.test.ts",
+        "src/services/__tests__/gameResultSecurity.test.ts",
+        "src/services/__tests__/globalLeaderboardSystem.test.ts"
+      ]
+    },
+    {
+      "id": "12",
+      "files": [
+        "src/services/__tests__/globalPlatformSearch.test.ts",
+        "src/services/__tests__/globalRateLimitingEngine.test.ts",
+        "src/services/__tests__/idorAndEconomyValidation.test.ts",
+        "src/services/__tests__/insufficientBalanceExperience.test.ts",
+        "src/services/__tests__/kycAddressSync.test.ts"
+      ]
+    },
+    {
+      "id": "13",
+      "files": [
+        "src/services/__tests__/kycSecurityHardening.test.ts",
+        "src/services/__tests__/loginTimeMfa.test.ts",
+        "src/services/__tests__/matchAbandonmentEngine.test.ts",
+        "src/services/__tests__/matchTimeoutEngine.test.ts",
+        "src/services/__tests__/matchmakingQueue.test.ts"
+      ]
+    },
+    {
+      "id": "14",
+      "files": [
+        "src/services/__tests__/mfaSessionLifecycle.test.ts",
+        "src/services/__tests__/migrationPreflight.test.ts",
+        "src/services/__tests__/multiplayerRecovery.test.ts",
+        "src/services/__tests__/passwordResetAuthFlow.test.ts",
+        "src/services/__tests__/persistentMatchState.test.ts"
+      ]
+    },
+    {
+      "id": "15",
+      "files": [
+        "src/services/__tests__/playerProfileSystem.test.ts",
+        "src/services/__tests__/practiceMatchWalletBehavior.test.ts",
+        "src/services/__tests__/productionCoinVerification.unit.test.ts",
+        "src/services/__tests__/productionGameAudit.test.ts",
+        "src/services/__tests__/productionSmokeTest.test.ts"
+      ]
+    },
+    {
+      "id": "16",
+      "files": [
+        "src/services/__tests__/referralSystem.test.ts",
+        "src/services/__tests__/registrationAdmission.test.ts",
+        "src/services/__tests__/registrationCountry.test.ts",
+        "src/services/__tests__/roomStartSettlementSafety.test.ts",
+        "src/services/__tests__/securityAttackSimulation.test.ts"
+      ]
+    },
+    {
+      "id": "17",
+      "files": [
+        "src/services/__tests__/securityRemediation.unit.test.ts",
+        "src/services/__tests__/securityRemediationHardening.test.ts",
+        "src/services/__tests__/sharedQueueRoomFlow.test.ts",
+        "src/services/__tests__/singleActiveSession.test.ts",
+        "src/services/__tests__/smtpEmailProvider.test.ts"
+      ]
+    },
+    {
+      "id": "18",
+      "files": [
+        "src/services/__tests__/socketRematchSecurity.test.ts",
+        "src/services/__tests__/suspiciousActivityEngine.test.ts",
+        "src/services/__tests__/totpEncryptionMigration.test.ts",
+        "src/services/__tests__/tournamentAdminControlCenter.test.ts",
+        "src/services/__tests__/tournamentAdminManagementSystem.test.ts"
+      ]
+    },
+    {
+      "id": "19",
+      "files": [
+        "src/services/__tests__/tournamentAnalyticsReporting.unit.test.ts",
+        "src/services/__tests__/tournamentAntiCheatValidation.unit.test.ts",
+        "src/services/__tests__/tournamentCancellationRefundUnit.unit.test.ts",
+        "src/services/__tests__/tournamentCrashRecovery.test.ts",
+        "src/services/__tests__/tournamentEmailService.test.ts"
+      ]
+    },
+    {
+      "id": "20",
+      "files": [
+        "src/services/__tests__/tournamentFinancialSettlementSystem.test.ts",
+        "src/services/__tests__/tournamentFinancialUnit.unit.test.ts",
+        "src/services/__tests__/tournamentHistory.test.ts",
+        "src/services/__tests__/tournamentLeaderboardRanking.test.ts",
+        "src/services/__tests__/tournamentLeaderboardStats.unit.test.ts"
+      ]
+    },
+    {
+      "id": "21",
+      "files": [
+        "src/services/__tests__/tournamentNotificationSystem.test.ts",
+        "src/services/__tests__/tournamentPlayerDashboard.test.ts",
+        "src/services/__tests__/tournamentPrizeSettlement.test.ts",
+        "src/services/__tests__/tournamentProductionFlow.test.ts",
+        "src/services/__tests__/tournamentRegistrationAntiAbuse.test.ts"
+      ]
+    },
+    {
+      "id": "22",
+      "files": [
+        "src/services/__tests__/tournamentSeedingBracket.test.ts",
+        "src/services/__tests__/tournamentVerificationDisputes.test.ts",
+        "src/services/__tests__/unifiedGameLifecycle.test.ts",
+        "src/services/__tests__/universalMatchRoom.test.ts",
+        "src/services/__tests__/universalSettlementEngine.test.ts"
+      ]
+    },
+    {
+      "id": "23",
+      "files": [
+        "src/services/__tests__/walletHistory.test.ts",
+        "src/services/__tests__/walletNotificationEngine.test.ts",
+        "src/services/__tests__/walletRequests.test.ts",
+        "src/services/__tests__/walletSyncEngine.test.ts",
+        "src/services/__tests__/walletTransactionService.test.ts"
+      ]
+    }
+  ]
+}
