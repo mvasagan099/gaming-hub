@@ -445,3 +445,31 @@ describe('Snake vs Worms supported multiplayer player counts', () => {
     expect(engine.handleTimeout('match').winnerSeats).toEqual([]);
   });
 });
+
+
+describe('Snake elapsed-time synchronization', () => {
+  const create = () => new SnakeVsWormsEngine(
+    [{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }], seededRandomSource(731), { now: () => 1000 });
+  it('preserves movement and boost accounting when six frames arrive in one delayed tick', () => {
+    const regular = create(), delayed = create();
+    regular.apply({ type: 'boost-start' }, 0); delayed.apply({ type: 'boost-start' }, 0);
+    for (let i = 0; i < 6; i++) regular.tick();
+    delayed.tick(100);
+    expect(delayed.state.players).toEqual(regular.state.players);
+    expect(delayed.state.food.map(({ id, ...food }) => food)).toEqual(regular.state.food.map(({ id, ...food }) => food));
+  });
+  it('preserves fractional physics time across checkpoint restoration', () => {
+    const uninterrupted = create(), restored = create();
+    uninterrupted.tick(8);
+    restored.restoreState(uninterrupted.getStateSnapshot());
+    uninterrupted.tick(9); restored.tick(9);
+    expect(restored.state.players).toEqual(uninterrupted.state.players);
+    expect(restored.state.physicsRemainderMs).toBeCloseTo(1 / 3);
+  });
+  it('bounds catch-up work after a long stall', () => {
+    const bounded = create(), stalled = create();
+    bounded.tick(250); stalled.tick(10000);
+    expect(stalled.state.players).toEqual(bounded.state.players);
+    expect(stalled.state.food.map(({ id, ...food }) => food)).toEqual(bounded.state.food.map(({ id, ...food }) => food));
+  });
+});

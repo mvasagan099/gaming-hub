@@ -49,9 +49,17 @@ export default class TableTennisMultiplayerDriver {
       if (this.destroyed) return;
       
       if ((this.matchId && state.matchId !== this.matchId) || (this.roomId && state.room?.id !== this.roomId)) return;
-      if (state.status !== prev.status && state.status !== 'connected') this.awaitingReconnect = true;
+      if (state.status !== prev.status && state.status !== 'connected') {
+        this.awaitingReconnect = true;
+        this.moveRequest++;
+        this.moveInFlight = false;
+        this.pendingPaddleMove = null;
+      }
       if (state.status === 'connected' && prev.status !== 'connected') {
         this.restoreInput = true;
+        this.moveRequest++;
+        this.moveInFlight = false;
+        this.pendingServe = false;
         this.pendingPaddleMove = null;
         void state.requestFullStateSync?.().catch(() => undefined);
       }
@@ -178,7 +186,7 @@ export default class TableTennisMultiplayerDriver {
       type: "paddle-move",
       y,
       velocity,
-    }).then(result => { if (!result.ok) retry(); }).catch(retry).finally(() => { this.moveInFlight = false; });
+    }).then(result => { if (!result.ok) retry(); }).catch(retry).finally(() => { if (this.moveRequest === request) this.moveInFlight = false; });
   }
   
   sendServe(angle: number = 0, power: number = 5.25): void {

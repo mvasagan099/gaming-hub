@@ -165,3 +165,25 @@ describe('Table Tennis bat contact alignment', () => {
     expect(timeline.ball(5070)!.vx).toBe(b.ball!.vx);
   });
 });
+
+
+describe('Table Tennis stale snapshot protection', () => {
+  it('does not rewind paddles, pause state, or time on late packets', () => {
+    const timeline = new TableTennisTimeline();
+    const current = { ...snapshot(1040, 112), matchRemainingMs: 90000 };
+    current.players[0].paddleY = 200;
+    timeline.receive(current, 5040);
+    const stale = { ...snapshot(1000, 100), paused: true, matchRemainingMs: 1000 };
+    stale.players[0].paddleY = 40;
+    timeline.receive(stale, 5050);
+    expect(timeline.paddles(5100)[0]).toBe(200);
+    expect(timeline.secondsRemaining(6040)).toBe(89);
+    expect(timeline.ball(5100)!.x).toBeGreaterThan(112);
+  });
+  it('does not resurrect a previous rally after a newer serve snapshot cleared the buffer', () => {
+    const timeline = new TableTennisTimeline();
+    timeline.receive({ ...snapshot(1040, 112), ball: null, phase: 'serve' }, 5040);
+    timeline.receive(snapshot(1000, 100), 5050);
+    expect(timeline.ball(5100)).toBeNull();
+  });
+});

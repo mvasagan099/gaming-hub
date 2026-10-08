@@ -66,6 +66,29 @@ describe('Table Tennis physics scheduling', () => {
     } finally { release(); await framework.shutdown(); }
   });
 
+  it.each(['table-tennis', 'snake-vs-worms'] as const)('%s advances by elapsed server time after a delayed checkpoint', async gameId => {
+    Framework.resetInstance();
+    const framework = createTestFramework({ enableReplay: false });
+    const room = createMatchRoom(gameId, [makePlayer('a', 0), makePlayer('b', 1)]);
+    if (gameId === 'table-tennis') {
+      const engine = room.match!.engine as TableTennisEngine;
+      engine.apply({ type: 'ready' }, 0); engine.apply({ type: 'ready' }, 1);
+      engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
+    }
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const tick = vi.spyOn(room.match!.engine as TableTennisEngine, 'tick');
+    const manager = framework.matchManager as unknown as { runPhysicsTick(room: RoomRuntime): Promise<void> };
+    try {
+      await manager.runPhysicsTick(room);
+      now.mockReturnValue(1100);
+      await manager.runPhysicsTick(room);
+      expect(tick).toHaveBeenLastCalledWith(100);
+      now.mockReturnValue(2100);
+      await manager.runPhysicsTick(room);
+      expect(tick).toHaveBeenLastCalledWith(250);
+    } finally { now.mockRestore(); await framework.shutdown(); }
+  });
+
   it('discards a queued tick when a different match replaces the old one', async () => {
     Framework.resetInstance();
     const framework = createTestFramework({ enableReplay: false });

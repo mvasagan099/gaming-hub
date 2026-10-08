@@ -84,7 +84,7 @@ export class MatchManager {
     this.physicsLastAt.set(matchId, Date.now());
     const intervalId = setInterval(() => {
       this.runPhysicsTick(room);
-    }, gameId === "table-tennis" ? 33 : this.PHYSICS_TICK_MS);
+    }, gameId === "table-tennis" ? 33 : gameId === "snake-vs-worms" ? 50 : this.PHYSICS_TICK_MS);
     
     this.physicsIntervals.set(matchId, intervalId);
     this.framework.log(`Physics loop started for match ${matchId} (${gameId})`);
@@ -115,7 +115,7 @@ export class MatchManager {
       const now = Date.now();
       const elapsed = Math.min(250, Math.max(0, now - (this.physicsLastAt.get(matchId) ?? now - 1000 / 60)));
       this.physicsLastAt.set(matchId, now);
-      const result = room.config.gameId === "table-tennis" ? engine.tick(elapsed) : engine.tick();
+      const result = ["table-tennis", "snake-vs-worms"].includes(room.config.gameId) ? engine.tick(elapsed) : engine.tick();
       if (result && result.ok) {
         const hasEvents = result.events && result.events.length > 0;
         const isPhysicsActive = room.config.gameId === "table-tennis"

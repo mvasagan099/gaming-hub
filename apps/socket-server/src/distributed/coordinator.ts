@@ -156,6 +156,11 @@ export class DistributedRoomCoordinator {
     if (command.event === 'room:create') return this.dispatch(command);
     // Routing needs identity only. Do not transfer an ever-growing match history
     // from PostgreSQL on every paddle input; takeover loads the full checkpoint.
+    // A currently owned room is already resolved. The local path still asserts
+    // its Redis fence before processing/publication; no client identity is trusted.
+    if (command.roomId && this.owned.has(command.roomId) && this.framework.roomManager.getRoom(command.roomId)) {
+      return this.local(command.roomId, () => this.dispatch(command), command.event === "carrom:striker-position");
+    }
     const stored = await this.store.resolveRoom({ roomId: command.roomId, code: command.code,
       matchId: command.payload.matchId ? String(command.payload.matchId) : undefined });
     if (!stored || stored.closed) throw new Error('Room not found');
@@ -213,6 +218,8 @@ export class DistributedRoomCoordinator {
       const owner = this.owned.get(roomId)!;
       await this.ownership.assert(roomId, this.instanceId, owner.token);
       const originalRoom = this.framework.roomManager.getRoom(roomId)!;
+      const stableParticipants = ["table-tennis", "snake-vs-worms"].includes(originalRoom.config.gameId)
+        ? [...originalRoom.players.keys()].sort() : undefined;
       const connections = new Map([...originalRoom.players.values(), ...originalRoom.spectators.values()]
         .map(player => [player.id, new Set(player.socketIds)]));
       return this.context.run({ active: true, roomId, publications: [] }, async () => {
@@ -229,7 +236,7 @@ export class DistributedRoomCoordinator {
           if (!presentationOnly) {
             const snapshot = serializeRoomCheckpoint(this.framework, room);
             owner.revision = await this.store.commit(roomId, this.instanceId, owner.token, owner.revision,
-              room.match?.matchId ?? null, snapshot as unknown as Prisma.InputJsonValue, context.result, context.closed ?? false);
+              room.match?.matchId ?? null, snapshot as unknown as Prisma.InputJsonValue, context.result, context.closed ?? false, stableParticipants);
           }
           await this.ownership.assert(roomId, this.instanceId, owner.token);
           for (const event of context.publications) this.framework.io.to(event.destination).emit(event.event, event.payload);

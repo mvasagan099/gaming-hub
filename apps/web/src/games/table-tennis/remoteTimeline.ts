@@ -10,9 +10,13 @@ export class TableTennisTimeline {
   private remainingMs = 0;
   private clockReceivedAt = 0;
   private paused = false;
+  private latestTimestamp = -Infinity;
 
   receive(state: TableTennisState, receivedAt: number): void {
     const timestamp = typeof state.serverTimestamp === 'number' ? state.serverTimestamp : receivedAt;
+    // A late snapshot must not rewind paddles, pause state, or the match clock.
+    if (timestamp < this.latestTimestamp) return;
+    this.latestTimestamp = timestamp;
     // Keep the smallest observed transit delay; packet jitter must not move the playback clock.
     this.offset = Math.min(this.offset ?? Infinity, receivedAt - timestamp);
     const remaining = state.matchRemainingMs;
@@ -28,7 +32,6 @@ export class TableTennisTimeline {
       this.rendered = null;
       return;
     }
-    if (this.samples.length && timestamp < this.samples[this.samples.length - 1].time) return;
     const sample = { time: timestamp, ball: { ...state.ball }, paddles: [...this.latestPaddles] };
     const previous = this.samples.at(-1);
     if (previous && sample.ball.touchCount === previous.ball.touchCount + 1

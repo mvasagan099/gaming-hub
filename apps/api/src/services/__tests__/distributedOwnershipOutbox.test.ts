@@ -85,6 +85,23 @@ describe('crossReplicaOwnership / ownershipFencing with real Redis and PostgreSQ
     expect(ids).toContain(live?.id);
   });
 
+  it('verifies unchanged membership atomically and rejects forged cached membership', async () => {
+    const id = randomUUID(), player = randomUUID(), other = randomUUID();
+    const token = await store.nextFencingToken();
+    await leases.acquire(id, 'owner', token, 10000);
+    await store.create(id, randomUUID(), { players: [{ id: player }] }, { ownerId: 'owner', token, ttlMs: 10000 });
+    await store.commit(id, 'owner', token, 0, null, { players: [{ id: player }], frame: 1 }, undefined, false, [player]);
+    await expect(store.commit(id, 'owner', token, 1, null,
+      { players: [{ id: other }] }, undefined, false, [other])).rejects.toThrow('STALE');
+    expect((await store.load(id))!.revision).toBe(1);
+    expect((await store.load(id))!.snapshot).toEqual({ players: [{ id: player }], frame: 1 });
+    await store.create(randomUUID(), randomUUID(), { players: [{ id: other }] });
+    await expect(store.commit(id, 'owner', token, 1, null,
+      { players: [{ id: player }, { id: other }] }, undefined, false, [player])).rejects.toThrow();
+    expect((await store.load(id))!.revision).toBe(1);
+    await leases.release(id, 'owner', token);
+  });
+
   it('commits a final snapshot and a single result in one fenced transaction', async () => {
     const id = await room(); const token = await store.nextFencingToken();
     await leases.acquire(id, 'owner', token, 5000); await store.adopt(id, 'owner', token, 5000);

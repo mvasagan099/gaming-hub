@@ -91,3 +91,28 @@ describe('Table Tennis multiplayer action and result guards', () => {
     expect(receive).not.toHaveBeenCalled(); scoped.stop();
   });
 });
+
+
+describe('Table Tennis reconnect delivery', () => {
+  it('abandons an old pending ACK without unlocking a new connection request', async () => {
+    let oldAck!: (value: { ok: boolean }) => void;
+    let newAck!: (value: { ok: boolean }) => void;
+    actions.send.mockImplementationOnce(() => new Promise(done => { oldAck = done; }));
+    driver.sendPaddleMove(170, 1);
+    actions.listener({ status: 'disconnected' }, { status: 'connected' });
+    const sync = vi.fn().mockResolvedValue(undefined);
+    actions.listener({ status: 'connected', requestFullStateSync: sync }, { status: 'disconnected' });
+    expect(sync).toHaveBeenCalledOnce();
+    driver.applyState(readyState().state);
+    await vi.advanceTimersByTimeAsync(50);
+    actions.send.mockImplementationOnce(() => new Promise(done => { newAck = done; }));
+    driver.sendPaddleMove(200, 1);
+    expect(actions.send).toHaveBeenCalledTimes(2);
+    oldAck({ ok: true }); await vi.advanceTimersByTimeAsync(50);
+    driver.sendPaddleMove(220, 1); await vi.advanceTimersByTimeAsync(50);
+    expect(actions.send).toHaveBeenCalledTimes(2);
+    newAck({ ok: true }); await vi.advanceTimersByTimeAsync(20);
+    expect(actions.send).toHaveBeenCalledTimes(3);
+    expect(actions.send).toHaveBeenLastCalledWith({ type: 'paddle-move', y: 220, velocity: 1 });
+  });
+});

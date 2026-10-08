@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-08",
+  "baseline": "4263a9634dd2f9ccc9d6e78c1fb942fa270cf273",
+  "scope": "Table Tennis and Snake vs Worms multiplayer sync; local uncommitted changes",
+  "checks": {
+    "engine": {
+      "files": 27,
+      "total": 424,
+      "passed": 424,
+      "failed": 0,
+      "skipped": 0,
+      "report": "/tmp/realtime-sync-engine.json"
+    },
+    "web": {
+      "files": 41,
+      "total": 370,
+      "passed": 370,
+      "failed": 0,
+      "skipped": 0,
+      "report": "/tmp/realtime-sync-web.json"
+    },
+    "multiplayer": {
+      "files": 24,
+      "total": 360,
+      "passed": 360,
+      "failed": 0,
+      "skipped": 0,
+      "report": "/tmp/realtime-sync-multiplayer.json"
+    },
+    "ownership": {
+      "files": 1,
+      "total": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "report": "/tmp/realtime-sync-ownership.json"
+    },
+    "replicas": {
+      "files": 1,
+      "total": 30,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 28,
+      "report": "/tmp/realtime-sync-replicas.json"
+    }
+  },
+  "build": "PASS",
+  "repository_typecheck": "FAIL: pre-existing roomInvitations.test.ts JSON fixture errors at lines 17 and 21",
+  "production_database_touched": false,
+  "deployed": false
+}

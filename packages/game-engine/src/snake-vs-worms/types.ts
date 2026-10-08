@@ -50,6 +50,8 @@ export interface SnakeVsWormsState extends BaseState {
   food: SnakeWormFood[];
   gameStatus: "waiting" | "playing" | "finished";
   stateVersion: number;
+  /** Fraction of the next 60 Hz physics step; persisted for restart continuity. */
+  physicsRemainderMs: number;
 }
 
 export type SnakeVsWormsAction =

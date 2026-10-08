@@ -109,6 +109,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
       food,
       gameStatus: "playing",
       stateVersion: 1,
+      physicsRemainderMs: 0,
     };
   }
 
@@ -241,7 +242,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
     }
   }
 
-  tick(): EngineActionResult<InternalState> {
+  tick(elapsedMs = 1000 / 60): EngineActionResult<InternalState> {
     if (this.state.finished || this.state.paused || this.state.gameStatus !== "playing") {
       return {
         ok: true,
@@ -255,7 +256,15 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
     if (this.state.matchStartedAtMs == null) this.startMatchClock();
     if (this.currentMatchDeadline != null && this.now() >= this.currentMatchDeadline) return this.handleTimeout("match");
 
-    const nextState = this.simulatePhysics(this.state);
+    // Network/checkpoint scheduling must not define world speed. Run bounded
+    // 60 Hz substeps so delayed ticks retain collision/boost rules and real time.
+    const frameMs = 1000 / 60;
+    const total = (this.state.physicsRemainderMs ?? 0) +
+      (Number.isFinite(elapsedMs) ? Math.max(0, Math.min(250, elapsedMs)) : 0);
+    const steps = Math.floor((total + 1e-6) / frameMs);
+    let nextState = this.cloneState(this.state);
+    for (let step = 0; step < steps && !nextState.finished; step++) nextState = this.simulatePhysics(nextState);
+    nextState.physicsRemainderMs = Math.max(0, total - steps * frameMs);
     this.updateState(nextState);
 
     const events: EngineEvent[] = [];
