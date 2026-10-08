@@ -1,0 +1,159 @@
+id,area,test,status,evidence
+PREP-01,Preparation,Current Render project/service inventory,PASS,"Read-only signed-in dashboard: only Production, five resources"
+PREP-02,Preparation,Baseline identity and clean tree before preparation,PASS,9b813000599d7abf99734858bcc6e69b356e2dd9; clean before documentation changes
+PREP-03,Preparation,"Nine-game registry, Cricket inactive",PASS,packages/shared/src/games.ts: nine supported IDs; no Cricket
+PREP-04,Preparation,Staging resource costs and env templates prepared,PASS,resources.proposal.json; three credential-free env templates
+ISO-01,Isolation,Provisioned network-isolated environment,NOT TESTED,Awaiting approved isolated staging deployment
+ISO-02,Isolation,Staging DB/Redis identity disjoint from production,NOT TESTED,Awaiting approved isolated staging deployment
+ISO-03,Isolation,Staging auth issuer/keys/storage disjoint from production,NOT TESTED,Awaiting approved isolated staging deployment
+ISO-04,Isolation,"CouponVault test tenant, no live cash-out",NOT TESTED,Awaiting approved isolated staging deployment
+ISO-05,Isolation,Email account and controlled recipients,NOT TESTED,Awaiting approved isolated staging deployment
+ISO-06,Isolation,KYC synthetic fixtures and private staging storage,NOT TESTED,Awaiting approved isolated staging deployment
+ISO-07,Isolation,No frontend secrets in built deployed bundle,NOT TESTED,Awaiting approved isolated staging deployment
+ISO-08,Isolation,Explicit cost/resource approval,NOT TESTED,Awaiting approved isolated staging deployment
+DEP-01,Deployment/auth,Pinned commit and auto-deploy disabled,NOT TESTED,Awaiting approved isolated staging deployment
+DEP-02,Deployment/auth,Eleven staging-only migrations and status,NOT TESTED,Awaiting approved isolated staging deployment
+DEP-03,Deployment/auth,API liveness/readiness and DB connections,NOT TESTED,Awaiting approved isolated staging deployment
+DEP-04,Deployment/auth,"Redis auth, adapter, locks and reconnect",NOT TESTED,Awaiting approved isolated staging deployment
+DEP-05,Deployment/auth,Socket readiness and both replica identities,NOT TESTED,Awaiting approved isolated staging deployment
+DEP-06,Deployment/auth,Frontend SPA deep links and missing Cricket route,NOT TESTED,Awaiting approved isolated staging deployment
+DEP-07,Deployment/auth,HTTPS/CORS/security headers,NOT TESTED,Awaiting approved isolated staging deployment
+DEP-08,Deployment/auth,"Staging email/password signup, verification, logout, recovery",NOT TESTED,Awaiting approved isolated staging deployment
+DEP-09,Deployment/auth,MFA pending survives refresh/reconnect,NOT TESTED,Awaiting approved isolated staging deployment
+DEP-10,Deployment/auth,Fresh/stale MFA and unenrolled admin/moderator denial,NOT TESTED,Awaiting approved isolated staging deployment
+DEP-11,Deployment/auth,"Session expiry/revocation, banned/deleted account denial",NOT TESTED,Awaiting approved isolated staging deployment
+GAME-ludo-01,Ludo,Quick matchmaking with two independent authenticated clients,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-ludo-02,Ludo,Private room create/join and membership authorization,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-ludo-03,Ludo,Assigned seats/colors and turn order,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-ludo-04,Ludo,Valid action synchronization and convergence,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-ludo-05,Ludo,Invalid/out-of-turn/spectator/stale actions rejected,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-ludo-06,Ludo,Disconnect/reconnect restores authoritative state,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-ludo-07,Ludo,In-game Exit confirmation/Cancel/confirmed cleanup,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-ludo-08,Ludo,Browser gesture/native Back navigates directly without confirmation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-ludo-09,Ludo,Timers and server-authoritative winner calculation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-ludo-10,Ludo,Tournament progression and exactly-once settlement,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-ludo-11,Ludo,Duplicate/replayed events and rematch create no duplicate effects,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-chess-01,Chess,Quick matchmaking with two independent authenticated clients,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-chess-02,Chess,Private room create/join and membership authorization,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-chess-03,Chess,Assigned seats/colors and turn order,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-chess-04,Chess,Valid action synchronization and convergence,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-chess-05,Chess,Invalid/out-of-turn/spectator/stale actions rejected,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-chess-06,Chess,Disconnect/reconnect restores authoritative state,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-chess-07,Chess,In-game Exit confirmation/Cancel/confirmed cleanup,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-chess-08,Chess,Browser gesture/native Back navigates directly without confirmation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-chess-09,Chess,Timers and server-authoritative winner calculation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-chess-10,Chess,Tournament progression and exactly-once settlement,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-chess-11,Chess,Duplicate/replayed events and rematch create no duplicate effects,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-carrom-01,Carrom,Quick matchmaking with two independent authenticated clients,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-carrom-02,Carrom,Private room create/join and membership authorization,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-carrom-03,Carrom,Assigned seats/colors and turn order,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-carrom-04,Carrom,Valid action synchronization and convergence,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-carrom-05,Carrom,Invalid/out-of-turn/spectator/stale actions rejected,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-carrom-06,Carrom,Disconnect/reconnect restores authoritative state,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-carrom-07,Carrom,In-game Exit confirmation/Cancel/confirmed cleanup,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-carrom-08,Carrom,Browser gesture/native Back navigates directly without confirmation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-carrom-09,Carrom,Timers and server-authoritative winner calculation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-carrom-10,Carrom,Tournament progression and exactly-once settlement,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-carrom-11,Carrom,Duplicate/replayed events and rematch create no duplicate effects,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snooker-01,Snooker,Quick matchmaking with two independent authenticated clients,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snooker-02,Snooker,Private room create/join and membership authorization,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snooker-03,Snooker,Assigned seats/colors and turn order,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snooker-04,Snooker,Valid action synchronization and convergence,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snooker-05,Snooker,Invalid/out-of-turn/spectator/stale actions rejected,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snooker-06,Snooker,Disconnect/reconnect restores authoritative state,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snooker-07,Snooker,In-game Exit confirmation/Cancel/confirmed cleanup,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snooker-08,Snooker,Browser gesture/native Back navigates directly without confirmation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snooker-09,Snooker,Timers and server-authoritative winner calculation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snooker-10,Snooker,Tournament progression and exactly-once settlement,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snooker-11,Snooker,Duplicate/replayed events and rematch create no duplicate effects,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-table-tennis-01,Table Tennis,Quick matchmaking with two independent authenticated clients,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-table-tennis-02,Table Tennis,Private room create/join and membership authorization,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-table-tennis-03,Table Tennis,Assigned seats/colors and turn order,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-table-tennis-04,Table Tennis,Valid action synchronization and convergence,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-table-tennis-05,Table Tennis,Invalid/out-of-turn/spectator/stale actions rejected,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-table-tennis-06,Table Tennis,Disconnect/reconnect restores authoritative state,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-table-tennis-07,Table Tennis,In-game Exit confirmation/Cancel/confirmed cleanup,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-table-tennis-08,Table Tennis,Browser gesture/native Back navigates directly without confirmation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-table-tennis-09,Table Tennis,Timers and server-authoritative winner calculation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-table-tennis-10,Table Tennis,Tournament progression and exactly-once settlement,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-table-tennis-11,Table Tennis,Duplicate/replayed events and rematch create no duplicate effects,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-&-ladder-01,Snake & Ladder,Quick matchmaking with two independent authenticated clients,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-&-ladder-02,Snake & Ladder,Private room create/join and membership authorization,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-&-ladder-03,Snake & Ladder,Assigned seats/colors and turn order,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-&-ladder-04,Snake & Ladder,Valid action synchronization and convergence,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-&-ladder-05,Snake & Ladder,Invalid/out-of-turn/spectator/stale actions rejected,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-&-ladder-06,Snake & Ladder,Disconnect/reconnect restores authoritative state,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-&-ladder-07,Snake & Ladder,In-game Exit confirmation/Cancel/confirmed cleanup,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-&-ladder-08,Snake & Ladder,Browser gesture/native Back navigates directly without confirmation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-&-ladder-09,Snake & Ladder,Timers and server-authoritative winner calculation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-&-ladder-10,Snake & Ladder,Tournament progression and exactly-once settlement,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-&-ladder-11,Snake & Ladder,Duplicate/replayed events and rematch create no duplicate effects,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-fruit-ninja-01,Fruit Ninja,Quick matchmaking with two independent authenticated clients,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-fruit-ninja-02,Fruit Ninja,Private room create/join and membership authorization,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-fruit-ninja-03,Fruit Ninja,Assigned seats/colors and turn order,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-fruit-ninja-04,Fruit Ninja,Valid action synchronization and convergence,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-fruit-ninja-05,Fruit Ninja,Invalid/out-of-turn/spectator/stale actions rejected,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-fruit-ninja-06,Fruit Ninja,Disconnect/reconnect restores authoritative state,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-fruit-ninja-07,Fruit Ninja,In-game Exit confirmation/Cancel/confirmed cleanup,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-fruit-ninja-08,Fruit Ninja,Browser gesture/native Back navigates directly without confirmation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-fruit-ninja-09,Fruit Ninja,Timers and server-authoritative winner calculation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-fruit-ninja-10,Fruit Ninja,Tournament progression and exactly-once settlement,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-fruit-ninja-11,Fruit Ninja,Duplicate/replayed events and rematch create no duplicate effects,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-bubble-shooter-01,Bubble Shooter,Quick matchmaking with two independent authenticated clients,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-bubble-shooter-02,Bubble Shooter,Private room create/join and membership authorization,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-bubble-shooter-03,Bubble Shooter,Assigned seats/colors and turn order,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-bubble-shooter-04,Bubble Shooter,Valid action synchronization and convergence,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-bubble-shooter-05,Bubble Shooter,Invalid/out-of-turn/spectator/stale actions rejected,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-bubble-shooter-06,Bubble Shooter,Disconnect/reconnect restores authoritative state,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-bubble-shooter-07,Bubble Shooter,In-game Exit confirmation/Cancel/confirmed cleanup,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-bubble-shooter-08,Bubble Shooter,Browser gesture/native Back navigates directly without confirmation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-bubble-shooter-09,Bubble Shooter,Timers and server-authoritative winner calculation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-bubble-shooter-10,Bubble Shooter,Tournament progression and exactly-once settlement,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-bubble-shooter-11,Bubble Shooter,Duplicate/replayed events and rematch create no duplicate effects,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-vs-worms-01,Snake vs Worms,Quick matchmaking with two independent authenticated clients,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-vs-worms-02,Snake vs Worms,Private room create/join and membership authorization,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-vs-worms-03,Snake vs Worms,Assigned seats/colors and turn order,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-vs-worms-04,Snake vs Worms,Valid action synchronization and convergence,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-vs-worms-05,Snake vs Worms,Invalid/out-of-turn/spectator/stale actions rejected,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-vs-worms-06,Snake vs Worms,Disconnect/reconnect restores authoritative state,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-vs-worms-07,Snake vs Worms,In-game Exit confirmation/Cancel/confirmed cleanup,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-vs-worms-08,Snake vs Worms,Browser gesture/native Back navigates directly without confirmation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-vs-worms-09,Snake vs Worms,Timers and server-authoritative winner calculation,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-vs-worms-10,Snake vs Worms,Tournament progression and exactly-once settlement,NOT TESTED,Awaiting approved isolated staging deployment
+GAME-snake-vs-worms-11,Snake vs Worms,Duplicate/replayed events and rematch create no duplicate effects,NOT TESTED,Awaiting approved isolated staging deployment
+CHESS-HISTORY,Chess,"Chronological SAN, no double move, promotion/capture/castling/checkmate and reconnect",NOT TESTED,Awaiting approved isolated staging deployment
+CARROM-REPLAY,Carrom,"Both clients see each shot once, pocket/queen/foul outcome and striker recovery agree",NOT TESTED,Awaiting approved isolated staging deployment
+CRICKET-NEGATIVE,Removed game,Direct /games/cricket and game/room/tournament selectors cannot launch Cricket,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-01,Financial,New user MAIN/BONUS/LOCKED all zero,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-02,Financial,External test coupon redeem credits MAIN once,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-03,Financial,Duplicate and concurrent coupon redemption safe,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-04,Financial,Direct deposit and admin deposit approval blocked,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-05,Financial,Entry fees debit once with sufficient balance,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-06,Financial,Concurrent entry/withdraw prevents double spend,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-07,Financial,Winner payout remains local; external transfer count zero,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-08,Financial,Withdrawal auth/KYC/limits and correct TOTP-or-email OTP path,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-09,Financial,"OTP delivered to controlled test inbox, consumed atomically",NOT TESTED,Awaiting approved isolated staging deployment
+FIN-10,Financial,Admin fresh MFA approval reserves/deducts once,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-11,Financial,CouponVault transfer once with WalletRequest ID idempotency,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-12,Financial,Duplicate approval/client retry no duplicate debit or transfer,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-13,Financial,Definitive provider failure refunds exactly once,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-14,Financial,Timeout yields UNCONFIRMED_HOLD with no blind refund,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-15,Financial,Reconcile processed completes once,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-16,Financial,Reconcile definitively not processed refunds once,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-17,Financial,Reconcile unknown remains held,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-18,Financial,Generic 409 without proven transaction identity not success,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-19,Financial,Tournament cancellation/refund and settlement retries once,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-20,Financial,Ledger balances and external test transaction identities reconcile,NOT TESTED,Awaiting approved isolated staging deployment
+FIN-21,Financial,User cannot access another wallet/KYC/request/room,NOT TESTED,Awaiting approved isolated staging deployment
+PERF-01,Performance/stability,Two-client baseline latency and packet delivery,NOT TESTED,Awaiting approved isolated staging deployment
+PERF-02,Performance/stability,Progressive 10/25/50 concurrent players at legal paced actions,NOT TESTED,Awaiting approved isolated staging deployment
+PERF-03,Performance/stability,Sustained two-hour representative multiplayer soak,NOT TESTED,Awaiting approved isolated staging deployment
+PERF-04,Performance/stability,CPU/RSS/heap/event-loop p50/p95/p99 per replica,NOT TESTED,Awaiting approved isolated staging deployment
+PERF-05,Performance/stability,Socket connections/events/broadcast rates and action queue depth,NOT TESTED,Awaiting approved isolated staging deployment
+PERF-06,Performance/stability,API latency/errors and PostgreSQL pool/locks/connections,NOT TESTED,Awaiting approved isolated staging deployment
+PERF-07,Performance/stability,Redis memory/connections/evictions/reconnect,NOT TESTED,Awaiting approved isolated staging deployment
+PERF-08,Performance/stability,Owner replica restart and durable state/action recovery,NOT TESTED,Awaiting approved isolated staging deployment
+PERF-09,Performance/stability,"API restart, temporary Redis/DB outage and reconciliation",NOT TESTED,Awaiting approved isolated staging deployment
+PERF-10,Performance/stability,Email and external provider timeout injection,NOT TESTED,Awaiting approved isolated staging deployment
+PERF-11,Performance/stability,Room/timer/listener cleanup after churn and disconnect,NOT TESTED,Awaiting approved isolated staging deployment
+PERF-12,Performance/stability,Crash/OOM/restart logs compared to actual approved limits,NOT TESTED,Awaiting approved isolated staging deployment

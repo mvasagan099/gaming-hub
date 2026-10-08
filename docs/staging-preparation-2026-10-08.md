@@ -1,3 +1,5 @@
+> Updated preparation, costs and full PASS/FAIL/NOT TESTED matrix: [isolated staging package](staging/2026-10-08/README.md). This earlier checklist remains historical context; no resources were provisioned.
+
 # Staging preparation — 2026-10-08
 
 ## Current infrastructure (read-only dashboard inspection)
