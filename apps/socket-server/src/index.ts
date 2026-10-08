@@ -1,3 +1,4 @@
+import { startMemoryDiagnostics } from "./memoryDiagnostics";
 import { SharedMatchmaking } from "./distributed/matchmaking";
 import { provisionTournamentRoom } from "./distributed/provision";
 import { DistributedRoomCoordinator } from "./distributed/coordinator";
@@ -32,6 +33,7 @@ import { applySocketGameAction } from "./gameActions";
 import { registerRoomLifecycleHandlers } from "./roomHandlers";
 import { registerCarromPreviewHandler } from "./carromHandlers";
 import { GameEventBus } from "./events/GameEventBus";
+import { GameStateSyncManager } from "./sync/GameStateSyncManager";
 import { createAndFundRoomMatch, settleMatch, cancelMatch, reportTournamentMatchResult } from "./apiClient";
 import { checkInternalApiAuth } from "./internalApiCheck";
 import { runStartupStep } from "./startupStep";
@@ -433,6 +435,8 @@ async function main(): Promise<void> {
   // Attach Socket.IO to HTTP server
   io.attach(httpServer);
 
+  const adapterRedisClients: Redis[] = [];
+  const presenceTimers = new Map<string, ReturnType<typeof setTimeout>>();
   if (env.REDIS_URL) {
     const pub = new Redis(env.REDIS_URL, {
       maxRetriesPerRequest: 3,
@@ -441,6 +445,7 @@ async function main(): Promise<void> {
       },
     });
     const sub = pub.duplicate();
+    adapterRedisClients.push(pub, sub);
 
     pub.on("error", (err) => {
       logger.warn({ err: err?.message || String(err) }, "Redis publisher error");
@@ -1009,7 +1014,10 @@ async function main(): Promise<void> {
       // Remove from matchmaking
       framework.matchmakingManager.removeFromQueue(user.userId);
       
-      setTimeout(() => {
+      const previousPresenceTimer = presenceTimers.get(user.userId);
+      if (previousPresenceTimer) clearTimeout(previousPresenceTimer);
+      presenceTimers.set(user.userId, setTimeout(() => {
+        presenceTimers.delete(user.userId);
         const remaining = io.sockets.adapter.rooms.get(`user:${user.userId}`);
         if (!remaining || remaining.size === 0) {
           prisma.user
@@ -1019,7 +1027,7 @@ async function main(): Promise<void> {
             })
             .catch(() => {});
         }
-      }, 1000);
+      }, 1000));
 
       if (distributed) {
         void durableStore.findPlayer(user.userId).then(room => room ? distributed!.route({ event: "disconnect", roomId: room.id,
@@ -1040,17 +1048,33 @@ async function main(): Promise<void> {
     });
   });
 
+  const stopMemoryDiagnostics = startMemoryDiagnostics(() => ({
+    ...framework.getMemoryStats(), ...GameStateSyncManager.getMemoryStats(), ...(distributed?.getMemoryStats() ?? {}),
+    activeTimers: framework.getMemoryStats().activeTimers + presenceTimers.size + GameStateSyncManager.getMemoryStats().syncRateLimitCleanupTimers,
+    activeIntervals: framework.getMemoryStats().activeIntervals + 1 + Number(Boolean(distributed)) + Number(Boolean(resultWorker)) + Number(Boolean(matchmakingRecovery)),
+    connectedSocketCount: io.sockets.sockets.size,
+    socketAdapterRoomCount: io.sockets.adapter.rooms.size,
+    redisConnectionCount: adapterRedisClients.length + (coordinationRedis ? 2 : 0),
+    redisSubscriptionCount: adapterRedisClients.reduce((count, client) => count +
+      Object.values(client.condition?.subscriber ?? {}).reduce((n, channels) => n + Object.keys(channels ?? {}).length, 0), 0)
+      + (distributed?.getMemoryStats().redisSubscriptionCount ?? 0),
+  }), sample => logger.info(sample, '[MEMORY]'));
+
   httpServer.listen(env.PORT, "0.0.0.0", () => {
     logger.info(`Socket server listening on port ${env.PORT}`);
   });
 
   const shutdown = async () => {
     logger.info("Shutting down socket server…");
+    stopMemoryDiagnostics();
+    for (const timer of presenceTimers.values()) clearTimeout(timer);
+    presenceTimers.clear();
     resultWorker?.stop();
     if (matchmakingRecovery) clearInterval(matchmakingRecovery);
     await framework.shutdown();
     await distributed?.stop();
     await coordinationRedis?.quit();
+    await Promise.allSettled(adapterRedisClients.map(client => client.quit()));
     io.close();
     httpServer.close();
     await new Promise((resolve) => setTimeout(resolve, 300));

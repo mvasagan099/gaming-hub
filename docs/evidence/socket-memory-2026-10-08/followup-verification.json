@@ -1,0 +1,37 @@
+{
+  "baselineCommit": "2bba5f2b667e3af1cec238f83cf187ad63eb16e3",
+  "productionTouched": false,
+  "deployed": false,
+  "multiplayer": {
+    "files": 26,
+    "passed": 392,
+    "failed": 0,
+    "skipped": 0
+  },
+  "workspaceTypecheckExitCode": 0,
+  "finalSocketTypecheckExitCode": 0,
+  "repositoryBuildExitCode": 0,
+  "sourceSha256": {
+    "apps/socket-server/src/distributed/coordinator.ts": "b6019ded2274cc640a0d8690335e0714248cc02267c6acd92da5352e5c596d18",
+    "apps/socket-server/src/index.ts": "fd9d5a19fb3c12506d8c450558ab91d7a5f7aa709bf82647f020bfbd6c9662a7",
+    "apps/socket-server/src/rooms/MatchTimeoutMonitoringService.ts": "f9c47a117a729082422e07110e4a1fcaa79590e82293c70065ce53844c6e9450",
+    "apps/socket-server/src/rooms/RoomManager.ts": "8c636d0f29207b4c9a37d3bb1b28678e2087c9b46d33e95ad723445a5785d607",
+    "apps/socket-server/src/sync/GameStateSyncManager.ts": "91e0b1956267986aab8909871fc00fce93b879d6f5bcfaea51725e4aa64e4df8",
+    "packages/multiplayer/src/framework.ts": "1e2e431ecd5c87b81830f7c639d60e9835f4be068814ecbeb5fd289bfd1f3ce8",
+    "packages/multiplayer/src/gameplay/GameStateManager.ts": "f6e54ff3bfcc2b9f798c3b53f8a79e5d7ee6cc61a0c568fcf8da33c5fc879540",
+    "packages/multiplayer/src/gameplay/StatisticsCollector.ts": "0fd84891d140693fff1b1893e464601cce753ae2974a732398d6526ed7bd11b7",
+    "packages/multiplayer/src/managers/AntiCheatManager.ts": "6a1eca2a525ba21b5e1bb24f91dc9a2f53d643f0b7f7a10e1afc14896d3d39e8",
+    "packages/multiplayer/src/managers/MatchManager.ts": "61e192dbea1f5a9135ea32631f97b06054fd533f3572cc6cf3eddde907a0c004",
+    "packages/multiplayer/src/managers/MatchmakingManager.ts": "7e0af6cb21c6dd94a46d9bfcc6bc1ee84477453a7237acc2a7a87e9710e5ea90",
+    "packages/multiplayer/src/managers/NetworkOptimizationsManager.ts": "4fb2aabbb2135afb1552ba71ab652b13a7d11ea1a5e1d84a6808c5dd77c704ff",
+    "packages/multiplayer/src/managers/PlayerManager.ts": "124f167b3a4b0cd29d42520f29df9b996b451b78d2c34826b29035a0ddd64eaf",
+    "packages/multiplayer/src/managers/ReplayManager.ts": "916a18317115036ebab4a7d9bc905008f5cd91348f1bbd6cda09ffaf022f9966",
+    "packages/multiplayer/src/managers/RoomManager.ts": "9b942905ab748cc80662b0ed6141b2db6bce12e4c8e8f6036b6a17c3ff00e2bb",
+    "packages/multiplayer/src/managers/SpectatorManager.ts": "0898e55356e6aef301343c700908cc39333a5adaaa7bc499dbe3b74391ec3a88",
+    "packages/multiplayer/src/managers/SyncManager.ts": "f543b8011c5efcb633355a72c7892f673e29078485bc14dfc43e39a941e1b329",
+    "packages/multiplayer/src/managers/TimerManager.ts": "18058100e36f1c926367464ca829e28281b52e79329d384bce4843e27e7b9457",
+    "apps/socket-server/src/memoryDiagnostics.ts": "0bbac78f59d07d70eefc28deb560a46ed776ca8d8ba56c5eee70e8b3d9a17f3b",
+    "packages/multiplayer/__tests__/legacyMemoryCleanup.test.ts": "9ce4a40e674b251c80aca5fe71014ee462d9e4c38fb1d5ec7e6289a3cfb4e600",
+    "packages/multiplayer/__tests__/memoryRetention.test.ts": "ca1110e3ebe569e8e6f68510c319aab553608ffe49d86d9f26e5d0de06efba69"
+  }
+}

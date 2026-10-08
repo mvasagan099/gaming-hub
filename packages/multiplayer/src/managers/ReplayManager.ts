@@ -73,6 +73,8 @@ export class ReplayManager {
     this.framework = framework;
   }
   
+  getMemoryStats() { return { replayTimers: this.replayTimers.size, replayRecords: this.replays.size }; }
+
   async initialize(): Promise<void> {
     this.framework.log("ReplayManager initialized");
   }

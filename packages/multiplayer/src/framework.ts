@@ -217,8 +217,20 @@ export class MultiplayerFramework {
   }
   
   /**
-   * Gracefully shutdown the framework and all managers.
+   * Aggregate application-owned runtime counters for operational diagnostics.
    */
+  getMemoryStats() {
+    const counts = { ...this.roomManager.getMemoryStats(), ...this.matchManager.getMemoryStats(),
+      ...this.playerManager.getMemoryStats(), ...this.syncManager.getMemoryStats(),
+      ...this.timerManager.getMemoryStats(), ...this.spectatorManager.getMemoryStats(),
+      ...this.matchmakingManager.getMemoryStats(), ...this.replayManager.getMemoryStats(),
+      ...this.antiCheatManager.getMemoryStats(), ...this.gameStateManager.getMemoryStats() };
+    return { ...counts,
+      activeTimers: counts.roomTimers + counts.countdownTimers + counts.loadTimers + counts.matchTimers + counts.spectatorTimers + counts.replayTimers,
+      activeIntervals: counts.physicsIntervals + counts.afkIntervals + counts.playerPingIntervals + counts.syncPingIntervals + counts.matchmakingIntervals };
+  }
+
+  /** Gracefully shutdown the framework and all managers. */
   async shutdown(): Promise<void> {
     if (!this.initialized) return;
     

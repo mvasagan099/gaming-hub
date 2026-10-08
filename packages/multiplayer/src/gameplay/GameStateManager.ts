@@ -35,6 +35,8 @@ export class GameStateManager {
     this.queues.clear();
   }
 
+  getMemoryStats() { return { pendingRoomQueues: this.queues.size }; }
+
   /**
    * Run a task after every previously queued task for the same room has
    * settled, guaranteeing per-room serial execution of state mutations.
@@ -46,13 +48,9 @@ export class GameStateManager {
     const previous = this.queues.get(roomId) ?? Promise.resolve();
     const execute = () => task();
     const next = previous.then(execute, execute);
-    this.queues.set(
-      roomId,
-      next.then(
-        () => undefined,
-        () => undefined,
-      ),
-    );
+    const settled = next.then(() => undefined, () => undefined);
+    this.queues.set(roomId, settled);
+    void settled.then(() => { if (this.queues.get(roomId) === settled) this.queues.delete(roomId); });
     return next;
   }
 

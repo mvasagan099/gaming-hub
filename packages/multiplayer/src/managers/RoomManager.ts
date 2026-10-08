@@ -341,6 +341,7 @@ export class RoomManager {
     room.players.delete(playerId);
     room.spectators.delete(playerId);
     this.playerRoomMap.delete(playerId);
+    this.framework.playerManager.releasePlayer(playerId);
     
     // Leave socket room
     socket.leave(room.ioName);
@@ -423,6 +424,7 @@ export class RoomManager {
     // Remove player
     room.players.delete(targetPlayerId);
     this.playerRoomMap.delete(targetPlayerId);
+    this.framework.playerManager.releasePlayer(targetPlayerId);
     
     // Disconnect player's sockets
     for (const socketId of player.socketIds) {
@@ -527,6 +529,8 @@ export class RoomManager {
   /**
    * Get room count.
    */
+  getMemoryStats() { return { activeRoomCount: this.rooms.size, roomTimers: this.roomExpirationTimers.size }; }
+
   getRoomCount(): number {
     return this.rooms.size;
   }
@@ -558,6 +562,15 @@ export class RoomManager {
       if (expiry) clearTimeout(expiry);
       this.roomExpirationTimers.delete(roomId);
       this.rooms.delete(roomId);
+      this.framework.matchManager.detachRoom(room);
+      this.framework.timerManager.clearRoomTimers(roomId);
+      this.framework.syncManager.releaseRoom(roomId);
+      this.framework.statisticsCollector.releaseRoom(roomId);
+      this.framework.spectatorManager.releaseRoom(roomId);
+      this.framework.antiCheatManager.clearRoomActionCache(roomId);
+      for (const player of [...room.players.values(), ...room.spectators.values()]) {
+        if (!this.playerRoomMap.has(player.id)) this.framework.playerManager.releasePlayer(player.id);
+      }
     }
   }
   

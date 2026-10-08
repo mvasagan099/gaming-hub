@@ -50,6 +50,7 @@ export class MatchmakingManager {
   private readonly buckets = new Map<string, MatchmakingBucket>();
   private readonly playerQueueMap = new Map<PlayerId, string>(); // playerId -> bucketKey
   private readonly sweepInterval: NodeJS.Timeout;
+  private sweepStopped = false;
   
   // Constants
   private readonly SWEEP_INTERVAL_MS = 30_000;
@@ -63,12 +64,15 @@ export class MatchmakingManager {
     }, this.SWEEP_INTERVAL_MS);
   }
   
+  getMemoryStats() { return { matchmakingIntervals: this.sweepStopped ? 0 : 1, queuedPlayers: this.playerQueueMap.size }; }
+
   async initialize(): Promise<void> {
     this.framework.log("MatchmakingManager initialized");
   }
   
   async shutdown(): Promise<void> {
     clearInterval(this.sweepInterval);
+    this.sweepStopped = true;
     
     // Remove all players from queue
     for (const playerId of this.playerQueueMap.keys()) {

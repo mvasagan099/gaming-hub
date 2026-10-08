@@ -69,6 +69,10 @@ export class NetworkOptimizationsManager {
     this.compressionCache.clear();
   }
 
+  /** Caller-owned lifecycle; this optional manager is not instantiated by the server. */
+  releaseRoom(roomId: string): void { this.previousStates.delete(roomId); }
+  releasePlayer(playerId: string): void { this.predictionQueue.delete(playerId); }
+
   calculateDelta(
     roomId: string,
     newState: JsonObject

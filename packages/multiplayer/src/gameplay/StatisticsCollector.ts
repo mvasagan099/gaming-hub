@@ -38,6 +38,8 @@ export class StatisticsCollector {
     this.statsByRoom.clear();
   }
 
+  releaseRoom(roomId: string): void { this.statsByRoom.delete(roomId); }
+
   getMatchStats(roomId: string, playerId: string): PlayerMatchStats | null {
     return this.statsByRoom.get(roomId)?.get(playerId) ?? null;
   }

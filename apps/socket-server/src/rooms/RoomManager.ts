@@ -385,7 +385,14 @@ export class RoomManager {
     }
   }
 
+  private cleanupMatchRuntime(room: RoomRuntime): void {
+    if (!room.match) return;
+    GameStateSyncManager.cleanupMatch(room.match.matchId);
+    GameEventBus.cleanupMatch(room.match.matchId);
+  }
+
   private closeRoom(room: RoomRuntime, reason: string) {
+    this.cleanupMatchRuntime(room);
     this.emitToRoom(room, "room:closed", { roomId: room.id, reason });
     this.io.in(room.ioName).socketsLeave(room.ioName);
     this.rooms.delete(room.id);
@@ -985,6 +992,7 @@ export class RoomManager {
 
     // Everyone confirmed: reset back to the lobby and relaunch immediately.
     room.rematch = null;
+    this.cleanupMatchRuntime(room);
     room.match = null;
     this.clearClockTimer(room.id);
     room.status = "waiting";
@@ -1001,6 +1009,7 @@ export class RoomManager {
 
   async launchRematch(room: RoomRuntime, starter: Pick<AuthenticatedUser, "userId">, socket: Socket): Promise<RoomFull> {
     room.status = "waiting";
+    this.cleanupMatchRuntime(room);
     room.match = null;
     room.rematch = null;
     let seat = 0;
@@ -1650,7 +1659,7 @@ export class RoomManager {
       if (ev.type === "coin-pocketed" || ev.type === "CARROM_COIN_POCKETED") {
         const shotId = (ev as any).shotId ?? (result.state as any)?.lastActionAtMs ?? Date.now();
         const coinId = (ev as any).coinId ?? (ev as any).coin?.id ?? "unknown";
-        const isFirst = GameStateSyncManager.checkAndMarkCarromPocket(shotId, coinId);
+        const isFirst = GameStateSyncManager.checkAndMarkCarromPocket(shotId, coinId, room.match.matchId);
         if (!isFirst) {
           console.log(`[CARROM] COIN_POCKETED_DEDUPLICATED (Ignored duplicate): ${shotId}:${coinId}`);
           continue;
@@ -1755,6 +1764,7 @@ export class RoomManager {
       console.error(`Cancel failed for aborted match ${matchId}`, error);
     }
 
+    this.cleanupMatchRuntime(room);
     room.match = null;
     room.status = "ended";
     await prisma.room.update({ where: { id: room.id }, data: { status: "ENDED" } });

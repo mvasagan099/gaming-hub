@@ -56,6 +56,7 @@ export class AntiCheatManager {
   private readonly suspiciousEvents = new Map<string, SuspiciousEvent[]>(); // playerId -> events
   private readonly actionSequences = new Map<string, number>(); // playerId -> last sequence number
   private readonly processedActionCache = new Map<string, { timestamp: number; result: any }>(); // match/player scope + actionId
+  private readonly idlePlayers = new Map<string, number>();
   private readonly playerRiskScores = new Map<string, number>(); // playerId -> internal fair play risk score (0-100)
   
   constructor(framework: MultiplayerFramework, config?: Partial<AntiCheatConfig>) {
@@ -93,6 +94,7 @@ export class AntiCheatManager {
     this.actionSequences.clear();
     this.processedActionCache.clear();
     this.playerRiskScores.clear();
+    this.idlePlayers.clear();
   }
 
   /**
@@ -102,6 +104,23 @@ export class AntiCheatManager {
     for (const key of this.processedActionCache.keys()) {
       // Scope is a JSON array [roomId, matchId, playerId], followed by action ID.
       if (key.startsWith(`[${JSON.stringify(roomId)},`)) this.processedActionCache.delete(key);
+    }
+  }
+
+  getMemoryStats() { this.pruneIdlePlayers(); return { cachedActionResults: this.processedActionCache.size, idleSecurityProfiles: this.idlePlayers.size }; }
+
+  releasePlayer(playerId: string): void {
+    this.actionHistory.delete(playerId);
+    this.actionSequences.delete(playerId);
+    this.idlePlayers.delete(playerId); this.idlePlayers.set(playerId, Date.now());
+    this.pruneIdlePlayers();
+  }
+
+  private pruneIdlePlayers(): void {
+    const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+    for (const [id, at] of this.idlePlayers) {
+      if (at > cutoff && this.idlePlayers.size <= 5000) break;
+      this.idlePlayers.delete(id); this.suspiciousEvents.delete(id); this.playerRiskScores.delete(id);
     }
   }
 
@@ -120,12 +139,14 @@ export class AntiCheatManager {
     const key = `${actionScope}:${actionId}`;
     this.processedActionCache.set(key, { timestamp: Date.now(), result });
 
-    // Prune entries older than 2 minutes if cache grows large
-    if (this.processedActionCache.size > 1000) {
-      const cutoff = Date.now() - 120000;
-      for (const [k, v] of this.processedActionCache.entries()) {
-        if (v.timestamp < cutoff) this.processedActionCache.delete(k);
-      }
+    // Full results include large engine states. Bound cache memory independently
+    // of TTL; durable actionHistory/sequence checks still reject old retries.
+    const cutoff = Date.now() - 120000;
+    for (const [key, value] of this.processedActionCache) {
+      if (value.timestamp < cutoff) this.processedActionCache.delete(key);
+    }
+    while (this.processedActionCache.size > 256) {
+      this.processedActionCache.delete(this.processedActionCache.keys().next().value!);
     }
   }
 
@@ -146,6 +167,7 @@ export class AntiCheatManager {
     action: GameAction,
   ): Promise<ValidationResult> {
     const now = Date.now();
+    this.idlePlayers.delete(player.id);
 
     // 1. Authoritative 10-Minute Hard Match Timer Protection
     const MATCH_HARD_LIMIT_MS = 10 * 60 * 1000; // 10 minutes

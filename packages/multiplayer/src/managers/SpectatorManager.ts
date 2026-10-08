@@ -74,6 +74,7 @@ export class SpectatorManager {
   private readonly framework: MultiplayerFramework;
   private readonly spectators = new Map<string, SpectatorState>();
   private readonly delayBuffers = new Map<string, any[]>();
+  private readonly delayTimers = new Map<string, NodeJS.Timeout>();
   private readonly spectatorConfigs = new Map<string, SpectatorConfig>();
 
   constructor(framework: MultiplayerFramework) {
@@ -85,9 +86,21 @@ export class SpectatorManager {
   }
 
   async shutdown(): Promise<void> {
+    for (const timer of this.delayTimers.values()) clearTimeout(timer);
+    this.delayTimers.clear();
     this.spectators.clear();
     this.delayBuffers.clear();
     this.spectatorConfigs.clear();
+  }
+
+  getMemoryStats() { return { spectatorTimers: this.delayTimers.size, spectatorBuffers: this.delayBuffers.size, spectators: this.spectators.size }; }
+
+  releaseRoom(roomId: string): void {
+    const timer = this.delayTimers.get(roomId); if (timer) clearTimeout(timer);
+    this.delayTimers.delete(roomId); this.delayBuffers.delete(roomId); this.spectatorConfigs.delete(roomId);
+    for (const [key, value] of this.spectators) if (value.roomId === roomId) {
+      value.socket.leave(`spectator:${roomId}`); this.spectators.delete(key);
+    }
   }
 
   async joinAsSpectator(
@@ -272,16 +285,33 @@ export class SpectatorManager {
     }
 
     const buffer = this.delayBuffers.get(roomId)!;
+    // Coalesce only transient realtime snapshots, never shot/finish events.
+    // Retain the newest snapshot per 100ms bucket in the delayed viewing window.
+    const now = Date.now();
+    const realtime = ['table-tennis', 'snake-vs-worms', 'fruit-ninja'].includes(
+      this.framework.roomManager.getRoom(roomId)?.config.gameId ?? '');
+    const previous = buffer[buffer.length - 1];
+    if (realtime && event === 'game:state' && !payload.events?.length &&
+        previous?.event === event && !previous.payload.events?.length &&
+        Math.floor(previous.timestamp / 100) === Math.floor(now / 100)) {
+      previous.payload = payload;
+      previous.timestamp = now;
+      return;
+    }
     buffer.push({
       event,
       payload,
-      timestamp: Date.now(),
+      timestamp: now,
       delay: delaySeconds * 1000,
     });
 
-    setTimeout(() => {
-      this.flushBuffer(roomId);
-    }, delaySeconds * 1000);
+    if (!this.delayTimers.has(roomId)) this.scheduleFlush(roomId, delaySeconds * 1000);
+  }
+
+  private scheduleFlush(roomId: string, delayMs: number): void {
+    this.delayTimers.set(roomId, setTimeout(() => {
+      this.delayTimers.delete(roomId); this.flushBuffer(roomId);
+    }, delayMs));
   }
 
   private flushBuffer(roomId: string): void {
@@ -296,7 +326,10 @@ export class SpectatorManager {
     }
 
     const remainingEvents = buffer.filter((item: any) => now < item.timestamp + item.delay);
-    this.delayBuffers.set(roomId, remainingEvents);
+    if (remainingEvents.length) {
+      this.delayBuffers.set(roomId, remainingEvents);
+      this.scheduleFlush(roomId, Math.max(0, Math.min(...remainingEvents.map(item => item.timestamp + item.delay)) - now));
+    } else this.delayBuffers.delete(roomId);
   }
 
   private async sendSpectatorJoined(roomId: string, spectatorId: string): Promise<void> {

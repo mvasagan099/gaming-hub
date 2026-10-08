@@ -23,6 +23,8 @@ export class DistributedRoomCoordinator {
   private readonly subscriber: Redis;
   private readonly pending = new Map<string, { resolve(value: unknown): void; reject(error: Error): void }>();
   private storeAvailable = false;
+  private started = false;
+  private messageHandler?: (channel: string, data: string) => void;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   private dispatch!: (command: RoutedCommand) => Promise<unknown>;
   private readonly rpcChannel: string;
@@ -40,10 +42,12 @@ export class DistributedRoomCoordinator {
   }
 
   async start(dispatch: (command: RoutedCommand) => Promise<unknown>) {
+    if (this.started) return;
+    this.started = true;
     await this.store.validateSchema();
     this.storeAvailable = true;
     this.dispatch = dispatch;
-    this.subscriber.on('message', (channel, data) => {
+    this.messageHandler = (channel, data) => {
       try {
       if (data.length > 64 * 1024) return;
       if (channel === this.replyChannel) {
@@ -60,7 +64,8 @@ export class DistributedRoomCoordinator {
         ).catch(() => this.framework.error("Owner reply transport unavailable", "RPC_REPLY_FAILED"));
       }
       } catch { this.framework.error('Invalid coordination message', 'RPC_INVALID'); }
-    });
+    };
+    this.subscriber.on('message', this.messageHandler);
     if (this.subscriber.status === 'wait') await this.subscriber.connect();
     await this.subscriber.subscribe(this.rpcChannel, this.replyChannel);
     this.heartbeat = setInterval(() => {
@@ -72,10 +77,19 @@ export class DistributedRoomCoordinator {
     this.heartbeat.unref();
   }
 
+  getMemoryStats() { return { ownedRooms: this.owned.size, ownerQueues: this.queues.size,
+    pendingOwnerRpc: this.pending.size, redisSubscriptionCount: this.started ? 2 : 0 }; }
+
   isReady() { return this.storeAvailable && this.redis.status === "ready" && this.subscriber.status === "ready"; }
 
   async stop() {
     if (this.heartbeat) clearInterval(this.heartbeat);
+    this.heartbeat = null;
+    this.started = false;
+    if (this.messageHandler) this.subscriber.off('message', this.messageHandler);
+    this.messageHandler = undefined;
+    for (const request of this.pending.values()) request.reject(new Error("MATCH_COORDINATION_STOPPED"));
+    this.pending.clear();
     for (const [roomId, owner] of this.owned) await this.ownership.release(roomId, this.instanceId, owner.token).catch(() => undefined);
     await this.subscriber.quit();
   }

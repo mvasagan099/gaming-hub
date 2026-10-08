@@ -127,6 +127,22 @@ export class PlayerManager {
     return this.players.get(playerId);
   }
   
+  getMemoryStats() { return { trackedPlayers: this.players.size, afkIntervals: this.afkTimers.size, playerPingIntervals: this.pingIntervals.size }; }
+
+  releasePlayer(playerId: PlayerId): void {
+    for (const key of this.afkTimers.keys()) if (key.endsWith(`:${playerId}`)) {
+      clearInterval(this.afkTimers.get(key)!); this.afkTimers.delete(key);
+    }
+    const ping = this.pingIntervals.get(playerId); if (ping) clearInterval(ping);
+    this.pingIntervals.delete(playerId);
+    this.players.delete(playerId);
+    this.activityLog.delete(playerId);
+    this.playerStats.delete(playerId);
+    this.framework.syncManager.releasePlayer(playerId);
+    this.framework.actionValidator.resetPlayer(playerId);
+    this.framework.antiCheatManager.releasePlayer(playerId);
+  }
+
   /**
    * Get all players.
    */

@@ -57,6 +57,8 @@ export class TimerManager {
     this.timerCallbacks.clear();
   }
   
+  getMemoryStats() { return { matchTimers: this.timerHandles.size }; }
+
   /**
    * Start a timer.
    */

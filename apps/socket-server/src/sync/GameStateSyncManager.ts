@@ -25,6 +25,7 @@ export class GameStateSyncManager {
   private static matchStates = new Map<string, AuthoritativeMatchState>();
   private static processedPocketKeys = new Set<string>();
   private static clientSyncRateLimits = new Map<string, number[]>();
+  private static rateLimitCleanupTimer: ReturnType<typeof setTimeout> | null = null;
   private static cachedActionResults = new Map<string, any>();
   private static securityEvents: SecurityEventRecord[] = [];
   private static activeReplayPackages = new Map<string, ReplayPackage>();
@@ -351,9 +352,7 @@ export class GameStateSyncManager {
   public static checkSyncRateLimit(clientKey: string): void {
     const now = Date.now();
     // Expired identities must not accumulate as users reconnect or leave matches.
-    for (const [key, times] of this.clientSyncRateLimits) {
-      if (!times.length || times[times.length - 1] <= now - SYNC_RATE_LIMIT_WINDOW_MS) this.clientSyncRateLimits.delete(key);
-    }
+    this.pruneExpiredRateLimits();
     const timestamps = this.clientSyncRateLimits.get(clientKey) || [];
     const windowStart = now - SYNC_RATE_LIMIT_WINDOW_MS;
 
@@ -365,13 +364,14 @@ export class GameStateSyncManager {
 
     recent.push(now);
     this.clientSyncRateLimits.set(clientKey, recent);
+    this.scheduleRateLimitCleanup();
   }
 
   /**
    * Deduplication check for Carrom coin pocketing
    */
-  public static checkAndMarkCarromPocket(shotId: string | number, coinId: string): boolean {
-    const key = getCarromPocketDedupeKey(shotId, coinId);
+  public static checkAndMarkCarromPocket(shotId: string | number, coinId: string, matchId?: string): boolean {
+    const key = `${matchId ? `${matchId}:` : ""}${getCarromPocketDedupeKey(shotId, coinId)}`;
     if (this.processedPocketKeys.has(key)) {
       return false; // Already processed
     }
@@ -491,10 +491,38 @@ export class GameStateSyncManager {
     return { items: paginated, total };
   }
 
-  /**
-   * Cleans up match records after match settlement
-   */
+  private static pruneExpiredRateLimits(): void {
+    const cutoff = Date.now() - SYNC_RATE_LIMIT_WINDOW_MS;
+    for (const [key, times] of this.clientSyncRateLimits) {
+      if (!times.length || times[times.length - 1] <= cutoff) this.clientSyncRateLimits.delete(key);
+    }
+  }
+
+  private static scheduleRateLimitCleanup(): void {
+    if (this.rateLimitCleanupTimer) return;
+    this.rateLimitCleanupTimer = setTimeout(() => {
+      this.rateLimitCleanupTimer = null;
+      this.pruneExpiredRateLimits();
+      if (this.clientSyncRateLimits.size) this.scheduleRateLimitCleanup();
+    }, SYNC_RATE_LIMIT_WINDOW_MS);
+    this.rateLimitCleanupTimer.unref();
+  }
+
+  public static getMemoryStats() {
+    return { legacyMatchStates: this.matchStates.size, legacyReplayPackages: this.activeReplayPackages.size,
+      legacySnapshotTimestamps: this.lastSnapshotTimestamps.size, legacyCachedActionResults: this.cachedActionResults.size,
+      legacyPocketKeys: this.processedPocketKeys.size, syncRateLimitScopes: this.clientSyncRateLimits.size,
+      syncRateLimitCleanupTimers: Number(Boolean(this.rateLimitCleanupTimer)) };
+  }
+
+  /** Release match-owned state; preserve unexpired security rate limits. */
   public static cleanupMatch(matchId: string): void {
     this.matchStates.delete(matchId);
+    this.activeReplayPackages.delete(matchId);
+    this.lastSnapshotTimestamps.delete(matchId);
+    for (const key of this.cachedActionResults.keys()) if (key.startsWith(`${matchId}:`)) this.cachedActionResults.delete(key);
+    for (const key of this.processedPocketKeys) if (key.startsWith(`${matchId}:`)) this.processedPocketKeys.delete(key);
+    // Limits are per client across matches: removing a match must not reset them.
+    this.pruneExpiredRateLimits();
   }
 }

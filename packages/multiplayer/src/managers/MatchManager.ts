@@ -45,6 +45,7 @@ export class MatchManager {
   private readonly framework: MultiplayerFramework;
   private readonly activeMatches = new Map<string, MatchRuntime>();
   private tableTennisTicks = new Set<string>();
+  private pendingCarromShots = 0;
   private physicsIntervals = new Map<string, ReturnType<typeof setInterval>>();
   private countdownTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly PHYSICS_TICK_MS = 16;
@@ -143,6 +144,10 @@ export class MatchManager {
       if (serialized) this.tableTennisTicks.delete(matchId);
     }
   }
+
+  getMemoryStats() { return { activeMatchCount: this.activeMatches.size, physicsIntervals: this.physicsIntervals.size,
+    countdownTimers: this.countdownTimers.size, loadTimers: this.loadTimers.size,
+    pendingRealtimeStates: this.tableTennisTicks.size, pendingCarromShots: this.pendingCarromShots }; }
 
   async declineRematch(roomId: RoomId, playerId: string) {
     return this.framework.gameStateManager.enqueue(roomId, async () => {
@@ -536,7 +541,9 @@ export class MatchManager {
     
     // Serialize state mutations per room so concurrent actions never corrupt
     // the authoritative engine.
-    return this.framework.gameStateManager.enqueue(roomId, async () => {
+    const carromShot = room.config.gameId === "carrom" && action.type === "strike";
+    if (carromShot) this.pendingCarromShots++;
+    try { return await this.framework.gameStateManager.enqueue(roomId, async () => {
       if (this.framework.roomManager.getRoom(roomId) !== room || room.match !== match ||
           room.status !== "playing" || room.players.get(playerId) !== player) {
         return this.createErrorResult(null, "Match or room membership changed");
@@ -666,7 +673,7 @@ export class MatchManager {
       }
       
       return result;
-    });
+    }); } finally { if (carromShot) this.pendingCarromShots--; }
   }
   
   /**

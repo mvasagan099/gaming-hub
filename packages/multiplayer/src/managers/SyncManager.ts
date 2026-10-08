@@ -33,7 +33,7 @@ import type { Socket } from "socket.io";
 export class SyncManager {
   private readonly framework: MultiplayerFramework;
   private readonly sequenceNumbers = new Map<string, number>(); // roomId -> sequence number
-  private readonly acknowledgedSequences = new Map<string, Set<number>>(); // playerId -> acknowledged sequences
+  private readonly acknowledgedSequences = new Map<string, Set<number>>(); // roomId:playerId -> bounded acknowledged sequences
   private readonly connectionQuality = new Map<PlayerId, ConnectionQuality>();
   private readonly pingIntervals = new Map<PlayerId, NodeJS.Timeout>();
   
@@ -55,6 +55,19 @@ export class SyncManager {
     this.connectionQuality.clear();
   }
   
+  private readonly statePayloadBytes = new Map<string, number>();
+
+  getMemoryStats() { return { statePayloadBytes: Object.fromEntries(this.statePayloadBytes), syncRooms: this.sequenceNumbers.size, ackScopes: this.acknowledgedSequences.size, syncPingIntervals: this.pingIntervals.size }; }
+
+  releaseRoom(roomId: string): void {
+    this.sequenceNumbers.delete(roomId);
+    for (const key of this.acknowledgedSequences.keys()) if (key.startsWith(`${roomId}:`)) this.acknowledgedSequences.delete(key);
+  }
+  releasePlayer(playerId: string): void {
+    this.stopPingMonitoring(playerId);
+    this.connectionQuality.delete(playerId);
+  }
+
   /**
    * Broadcast a room update to all participants.
    */
@@ -118,7 +131,7 @@ export class SyncManager {
         return event;
       }),
       timestamp: Date.now(),
-      checksum: this.calculateChecksum(state),
+      checksum: this.calculateChecksum(state, room.config.gameId),
       sequenceNumber,
     };
     
@@ -149,7 +162,7 @@ export class SyncManager {
       state,
       events: [{ type: "sync", timestamp: Date.now() }],
       timestamp: Date.now(),
-      checksum: this.calculateChecksum(state),
+      checksum: this.calculateChecksum(state, room.config.gameId),
       sequenceNumber,
     };
     
@@ -239,9 +252,14 @@ export class SyncManager {
    * Handle state acknowledgment from client.
    */
   handleStateAck(playerId: PlayerId, roomId: RoomId, sequenceNumber: number): void {
-    const acks = this.acknowledgedSequences.get(playerId) ?? new Set();
+    if (!Number.isSafeInteger(sequenceNumber) || sequenceNumber < 0) return;
+    const room = this.framework.roomManager.getRoom(roomId);
+    if (!room || (!room.players.has(playerId) && !room.spectators.has(playerId))) return;
+    const key = `${roomId}:${playerId}`;
+    const acks = this.acknowledgedSequences.get(key) ?? new Set<number>();
     acks.add(sequenceNumber);
-    this.acknowledgedSequences.set(playerId, acks);
+    while (acks.size > 128) acks.delete(acks.values().next().value!);
+    this.acknowledgedSequences.set(key, acks);
     
     this.framework.log(`Player ${playerId} acknowledged state ${sequenceNumber} for room ${roomId}`);
   }
@@ -255,7 +273,7 @@ export class SyncManager {
     );
     
     for (const player of connectedPlayers) {
-      const acks = this.acknowledgedSequences.get(player.id);
+      const acks = this.acknowledgedSequences.get(`${room.id}:${player.id}`);
       if (!acks || !acks.has(sequenceNumber)) {
         return false;
       }
@@ -336,9 +354,10 @@ export class SyncManager {
   /**
    * Calculate simple checksum for state validation.
    */
-  private calculateChecksum(state: JsonObject): string {
+  private calculateChecksum(state: JsonObject, gameId: string): string {
     // Simple hash for state validation
     const str = JSON.stringify(state);
+    this.statePayloadBytes.set(gameId, Buffer.byteLength(str));
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);

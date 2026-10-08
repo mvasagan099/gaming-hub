@@ -41,12 +41,16 @@ export class MatchTimeoutMonitoringService {
     timeLimitCompletions: 0,
     finalizationFailures: 0,
     settlementFailures: 0,
-    durations: [] as number[],
+    durationCount: 0,
+    durationTotal: 0,
+    durationMaximum: 0,
     byGame: new Map<string, {
       timeoutFinalizations: number;
       normalCompletions: number;
       timeLimitCompletions: number;
-      durations: number[];
+      durationCount: number;
+      durationTotal: number;
+      durationMaximum: number;
     }>(),
   };
 
@@ -208,7 +212,9 @@ export class MatchTimeoutMonitoringService {
       this.metrics.normalCompletions++;
     }
 
-    this.metrics.durations.push(durationSec);
+    this.metrics.durationCount++;
+    this.metrics.durationTotal += durationSec;
+    this.metrics.durationMaximum = Math.max(this.metrics.durationMaximum, durationSec);
 
     // Track per-game
     if (!this.metrics.byGame.has(gameId)) {
@@ -216,7 +222,7 @@ export class MatchTimeoutMonitoringService {
         timeoutFinalizations: 0,
         normalCompletions: 0,
         timeLimitCompletions: 0,
-        durations: [],
+        durationCount: 0, durationTotal: 0, durationMaximum: 0,
       });
     }
 
@@ -227,7 +233,9 @@ export class MatchTimeoutMonitoringService {
     } else {
       gMetric.normalCompletions++;
     }
-    gMetric.durations.push(durationSec);
+    gMetric.durationCount++;
+    gMetric.durationTotal += durationSec;
+    gMetric.durationMaximum = Math.max(gMetric.durationMaximum, durationSec);
   }
 
   static recordSettlementFailure() {
@@ -260,11 +268,9 @@ export class MatchTimeoutMonitoringService {
       }
     }
 
-    const durations = this.metrics.durations;
-    const avgDuration = durations.length > 0
-      ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
-      : 0;
-    const maxDuration = durations.length > 0 ? Math.max(...durations) : 0;
+    const avgDuration = this.metrics.durationCount > 0
+      ? Math.round(this.metrics.durationTotal / this.metrics.durationCount) : 0;
+    const maxDuration = this.metrics.durationMaximum;
 
     const overall: MatchMetricsBreakdown = {
       activeMatches,
@@ -280,11 +286,8 @@ export class MatchTimeoutMonitoringService {
 
     const byGame: Record<string, MatchMetricsBreakdown> = {};
     for (const [gameId, gm] of this.metrics.byGame.entries()) {
-      const gDurations = gm.durations;
-      const gAvg = gDurations.length > 0
-        ? Math.round(gDurations.reduce((a, b) => a + b, 0) / gDurations.length)
-        : 0;
-      const gMax = gDurations.length > 0 ? Math.max(...gDurations) : 0;
+      const gAvg = gm.durationCount > 0 ? Math.round(gm.durationTotal / gm.durationCount) : 0;
+      const gMax = gm.durationMaximum;
 
       byGame[gameId] = {
         activeMatches: activeByGame[gameId]?.active ?? 0,
