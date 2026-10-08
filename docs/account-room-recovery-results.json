@@ -1,0 +1,185 @@
+{
+  "date": "2026-10-08",
+  "baselineCommit": "2802362",
+  "productionDatabaseTouched": false,
+  "deployed": false,
+  "affectedLiveAccountInspected": false,
+  "beforeFix": {
+    "files": 1,
+    "tests": 10,
+    "passed": 0,
+    "failed": 10,
+    "skipped": 0,
+    "success": false,
+    "filesExecuted": [
+      "packages/multiplayer/__tests__/completedRoomCheckpoint.test.ts"
+    ]
+  },
+  "multiplayer": {
+    "files": 24,
+    "tests": 357,
+    "passed": 357,
+    "failed": 0,
+    "skipped": 0,
+    "success": true,
+    "filesExecuted": [
+      "packages/multiplayer/__tests__/bubbleShooterGameplay.test.ts",
+      "packages/multiplayer/__tests__/carromLifecycle.test.ts",
+      "packages/multiplayer/__tests__/carromPreview.test.ts",
+      "packages/multiplayer/__tests__/centralizedGameConfig.test.ts",
+      "packages/multiplayer/__tests__/clientMatchIdentity.test.ts",
+      "packages/multiplayer/__tests__/completedRoomCheckpoint.test.ts",
+      "packages/multiplayer/__tests__/disconnectReconnect.test.ts",
+      "packages/multiplayer/__tests__/finishedRoomRecovery.test.ts",
+      "packages/multiplayer/__tests__/gameConfigs.test.ts",
+      "packages/multiplayer/__tests__/gameEventSystem.test.ts",
+      "packages/multiplayer/__tests__/gameLoadSafety.test.ts",
+      "packages/multiplayer/__tests__/gameStateSync.test.ts",
+      "packages/multiplayer/__tests__/gameplay.test.ts",
+      "packages/multiplayer/__tests__/internalApiCheck.test.ts",
+      "packages/multiplayer/__tests__/matchManager.test.ts",
+      "packages/multiplayer/__tests__/matchmaking.test.ts",
+      "packages/multiplayer/__tests__/playerExit.test.ts",
+      "packages/multiplayer/__tests__/privateRoomSocketFlow.test.ts",
+      "packages/multiplayer/__tests__/realtimeSync.test.ts",
+      "packages/multiplayer/__tests__/rematch.test.ts",
+      "packages/multiplayer/__tests__/roomCleanup.test.ts",
+      "packages/multiplayer/__tests__/snookerPreview.test.ts",
+      "packages/multiplayer/__tests__/startupStep.test.ts",
+      "packages/multiplayer/__tests__/tournamentRoomAccess.test.ts"
+    ]
+  },
+  "gameEngine": {
+    "files": 27,
+    "tests": 421,
+    "passed": 421,
+    "failed": 0,
+    "skipped": 0,
+    "success": true,
+    "filesExecuted": [
+      "packages/game-engine/__tests__/admin-game-timeout-configuration.test.ts",
+      "packages/game-engine/__tests__/bubble-shooter.test.ts",
+      "packages/game-engine/__tests__/carrom.test.ts",
+      "packages/game-engine/__tests__/carromPockets.test.ts",
+      "packages/game-engine/__tests__/carromSync.test.ts",
+      "packages/game-engine/__tests__/checkpointRecovery.test.ts",
+      "packages/game-engine/__tests__/chess.test.ts",
+      "packages/game-engine/__tests__/confirmation-popups-safety.test.ts",
+      "packages/game-engine/__tests__/fruit-ninja-spawn-balancing.test.ts",
+      "packages/game-engine/__tests__/fruit-ninja.test.ts",
+      "packages/game-engine/__tests__/global-match-history-replay-stats.test.ts",
+      "packages/game-engine/__tests__/global-match-qa-monitoring-edge-cases.test.ts",
+      "packages/game-engine/__tests__/global-match-timeout-engine.test.ts",
+      "packages/game-engine/__tests__/global-matchmaking-readiness-start.test.ts",
+      "packages/game-engine/__tests__/global-multiplayer-security-anti-cheat.test.ts",
+      "packages/game-engine/__tests__/global-realtime-game-events-notifications.test.ts",
+      "packages/game-engine/__tests__/ludo.test.ts",
+      "packages/game-engine/__tests__/production-player-limits.test.ts",
+      "packages/game-engine/__tests__/snake-ladder.test.ts",
+      "packages/game-engine/__tests__/snake-vs-worms.test.ts",
+      "packages/game-engine/__tests__/snookerMultiplayer.test.ts",
+      "packages/game-engine/__tests__/snookerPhysics.test.ts",
+      "packages/game-engine/__tests__/snookerRules.test.ts",
+      "packages/game-engine/__tests__/table-tennis.test.ts",
+      "packages/game-engine/__tests__/timeout-resolution.test.ts",
+      "packages/game-engine/__tests__/universal-game-result-adapters.test.ts",
+      "packages/game-engine/__tests__/universal-match-finalization.test.ts"
+    ]
+  },
+  "newRecoveryCases": [
+    {
+      "name": "completed room recovery after another participant leaves restores snake-ladder so the remaining account can leave after owner restart",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves restores ludo so the remaining account can leave after owner restart",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves restores chess so the remaining account can leave after owner restart",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves restores carrom so the remaining account can leave after owner restart",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves restores fruit-ninja so the remaining account can leave after owner restart",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves restores bubble-shooter so the remaining account can leave after owner restart",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves restores table-tennis so the remaining account can leave after owner restart",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves restores snake-vs-worms so the remaining account can leave after owner restart",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves restores snooker so the remaining account can leave after owner restart",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves retains original game-load confirmations when a finished participant has left",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves still rejects incomplete membership for a waiting room",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves still rejects incomplete membership for a starting room",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves still rejects incomplete membership for a playing room",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves does not accept an unfinished match merely because its room says ended",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves rejects a remaining member with a different original seat",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves rejects an injected account even in a completed room",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves rejects a game-load confirmation from someone outside the original match",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves rejects an incompatible historical engine instead of clearing membership blindly",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves does not authorize a departed player for room:leave using the historical roster",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves does not authorize a departed player for game:action using the historical roster",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves does not authorize a departed player for game:sync using the historical roster",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves does not authorize a departed player for game:rematch using the historical roster",
+      "status": "passed"
+    },
+    {
+      "name": "completed room recovery after another participant leaves allows the last spectator to leave a completed room after both players departed",
+      "status": "passed"
+    }
+  ],
+  "typecheck": "PASS",
+  "build": "PASS"
+}

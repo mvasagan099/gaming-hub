@@ -42,18 +42,25 @@ export function restoreRoomCheckpoint(framework: MultiplayerFramework, snapshot:
       !Number.isInteger(snapshot.stateVersion) || snapshot.stateVersion < 0) throw new Error('INCOMPATIBLE_ROOM_CHECKPOINT');
   const participants = snapshot.players.filter(p => !p.isSpectator);
   const identities = participants.map(p => p.id), seats = participants.map(p => p.seat);
+  if (snapshot.match && !Array.isArray(snapshot.match.engine?.participants)) throw new Error('INVALID_MATCH_PARTICIPANTS');
+  // Finished matches retain their original engine roster after players leave.
+  // Room membership is still authoritative for access; that roster is history.
+  const completed = snapshot.room.status === 'ended' && snapshot.match != null && Number.isFinite(snapshot.match.finishedAt);
+  const matchIdentities = completed ? snapshot.match!.engine.participants.map(p => p.userId) : identities;
   if (new Set(identities).size !== identities.length || new Set(seats).size !== seats.length ||
       participants.some(p => p.id !== p.userId || !Number.isSafeInteger(p.seat) || p.seat! < 0 ||
         !Number.isSafeInteger(p.packetSequenceNumber) || p.packetSequenceNumber < 0) ||
-      !identities.includes(snapshot.room.hostId) || snapshot.players.some(p => p.isSpectator) ||
+      !(identities.includes(snapshot.room.hostId) || (completed && participants.length === 0 && matchIdentities.includes(snapshot.room.hostId))) || snapshot.players.some(p => p.isSpectator) ||
       snapshot.spectators.some(p => !p.isSpectator || identities.includes(p.id))) throw new Error('INVALID_ROOM_PARTICIPANTS');
   if (snapshot.match && (snapshot.match.engine.gameId !== snapshot.room.config.gameId ||
-      snapshot.match.engine.participants.some(p => !participants.some(r => r.id === p.userId && r.seat === p.seat)) ||
-      snapshot.match.engine.participants.length !== participants.length)) throw new Error('INVALID_MATCH_PARTICIPANTS');
+      (completed
+        ? participants.some(r => !snapshot.match!.engine.participants.some(p => r.id === p.userId && r.seat === p.seat))
+        : snapshot.match.engine.participants.some(p => !participants.some(r => r.id === p.userId && r.seat === p.seat)) ||
+          snapshot.match.engine.participants.length !== participants.length))) throw new Error('INVALID_MATCH_PARTICIPANTS');
   if (snapshot.match?.startConfirmationRequired && (
       !Array.isArray(snapshot.match.loadedPlayerIds) ||
       new Set(snapshot.match.loadedPlayerIds).size !== snapshot.match.loadedPlayerIds.length ||
-      snapshot.match.loadedPlayerIds.some(id => !identities.includes(id)) ||
+      snapshot.match.loadedPlayerIds.some(id => !matchIdentities.includes(id)) ||
       (snapshot.room.status === 'playing' && snapshot.match.gameplayStartedAt == null &&
         !Number.isFinite(snapshot.match.loadDeadline)))) throw new Error('INVALID_GAME_LOAD_CHECKPOINT');
   if (snapshot.room.lifecyclePhase === 'COUNTDOWN' && (!snapshot.match || !Number.isFinite(snapshot.room.countdownEndsAt)))
