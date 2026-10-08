@@ -868,35 +868,37 @@ export class MatchManager {
    * Handle player forfeit.
    */
   async handlePlayerForfeit(room: RoomRuntime, player: PlayerRuntime, reason: string): Promise<void> {
-    if (!room.match) return;
-    if (room.status === "starting" || this.isAwaitingGameLoad(room)) { await this.abortMatch(room, "game_initialization_failed"); return; }
-    
-    if (player.seat === null) return;
-    
-    this.framework.log(`Player ${player.id} forfeited in room ${room.id}: ${reason}`);
-    
-    // If the match was auto-paused (e.g. by this player's disconnect), resume
-    // it first so the engine accepts the resign action.
-    if (room.match.pausedAt) {
-      const engine = room.match.engine as EngineInstance;
-      const resumeResult = engine.apply({ type: "resume" }, player.seat);
-      if (resumeResult.ok) {
-        room.match.pausedAt = null;
-        room.match.pausedBy = null;
-        await this.framework.syncManager.broadcastGameState(room, resumeResult.events);
+    const match = room.match;
+    if (!match || match.finishedAt || player.isSpectator || player.seat === null) return;
+    await this.framework.gameStateManager.enqueue(room.id, async () => {
+      if (room.match !== match || match.finishedAt) return;
+      if (room.status === "starting" || this.isAwaitingGameLoad(room)) {
+        await this.abortMatch(room, "game_initialization_failed");
+        return;
       }
-    }
-    
-    // Apply forfeit action
-    const forfeitAction: GameAction = {
-      type: "resign",
-      reason,
-    };
-    
-    await this.applyAction({
-      roomId: room.id,
-      playerId: player.id,
-      action: forfeitAction,
+      if (room.status !== "playing" || room.players.get(player.id) !== player) return;
+      this.framework.log(`Player ${player.id} forfeited in room ${room.id}: ${reason}`);
+      const engine = match.engine as EngineInstance;
+      // Server-owned forfeits must not depend on turn, input cooldown, packet
+      // sequence, or client anti-cheat checks. Keep engine mutations serialized.
+      if (match.pausedAt) {
+        engine.apply({ type: "resume" }, player.seat!);
+        match.pausedAt = null;
+        match.pausedBy = null;
+      }
+      if (engine.finished) {
+        await this.finishMatch(room, { ok: true, state: engine.serialize(), events: [], finished: true, winnerSeats: engine.winnerSeats });
+        return;
+      }
+      const action: GameAction = { type: "resign", reason };
+      const result = engine.apply(action, player.seat!);
+      if (!result.ok || !result.finished) throw new Error(`Unable to finalize forfeit for ${room.config.gameId}`);
+      const events = this.framework.eventDispatcher.toGameEvents(room, result.events);
+      this.framework.eventDispatcher.appendToLog(room, events);
+      const recorded = this.framework.gameStateManager.recordResult(room, result, player.id, player.seat!, action, events);
+      if (this.framework.config.enableReplay) this.framework.replayManager.recordAction(room, recorded);
+      await this.framework.syncManager.broadcastGameState(room, result.events);
+      await this.finishMatch(room, result);
     });
   }
   

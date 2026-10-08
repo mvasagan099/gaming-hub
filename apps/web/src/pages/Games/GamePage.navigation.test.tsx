@@ -70,7 +70,8 @@ describe('game Exit versus router Back', () => {
     expect(context.navigate).not.toHaveBeenCalled();
   });
 
-  it('leaves once on confirmed Exit, even when confirmed twice and unmounted', async () => {
+  it.each(GAME_IDS)('%s leaves once on confirmed Exit, even when confirmed twice and unmounted', async gameId => {
+    context.gameId = gameId; context.room.gameId = gameId;
     const page = render();
     const cleanup = context.effects[0]() as () => void;
     const confirm = dialog(page).onConfirm;
@@ -80,7 +81,8 @@ describe('game Exit versus router Back', () => {
     expect(context.navigate).toHaveBeenCalledExactlyOnceWith(-1);
   });
 
-  it('does not trap browser/gesture Back or push extra history; unmount leaves once', async () => {
+  it.each(GAME_IDS)('%s does not trap browser/gesture Back or push extra history; unmount leaves once', async gameId => {
+    context.gameId = gameId; context.room.gameId = gameId;
     const page = render();
     const cleanup = context.effects[0]() as () => void;
     expect(window.addEventListener).not.toHaveBeenCalled();
@@ -92,7 +94,8 @@ describe('game Exit versus router Back', () => {
     expect(context.states[0]).toBe(false);
   });
 
-  it('StrictMode replay keeps membership; the eventual real unmount leaves', async () => {
+  it.each(GAME_IDS)('%s StrictMode replay keeps membership; the eventual real unmount leaves', async gameId => {
+    context.gameId = gameId; context.room.gameId = gameId;
     render();
     const setup = context.effects[0];
     (setup() as () => void)();

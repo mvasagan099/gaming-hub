@@ -318,8 +318,15 @@ export class RoomManager {
     // Initialization failures refund everyone; they cannot declare the room host a winner.
     if (player.seat !== null && !player.isSpectator && room.match &&
         (room.status === "starting" || this.framework.matchManager.isAwaitingGameLoad(room))) {
+      await this.framework.matchManager.abortMatch(room, "game_initialization_player_left");
       await this.closeRoom(roomId, "game_initialization_player_left");
       return;
+    }
+    // An explicit exit is a forfeit, not a reconnectable socket disconnect.
+    // Finalize while both participants still exist for results and settlement.
+    if (room.status === "playing" && room.match && player.seat !== null && !player.isSpectator) {
+      await this.framework.matchManager.handlePlayerForfeit(room, player, "player_left");
+      this.framework.timerManager.clearPlayerTimers(room.id, playerId);
     }
     // Remove player from room
     room.players.delete(playerId);
@@ -337,11 +344,6 @@ export class RoomManager {
         newHost.isHost = true;
         this.framework.log(`Host transferred from ${playerId} to ${newHost.id} in room ${roomId}`);
       }
-    }
-    
-    // Handle player leaving during match
-    if (room.status === "playing" && room.match && player.seat !== null) {
-      await this.framework.matchManager.handlePlayerDisconnect(room, player);
     }
     
     // Close room if empty
@@ -553,7 +555,7 @@ export class RoomManager {
   /**
    * Close a room.
    */
-  closeRoom(roomId: RoomId, reason: string): void | Promise<void> {
+  async closeRoom(roomId: RoomId, reason: string): Promise<void> {
     const room = this.rooms.get(roomId);
     if (!room) return;
     if (this.framework.config.closeRoom) return this.framework.config.closeRoom(room, reason);
@@ -567,8 +569,8 @@ export class RoomManager {
     
     // End match if active (finished/aborted rooms are closed as-is so we don't
     // re-broadcast an abort after game:over).
-    if (room.status === "playing" && room.match) {
-      this.framework.matchManager.abortMatch(room, reason);
+    if ((room.status === "playing" || room.status === "starting") && room.match && !room.match.finishedAt) {
+      await this.framework.matchManager.abortMatch(room, reason);
     }
     
     // Notify all players
@@ -577,18 +579,11 @@ export class RoomManager {
     // Remove all sockets from room
     this.framework.io.in(room.ioName).socketsLeave(room.ioName);
     
-    // Clean up player mappings
-    for (const playerId of room.players.keys()) {
-      this.playerRoomMap.delete(playerId);
-    }
-    for (const playerId of room.spectators.keys()) {
-      this.playerRoomMap.delete(playerId);
-    }
-    
-    // Remove room
-    this.rooms.delete(roomId);
-    this.roomsByCode.delete(room.code);
-    
+    // Aborting schedules a linger timer; closing cancels that timer as well.
+    this.framework.matchManager.detachRoom(room);
+    this.framework.timerManager.clearRoomTimers(roomId);
+    this.unregisterRoom(roomId);
+
     this.framework.log(`Room ${roomId} closed: ${reason}`);
   }
   
