@@ -37,8 +37,8 @@ const createTournamentSchema = z.object({
   format: z.enum(["SINGLE_ELIMINATION", "BRACKET", "KNOCKOUT", "ROUND_ROBIN", "SWISS"]).optional(),
   prizePool: z.number().int().min(0).optional(),
   entryFee: z.number().int().min(0).optional(),
-  minPlayers: z.number().int().min(2).max(128).optional(),
-  maxPlayers: z.number().int().min(2).max(128).optional(),
+  minPlayers: z.number().int().min(2).max(10000).optional(),
+  maxPlayers: z.number().int().min(2).max(10000).optional(),
   startTime: z.string().datetime({ offset: true }),
   endTime: z.string().datetime({ offset: true }).nullable().optional(),
   registrationStartsAt: z.string().datetime({ offset: true }).nullable().optional(),
@@ -123,25 +123,6 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
 
     const tournament = await createTournament(input, admin.id);
 
-    // Update extra fields not in base createTournament
-    const extraUpdates: Record<string, unknown> = {};
-    if (body.minPlayers !== undefined) extraUpdates.minPlayers = body.minPlayers;
-    if (body.registrationEndsAt !== undefined) {
-      extraUpdates.registrationEndsAt = body.registrationEndsAt ? new Date(body.registrationEndsAt) : null;
-    }
-    if (body.registrationStartsAt !== undefined) {
-      extraUpdates.registrationStartsAt = body.registrationStartsAt ? new Date(body.registrationStartsAt) : null;
-    }
-    if (body.autoStartWhenFull !== undefined) extraUpdates.autoStartWhenFull = body.autoStartWhenFull;
-    if (body.prizeDistribution !== undefined) extraUpdates.prizeDistribution = body.prizeDistribution;
-
-    if (Object.keys(extraUpdates).length > 0) {
-      await prisma.tournament.update({
-        where: { id: tournament.id },
-        data: extraUpdates as any,
-      });
-    }
-
     auditFromRequest(request, {
       actorType: "user",
       actorId: admin.id,
@@ -172,25 +153,6 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
     }
 
     const updated = await updateTournament(id, body as any, admin.id);
-
-    // Apply extra fields
-    const extraUpdates: Record<string, unknown> = {};
-    if (body.minPlayers !== undefined) extraUpdates.minPlayers = body.minPlayers;
-    if (body.registrationEndsAt !== undefined) {
-      extraUpdates.registrationEndsAt = body.registrationEndsAt ? new Date(body.registrationEndsAt) : null;
-    }
-    if (body.registrationStartsAt !== undefined) {
-      extraUpdates.registrationStartsAt = body.registrationStartsAt ? new Date(body.registrationStartsAt) : null;
-    }
-    if (body.autoStartWhenFull !== undefined) extraUpdates.autoStartWhenFull = body.autoStartWhenFull;
-    if (body.prizeDistribution !== undefined) extraUpdates.prizeDistribution = body.prizeDistribution;
-
-    if (Object.keys(extraUpdates).length > 0) {
-      await prisma.tournament.update({
-        where: { id },
-        data: extraUpdates as any,
-      });
-    }
 
     auditFromRequest(request, {
       actorType: "user",

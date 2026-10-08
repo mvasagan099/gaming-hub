@@ -145,6 +145,23 @@ function unwrapAck<T>(res: AckResult<T>): T {
 }
 
 let wired = false;
+let pendingLeaveRoom: RoomFull | null = null;
+let roomLeaveOperation: Promise<void> | null = null;
+const departedRooms = new Set<string>();
+const departedMatches = new Set<string>();
+function rememberDeparture(ids: Set<string>, id: string | null | undefined) {
+  if (!id) return;
+  ids.add(id);
+  if (ids.size > 32) ids.delete(ids.values().next().value!);
+}
+function finishRoomCleanup(get: () => MultiplayerState): Promise<void> | undefined {
+  if (pendingLeaveRoom || roomLeaveOperation || get().room?.status === "ended") {
+    return (async () => {
+      await get().leaveRoom();
+      if (pendingLeaveRoom) throw new Error(get().error || "Room cleanup is still pending. Please try again.");
+    })();
+  }
+}
 
 function applyRoom(set: (partial: Partial<MultiplayerState>) => void, room: RoomFull) {
   const me = useAuthStore.getState().user?.id;
@@ -161,6 +178,9 @@ function applyRoom(set: (partial: Partial<MultiplayerState>) => void, room: Room
 
 function clearRoom(set: (partial: Partial<MultiplayerState>) => void) {
   set({
+    matchFound: null,
+    matchmaking: { ...IDLE_MATCHMAKING },
+    pendingRequeue: null,
     room: null,
     mySeat: null,
     isSpectator: false,
@@ -307,10 +327,14 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
       socket.on("room:update", (room) => {
         console.log("[MultiplayerStore] room:update received", room.id, "gameId:", room.gameId, "status:", room.status);
+        if (departedRooms.has(room.id)) return;
         applyRoom(set, room);
       });
 
-      socket.on("room:closed", () => clearRoom(set));
+      socket.on("room:closed", (payload) => {
+        if (get().room?.id === payload.roomId) clearRoom(set);
+        if (pendingLeaveRoom?.id === payload.roomId) pendingLeaveRoom = null;
+      });
 
       socket.on("game:state", (payload) => {
         const current = get();
@@ -371,6 +395,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
       // ── Centralized Authoritative State Sync Listener ──
       socket.on("game:state:authoritative", (authoritativeState: AuthoritativeMatchState) => {
+        if (departedMatches.has(authoritativeState.matchId)) return;
         if (get().matchId && get().matchId !== authoritativeState.matchId) return;
         const currentVersion = get().lastStateVersion;
         const incomingVersion = authoritativeState.stateVersion;
@@ -428,6 +453,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("game:over", (payload) => {
+        if (departedMatches.has(payload.matchId)) return;
         if (get().matchId && get().matchId !== payload.matchId) return;
         set({
           winner: { winnerSeats: payload.winnerSeats, winnerIds: payload.winnerIds },
@@ -443,6 +469,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("game:finished", (payload) => {
+        if (departedMatches.has(payload.matchId)) return;
         if (get().matchId && get().matchId !== payload.matchId) return;
         console.log("[MultiplayerStore] game:finished received", payload);
         set({
@@ -792,6 +819,10 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const socket = get().socket;
     if (socket) socket.disconnect();
     wired = false;
+    pendingLeaveRoom = null;
+    roomLeaveOperation = null;
+    departedRooms.clear();
+    departedMatches.clear();
     set({
       socket: null,
       status: "idle",
@@ -803,17 +834,26 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   },
 
   createRoom: async (gameId, isPrivate, stake, maxPlayers, settings) => {
+    const cleanup = finishRoomCleanup(get);
+    if (cleanup) await cleanup;
     const socket = get().socket;
     if (!socket) throw new Error("Not connected to the game server");
     set({ error: null });
     const res = await socket.emitWithAck("room:create", { gameId, isPrivate, stake, maxPlayers, settings });
     const room = unwrapAck<RoomFull>(res);
+    departedRooms.delete(room.id);
+    if (room.matchId) departedMatches.delete(room.matchId);
     applyRoom(set, room);
     set({ winner: null, matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null, error: null });
     return room;
   },
 
   joinRoom: async (input) => {
+    const currentRoom = get().room;
+    if (!currentRoom || (input.roomId !== currentRoom.id && input.code?.toUpperCase() !== currentRoom.code)) {
+      const cleanup = finishRoomCleanup(get);
+      if (cleanup) await cleanup;
+    }
     const socket = get().socket;
     if (!socket) throw new Error("Not connected to the game server");
     set({ error: null });
@@ -823,27 +863,36 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       asSpectator: input.asSpectator ?? false,
     });
     const room = unwrapAck<RoomFull>(res);
+    departedRooms.delete(room.id);
+    if (room.matchId) departedMatches.delete(room.matchId);
     applyRoom(set, room);
     set({ winner: null, matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null, error: null });
     return room;
   },
 
   leaveRoom: async () => {
+    if (roomLeaveOperation) return roomLeaveOperation;
     const socket = get().socket;
-    const room = get().room;
-    if (!socket || !room) {
-      clearRoom(set);
-      return;
-    }
-    // Clear local membership before awaiting the server, so route navigation
-    // cannot re-enter a playing room and repeated exits cannot emit twice.
-    clearRoom(set);
-    try {
-      const res = await socket.emitWithAck("room:leave", { roomId: room.id });
-      unwrapAck(res);
-    } catch {
-      // The room may already be gone; local membership is already cleared.
-    }
+    const room = get().room ?? pendingLeaveRoom;
+    if (!room) return;
+    pendingLeaveRoom = room;
+    rememberDeparture(departedRooms, room.id);
+    rememberDeparture(departedMatches, room.matchId ?? get().matchId);
+    if (get().room?.id === room.id) clearRoom(set);
+    if (!socket) return;
+    const operation = (async () => {
+      try {
+        const res = await socket.timeout(8_000).emitWithAck("room:leave", { roomId: room.id });
+        unwrapAck(res);
+        if (pendingLeaveRoom?.id === room.id) pendingLeaveRoom = null;
+      } catch (error) {
+        // Keep this identity for retry; a new search must not overtake cleanup.
+        if (get().socket === socket) set({ error: error instanceof Error ? error.message : "Room cleanup failed. Please try again." });
+      }
+    })();
+    roomLeaveOperation = operation;
+    try { await operation; }
+    finally { if (roomLeaveOperation === operation) roomLeaveOperation = null; }
   },
 
   setReady: async (ready) => {
@@ -891,6 +940,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   },
 
   joinMatchmaking: async (gameId, stake, settings) => {
+    const cleanup = finishRoomCleanup(get);
+    if (cleanup) await cleanup;
     const socket = get().socket;
     if (!socket) throw new Error("Not connected to the game server");
     set({ error: null });

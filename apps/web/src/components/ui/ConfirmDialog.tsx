@@ -6,6 +6,7 @@ import { cn } from '../../lib/utils';
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
+  layer?: 'default' | 'game';
   onClose: () => void;
   title: string;
   message: string;
@@ -19,6 +20,7 @@ export interface ConfirmDialogProps {
 
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   isOpen,
+  layer = 'default',
   onClose,
   title,
   message,
@@ -67,6 +69,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   return (
     <Modal
+      layer={layer}
       isOpen={isOpen}
       onClose={() => {
         if (!isBusy) onClose();

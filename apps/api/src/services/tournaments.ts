@@ -23,6 +23,11 @@ export interface CreateTournamentInput {
   prizePool?: number;
   entryFee?: number;
   maxPlayers?: number;
+  minPlayers?: number;
+  registrationStartsAt?: string | Date | null;
+  registrationEndsAt?: string | Date | null;
+  autoStartWhenFull?: boolean;
+  prizeDistribution?: Array<{ rank: number; percentage: number }>;
   startTime: string;
   endTime?: string | null;
   bannerUrl?: string | null;
@@ -653,8 +658,32 @@ export async function getAdminTournamentRegistrationSummary(tournamentId: string
 // Admin management
 // ---------------------------------------------------------------------------
 
+function validateTournamentConfiguration(input: {
+  minPlayers?: number; maxPlayers?: number; startTime: string | Date;
+  endTime?: string | Date | null; registrationStartsAt?: string | Date | null; registrationEndsAt?: string | Date | null;
+}) {
+  const min = input.minPlayers ?? 2, max = input.maxPlayers ?? 16;
+  if (!Number.isInteger(min) || !Number.isInteger(max) || min < 2 || max > 10000 || min > max) {
+    throw new AppError("VALIDATION_ERROR", "Player limits must be between 2 and 10,000, with minimum no greater than maximum", 422);
+  }
+  const date = (value: string | Date | null | undefined) => {
+    if (value == null) return null;
+    const result = new Date(value);
+    if (Number.isNaN(result.getTime())) throw new AppError("VALIDATION_ERROR", "Invalid tournament date", 422);
+    return result;
+  };
+  const start = date(input.startTime)!;
+  const end = date(input.endTime), regStart = date(input.registrationStartsAt), regEnd = date(input.registrationEndsAt);
+  if (end && end <= start) throw new AppError("VALIDATION_ERROR", "End time must be after start time", 422);
+  if (regEnd && regEnd > start) throw new AppError("VALIDATION_ERROR", "Registration must close by the start time", 422);
+  if (regStart && (regStart > start || (regEnd && regStart >= regEnd))) {
+    throw new AppError("VALIDATION_ERROR", "Registration must open before closing and before the start time", 422);
+  }
+}
+
 export async function createTournament(input: CreateTournamentInput, createdBy: string | null) {
   if (!isGameId(input.gameId)) throw new AppError("VALIDATION_ERROR", "Unknown game", 422);
+  validateTournamentConfiguration(input);
   const startTime = new Date(input.startTime);
   if (Number.isNaN(startTime.getTime())) throw new AppError("VALIDATION_ERROR", "Invalid start time", 422);
 
@@ -667,6 +696,11 @@ export async function createTournament(input: CreateTournamentInput, createdBy: 
       prizePool: input.prizePool ?? 0,
       entryFee: input.entryFee ?? 0,
       maxPlayers: input.maxPlayers ?? 16,
+      minPlayers: input.minPlayers ?? 2,
+      registrationStartsAt: input.registrationStartsAt ? new Date(input.registrationStartsAt) : null,
+      registrationEndsAt: input.registrationEndsAt ? new Date(input.registrationEndsAt) : null,
+      autoStartWhenFull: input.autoStartWhenFull ?? false,
+      prizeDistribution: input.prizeDistribution as Prisma.InputJsonValue | undefined,
       startTime,
       endTime: input.endTime ? new Date(input.endTime) : null,
       bannerUrl: input.bannerUrl ?? null,
@@ -693,6 +727,7 @@ export async function updateTournament(id: string, input: Partial<CreateTourname
   const existing = await prisma.tournament.findUnique({ where: { id } });
   if (!existing) throw new AppError("NOT_FOUND", "Tournament not found", 404);
 
+  validateTournamentConfiguration({ ...existing, ...input });
   const data: Record<string, unknown> = {};
   if (input.title !== undefined) data.title = input.title;
   if (input.description !== undefined) data.description = input.description;
@@ -700,6 +735,11 @@ export async function updateTournament(id: string, input: Partial<CreateTourname
   if (input.prizePool !== undefined) data.prizePool = input.prizePool;
   if (input.entryFee !== undefined) data.entryFee = input.entryFee;
   if (input.maxPlayers !== undefined) data.maxPlayers = input.maxPlayers;
+  if (input.minPlayers !== undefined) data.minPlayers = input.minPlayers;
+  if (input.registrationStartsAt !== undefined) data.registrationStartsAt = input.registrationStartsAt ? new Date(input.registrationStartsAt) : null;
+  if (input.registrationEndsAt !== undefined) data.registrationEndsAt = input.registrationEndsAt ? new Date(input.registrationEndsAt) : null;
+  if (input.autoStartWhenFull !== undefined) data.autoStartWhenFull = input.autoStartWhenFull;
+  if (input.prizeDistribution !== undefined) data.prizeDistribution = input.prizeDistribution;
   if (input.startTime !== undefined) data.startTime = new Date(input.startTime);
   if (input.endTime !== undefined) data.endTime = input.endTime ? new Date(input.endTime) : null;
   if (input.bannerUrl !== undefined) data.bannerUrl = input.bannerUrl ?? null;

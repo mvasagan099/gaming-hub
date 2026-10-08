@@ -157,3 +157,10 @@ describe('game Exit versus router Back', () => {
   await flushCleanup();
   expect(context.leaveRoom).not.toHaveBeenCalled();
  });
+
+it.each(GAME_IDS)('%s legacy tournament links go to the assigned lobby rather than AI practice', gameId => {
+  context.gameId = gameId; context.search = '?matchId=assigned-match&tournamentId=tournament';
+  const page = render();
+  expect(page.props.to).toBe(`/lobby/${gameId}${context.search}`);
+  expect(page.props.replace).toBe(true);
+});

@@ -16,7 +16,7 @@
 
 import { prisma } from "@gaming-hub/db";
 import type { Prisma } from "@gaming-hub/db";
-import { GAME_IDS } from "@gaming-hub/shared";
+import { GAME_IDS, DEFAULT_TOURNAMENT_TIERS } from "@gaming-hub/shared";
 import type {
   PrizeDistributionEntry,
   TournamentTierCode,
@@ -161,6 +161,17 @@ export async function scheduleHourlyTournaments(): Promise<HourlyScheduleResult>
   // Tournaments open for registration one hour ahead (i.e., start at the NEXT
   // clock-hour boundary so players have time to join the CURRENT slot).
   const nextSlotHour = new Date(currentSlotHour.getTime() + 60 * 60 * 1000);
+
+  // Fresh deployments may have migrations without seed data. Initialize only
+  // an empty configuration; existing disabled tiers and admin settings stay intact.
+  if (await prisma.tournamentTier.count() === 0) {
+    await prisma.tournamentTier.createMany({
+      data: DEFAULT_TOURNAMENT_TIERS.map(({ minPlayers: _minPlayers, ...tier }) => ({
+        ...tier, prizeDistribution: tier.prizeDistribution as unknown as Prisma.InputJsonValue,
+      })),
+      skipDuplicates: true,
+    });
+  }
 
   const activeTiers = await prisma.tournamentTier.findMany({
     where: { isActive: true },

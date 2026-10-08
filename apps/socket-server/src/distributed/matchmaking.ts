@@ -14,7 +14,7 @@ export class SharedMatchmaking {
     await assertFeatureEnabled('games.enabled', 'Games'); await assertFeatureEnabled('games.matchmaking', 'Matchmaking');
     await assertFeatureEnabled(parsed.stake > 0 ? 'games.realMoney' : 'games.practice', 'Games');
     await assertGameEnabled(parsed.gameId, parsed.stake);
-    if (await this.coordinator.findPlayer(command.playerId)) throw new Error('Leave your current room before searching');
+    if (!await this.coordinator.leaveEndedRoom(command)) throw new Error('Leave your current room before searching');
     const gameMode = parsed.gameMode ?? 'casual';
     // Serialize assignment in the database; sockets and sticky routing do not define identity.
     const paired = await prisma.$transaction(async tx => {

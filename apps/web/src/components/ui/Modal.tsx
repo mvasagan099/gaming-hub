@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -10,6 +11,7 @@ export interface ModalProps {
   description?: React.ReactNode;
   size?: 'sm' | 'md' | 'lg';
   hideClose?: boolean;
+  layer?: 'default' | 'game';
   children: React.ReactNode;
   footer?: React.ReactNode;
 }
@@ -27,6 +29,7 @@ export const Modal: React.FC<ModalProps> = ({
   description,
   size = 'md',
   hideClose = false,
+  layer = 'default',
   children,
   footer,
 }) => {
@@ -66,10 +69,10 @@ export const Modal: React.FC<ModalProps> = ({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isOpen, onClose]);
 
-  return (
+  const content = (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+        <div className={cn("fixed inset-0 flex items-center justify-center p-4", layer === "game" ? "z-[200]" : "z-[90]")}>
           <motion.div
             className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
             initial={reduceMotion ? false : { opacity: 0 }}
@@ -127,4 +130,6 @@ export const Modal: React.FC<ModalProps> = ({
       )}
     </AnimatePresence>
   );
+  // Game confirmations must escape transformed/clipped route containers.
+  return layer === "game" && typeof document !== "undefined" ? createPortal(content, document.body) : content;
 };

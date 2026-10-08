@@ -132,6 +132,19 @@ export class DistributedRoomCoordinator {
 
   findPlayer(playerId: string) { return this.store.findPlayer(playerId); }
 
+  /** Searching again may release a completed room, never forfeit an active match. */
+  async leaveEndedRoom(command: RoutedCommand): Promise<boolean> {
+    const previous = await this.store.findPlayer(command.playerId);
+    if (!previous) return true;
+    const checkpoint = await this.store.load(previous.id);
+    if (!checkpoint || checkpoint.closed) return true;
+    if ((checkpoint.snapshot as unknown as RoomCheckpoint).room?.status !== 'ended') return false;
+    // Recheck under the authoritative owner's lock in case a rematch starts meanwhile.
+    await this.route({ ...command, event: 'room:leave', roomId: previous.id,
+      payload: { onlyIfEnded: true } });
+    return !await this.store.findPlayer(command.playerId);
+  }
+
   async assertRematchSettled(room: RoomRuntime): Promise<void> {
     if (room.config.stake > 0 && room.match && !await this.store.isResultDelivered(room.match.matchId)) {
       throw new Error('Previous match settlement is still processing. Try rematch after your wallet is updated.');

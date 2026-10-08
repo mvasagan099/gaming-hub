@@ -23,6 +23,7 @@ export const GamePage: React.FC = () => {
 
   const state = location.state as { mode?: 'ai' | 'multiplayer'; stake?: number } | null;
   const replayMatchId = new URLSearchParams(location.search).get('replayMatchId');
+  const tournamentMatchId = new URLSearchParams(location.search).get('matchId');
   const mode = replayMatchId ? 'ai' : state?.mode || 'ai';
   const stake = state?.stake !== undefined ? state.stake : (mode === 'multiplayer' ? 100 : 0);
 
@@ -55,6 +56,10 @@ export const GamePage: React.FC = () => {
 
   if (!gameId || !isGameId(gameId)) {
     return <Navigate to="/" replace />;
+  }
+
+  if (tournamentMatchId && !replayMatchId) {
+    return <Navigate to={`/lobby/${gameId}${location.search}`} replace />;
   }
 
   if (replayMatchId) {
@@ -107,6 +112,7 @@ export const GamePage: React.FC = () => {
         animations, result modal and driver. Room membership remains intact. */}
     <Suspense key={mode === 'multiplayer' ? matchId : gameId} fallback={<div role="status" className="p-10 text-center">Loading game…</div>}>{game}</Suspense>
     <ConfirmDialog
+      layer="game"
       isOpen={showExitConfirm}
       onClose={() => setShowExitConfirm(false)}
       title="Exit Game?"

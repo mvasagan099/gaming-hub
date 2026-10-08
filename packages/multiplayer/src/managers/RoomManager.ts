@@ -222,6 +222,10 @@ export class RoomManager {
         throw new Error("Invalid password");
       }
       
+      if (room.config.settings.tournamentId && room.match && !asSpectator && !room.players.has(playerId)) {
+        throw new Error("Only assigned participants can join this tournament match");
+      }
+
       // Check if already in room
       if (room.players.has(playerId) || room.spectators.has(playerId)) {
         // Reconnect existing player

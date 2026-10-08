@@ -118,7 +118,7 @@ export function MyTournamentsView() {
       navigate(`/tournaments/${tournament.tournamentId}`);
       return;
     }
-    navigate(`/game/${tournament.gameId}?matchId=${tournament.myCurrentMatch.matchId}&tournamentId=${tournament.tournamentId}`);
+    navigate(`/lobby/${tournament.gameId}?matchId=${encodeURIComponent(tournament.myCurrentMatch.matchId)}&tournamentId=${tournament.tournamentId}`);
   };
 
   return (

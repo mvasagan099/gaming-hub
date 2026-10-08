@@ -72,6 +72,7 @@ export function createCommandDispatcher(framework: MultiplayerFramework, coordin
         await framework.matchManager.startMatch({ roomId: roomId!, startedBy: playerId });
         return framework.syncManager.serializeRoom(room!);
       case 'room:leave':
+        if (payload.onlyIfEnded && room!.status !== 'ended') throw new AppError('INVALID_ACTION', 'An active room must be left explicitly', 409);
         await framework.roomManager.leaveRoom(roomId!, playerId, socket); return undefined;
       case 'game:loaded':
         return framework.matchManager.confirmGameLoaded(roomId!, playerId, String(payload.matchId));

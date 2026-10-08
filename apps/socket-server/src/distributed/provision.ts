@@ -1,5 +1,5 @@
 import { createEngine } from '@gaming-hub/game-engine';
-import { getGameDefinition, isGameId } from '@gaming-hub/shared';
+import { isGameId } from '@gaming-hub/shared';
 import { prisma } from '@gaming-hub/db';
 import type { MultiplayerFramework } from '@gaming-hub/multiplayer';
 import { remoteSocket } from './commands';
@@ -23,7 +23,7 @@ export async function provisionTournamentRoom(framework: MultiplayerFramework, c
   try {
     await coordinator.create(async () => {
       const room = await framework.roomManager.createRoom({ gameId, hostId: playerIds[0]!, hostSocket: sockets[0]!,
-        isPrivate: true, stake: 0, maxPlayers: getGameDefinition(gameId).maxPlayers,
+        isPrivate: true, stake: 0, maxPlayers: 2,
         settings: { tournamentId: context.tournamentId, tournamentRoundId: context.tournamentRoundId,
           tournamentMatchNumber: context.tournamentMatchNumber, tournamentEntryHandled: true } });
       await framework.roomManager.joinRoom({ roomId: room.id, playerId: playerIds[1]!, socket: sockets[1]! });

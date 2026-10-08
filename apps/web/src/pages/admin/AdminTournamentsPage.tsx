@@ -872,17 +872,24 @@ export function AdminTournamentsPage() {
   };
 
   const handleCreate = async () => {
-    if (!form.title || !form.startTime) return;
+    if (isSubmitting) return;
+    if (form.title.trim().length < 3 || !form.startTime) {
+      setError("Enter a title of at least 3 characters and a start time.");
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     try {
       const payload: Record<string, unknown> = {
         ...form,
+        title: form.title.trim(),
+        prizeDistribution: [
+          { rank: 1, percentage: 50 }, { rank: 2, percentage: 25 },
+          { rank: 3, percentage: 15 }, { rank: 4, percentage: 10 },
+        ],
+        registrationEndsAt: form.registrationEndsAt ? new Date(form.registrationEndsAt).toISOString() : null,
         startTime: new Date(form.startTime).toISOString(),
       };
-      if (form.registrationEndsAt) {
-        payload.registrationEndsAt = new Date(form.registrationEndsAt).toISOString();
-      }
       await adminApi.createTournament(payload);
       setShowCreateModal(false);
       flash('Exceptional tournament created');
@@ -6095,6 +6102,7 @@ export function AdminTournamentsPage() {
           title="Create Exceptional Tournament"
         >
           <div className="space-y-4 text-xs">
+            {error && <p role="alert" className="rounded-xl bg-rose-500/10 p-3 text-rose-400">{error}</p>}
             <div>
               <label className="block font-bold text-slate-300 mb-1">Game</label>
               <select

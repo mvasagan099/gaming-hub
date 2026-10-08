@@ -19,7 +19,7 @@ describe('leaving a multiplayer game', () => {
     const emitWithAck = vi.fn(() => acknowledgement);
     useMultiplayerStore.setState({
       room: { id: 'room-1' } as never,
-      socket: { emitWithAck } as never,
+      socket: { emitWithAck, timeout: () => ({ emitWithAck }) } as never,
     });
 
     const firstLeave = useMultiplayerStore.getState().leaveRoom();

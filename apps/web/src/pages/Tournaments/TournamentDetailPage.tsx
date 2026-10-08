@@ -250,7 +250,7 @@ export function TournamentDetailPage() {
   const handleEnterMatch = (matchId: string | null) => {
     if (!detail) return;
     if (matchId) {
-      navigate(`/game/${detail.gameId}?matchId=${matchId}&tournamentId=${detail.id}`);
+      navigate(`/lobby/${detail.gameId}?matchId=${encodeURIComponent(matchId)}&tournamentId=${detail.id}`);
     } else {
       navigate(`/lobby/${detail.gameId}`);
     }

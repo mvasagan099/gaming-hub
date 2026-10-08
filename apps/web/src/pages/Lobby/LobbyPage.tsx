@@ -1,6 +1,6 @@
 import { useRoomCountdown } from "../../hooks/useRoomCountdown";
 import { canChangeRoomReady } from "../../utils/roomReadiness";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { goBackOrHome } from "../../utils/navigation";
 import toast from "react-hot-toast";
@@ -229,6 +229,11 @@ export const LobbyPage: React.FC = () => {
   const state = location.state as { stake?: number; roomAction?: "create" | "join" } | null;
   const [stake, setStake] = useState(state?.stake ?? def?.defaultStake ?? 100);
   const [joinCode, setJoinCode] = useState("");
+  const tournamentMatchId = new URLSearchParams(location.search || "").get("matchId");
+  const tournamentJoinAttempt = useRef<string | null>(null);
+  const [tournamentJoinError, setTournamentJoinError] = useState<string | null>(null);
+  const [tournamentJoinRetry, setTournamentJoinRetry] = useState(0);
+
 
   const session = useAuthStore((s) => s.session);
   const userId = useAuthStore((s) => s.user?.id ?? null);
@@ -310,6 +315,20 @@ export const LobbyPage: React.FC = () => {
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
     target?.focus({ preventScroll: true });
   }, [session, room, matchmaking.queued, state?.roomAction]);
+
+  useEffect(() => {
+    if (!tournamentMatchId || !session || socketStatus !== "connected" || room?.id === tournamentMatchId) return;
+    if (room) {
+      setTournamentJoinError("Leave your current room before entering this tournament match.");
+      return;
+    }
+    if (tournamentJoinAttempt.current === tournamentMatchId) return;
+    tournamentJoinAttempt.current = tournamentMatchId;
+    setTournamentJoinError(null);
+    void joinRoom({ roomId: tournamentMatchId }).catch(error => {
+      setTournamentJoinError(error instanceof Error ? error.message : "Your match room is not ready. Please try again shortly.");
+    });
+  }, [tournamentMatchId, session, socketStatus, room, joinRoom, tournamentJoinRetry]);
 
   // Client-side queue timeout: gives feedback even if the server eviction
   // event is missed (e.g. while disconnected).
@@ -509,7 +528,7 @@ export const LobbyPage: React.FC = () => {
         </div>
       )}
 
-      {session && !room && !matchmaking.queued && (
+      {session && !room && !matchmaking.queued && !tournamentMatchId && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Join options */}
           <div className="space-y-4">
@@ -671,6 +690,16 @@ export const LobbyPage: React.FC = () => {
               👁️ Join as spectator instead
             </button>
           </div>
+        </div>
+      )}
+
+      {session && !room && tournamentMatchId && (
+        <div className="rounded-3xl border border-slate-200 dark:border-slate-800 p-8 text-center space-y-4">
+          <h3 className="font-black text-slate-900 dark:text-white">Tournament match</h3>
+          {tournamentJoinError ? <>
+            <p role="alert" className="text-sm text-rose-500">{tournamentJoinError}</p>
+            <button onClick={() => { tournamentJoinAttempt.current = null; setTournamentJoinRetry(value => value + 1); }} className="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white">Try Again</button>
+          </> : <p role="status" className="text-sm text-slate-500">Connecting to your assigned match room…</p>}
         </div>
       )}
 

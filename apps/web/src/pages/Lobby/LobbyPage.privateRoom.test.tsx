@@ -2,12 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RoomFull } from '@gaming-hub/shared';
 
 const fixture = vi.hoisted(() => ({
-  slug: 'chess', effects: [] as Array<() => void | (() => void)>, navigate: vi.fn(),
+  slug: 'chess', search: '', refs: [] as any[], refIndex: 0, effects: [] as Array<() => void | (() => void)>, navigate: vi.fn(),
   multiplayer: {} as Record<string, any>,
 }));
 vi.mock('react', async original => {
   const actual = await original<typeof import('react')>();
   const overrides = {
+    useRef: (initial: unknown) => { const index = fixture.refIndex++; return fixture.refs[index] ??= { current: initial }; },
     useState: (initial: unknown) => [initial, vi.fn()],
     useEffect: (effect: () => void) => fixture.effects.push(effect),
   };
@@ -15,7 +16,7 @@ vi.mock('react', async original => {
 });
 vi.mock('react-router-dom', () => ({
   Link: () => null, useParams: () => ({ slug: fixture.slug }),
-  useLocation: () => ({ state: null }), useNavigate: () => fixture.navigate,
+  useLocation: () => ({ state: null, search: fixture.search }), useNavigate: () => fixture.navigate,
 }));
 vi.mock('../../store/authStore', () => ({ useAuthStore: (select: any) => select({ session: {}, user: { id: 'guest' } }) }));
 vi.mock('../../store/multiplayerStore', () => ({
@@ -30,10 +31,10 @@ vi.mock('../../components/ui/ConfirmDialog', () => ({ ConfirmDialog: () => null 
 import { LobbyPage } from './LobbyPage';
 
 beforeEach(() => {
-  vi.clearAllMocks(); fixture.effects = []; fixture.slug = 'chess';
+  vi.clearAllMocks(); fixture.effects = []; fixture.slug = 'chess'; fixture.search = ''; fixture.refs = []; fixture.refIndex = 0;
   fixture.multiplayer = {
     room: null, status: 'connected', matchmaking: { queued: false }, messages: [], emojis: [],
-    connect: vi.fn(), disconnect: vi.fn(), clearError: vi.fn(),
+    joinRoom: vi.fn().mockResolvedValue({}), connect: vi.fn(), disconnect: vi.fn(), clearError: vi.fn(),
   };
 });
 function renderRoom(gameId: string, status = 'waiting', matchId: string | null = null) {
@@ -64,5 +65,22 @@ describe('private room lobby navigation', () => {
   it('does not navigate before joining a room', () => {
     LobbyPage({}); fixture.effects.forEach(effect => effect());
     expect(fixture.navigate).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('tournament room entry', () => {
+  it.each(['chess', 'carrom', 'snooker', 'table-tennis', 'snake-ladder', 'ludo', 'fruit-ninja', 'bubble-shooter', 'snake-vs-worms'])('%s joins the assigned identity without quick matchmaking or creating a room', gameId => {
+    fixture.slug = gameId; fixture.search = '?matchId=assigned-match&tournamentId=tournament';
+    LobbyPage({}); fixture.effects.forEach(effect => effect());
+    expect(fixture.multiplayer.joinRoom).toHaveBeenCalledExactlyOnceWith({ roomId: 'assigned-match' });
+  });
+  it('waits for connection and does not rejoin on effect replay', () => {
+    fixture.search = '?matchId=assigned-match'; fixture.multiplayer.status = 'connecting';
+    LobbyPage({}); fixture.effects.forEach(effect => effect());
+    expect(fixture.multiplayer.joinRoom).not.toHaveBeenCalled();
+    fixture.multiplayer.status = 'connected'; fixture.refIndex = 0; fixture.effects = [];
+    LobbyPage({}); fixture.effects.forEach(effect => { effect(); effect(); });
+    expect(fixture.multiplayer.joinRoom).toHaveBeenCalledOnce();
   });
 });
