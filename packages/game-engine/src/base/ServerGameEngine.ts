@@ -62,10 +62,10 @@ export abstract class ServerGameEngine<S extends JsonObject, A extends GameActio
   }
 
   serialize(): JsonObject {
-    return structuredClone(this.state) as unknown as JsonObject;
+    return JSON.parse(JSON.stringify(this.state)) as unknown as JsonObject;
   }
 
-  persistenceState(): JsonObject { return structuredClone(this.state); }
+  persistenceState(): JsonObject { return JSON.parse(JSON.stringify(this.state)); }
   persistenceOptions(): JsonObject { return {}; }
 
   get finished(): boolean {
@@ -124,6 +124,6 @@ export abstract class ServerGameEngine<S extends JsonObject, A extends GameActio
    * Used for transactional rollback when downstream anti-cheat or validation rejects an applied action.
    */
   restoreState(state: S): void {
-    this._state = structuredClone(state);
+    this._state = JSON.parse(JSON.stringify(state));
   }
 }

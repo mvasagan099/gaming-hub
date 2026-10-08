@@ -387,8 +387,23 @@ export class RoomManager {
 
   private cleanupMatchRuntime(room: RoomRuntime): void {
     if (!room.match) return;
-    GameStateSyncManager.cleanupMatch(room.match.matchId);
-    GameEventBus.cleanupMatch(room.match.matchId);
+    const matchId = room.match.matchId;
+    GameStateSyncManager.cleanupMatch(matchId);
+    GameEventBus.cleanupMatch(matchId);
+
+    // Prevent unbounded memory growth
+    this.finalizingMatches.delete(matchId);
+    
+    for (const key of this.processedForfeits.keys()) {
+      if (key.startsWith(`${matchId}:`)) {
+        this.processedForfeits.delete(key);
+      }
+    }
+    for (const key of this.scheduledWarnings.keys()) {
+      if (key.startsWith(`${matchId}:`)) {
+        this.scheduledWarnings.delete(key);
+      }
+    }
   }
 
   private closeRoom(room: RoomRuntime, reason: string) {

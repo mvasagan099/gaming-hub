@@ -113,7 +113,7 @@ export class GameStateManager {
     };
     if (room.config.gameId === 'carrom') {
       const { lastTrajectory: _trajectory, lastAction: _action, ...settled } = result.state;
-      recordedAction.replayState = structuredClone(settled);
+      recordedAction.replayState = JSON.parse(JSON.stringify(settled));
       // Both live shot events contain the same keyframes. Retain them once in
       // durable history; live broadcasts still use the untouched engine events.
       recordedAction.events = events.map(event => {

@@ -188,7 +188,7 @@ export function isUserOnline(user: { isOnline?: boolean; lastSeenAt?: Date | str
   if (!user.lastSeenAt) return Boolean(user.isOnline);
   const date = typeof user.lastSeenAt === "string" ? new Date(user.lastSeenAt) : user.lastSeenAt;
   const elapsed = Date.now() - date.getTime();
-  return elapsed < 3 * 60 * 1000 || (Boolean(user.isOnline) && elapsed < 5 * 60 * 1000);
+  return elapsed < 5 * 60 * 1000 || (Boolean(user.isOnline) && elapsed < 4 * 60 * 60 * 1000);
 }
 
 export function toPublicProfile(

@@ -325,7 +325,7 @@ export class MatchManager {
       winnerSeats: [],
       stateSnapshots: [],
       actionHistory: [],
-      ...(room.config.gameId === "carrom" ? { replayInitialState: structuredClone(engine.serialize()) } : {}),
+      ...(room.config.gameId === "carrom" ? { replayInitialState: JSON.parse(JSON.stringify(engine.serialize())) } : {}),
     };
     
     // Store initial state snapshot
@@ -597,7 +597,7 @@ export class MatchManager {
       
       // Snapshot previous state for rollback if downstream validation fails
       const engine = room!.match!.engine as EngineInstance;
-      const previousState = (engine as any).state ? structuredClone((engine as any).state) : null;
+      const previousState = (engine as any).state ? JSON.parse(JSON.stringify((engine as any).state)) : null;
       const seat = player.seat as number;
       const result = engine.apply(action as { type: string }, seat);
       

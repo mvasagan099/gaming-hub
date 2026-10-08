@@ -433,7 +433,7 @@ export abstract class MultiplayerGameEngine<
   protected abstract applyGameAction(action: A, seat: number, state: S): EngineActionResult<S>;
 
   protected cloneState(state: S): S {
-    return structuredClone(state);
+    return JSON.parse(JSON.stringify(state));
   }
 
   protected serializeWithLiveTimers(state: S): S {

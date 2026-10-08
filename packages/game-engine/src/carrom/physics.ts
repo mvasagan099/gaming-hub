@@ -367,11 +367,18 @@ export function simulatePhysics(
     for (const p of POCKETS) {
       const dx = b.x - p.x;
       const dy = b.y - p.y;
-      const dist = Math.hypot(dx, dy);
+      
       const isCornerDir = (p.x < CARROM_BOARD_WIDTH / 2 ? dx < 0 : dx > 0) &&
                           (p.y < CARROM_BOARD_HEIGHT / 2 ? dy < 0 : dy > 0);
-      const cornerLimit = 28; // Outer corner cushion rim behind pocket hole
-      if (isCornerDir && dist > cornerLimit) {
+                          
+      if (!isCornerDir) continue;
+
+      const distSq = dx * dx + dy * dy;
+      const cornerLimitSq = 28 * 28;
+      
+      if (distSq > cornerLimitSq) {
+        const dist = Math.sqrt(distSq);
+        const cornerLimit = 28;
         const nx = dx / dist;
         const ny = dy / dist;
         b.x = p.x + nx * cornerLimit;
