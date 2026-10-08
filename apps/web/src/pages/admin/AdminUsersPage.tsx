@@ -11,6 +11,8 @@ import {
   Loader2,
   Coins,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { openMfaModal } from '../../components/auth/MfaVerificationModal';
 import { apiClient } from '../../services/api/client';
 import { adminApi } from '../../services/api/enterprise';
 import type { AdminCustomerDetail } from '@gaming-hub/shared';
@@ -38,6 +40,7 @@ export function AdminUsersPage() {
   const [users, setUsers] = useState<UserListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -49,6 +52,14 @@ export function AdminUsersPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    const onMfaVerified = () => {
+      setModalError(null);
+    };
+    window.addEventListener('gaming-hub:mfa-verified', onMfaVerified);
+    return () => window.removeEventListener('gaming-hub:mfa-verified', onMfaVerified);
+  }, []);
 
   const openDetail = useCallback(async (userId: string) => {
     setDetailLoading(true);
@@ -89,20 +100,36 @@ export function AdminUsersPage() {
   }, [userIdParam, setSearchParams, openDetail]);
 
   const handleWalletAdjust = async () => {
-    if (!selectedUser || !walletReason || walletAmount === 0) return;
+    if (!selectedUser || walletReason.trim().length < 3 || walletAmount === 0) return;
     setIsSubmitting(true);
-    setError(null);
+    setModalError(null);
     try {
-      await apiClient.post(`/admin/users/${selectedUser.id}/wallet`, {
-        amount: walletAmount,
-        reason: walletReason,
+      await apiClient.post(`/admin/users/${selectedUser.id}/wallet/adjust`, {
+        amount: Math.round(walletAmount),
+        reason: walletReason.trim(),
       });
+      toast.success(`Wallet adjusted successfully for ${selectedUser.displayName}`);
       setShowWalletModal(false);
       setWalletAmount(0);
       setWalletReason('');
+      setModalError(null);
       await loadUsers();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to adjust wallet');
+      if (detail && detail.user.id === selectedUser.id) {
+        void openDetail(selectedUser.id);
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to adjust wallet';
+      setModalError(msg);
+      if (
+        err?.code === 'MFA_REQUIRED' ||
+        err?.code === 'MFA_ENROLLMENT_REQUIRED' ||
+        msg.includes('2FA') ||
+        msg.includes('MFA')
+      ) {
+        openMfaModal('Complete 2FA verification to adjust user wallet.');
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -111,15 +138,31 @@ export function AdminUsersPage() {
   const handleRoleChange = async () => {
     if (!selectedUser) return;
     setIsSubmitting(true);
-    setError(null);
+    setModalError(null);
     try {
       await apiClient.patch(`/admin/users/${selectedUser.id}/role`, {
         role: newRole,
       });
+      toast.success(`Role updated to ${newRole} for ${selectedUser.displayName}`);
       setShowRoleModal(false);
+      setModalError(null);
       await loadUsers();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to change role');
+      if (detail && detail.user.id === selectedUser.id) {
+        void openDetail(selectedUser.id);
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to change role';
+      setModalError(msg);
+      if (
+        err?.code === 'MFA_REQUIRED' ||
+        err?.code === 'MFA_ENROLLMENT_REQUIRED' ||
+        msg.includes('2FA') ||
+        msg.includes('MFA')
+      ) {
+        openMfaModal('Complete 2FA verification to change user role.');
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -257,6 +300,9 @@ export function AdminUsersPage() {
                         <button
                           onClick={() => {
                             setSelectedUser(user);
+                            setWalletAmount(0);
+                            setWalletReason('');
+                            setModalError(null);
                             setShowWalletModal(true);
                           }}
                           className="px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-bold text-xs transition-colors flex items-center gap-1.5"
@@ -268,6 +314,7 @@ export function AdminUsersPage() {
                           onClick={() => {
                             setSelectedUser(user);
                             setNewRole(user.role);
+                            setModalError(null);
                             setShowRoleModal(true);
                           }}
                           className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors flex items-center gap-1.5"
@@ -292,30 +339,49 @@ export function AdminUsersPage() {
             <p className="text-xs text-slate-500 dark:text-slate-400">
               User: <span className="font-bold text-slate-900 dark:text-white">{selectedUser.displayName}</span> (Current: <Coins className="w-3.5 h-3.5 text-amber-400 inline-block align-middle mr-1" />{selectedUser.coins.toLocaleString()})
             </p>
+
+            {modalError && (
+              <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-semibold flex items-start gap-2.5">
+                <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span className="flex-1 leading-relaxed">{modalError}</span>
+              </div>
+            )}
+
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Amount (Positive to Add, Negative to Deduct)</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Amount (Coins)</label>
+                <span className="text-[10px] text-slate-400">Positive to Add, Negative to Deduct</span>
+              </div>
               <input
                 type="number"
-                value={walletAmount}
-                onChange={(e) => setWalletAmount(e.target.valueAsNumber)}
-                className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-xs text-slate-900 dark:text-white outline-none"
+                value={walletAmount === 0 ? '' : walletAmount}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                  setWalletAmount(isNaN(val) ? 0 : val);
+                  setModalError(null);
+                }}
+                placeholder="e.g. 500 or -200"
+                className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Reason</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Reason (min 3 characters)</label>
               <input
                 type="text"
                 value={walletReason}
-                onChange={(e) => setWalletReason(e.target.value)}
-                className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-xs text-slate-900 dark:text-white outline-none"
-                placeholder="Reason for adjustment"
+                onChange={(e) => {
+                  setWalletReason(e.target.value);
+                  setModalError(null);
+                }}
+                className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20"
+                placeholder="Reason for adjustment (minimum 3 characters)"
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => {
                   setShowWalletModal(false);
-                  setError(null);
+                  setModalError(null);
                 }}
                 className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
@@ -323,10 +389,11 @@ export function AdminUsersPage() {
               </button>
               <button
                 onClick={handleWalletAdjust}
-                disabled={isSubmitting || !walletReason || walletAmount === 0}
-                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 disabled:opacity-50"
+                disabled={isSubmitting || walletReason.trim().length < 3 || walletAmount === 0}
+                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5"
               >
-                {isSubmitting ? 'Adjusting...' : 'Confirm Adjustment'}
+                {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isSubmitting ? 'Adjusting...' : 'Confirm Adjustment'}</span>
               </button>
             </div>
           </div>
@@ -340,11 +407,22 @@ export function AdminUsersPage() {
             <p className="text-xs text-slate-500 dark:text-slate-400">
               User: <span className="font-bold text-slate-900 dark:text-white">{selectedUser.displayName}</span> (Current Role: <span className="font-bold text-indigo-500">{selectedUser.role}</span>)
             </p>
+
+            {modalError && (
+              <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-semibold flex items-start gap-2.5">
+                <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span className="flex-1 leading-relaxed">{modalError}</span>
+              </div>
+            )}
+
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Select New Role</label>
               <select
                 value={newRole}
-                onChange={(e) => setNewRole(e.target.value as 'USER' | 'MODERATOR' | 'ADMIN')}
+                onChange={(e) => {
+                  setNewRole(e.target.value as 'USER' | 'MODERATOR' | 'ADMIN');
+                  setModalError(null);
+                }}
                 className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-900 dark:text-white outline-none cursor-pointer"
               >
                 <option value="USER">User (Standard Access)</option>
@@ -356,7 +434,7 @@ export function AdminUsersPage() {
               <button
                 onClick={() => {
                   setShowRoleModal(false);
-                  setError(null);
+                  setModalError(null);
                 }}
                 className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
@@ -365,9 +443,10 @@ export function AdminUsersPage() {
               <button
                 onClick={handleRoleChange}
                 disabled={isSubmitting || newRole === selectedUser.role}
-                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 disabled:opacity-50"
+                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5"
               >
-                {isSubmitting ? 'Updating...' : 'Save Role'}
+                {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isSubmitting ? 'Updating...' : 'Save Role'}</span>
               </button>
             </div>
           </div>
@@ -431,7 +510,35 @@ export function AdminUsersPage() {
                 )}
 
                 {detail.wallet && (
-                  <Section title="Wallet Balances">
+                  <Section
+                    title="Wallet Balances"
+                    action={
+                      <button
+                        onClick={() => {
+                          const targetUser = users?.items.find((u) => u.id === detail.user.id) ?? {
+                            id: detail.user.id,
+                            username: detail.user.username,
+                            displayName: detail.user.displayName,
+                            email: detail.user.email,
+                            role: detail.user.role as any,
+                            isOnline: detail.user.isOnline,
+                            coins: detail.wallet?.balance ?? 0,
+                            level: detail.profile?.level ?? 1,
+                            createdAt: new Date().toISOString(),
+                          };
+                          setSelectedUser(targetUser);
+                          setWalletAmount(0);
+                          setWalletReason('');
+                          setModalError(null);
+                          setShowWalletModal(true);
+                        }}
+                        className="px-2.5 py-1 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-bold text-xs transition-colors flex items-center gap-1.5"
+                      >
+                        <Wallet className="w-3.5 h-3.5" />
+                        <span>Adjust Balance</span>
+                      </button>
+                    }
+                  >
                     <StatGrid
                       items={[
                         { label: 'Main', value: <span className="flex items-center gap-1.5"><Coins className="w-3.5 h-3.5 text-amber-400" /> {detail.wallet.balance.toLocaleString()}</span> },
@@ -488,10 +595,13 @@ export function AdminUsersPage() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="space-y-2.5">
-      <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">{title}</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">{title}</h3>
+        {action}
+      </div>
       {children}
     </div>
   );

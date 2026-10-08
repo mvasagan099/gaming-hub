@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { prisma } from "@gaming-hub/db";
 import {
@@ -122,7 +122,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return AdminWalletService.getUserWalletDetails(id);
   });
 
-  app.post("/api/admin/users/:id/wallet/adjust", { preHandler: [authenticate, requireMfa] }, async (request) => {
+  const handleWalletAdjustment = async (request: FastifyRequest) => {
     const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
     const { id } = routeParams(request);
     const { amount, reason } = parseSchema(walletAdjustSchema, request.body);
@@ -134,7 +134,10 @@ export async function adminRoutes(app: FastifyInstance) {
       amount,
       reason,
     });
-  });
+  };
+
+  app.post("/api/admin/users/:id/wallet/adjust", { preHandler: [authenticate, requireMfa] }, handleWalletAdjustment);
+  app.post("/api/admin/users/:id/wallet", { preHandler: [authenticate, requireMfa] }, handleWalletAdjustment);
 
   // ---- Admin Financial Dashboard -------------------------------------------
   app.get("/api/admin/finance/summary", { preHandler: authenticate }, async (request) => {

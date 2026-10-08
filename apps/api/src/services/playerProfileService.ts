@@ -334,10 +334,11 @@ export class PlayerProfileService {
    * Search players by username or display name with pagination and privacy compliance.
    */
   static async searchPlayers(query: string, page = 1, pageSize = 10, viewerId?: string) {
-    const q = query.trim();
+    const q = query.trim().replace(/^@+/, "");
     if (!q) return { items: [], total: 0, page, pageSize };
 
     const where: Prisma.UserWhereInput = {
+      ...(viewerId ? { id: { not: viewerId } } : {}),
       OR: [
         { id: { equals: q } },
         { username: { contains: q, mode: "insensitive" } },

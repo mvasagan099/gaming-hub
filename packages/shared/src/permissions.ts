@@ -170,9 +170,21 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
   "games.prize.update",
 ];
 
-export function hasPermission(role: DbUserRole, permission: Permission, customPermissions?: readonly Permission[]): boolean {
+export function hasPermission(
+  role?: DbUserRole | null | string,
+  permission?: Permission,
+  customPermissions?: readonly Permission[]
+): boolean {
+  if (!role || !permission) {
+    return false;
+  }
   if (role === "CUSTOM") {
     return customPermissions?.includes(permission) ?? false;
   }
-  return ROLE_PERMISSIONS[role].includes(permission);
+  const rolePerms = ROLE_PERMISSIONS[role as DbUserRole];
+  if (!rolePerms) {
+    return false;
+  }
+  return rolePerms.includes(permission);
 }
+

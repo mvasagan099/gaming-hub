@@ -244,9 +244,16 @@ export default function Navbar({ onLogoClick, onMenuClick }: NavbarProps) {
                           <p className="text-sm font-black text-slate-900 dark:text-white truncate">
                             {me.user.displayName || me.user.username}
                           </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                            {me.user.email || me.user.username}
-                          </p>
+                          {me.user.username && (
+                            <p className="text-xs font-bold text-accent-600 dark:text-accent-400 truncate">
+                              {me.user.username.startsWith('@') ? me.user.username : `@${me.user.username}`}
+                            </p>
+                          )}
+                          {me.user.email && (
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                              {me.user.email}
+                            </p>
+                          )}
                         </div>
                       </div>
 

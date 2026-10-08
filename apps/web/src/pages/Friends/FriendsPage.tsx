@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import { Check, UserPlus, Users, X, Ban } from 'lucide-react';
-import { friendsApi, messagesApi, type FriendEntry } from '../../services/api/enterprise';
+import { useEffect, useRef, useState } from 'react';
+import { Check, UserPlus, Users, X, Ban, Loader2, UserCheck, Sparkles } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { friendsApi, messagesApi, usersApi, type FriendEntry, type UserSearchResult } from '../../services/api/enterprise';
 import type { BlockedUser, FriendRequest } from '@gaming-hub/shared';
 import { Skeleton } from '../../components/Skeleton';
 import { Button } from '../../components/ui/Button';
@@ -15,6 +16,14 @@ export const FriendsPage: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState<UserSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [sendingUsernames, setSendingUsernames] = useState<Record<string, boolean>>({});
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -35,6 +44,47 @@ export const FriendsPage: React.FC = () => {
     load();
   }, []);
 
+  // Click outside to dismiss dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Debounced search on username typing
+  useEffect(() => {
+    const raw = username.trim().replace(/^@+/, '');
+    if (!raw) {
+      setSuggestions([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const results = await usersApi.search(raw, 8);
+        setSuggestions(results);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 220);
+
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [username]);
+
   const handleUnblock = async (blockedId: string) => {
     setBusyId(blockedId);
     setActionError(null);
@@ -48,18 +98,41 @@ export const FriendsPage: React.FC = () => {
     }
   };
 
-  const handleSend = async () => {
-    if (!username.trim()) return;
+  const handleSend = async (targetUser?: string) => {
+    const target = (targetUser ?? username).trim().replace(/^@+/, '');
+    if (!target) return;
     setSending(true);
     setActionError(null);
     try {
-      await friendsApi.send(username.trim());
+      await friendsApi.send(target);
+      toast.success(`Friend request sent to @${target}`);
       setUsername('');
+      setShowDropdown(false);
       await load();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to send request');
+      const msg = err instanceof Error ? err.message : 'Failed to send request';
+      setActionError(msg);
+      toast.error(msg);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleQuickAdd = async (targetUsername: string) => {
+    setSendingUsernames((prev) => ({ ...prev, [targetUsername]: true }));
+    setActionError(null);
+    try {
+      await friendsApi.send(targetUsername);
+      toast.success(`Friend request sent to @${targetUsername}`);
+      setUsername('');
+      setShowDropdown(false);
+      await load();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to send request';
+      setActionError(msg);
+      toast.error(msg);
+    } finally {
+      setSendingUsernames((prev) => ({ ...prev, [targetUsername]: false }));
     }
   };
 
@@ -98,30 +171,173 @@ export const FriendsPage: React.FC = () => {
         </p>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-4 sm:p-6">
-        <h3 className="text-sm font-black text-slate-900 dark:text-white mb-3">Add a friend</h3>
-        <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-2">
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void handleSend();
-            }}
-            placeholder="Enter username"
-            className="w-full sm:flex-1 min-w-0 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 sm:px-4 py-2.5 sm:py-2 text-sm text-slate-900 dark:text-white"
-          />
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => void handleSend()}
-            disabled={sending || !username.trim()}
-            className="w-full sm:w-auto justify-center whitespace-nowrap shrink-0"
-          >
-            <UserPlus className="h-4 w-4 shrink-0" />
-            <span>{sending ? 'Sending...' : 'Send request'}</span>
-          </Button>
+      <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-4 sm:p-6 relative">
+        <h3 className="text-sm font-black text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+          <span>Add a friend</span>
+          <span className="text-[11px] font-normal text-slate-400 dark:text-slate-500 hidden sm:inline">
+            Type a username to see suggestions
+          </span>
+        </h3>
+
+        <div ref={searchContainerRef} className="relative">
+          <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  setShowDropdown(true);
+                }}
+                onFocus={() => {
+                  if (username.trim().length > 0) setShowDropdown(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleSend();
+                  if (e.key === 'Escape') setShowDropdown(false);
+                }}
+                placeholder="Enter username (e.g. alex, shadow)"
+                className="w-full min-w-0 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 sm:px-4 py-2.5 sm:py-2 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-accent-500"
+              />
+              {isSearching && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <Loader2 className="h-4 w-4 text-slate-400 animate-spin" />
+                </div>
+              )}
+            </div>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => void handleSend()}
+              disabled={sending || !username.trim()}
+              className="w-full sm:w-auto justify-center whitespace-nowrap shrink-0"
+            >
+              {sending ? <Loader2 className="h-4 w-4 animate-spin shrink-0" /> : <UserPlus className="h-4 w-4 shrink-0" />}
+              <span>{sending ? 'Sending...' : 'Send request'}</span>
+            </Button>
+          </div>
+
+          {/* Live Suggestions Dropdown */}
+          {showDropdown && username.trim().length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850 shadow-2xl overflow-hidden backdrop-blur-xl">
+              <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span className="font-semibold uppercase tracking-wider text-[10px]">
+                  Matching Players
+                </span>
+                {isSearching ? (
+                  <span className="flex items-center gap-1.5 text-accent-500">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Searching...
+                  </span>
+                ) : (
+                  <span>{suggestions.length} found</span>
+                )}
+              </div>
+
+              {suggestions.length === 0 && !isSearching ? (
+                <div className="p-4 text-center text-sm text-slate-500 dark:text-slate-400">
+                  No players found matching <span className="font-semibold text-slate-800 dark:text-slate-200">"{username}"</span>
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
+                  {suggestions.map((u) => {
+                    const isAlreadyFriend = friends.some(
+                      (f) =>
+                        f.friend.username.toLowerCase() === u.username.toLowerCase() ||
+                        f.friend.userId === u.id
+                    );
+                    const isPending = requests.some(
+                      (r) => r.requester.username?.toLowerCase() === u.username.toLowerCase()
+                    );
+                    const isBlocked = blocked.some(
+                      (b) => b.username.toLowerCase() === u.username.toLowerCase()
+                    );
+                    const isAddingThis = sendingUsernames[u.username];
+
+                    return (
+                      <li
+                        key={u.id || u.username}
+                        onClick={() => {
+                          setUsername(u.username);
+                          setShowDropdown(false);
+                        }}
+                        className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="relative shrink-0">
+                            {u.avatarUrl ? (
+                              <img
+                                src={u.avatarUrl}
+                                alt=""
+                                className="w-9 h-9 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                              />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-accent-600 to-indigo-600 flex items-center justify-center text-xs font-black text-white">
+                                {(u.displayName || u.username).slice(0, 1).toUpperCase()}
+                              </div>
+                            )}
+                            <span
+                              className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-850 ${
+                                u.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+                              }`}
+                            />
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                                {u.displayName}
+                              </span>
+                              {u.level && u.level > 1 && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                                  Lv.{u.level}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 block truncate">
+                              @{u.username}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {isAlreadyFriend ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                              <UserCheck className="h-3 w-3" /> Friends
+                            </span>
+                          ) : isPending ? (
+                            <span className="inline-flex items-center text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-full border border-amber-500/20">
+                              Request Pending
+                            </span>
+                          ) : isBlocked ? (
+                            <span className="inline-flex items-center text-xs font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2.5 py-1 rounded-full border border-rose-500/20">
+                              Blocked
+                            </span>
+                          ) : (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => void handleQuickAdd(u.username)}
+                              disabled={isAddingThis || sending}
+                              className="text-xs px-2.5 py-1 h-7"
+                            >
+                              {isAddingThis ? (
+                                <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                              ) : (
+                                <UserPlus className="h-3 w-3 shrink-0" />
+                              )}
+                              <span>{isAddingThis ? 'Adding...' : 'Add'}</span>
+                            </Button>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
+
         {actionError && <p className="mt-2 text-xs text-red-500">{actionError}</p>}
       </div>
 

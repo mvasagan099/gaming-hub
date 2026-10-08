@@ -106,12 +106,20 @@ export class AdminWalletService {
       userId: params.adminId,
       referenceId: params.targetUserId,
       handler: async (tx) => {
-        const wallet = await tx.wallet.findUnique({
+        let wallet = await tx.wallet.findUnique({
           where: { userId: params.targetUserId },
         });
 
         if (!wallet) {
-          throw new AppError("NOT_FOUND", "Target user wallet not found", 404);
+          const userExists = await tx.user.findUnique({
+            where: { id: params.targetUserId },
+          });
+          if (!userExists) {
+            throw new AppError("NOT_FOUND", "Target user not found", 404);
+          }
+          wallet = await tx.wallet.create({
+            data: { userId: params.targetUserId, balance: 0 },
+          });
         }
 
         // Guard against negative balance on debit

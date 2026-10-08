@@ -160,6 +160,7 @@ export const router = createBrowserRouter([
           { path: "tournaments/disputes", element: <SuspensePage><AdminTournamentDisputesPage /></SuspensePage> },
           { path: "tournaments/:id", element: <SuspensePage><AdminTournamentDetailPage /></SuspensePage> },
           { path: "coupons", element: <SuspensePage><AdminCouponsPage /></SuspensePage> },
+          { path: "affiliate", element: <Navigate to="/admin/affiliates" replace /> },
           { path: "affiliates", element: <SuspensePage><AdminAffiliatesPage /></SuspensePage> },
           { path: "announcements", element: <SuspensePage><AdminAnnouncementsPage /></SuspensePage> },
           { path: "crm", element: <SuspensePage><AdminCrmPage /></SuspensePage> },

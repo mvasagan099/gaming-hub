@@ -224,6 +224,11 @@ export function AdminLayout() {
               <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
                 {me?.user.displayName || me?.user.username || 'Admin'}
               </div>
+              {me?.user.username && (
+                <div className="text-[10px] font-semibold text-indigo-400 truncate">
+                  {me.user.username.startsWith('@') ? me.user.username : `@${me.user.username}`}
+                </div>
+              )}
               <div className="text-[10px] font-extrabold text-emerald-500 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 {userRole === 'ADMIN' ? 'Super Admin' : userRole === 'MODERATOR' ? 'Moderator' : 'Staff'}

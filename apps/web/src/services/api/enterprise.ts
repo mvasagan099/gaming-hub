@@ -773,6 +773,62 @@ export const searchApi = {
   clearHistory: () => apiClient.delete<{ ok: boolean }>('/search/history'),
 };
 
+export interface UserSearchResult {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  isOnline: boolean;
+  level?: number;
+}
+
+export const usersApi = {
+  search: async (query: string, limit = 8): Promise<UserSearchResult[]> => {
+    const raw = query.trim().replace(/^@+/, '');
+    if (!raw) return [];
+    try {
+      const res = await searchApi.search(raw, 'USERS', 1, limit);
+      const list = res.users || res.players || [];
+      if (list.length > 0) {
+        return list.map((u) => ({
+          id: u.id,
+          username: u.username,
+          displayName: u.displayName,
+          avatarUrl: u.avatarUrl ?? null,
+          isOnline: u.isOnline ?? false,
+          level: u.level ?? 1,
+        }));
+      }
+    } catch {
+      // Fallback
+    }
+
+    try {
+      const res = await apiClient.get<{
+        items: Array<{
+          id?: string;
+          userId?: string;
+          username: string;
+          displayName: string;
+          avatarUrl?: string | null;
+          isOnline?: boolean;
+          level?: number;
+        }>;
+      }>(`/users/search?q=${encodeURIComponent(raw)}&pageSize=${limit}`);
+      return (res.items ?? []).map((u) => ({
+        id: u.id || u.userId || '',
+        username: u.username,
+        displayName: u.displayName,
+        avatarUrl: u.avatarUrl ?? null,
+        isOnline: u.isOnline ?? false,
+        level: u.level ?? 1,
+      }));
+    } catch {
+      return [];
+    }
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Sessions / devices
 // ---------------------------------------------------------------------------

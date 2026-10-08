@@ -60,9 +60,10 @@ interface AffiliateSettingsData {
 
 export function AdminAffiliatesPage() {
   const { me } = useMe();
+  const userRole = me?.user?.role;
   const canEdit =
-    me?.user?.role === 'ADMIN' ||
-    hasPermission(me?.user?.role as any, 'admin:settings:edit');
+    userRole === 'ADMIN' ||
+    (userRole ? hasPermission(userRole as any, 'admin:settings:edit') : false);
 
   // Sub-navigation tab
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'RISK' | 'MONITORING'>(

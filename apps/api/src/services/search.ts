@@ -58,12 +58,13 @@ export class SearchService {
     requestingUserId?: string,
     isAdmin = false
   ): Promise<PublicUserSummary[]> {
-    const q = query.trim();
-    if (!q || q.length < 2) return [];
+    const q = query.trim().replace(/^@+/, "");
+    if (!q) return [];
 
     const users = await prisma.user.findMany({
       where: {
         deletedAt: null,
+        ...(requestingUserId && !isAdmin ? { id: { not: requestingUserId } } : {}),
         OR: [
           { username: { contains: q, mode: "insensitive" } },
           { displayName: { contains: q, mode: "insensitive" } },
@@ -285,16 +286,17 @@ export class SearchService {
       };
     }
 
-    const q = (input.query || "").trim();
+    const q = (input.query || "").trim().replace(/^@+/, "");
     const page = Math.max(1, input.page ?? 1);
     const limit = Math.min(
       searchSettings.maxResults,
       Math.max(1, input.limit ?? 20)
     );
     const type: SearchType = input.type ?? "GLOBAL";
+    const isUserOnly = type === "PLAYERS" || type === "USERS";
 
-    // Sub-2 character queries return immediately without DB hit
-    if (!q || q.length < 2) {
+    // Sub-2 character queries return immediately without DB hit unless searching users/players
+    if (!q || (!isUserOnly && q.length < 2)) {
       return {
         users: [],
         players: [],
