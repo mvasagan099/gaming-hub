@@ -125,7 +125,7 @@ export class SyncManager {
       // Sending it in both shot events as well triples the largest payload.
       events: events.map(e => {
         const event: EngineEvent & { timestamp: number } = { ...e, timestamp: Date.now() };
-        if (room.config.gameId === 'carrom' && Array.isArray(state.lastTrajectory) &&
+        if (room.config.gameId === 'carrom' && (Array.isArray(state.lastTrajectory) || state.packedCarromTrajectory?.version === 1) &&
             e.shotId === state.lastActionAtMs && ['shot-trajectory', 'carrom:shot-start'].includes(e.type)) {
           delete event.keyframes;
         }

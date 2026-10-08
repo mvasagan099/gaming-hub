@@ -13,6 +13,7 @@ import type {
   AuthoritativeMatchState,
 } from "@gaming-hub/shared";
 import {
+  unpackCarromState,
   isStaleStateVersion,
   isSequentialStateVersion,
   isStateVersionGap,
@@ -373,7 +374,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
         // Always increment renderKey and ensure proper state update
         set({
-          gameState: payload.state,
+          gameState: unpackCarromState(payload.state),
           lastEvents: payload.events,
           matchId: payload.matchId,
           winner: null,
@@ -461,7 +462,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         if (get().matchId && get().matchId !== payload.matchId) return;
         set({
           winner: { winnerSeats: payload.winnerSeats, winnerIds: payload.winnerIds },
-          gameState: payload.state,
+          gameState: unpackCarromState(payload.state),
           lastEvents: [],
           matchId: payload.matchId,
           disconnectGrace: null,
@@ -517,6 +518,11 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("game:match-started" as any, (payload: { matchId: string; startedAt: number; matchDeadline?: number; matchDurationSeconds?: number }) => {
+        const room = get().room;
+        if (!room || room.status !== "playing" || departedRooms.has(room.id) || departedMatches.has(payload.matchId)) return;
+        // room:update is the authoritative identity for first starts/rematches.
+        // Never let a delayed start notification replace a different match.
+        if ((room.matchId ?? get().matchId) !== payload.matchId) return;
         console.log("[MultiplayerStore] game:match-started received", payload);
         set({
           matchId: payload.matchId,
@@ -791,13 +797,6 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         });
       });
 
-      socket.on("game:match-started" as any, () => {
-        set({
-          countdown: null,
-          matchmaking: { ...IDLE_MATCHMAKING },
-          pendingRequeue: null,
-        });
-      });
 
       socket.on("game:match-cancelled" as any, (payload: { reason?: string }) => {
         set({ countdown: null, error: payload?.reason ? `Match cancelled: ${payload.reason}` : "Match was cancelled" });
@@ -1005,7 +1004,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     
     const logAction = !["table-tennis", "fruit-ninja", "snake-vs-worms"].includes(room.gameId);
     if (logAction) console.log("[MultiplayerStore] Client sending game:action to room", room.id, "with action:", action);
-    const actionSocket = ["snooker", "snake-vs-worms"].includes(room.gameId) ? socket.timeout(8000) : socket;
+    const actionSocket = ["snooker", "snake-vs-worms", "table-tennis"].includes(room.gameId) ? socket.timeout(8000) : socket;
     const userId = useAuthStore.getState().user?.id ?? "";
     const scope = `${matchId}:${userId}`;
     const accepted = room.players.find(p => p.id === userId)?.lastAcceptedActionSequence ?? 0;

@@ -1,0 +1,25 @@
+{
+  "scenario": "Two repetitions of Nf3 Nf6 Ng1 Ng8; starting position occurs three times",
+  "moves": [
+    "Nf3",
+    "Nf6",
+    "Ng1",
+    "Ng8",
+    "Nf3",
+    "Nf6",
+    "Ng1",
+    "Ng8"
+  ],
+  "expected": {
+    "threefold": true,
+    "gameOver": true,
+    "draw": true
+  },
+  "actual": {
+    "finished": false,
+    "gameOver": false,
+    "draw": false,
+    "endReason": null
+  },
+  "sameFinalFen": true
+}

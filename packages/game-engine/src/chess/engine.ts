@@ -44,6 +44,8 @@ export type ChessState = JsonObject & {
   moveCount: number;
   /** SAN of every played ply, in order. */
   history: string[];
+  /** Position identities including the initial board; persisted for repetition recovery. */
+  repetitionPositions?: string[];
   players: { userId: string; seat: number; color: ChessColor }[];
   whitePlayerId: string;
   blackPlayerId: string;
@@ -154,6 +156,7 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
       lastMove: null,
       moveCount: chess.moveNumber(),
       history: [],
+      repetitionPositions: [this.positionKey(chess)],
       players: this.players.map((p) => ({ userId: p.userId, seat: p.seat, color: p.seat === 0 ? "w" : "b" })),
       whitePlayerId: this.players[0]!.userId,
       blackPlayerId: this.players[1]!.userId,
@@ -182,6 +185,28 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
                 : null
         : null,
     };
+  }
+
+  private positionKey(chess: Chess): string {
+    // Exclude move counters; retain turn, castling and legal en-passant rights.
+    return chess.fen().split(" ").slice(0, 4).join(" ");
+  }
+
+  private repetitionHistory(state: ChessState): string[] {
+    const current = this.positionKey(new Chess(state.fen));
+    if (state.repetitionPositions?.at(-1) === current) return state.repetitionPositions;
+    // Older snapshots have SAN but no repetition metadata. Recover it only
+    // when replay really reproduces this board (custom FENs remain supported).
+    const replay = new Chess();
+    const positions = [this.positionKey(replay)];
+    try {
+      for (const san of state.history) {
+        replay.move(san);
+        positions.push(this.positionKey(replay));
+      }
+      if (replay.fen() === state.fen) return positions;
+    } catch { /* Custom/legacy snapshot without a reproducible initial position. */ }
+    return [current];
   }
 
   private startClock(state: ChessState, seat: number, now: number): void {
@@ -347,6 +372,14 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
     };
     next.moveCount = chess.moveNumber();
     next.history = [...state.history, move.san];
+    const position = this.positionKey(chess);
+    next.repetitionPositions = [...this.repetitionHistory(state), position];
+    if (!next.finished && next.repetitionPositions.filter(key => key === position).length >= 3) {
+      next.finished = next.gameOver = next.draw = true;
+      next.winnerSeats = [];
+      next.result = "1/2-1/2";
+      next.endReason = "repetition";
+    }
     next.timeControl = state.timeControl;
     next.drawOfferedBy = null;
     next.lastMoveAtMs = now;

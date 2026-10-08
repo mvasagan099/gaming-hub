@@ -1,6 +1,7 @@
+import { packCarromTrajectory } from "@gaming-hub/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const socket = vi.hoisted(() => ({ listeners: new Map<string, (data: any) => void>(), emit: vi.fn(), emitWithAck: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), timeout: vi.fn() }));
-vi.mock('@gaming-hub/socket', () => ({ createTypedSocket: () => Object.assign(socket, { on: (event: string, callback: any) => socket.listeners.set(event, callback) }) }));
+vi.mock('@gaming-hub/socket', () => ({ createTypedSocket: () => Object.assign(socket, { on: (event: string, callback: any) => socket.listeners.set(event, socket.listeners.has(event) ? ((previous => (data: any) => { previous(data); callback(data); })(socket.listeners.get(event)!)) : callback) }) }));
 vi.mock('./authStore', () => ({ useAuthStore: { getState: () => ({ session: { access_token: 'test' }, user: { id: 'p1' } }) } }));
 vi.mock('./walletStore', () => ({ useWalletStore: { getState: () => ({ fetchWallet: vi.fn() }) } }));
 vi.mock('../services/api/practiceReward', () => ({ notifyWalletChanged: vi.fn() }));
@@ -77,4 +78,49 @@ describe('finished room cleanup before another game', () => {
     expect(useMultiplayerStore.getState().room?.id).toBe('new-room');
   });
 
+});
+
+describe('audit delayed match-start identity', () => {
+  it('does not overwrite a newer match with an old start packet', () => {
+    useMultiplayerStore.setState({ room: { ...ended, id: 'new-room', matchId: 'new-match', status: 'playing' }, matchId: 'new-match' });
+    socket.listeners.get('game:match-started')!({ roomId: 'old-room', matchId: 'old-match', matchDeadline: 999 });
+    expect(useMultiplayerStore.getState().matchId).toBe('new-match');
+  });
+  it('does not restore a departed match from a late start packet', async () => {
+    socket.emitWithAck.mockResolvedValue({ ok: true });
+    await useMultiplayerStore.getState().leaveRoom();
+    socket.listeners.get('game:match-started')!({ roomId: 'old-room', matchId: 'old-match', matchDeadline: 999 });
+    expect(useMultiplayerStore.getState().matchId).toBeNull();
+  });
+});
+
+it('accepts the current first-start and authoritative rematch identities', () => {
+  const receive = socket.listeners.get('game:match-started')!;
+  useMultiplayerStore.setState({ room: { ...ended, status: 'playing' }, matchId: null, countdown: 1 });
+  receive({ matchId: 'old-match', startedAt: 1, matchDeadline: 20 });
+  expect(useMultiplayerStore.getState()).toMatchObject({ matchId: 'old-match', matchDeadline: 20, countdown: null });
+  socket.listeners.get('room:update')!({ ...ended, matchId: 'rematch', status: 'playing' });
+  receive({ matchId: 'rematch', startedAt: 30, matchDeadline: 50 });
+  expect(useMultiplayerStore.getState()).toMatchObject({ matchId: 'rematch', matchDeadline: 50 });
+});
+
+it('ignores a replayed start notification after the match has finished', () => {
+  useMultiplayerStore.setState({ room: ended, matchId: 'old-match', winner: { winnerSeats: [0], winnerIds: ['p1'] } });
+  socket.listeners.get('game:match-started')!({ matchId: 'old-match', startedAt: 1, matchDeadline: 2 });
+  expect(useMultiplayerStore.getState().winner).toEqual({ winnerSeats: [0], winnerIds: ['p1'] });
+});
+
+it('decodes compact Carrom trajectories once at the state boundary', () => {
+  useMultiplayerStore.setState({ room: { ...ended, gameId: 'carrom', status: 'playing' }, lastStateVersion: 0 });
+  const frames = [{ frame: 0, pieces: [{ id: 'white-1', x: 10.125, y: 20, pocketed: false, pocketIndex: null }] }];
+  socket.listeners.get('game:state')!({ roomId: ended.id, matchId: ended.matchId, sequenceNumber: 1,
+    state: { lastTrajectory: null, packedCarromTrajectory: packCarromTrajectory(frames) }, events: [] });
+  expect(useMultiplayerStore.getState().gameState).toEqual({ lastTrajectory: frames });
+});
+
+it('bounds Table Tennis action ACK waits instead of leaving paddle slots stuck forever', async () => {
+  useMultiplayerStore.setState({ room: { ...ended, gameId: 'table-tennis', status: 'playing' } });
+  socket.emitWithAck.mockResolvedValue({ ok: true, data: { ok: true } });
+  await useMultiplayerStore.getState().sendGameAction({ type: 'paddle-move', y: 180, velocity: 1 });
+  expect(socket.timeout).toHaveBeenCalledWith(8000);
 });

@@ -29,3 +29,5 @@ export * from "./appVersion";
 export * from "./deepLink";
 
 export * from "./emailVerification";
+
+export * from "./carromTrajectory";

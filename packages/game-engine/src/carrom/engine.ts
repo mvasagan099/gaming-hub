@@ -1,3 +1,4 @@
+import { packCarromTrajectory } from "@gaming-hub/shared";
 import type { EngineActionResult, EngineEvent, EnginePlayer, RandomSource } from "../types";
 import { MultiplayerGameEngine } from "../base/MultiplayerGameEngine";
 import {
@@ -31,6 +32,10 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
   }
 
   serializeForSync(includeTrajectory: boolean): import("@gaming-hub/shared").JsonObject {
+    if (includeTrajectory && this.state.lastTrajectory) {
+      return { ...this.serializeWithLiveTimers({ ...this.state, lastTrajectory: null }),
+        serverTimestamp: this.now(), packedCarromTrajectory: packCarromTrajectory(this.state.lastTrajectory) } as unknown as import("@gaming-hub/shared").JsonObject;
+    }
     if (includeTrajectory) return this.serialize();
     // Exclude the settled trajectory before cloning a metadata update, while
     // retaining it in engine state, recovery snapshots and historical replays.

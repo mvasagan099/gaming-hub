@@ -142,7 +142,7 @@ try {
   const costs = Object.fromEntries(rooms.map(room => {
     const state = (room.match!.engine as EngineInstance).serialize();
     const run = (fn: () => unknown) => { const values = []; for (let i = 0; i < 100; i++) { const at = performance.now(); fn(); values.push(performance.now() - at); } return distribution(values); };
-    return [room.config.gameId, { bytes: Buffer.byteLength(JSON.stringify(state)), jsonCloneMs: run(() => JSON.parse(JSON.stringify(state))), structuredCloneMs: run(() => structuredClone(state)), serializationMs: run(() => (room.match!.engine as EngineInstance).serialize()), jsonEncodeMs: run(() => JSON.stringify(state)), hashMs: run(() => StateValidator.calculateHash(state)) }];
+    return [room.config.gameId, { bytes: Buffer.byteLength(JSON.stringify(state)), shotWireBytes: Buffer.byteLength(JSON.stringify((room.match!.engine as EngineInstance).serializeForSync?.(true) ?? state)), shotWireSerializationMs: run(() => (room.match!.engine as EngineInstance).serializeForSync?.(true) ?? (room.match!.engine as EngineInstance).serialize()), jsonCloneMs: run(() => JSON.parse(JSON.stringify(state))), structuredCloneMs: run(() => structuredClone(state)), serializationMs: run(() => (room.match!.engine as EngineInstance).serialize()), jsonEncodeMs: run(() => JSON.stringify(state)), hashMs: run(() => StateValidator.calculateHash(state)) }];
   }));
   const activeCounts = framework.getMemoryStats();
   for (const client of clients) client.disconnect();

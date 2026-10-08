@@ -392,9 +392,15 @@ describe('private room Socket.IO lifecycle', () => {
     });
     expect((await action(guest, { type: 'direction', direction: 'down' })).data.ok).toBe(false);
     expect((await action(host, { type: 'boost-start' })).data.ok).toBe(true);
+    const scoreBeforeFood = engine.state.players[0].score;
     engine.state.food = [{ id: 'test-food', x: engine.state.players[0].body[0].x, y: engine.state.players[0].body[0].y + 10, type: 'golden', score: 50, growth: 3 }];
-    await vi.waitFor(() => expect(engine.state.players[0].score).toBeGreaterThanOrEqual(50));
-    expect((await action(host, { type: 'pause' })).data.ok).toBe(true);
+    // Wait for this fixture to be consumed; earlier random food may already have scored.
+    await vi.waitFor(() => {
+      expect(engine.state.players[0].score).toBeGreaterThanOrEqual(scoreBeforeFood + 50);
+      expect(engine.state.food.some((food: any) => food.id === 'test-food')).toBe(false);
+    });
+    const pauseResult = await action(host, { type: 'pause' });
+    expect(pauseResult.data.ok, JSON.stringify(pauseResult)).toBe(true);
     const paused = engine.serialize().matchRemainingMs;
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(engine.serialize().matchRemainingMs).toBe(paused);

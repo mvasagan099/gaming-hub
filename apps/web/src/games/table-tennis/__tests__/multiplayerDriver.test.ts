@@ -14,14 +14,28 @@ beforeEach(() => {
 });
 afterEach(() => { driver.stop(); vi.useRealTimers(); });
 describe('Table Tennis paddle delivery', () => {
-  it('keeps one request in flight and replaces stale queued paddle input', async () => {
-    let resolve!: (result: { ok: boolean }) => void;
-    actions.send.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
-    driver.sendPaddleMove(160, 0);
-    for (let y = 170; y <= 250; y += 10) { driver.sendPaddleMove(y, 1); await vi.advanceTimersByTimeAsync(50); }
-    expect(actions.send).toHaveBeenCalledOnce();
-    resolve({ ok: true }); await vi.advanceTimersByTimeAsync(20);
-    expect(actions.send).toHaveBeenCalledTimes(2);
+  it('bounds outstanding movement requests and retains only the latest unsent input', async () => {
+    const acknowledgements: ((result: { ok: boolean }) => void)[] = [];
+    actions.send.mockImplementation(() => new Promise(done => acknowledgements.push(done)));
+    for (let y = 160; y <= 250; y += 10) { driver.sendPaddleMove(y, 1); await vi.advanceTimersByTimeAsync(50); }
+    expect(actions.send).toHaveBeenCalledTimes(8);
+    acknowledgements[0]({ ok: true }); await vi.advanceTimersByTimeAsync(20);
+    expect(actions.send).toHaveBeenCalledTimes(9);
+    expect(actions.send).toHaveBeenLastCalledWith({ type: 'paddle-move', y: 250, velocity: 1 });
+  });
+  it('maintains paced 25 Hz movement with 200 ms acknowledgements and flushes the final position', async () => {
+    actions.send.mockImplementation(() => new Promise(resolve => setTimeout(() => resolve({ ok: true }), 200)));
+    for (let i = 0; i < 60; i++) { driver.sendPaddleMove(100 + i, 1); await vi.advanceTimersByTimeAsync(1000 / 60); }
+    expect(actions.send).toHaveBeenCalledTimes(25);
+    await vi.advanceTimersByTimeAsync(240);
+    expect(actions.send).toHaveBeenLastCalledWith({ type: 'paddle-move', y: 159, velocity: 1 });
+  });
+  it('releases timed-out movement slots and sends the latest queued position', async () => {
+    actions.send.mockImplementation(() => new Promise((_, reject) => setTimeout(() => reject(new Error('ACK timeout')), 8000)));
+    for (let y = 160; y <= 250; y += 10) { driver.sendPaddleMove(y, 1); await vi.advanceTimersByTimeAsync(50); }
+    expect(actions.send).toHaveBeenCalledTimes(8);
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(actions.send).toHaveBeenCalledTimes(9);
     expect(actions.send).toHaveBeenLastCalledWith({ type: 'paddle-move', y: 250, velocity: 1 });
   });
   it('sends first movement immediately and coalesces following input at a safe rate', async () => {
@@ -94,25 +108,21 @@ describe('Table Tennis multiplayer action and result guards', () => {
 
 
 describe('Table Tennis reconnect delivery', () => {
-  it('abandons an old pending ACK without unlocking a new connection request', async () => {
-    let oldAck!: (value: { ok: boolean }) => void;
-    let newAck!: (value: { ok: boolean }) => void;
-    actions.send.mockImplementationOnce(() => new Promise(done => { oldAck = done; }));
+  it('old connection ACKs cannot release a new connection movement slot', async () => {
+    const acknowledgements: ((result: { ok: boolean }) => void)[] = [];
+    actions.send.mockImplementation(() => new Promise(done => acknowledgements.push(done)));
     driver.sendPaddleMove(170, 1);
     actions.listener({ status: 'disconnected' }, { status: 'connected' });
     const sync = vi.fn().mockResolvedValue(undefined);
     actions.listener({ status: 'connected', requestFullStateSync: sync }, { status: 'disconnected' });
     expect(sync).toHaveBeenCalledOnce();
     driver.applyState(readyState().state);
-    await vi.advanceTimersByTimeAsync(50);
-    actions.send.mockImplementationOnce(() => new Promise(done => { newAck = done; }));
-    driver.sendPaddleMove(200, 1);
-    expect(actions.send).toHaveBeenCalledTimes(2);
-    oldAck({ ok: true }); await vi.advanceTimersByTimeAsync(50);
-    driver.sendPaddleMove(220, 1); await vi.advanceTimersByTimeAsync(50);
-    expect(actions.send).toHaveBeenCalledTimes(2);
-    newAck({ ok: true }); await vi.advanceTimersByTimeAsync(20);
-    expect(actions.send).toHaveBeenCalledTimes(3);
-    expect(actions.send).toHaveBeenLastCalledWith({ type: 'paddle-move', y: 220, velocity: 1 });
+    for (let y = 180; y <= 260; y += 10) { driver.sendPaddleMove(y, 1); await vi.advanceTimersByTimeAsync(50); }
+    expect(actions.send).toHaveBeenCalledTimes(9);
+    acknowledgements[0]({ ok: true }); await vi.advanceTimersByTimeAsync(50);
+    expect(actions.send).toHaveBeenCalledTimes(9);
+    acknowledgements[1]({ ok: true }); await vi.advanceTimersByTimeAsync(20);
+    expect(actions.send).toHaveBeenCalledTimes(10);
+    expect(actions.send).toHaveBeenLastCalledWith({ type: 'paddle-move', y: 260, velocity: 1 });
   });
 });
