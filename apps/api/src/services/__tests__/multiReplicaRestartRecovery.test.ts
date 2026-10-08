@@ -1,10 +1,12 @@
 import { createServer as createTcpServer, connect as connectTcp, type Socket as TcpSocket } from 'node:net';
 import { appendFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { once } from 'node:events';
 import { io, type Socket } from 'socket.io-client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '@gaming-hub/db';
 import { GAME_IDS, type GameId } from '@gaming-hub/shared';
 import { buildApp } from '../../app';
@@ -41,7 +43,19 @@ const redisProxy = createTcpServer(client => {
   upstream.on('close', () => { client.destroy(); redisLinks.delete(upstream); });
   client.pipe(upstream).pipe(client);
 });
-const apiPort = 14006, aPort = 14007, bPort = 14008;
+let apiPort: number, aPort: number, bPort: number, redisPort: number;
+async function listen(server: ReturnType<typeof createTcpServer>, port = 0) {
+  const listening = once(server, 'listening');
+  server.listen(port, '127.0.0.1');
+  await listening;
+  return (server.address() as { port: number }).port;
+}
+async function availablePort() {
+  const reservation = createTcpServer();
+  const port = await listen(reservation);
+  await new Promise<void>((resolve, reject) => reservation.close(error => error ? reject(error) : resolve()));
+  return port;
+}
 const children = new Set<ChildProcess>(), sockets = new Set<Socket>();
 let a: ChildProcess, b: ChildProcess;
 async function until(check: () => Promise<boolean>, timeout = 20000) {
@@ -53,20 +67,37 @@ async function until(check: () => Promise<boolean>, timeout = 20000) {
 async function server(port: number) {
   const child = spawn(process.execPath, ['--import', 'tsx', 'apps/socket-server/src/index.ts'], { cwd: root,
     env: { ...process.env, NODE_ENV: 'test', PORT: String(port), API_URL: `http://127.0.0.1:${apiPort}`,
-      INTERNAL_API_KEY: env.INTERNAL_API_KEY, REDIS_URL: 'redis://127.0.0.1:14009', DISTRIBUTED_MATCHES: 'true',
+      INTERNAL_API_KEY: env.INTERNAL_API_KEY, REDIS_URL: `redis://127.0.0.1:${redisPort}`, DISTRIBUTED_MATCHES: 'true',
       SUPABASE_URL: 'http://127.0.0.1:19999', CORS_ORIGIN: 'http://localhost', LOG_LEVEL: 'error' },
     stdio: ['ignore', 'pipe', 'pipe'] });
   children.add(child);
-  let diagnostics = '';
-  child.stderr!.on('data', chunk => { diagnostics += chunk.toString(); appendFileSync(`/tmp/gaming-recovery-socket-${port}.log`, chunk.toString()); });
-  child.stdout!.on('data', chunk => { diagnostics += chunk.toString(); appendFileSync(`/tmp/gaming-recovery-socket-${port}.log`, chunk.toString()); });
-  await until(async () => {
-    if (child.exitCode != null || child.signalCode != null) throw new Error(`Socket process failed: ${diagnostics.slice(-1500)}`);
-    return fetch(`http://127.0.0.1:${port}/health/ready`).then(r => r.ok).catch(() => false);
-  });
-  return child;
+  let diagnostics = '', spawnError: Error | undefined;
+  child.once('error', error => { spawnError = error; });
+  const logfile = join(tmpdir(), `gaming-recovery-socket-${port}-${child.pid}.log`);
+  const record = (chunk: Buffer) => {
+    diagnostics = (diagnostics + chunk.toString()).slice(-8192);
+    appendFileSync(logfile, chunk.toString());
+  };
+  child.stderr!.on('data', record); child.stdout!.on('data', record);
+  try {
+    await until(async () => {
+      if (spawnError) throw spawnError;
+      if (child.exitCode != null || child.signalCode != null) throw new Error(`Socket process failed on ${port}: ${diagnostics.slice(-1500)}`);
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/health/ready`, { signal: AbortSignal.timeout(1000) });
+        const ready = response.ok; await response.body?.cancel(); return ready;
+      } catch { return false; }
+    });
+    return child;
+  } catch (error) { await kill(child); throw error; }
 }
-async function kill(child: ChildProcess) { if (child.exitCode == null && child.signalCode == null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done; } children.delete(child); }
+async function kill(child: ChildProcess) {
+  if (child.exitCode == null && child.signalCode == null) {
+    // close includes stdio teardown; no replacement process starts during shutdown.
+    const done = once(child, 'close'); child.kill('SIGKILL'); await done;
+  }
+  children.delete(child);
+}
 function socketOnce(socket: Socket, event: string): Promise<any[]> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => { socket.off(event, handler); reject(new Error(`Socket event timed out: ${event}`)); }, 10000);
@@ -75,9 +106,20 @@ function socketOnce(socket: Socket, event: string): Promise<any[]> {
   });
 }
 async function connect(port: number, id: string) {
-  const socket = io(`http://127.0.0.1:${port}`, { auth: { token: `test.${id}` }, transports: ['websocket'], reconnection: false });
+  const socket = io(`http://127.0.0.1:${port}`, { auth: { token: `test.${id}` }, transports: ['websocket'], reconnection: false, autoConnect: false });
   sockets.add(socket);
-  await Promise.race([socketOnce(socket, 'connect'), socketOnce(socket, 'connect_error').then(([e]) => { throw e; })]);
+  socket.on('disconnect', () => sockets.delete(socket));
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => { clearTimeout(timer); socket.off('connect', connected); socket.off('connect_error', failed); };
+    const connected = () => { cleanup(); resolve(); };
+    const failed = (error: any) => {
+      cleanup(); socket.disconnect(); sockets.delete(socket);
+      const cause = error.description?.error?.code ?? error.description?.code ?? error.context?.code ?? '';
+      reject(new Error(`Replica ${port}: ${error.message}${cause ? ` (${cause})` : ''}`, { cause: error }));
+    };
+    const timer = setTimeout(() => failed(new Error('Socket connect timed out')), 10000);
+    socket.once('connect', connected); socket.once('connect_error', failed); socket.connect();
+  });
   return socket;
 }
 async function command(socket: Socket, event: string, payload: unknown) {
@@ -93,9 +135,23 @@ const actions: Record<GameId, Record<string, unknown>> = {
 };
 beforeAll(async () => {
   if (!process.env.TEST_REDIS_URL) throw new Error('Real integration requires TEST_REDIS_URL');
-  await new Promise<void>(resolve => redisProxy.listen(14009, '127.0.0.1', resolve));
-  await api.listen({ port: apiPort, host: '127.0.0.1' });
+  const redisTarget = new URL(process.env.TEST_REDIS_URL);
+  if (!['127.0.0.1', 'localhost', '[::1]'].includes(redisTarget.hostname)) throw new Error('Disposable local Redis required');
+  redisPort = await listen(redisProxy);
+  await api.listen({ port: 0, host: '127.0.0.1' });
+  apiPort = (api.server.address() as { port: number }).port;
+  aPort = await availablePort(); bPort = await availablePort();
   a = await server(aPort); b = await server(bPort);
+});
+// Restart prerequisites belong to every test, including tests following owner death.
+beforeEach(async () => {
+  if (a.exitCode != null || a.signalCode != null) a = await server(aPort);
+  if (b.exitCode != null || b.signalCode != null) b = await server(bPort);
+});
+afterEach(() => {
+  loseFundingAck = false; settlementFault = 'none'; redisUnavailable = false;
+  for (const socket of sockets) socket.disconnect();
+  sockets.clear();
 });
 afterAll(async () => {
   for (const socket of sockets) socket.disconnect();
