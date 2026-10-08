@@ -22,6 +22,7 @@ import type {
   SocketErrorPayload,
 } from "@gaming-hub/socket";
 import { MultiplayerFramework } from "@gaming-hub/multiplayer";
+import { prisma } from "@gaming-hub/db";
 import pino from "pino";
 import { env } from "./env";
 import { authenticateToken, type AuthenticatedUser } from "./auth";
@@ -582,6 +583,13 @@ async function main(): Promise<void> {
     const user = (socket.data as { user: AuthenticatedUser }).user;
     socket.data.tokenHash = user.tokenHash;
 
+    prisma.user
+      .update({
+        where: { id: user.userId },
+        data: { isOnline: true, lastSeenAt: new Date() },
+      })
+      .catch(() => {});
+
 
     if (distributed) {
       socket.use((packet, next) => {
@@ -1001,6 +1009,18 @@ async function main(): Promise<void> {
       // Remove from matchmaking
       framework.matchmakingManager.removeFromQueue(user.userId);
       
+      setTimeout(() => {
+        const remaining = io.sockets.adapter.rooms.get(`user:${user.userId}`);
+        if (!remaining || remaining.size === 0) {
+          prisma.user
+            .update({
+              where: { id: user.userId },
+              data: { isOnline: false, lastSeenAt: new Date() },
+            })
+            .catch(() => {});
+        }
+      }, 1000);
+
       if (distributed) {
         void durableStore.findPlayer(user.userId).then(room => room ? distributed!.route({ event: "disconnect", roomId: room.id,
           playerId: user.userId, socketId: socket.id, user: {}, payload: {} }) : undefined)

@@ -51,6 +51,22 @@ async function getVersionConfig(): Promise<VersionCacheEntry> {
 
 // ─── Main Authenticate Handler ─────────────────────────────────────────────────
 
+const userActivityThrottle = new Map<string, number>();
+
+export function touchUserPresence(userId: string): void {
+  const now = Date.now();
+  const lastTouch = userActivityThrottle.get(userId) ?? 0;
+  if (now - lastTouch > 20_000) {
+    userActivityThrottle.set(userId, now);
+    prisma.user
+      .update({
+        where: { id: userId },
+        data: { isOnline: true, lastSeenAt: new Date() },
+      })
+      .catch(() => {});
+  }
+}
+
 export async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
 const header = request.headers.authorization;
   const token = header?.startsWith("Bearer ")
@@ -74,6 +90,9 @@ const header = request.headers.authorization;
   }
 
   const user = await ensureUser(verified.sub, verified.email, verified.userMetadata);
+
+  // Keep player online presence fresh
+  touchUserPresence(user.id);
 
   // Check if this session token was explicitly revoked or expired
   const tokenHash = hashToken(token);

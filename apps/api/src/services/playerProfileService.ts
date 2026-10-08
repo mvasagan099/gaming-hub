@@ -10,6 +10,7 @@ import {
   type GameId,
 } from "@gaming-hub/shared";
 import { getPrivacySettings, updatePrivacySettings, canViewProfile } from "./privacyService";
+import { isUserOnline } from "./users";
 
 export class PlayerProfileService {
   /**
@@ -60,7 +61,7 @@ export class PlayerProfileService {
         level: user.profile?.level ?? 1,
         xp: user.profile?.xp ?? 0,
         joinedAt: user.createdAt.toISOString(),
-        isOnline: user.isOnline,
+        isOnline: isUserOnline(user),
         lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
         isPrivate: true,
         gamesPlayed: 0,
@@ -243,7 +244,7 @@ export class PlayerProfileService {
       level: user.profile?.level ?? 1,
       xp: user.profile?.xp ?? 0,
       joinedAt: user.createdAt.toISOString(),
-      isOnline: user.isOnline,
+      isOnline: isUserOnline(user),
       lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
       isPrivate,
       gamesPlayed: maskStats ? 0 : totalGames,

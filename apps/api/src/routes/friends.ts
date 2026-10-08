@@ -51,6 +51,39 @@ export async function friendsRoutes(app: FastifyInstance) {
     }));
   });
 
+  app.get("/api/friends/status/:targetId", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    await assertFeatureEnabled("social.friends", "Friends");
+    const { targetId } = routeParams(request);
+    if (!targetId || targetId === user.id) return { status: "SELF" };
+
+    const targetUser = await prisma.user.findFirst({
+      where: { OR: [{ id: targetId }, { username: targetId }] },
+      select: { id: true },
+    });
+    const targetUserId = targetUser?.id ?? targetId;
+
+    const rel = await prisma.friend.findFirst({
+      where: {
+        OR: [
+          { requesterId: user.id, addresseeId: targetUserId },
+          { requesterId: targetUserId, addresseeId: user.id },
+        ],
+      },
+    });
+
+    if (!rel) return { status: "NONE" };
+    if (rel.status === "ACCEPTED") return { status: "FRIENDS", friendshipId: rel.id };
+    if (rel.status === "PENDING") {
+      if (rel.requesterId === user.id) {
+        return { status: "REQUEST_SENT", requestId: rel.id };
+      } else {
+        return { status: "REQUEST_RECEIVED", requestId: rel.id };
+      }
+    }
+    return { status: "NONE" };
+  });
+
   app.post("/api/friends/request", { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
     await assertFeatureEnabled("social.friends", "Friends");

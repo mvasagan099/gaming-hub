@@ -1,6 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
-import { MessageCircle, Send, Search, Loader2, X, MessageSquarePlus } from 'lucide-react';
-import { messagesApi, usersApi, type UserSearchResult } from '../../services/api/enterprise';
+import {
+  MessageCircle,
+  Send,
+  Search,
+  Loader2,
+  X,
+  MessageSquarePlus,
+  UserPlus,
+  UserCheck,
+  Clock,
+  Check,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import {
+  messagesApi,
+  usersApi,
+  friendsApi,
+  type UserSearchResult,
+  type FriendshipStatusResponse,
+} from '../../services/api/enterprise';
 import type { ConversationSummary, Message } from '@gaming-hub/shared';
 import { Skeleton } from '../../components/Skeleton';
 import { Button } from '../../components/ui/Button';
@@ -19,25 +37,37 @@ export const MessagesPage: React.FC = () => {
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [startingUserId, setStartingUserId] = useState<string | null>(null);
 
+  // Friendship status for the active conversation
+  const [friendshipStatus, setFriendshipStatus] = useState<FriendshipStatusResponse | null>(null);
+  const [loadingFriendship, setLoadingFriendship] = useState(false);
+  const [actionInProgress, setActionInProgress] = useState(false);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  const loadConversations = async () => {
-    setLoading(true);
+  const loadConversations = async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const data = await messagesApi.conversations();
       setConversations(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load conversations');
+      if (!silent) {
+        setError(err instanceof Error ? err.message : 'Failed to load conversations');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadConversations();
+    // Poll conversations & online presence every 4 seconds
+    const interval = setInterval(() => {
+      void loadConversations(true);
+    }, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   // Dismiss search dropdown on click outside
@@ -81,9 +111,46 @@ export const MessagesPage: React.FC = () => {
     };
   }, [searchQuery]);
 
+  const selected = conversations.find((c) => c.id === selectedId) ?? null;
+
+  // Load friendship status whenever selected otherUser changes
+  const loadFriendship = async (targetId: string) => {
+    setLoadingFriendship(true);
+    try {
+      const res = await friendsApi.status(targetId);
+      setFriendshipStatus(res);
+    } catch {
+      setFriendshipStatus(null);
+    } finally {
+      setLoadingFriendship(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selected?.otherUser?.id) {
+      void loadFriendship(selected.otherUser.id);
+    } else {
+      setFriendshipStatus(null);
+    }
+  }, [selected?.otherUser?.id]);
+
   useEffect(() => {
     if (selectedId) {
       messagesApi.messages(selectedId, 1, 100).then((page) => setMessages(page.items)).catch(() => setMessages([]));
+
+      // Poll messages for active chat every 3 seconds for real-time delivery
+      const interval = setInterval(() => {
+        messagesApi.messages(selectedId, 1, 100).then((page) => {
+          setMessages((prev) => {
+            if (prev.length !== page.items.length || (page.items[0]?.id !== prev[0]?.id)) {
+              return page.items;
+            }
+            return prev;
+          });
+        }).catch(() => {});
+      }, 3000);
+
+      return () => clearInterval(interval);
     } else {
       setMessages([]);
     }
@@ -100,6 +167,32 @@ export const MessagesPage: React.FC = () => {
         prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c)),
       );
     });
+  };
+
+  const handleAddFriend = async (targetUsername: string) => {
+    setActionInProgress(true);
+    try {
+      await friendsApi.send(targetUsername);
+      toast.success(`Friend request sent to @${targetUsername}`);
+      setFriendshipStatus({ status: 'REQUEST_SENT' });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send friend request');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const handleAcceptFriend = async (requestId: string) => {
+    setActionInProgress(true);
+    try {
+      await friendsApi.respond(requestId, true);
+      toast.success('Friend request accepted');
+      setFriendshipStatus({ status: 'FRIENDS' });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to accept friend request');
+    } finally {
+      setActionInProgress(false);
+    }
   };
 
   const handleSend = async () => {
@@ -134,7 +227,6 @@ export const MessagesPage: React.FC = () => {
     }
   };
 
-  const selected = conversations.find((c) => c.id === selectedId) ?? null;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8 space-y-6">
@@ -294,9 +386,24 @@ export const MessagesPage: React.FC = () => {
                       onClick={() => handleSelect(c.id)}
                       className={`flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 ${selectedId === c.id ? 'bg-indigo-500/5' : ''}`}
                     >
-                      <span className="w-10 h-10 rounded-full bg-indigo-500/15 flex items-center justify-center text-indigo-500 font-black shrink-0">
-                        {c.otherUser.displayName.slice(0, 1).toUpperCase()}
-                      </span>
+                      <div className="relative shrink-0">
+                        {c.otherUser.avatarUrl ? (
+                          <img
+                            src={c.otherUser.avatarUrl}
+                            alt=""
+                            className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                          />
+                        ) : (
+                          <span className="w-10 h-10 rounded-full bg-indigo-500/15 flex items-center justify-center text-indigo-500 font-black">
+                            {c.otherUser.displayName.slice(0, 1).toUpperCase()}
+                          </span>
+                        )}
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-slate-900 ${
+                            c.otherUser.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+                          }`}
+                        />
+                      </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
@@ -329,15 +436,103 @@ export const MessagesPage: React.FC = () => {
           <div className="flex flex-col">
             {selected ? (
               <>
-                <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
-                  <span className="w-8 h-8 rounded-full bg-indigo-500/15 flex items-center justify-center text-indigo-500 text-sm font-black">
-                    {selected.otherUser.displayName.slice(0, 1).toUpperCase()}
-                  </span>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">{selected.otherUser.displayName}</p>
-                    <p className="text-[10px] text-slate-500">
-                      {selected.otherUser.isOnline ? 'Online' : 'Offline'}
-                    </p>
+                <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="relative shrink-0">
+                      {selected.otherUser.avatarUrl ? (
+                        <img
+                          src={selected.otherUser.avatarUrl}
+                          alt=""
+                          className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                        />
+                      ) : (
+                        <span className="w-10 h-10 rounded-full bg-indigo-500/15 flex items-center justify-center text-indigo-500 text-sm font-black">
+                          {selected.otherUser.displayName.slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-slate-900 ${
+                          selected.otherUser.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+                        }`}
+                      >
+                        {selected.otherUser.isOnline && (
+                          <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-75" />
+                        )}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                          {selected.otherUser.displayName}
+                        </p>
+                        <span className="text-xs text-slate-400 truncate">@{selected.otherUser.username}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            selected.otherUser.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+                          }`}
+                        />
+                        <span
+                          className={`text-xs font-semibold ${
+                            selected.otherUser.isOnline
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-slate-400 dark:text-slate-500'
+                          }`}
+                        >
+                          {selected.otherUser.isOnline ? 'Online' : 'Offline'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Add Friend Action on Right Side */}
+                  <div className="shrink-0 flex items-center gap-2">
+                    {loadingFriendship ? (
+                      <div className="h-8 w-24 bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse" />
+                    ) : friendshipStatus?.status === 'FRIENDS' ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <UserCheck className="h-3.5 w-3.5" />
+                        <span>Friends</span>
+                      </span>
+                    ) : friendshipStatus?.status === 'REQUEST_SENT' ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>Request Sent</span>
+                      </span>
+                    ) : friendshipStatus?.status === 'REQUEST_RECEIVED' ? (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() =>
+                          friendshipStatus.requestId && void handleAcceptFriend(friendshipStatus.requestId)
+                        }
+                        disabled={actionInProgress}
+                        className="text-xs gap-1.5 rounded-xl"
+                      >
+                        {actionInProgress ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                        <span>Accept Request</span>
+                      </Button>
+                    ) : friendshipStatus?.status === 'SELF' ? null : (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => void handleAddFriend(selected.otherUser.username)}
+                        disabled={actionInProgress}
+                        className="text-xs gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                      >
+                        {actionInProgress ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <UserPlus className="h-3.5 w-3.5" />
+                        )}
+                        <span>Add Friend</span>
+                      </Button>
+                    )}
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto space-y-3 p-6 max-h-[400px]">

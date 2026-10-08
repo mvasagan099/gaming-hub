@@ -490,9 +490,19 @@ export interface FriendEntry {
   createdAt: string;
 }
 
+export type FriendshipStatus = 'FRIENDS' | 'REQUEST_SENT' | 'REQUEST_RECEIVED' | 'NONE' | 'SELF';
+
+export interface FriendshipStatusResponse {
+  status: FriendshipStatus;
+  requestId?: string;
+  friendshipId?: string;
+}
+
 export const friendsApi = {
   list: () => apiClient.get<FriendEntry[]>('/friends'),
   requests: () => apiClient.get<FriendRequest[]>('/friends/requests'),
+  status: (targetId: string) =>
+    apiClient.get<FriendshipStatusResponse>(`/friends/status/${encodeURIComponent(targetId)}`),
   send: (username: string) => apiClient.post<{ id: string }>('/friends/request', { username }),
   respond: (requestId: string, accept: boolean) =>
     apiClient.post<{ ok: boolean; friend: PublicProfile | null }>('/friends/respond', { requestId, accept }),

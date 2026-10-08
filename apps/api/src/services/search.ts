@@ -16,6 +16,7 @@ import { RateLimitService } from "./rateLimitService";
 import { AppError } from "@gaming-hub/shared";
 
 import { PlayerProfileService } from "./playerProfileService";
+import { isUserOnline } from "./users";
 
 export interface SearchInput {
   query: string;
@@ -90,7 +91,7 @@ export class SearchService {
         username: u.username,
         displayName: u.displayName,
         avatarUrl: u.avatarUrl,
-        isOnline: u.isOnline,
+        isOnline: isUserOnline(u),
         level: u.profile?.level ?? 1,
         xp: u.profile?.xp ?? 0,
         wins: isPrivate ? 0 : u.profile?.wins ?? 0,

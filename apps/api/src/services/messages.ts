@@ -3,6 +3,7 @@ import { AppError } from "@gaming-hub/shared";
 import { createNotification } from "./notifications";
 import { getCategorySettings } from "./settings";
 import { audit } from "./audit";
+import { isUserOnline } from "./users";
 
 async function assertMessagingEnabled(): Promise<void> {
   const messaging = await getCategorySettings("messaging");
@@ -123,9 +124,20 @@ export async function listConversations(userId: string) {
     .filter((id): id is string => Boolean(id));
   const others = await prisma.user.findMany({
     where: { id: { in: otherIds } },
-    select: { id: true, username: true, displayName: true, avatarUrl: true, isOnline: true },
+    select: { id: true, username: true, displayName: true, avatarUrl: true, isOnline: true, lastSeenAt: true },
   });
-  const othersById = new Map(others.map((u) => [u.id, u]));
+  const othersById = new Map(
+    others.map((u) => [
+      u.id,
+      {
+        id: u.id,
+        username: u.username,
+        displayName: u.displayName,
+        avatarUrl: u.avatarUrl,
+        isOnline: isUserOnline(u),
+      },
+    ])
+  );
 
   return memberships
     .map((m) => {
@@ -199,13 +211,21 @@ export async function getConversationSummary(userId: string, conversationId: str
   const otherUser = other
     ? await prisma.user.findUnique({
         where: { id: other },
-        select: { id: true, username: true, displayName: true, avatarUrl: true, isOnline: true },
+        select: { id: true, username: true, displayName: true, avatarUrl: true, isOnline: true, lastSeenAt: true },
       })
     : null;
 
   return {
     id: conversation.id,
-    otherUser: otherUser ?? { id: other ?? "", username: "deleted", displayName: "Deleted User", avatarUrl: null, isOnline: false },
+    otherUser: otherUser
+      ? {
+          id: otherUser.id,
+          username: otherUser.username,
+          displayName: otherUser.displayName,
+          avatarUrl: otherUser.avatarUrl,
+          isOnline: isUserOnline(otherUser),
+        }
+      : { id: other ?? "", username: "deleted", displayName: "Deleted User", avatarUrl: null, isOnline: false },
   };
 }
 

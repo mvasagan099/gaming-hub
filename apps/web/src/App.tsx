@@ -48,6 +48,39 @@ function SiteThemeSync() {
   return null;
 }
 
+function UserPresenceHeartbeat() {
+  const session = useAuthStore((s) => s.session);
+
+  useEffect(() => {
+    if (!session?.access_token) return;
+
+    const sendHeartbeat = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      apiClient.post('/users/heartbeat', {}).catch(() => {});
+    };
+
+    sendHeartbeat();
+
+    const onVisibilityChange = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        sendHeartbeat();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', sendHeartbeat);
+    const interval = setInterval(sendHeartbeat, 25_000);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', sendHeartbeat);
+    };
+  }, [session?.access_token]);
+
+  return null;
+}
+
 export function App() {
   const setSession = useAuthStore((s) => s.setSession);
   const setUser = useAuthStore((s) => s.setUser);
@@ -216,6 +249,7 @@ export function App() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="gaming-hub-theme">
       <SiteThemeSync />
+      <UserPresenceHeartbeat />
       <AppErrorBoundary>
         {/* Android version gate: hard-locked state renders ONLY the update screen.
             Web browsers always pass through (versionStatus is immediately 'ok'). */}

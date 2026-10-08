@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { AppError, updateProfileSchema, clampPagination } from "@gaming-hub/shared";
-import { authenticate, optionalAuthenticate } from "../plugins/authenticate";
+import { authenticate, optionalAuthenticate, touchUserPresence } from "../plugins/authenticate";
 import { requireUser, parseSchema, routeParams, queryParams, queryString } from "../lib/http";
 import { assertFeatureEnabled } from "../services/featureFlags";
 import { updateUserProfile } from "../services/users";
@@ -92,5 +92,14 @@ export async function usersRoutes(app: FastifyInstance) {
     const gameId = queryString(queryParams(request).gameId) || "overall";
     const rank = await getRankOfUser(gameId, user.id);
     return { rank };
+  });
+
+  /**
+   * User presence heartbeat.
+   */
+  app.post("/api/users/heartbeat", { preHandler: authenticate }, async (request) => {
+    const user = requireUser(request);
+    touchUserPresence(user.id);
+    return { ok: true, isOnline: true };
   });
 }

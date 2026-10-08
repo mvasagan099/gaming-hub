@@ -184,6 +184,13 @@ export async function ensureUser(
   return created;
 }
 
+export function isUserOnline(user: { isOnline?: boolean; lastSeenAt?: Date | string | null }): boolean {
+  if (!user.lastSeenAt) return Boolean(user.isOnline);
+  const date = typeof user.lastSeenAt === "string" ? new Date(user.lastSeenAt) : user.lastSeenAt;
+  const elapsed = Date.now() - date.getTime();
+  return elapsed < 3 * 60 * 1000 || (Boolean(user.isOnline) && elapsed < 5 * 60 * 1000);
+}
+
 export function toPublicProfile(
   user: Prisma.UserGetPayload<{ include: { profile: true } }>,
 ): PublicProfile {
@@ -202,7 +209,7 @@ export function toPublicProfile(
     wins: profile?.wins ?? 0,
     losses: profile?.losses ?? 0,
     draws: profile?.draws ?? 0,
-    isOnline: user.isOnline,
+    isOnline: isUserOnline(user),
     lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
   };
 }
