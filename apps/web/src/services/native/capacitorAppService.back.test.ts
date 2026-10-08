@@ -13,7 +13,7 @@ vi.mock('../../store/authStore', () => ({ useAuthStore: { getState: vi.fn() } })
 vi.mock('../supabase', () => ({ supabase: {} }));
 vi.mock('../../store/appVersionStore', () => ({ useAppVersionStore: { getState: vi.fn() } }));
 vi.mock('../../store/walletStore', () => ({ useWalletStore: { getState: vi.fn() } }));
-import { initCapacitorServices } from './capacitorAppService';
+import { initCapacitorServices, registerBackButtonHandler } from './capacitorAppService';
 
 beforeAll(async () => { await initCapacitorServices(); });
 beforeEach(() => {
@@ -21,7 +21,19 @@ beforeEach(() => {
   vi.stubGlobal('window', { location: { pathname: '/games/chess' }, history: { state: { idx: 2 } } });
 });
 afterEach(() => vi.unstubAllGlobals());
-describe('native Back uses normal navigation', () => {
+describe('native Back handling', () => {
+  it('gives the active game confirmation priority even without browser history', () => {
+    const requestExit = vi.fn(() => true);
+    const unregister = registerBackButtonHandler(requestExit);
+    try {
+      native.listeners.get('backButton')({ canGoBack: false });
+      expect(requestExit).toHaveBeenCalledOnce();
+      expect(native.navigate).not.toHaveBeenCalled();
+      expect(native.minimize).not.toHaveBeenCalled();
+    } finally { unregister(); }
+    native.listeners.get('backButton')({ canGoBack: true });
+    expect(native.navigate).toHaveBeenCalledExactlyOnceWith(-1);
+  });
   it('immediately navigates back from a game with in-app history', () => {
     native.listeners.get('backButton')({ canGoBack: true });
     expect(native.navigate).toHaveBeenCalledExactlyOnceWith(-1);

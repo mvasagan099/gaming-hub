@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { useParams, useLocation, useNavigate, Navigate } from 'react-router-dom';
+import { useParams, useLocation, useNavigate, useBlocker, Navigate } from 'react-router-dom';
 const SnakeLadder = lazy(() => import("../../games/snake-ladder").then(m => ({ default: m.SnakeLadder })));
 const LudoGame = lazy(() => import("../../games/ludo/LudoGame").then(m => ({ default: m.LudoGame })));
 const ChessGame = lazy(() => import("../../games/chess/ChessGame").then(m => ({ default: m.ChessGame })));
@@ -14,6 +14,7 @@ import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { isGameId } from '@gaming-hub/shared';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { goBackOrHome } from '../../utils/navigation';
+import { registerBackButtonHandler } from '../../services/native/capacitorAppService';
 
 export const GamePage: React.FC = () => {
   const params = useParams<{ gameId?: string; slug?: string }>();
@@ -33,12 +34,17 @@ export const GamePage: React.FC = () => {
   const [isExiting, setIsExiting] = useState(false);
 
   const exitInProgress = useRef(false);
+  const allowNavigation = useRef(false);
   const activeRoute = useRef<{ gameId: string | undefined; mode: string } | null>(null);
 
-  // Back/gesture navigation is owned by the router, never by the Exit dialog.
+  // The route retains room membership until navigation is confirmed.
   // Drivers clean up their listeners on unmount; this route owns room membership.
   useEffect(() => {
     activeRoute.current = { gameId, mode };
+    allowNavigation.current = false;
+    exitInProgress.current = false;
+    setIsExiting(false);
+    setShowExitConfirm(false);
     const currentRoom = useMultiplayerStore.getState().room;
     const roomId = mode === 'multiplayer' && currentRoom && currentRoom.gameId === gameId ? currentRoom.id : null;
     return () => {
@@ -53,6 +59,33 @@ export const GamePage: React.FC = () => {
       });
     };
   }, [gameId, mode]);
+
+  const shouldConfirmExit = !!gameId && isGameId(gameId) && !replayMatchId && !tournamentMatchId &&
+    (isExiting || mode === 'ai' || (!!room && room.gameId === gameId && room.status === 'playing'));
+  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
+    shouldConfirmExit && !allowNavigation.current && currentLocation.key !== nextLocation.key);
+  const pendingNavigation = useRef(blocker);
+  pendingNavigation.current = blocker;
+
+  useEffect(() => {
+    if (!shouldConfirmExit) return;
+    const unregister = registerBackButtonHandler(() => {
+      if (!allowNavigation.current && !exitInProgress.current) setShowExitConfirm(true);
+      return !allowNavigation.current;
+    });
+    // Leaving the document (refresh, closing a tab, or external history) uses
+    // the browser's native confirmation; in-app Back uses our game dialog.
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowNavigation.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => {
+      unregister();
+      window.removeEventListener('beforeunload', beforeUnload);
+    };
+  }, [shouldConfirmExit]);
 
   if (!gameId || !isGameId(gameId)) {
     return <Navigate to="/" replace />;
@@ -75,14 +108,18 @@ export const GamePage: React.FC = () => {
     exitInProgress.current = true;
     setShowExitConfirm(false);
     setIsExiting(true);
+    const owner = activeRoute.current;
     if (mode === 'multiplayer') {
-      const owner = activeRoute.current;
       await useMultiplayerStore.getState().leaveRoom();
       // Back may have already navigated while the leave ACK was in flight.
       if (activeRoute.current !== owner) return;
-      goBackOrHome(navigate, `/lobby/${gameId}`);
+    }
+    allowNavigation.current = true;
+    const pending = pendingNavigation.current;
+    if (pending.state === 'blocked') {
+      pending.proceed();
     } else {
-      goBackOrHome(navigate);
+      goBackOrHome(navigate, mode === 'multiplayer' ? `/lobby/${gameId}` : '/');
     }
   };
 
@@ -113,8 +150,11 @@ export const GamePage: React.FC = () => {
     <Suspense key={mode === 'multiplayer' ? matchId : gameId} fallback={<div role="status" className="p-10 text-center">Loading game…</div>}>{game}</Suspense>
     <ConfirmDialog
       layer="game"
-      isOpen={showExitConfirm}
-      onClose={() => setShowExitConfirm(false)}
+      isOpen={showExitConfirm || blocker.state === 'blocked'}
+      onClose={() => {
+        setShowExitConfirm(false);
+        if (blocker.state === 'blocked') blocker.reset();
+      }}
       title="Exit Game?"
       message="Are you sure you want to exit the game?"
       cancelText="Cancel"

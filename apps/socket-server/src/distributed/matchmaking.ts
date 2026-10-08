@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@gaming-hub/db';
-import { matchmakingJoinSchema, isGameId, getGameDefinition, type GameId } from '@gaming-hub/shared';
+import { matchmakingJoinSchema, isGameId, getGameDefinition, type GameId, type MatchSettings } from '@gaming-hub/shared';
 import type { MultiplayerFramework } from '@gaming-hub/multiplayer';
 import type { DistributedRoomCoordinator, RoutedCommand } from './coordinator';
 import { remoteSocket } from './commands';
@@ -16,6 +16,10 @@ export class SharedMatchmaking {
     await assertGameEnabled(parsed.gameId, parsed.stake);
     if (!await this.coordinator.leaveEndedRoom(command)) throw new Error('Leave your current room before searching');
     const gameMode = parsed.gameMode ?? 'casual';
+    const selected = parsed.gameId === 'chess' ? parsed.settings?.timeControl : null;
+    const timeControl = selected && selected.baseSeconds > 0 ? selected : null;
+    const settings = { timeControl, rated: parsed.settings?.rated ?? true };
+    const settingsKey = `${timeControl ? `${timeControl.baseSeconds}+${timeControl.incrementSeconds}+${timeControl.delaySeconds}` : 'untimed'}:${settings.rated ? 'rated' : 'casual'}`;
     // Serialize assignment in the database; sockets and sticky routing do not define identity.
     const paired = await prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('shared-matchmaking'))`;
@@ -24,14 +28,14 @@ export class SharedMatchmaking {
       const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId: command.playerId } });
       if (wallet.isFrozen || wallet.balance < parsed.stake) throw new Error('Wallet unavailable or insufficient balance');
       if (existing?.status === 'MATCHED') return existing.matchId;
-      if (existing && existing.gameId === parsed.gameId && existing.entryFee === parsed.stake && existing.gameMode === gameMode) {
+      if (existing && existing.gameId === parsed.gameId && existing.entryFee === parsed.stake && existing.gameMode === gameMode && existing.settingsKey === settingsKey) {
         await tx.matchmakingQueue.update({ where: { id: existing.id }, data: { socketId: command.socketId } });
         return null;
       }
       if (existing) await tx.matchmakingQueue.update({ where: { id: existing.id }, data: { status: 'CANCELLED' } });
       await tx.matchmakingQueue.create({ data: { userId: command.playerId, gameId: parsed.gameId, entryFee: parsed.stake,
-        gameMode, socketId: command.socketId, expiresAt: new Date(Date.now() + 120000) } });
-      const group = await tx.matchmakingQueue.findMany({ where: { status: 'WAITING', gameId: parsed.gameId, entryFee: parsed.stake, gameMode }, orderBy: { joinedAt: 'asc' }, take: getGameDefinition(parsed.gameId).minPlayers });
+        gameMode, settings, settingsKey, socketId: command.socketId, expiresAt: new Date(Date.now() + 120000) } });
+      const group = await tx.matchmakingQueue.findMany({ where: { status: 'WAITING', gameId: parsed.gameId, entryFee: parsed.stake, gameMode, settingsKey }, orderBy: { joinedAt: 'asc' }, take: getGameDefinition(parsed.gameId).minPlayers });
       if (group.length < getGameDefinition(parsed.gameId).minPlayers) return null;
       const id = randomUUID();
       await tx.matchmakingQueue.updateMany({ where: { id: { in: group.map(p => p.id) } }, data: { status: 'MATCHED', matchId: id, roomId: id, matchedAt: new Date(), expiresAt: new Date(Date.now() + 120000) } });
@@ -57,6 +61,8 @@ export class SharedMatchmaking {
     const group = await prisma.matchmakingQueue.findMany({ where: { matchId: id, status: 'MATCHED' }, orderBy: { joinedAt: 'asc' }, include: { user: true } });
     if (group.length < 2 || !isGameId(group[0]!.gameId)) return;
     const first = group[0]!, gameId = first.gameId as GameId;
+    if (group.some(entry => entry.settingsKey !== first.settingsKey)) throw new Error('Incompatible matchmaking settings');
+    const settings = matchmakingJoinSchema.shape.settings.unwrap().parse(first.settings) as MatchSettings;
     let checkpoint = await store.load(id);
     if (!checkpoint) {
       try {
@@ -64,7 +70,7 @@ export class SharedMatchmaking {
           const proxies = group.map(entry => remoteSocket(this.framework, { playerId: entry.userId, socketId: entry.socketId!, user: entry.user,
             event: 'matchmaking:join', payload: {} }));
           const room = await this.framework.roomManager.createRoom({ gameId, hostId: first.userId, hostSocket: proxies[0]!,
-            stake: first.entryFee, isPrivate: true, maxPlayers: group.length });
+            stake: first.entryFee, isPrivate: true, maxPlayers: group.length, settings });
           for (let i = 1; i < group.length; i++) await this.framework.roomManager.joinRoom({ roomId: room.id, playerId: group[i]!.userId, socket: proxies[i]! });
           this.framework.roomManager.unregisterRoom(room.id); room.id = id; room.ioName = `room:${id}`;
           for (const proxy of proxies) await proxy.join(room.ioName);

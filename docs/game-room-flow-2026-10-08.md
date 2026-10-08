@@ -82,3 +82,7 @@ The user's affected live account was not inspected or reset. Changes from this c
 ## Verdict
 
 All executed core room-flow regressions and targeted financial/security checks passed (0 failures). The two configuration findings above remain open. This report does not declare every game feature or the deployed application fully verified.
+
+## Follow-up: settings findings resolved locally
+
+The two configuration findings above were fixed and verified in the subsequent working copy. See [settings fix evidence](game-room-settings-2026-10-08.md) for the current migration, test totals and rollout requirement. The original tables remain an audit snapshot. Deployed/manual verification remains outstanding.

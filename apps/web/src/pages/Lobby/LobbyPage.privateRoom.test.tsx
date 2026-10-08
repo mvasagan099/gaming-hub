@@ -28,6 +28,7 @@ vi.mock('../../services/api/useMe', () => ({ useMe: () => ({ me: null }) }));
 vi.mock('../../services/api/usePublicProfile', () => ({ usePublicProfile: () => ({ profile: null }) }));
 vi.mock('./RoomChat', () => ({ RoomChat: () => null }));
 vi.mock('../../components/ui/ConfirmDialog', () => ({ ConfirmDialog: () => null }));
+vi.mock('../../services/api/client', () => ({ apiClient: { get: vi.fn().mockResolvedValue({ entryFees: [50, 100, 500, 1000], defaultEntryFee: 100 }) } }));
 import { LobbyPage } from './LobbyPage';
 
 beforeEach(() => {

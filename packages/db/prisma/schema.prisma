@@ -622,6 +622,8 @@ model MatchmakingQueue {
   gameId      String
   entryFee    Int               @default(0)
   gameMode    String            @default("casual")
+  settings    Json              @default("{\"timeControl\":null,\"rated\":true}")
+  settingsKey String            @default("untimed:rated")
   rating      Int?              @default(1000)
   status      MatchmakingStatus @default(WAITING)
   socketId    String?
@@ -636,6 +638,7 @@ model MatchmakingQueue {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([gameId, entryFee, gameMode, status, joinedAt])
+  @@index([gameId, entryFee, gameMode, settingsKey, status, joinedAt], map: "MatchmakingQueue_settings_pool_idx")
   @@index([userId, status])
   @@index([status, expiresAt])
 }

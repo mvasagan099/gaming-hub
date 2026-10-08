@@ -62,7 +62,7 @@ export async function initCapacitorServices(): Promise<void> {
 
   // 4. Android Hardware Back Button Handling
   CapApp.addListener('backButton', ({ canGoBack }) => {
-    // Allow app-wide blocking screens to intercept Back; games use normal navigation.
+    // Allow active games and app-wide blocking screens to intercept Back.
     if (backButtonHandlers.length > 0) {
       const topHandler = backButtonHandlers[backButtonHandlers.length - 1];
       if (topHandler && topHandler()) {

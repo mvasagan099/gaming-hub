@@ -1,0 +1,144 @@
+{
+  "date": "2026-10-08",
+  "baselineCommit": "5deea5b",
+  "workingCopy": true,
+  "deployed": false,
+  "productionDatabaseTouched": false,
+  "scope": "Quick Match settings and server-configured lobby stakes",
+  "suites": {
+    "queueOnUpgradedTestDatabase": {
+      "files": 1,
+      "passed": 18,
+      "failed": 0,
+      "skippedOrFiltered": 0,
+      "success": true,
+      "fileManifest": [
+        "apps/api/src/services/__tests__/sharedQueueRoomFlow.test.ts"
+      ]
+    },
+    "queueOnFreshTestDatabase": {
+      "files": 1,
+      "passed": 18,
+      "failed": 0,
+      "skippedOrFiltered": 0,
+      "success": true,
+      "fileManifest": [
+        "apps/api/src/services/__tests__/sharedQueueRoomFlow.test.ts"
+      ]
+    },
+    "realTwoReplicaChessReconnectRematch": {
+      "files": 1,
+      "passed": 1,
+      "failed": 0,
+      "skippedOrFiltered": 29,
+      "success": true,
+      "fileManifest": [
+        "apps/api/src/services/__tests__/multiReplicaRestartRecovery.test.ts"
+      ],
+      "note": "One selected new integration case; 29 other cases intentionally filtered, not a full file rerun."
+    },
+    "fullWeb": {
+      "files": 39,
+      "passed": 345,
+      "failed": 0,
+      "skippedOrFiltered": 0,
+      "success": true,
+      "fileManifest": [
+        "apps/web/src/components/GameWrapper.test.tsx",
+        "apps/web/src/data/games.test.ts",
+        "apps/web/src/store/multiplayerStore.leave.test.ts",
+        "apps/web/src/store/multiplayerStore.matchmaking.test.ts",
+        "apps/web/src/store/multiplayerStore.rematch.test.ts",
+        "apps/web/src/store/multiplayerStore.roomLifecycle.test.ts",
+        "apps/web/src/utils/roomReadiness.test.ts",
+        "apps/web/src/components/Replay/CarromReplayBoard.test.tsx",
+        "apps/web/src/components/Replay/ReplayModal.test.tsx",
+        "apps/web/src/components/Replay/replayPresentation.test.ts",
+        "apps/web/src/games/fruit-ninja/FruitNinjaAuthority.test.ts",
+        "apps/web/src/games/fruit-ninja/FruitNinjaBomb.test.ts",
+        "apps/web/src/games/fruit-ninja/FruitNinjaPresentation.test.tsx",
+        "apps/web/src/services/native/capacitorAppService.back.test.ts",
+        "apps/web/src/pages/Games/GamePage.navigation.test.tsx",
+        "apps/web/src/pages/Games/GamePage.rematch.test.tsx",
+        "apps/web/src/pages/Home/Home.gameMode.test.tsx",
+        "apps/web/src/pages/Lobby/LobbyPage.privateRoom.test.tsx",
+        "apps/web/src/pages/Lobby/LobbyPage.stakes.test.tsx",
+        "apps/web/src/games/bubble-shooter/__tests__/multiplayerControls.test.tsx",
+        "apps/web/src/games/bubble-shooter/utils/multiplayerPresentation.test.ts",
+        "apps/web/src/games/carrom/__tests__/multiplayerDriver.test.ts",
+        "apps/web/src/games/carrom/__tests__/multiplayerInput.test.tsx",
+        "apps/web/src/games/carrom/__tests__/shotPreview.test.ts",
+        "apps/web/src/games/carrom/__tests__/strikerPlacement.test.tsx",
+        "apps/web/src/games/chess/utils/chessState.test.ts",
+        "apps/web/src/games/shared/hooks/animationLoop.test.ts",
+        "apps/web/src/games/shared/rendering/StaticCanvasLayer.test.ts",
+        "apps/web/src/games/shared/rendering/sceneryCache.test.ts",
+        "apps/web/src/games/shared/rendering/viewport.test.ts",
+        "apps/web/src/games/snake-vs-worms/__tests__/multiplayerDriver.test.ts",
+        "apps/web/src/games/snake-vs-worms/__tests__/multiplayerLifecycle.test.tsx",
+        "apps/web/src/games/snooker/__tests__/multiplayerDriver.test.ts",
+        "apps/web/src/games/snooker/__tests__/multiplayerInput.test.tsx",
+        "apps/web/src/games/snooker/__tests__/shotPlayback.test.ts",
+        "apps/web/src/games/table-tennis/__tests__/multiplayerDriver.test.ts",
+        "apps/web/src/games/table-tennis/__tests__/multiplayerLifecycle.test.tsx",
+        "apps/web/src/games/table-tennis/__tests__/remoteTimeline.test.ts",
+        "apps/web/src/games/ludo/phaser/data/boardLayout.test.ts"
+      ]
+    },
+    "fullMultiplayer": {
+      "files": 24,
+      "passed": 357,
+      "failed": 0,
+      "skippedOrFiltered": 0,
+      "success": true,
+      "fileManifest": [
+        "packages/multiplayer/__tests__/bubbleShooterGameplay.test.ts",
+        "packages/multiplayer/__tests__/carromLifecycle.test.ts",
+        "packages/multiplayer/__tests__/carromPreview.test.ts",
+        "packages/multiplayer/__tests__/centralizedGameConfig.test.ts",
+        "packages/multiplayer/__tests__/clientMatchIdentity.test.ts",
+        "packages/multiplayer/__tests__/completedRoomCheckpoint.test.ts",
+        "packages/multiplayer/__tests__/disconnectReconnect.test.ts",
+        "packages/multiplayer/__tests__/finishedRoomRecovery.test.ts",
+        "packages/multiplayer/__tests__/gameConfigs.test.ts",
+        "packages/multiplayer/__tests__/gameEventSystem.test.ts",
+        "packages/multiplayer/__tests__/gameLoadSafety.test.ts",
+        "packages/multiplayer/__tests__/gameStateSync.test.ts",
+        "packages/multiplayer/__tests__/gameplay.test.ts",
+        "packages/multiplayer/__tests__/internalApiCheck.test.ts",
+        "packages/multiplayer/__tests__/matchManager.test.ts",
+        "packages/multiplayer/__tests__/matchmaking.test.ts",
+        "packages/multiplayer/__tests__/playerExit.test.ts",
+        "packages/multiplayer/__tests__/privateRoomSocketFlow.test.ts",
+        "packages/multiplayer/__tests__/realtimeSync.test.ts",
+        "packages/multiplayer/__tests__/rematch.test.ts",
+        "packages/multiplayer/__tests__/roomCleanup.test.ts",
+        "packages/multiplayer/__tests__/snookerPreview.test.ts",
+        "packages/multiplayer/__tests__/startupStep.test.ts",
+        "packages/multiplayer/__tests__/tournamentRoomAccess.test.ts"
+      ]
+    }
+  },
+  "migration": {
+    "name": "20261008140000_matchmaking_settings",
+    "freshMigrationChain": "PASS",
+    "freshSchemaDiff": "No difference detected.",
+    "upgradedLocalTestDatabase": "PASS",
+    "dataDestruction": false,
+    "testDatabases": [
+      "gaming_room_queue_test",
+      "gaming_room_flow_test",
+      "gaming_room_settings_fresh_test"
+    ],
+    "host": "127.0.0.1",
+    "port": 5540
+  },
+  "temporaryRedisRemoved": true,
+  "gates": {
+    "rootTypecheck": "PASS",
+    "rootBuild": "PASS",
+    "diffWhitespace": "PASS"
+  },
+  "buildWarning": "Existing web chunks exceed 500 kB after minification.",
+  "verdict": "Both settings findings fixed and verified locally; deployed smoke checks outstanding."
+}

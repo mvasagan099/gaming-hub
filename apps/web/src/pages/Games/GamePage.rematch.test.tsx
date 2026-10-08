@@ -17,13 +17,14 @@ vi.mock('react', async original => {
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ slug: context.gameId }),
   useLocation: () => ({ state: { mode: context.mode, stake: 100 } }),
-  useNavigate: () => vi.fn(), Navigate: () => null,
+  useNavigate: () => vi.fn(), useBlocker: () => ({ state: "unblocked" }), Navigate: () => null,
 }));
 vi.mock('../../store/multiplayerStore', () => ({
   useMultiplayerStore: Object.assign((selector: any) => selector(context.state), {
     getState: () => ({ ...context.state, rematch: context.rematch }),
   }),
 }));
+vi.mock('../../services/native/capacitorAppService', () => ({ registerBackButtonHandler: () => vi.fn() }));
 vi.mock('../../components/ui/ConfirmDialog', () => ({ ConfirmDialog: () => null }));
 vi.mock('../../components/GameWrapper', () => ({ GameWrapper: () => null }));
 vi.mock('../../games/shared/components/MultiplayerMatchPanel', () => ({ MultiplayerMatchPanel: () => null }));

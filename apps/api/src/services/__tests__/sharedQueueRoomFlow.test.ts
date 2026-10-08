@@ -115,4 +115,38 @@ describe('distributed queue reconnect and room transitions with PostgreSQL', () 
     await prisma.matchmakingQueue.updateMany({ where: { userId }, data: { status: 'MATCHED', matchId: 'expired-room', roomId: 'expired-room', expiresAt: new Date(Date.now() - 1000) } });
     await expect(dispatch('room:create').run()).resolves.toMatchObject({ id: 'private-room' });
   });
+  it.each([
+    { timeControl: null, rated: true },
+    { timeControl: { baseSeconds: 300, incrementSeconds: 0, delaySeconds: 0 }, rated: true },
+    { timeControl: { baseSeconds: 600, incrementSeconds: 0, delaySeconds: 5 }, rated: true },
+    { timeControl: { baseSeconds: 600, incrementSeconds: 0, delaySeconds: 0 }, rated: false },
+  ])('changing clock/rated settings replaces the old waiting reservation: %j', async settings => {
+    const timed = { timeControl: { baseSeconds: 600, incrementSeconds: 0, delaySeconds: 0 }, rated: true };
+    await search.join({ ...request(), payload: { ...request().payload, settings: timed } });
+    await search.join({ ...request(), payload: { ...request().payload, settings } });
+    const rows = await queues();
+    expect(rows).toHaveLength(2);
+    expect(rows[0].status).toBe('CANCELLED');
+    expect(rows[1]).toMatchObject({ status: 'WAITING', settings });
+    expect(rows[1].settingsKey).not.toBe(rows[0].settingsKey);
+  });
+  it('only assigns compatible settings, including after a queued socket reconnect', async () => {
+    const other = await createTestUser();
+    const provision = vi.spyOn(search as any, 'provision').mockResolvedValue(undefined);
+    const settings = { timeControl: { baseSeconds: 600, incrementSeconds: 2, delaySeconds: 1 }, rated: false };
+    try {
+      await search.join({ ...request('chess', 0, 'old'), payload: { gameId: 'chess', stake: 0, settings } });
+      await search.join({ ...request('chess', 0), playerId: other.id, payload: { gameId: 'chess', stake: 0, settings: { ...settings, rated: true } } });
+      expect(provision).not.toHaveBeenCalled();
+      await search.join({ ...request('chess', 0, 'reconnected'), payload: { gameId: 'chess', stake: 0, settings } });
+      await search.join({ ...request('chess', 0), playerId: other.id, payload: { gameId: 'chess', stake: 0, settings } });
+      expect(provision).toHaveBeenCalledOnce();
+      const pair = await prisma.matchmakingQueue.findMany({ where: { status: 'MATCHED', userId: { in: [userId, other.id] } } });
+      expect(pair).toHaveLength(2);
+      expect(pair[0].matchId).toBe(pair[1].matchId);
+      expect(pair.find(row => row.userId === userId)?.socketId).toBe('reconnected');
+      expect(pair.every(row => row.settingsKey === pair[0].settingsKey)).toBe(true);
+    } finally { provision.mockRestore(); await prisma.user.delete({ where: { id: other.id } }); }
+  });
+
 });

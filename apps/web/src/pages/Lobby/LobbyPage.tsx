@@ -27,6 +27,7 @@ import {
   chessModeId,
   DEFAULT_TIME_CONTROL,
   GAME_BY_ID,
+  type GameConfig,
   type GameId,
   type MatchSettings,
   type RoomFull,
@@ -36,6 +37,7 @@ import { useAuthStore } from "../../store/authStore";
 import { useMultiplayerStore } from "../../store/multiplayerStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useWalletStore } from "../../store/walletStore";
+import { apiClient } from "../../services/api/client";
 import { useMe } from "../../services/api/useMe";
 import { usePublicProfile } from "../../services/api/usePublicProfile";
 import { RoomChat } from "./RoomChat";
@@ -228,6 +230,24 @@ export const LobbyPage: React.FC = () => {
   const def = slug ? GAME_BY_ID.get(slug as GameId) : undefined;
   const state = location.state as { stake?: number; roomAction?: "create" | "join" } | null;
   const [stake, setStake] = useState(state?.stake ?? def?.defaultStake ?? 100);
+  const [gameConfig, setGameConfig] = useState<{ gameId: string; config: GameConfig } | null>(null);
+  const [configError, setConfigError] = useState(false);
+  const serverConfig = gameConfig && gameConfig.gameId === slug ? gameConfig.config : null;
+  const stakeTiers = serverConfig?.entryFees ?? [];
+  const canFundRoom = !!serverConfig && serverConfig.onlineEnabled !== false && stakeTiers.includes(stake);
+  useEffect(() => {
+    if (!slug || !GAME_BY_ID.has(slug as GameId)) return;
+    let active = true;
+    setGameConfig(null);
+    setConfigError(false);
+    apiClient.get<GameConfig>(`/games/${slug}/config`).then(config => {
+      if (!active) return;
+      setGameConfig({ gameId: slug, config });
+      setStake(current => config.entryFees.includes(current) ? current :
+        config.entryFees.includes(config.defaultEntryFee) ? config.defaultEntryFee : (config.entryFees[0] ?? 0));
+    }).catch(() => { if (active) setConfigError(true); });
+    return () => { active = false; };
+  }, [slug]);
   const [joinCode, setJoinCode] = useState("");
   const tournamentMatchId = new URLSearchParams(location.search || "").get("matchId");
   const tournamentJoinAttempt = useRef<string | null>(null);
@@ -368,7 +388,7 @@ export const LobbyPage: React.FC = () => {
 
 
   const handleCreatePrivate = async () => {
-    if (!def || isCreatingRoom) return;
+    if (!def || isCreatingRoom || !canFundRoom) return;
     setIsCreatingRoom(true);
     try {
       await createRoom(def.id, true, stake, allowsPlayerCountChoice ? playerCount : def.maxPlayers, settings);
@@ -381,7 +401,7 @@ export const LobbyPage: React.FC = () => {
   };
 
   const handleQuickMatch = async () => {
-    if (!def || isJoiningMatch || matchmaking.queued) return;
+    if (!def || isJoiningMatch || matchmaking.queued || !canFundRoom) return;
     setIsJoiningMatch(true);
     try {
       await joinMatchmaking(def.id, stake, { ...settings, playerCount: allowsPlayerCountChoice ? playerCount : undefined } as Record<string, unknown>);
@@ -432,9 +452,6 @@ export const LobbyPage: React.FC = () => {
   const spectators = room?.spectators ?? [];
   const allReady = participants.length >= (def.minPlayers ?? 2) && participants.every((p) => p.isReady);
   const canStart = isHost && room?.status === "waiting" && allReady;
-  const stakeTiers = Array.from(
-    new Set([50, def.defaultStake, def.defaultStake * 2, def.defaultStake * 5, def.defaultStake * 10])
-  ).sort((a, b) => a - b);
   const walletStoreBalance = useWalletStore((s) => s.balance);
   const isWalletLoaded = useWalletStore((s) => !s.isStale || s.lastUpdated !== null);
   const balance = isWalletLoaded ? walletStoreBalance : (me?.wallet?.balance ?? null);
@@ -536,6 +553,10 @@ export const LobbyPage: React.FC = () => {
               <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2 mb-4">
                 <Zap className="w-4 h-4 text-amber-400" /> Entry Stake
               </h3>
+              {!serverConfig && <p className="mb-3 text-xs text-slate-500" role="status">
+                {configError ? "Unable to load entry stakes. Reload to try again." : "Loading entry stakes…"}
+              </p>}
+              {serverConfig?.onlineEnabled === false && <p className="mb-3 text-xs text-slate-500">Online play is currently disabled.</p>}
               <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                 {stakeTiers.map((val) => (
                   <button
@@ -555,7 +576,7 @@ export const LobbyPage: React.FC = () => {
               <div className="flex items-center justify-between mt-3 text-xs">
                 <span className="text-slate-500 dark:text-slate-400">Prize pool</span>
                 <span className="text-amber-400 font-extrabold flex items-center gap-1">
-                  <Trophy className="w-3.5 h-3.5" /> {Math.round(stake * 1.8)}
+                  <Trophy className="w-3.5 h-3.5" /> {Math.round(stake * 2 * (serverConfig?.winnerPercentage ?? 90) / 100)}
                 </span>
               </div>
               {balance != null && balance < stake && (
@@ -636,7 +657,7 @@ export const LobbyPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => void handleQuickMatch()}
-                disabled={(balance != null && balance < stake) || isJoiningMatch || matchmaking.queued}
+                disabled={!canFundRoom || (balance != null && balance < stake) || isJoiningMatch || matchmaking.queued}
                 className="flex flex-col items-center gap-2 p-5 rounded-3xl bg-gradient-to-br from-indigo-600 to-purple-700 hover:from-indigo-500 hover:to-purple-600 disabled:opacity-40 text-white border border-indigo-500/40 shadow-xl shadow-indigo-500/20 transition-all cursor-pointer disabled:cursor-not-allowed"
               >
                 {isJoiningMatch ? <Loader2 className="w-7 h-7 animate-spin" /> : <Swords className="w-7 h-7" />}
@@ -646,7 +667,7 @@ export const LobbyPage: React.FC = () => {
               <button
                 id="create-private-room"
                 onClick={() => void handleCreatePrivate()}
-                disabled={isCreatingRoom}
+                disabled={!canFundRoom || isCreatingRoom}
                 className="flex flex-col items-center gap-2 p-5 rounded-3xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 disabled:opacity-40 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 transition-all cursor-pointer disabled:cursor-not-allowed"
               >
                 {isCreatingRoom ? <Loader2 className="w-7 h-7 animate-spin text-indigo-400" /> : <Users className="w-7 h-7 text-indigo-400" />}
