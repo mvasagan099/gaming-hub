@@ -1,3 +1,4 @@
+import { buildCompletedReplay } from './replay';
 import { prisma, type Prisma } from '@gaming-hub/db';
 
 export type DurableSnapshot = Prisma.InputJsonValue;
@@ -16,10 +17,15 @@ export class PostgresMatchStore {
     const rows = await this.db.$queryRaw<Array<{ token: bigint }>>`SELECT nextval('match_owner_fencing_seq') AS token`;
     return rows[0]!.token.toString();
   }
-  async create(roomId: string, code: string, snapshot: DurableSnapshot) {
+  async create(roomId: string, code: string, snapshot: DurableSnapshot,
+    owner?: { ownerId: string; token: string; ttlMs: number }) {
     return this.db.$transaction(async tx => {
       await reserveParticipants(tx, roomId, snapshot);
-      return tx.liveRoomCheckpoint.create({ data: { id: roomId, code, snapshot } });
+      const created = await tx.liveRoomCheckpoint.create({ data: { id: roomId, code, snapshot,
+        ...(owner ? { ownerId: owner.ownerId, fencingToken: BigInt(owner.token) } : {}) } });
+      if (owner) await tx.$executeRaw`UPDATE "LiveRoomCheckpoint" SET
+        "leaseExpiresAt"=clock_timestamp() + ${owner.ttlMs} * interval '1 millisecond' WHERE "id"=${roomId}`;
+      return created;
     });
   }
   async resolveRoom(identity: { roomId?: string; code?: string; matchId?: string }) {
@@ -30,6 +36,10 @@ export class PostgresMatchStore {
   async load(roomId: string) { return this.db.liveRoomCheckpoint.findUnique({ where: { id: roomId } }); }
   async find(code: string) { return this.db.liveRoomCheckpoint.findUnique({ where: { code: code.toUpperCase() } }); }
   async findMatch(matchId: string) { return this.db.liveRoomCheckpoint.findUnique({ where: { matchId } }); }
+  async isResultDelivered(matchId: string): Promise<boolean> {
+    const event = await this.db.gameResultOutbox.findUnique({ where: { matchId }, select: { status: true } });
+    return event?.status === 'DELIVERED';
+  }
   async findPlayer(playerId: string): Promise<{ id: string } | null> {
     const rooms = await this.db.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "LiveRoomCheckpoint"
       WHERE "closed"=false AND ("snapshot"->'players' @> ${JSON.stringify([{ id: playerId }])}::jsonb
@@ -65,7 +75,13 @@ export class PostgresMatchStore {
       if (result) {
         const existing = await tx.gameResultOutbox.findUnique({ where: { matchId: result.matchId } });
         if (!existing) await tx.gameResultOutbox.create({ data: result });
-        else if (existing.id !== result.id || existing.roomId !== result.roomId || canonical(existing.result) !== canonical(result.result)) throw new Error('CONFLICTING_CANONICAL_RESULT');
+        const replay = buildCompletedReplay(snapshot, result);
+        if (replay && await tx.match.findUnique({ where: { id: result.matchId }, select: { id: true } })) {
+          await tx.replay.upsert({ where: { matchId: result.matchId },
+            create: { matchId: result.matchId, gameId: replay.gameId, payload: replay as unknown as Prisma.InputJsonValue,
+              sizeBytes: Buffer.byteLength(JSON.stringify(replay)) }, update: {} });
+        }
+        if (existing && (existing.id !== result.id || existing.roomId !== result.roomId || canonical(existing.result) !== canonical(result.result))) throw new Error('CONFLICTING_CANONICAL_RESULT');
       }
       return expectedRevision + 1;
     });

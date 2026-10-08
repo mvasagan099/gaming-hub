@@ -1,5 +1,9 @@
 # Gaming Hub Complete Game Audit
 
+## All-game private room follow-up — 2026-10-08
+
+The [private room report](2026-10-08-private-rooms.md) records 497 passing tests across the complete multiplayer/web suites and expanded real two-server financial integration (57 files). All nine games passed paid admission, gameplay/recovery, fresh rematch and cancelled-countdown refund checks. Fixed creator/recovery room-ownership race, disabled Ready after countdown reconnect, stale countdown display and paid rematch overwriting a retrying result. Typecheck and build passed. Current production endpoints return readiness OK and all nine games enabled; these new repairs remain local and have not been deployed. The [production migration record](2026-10-07-production-migration-verification.md) confirms the previously authorized schema upgrade. Physical-device/private-room production play certification remains separate.
+
 ## Paid room initialization and Table Tennis follow-up — 2026-10-07
 
 The latest [room-start payment and Table Tennis report](2026-10-07-room-start-payment-and-table-tennis.md) records the new canonical settlement guard, both-board admission for Carrom/Snake vs Worms, failed-start cancellation/refunds, and elapsed-time Table Tennis simulation with bounded input delivery. It supersedes the earlier countdown-only start description for those two games. Funding remains a reservation; gameplay and adjudication begin after both boards render. Complete final regressions passed: engine 421, multiplayer 205, web 244 and API 1,314 — **2,184 tests across 174 files, 0 failed, 0 skipped**. Build, workspace type checking and Android/iOS sync passed with exit 0. These counts supersede the historical 2,165-test result below. No production deployment or historical transaction reconciliation has occurred. The existing production and physical-device gates remain outstanding.

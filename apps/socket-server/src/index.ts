@@ -476,7 +476,9 @@ async function main(): Promise<void> {
     roomExpirationMs: 30 * 60 * 1000,
     maxSpectators: 10,
     enableAntiCheat: true,
-    enableReplay: true,
+    // Distributed replay facts are archived atomically with the result.
+    // Avoid keeping a second, unbounded in-memory recording of every shot.
+    enableReplay: !env.distributedMatches,
     debug: env.LOG_LEVEL === "debug",
     onMatchStarting: async (room, matchId) => {
       if (distributed) await distributed.prepareFunding(room, matchId);

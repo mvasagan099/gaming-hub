@@ -32,6 +32,20 @@ async function paidResult() {
 }
 
 describe('crossReplicaOwnership / ownershipFencing with real Redis and PostgreSQL', () => {
+  it('publishes a new room with its creator fence and database lease already installed', async () => {
+    const id = randomUUID(), token = await store.nextFencingToken();
+    expect(await leases.acquire(id, 'creator', token, 10000)).toBe(true);
+    await store.create(id, randomUUID(), { schemaVersion: 1 }, { ownerId: 'creator', token, ttlMs: 10000 });
+    const saved = await store.load(id);
+    expect(saved!.ownerId).toBe('creator');
+    expect(saved!.fencingToken.toString()).toBe(token);
+    expect(saved!.leaseExpiresAt).not.toBeNull();
+    expect((await store.expiredRooms()).some(room => room.id === id)).toBe(false);
+    const competitor = await store.nextFencingToken();
+    expect(await leases.acquire(id, 'recovery-replica', competitor, 10000)).toBe(false);
+    await store.commit(id, 'creator', token, 0, null, { schemaVersion: 1, created: true });
+    await leases.release(id, 'creator', token);
+  });
   it('racing replicas admit one owner, renew, expire and reject the old fencing token', async () => {
     const id = await room();
     const a = await store.nextFencingToken(), b = await store.nextFencingToken();

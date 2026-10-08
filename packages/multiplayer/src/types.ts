@@ -160,6 +160,7 @@ export interface MatchRuntime {
   winnerSeats: number[];
   stateSnapshots: StateSnapshot[];
   actionHistory: RecordedAction[];
+  replayInitialState?: JsonObject;
 }
 
 /** State snapshot for replay and reconnection */
@@ -178,6 +179,7 @@ export interface RecordedAction {
   seat: number;
   action: GameAction;
   events: GameEvent[];
+  replayState?: JsonObject;
 }
 
 /** Rematch state */

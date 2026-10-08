@@ -5,7 +5,7 @@ import { GAME_IDS } from '@gaming-hub/shared';
 // Exercise the production route's callbacks and effect cleanup without loading
 // Phaser/WebGL. Hook state persists across renders, including StrictMode replay.
 const context = vi.hoisted(() => ({
-  gameId: 'chess', mode: 'multiplayer', room: null as any,
+  gameId: 'chess', mode: 'multiplayer', search: '', room: null as any,
   navigate: vi.fn(), leaveRoom: vi.fn(),
   effects: [] as Array<() => void | (() => void)>,
   states: [] as any[], refs: [] as any[], stateIndex: 0, refIndex: 0,
@@ -27,7 +27,7 @@ vi.mock('react', async original => {
 });
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ slug: context.gameId }),
-  useLocation: () => ({ state: { mode: context.mode, stake: 0 } }),
+  useLocation: () => ({ search: context.search, state: { mode: context.mode, stake: 0 } }),
   useNavigate: () => context.navigate, Navigate: () => null,
 }));
 vi.mock('../../store/multiplayerStore', () => ({
@@ -48,7 +48,7 @@ const flushCleanup = () => new Promise<void>(resolve => queueMicrotask(resolve))
 
 beforeEach(() => {
   vi.clearAllMocks();
-  context.gameId = 'chess'; context.mode = 'multiplayer';
+  context.gameId = 'chess'; context.mode = 'multiplayer'; context.search = '';
   context.states = []; context.refs = []; context.effects = [];
   context.room = { id: 'room-1', gameId: 'chess', status: 'playing' };
   context.leaveRoom.mockImplementation(async () => { context.room = null; });
@@ -143,3 +143,14 @@ describe('game Exit versus router Back', () => {
     expect(context.leaveRoom).not.toHaveBeenCalled();
   });
 });
+
+ it('opens a saved replay route without mounting a live game or leaving an unrelated room', async () => {
+  context.search = '?replayMatchId=history-match';
+  const page = render();
+  expect(page.type).toBe(React.Suspense);
+  expect(page.props.children.props.matchId).toBe('history-match');
+  const cleanup = context.effects[0]() as () => void;
+  cleanup();
+  await flushCleanup();
+  expect(context.leaveRoom).not.toHaveBeenCalled();
+ });

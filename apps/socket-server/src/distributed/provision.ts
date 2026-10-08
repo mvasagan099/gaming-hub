@@ -32,6 +32,7 @@ export async function provisionTournamentRoom(framework: MultiplayerFramework, c
       const participants = playerIds.map((userId, seat) => ({ userId, seat }));
       room.match = { matchId, participants, engine: createEngine(gameId, participants), turnNumber: 0, startedAt: Date.now(),
         pausedAt: null, pausedBy: null, finishedAt: null, winnerIds: [], winnerSeats: [], stateSnapshots: [], actionHistory: [] };
+      if (gameId === 'carrom') room.match.replayInitialState = (room.match.engine as ReturnType<typeof createEngine>).serialize();
       for (const player of room.players.values()) { player.socketIds.clear(); player.connectionStatus = 'disconnected'; player.isReady = false; }
       room.lifecyclePhase = 'WAITING';
       framework.roomManager.registerRoom(room);

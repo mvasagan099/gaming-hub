@@ -1,3 +1,25 @@
+Gaming Hub all-game private room verification — 2026-10-08
+Latest focused follow-up; previous complete suites retained below as history.
+Multiplayer: 209 passed, 20 files; gaming-private-all-mp.log
+Web: 246 passed, 34 files; gaming-private-all-web.log
+Real paid integration: 42 passed, 3 files; gaming-private-all-api2.log
+Final selected total: 497 passed, 57 files, zero failures/skips, each exit 0.
+Initial integration: 40/41 passed; room-create ownership race exposed and fixed.
+Final integration rerun: 258.83 seconds; 42/42 passing after repair.
+All nine: private paid admission, gameplay/owner recovery, new funded rematch,
+stale actions rejected, cancelled countdown and duplicate cancellation refunds.
+Creator fence/lease published atomically; pending payout prevents paid rematch.
+Readiness UI permits re-ready after interrupted countdown and clears stale countdown.
+Workspace typecheck and full build: PASS, exit 0.
+Final socket typecheck/build after ownership cleanup: PASS, exit 0.
+Production read-only endpoint retry: socket readiness 200/status ok;
+API game registry 200, all nine games enabled. No live paid game was started.
+No production wallet writes, deployment, commit or push in this follow-up.
+Physical-device certification not inferred. Full API/engine suites not repeated.
+Test-owned services stopped. Report: 2026-10-08-private-rooms.md
+
+--- Previous verification evidence ---
+
 Gaming Hub paid-room initialization and Table Tennis verification — 2026-10-07
 Latest follow-up; previous recovery and gameplay runs retained below as historical evidence.
 Local isolated PostgreSQL + Redis + real API + two real socket processes.

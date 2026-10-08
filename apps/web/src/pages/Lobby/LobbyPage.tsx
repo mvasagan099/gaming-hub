@@ -1,4 +1,5 @@
 import { useRoomCountdown } from "../../hooks/useRoomCountdown";
+import { canChangeRoomReady } from "../../utils/roomReadiness";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { goBackOrHome } from "../../utils/navigation";
@@ -843,7 +844,7 @@ export const LobbyPage: React.FC = () => {
                 {!isSpectator && (
                   <button
                     onClick={() => void setReady(!meReady)}
-                    disabled={room.status !== "waiting"}
+                    disabled={!canChangeRoomReady(room)}
                     className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${
                       meReady
                         ? "bg-emerald-600 hover:bg-emerald-500 text-white"

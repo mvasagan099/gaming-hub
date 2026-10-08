@@ -579,6 +579,7 @@ const CarromMultiplayer: React.FC<Props> = ({
     driver.start();
 
     return () => {
+      clearSettleTimeout();
       worker?.terminate();
       previewWorkerRef.current = null;
       driver.stop();
@@ -1507,7 +1508,7 @@ const CarromMultiplayer: React.FC<Props> = ({
       renderedMatchRef.current = currentMatchId;
       setRenderedMatchId(currentMatchId);
     }
-    rafRef.current = requestAnimationFrame(animate);
+    if (!gameOver) rafRef.current = requestAnimationFrame(animate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragState, dragAim, gameOver]);
 

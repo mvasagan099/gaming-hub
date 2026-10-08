@@ -561,12 +561,20 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
     if (gameOver || isTurnActive || showRules || currentPlayer !== 'ai') return;
     
     setAiThinking(true);
+    let shotTimer: ReturnType<typeof setTimeout> | undefined;
     const timer = setTimeout(() => {
       const coins = coinsRef.current;
-      const blacks = coins.filter(c => c.type === 'black' && c.active);
+      const blackCoins = coins.filter(c => c.type === 'black' && c.active);
+      const queen = coins.find(c => c.type === 'queen' && c.active);
+      const blacks = blackCoins.length <= 1 && queen ? [queen] : blackCoins;
       const striker = coins.find(c => c.type === 'striker');
       
-      if (!striker || blacks.length === 0) return;
+      if (!striker || blacks.length === 0) {
+        setAiThinking(false);
+        setCurrentPlayer('player');
+        setTimeLeft(20);
+        return;
+      }
 
       let bestTarget = blacks[0];
       let bestPocket = POCKETS[0];
@@ -616,7 +624,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
          striker.x = aiX;
          striker.y = 70;
          
-         setTimeout(() => {
+         shotTimer = setTimeout(() => {
            const shootAngle = Math.atan2(impactY - striker.y, impactX - striker.x);
            striker.vx = Math.cos(shootAngle) * SHOT_MAX_SPEED;
            striker.vy = Math.sin(shootAngle) * SHOT_MAX_SPEED;
@@ -626,7 +634,10 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
          }, 1500); 
       }
     }, 1500);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(shotTimer);
+    };
   }, [currentPlayer, isTurnActive, gameOver, showRules, mode]);
 
   useEffect(() => {
@@ -980,7 +991,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
 
         if (rules.queenStatus === 'pocketed_needs_cover' && rules.queenPocketedBy === currentPlayer) {
             const scoredOwn = (currentPlayer === 'player' && turnStats.white > 0) || (currentPlayer === 'ai' && turnStats.black > 0);
-            if (scoredOwn) {
+            if (scoredOwn && !turnStats.foul) {
                 rules.queenStatus = 'covered';
                 toast.success('Queen Covered!', { id: 'q-cover' });
             } else {
@@ -997,9 +1008,17 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
         }
 
         if (turnStats.queen) {
-           rules.queenStatus = 'pocketed_needs_cover';
-           rules.queenPocketedBy = currentPlayer;
-           toast('Queen pocketed! Must cover on next shot.', { id: 'q-pocket' });
+           const scoredOwn = currentPlayer === 'player' ? turnStats.white > 0 : turnStats.black > 0;
+           if (turnStats.foul) {
+             rules.queenStatus = 'unpocketed';
+             rules.queenPocketedBy = null;
+             const queen = coins.find(c => c.type === 'queen');
+             if (queen) Object.assign(queen, { active: true, x: BOARD_WIDTH / 2, y: BOARD_HEIGHT / 2, vx: 0, vy: 0 });
+           } else {
+             rules.queenStatus = scoredOwn ? 'covered' : 'pocketed_needs_cover';
+             rules.queenPocketedBy = currentPlayer;
+             toast(scoredOwn ? 'Queen Covered!' : 'Queen pocketed! Must cover on next shot.', { id: 'q-pocket' });
+           }
         }
 
         if (turnStats.foul) {
@@ -1014,46 +1033,25 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
            }
         }
 
-        setScore(prev => {
-           let newWhite = prev.white;
-           let newBlack = prev.black;
-           let wTaken = 0; let bTaken = 0;
-           
-           if (rules.dueOwed.white > 0 && newWhite > 0) {
-              const take = Math.min(rules.dueOwed.white, newWhite);
-              newWhite -= take; rules.dueOwed.white -= take; wTaken = take;
-           }
-           if (rules.dueOwed.black > 0 && newBlack > 0) {
-              const take = Math.min(rules.dueOwed.black, newBlack);
-              newBlack -= take; rules.dueOwed.black -= take; bTaken = take;
-           }
-
-           if (wTaken > 0 || bTaken > 0) {
-              let spawnedW = 0; let spawnedB = 0;
-              for (const c of coins) {
-                 if (!c.active) {
-                    const rx = BOARD_WIDTH/2 + (Math.random() - 0.5) * 40;
-                    const ry = BOARD_HEIGHT/2 + (Math.random() - 0.5) * 40;
-                    if (c.type === 'white' && spawnedW < wTaken) {
-                       c.active = true; c.x = rx; c.y = ry; spawnedW++;
-                    }
-                    if (c.type === 'black' && spawnedB < bTaken) {
-                       c.active = true; c.x = rx; c.y = ry; spawnedB++;
-                    }
-                 }
-              }
-           }
-
-           const pocketedW = coins.filter(c => c.type === 'white' && !c.active).length;
-           const pocketedB = coins.filter(c => c.type === 'black' && !c.active).length;
-           const queenPocketed = !coins.some(c => c.type === 'queen' && c.active);
-
-           if ((pocketedW >= 9 || pocketedB >= 9) && queenPocketed) {
-              setTimeout(() => setGameOver(true), 500);
-           }
-
-           return { white: newWhite, black: newBlack };
-        });
+        // Apply physical refunds exactly once, outside React state updaters.
+        // React may invoke an updater twice; it must never mutate rules or coins.
+        for (const color of ['white', 'black'] as const) {
+          for (const coin of coins) {
+            if (rules.dueOwed[color] <= 0) break;
+            if (coin.type !== color || coin.active) continue;
+            coin.active = true;
+            coin.x = BOARD_WIDTH / 2 + (Math.random() - 0.5) * 40;
+            coin.y = BOARD_HEIGHT / 2 + (Math.random() - 0.5) * 40;
+            coin.vx = 0; coin.vy = 0;
+            rules.dueOwed[color]--;
+          }
+        }
+        const pocketedW = coins.filter(c => c.type === 'white' && !c.active).length;
+        const pocketedB = coins.filter(c => c.type === 'black' && !c.active).length;
+        setScore({ white: pocketedW, black: pocketedB });
+        if (rules.queenStatus === 'covered' &&
+            ((pocketedW >= 9 && rules.queenPocketedBy === 'player') ||
+             (pocketedB >= 9 && rules.queenPocketedBy === 'ai'))) setGameOver(true);
 
         setCurrentPlayer(nextPlayer);
         turnScoreRef.current = { white: 0, black: 0, queen: false, foul: false };
@@ -1174,7 +1172,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
 
     renderBoard(ctx, coins, dragState, dragStart, currentAim, strikerPhase, currentPlayer, isTurnActive, gameOver, strikerPos, mySeatRef.current);
 
-  }, true);
+  }, !gameOver);
 
   const renderBoard = useCallback((
     ctx: CanvasRenderingContext2D,
@@ -1584,6 +1582,14 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
     setStrikerPos(0);
     setStrikerPhase('positioning');
     setDragState('idle');
+    setDragStart({ x: 0, y: 0 });
+    setCurrentAim({ x: 0, y: 0 });
+    setAiThinking(false);
+    setQueenStatus('unpocketed');
+    floatingPopsRef.current = [];
+    pocketRipplesRef.current = [];
+    turnActiveFramesRef.current = 0;
+    isTurnActiveRef.current = false;
     setTimeLeft(20);
     setCurrentPlayer('player');
     rulesRef.current = { queenStatus: 'unpocketed', queenPocketedBy: null, dueOwed: { white: 0, black: 0 } };
@@ -1596,7 +1602,7 @@ const CarromAI: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
   const pocketedBlackCount = coinsRef.current.filter(c => c.type === 'black' && !c.active).length;
   const isPlayerWinner = mode === 'multiplayer' 
     ? (mySeat === 0 ? pocketedWhiteCount >= 9 : pocketedBlackCount >= 9)
-    : pocketedWhiteCount >= 9;
+    : pocketedWhiteCount >= 9 && rulesRef.current.queenStatus === 'covered' && rulesRef.current.queenPocketedBy === 'player';
 
   return (
     <GameWrapper title="Real Carrom 3D" gameId="carrom" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={gameOver}>

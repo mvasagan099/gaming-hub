@@ -113,6 +113,17 @@ export class GameStateManager {
       action,
       events,
     };
+    if (room.config.gameId === 'carrom') {
+      const { lastTrajectory: _trajectory, lastAction: _action, ...settled } = result.state;
+      recordedAction.replayState = structuredClone(settled);
+      // Both live shot events contain the same keyframes. Retain them once in
+      // durable history; live broadcasts still use the untouched engine events.
+      recordedAction.events = events.map(event => {
+        if (event.type !== 'carrom:shot-start') return event;
+        const { keyframes: _frames, ...metadata } = event;
+        return metadata;
+      });
+    }
     room.match.actionHistory.push(recordedAction);
     room.match.stateSnapshots.push({
       turnNumber: room.match.turnNumber,
@@ -120,6 +131,11 @@ export class GameStateManager {
       state: result.state,
       action: recordedAction,
     });
+    if (this.framework.config.executeRoomTask && room.match.stateSnapshots.length > 1) {
+      // Distributed recovery uses its canonical checkpoint and action history.
+      // Keep only the latest verification snapshot instead of all shot frames.
+      room.match.stateSnapshots.splice(0, room.match.stateSnapshots.length - 1);
+    }
     return recordedAction;
   }
 

@@ -4,7 +4,7 @@ import { predictCarromShot } from '../shotPreview';
 
 const fixture = vi.hoisted(() => ({
   slots: [] as any[], cursor: 0, effects: [] as Array<() => any>, driver: null as any,
-  worker: null as any, message: null as any, state: null as any, seat: 0, animate: null as any, consume: vi.fn(), place: vi.fn(), strike: vi.fn(), live: vi.fn(),
+  cleanup: null as any, worker: null as any, message: null as any, state: null as any, seat: 0, animate: null as any, consume: vi.fn(), place: vi.fn(), strike: vi.fn(), live: vi.fn(),
 }));
 vi.mock('react', async original => {
   const actual = await original<typeof import('react')>();
@@ -68,7 +68,7 @@ function setup(seat = 0) {
     fixture.cursor = 0; fixture.effects = [];
     return CarromMultiplayer({ mySeat: seat, playerNames: ['Host', 'Guest'], stake: 0, onBack: vi.fn() });
   };
-  render(); fixture.effects[0]();
+  render(); fixture.cleanup = fixture.effects[0]();
   const canvas = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 500, height: 500 }), setPointerCapture: vi.fn() };
   fixture.slots[0].current = canvas;
   const board = () => find(render(), node => node.type === 'canvas').props;
@@ -298,3 +298,22 @@ describe('Carrom multiplayer striker controls', () => {
     expect(striker.x).toBe(310);
   });
 });
+
+ describe('Carrom completed match resources', () => {
+  it('clears pending shot settlement timers on unmount', () => {
+    const game = setup();
+    const board = game.board();
+    board.onPointerDown(game.pointer(250, 422.5)); board.onPointerMove(game.pointer(250, 485)); board.onPointerUp();
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    fixture.cleanup();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it('stops requesting frames after the final shot and result have settled', () => {
+    const game = setup(); const tick = frames();
+    receiveShot(true); fixture.driver.onWin(0); tick(500);
+    game.render();
+    vi.mocked(requestAnimationFrame).mockClear();
+    tick(600);
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
+  });
+ });

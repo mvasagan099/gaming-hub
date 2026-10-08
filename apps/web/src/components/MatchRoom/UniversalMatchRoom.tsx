@@ -1,4 +1,5 @@
 import { useRoomCountdown } from "../../hooks/useRoomCountdown";
+import { canChangeRoomReady } from "../../utils/roomReadiness";
 import React, { useState, useEffect } from 'react';
 import {
   Swords,
@@ -287,7 +288,7 @@ export const UniversalMatchRoom: React.FC<UniversalMatchRoomProps> = ({
 
                 <button
                   onClick={() => void handleToggleReady()}
-                  disabled={togglingReady || !opponent}
+                  disabled={togglingReady || !opponent || !canChangeRoomReady(room)}
                   className={`w-full sm:w-auto min-w-[200px] py-3.5 px-8 rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-xl flex items-center justify-center gap-2 ${
                     meReady
                       ? 'bg-rose-600/90 hover:bg-rose-600 text-white shadow-rose-600/20 active:scale-[0.98]'

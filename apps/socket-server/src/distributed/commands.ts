@@ -111,6 +111,7 @@ export function createCommandDispatcher(framework: MultiplayerFramework, coordin
         await assertFeatureEnabled('games.enabled', 'Games');
         await assertFeatureEnabled(room!.config.stake > 0 ? 'games.realMoney' : 'games.practice', 'Games');
         await assertGameEnabled(room!.config.gameId, room!.config.stake);
+        await coordinator.assertRematchSettled(room!);
         return framework.matchManager.requestRematch(roomId!, playerId);
       case 'game:rematch-decline': return framework.matchManager.declineRematch(roomId!, playerId);
       case 'disconnect':

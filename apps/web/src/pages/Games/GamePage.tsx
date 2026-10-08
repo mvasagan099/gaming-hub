@@ -9,6 +9,7 @@ const BubbleShooterGame = lazy(() => import("../../games/bubble-shooter/BubbleSh
 const TableTennisGame = lazy(() => import("../../games/table-tennis/TableTennisGame").then(m => ({ default: m.TableTennisGame })));
 const SnakeVsWormsGame = lazy(() => import("../../games/snake-vs-worms/SnakeVsWormsGame").then(m => ({ default: m.SnakeVsWormsGame })));
 const SnookerGame = lazy(() => import("../../games/snooker/SnookerGame").then(m => ({ default: m.SnookerGame })));
+const ReplayModal = lazy(() => import("../../components/Replay/ReplayModal").then(m => ({ default: m.ReplayModal })));
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { isGameId } from '@gaming-hub/shared';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
@@ -21,7 +22,8 @@ export const GamePage: React.FC = () => {
   const navigate = useNavigate();
 
   const state = location.state as { mode?: 'ai' | 'multiplayer'; stake?: number } | null;
-  const mode = state?.mode || 'ai';
+  const replayMatchId = new URLSearchParams(location.search).get('replayMatchId');
+  const mode = replayMatchId ? 'ai' : state?.mode || 'ai';
   const stake = state?.stake !== undefined ? state.stake : (mode === 'multiplayer' ? 100 : 0);
 
   const room = useMultiplayerStore((s) => s.room);
@@ -53,6 +55,12 @@ export const GamePage: React.FC = () => {
 
   if (!gameId || !isGameId(gameId)) {
     return <Navigate to="/" replace />;
+  }
+
+  if (replayMatchId) {
+    return <Suspense fallback={<div role="status" className="p-10 text-center">Loading replay…</div>}>
+      <ReplayModal key={replayMatchId} matchId={replayMatchId} onClose={() => goBackOrHome(navigate)} />
+    </Suspense>;
   }
 
   const onBack = () => setShowExitConfirm(true);

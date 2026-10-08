@@ -132,6 +132,12 @@ export class DistributedRoomCoordinator {
 
   findPlayer(playerId: string) { return this.store.findPlayer(playerId); }
 
+  async assertRematchSettled(room: RoomRuntime): Promise<void> {
+    if (room.config.stake > 0 && room.match && !await this.store.isResultDelivered(room.match.matchId)) {
+      throw new Error('Previous match settlement is still processing. Try rematch after your wallet is updated.');
+    }
+  }
+
   /** The origin has already authenticated playerId; clients never supply this envelope. */
   async route(command: RoutedCommand): Promise<unknown> {
     if (command.event === 'room:create') return this.dispatch(command);
@@ -155,7 +161,7 @@ export class DistributedRoomCoordinator {
     });
   }
 
-  /** Capture creation publications, persist the initial room, then acquire ownership. */
+  /** Admit the creator before making the room visible to replica recovery. */
   async create(task: () => Promise<RoomRuntime>): Promise<RoomRuntime> {
     return this.context.run({ active: true, roomId: null, publications: [] }, async () => {
       try {
@@ -163,9 +169,19 @@ export class DistributedRoomCoordinator {
       room.lifecyclePhase ??= 'WAITING';
       room.config.settings.requiresGameStartValidation = true;
       const snapshot = serializeRoomCheckpoint(this.framework, room);
-      try { await this.store.create(room.id, room.code, snapshot as unknown as Prisma.InputJsonValue); }
-      catch (error) { this.framework.roomManager.unregisterRoom(room.id); throw error; }
-      await this.acquire(room.id, false);
+      let token: string | undefined;
+      try {
+        token = await this.store.nextFencingToken();
+        if (!await this.ownership.acquire(room.id, this.instanceId, token, this.ttlMs)) throw new Error('MATCH_HAS_ANOTHER_OWNER');
+        await this.store.create(room.id, room.code, snapshot as unknown as Prisma.InputJsonValue,
+          { ownerId: this.instanceId, token, ttlMs: this.ttlMs });
+        await this.ownership.assert(room.id, this.instanceId, token);
+        this.owned.set(room.id, { token, revision: 0 });
+      } catch (error) {
+        this.fenceOff(room.id);
+        if (token) await this.ownership.release(room.id, this.instanceId, token).catch(() => undefined);
+        throw error;
+      }
       return await this.local(room.id, async () => {
         const transaction = this.context.getStore()!;
         transaction.publications.push({ destination: room.ioName, event: 'room:update', payload: this.framework.syncManager.serializeRoom(room) });

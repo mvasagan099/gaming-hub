@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   X,
   Play,
@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { apiClient } from "../../services/api/client";
 import type { ReplayPackage, ReplayEventRecord } from "@gaming-hub/shared";
+import { summarizeReplayData, replayStepDuration } from "./replayPresentation";
+import { CarromReplayBoard } from "./CarromReplayBoard";
 import toast from "react-hot-toast";
 
 interface ReplayModalProps {
@@ -31,17 +33,27 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ matchId, onClose }) =>
 
   useEffect(() => {
     let mounted = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
     setLoading(true);
+    setReplayPkg(null);
+    setCurrentStep(0);
+    setIsPlaying(false);
     apiClient
-      .get<ReplayPackage>(`/matches/${matchId}/replay`)
+      .get<ReplayPackage>(`/matches/${encodeURIComponent(matchId)}/replay`, { signal: controller.signal })
       .then((data) => {
         if (mounted) {
+          clearTimeout(timeout);
+          if (!Array.isArray(data.events) || !data.metadata || !data.initialState || !data.finalState) {
+            throw new Error("Replay data is incomplete");
+          }
           setReplayPkg(data);
           setLoading(false);
         }
       })
       .catch((err) => {
         if (mounted) {
+          clearTimeout(timeout);
           toast.error("Failed to load match replay: " + (err instanceof Error ? err.message : "Not found"));
           setLoading(false);
         }
@@ -49,31 +61,28 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ matchId, onClose }) =>
 
     return () => {
       mounted = false;
-      if (playTimerRef.current) clearInterval(playTimerRef.current);
+      clearTimeout(timeout);
+      controller.abort();
+      if (playTimerRef.current) clearTimeout(playTimerRef.current);
     };
   }, [matchId]);
 
   useEffect(() => {
     if (!isPlaying || !replayPkg || replayPkg.events.length === 0) {
-      if (playTimerRef.current) clearInterval(playTimerRef.current);
+      if (playTimerRef.current) clearTimeout(playTimerRef.current);
       return;
     }
 
-    const interval = Math.max(100, Math.round(1000 / speed));
-    playTimerRef.current = setInterval(() => {
-      setCurrentStep((prev) => {
-        if (prev >= replayPkg.events.length - 1) {
-          setIsPlaying(false);
-          return prev;
-        }
-        return prev + 1;
-      });
+    const interval = replayStepDuration(replayPkg.events[currentStep]) / speed;
+    playTimerRef.current = setTimeout(() => {
+      if (currentStep >= replayPkg.events.length - 1) setIsPlaying(false);
+      else setCurrentStep(currentStep + 1);
     }, interval);
 
     return () => {
-      if (playTimerRef.current) clearInterval(playTimerRef.current);
+      if (playTimerRef.current) clearTimeout(playTimerRef.current);
     };
-  }, [isPlaying, speed, replayPkg]);
+  }, [isPlaying, speed, replayPkg, currentStep]);
 
   const handleRestart = () => {
     setIsPlaying(false);
@@ -93,6 +102,10 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ matchId, onClose }) =>
 
   const totalEvents = replayPkg?.events.length ?? 0;
   const currentEvent: ReplayEventRecord | undefined = replayPkg?.events[currentStep];
+
+  const eventPreview = useMemo(() => currentEvent
+    ? JSON.stringify(summarizeReplayData({ action: currentEvent.actionData, result: currentEvent.resultData }), null, 2)
+    : "", [currentEvent]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 sm:p-6 overflow-y-auto">
@@ -169,11 +182,14 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ matchId, onClose }) =>
                   <Shield className="w-4 h-4 text-emerald-400" />
                   <div>
                     <span className="text-[10px] text-slate-400 block font-bold">Checksum</span>
-                    <span className="font-mono text-emerald-300">{replayPkg.checksum?.slice(0, 8) ?? "Verified"}</span>
+                    <span className="font-mono text-emerald-300">{replayPkg.checksum?.slice(0, 8) ?? "Not recorded"}</span>
                   </div>
                 </div>
               </div>
 
+              {replayPkg.gameId === "carrom" && <CarromReplayBoard
+                event={currentEvent} fallbackState={currentEvent?.resultData.state ?? (Object.keys(replayPkg.initialState).length ? replayPkg.initialState : replayPkg.finalState)}
+                isPlaying={isPlaying} speed={speed} />}
               {/* Event Board / State Visualizer */}
               <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
                 <div className="flex items-center justify-between text-xs text-slate-400">
@@ -200,16 +216,16 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ matchId, onClose }) =>
                       </div>
                     </div>
 
-                    <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800/80 font-mono text-xs text-slate-300 overflow-x-auto max-h-48">
-                      <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">Action Payload & Result Data:</div>
+                    <details className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800/80 font-mono text-xs text-slate-300 overflow-x-auto max-h-48">
+                      <summary className="text-[10px] text-slate-400 uppercase font-bold mb-1 cursor-pointer">Action details</summary>
                       <pre className="text-[11px] text-blue-300">
-                        {JSON.stringify({ action: currentEvent.actionData, result: currentEvent.resultData }, null, 2)}
+                        {eventPreview}
                       </pre>
-                    </div>
+                    </details>
                   </div>
                 ) : (
                   <div className="py-10 text-center text-slate-500 text-xs font-bold">
-                    Initial Match State (No actions executed yet)
+                    No recorded actions are available for this match.
                   </div>
                 )}
               </div>
@@ -222,7 +238,7 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ matchId, onClose }) =>
           <div className="p-4 sm:p-6 border-t border-slate-800 bg-slate-950/80 space-y-3">
             {/* Timeline Slider */}
             <div className="flex items-center gap-3">
-              <span className="text-[11px] font-mono text-slate-400 w-10 text-right">{currentStep + 1}</span>
+              <span className="text-[11px] font-mono text-slate-400 w-10 text-right">{totalEvents ? currentStep + 1 : 0}</span>
               <input
                 type="range"
                 min={0}
@@ -256,7 +272,11 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ matchId, onClose }) =>
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => setIsPlaying(!isPlaying)}
+                  onClick={() => {
+                    if (!isPlaying && currentStep >= totalEvents - 1) setCurrentStep(0);
+                    setIsPlaying(!isPlaying);
+                  }}
+                  disabled={totalEvents === 0}
                   title={isPlaying ? "Pause" : "Play"}
                   className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/25 transition-all"
                 >

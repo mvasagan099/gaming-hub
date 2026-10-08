@@ -320,6 +320,7 @@ export class MatchManager {
       winnerSeats: [],
       stateSnapshots: [],
       actionHistory: [],
+      ...(room.config.gameId === "carrom" ? { replayInitialState: structuredClone(engine.serialize()) } : {}),
     };
     
     // Store initial state snapshot

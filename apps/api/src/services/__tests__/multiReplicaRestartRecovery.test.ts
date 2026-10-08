@@ -10,6 +10,7 @@ import { GAME_IDS, type GameId } from '@gaming-hub/shared';
 import { buildApp } from '../../app';
 import { env } from '../../env';
 import { createTestUser } from '../../../test/helpers';
+import { GameHistoryService } from '../gameHistoryService';
 import { WalletTransactionService } from '../walletTransactionService';
 
 const root = fileURLToPath(new URL('../../../../..', import.meta.url));
@@ -165,6 +166,10 @@ describe('restartRecovery / crossReplicaOwnership / multiReplicaPaidMatch — re
     const duplicate = await command(first, 'game:action', { roomId: room.id, matchId, action });
     expect(duplicate.ok).toBe(true);
     expect(((await load()).snapshot as any).match.actionHistory).toHaveLength(1);
+    if (gameId === 'carrom') {
+      expect((await command(first, 'game:action', { roomId: room.id, matchId,
+        action: { type: 'strike', angle: -Math.PI / 2, power: 0.5, actionId: crypto.randomUUID() } })).ok).toBe(true);
+    }
     const finished = await command(second, 'game:action', { roomId: room.id, matchId, action: { type: 'resign', actionId: crypto.randomUUID() } });
     expect(finished.finished).toBe(true);
     await until(async () => (await prisma.gameResultOutbox.findUnique({ where: { matchId } }))?.status === 'DELIVERED');
@@ -172,8 +177,76 @@ describe('restartRecovery / crossReplicaOwnership / multiReplicaPaidMatch — re
     expect(await prisma.matchPlayer.count({ where: { matchId } })).toBe(2);
     expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: players[0]!.id } })).balance).toBe(1080);
     expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: players[1]!.id } })).balance).toBe(900);
+    // A private-room rematch must receive a new funded identity and fresh board admission.
+    await command(first, 'game:rematch-request', { roomId: room.id });
+    await command(second, 'game:rematch-accept', { roomId: room.id });
+    await until(async () => ((await load()).snapshot as any).room.status === 'playing');
+    const archivedReplay = await GameHistoryService.getMatchReplay(players[0]!.id, matchId);
+    expect(archivedReplay.matchId).toBe(matchId);
+    expect(archivedReplay.events.length).toBeGreaterThan(0);
+    if (gameId === 'carrom') {
+      expect(archivedReplay.initialState.coins).toHaveLength(19);
+      expect(archivedReplay.events.some(event => (event.resultData.events as any[])?.some(e => e.type === 'shot-trajectory'))).toBe(true);
+    }
+    const nextMatchId = (await load()).matchId!;
+    expect(nextMatchId).not.toBe(matchId);
+    if (['carrom', 'snake-vs-worms'].includes(gameId)) {
+      expect(((await load()).snapshot as any).match.loadedPlayerIds).toEqual([]);
+      await command(first, 'game:loaded', { roomId: room.id, matchId: nextMatchId });
+      await command(second, 'game:loaded', { roomId: room.id, matchId: nextMatchId });
+    }
+    expect((await command(first, 'game:action', { roomId: room.id, matchId, action })).ok).toBe(false);
+    for (const [index, balance] of [[0, 980], [1, 800]] as const) {
+      expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: players[index]!.id } })).balance).toBe(balance);
+    }
+    expect((await command(first, 'game:action', { roomId: room.id, matchId: nextMatchId,
+      action: { ...actions[gameId], actionId: crypto.randomUUID(), ...(gameId === 'fruit-ninja' ? { time: Date.now() } : {}) } })).ok).toBe(true);
+    await command(second, 'game:action', { roomId: room.id, matchId: nextMatchId, action: { type: 'resign' } });
+    await until(async () => (await prisma.gameResultOutbox.findUnique({ where: { matchId: nextMatchId } }))?.status === 'DELIVERED');
+    expect(await prisma.transaction.count({ where: { referenceId: nextMatchId, referenceType: 'MATCH_PAYOUT' } })).toBe(1);
+    expect(await GameHistoryService.getMatchReplay(players[0]!.id, matchId)).toEqual(archivedReplay);
+    await expect(GameHistoryService.getMatchReplay(crypto.randomUUID(), matchId)).rejects.toThrow(/Unauthorized/);
+    expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: players[0]!.id } })).balance).toBe(1160);
+    expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: players[1]!.id } })).balance).toBe(800);
     first.disconnect(); second.disconnect();
     a = await server(aPort);
+  }, 60000);
+});
+
+describe('all-game paid private-room admission and cancellation', () => {
+  it.each(GAME_IDS)('%s rejects invalid admission and refunds a cancelled countdown once', async gameId => {
+    const players = await Promise.all([createTestUser(), createTestUser(), createTestUser()]);
+    for (const user of players) await prisma.$transaction(tx => WalletTransactionService.createCredit(tx,
+      { userId: user.id, amount: 1000, referenceType: 'ADMIN', referenceId: crypto.randomUUID() }));
+    const first = await connect(aPort, players[0]!.id), second = await connect(bPort, players[1]!.id);
+    const outsider = await connect(bPort, players[2]!.id);
+    try {
+      const room = await command(first, 'room:create', { gameId, stake: 100, maxPlayers: 2, isPrivate: true });
+      expect(room.isPrivate).toBe(true);
+      expect((await second.timeout(10000).emitWithAck('room:join', { code: 'INVALID-CODE' })).ok).toBe(false);
+      await command(second, 'room:join', { code: room.code.toLowerCase() });
+      expect((await outsider.timeout(10000).emitWithAck('room:join', { roomId: room.id })).ok).toBe(false);
+      expect((await outsider.timeout(10000).emitWithAck('room:ready', { roomId: room.id, ready: true })).ok).toBe(false);
+      expect((await first.timeout(10000).emitWithAck('room:start', { roomId: room.id })).ok).toBe(false);
+      expect((await second.timeout(10000).emitWithAck('room:start', { roomId: room.id })).ok).toBe(false);
+      for (const user of players) expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } })).balance).toBe(1000);
+      await command(first, 'room:ready', { roomId: room.id, ready: true });
+      await command(second, 'room:ready', { roomId: room.id, ready: true });
+      const started = await command(first, 'room:start', { roomId: room.id });
+      expect(started.lifecyclePhase).toBe('COUNTDOWN');
+      const saved = await prisma.liveRoomCheckpoint.findUniqueOrThrow({ where: { id: room.id } });
+      const matchId = saved.matchId!;
+      expect((await first.timeout(10000).emitWithAck('room:start', { roomId: room.id })).ok).toBe(false);
+      expect((await command(first, 'game:action', { roomId: room.id, matchId, action: { type: 'resign' } })).ok).toBe(false);
+      await command(second, 'room:leave', { roomId: room.id });
+      await until(async () => (await prisma.gameResultOutbox.findUnique({ where: { matchId } }))?.status === 'DELIVERED');
+      const { GameCoinService } = await import('../gameCoinService');
+      await GameCoinService.cancelMatch(matchId, 'duplicate_private_room_cancellation');
+      for (const user of players) expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } })).balance).toBe(1000);
+      expect((await prisma.match.findUniqueOrThrow({ where: { id: matchId } })).status).toBe('ABORTED');
+      expect(await prisma.transaction.count({ where: { referenceId: matchId, referenceType: 'MATCH_PAYOUT' } })).toBe(0);
+      expect(await prisma.gameResultOutbox.count({ where: { matchId } })).toBe(1);
+    } finally { first.disconnect(); second.disconnect(); outsider.disconnect(); }
   }, 60000);
 });
 
@@ -358,6 +431,14 @@ describe('network failures with real HTTP and Redis transport', () => {
       await command(f.second, 'game:action', { roomId: f.room.id, matchId: f.matchId, action: { type: 'resign' } });
       await until(async () => (await prisma.gameResultOutbox.findUnique({ where: { matchId: f.matchId } }))?.status === 'FAILED_RETRYABLE');
       expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: f.players[0]!.id } })).balance).toBe(900);
+      // A retryable payout must retain its completed checkpoint until delivery.
+      for (const client of [f.first, f.second]) {
+        const rematch = await client.timeout(10000).emitWithAck('game:rematch-request', { roomId: f.room.id });
+        expect(rematch.ok).toBe(false);
+        expect(rematch.error.message).toContain('settlement is still processing');
+      }
+      expect((await prisma.liveRoomCheckpoint.findUniqueOrThrow({ where: { id: f.room.id } })).matchId).toBe(f.matchId);
+      expect(await prisma.match.count({ where: { roomId: f.room.id } })).toBe(1);
       await kill(a); f.first.disconnect();
       settlementFault = 'loseAck';
       await until(async () => (await prisma.gameResultOutbox.findUnique({ where: { matchId: f.matchId } }))?.status === 'DELIVERED');

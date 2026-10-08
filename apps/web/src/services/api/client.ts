@@ -162,8 +162,8 @@ async function request<T>(path: string, init: RequestInit, tokenOverride?: strin
 }
 
 export const apiClient = {
-  get<T>(path: string): Promise<T> {
-    return request<T>(path, { method: "GET" });
+  get<T>(path: string, options?: Pick<RequestInit, "signal">): Promise<T> {
+    return request<T>(path, { ...options, method: "GET" });
   },
   post<T>(path: string, body?: unknown, tokenOverride?: string): Promise<T> {
     const requestBody = typeof FormData !== "undefined" && body instanceof FormData

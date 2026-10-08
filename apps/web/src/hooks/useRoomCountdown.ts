@@ -11,5 +11,5 @@ export function useRoomCountdown(room: RoomFull | null, legacy: number | null) {
     update(); const timer = setInterval(update, 100);
     return () => clearInterval(timer);
   }, [room?.lifecyclePhase, room?.countdownEndsAt, room?.serverTimeMs]);
-  return room?.lifecyclePhase === 'COUNTDOWN' ? remaining : legacy;
+  return room?.lifecyclePhase ? (room.lifecyclePhase === 'COUNTDOWN' ? remaining : null) : legacy;
 }

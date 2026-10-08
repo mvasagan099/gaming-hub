@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 
 // Exercise the actual component handlers without mounting the canvas renderer
 // or starting timers. Hook slots survive re-renders, just as they do in React.
-const hooks = vi.hoisted(() => ({ slots: [] as any[], cursor: 0, frame: null as null | ((dt: number) => void) }));
+const hooks = vi.hoisted(() => ({ slots: [] as any[], cursor: 0, effects: [] as Array<() => any>, running: true, doubleUpdaters: false, frame: null as null | ((dt: number) => void) }));
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>();
   const overrides = {
@@ -11,6 +11,7 @@ vi.mock('react', async (importOriginal) => {
       const index = hooks.cursor++;
       if (!(index in hooks.slots)) hooks.slots[index] = typeof initial === 'function' ? initial() : initial;
       return [hooks.slots[index], (value: any) => {
+        if (hooks.doubleUpdaters && typeof value === 'function') value(hooks.slots[index]);
         hooks.slots[index] = typeof value === 'function' ? value(hooks.slots[index]) : value;
       }];
     },
@@ -19,7 +20,7 @@ vi.mock('react', async (importOriginal) => {
       if (!(index in hooks.slots)) hooks.slots[index] = { current: initial };
       return hooks.slots[index];
     },
-    useEffect() {},
+    useEffect(effect: any) { hooks.effects.push(effect); },
     useLayoutEffect() {},
     useCallback(callback: any) { return callback; },
   };
@@ -27,7 +28,7 @@ vi.mock('react', async (importOriginal) => {
 });
 vi.mock('../../../components/GameWrapper', () => ({ GameWrapper: () => null }));
 vi.mock('../../shared/components/MultiplayerMatchPanel', () => ({ MultiplayerMatchPanel: () => null }));
-vi.mock('../../shared/hooks/useGameLoop', () => ({ useGameLoop: (frame: (dt: number) => void) => { hooks.frame = frame; } }));
+vi.mock('../../shared/hooks/useGameLoop', () => ({ useGameLoop: (frame: (dt: number) => void, running: boolean) => { hooks.frame = frame; hooks.running = running; } }));
 vi.mock('../rendering/CarromBoardRenderer', () => ({ CarromBoardRenderer: { drawBoard: vi.fn() } }));
 vi.mock('../rendering/CarromPieceRenderer', () => ({ CarromPieceRenderer: { drawCoin: vi.fn() } }));
 vi.mock('../rendering/CarromEffectsRenderer', () => ({ CarromEffectsRenderer: {} }));
@@ -56,7 +57,7 @@ function find(root: any, predicate: (node: Node) => boolean): Node | undefined {
 function setup() {
   const element = CarromGame({ mode: 'ai', stake: 0, onBack: vi.fn() }) as Node;
   const render = () => {
-    hooks.cursor = 0;
+    hooks.cursor = 0; hooks.effects = [];
     return (element.type as any)(element.props);
   };
   let tree = render();
@@ -82,7 +83,9 @@ function setup() {
   return { render, board, mover, striker, blocker, coins, pointer, tick };
 }
 
-beforeEach(() => { hooks.slots = []; hooks.cursor = 0; vi.clearAllMocks(); });
+beforeEach(() => { hooks.slots = []; hooks.cursor = 0; hooks.effects = []; hooks.doubleUpdaters = false; vi.clearAllMocks(); });
+
+afterEach(() => vi.useRealTimers());
 
 describe('Carrom striker placement recovery', () => {
   it('keeps the mover available after tapping a coin and allows moving away and shooting', () => {
@@ -242,3 +245,100 @@ describe('Carrom pocket capture', () => {
     expect(rules.queenPocketedBy).toBe('player');
   });
 });
+
+ describe('Carrom restart and cleanup', () => {
+  it('clears the second AI shot timer when leaving after it has aimed', () => {
+    vi.useFakeTimers();
+    const game = setup();
+    hooks.slots[hooks.slots.indexOf('player')] = 'ai';
+    game.render();
+    const cleanups = hooks.effects.map(effect => effect()).filter(value => typeof value === 'function');
+    vi.advanceTimersByTime(1500);
+    expect(vi.getTimerCount()).toBe(1);
+    cleanups.forEach(cleanup => cleanup());
+    vi.advanceTimersByTime(2000);
+    expect(game.striker.vx).toBe(0);
+    expect(game.striker.vy).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('stops completed rendering and resets coins, queen state and effects for Replay', () => {
+    const game = setup();
+    hooks.slots[8] = true; // completed game
+    const rules = hooks.slots.find(slot => slot?.current?.dueOwed).current;
+    rules.queenStatus = 'covered';
+    game.coins[1].active = false;
+    const oldCoins = game.coins;
+    const tree = game.render();
+    expect(hooks.running).toBe(false);
+    find(tree, node => node.type === 'button' && node.props.children === 'Replay')!.props.onClick();
+    game.render();
+    expect(hooks.running).toBe(true);
+    const coins = hooks.slots.find(slot => Array.isArray(slot?.current) && slot.current[0]?.type === 'striker').current;
+    expect(coins).not.toBe(oldCoins);
+    expect(coins.every((coin: any) => coin.active && coin.vx === 0 && coin.vy === 0)).toBe(true);
+    expect(hooks.slots.find(slot => slot?.current?.dueOwed).current.queenStatus).toBe('unpocketed');
+    expect(game.mover()).toBeDefined();
+  });
+ });
+
+ describe('Carrom completed-shot rules', () => {
+  function settledShot(game: ReturnType<typeof setup>) {
+    game.board().onPointerDown(game.pointer(200, 338));
+    game.board().onPointerMove(game.pointer(200, 398));
+    game.board().onPointerUp();
+    game.striker.vx = 0; game.striker.vy = 0;
+    return hooks.slots.find(slot => slot?.current?.queen === false && 'foul' in slot.current).current;
+  }
+  it('returns one foul coin and keeps the score consistent when React rechecks updaters', () => {
+    const game = setup(); const stats = settledShot(game);
+    stats.foul = true;
+    game.coins.find((coin: any) => coin.type === 'white').active = false;
+    hooks.slots[1] = { white: 1, black: 0 };
+    hooks.doubleUpdaters = true;
+    game.tick();
+    expect(hooks.slots[1].white).toBe(0);
+    expect(game.coins.filter((coin: any) => coin.type === 'white' && !coin.active)).toHaveLength(0);
+    expect(hooks.slots.find(slot => slot?.current?.dueOwed).current.dueOwed.white).toBe(0);
+  });
+  it('covers queen and own coin in one shot and ends only once all drops are settled', () => {
+    vi.useFakeTimers();
+    const game = setup(); const stats = settledShot(game);
+    for (const coin of game.coins) if (coin.type === 'white' || coin.type === 'queen') coin.active = false;
+    stats.queen = true; stats.white = 1;
+    game.tick(); game.render();
+    expect(hooks.slots.find(slot => slot?.current?.dueOwed).current.queenStatus).toBe('covered');
+    expect(hooks.running).toBe(false);
+    expect(vi.getTimerCount()).toBe(0); // no delayed game-over callback can enter a replay
+  });
+  it('returns the queen after a striker foul instead of covering it', () => {
+    const game = setup(); const stats = settledShot(game);
+    const queen = game.coins.find((coin: any) => coin.type === 'queen');
+    queen.active = false; stats.queen = true; stats.white = 1; stats.foul = true;
+    game.tick();
+    expect(queen.active).toBe(true);
+    expect(hooks.slots.find(slot => slot?.current?.dueOwed).current.queenStatus).toBe('unpocketed');
+    expect(hooks.slots[8]).toBe(false);
+  });
+  it('does not declare a win while the queen still needs a cover shot', () => {
+    const game = setup(); const stats = settledShot(game);
+    for (const coin of game.coins) if (coin.type === 'white' || coin.type === 'queen') coin.active = false;
+    stats.queen = true; stats.white = 0;
+    game.tick(); game.render();
+    expect(hooks.slots.find(slot => slot?.current?.dueOwed).current.queenStatus).toBe('pocketed_needs_cover');
+    expect(hooks.running).toBe(true);
+  });
+  it('passes an AI turn without eligible pieces instead of getting stuck thinking forever', () => {
+    vi.useFakeTimers();
+    const game = setup();
+    for (const coin of game.coins) if (coin.type === 'black' || coin.type === 'queen') coin.active = false;
+    const playerIndex = hooks.slots.indexOf('player');
+    hooks.slots[playerIndex] = 'ai'; game.render();
+    const cleanups = hooks.effects.map(effect => effect()).filter(value => typeof value === 'function');
+    vi.advanceTimersByTime(1500);
+    expect(hooks.slots[playerIndex]).toBe('player');
+    cleanups.forEach(cleanup => cleanup());
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+ });
