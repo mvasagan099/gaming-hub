@@ -11,7 +11,6 @@ import {
   Crown,
   Loader2,
   LogIn,
-  LogOut,
   Play,
   Shield,
   Star,
@@ -40,7 +39,6 @@ import { useWalletStore } from "../../store/walletStore";
 import { useMe } from "../../services/api/useMe";
 import { usePublicProfile } from "../../services/api/usePublicProfile";
 import { RoomChat } from "./RoomChat";
-import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 
 const SEAT_COLORS = [
   { ring: "border-rose-500", text: "text-rose-400", bg: "bg-rose-500", glow: "shadow-rose-500/20", badge: "bg-rose-500/20 text-rose-300" },
@@ -228,10 +226,9 @@ export const LobbyPage: React.FC = () => {
   const navigate = useNavigate();
 
   const def = slug ? GAME_BY_ID.get(slug as GameId) : undefined;
-  const state = location.state as { stake?: number } | null;
+  const state = location.state as { stake?: number; roomAction?: "create" | "join" } | null;
   const [stake, setStake] = useState(state?.stake ?? def?.defaultStake ?? 100);
   const [joinCode, setJoinCode] = useState("");
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const session = useAuthStore((s) => s.session);
   const userId = useAuthStore((s) => s.user?.id ?? null);
@@ -307,6 +304,13 @@ export const LobbyPage: React.FC = () => {
     }
   }, [room, slug, matchmaking.queued, navigate]);
 
+  useEffect(() => {
+    if (!session || room || matchmaking.queued || !state?.roomAction) return;
+    const target = document.getElementById(state.roomAction === "join" ? "private-room-code" : "create-private-room");
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    target?.focus({ preventScroll: true });
+  }, [session, room, matchmaking.queued, state?.roomAction]);
+
   // Client-side queue timeout: gives feedback even if the server eviction
   // event is missed (e.g. while disconnected).
   useEffect(() => {
@@ -343,12 +347,6 @@ export const LobbyPage: React.FC = () => {
   }
 
 
-
-  const handleSignOut = async () => {
-    await useAuthStore.getState().signOut();
-    disconnect();
-    navigate("/");
-  };
 
   const handleCreatePrivate = async () => {
     if (!def || isCreatingRoom) return;
@@ -415,7 +413,9 @@ export const LobbyPage: React.FC = () => {
   const spectators = room?.spectators ?? [];
   const allReady = participants.length >= (def.minPlayers ?? 2) && participants.every((p) => p.isReady);
   const canStart = isHost && room?.status === "waiting" && allReady;
-  const stakeTiers = [def.defaultStake, def.defaultStake * 2, def.defaultStake * 5, def.defaultStake * 10];
+  const stakeTiers = Array.from(
+    new Set([50, def.defaultStake, def.defaultStake * 2, def.defaultStake * 5, def.defaultStake * 10])
+  ).sort((a, b) => a - b);
   const walletStoreBalance = useWalletStore((s) => s.balance);
   const isWalletLoaded = useWalletStore((s) => !s.isStale || s.lastUpdated !== null);
   const balance = isWalletLoaded ? walletStoreBalance : (me?.wallet?.balance ?? null);
@@ -517,19 +517,19 @@ export const LobbyPage: React.FC = () => {
               <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2 mb-4">
                 <Zap className="w-4 h-4 text-amber-400" /> Entry Stake
               </h3>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                 {stakeTiers.map((val) => (
                   <button
                     key={val}
                     onClick={() => setStake(val)}
-                    className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all flex items-center justify-center ${
                       stake === val
                         ? "bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/20"
                         : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
                     }`}
                   >
-                    <Coins className={`w-3.5 h-3.5 inline-block mr-1 ${stake === val ? "text-black" : "text-amber-400"}`} />
-                    {val}
+                    <Coins className={`w-3.5 h-3.5 inline-block mr-1 shrink-0 ${stake === val ? "text-black" : "text-amber-400"}`} />
+                    <span>{val}</span>
                   </button>
                 ))}
               </div>
@@ -625,6 +625,7 @@ export const LobbyPage: React.FC = () => {
                 <span className="text-[10px] text-indigo-200">Find another online player</span>
               </button>
               <button
+                id="create-private-room"
                 onClick={() => void handleCreatePrivate()}
                 disabled={isCreatingRoom}
                 className="flex flex-col items-center gap-2 p-5 rounded-3xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 disabled:opacity-40 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 transition-all cursor-pointer disabled:cursor-not-allowed"
@@ -643,6 +644,8 @@ export const LobbyPage: React.FC = () => {
             </h3>
             <div className="flex items-center gap-2">
               <input
+                id="private-room-code"
+                aria-label="Room code"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 onKeyDown={(e) => {
@@ -667,14 +670,6 @@ export const LobbyPage: React.FC = () => {
             >
               👁️ Join as spectator instead
             </button>
-            {session && (
-              <button
-                onClick={() => setShowLogoutConfirm(true)}
-                className="mt-6 flex items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5" /> Sign out
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -904,18 +899,6 @@ export const LobbyPage: React.FC = () => {
         </div>
       )}
 
-      {/* Logout Confirmation Safety Dialog */}
-      <ConfirmDialog
-        isOpen={showLogoutConfirm}
-        onClose={() => setShowLogoutConfirm(false)}
-        title="Logout?"
-        message="Are you sure you want to log out?"
-        confirmText="Logout"
-        cancelText="Cancel"
-        variant="danger"
-        icon="logout"
-        onConfirm={handleSignOut}
-      />
     </div>
   );
 };

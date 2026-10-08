@@ -5,10 +5,13 @@ import { MatchSetupModal } from '../../components/MatchSetupModal';
 import { SearchBar } from '../../components/SearchBar/SearchBar';
 import { CategoryCard } from '../../components/CategoryCard/CategoryCard';
 import { GAMES_DATA } from '../../data/games';
-import { Sparkles, Clock, Flame, Trophy, Play, ChevronLeft, ChevronRight, Gamepad2 } from 'lucide-react';
+import { Sparkles, Clock, Flame, Trophy, Play, ChevronLeft, ChevronRight, Gamepad2, Users, Plus, LogIn } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useMe } from '../../services/api/useMe';
+import { useMultiplayerStore } from '../../store/multiplayerStore';
+import { useAuthStore } from '../../store/authStore';
+import { Modal } from '../../components/ui/Modal';
 import { useFeatureEnabled } from '../../store/featureFlagsStore';
 
 const gamesList: GameMetadata[] = GAMES_DATA.map(g => ({
@@ -117,6 +120,36 @@ export const Home: React.FC = () => {
     setGameSetup({ game, mode });
   };
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [privateRoomAction, setPrivateRoomAction] = useState<'create' | 'join' | null>(null);
+  const [roomCode, setRoomCode] = useState('');
+  const [joiningRoom, setJoiningRoom] = useState(false);
+  const [roomJoinError, setRoomJoinError] = useState('');
+  const joinInProgress = React.useRef(false);
+  const handleJoinPrivateRoom = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const code = roomCode.trim().toUpperCase();
+    if (!code || joinInProgress.current) return;
+    if (!useAuthStore.getState().session) {
+      setRoomJoinError('Sign in to join a private room.');
+      return;
+    }
+    joinInProgress.current = true;
+    setJoiningRoom(true);
+    setRoomJoinError('');
+    try {
+      const multiplayer = useMultiplayerStore.getState();
+      multiplayer.connect();
+      const room = await multiplayer.joinRoom({ code });
+      setPrivateRoomAction(null);
+      setRoomCode('');
+      navigate(`/lobby/${room.gameId}`);
+    } catch (error) {
+      setRoomJoinError(error instanceof Error ? error.message : 'Could not join room. Try again.');
+    } finally {
+      joinInProgress.current = false;
+      setJoiningRoom(false);
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -263,6 +296,24 @@ export const Home: React.FC = () => {
         </div>
       </div>
 
+      <section aria-label="Private rooms" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-indigo-100 dark:border-indigo-500/20 bg-white dark:bg-slate-900/60 p-5 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-indigo-50 dark:bg-indigo-500/10 p-3 text-indigo-600 dark:text-indigo-400"><Users className="w-5 h-5" /></div>
+          <div>
+            <h3 className="text-base font-black text-slate-900 dark:text-white">Play with friends</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Create a private room or join with a room code.</p>
+          </div>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button onClick={() => setPrivateRoomAction('create')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-3 text-sm font-bold text-white transition-colors">
+            <Plus className="w-4 h-4" /> Create Private Room
+          </button>
+          <button onClick={() => { setRoomJoinError(''); setPrivateRoomAction('join'); }} className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 dark:border-indigo-500/40 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 px-5 py-3 text-sm font-bold text-indigo-700 dark:text-indigo-300 transition-colors">
+            <LogIn className="w-4 h-4" /> Join Private Room
+          </button>
+        </div>
+      </section>
+
       {/* Search & Category Filter Section */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <CategoryCard
@@ -357,6 +408,40 @@ export const Home: React.FC = () => {
           ))}
         </div>
       </div>
+
+      <Modal
+        isOpen={privateRoomAction !== null}
+        onClose={() => { if (!joiningRoom) setPrivateRoomAction(null); }}
+        title={privateRoomAction === 'create' ? 'Create Private Room' : 'Join Private Room'}
+        description={privateRoomAction === 'create' ? 'Choose a game, then set up your room and invite friends.' : 'Enter your friend’s room code. The game is selected automatically.'}
+      >
+        {privateRoomAction === 'join' ? (
+          <form onSubmit={handleJoinPrivateRoom} className="space-y-4">
+            <div>
+              <label htmlFor="home-room-code" className="block mb-2 text-sm font-bold text-slate-900 dark:text-white">Room code</label>
+              <input id="home-room-code" value={roomCode} onChange={event => setRoomCode(event.target.value.toUpperCase())} placeholder="e.g. AB12CD" maxLength={8} autoComplete="off" autoCapitalize="characters" disabled={joiningRoom} aria-describedby={roomJoinError ? 'home-room-error' : undefined} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-base font-mono uppercase tracking-widest text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            {roomJoinError && <p id="home-room-error" role="alert" className="text-sm text-rose-600 dark:text-rose-400">{roomJoinError}</p>}
+            <button type="submit" disabled={joiningRoom || !roomCode.trim()} className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 px-5 py-3 text-sm font-bold text-white transition-colors">
+              {joiningRoom ? 'Joining…' : 'Join Room'}
+            </button>
+          </form>
+        ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {playableGamesList.map(game => (
+            <button key={game.id} onClick={() => {
+              if (!privateRoomAction) return;
+              navigate(`/lobby/${game.id}`, { state: { roomAction: privateRoomAction } });
+              setPrivateRoomAction(null);
+            }} className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-3 text-left hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors">
+              <img src={game.thumbnailUrl} alt="" className="w-10 h-10 rounded-lg object-cover" />
+              <span className="text-sm font-bold text-slate-900 dark:text-white">{game.title}</span>
+            </button>
+          ))}
+        </div>
+        )}
+        {privateRoomAction === 'create' && playableGamesList.length === 0 && <p className="text-sm text-slate-500">No games are available right now.</p>}
+      </Modal>
 
       {gameSetup && (
         <MatchSetupModal
