@@ -332,7 +332,11 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("room:closed", (payload) => {
-        if (get().room?.id === payload.roomId) clearRoom(set);
+        rememberDeparture(departedRooms, payload.roomId);
+        if (get().room?.id === payload.roomId) {
+          rememberDeparture(departedMatches, get().room?.matchId ?? get().matchId);
+          clearRoom(set);
+        }
         if (pendingLeaveRoom?.id === payload.roomId) pendingLeaveRoom = null;
       });
 

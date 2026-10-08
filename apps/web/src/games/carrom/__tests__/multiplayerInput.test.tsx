@@ -4,7 +4,7 @@ import { predictCarromShot } from '../shotPreview';
 
 const fixture = vi.hoisted(() => ({
   slots: [] as any[], cursor: 0, effects: [] as Array<() => any>, driver: null as any,
-  cleanup: null as any, worker: null as any, message: null as any, state: null as any, seat: 0, animate: null as any, consume: vi.fn(), place: vi.fn(), strike: vi.fn(), live: vi.fn(),
+  cleanup: null as any, worker: null as any, message: null as any, state: null as any, seat: 0, animate: null as any, consume: vi.fn(), sync: vi.fn(), place: vi.fn(), strike: vi.fn(), live: vi.fn(),
 }));
 vi.mock('react', async original => {
   const actual = await original<typeof import('react')>();
@@ -36,6 +36,7 @@ vi.mock('../CarromMultiplayerDriver', async original => {
     consumeNewStrike() { return fixture.consume(); }
     canStrike() { return this.lastState.currentSeat === fixture.seat; }
     canPlaceStriker() { return this.canStrike(); }
+    requestStateSync = fixture.sync;
     sendStrike = fixture.strike;
     sendPlaceStriker = fixture.place;
     sendLiveStrikerPosition = fixture.live;
@@ -91,7 +92,7 @@ function striker() {
     .current.find((coin: any) => coin.type === 'striker');
 }
 function receiveShot(finished = false, trajectory?: any[], seat = 0) {
-  const state = { ...fixture.state, turnNumber: 1, currentSeat: 1, finished, winnerSeats: finished ? [0] : [] };
+  const state = { ...fixture.state, turnNumber: fixture.state.turnNumber + 1, currentSeat: 1, finished, winnerSeats: finished ? [0] : [] };
   fixture.consume.mockReturnValueOnce({ isNew: true, shotId: 123, bySeat: seat, angle: 0, power: 0.5,
     pocketedCoinIds: [], pocketEvents: [], keyframes: trajectory ?? [
       { frame: 0, pieces: [{ id: 'striker', x: 300, y: 507 }] },
@@ -158,20 +159,20 @@ describe('Carrom multiplayer striker controls', () => {
     expect(find(game.render(), node => node.type === 'h2' && node.props.children === 'YOU WIN!')).toBeDefined();
     expect(fixture.driver.lastState).toBe(state);
   });
-  it('ignores a delayed rejection from an earlier shot after the player retries', async () => {
-    let first!: (result: any) => void, second!: (result: any) => void;
-    fixture.strike.mockReturnValueOnce(new Promise(resolve => { first = resolve; }))
-      .mockReturnValueOnce(new Promise(resolve => { second = resolve; }));
-    const game = setup();
-    const shoot = () => {
-      const board = game.board();
-      board.onPointerDown(game.pointer(250, 422.5)); board.onPointerMove(game.pointer(250, 485)); board.onPointerUp();
-    };
-    shoot(); await vi.advanceTimersByTimeAsync(4001); shoot();
-    first({ ok: false, error: 'Old request failed' }); await Promise.resolve(); await Promise.resolve();
+  it('recovers confirmation after four seconds without permitting another strike or replaying the preview', async () => {
+    fixture.strike.mockReturnValue(new Promise(() => {}));
+    fixture.sync.mockResolvedValue(undefined);
+    const game = setup(); const tick = frames(); const board = game.board();
+    board.onPointerDown(game.pointer(250, 422.5)); board.onPointerMove(game.pointer(250, 485)); board.onPointerUp();
+    const trajectory = predictCarromShot(fixture.message.state, fixture.message.seat, fixture.message.action);
+    fixture.worker.onmessage({ data: { requestId: fixture.message.requestId, keyframes: trajectory } });
+    tick(3500); await vi.advanceTimersByTimeAsync(4001);
+    expect(fixture.sync).toHaveBeenCalledOnce();
     expect(game.mover()).toBeUndefined();
-    second({ ok: false, error: 'Current request failed' }); await Promise.resolve(); await Promise.resolve();
-    expect(game.mover()).toBeDefined();
+    game.board().onPointerDown(game.pointer(250, 422.5)); game.board().onPointerMove(game.pointer(250, 485)); game.board().onPointerUp();
+    expect(fixture.strike).toHaveBeenCalledOnce();
+    receiveShot(true, trajectory); fixture.driver.onWin(0); tick(4500);
+    expect(find(game.render(), node => node.type === 'h2' && node.props.children === 'YOU WIN!')).toBeDefined();
   });
 
   it('keeps a confirmed final shot playing when its acknowledgement fails late', async () => {
@@ -317,3 +318,16 @@ describe('Carrom multiplayer striker controls', () => {
     expect(requestAnimationFrame).not.toHaveBeenCalled();
   });
  });
+
+
+it('recovers an uncertain transport reply without rolling back or resending the shot', async () => {
+  fixture.strike.mockResolvedValue({ ok: false, uncertain: true, error: 'ACK lost' });
+  fixture.sync.mockResolvedValue(undefined);
+  const game = setup(); const board = game.board();
+  board.onPointerDown(game.pointer(250, 422.5)); board.onPointerMove(game.pointer(250, 485)); board.onPointerUp();
+  await Promise.resolve(); await Promise.resolve();
+  expect(fixture.sync).toHaveBeenCalledOnce();
+  expect(fixture.strike).toHaveBeenCalledOnce();
+  expect(game.mover()).toBeUndefined();
+  fixture.cleanup();
+});

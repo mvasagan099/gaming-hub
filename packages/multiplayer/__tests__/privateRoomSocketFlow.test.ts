@@ -54,6 +54,10 @@ describe('private room Socket.IO lifecycle', () => {
         try { ack({ ok: true, data: authenticatedEngineStateSync(framework, userId, payload.matchId) }); }
         catch (error) { ack({ ok: false, error: { message: (error as Error).message } }); }
       });
+      socket.on('room:leave', async (payload, ack) => {
+        try { await framework.roomManager.leaveRoom(payload.roomId, userId, socket); ack({ ok: true }); }
+        catch (error) { ack({ ok: false, error: { message: (error as Error).message } }); }
+      });
       socket.on('game:action', async (payload, ack) => {
         try { ack({ ok: true, data: await applySocketGameAction(framework, userId, payload) }); }
         catch (error) { ack({ ok: false, error: { message: (error as Error).message } }); }
@@ -93,6 +97,28 @@ describe('private room Socket.IO lifecycle', () => {
   function create(gameId: GameId = 'chess') {
     return roomAck(host, 'room:create', { gameId, isPrivate: true, stake: 100, maxPlayers: 2 });
   }
+
+
+  it.each(GAME_IDS.flatMap(game => ['host', 'guest'].map(player => [game, player] as const)))('%s closes both clients and permits another room when %s exits', async (gameId, leaving) => {
+    const created = await create(gameId);
+    await roomAck(guest, 'room:join', { code: created.code });
+    await roomAck(guest, 'room:ready', { roomId: created.id, ready: true });
+    await roomAck(host, 'room:start', { roomId: created.id });
+    const events: string[] = [];
+    const closed = [host, guest].map(socket => new Promise<void>(resolve => {
+      socket.once('game:over', () => events.push('over'));
+      socket.once('room:closed', payload => { expect(payload.roomId).toBe(created.id); events.push('closed'); resolve(); });
+    }));
+    expect((await (leaving === 'host' ? host : guest).timeout(4000).emitWithAck('room:leave', { roomId: created.id })).ok).toBe(true);
+    await Promise.all(closed);
+    expect(events.filter(event => event === 'over')).toHaveLength(2);
+    expect(events.indexOf('over')).toBeLessThan(events.indexOf('closed'));
+    expect(framework.roomManager.getRoom(created.id)).toBeUndefined();
+    for (const socket of [host, guest]) {
+      const next = await roomAck(socket, 'room:create', { gameId: 'chess', isPrivate: true, stake: 0, maxPlayers: 2 });
+      expect(next.id).not.toBe(created.id);
+    }
+  });
 
   it('preserves the prepared tournament match identity when both players start', async () => {
     const created = await create('chess');

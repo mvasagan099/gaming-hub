@@ -122,9 +122,12 @@ export default class CarromMultiplayerDriver {
   private unsubscribe: (() => void) | null = null;
   private winFired = false;
 
-  // Tracks the lastActionAtMs of the most recently animated strike so we
-  // only animate each delivery once.
-  private lastAnimatedMs: number | null = null;
+  // Each accepted strike advances the authoritative turn, even for an extra
+  // turn. Timestamps can collide and cannot identify a delivery reliably.
+  private lastAnimatedTurn = 0;
+  private appliedVersion = -1;
+  private matchId: string | null = null;
+  private roomId: string | null = null;
 
   constructor(mySeat: number, playerNames: string[]) {
     this.mySeat = mySeat;
@@ -167,14 +170,17 @@ export default class CarromMultiplayerDriver {
   };
 
   start(): void {
+    if (this.destroyed || this.unsubscribe) return;
     // Apply current state immediately so the board renders on mount.
     const s = useMultiplayerStore.getState();
     // Mounts and reconnects should render the settled board immediately.
     const initial = s.gameState as CarromRemoteState | null;
-    if (initial?.lastAction?.type === "strike") this.lastAnimatedMs = initial.lastActionAtMs;
+    this.matchId = s.matchId;
+    this.roomId = s.room?.id ?? null;
+    if (initial?.lastAction?.type === "strike") this.lastAnimatedTurn = initial.turnNumber;
     this._apply(
       s.gameState as CarromRemoteState | null,
-      s.lastEvents,
+      [], // A restored board must not replay historical effects.
       s.winner,
       s.lastStateVersion
     );
@@ -184,7 +190,16 @@ export default class CarromMultiplayerDriver {
 
     // Subscribe to future updates.
     this.unsubscribe = useMultiplayerStore.subscribe((state, prev) => {
-      if (this.destroyed) return;
+      if (this.destroyed || state.room?.id !== this.roomId) return;
+      if (state.matchId !== this.matchId) {
+        this.matchId = state.matchId;
+        this.lastAnimatedTurn = 0;
+        this.appliedVersion = -1;
+        this.lastState = null;
+        this.processedEventIds.clear();
+        this.winFired = false;
+      }
+      if (state.status === 'connected' && prev.status !== 'connected') void this.requestStateSync();
       if (state.socket !== prev.socket) this.bindPreviewSocket(state.socket);
       if (
         state.renderKey !== prev.renderKey ||
@@ -193,7 +208,7 @@ export default class CarromMultiplayerDriver {
       ) {
         this._apply(
           state.gameState as CarromRemoteState | null,
-          state.lastEvents,
+          state.lastEvents !== prev.lastEvents ? state.lastEvents : [],
           state.winner,
           state.lastStateVersion
         );
@@ -315,7 +330,8 @@ export default class CarromMultiplayerDriver {
     localAngle: number,
     power: number,
     clientX?: number
-  ): Promise<{ ok: boolean; error?: string }> {
+  ): Promise<{ ok: boolean; error?: string; uncertain?: boolean }> {
+    const beforeTurn = this.lastState?.turnNumber;
     const serverAngle = localAngleToServer(localAngle, this.mySeat);
     const serverX = clientX !== undefined ? mapToServer(clientX, 0, this.mySeat).x : undefined;
     const action: { type: "strike"; angle: number; power: number; x?: number } = {
@@ -331,10 +347,18 @@ export default class CarromMultiplayerDriver {
       if (!res.ok) {
         return { ok: false, error: res.error ?? "Shot rejected" };
       }
+      // Recover a missing state broadcast after acceptance; never resend a strike.
+      if (beforeTurn != null && (this.lastState?.turnNumber ?? 0) <= beforeTurn) await this.requestStateSync();
       return { ok: true };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "Could not send shot" };
+      return { ok: false, uncertain: true, error: error instanceof Error ? error.message : "Could not send shot" };
     }
+  }
+
+  async requestStateSync(): Promise<void> {
+    const current = useMultiplayerStore.getState();
+    if (current.matchId !== this.matchId || current.room?.id !== this.roomId) return;
+    try { await current.requestFullStateSync?.(this.matchId ?? undefined); } catch { /* reconnect retries */ }
   }
 
   // ── Internal state application ───────────────────────────────────────────────
@@ -348,6 +372,10 @@ export default class CarromMultiplayerDriver {
     stateVersion?: number
   ): void {
     if (!state || this.destroyed) return;
+    // Reject stale state before any animation or event side effects.
+    if (stateVersion != null && stateVersion < this.appliedVersion) return;
+    if (this.lastState && state.turnNumber < this.lastState.turnNumber) return;
+    if (stateVersion != null) this.appliedVersion = stateVersion;
     this.lastState = state;
     this.lastEvents = events;
 
@@ -436,9 +464,9 @@ export default class CarromMultiplayerDriver {
     if (
       action?.type === "strike" &&
       actionAt !== null &&
-      actionAt !== this.lastAnimatedMs
+      s!.turnNumber > this.lastAnimatedTurn
     ) {
-      this.lastAnimatedMs = actionAt;
+      this.lastAnimatedTurn = s!.turnNumber;
 
       // Extract all pocketed coins in authoritative state
       const pocketedCoinIds = s?.coins.filter((c) => c.pocketed).map((c) => c.id) ?? [];
@@ -472,7 +500,7 @@ export default class CarromMultiplayerDriver {
 
       return {
         isNew: true,
-        shotId: actionAt,
+        shotId: s!.turnNumber,
         angle: action.angle ?? 0,
         power: action.power ?? 1,
         bySeat: s?.lastActionSeat ?? 0,

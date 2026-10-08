@@ -49,4 +49,17 @@ describe('finished room cleanup before another game', () => {
     socket.listeners.get('room:closed')!({ roomId: 'old-room' });
     expect(useMultiplayerStore.getState().room?.id).toBe('new-room');
   });
+  it('does not restore a server-closed room from delayed room updates or game-over messages', async () => {
+    socket.listeners.get('room:closed')!({ roomId: 'old-room', reason: 'player_left' });
+    socket.listeners.get('room:update')!(ended);
+    socket.listeners.get('game:over')!({ matchId: 'old-match', winnerSeats: [0], winnerIds: ['p1'], state: {} });
+    expect(useMultiplayerStore.getState().room).toBeNull();
+    expect(useMultiplayerStore.getState().matchId).toBeNull();
+    const next = { ...ended, id: 'new-room', matchId: null, status: 'waiting' };
+    socket.emitWithAck.mockResolvedValue({ ok: true, data: next });
+    await useMultiplayerStore.getState().createRoom('chess', true, 0, 2);
+    expect(socket.emitWithAck).toHaveBeenCalledExactlyOnceWith('room:create', expect.any(Object));
+    expect(useMultiplayerStore.getState().room?.id).toBe('new-room');
+  });
+
 });

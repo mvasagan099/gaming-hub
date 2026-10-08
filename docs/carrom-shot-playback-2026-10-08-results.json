@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-08",
+  "baseline": "1560bf195b04c6cb2561c73ec1c58ace31f4c13f",
+  "scope": "Carrom frontend shot ordering and playback recovery",
+  "web": {
+    "files": 41,
+    "passed": 376,
+    "failed": 0,
+    "skipped": 0
+  },
+  "carrom": {
+    "files": 4,
+    "passed": 64,
+    "failed": 0
+  },
+  "web_typecheck": "PASS",
+  "web_build": "PASS",
+  "production_logic_changed": false,
+  "production_data_touched": false,
+  "deployed": false
+}

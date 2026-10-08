@@ -13,7 +13,7 @@ async function setup(gameId = 'table-tennis') {
   const owner = await createTestUser(), friend = await createTestUser(), stranger = await createTestUser();
   await prisma.friend.create({ data: { requesterId: owner.id, addresseeId: friend.id, status: 'ACCEPTED' } });
   const snapshot = { room: { id: 'room-1', code: 'ABC123', status: 'waiting', expiresAt: Date.now()+600000, locked: false,
-    config: { gameId, stake: 100, isPrivate: true, maxPlayers: 2, password: '', settings: {} as Record<string, unknown> } }, players: [{ id: owner.id }] };
+    config: { gameId, stake: 100, isPrivate: true, maxPlayers: 2, password: '', settings: {} as Record<string, string> } }, players: [{ id: owner.id }] };
   await prisma.liveRoomCheckpoint.create({ data: { id: 'room-1', code: 'ABC123', snapshot } });
   const send = (user = owner, target = friend.id) => app.inject({ method: 'POST', url: '/api/room-invitations', headers: { authorization: `Bearer ${user.token}` }, payload: { roomId: 'room-1', friendId: target } });
   const pending = (user = friend) => app.inject({ method: 'GET', url: '/api/room-invitations', headers: { authorization: `Bearer ${user.token}` } });

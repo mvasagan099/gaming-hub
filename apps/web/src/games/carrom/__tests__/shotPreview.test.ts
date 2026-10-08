@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CarromEngine } from '@gaming-hub/game-engine';
-import { predictCarromShot } from '../shotPreview';
+import { predictCarromShot, authoritativeShotStart } from '../shotPreview';
 
 describe('Immediate Carrom shot preview', () => {
   for (const seat of [0, 1]) {
@@ -17,4 +17,11 @@ describe('Immediate Carrom shot preview', () => {
       },
     );
   }
+});
+
+
+it('uses server-confirmed shot age without depending on the client clock', () => {
+  expect(authoritativeShotStart({ lastActionAtMs: 1000, serverTimestamp: 1700 }, 5000)).toBe(4300);
+  expect(authoritativeShotStart({ lastActionAtMs: 1000, serverTimestamp: 900 }, 5000)).toBe(5000);
+  expect(authoritativeShotStart({ lastActionAtMs: null, serverTimestamp: 1700 }, 5000)).toBe(5000);
 });

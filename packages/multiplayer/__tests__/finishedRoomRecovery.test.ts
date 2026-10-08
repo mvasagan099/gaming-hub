@@ -138,3 +138,15 @@ describe('private room creation and join cleanup gates', () => {
     expect(fixture.createRoom).toHaveBeenCalledOnce();
   });
 });
+
+
+describe('closed room leave acknowledgements', () => {
+  it.each([null, { id: 'old-room', closed: true }])('acknowledges retried exits when the room is already gone: %j', async stored => {
+    const store = { resolveRoom: vi.fn().mockResolvedValue(stored) };
+    const coordinator = new DistributedRoomCoordinator({ roomManager: { getRoom: () => undefined } } as never,
+      { duplicate: () => ({ on: vi.fn() }) } as never, store as never);
+    const leaving = { ...command, event: 'room:leave', roomId: 'old-room', payload: {} };
+    await expect(coordinator.route(leaving)).resolves.toBeUndefined();
+    await expect(coordinator.route({ ...leaving, event: 'game:action' })).rejects.toThrow('Room not found');
+  });
+});

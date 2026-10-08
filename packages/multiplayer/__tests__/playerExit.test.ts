@@ -41,9 +41,13 @@ describe('intentional multiplayer exits', () => {
     expect(cancelled).not.toHaveBeenCalled();
     expect(gameOver).toHaveBeenCalledOnce();
     expect(framework.matchManager.getActiveMatchCount()).toBe(0);
-    const frozen = structuredClone(room.match!.engine.persistenceState());
-    await framework.matchManager.applyAction({ roomId: room.id, playerId: leaving === 'host' ? 'guest' : 'host', action: { type: 'resign' } });
-    expect(room.match!.engine.persistenceState()).toEqual(frozen);
+    expect(framework.roomManager.getRoom(room.id)).toBeUndefined();
+    expect(framework.roomManager.getPlayerRoom('host')).toBeUndefined();
+    expect(framework.roomManager.getPlayerRoom('guest')).toBeUndefined();
+    for (const [id, socket] of [['host', hostSocket], ['guest', guestSocket]] as const) {
+      const next = await framework.roomManager.createRoom({ gameId: 'chess', hostId: id, hostSocket: socket, maxPlayers: 2, stake: 0 });
+      expect(next.id).not.toBe(room.id);
+    }
     await framework.roomManager.leaveRoom(room.id, leaving, leaving === 'host' ? hostSocket : guestSocket);
     expect(paid).toHaveBeenCalledOnce();
   });

@@ -30,7 +30,7 @@ import CarromMultiplayerDriver, {
   localAngleToServer,
   type PocketEventInfo,
 } from "./CarromMultiplayerDriver";
-import { shotAnimationDuration } from "./shotPreview";
+import { shotAnimationDuration, authoritativeShotStart } from "./shotPreview";
 import type { CarromRemoteState } from "./CarromMultiplayerDriver";
 import { CARROM_MAX_SHOT_SPEED, POCKET_CAPTURE_RADIUS, type CarromTrajectoryKeyframe } from "@gaming-hub/game-engine";
 import { Crown, Sparkles, CheckCircle2, AlertTriangle, Play, RefreshCw, X, MessageSquare, Clock } from "lucide-react";
@@ -422,7 +422,7 @@ const CarromMultiplayer: React.FC<Props> = ({
             shotId: continuingPreview ? prediction.shotId : (shotId ?? Date.now()),
             keyframes,
             // Continue at the current playback time instead of rewinding to frame 0.
-            startTime: continuingPreview ? prediction.startTime : performance.now(),
+            startTime: continuingPreview ? prediction.startTime : authoritativeShotStart(state, performance.now()),
             durationMs,
             targetState: state,
             pocketEvents,
@@ -1649,16 +1649,10 @@ const CarromMultiplayer: React.FC<Props> = ({
 
     clearSettleTimeout();
     settleTimeoutRef.current = setTimeout(() => {
-      if (isTurnActiveRef.current) {
-        predictionRef.current = null;
-        activeTrajectoryRef.current = null;
-        awaitingShotRef.current = false;
-        isTurnActiveRef.current = false;
-        turnFramesRef.current = 0;
-        setIsTurnActive(false);
-        const s = pendingStateRef.current || driverRef.current?.lastState;
-        pendingStateRef.current = null;
-        if (s) applyServerState(s);
+      if (awaitingShotRef.current && shotRequestRef.current === shotRequest) {
+        // A slow/missing confirmation is not a rejection. Keep the original
+        // playback origin and prevent a second strike while recovering state.
+        void driver.requestStateSync();
       }
     }, 4000);
 
@@ -1667,6 +1661,10 @@ const CarromMultiplayer: React.FC<Props> = ({
       // A server-confirmed shot takes precedence over a late transport reply.
       // Replies to earlier requests must not cancel a newer shot either.
       if (driverRef.current !== driver || shotRequestRef.current !== shotRequest || !awaitingShotRef.current) return;
+      if (!res.ok && res.uncertain) {
+        void driver.requestStateSync();
+        return;
+      }
       if (!res.ok) {
         // Shot rejected — cancel local animation and restore state.
         predictionRef.current = null;

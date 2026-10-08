@@ -65,7 +65,7 @@ describe('Carrom multiplayer action delivery', () => {
   });
   it('turns a transport failure into a rejected shot so the UI can roll back', async () => {
     actions.send.mockRejectedValue(new Error('Connection lost'));
-    await expect(new Driver(0, []).sendStrike(-Math.PI / 2, 0.5, 250)).resolves.toEqual({ ok: false, error: 'Connection lost' });
+    await expect(new Driver(0, []).sendStrike(-Math.PI / 2, 0.5, 250)).resolves.toEqual({ ok: false, uncertain: true, error: 'Connection lost' });
   });
   it('does not treat a rejection without a message as success', async () => {
     actions.send.mockResolvedValue({ ok: false });
@@ -73,4 +73,51 @@ describe('Carrom multiplayer action delivery', () => {
     expect((await driver.sendPlaceStriker(250)).ok).toBe(false);
     expect((await driver.sendStrike(-Math.PI / 2, 0.5, 250)).ok).toBe(false);
   });
+});
+
+
+describe('Carrom authoritative shot ordering', () => {
+  it('plays distinct shots with the same timestamp once each and ignores older replay packets', () => {
+    const engine = new CarromEngine([{ seat: 0, userId: 'p0' }, { seat: 1, userId: 'p1' }], () => 0.5, { now: () => 1000 });
+    actions.state.gameState = engine.state;
+    const driver = new Driver(0, []); const shots: number[] = [];
+    driver.onStateUpdate = () => { const shot = driver.consumeNewStrike(); if (shot.isNew) shots.push(shot.shotId!); };
+    driver.start();
+    engine.apply({ type: 'strike', x: 280, angle: 0, power: 0 }, 0);
+    const first = structuredClone(engine.state);
+    (driver as any)._apply(first, [], null, 2);
+    (driver as any)._apply(first, [], null, 2);
+    engine.apply({ type: 'strike', x: 280, angle: Math.PI, power: 0 }, 1);
+    const second = structuredClone(engine.state);
+    expect(second.lastActionAtMs).toBe(first.lastActionAtMs);
+    (driver as any)._apply(second, [], null, 3);
+    (driver as any)._apply(first, [], null, 2);
+    (driver as any)._apply(second, [], null, 3);
+    expect(shots).toEqual([first.turnNumber, second.turnNumber]);
+    expect(driver.lastState?.turnNumber).toBe(second.turnNumber);
+    driver.stop();
+  });
+  it('requests authoritative state when an accepted shot broadcast has not arrived', async () => {
+    actions.state.gameState = new CarromEngine([{ seat: 0, userId: 'p0' }, { seat: 1, userId: 'p1' }]).state;
+    actions.state.requestFullStateSync = vi.fn().mockResolvedValue(undefined);
+    actions.send.mockResolvedValue({ ok: true });
+    const driver = new Driver(0, []); driver.start();
+    expect((await driver.sendStrike(0, 0.1, 250)).ok).toBe(true);
+    expect(actions.state.requestFullStateSync).toHaveBeenCalledOnce();
+    expect(actions.send).toHaveBeenCalledOnce();
+    driver.stop();
+  });
+});
+
+
+it('does not replay previous shot effects when a full-state sync reuses the event array', () => {
+  const engine = new CarromEngine([{ seat: 0, userId: 'p0' }, { seat: 1, userId: 'p1' }]);
+  const events = [{ type: 'foul', reason: 'old-shot' }];
+  actions.state = { ...actions.state, gameState: engine.state, lastEvents: events, lastStateVersion: 1, renderKey: 1 };
+  const driver = new Driver(0, []); driver.onFoul = vi.fn(); driver.start();
+  const previous = { ...actions.state };
+  actions.state = { ...actions.state, gameState: structuredClone(engine.state), lastStateVersion: 2, renderKey: 2 };
+  actions.subscribe.mock.calls[0][0](actions.state, previous);
+  expect(driver.onFoul).not.toHaveBeenCalled();
+  driver.stop();
 });

@@ -331,6 +331,11 @@ export class RoomManager {
     if (room.status === "playing" && room.match && player.seat !== null && !player.isSpectator) {
       await this.framework.matchManager.handlePlayerForfeit(room, player, "player_left");
       this.framework.timerManager.clearPlayerTimers(room.id, playerId);
+      // Explicit game exits end the session, including the rematch room.
+      // Close only after the final result is persisted so settlement remains
+      // authoritative, then release every participant's room membership.
+      await this.closeRoom(roomId, "player_left");
+      return;
     }
     // Remove player from room
     room.players.delete(playerId);

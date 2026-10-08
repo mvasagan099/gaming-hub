@@ -17,3 +17,13 @@ export function predictCarromShot(
 export function shotAnimationDuration(keyframes: { frame: number }[]) {
   return Math.max(400, Math.min(keyframes[keyframes.length - 1].frame * 16.67, 3000));
 }
+
+
+/** Start remote playback at the age already confirmed by the server clock. */
+export function authoritativeShotStart(state: Pick<CarromState, 'lastActionAtMs'> & { serverTimestamp?: unknown }, receivedAt: number): number {
+  const timestamp = state.serverTimestamp;
+  const actionAt = state.lastActionAtMs;
+  const age = typeof timestamp === 'number' && Number.isFinite(timestamp) &&
+    typeof actionAt === 'number' && Number.isFinite(actionAt) ? Math.max(0, timestamp - actionAt) : 0;
+  return receivedAt - age;
+}

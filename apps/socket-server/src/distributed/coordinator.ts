@@ -163,7 +163,12 @@ export class DistributedRoomCoordinator {
     }
     const stored = await this.store.resolveRoom({ roomId: command.roomId, code: command.code,
       matchId: command.payload.matchId ? String(command.payload.matchId) : undefined });
-    if (!stored || stored.closed) throw new Error('Room not found');
+    if (!stored || stored.closed) {
+      // A lost leave acknowledgement is safe to retry after the owner closes
+      // the room. There is no remaining membership or mutation to authorize.
+      if (command.event === 'room:leave') return undefined;
+      throw new Error('Room not found');
+    }
     command = { ...command, roomId: stored.id };
     const lease = await this.ownership.inspect(stored.id);
     if (!lease || lease.ownerId === this.instanceId) return this.local(stored.id, () => this.dispatch(command), command.event === "carrom:striker-position");
