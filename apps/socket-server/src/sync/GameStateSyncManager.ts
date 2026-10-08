@@ -186,6 +186,7 @@ export class GameStateSyncManager {
     actionData: Record<string, unknown> = {},
     resultData: Record<string, unknown> = {},
     stateVersion?: number,
+    fullState?: unknown,
   ): ReplayEventRecord | null {
     const replayPkg = this.activeReplayPackages.get(matchId);
     if (!replayPkg) return null;
@@ -218,7 +219,7 @@ export class GameStateSyncManager {
         sequence: currentSeq,
         timestamp: now,
         stateVersion: record.stateVersion,
-        state: JSON.parse(JSON.stringify(resultData.state ?? resultData)),
+        state: fullState ? JSON.parse(JSON.stringify(fullState)) : JSON.parse(JSON.stringify(resultData.state ?? resultData)),
       };
       replayPkg.snapshots.push(snap);
     }

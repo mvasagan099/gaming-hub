@@ -1696,9 +1696,10 @@ export class RoomManager {
       room.match.matchId,
       user.userId,
       action.type,
-      action,
-      result.state,
+      action as any,
+      { events: result.events },
       room.match.turnNumber,
+      result.state,
     );
 
     // Update and broadcast authoritative match state
