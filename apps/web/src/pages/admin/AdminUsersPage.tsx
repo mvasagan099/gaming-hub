@@ -44,7 +44,7 @@ export function AdminUsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
-  const [walletAmount, setWalletAmount] = useState(0);
+  const [walletAmount, setWalletAmount] = useState('');
   const [walletReason, setWalletReason] = useState('');
   const [newRole, setNewRole] = useState<'USER' | 'MODERATOR' | 'ADMIN'>('USER');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -100,17 +100,18 @@ export function AdminUsersPage() {
   }, [userIdParam, setSearchParams, openDetail]);
 
   const handleWalletAdjust = async () => {
-    if (!selectedUser || walletReason.trim().length < 3 || walletAmount === 0) return;
+    const parsedAmount = parseInt(walletAmount, 10);
+    if (!selectedUser || walletReason.trim().length < 3 || isNaN(parsedAmount) || parsedAmount === 0) return;
     setIsSubmitting(true);
     setModalError(null);
     try {
       await apiClient.post(`/admin/users/${selectedUser.id}/wallet/adjust`, {
-        amount: Math.round(walletAmount),
+        amount: parsedAmount,
         reason: walletReason.trim(),
       });
       toast.success(`Wallet adjusted successfully for ${selectedUser.displayName}`);
       setShowWalletModal(false);
-      setWalletAmount(0);
+      setWalletAmount('');
       setWalletReason('');
       setModalError(null);
       await loadUsers();
@@ -300,7 +301,7 @@ export function AdminUsersPage() {
                         <button
                           onClick={() => {
                             setSelectedUser(user);
-                            setWalletAmount(0);
+                            setWalletAmount('');
                             setWalletReason('');
                             setModalError(null);
                             setShowWalletModal(true);
@@ -337,7 +338,7 @@ export function AdminUsersPage() {
           <div className="w-full max-w-md rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4">
             <h2 className="text-lg font-black text-slate-900 dark:text-white">Adjust Wallet Balance</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              User: <span className="font-bold text-slate-900 dark:text-white">{selectedUser.displayName}</span> (Current: <Coins className="w-3.5 h-3.5 text-amber-400 inline-block align-middle mr-1" />{selectedUser.coins.toLocaleString()})
+              User: <span className="font-bold text-slate-900 dark:text-white">{selectedUser.displayName} (@{selectedUser.username})</span> (Current: <Coins className="w-3.5 h-3.5 text-amber-400 inline-block align-middle mr-1" />{selectedUser.coins.toLocaleString()})
             </p>
 
             {modalError && (
@@ -354,10 +355,9 @@ export function AdminUsersPage() {
               </div>
               <input
                 type="number"
-                value={walletAmount === 0 ? '' : walletAmount}
+                value={walletAmount}
                 onChange={(e) => {
-                  const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
-                  setWalletAmount(isNaN(val) ? 0 : val);
+                  setWalletAmount(e.target.value);
                   setModalError(null);
                 }}
                 placeholder="e.g. 500 or -200"
@@ -389,7 +389,7 @@ export function AdminUsersPage() {
               </button>
               <button
                 onClick={handleWalletAdjust}
-                disabled={isSubmitting || walletReason.trim().length < 3 || walletAmount === 0}
+                disabled={isSubmitting || walletReason.trim().length < 3 || isNaN(parseInt(walletAmount, 10)) || parseInt(walletAmount, 10) === 0}
                 className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5"
               >
                 {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -405,7 +405,7 @@ export function AdminUsersPage() {
           <div className="w-full max-w-md rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4">
             <h2 className="text-lg font-black text-slate-900 dark:text-white">Change User Role</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              User: <span className="font-bold text-slate-900 dark:text-white">{selectedUser.displayName}</span> (Current Role: <span className="font-bold text-indigo-500">{selectedUser.role}</span>)
+              User: <span className="font-bold text-slate-900 dark:text-white">{selectedUser.displayName} (@{selectedUser.username})</span> (Current Role: <span className="font-bold text-indigo-500">{selectedUser.role}</span>)
             </p>
 
             {modalError && (
@@ -527,7 +527,7 @@ export function AdminUsersPage() {
                             createdAt: new Date().toISOString(),
                           };
                           setSelectedUser(targetUser);
-                          setWalletAmount(0);
+                          setWalletAmount('');
                           setWalletReason('');
                           setModalError(null);
                           setShowWalletModal(true);
