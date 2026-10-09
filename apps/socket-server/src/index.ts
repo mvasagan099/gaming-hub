@@ -92,7 +92,7 @@ async function main(): Promise<void> {
   io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents>(undefined as any, {
     cors: { origin: getSocketCorsOrigin(env.CORS_ORIGIN), credentials: true },
     transports: ["websocket", "polling"],
-    maxHttpBufferSize: 32 * 1024,
+    maxHttpBufferSize: 2 * 1024 * 1024,
   });
 
   const httpServer: HttpServer = createServer((req, res) => {
@@ -792,7 +792,7 @@ async function main(): Promise<void> {
     );
 
     socket.on("game:state:ack", (payload) => {
-      framework.syncManager.handleStateAck(user.userId, payload.roomId, payload.timestamp);
+      framework.syncManager.handleStateAck(user.userId, payload.roomId, payload.sequenceNumber ?? payload.timestamp);
     });
 
     socket.on("game:event:ack", (payload) => {
