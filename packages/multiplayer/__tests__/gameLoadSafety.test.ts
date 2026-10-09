@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MultiplayerFramework } from '../src/framework';
 import { createTestFramework, makeSocket } from './helpers';
+import { GAME_IDS, type GameId } from '@gaming-hub/shared';
 
 afterEach(() => { vi.useRealTimers(); });
 
 describe('room board initialization safety', () => {
-  async function loading(gameId: 'carrom' | 'snake-vs-worms') {
+  async function loading(gameId: GameId) {
     MultiplayerFramework.resetInstance();
     const framework = createTestFramework({ enableReplay: false, enableAntiCheat: false });
     framework.config.requireGameLoadAck = true;
@@ -19,6 +20,20 @@ describe('room board initialization safety', () => {
     await framework.matchManager.startMatch({ roomId: room.id, startedBy: 'host' });
     return { framework, room, cancelled, paid };
   }
+  it.each(GAME_IDS.filter(game => game !== 'carrom' && game !== 'snake-vs-worms'))('%s preserves its immediate-start policy and accepts duplicate load receipts safely', async gameId => {
+    const { framework, room, cancelled, paid } = await loading(gameId);
+    try {
+      expect(room.match!.startConfirmationRequired).toBe(false);
+      expect(room.match!.gameplayStartedAt).toBeTypeOf('number');
+      expect(framework.matchManager.getActiveMatchCount()).toBe(1);
+      const startedAt = room.match!.gameplayStartedAt;
+      await framework.matchManager.confirmGameLoaded(room.id, 'host', room.match!.matchId);
+      await framework.matchManager.confirmGameLoaded(room.id, 'guest', room.match!.matchId);
+      expect(room.match!.gameplayStartedAt).toBe(startedAt);
+      expect(cancelled).not.toHaveBeenCalled();
+      expect(paid).not.toHaveBeenCalled();
+    } finally { await framework.shutdown(); }
+  });
   it.each(['carrom', 'snake-vs-worms'] as const)('%s waits for both boards and starts once despite duplicate receipts', async gameId => {
     const { framework, room, paid } = await loading(gameId);
     try {

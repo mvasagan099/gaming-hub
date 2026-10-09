@@ -43,7 +43,7 @@ export function SnakeLadderPage({ mode = 'ai', stake = 10, onBack = () => {} }: 
     <GameWrapper title="Snake & Ladder" gameId="snake-ladder" mode={mode} stake={stake} onBack={onBack} isFullscreen>
       <div className="flex flex-col lg:flex-row items-center justify-center gap-3 xl:gap-5 w-full h-full p-0 sm:p-2 lg:p-3 relative overflow-hidden">
         <div className={`flex items-center justify-center overflow-hidden w-full h-full ${isMultiplayer ? "lg:flex-1 lg:min-w-0 lg:min-h-0" : ""}`}>
-          <PhaserGame mode={isMultiplayer ? "pvp" : "ai"} players={players} seat={seat} names={names} />
+          <PhaserGame mode={isMultiplayer ? "pvp" : "ai"} players={players} seat={seat} names={names} onExit={onBack} />
         </div>
 
         {/* Desktop Sidebar Panel */}

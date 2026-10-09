@@ -20,6 +20,36 @@ beforeEach(() => {
 afterEach(() => useMultiplayerStore.getState().disconnect());
 
 describe('matchmaking join acknowledgement ordering', () => {
+  it.each(['matchmaking:queued', 'game:queue-joined'])('ignores a late %s after a match has been found', event => {
+    socket.listeners.get('game:match-found')!({ roomId: 'room', matchId: 'match', gameId: 'table-tennis' });
+    socket.listeners.get(event)!({ position: 1, gameId: 'table-tennis', entryFee: 100 });
+    expect(useMultiplayerStore.getState().matchmaking.queued).toBe(false);
+    expect(useMultiplayerStore.getState().matchFound?.matchId).toBe('match');
+  });
+  it('does not restore searching from a delayed join ACK after cancellation', async () => {
+    let complete!: (value: any) => void;
+    socket.emitWithAck.mockImplementation(event => event === 'matchmaking:leave' ? Promise.resolve({ ok: true })
+      : new Promise(resolve => { complete = resolve; }));
+    const pending = useMultiplayerStore.getState().joinMatchmaking('table-tennis', 100);
+    await useMultiplayerStore.getState().leaveMatchmaking();
+    complete({ ok: true, data: { position: 1 } });
+    await pending;
+    expect(useMultiplayerStore.getState().matchmaking.queued).toBe(false);
+  });
+  it('does not clear a new search when the previous cancellation ACK arrives late', async () => {
+    let cancel!: (value: any) => void;
+    socket.emitWithAck.mockImplementation(event => event === 'matchmaking:leave'
+      ? new Promise(resolve => { cancel = resolve; }) : Promise.resolve({ ok: true, data: { position: 1 } }));
+    await useMultiplayerStore.getState().joinMatchmaking('table-tennis', 100);
+    const leaving = useMultiplayerStore.getState().leaveMatchmaking();
+    await useMultiplayerStore.getState().joinMatchmaking('chess', 50);
+    cancel({ ok: true }); await leaving;
+    expect(useMultiplayerStore.getState().matchmaking).toMatchObject({ queued: true, gameId: 'chess', stake: 50 });
+  });
+  it.each(['matchmaking:queued', 'game:queue-joined'])('ignores unsolicited or cancelled %s packets', event => {
+    socket.listeners.get(event)!({ position: 1, gameId: 'table-tennis', entryFee: 100 });
+    expect(useMultiplayerStore.getState().matchmaking.queued).toBe(false);
+  });
   it('restores the same queued game and stake after verified token refresh', async () => {
     socket.emitWithAck.mockResolvedValue({ ok: true, data: { position: 1 } });
     await useMultiplayerStore.getState().joinMatchmaking('table-tennis', 100);

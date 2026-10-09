@@ -1,4 +1,5 @@
 import { packCarromTrajectory } from "@gaming-hub/shared";
+import { GAME_IDS } from "@gaming-hub/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const socket = vi.hoisted(() => ({ listeners: new Map<string, (data: any) => void>(), emit: vi.fn(), emitWithAck: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), timeout: vi.fn() }));
 vi.mock('@gaming-hub/socket', () => ({ createTypedSocket: () => Object.assign(socket, { on: (event: string, callback: any) => socket.listeners.set(event, socket.listeners.has(event) ? ((previous => (data: any) => { previous(data); callback(data); })(socket.listeners.get(event)!)) : callback) }) }));
@@ -14,6 +15,62 @@ beforeEach(() => {
 });
 afterEach(() => useMultiplayerStore.getState().disconnect());
 describe('finished room cleanup before another game', () => {
+  it.each(GAME_IDS)('%s ignores gameplay events after the room has been left', async gameId => {
+    useMultiplayerStore.setState({ room: { ...ended, gameId, status: 'playing' } });
+    socket.emitWithAck.mockResolvedValue({ ok: true });
+    await useMultiplayerStore.getState().leaveRoom();
+    socket.listeners.get('game:event')!({ matchId: ended.matchId, gameId, eventId: 'departed-state',
+      eventType: 'GAME_STATE_UPDATED', stateVersion: 50, payload: { state: { playing: true } } });
+    expect(useMultiplayerStore.getState().matchId).toBeNull();
+    expect(useMultiplayerStore.getState().gameState).toBeNull();
+  });
+  it.each(['setReady', 'startGame'] as const)('ignores a delayed %s reply after leaving', async operation => {
+    let reply!: (value: any) => void;
+    useMultiplayerStore.setState({ room: { ...ended, status: 'waiting' } });
+    socket.emitWithAck.mockImplementation(event => event === 'room:leave' ? Promise.resolve({ ok: true })
+      : new Promise(resolve => { reply = resolve; }));
+    const pending = operation === 'setReady' ? useMultiplayerStore.getState().setReady(true) : useMultiplayerStore.getState().startGame();
+    await useMultiplayerStore.getState().leaveRoom();
+    reply({ ok: true, data: { ...ended, status: 'playing' } });
+    await pending;
+    expect(useMultiplayerStore.getState().room).toBeNull();
+  });
+  it.each(GAME_IDS)('does not rewind a started %s match when the Ready reply arrives late', async gameId => {
+    let reply!: (value: any) => void;
+    const waiting = { ...ended, gameId, status: 'waiting', matchId: null };
+    useMultiplayerStore.setState({ room: waiting });
+    socket.emitWithAck.mockImplementation(() => new Promise(resolve => { reply = resolve; }));
+    const pending = useMultiplayerStore.getState().setReady(true);
+    socket.listeners.get('room:update')!({ ...waiting, status: 'playing', matchId: 'new-match' });
+    reply({ ok: true, data: waiting });
+    await pending;
+    expect(useMultiplayerStore.getState().room).toMatchObject({ status: 'playing', matchId: 'new-match' });
+  });
+  it.each(['createRoom', 'joinRoom'] as const)('does not rewind a broadcast-started room with a delayed %s reply', async operation => {
+    useMultiplayerStore.setState({ room: null });
+    let reply!: (value: any) => void;
+    const waiting = { ...ended, status: 'waiting', matchId: null };
+    socket.emitWithAck.mockImplementation(() => new Promise(resolve => { reply = resolve; }));
+    const pending = operation === 'createRoom' ? useMultiplayerStore.getState().createRoom('chess', true, 0, 2)
+      : useMultiplayerStore.getState().joinRoom({ code: 'ABC234' });
+    socket.listeners.get('room:update')!({ ...waiting, status: 'playing', matchId: 'new-match' });
+    reply({ ok: true, data: waiting });
+    await pending;
+    expect(useMultiplayerStore.getState().room).toMatchObject({ status: 'playing', matchId: 'new-match' });
+  });
+  it.each(['createRoom', 'joinRoom'] as const)('ignores a delayed %s reply after disconnecting', async operation => {
+    useMultiplayerStore.setState({ room: null });
+    let reply!: (value: any) => void;
+    socket.emitWithAck.mockImplementation(() => new Promise(resolve => { reply = resolve; }));
+    const pending = operation === 'createRoom' ? useMultiplayerStore.getState().createRoom('chess', true, 0, 2)
+      : useMultiplayerStore.getState().joinRoom({ code: 'ABC234' });
+    // Attach rejection handling before a stale response settles.
+    const settled = pending.catch(() => null);
+    useMultiplayerStore.getState().disconnect();
+    reply({ ok: true, data: ended });
+    await settled;
+    expect(useMultiplayerStore.getState().room).toBeNull();
+  });
   it('does not let a metadata event suppress the matching gameplay snapshot', () => {
     useMultiplayerStore.setState({ room: { ...ended, status: 'playing' }, lastStateVersion: 1, gameState: { score: 0 } });
     socket.listeners.get('game:event')!({ matchId: ended.matchId, eventId: 'countdown-2',

@@ -14,6 +14,7 @@ vi.mock('../supabase', () => ({ supabase: {} }));
 vi.mock('../../store/appVersionStore', () => ({ useAppVersionStore: { getState: vi.fn() } }));
 vi.mock('../../store/walletStore', () => ({ useWalletStore: { getState: vi.fn() } }));
 import { initCapacitorServices, registerBackButtonHandler } from './capacitorAppService';
+import { GAME_IDS } from '@gaming-hub/shared';
 
 beforeAll(async () => { await initCapacitorServices(); });
 beforeEach(() => {
@@ -22,7 +23,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe('native Back handling', () => {
-  it('gives the active game confirmation priority even without browser history', () => {
+  it('preserves explicitly registered app-level blocking screens', () => {
     const requestExit = vi.fn(() => true);
     const unregister = registerBackButtonHandler(requestExit);
     try {
@@ -34,7 +35,8 @@ describe('native Back handling', () => {
     native.listeners.get('backButton')({ canGoBack: true });
     expect(native.navigate).toHaveBeenCalledExactlyOnceWith(-1);
   });
-  it('immediately navigates back from a game with in-app history', () => {
+  it.each(GAME_IDS)('immediately navigates back from %s with in-app history', gameId => {
+    window.location.pathname = `/games/${gameId}`;
     native.listeners.get('backButton')({ canGoBack: true });
     expect(native.navigate).toHaveBeenCalledExactlyOnceWith(-1);
     expect(native.minimize).not.toHaveBeenCalled();

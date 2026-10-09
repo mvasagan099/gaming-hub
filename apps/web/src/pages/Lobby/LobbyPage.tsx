@@ -296,6 +296,16 @@ export const LobbyPage: React.FC = () => {
   const leaveRoom = useMultiplayerStore((s) => s.leaveRoom);
   const setReady = useMultiplayerStore((s) => s.setReady);
   const startGame = useMultiplayerStore((s) => s.startGame);
+  const [roomActionPending, setRoomActionPending] = useState(false);
+  const roomActionInFlight = useRef(false);
+  const runRoomAction = async (task: () => Promise<unknown>) => {
+    if (roomActionInFlight.current) return;
+    roomActionInFlight.current = true;
+    setRoomActionPending(true);
+    try { await task(); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Could not update the room. Please try again."); }
+    finally { roomActionInFlight.current = false; setRoomActionPending(false); }
+  };
   const legacyCountdown = useMultiplayerStore((s) => s.countdown);
   const countdown = useRoomCountdown(room, legacyCountdown);
   const joinMatchmaking = useMultiplayerStore((s) => s.joinMatchmaking);
@@ -890,8 +900,8 @@ export const LobbyPage: React.FC = () => {
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 {!isSpectator && (
                   <button
-                    onClick={() => void setReady(!meReady)}
-                    disabled={!canChangeRoomReady(room)}
+                    onClick={() => runRoomAction(() => setReady(!meReady))}
+                    disabled={roomActionPending || !canChangeRoomReady(room)}
                     className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${
                       meReady
                         ? "bg-emerald-600 hover:bg-emerald-500 text-white"
@@ -904,8 +914,8 @@ export const LobbyPage: React.FC = () => {
 
                 {isHost && (
                   <button
-                    onClick={() => void startGame()}
-                    disabled={!canStart}
+                    onClick={() => runRoomAction(startGame)}
+                    disabled={roomActionPending || !canStart}
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-black shadow-lg shadow-emerald-500/20 transition-all"
                     title={canStart ? "Start the match" : `Need ${def.minPlayers}+ ready players`}
                   >

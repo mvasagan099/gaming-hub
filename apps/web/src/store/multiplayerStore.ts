@@ -137,6 +137,10 @@ function unwrapAck<T>(res: AckResult<T>): T {
 let wired = false;
 let pendingLeaveRoom: RoomFull | null = null;
 let roomLeaveOperation: Promise<void> | null = null;
+// Invalidates outstanding membership replies when the user leaves or signs out.
+let membershipGeneration = 0;
+let pendingQueueJoin: { gameId: GameId; stake: number } | null = null;
+let queueIntentGeneration = 0;
 const departedRooms = new Set<string>();
 const departedMatches = new Set<string>();
 function rememberDeparture(ids: Set<string>, id: string | null | undefined) {
@@ -164,6 +168,18 @@ function applyRoom(set: (partial: Partial<MultiplayerState>) => void, room: Room
     matchmaking: { ...IDLE_MATCHMAKING },
     pendingRequeue: null,
   });
+}
+
+/** ACKs can trail room broadcasts; they must not rewind a newer match phase. */
+function applyRoomReply(set: (partial: Partial<MultiplayerState>) => void, get: () => MultiplayerState, room: RoomFull): RoomFull {
+  const current = get().room;
+  if (current?.id === room.id && (
+    (current.matchId && current.matchId !== room.matchId) ||
+    (current.status !== 'waiting' && room.status === 'waiting') ||
+    (current.status === 'ended' && room.status !== 'ended')
+  )) return current;
+  applyRoom(set, room);
+  return room;
 }
 
 function clearRoom(set: (partial: Partial<MultiplayerState>) => void) {
@@ -278,6 +294,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("disconnect", (reason) => {
+        pendingQueueJoin = null;
+        queueIntentGeneration++;
         const intentional = reason === "io client disconnect";
         const queued = get().matchmaking.queued;
         const gameId = get().matchmaking.gameId;
@@ -350,6 +368,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       socket.on("room:closed", (payload) => {
         rememberDeparture(departedRooms, payload.roomId);
         if (get().room?.id === payload.roomId) {
+          membershipGeneration++;
           rememberDeparture(departedMatches, get().room?.matchId ?? get().matchId);
           clearRoom(set);
         }
@@ -591,6 +610,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       const seenEventIds = new Set<string>();
 
       socket.on("game:event", (envelope: GameEventEnvelope<any>) => {
+        if (!get().room || departedMatches.has(envelope.matchId)) return;
+        if (get().room?.matchId && get().room?.matchId !== envelope.matchId) return;
         if (get().matchId && get().matchId !== envelope.matchId) return;
         if (import.meta.env.DEV) console.log("[MultiplayerStore] game:event received:", envelope.eventType, "stateVersion:", envelope.stateVersion, "id:", envelope.eventId);
 
@@ -751,18 +772,24 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("matchmaking:queued", (payload) => {
+        const current = get();
+        if (current.room || current.matchFound || current.matchId || payload.position <= 0 || (!current.matchmaking.queued && !pendingQueueJoin)) return;
         set((s) => ({
           matchmaking: {
             queued: true,
             position: payload.position,
-            gameId: s.matchmaking.gameId,
-            stake: s.matchmaking.stake,
+            gameId: pendingQueueJoin?.gameId ?? s.matchmaking.gameId,
+            stake: pendingQueueJoin?.stake ?? s.matchmaking.stake,
             settings: s.matchmaking.settings,
           },
         }));
       });
 
       socket.on("game:queue-joined" as any, (payload: { position: number; gameId: GameId; entryFee: number }) => {
+        const current = get();
+        if (current.room || current.matchFound || current.matchId || payload.position <= 0 || (!current.matchmaking.queued && !pendingQueueJoin)) return;
+        const intendedGame = pendingQueueJoin?.gameId ?? current.matchmaking.gameId;
+        if (intendedGame && payload.gameId && payload.gameId !== intendedGame) return;
         set((s) => ({
           matchmaking: {
             queued: true,
@@ -775,10 +802,12 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("matchmaking:found", () => {
+        pendingQueueJoin = null;
         set({ matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
       });
 
       socket.on("game:match-found" as any, (payload: import("@gaming-hub/shared").MatchFoundNotificationPayload) => {
+        pendingQueueJoin = null;
         set({
           matchmaking: { ...IDLE_MATCHMAKING },
           pendingRequeue: null,
@@ -787,10 +816,12 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("game:queue-cancelled" as any, () => {
+        pendingQueueJoin = null;
         set({ matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
       });
 
       socket.on("game:queue-expired" as any, (payload: { message?: string }) => {
+        pendingQueueJoin = null;
         set({
           matchmaking: { ...IDLE_MATCHMAKING },
           pendingRequeue: null,
@@ -836,6 +867,9 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   },
 
   disconnect: () => {
+    membershipGeneration++;
+    queueIntentGeneration++;
+    pendingQueueJoin = null;
     const socket = get().socket;
     if (socket) socket.disconnect();
     wired = false;
@@ -854,21 +888,27 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   },
 
   createRoom: async (gameId, isPrivate, stake, maxPlayers, settings) => {
+    queueIntentGeneration++;
+    pendingQueueJoin = null;
     const cleanup = finishRoomCleanup(get);
     if (cleanup) await cleanup;
     const socket = get().socket;
     if (!socket) throw new Error("Not connected to the game server");
+    const generation = membershipGeneration;
     set({ error: null });
     const res = await socket.emitWithAck("room:create", { gameId, isPrivate, stake, maxPlayers, settings });
     const room = unwrapAck<RoomFull>(res);
+    if (get().socket !== socket || generation !== membershipGeneration) throw new Error("Room request cancelled");
     departedRooms.delete(room.id);
     if (room.matchId) departedMatches.delete(room.matchId);
-    applyRoom(set, room);
-    set({ winner: null, matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null, error: null });
-    return room;
+    const applied = applyRoomReply(set, get, room);
+    set({ ...(applied.status !== 'ended' ? { winner: null } : {}), matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null, error: null });
+    return applied;
   },
 
   joinRoom: async (input) => {
+    queueIntentGeneration++;
+    pendingQueueJoin = null;
     const currentRoom = get().room;
     if (!currentRoom || (input.roomId !== currentRoom.id && input.code?.toUpperCase() !== currentRoom.code)) {
       const cleanup = finishRoomCleanup(get);
@@ -876,6 +916,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     }
     const socket = get().socket;
     if (!socket) throw new Error("Not connected to the game server");
+    const generation = membershipGeneration;
     set({ error: null });
     const res = await socket.emitWithAck("room:join", {
       roomId: input.roomId,
@@ -883,14 +924,18 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       asSpectator: input.asSpectator ?? false,
     });
     const room = unwrapAck<RoomFull>(res);
+    if (get().socket !== socket || generation !== membershipGeneration) throw new Error("Room request cancelled");
     departedRooms.delete(room.id);
     if (room.matchId) departedMatches.delete(room.matchId);
-    applyRoom(set, room);
-    set({ winner: null, matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null, error: null });
-    return room;
+    const applied = applyRoomReply(set, get, room);
+    set({ ...(applied.status !== 'ended' ? { winner: null } : {}), matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null, error: null });
+    return applied;
   },
 
   leaveRoom: async () => {
+    membershipGeneration++;
+    queueIntentGeneration++;
+    pendingQueueJoin = null;
     if (roomLeaveOperation) return roomLeaveOperation;
     const socket = get().socket;
     const room = get().room ?? pendingLeaveRoom;
@@ -919,20 +964,22 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const socket = get().socket;
     const room = get().room;
     if (!socket || !room) return null;
+    const generation = membershipGeneration;
     const res = await socket.emitWithAck("room:ready", { roomId: room.id, ready });
     const updated = unwrapAck<RoomFull>(res);
-    applyRoom(set, updated);
-    return updated;
+    if (get().socket !== socket || generation !== membershipGeneration || get().room?.id !== room.id) return null;
+    return applyRoomReply(set, get, updated);
   },
 
   startGame: async () => {
     const socket = get().socket;
     const room = get().room;
     if (!socket || !room) return null;
+    const generation = membershipGeneration;
     const res = await socket.emitWithAck("room:start", { roomId: room.id });
     const updated = unwrapAck<RoomFull>(res);
-    applyRoom(set, updated);
-    return updated;
+    if (get().socket !== socket || generation !== membershipGeneration || get().room?.id !== room.id) return null;
+    return applyRoomReply(set, get, updated);
   },
 
   kickPlayer: async (targetUserId) => {
@@ -964,26 +1011,36 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     if (cleanup) await cleanup;
     const socket = get().socket;
     if (!socket) throw new Error("Not connected to the game server");
+    const request = { gameId, stake };
+    queueIntentGeneration++;
+    pendingQueueJoin = request;
     set({ error: null });
-    const res = await socket.emitWithAck("matchmaking:join", { gameId, stake, settings });
-    const data = unwrapAck<{ position: number }>(res);
-    // A match broadcast can arrive before the join ACK. Preserve that result.
-    if (get().socket !== socket || data.position <= 0 || get().room || get().matchFound || get().matchId) return;
-    set({
-      matchmaking: { queued: true, position: data.position, gameId, stake, settings: settings ?? {} },
-      pendingRequeue: null,
-      error: null,
-    });
+    try {
+      const res = await socket.emitWithAck("matchmaking:join", { gameId, stake, settings });
+      const data = unwrapAck<{ position: number }>(res);
+      // Pairing or cancellation can precede this ACK. Preserve the newer intent.
+      if (pendingQueueJoin !== request || get().socket !== socket || data.position <= 0 || get().room || get().matchFound || get().matchId) return;
+      set({
+        matchmaking: { queued: true, position: data.position, gameId, stake, settings: settings ?? {} },
+        pendingRequeue: null,
+        error: null,
+      });
+    } finally { if (pendingQueueJoin === request) pendingQueueJoin = null; }
   },
 
   leaveMatchmaking: async () => {
+    const generation = ++queueIntentGeneration;
+    pendingQueueJoin = null;
+    set({ matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
     const socket = get().socket;
     if (!socket) return;
     try {
       const res = await socket.emitWithAck("matchmaking:leave", {});
       unwrapAck(res);
     } finally {
-      set({ matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
+      if (generation === queueIntentGeneration && get().socket === socket) {
+        set({ matchmaking: { ...IDLE_MATCHMAKING }, pendingRequeue: null });
+      }
     }
   },
 

@@ -345,9 +345,8 @@ export default class MultiplayerDriver {
   }
 
   private close(): void {
-    void useMultiplayerStore.getState().leaveRoom().finally(() => {
-      window.location.href = "/";
-    });
+    const requestExit = this.scene.registry.get("onExit");
+    if (typeof requestExit === "function") requestExit();
   }
 }
 

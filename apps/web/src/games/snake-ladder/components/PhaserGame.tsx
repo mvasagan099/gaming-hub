@@ -9,6 +9,7 @@ export interface PhaserGameProps {
   players?: number;
   seat?: number | null;
   names?: string[];
+  onExit?: () => void;
 }
 
 export default function PhaserGame({
@@ -16,6 +17,7 @@ export default function PhaserGame({
   players = 2,
   seat = null,
   names = [],
+  onExit,
 }: PhaserGameProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
@@ -47,8 +49,8 @@ export default function PhaserGame({
   const serializedNames = React.useMemo(() => JSON.stringify(names), [names]);
 
   // Keep latest dynamic props in ref so game creation reads the freshest values on mount
-  const propsRef = useRef({ mode, players, seat, names });
-  propsRef.current = { mode, players, seat, names };
+  const propsRef = useRef({ mode, players, seat, names, onExit });
+  propsRef.current = { mode, players, seat, names, onExit };
 
   // 1. Lifecycle effect: only instantiate or destroy Phaser when orientation or mode changes
   useEffect(() => {
@@ -78,6 +80,8 @@ export default function PhaserGame({
     game.registry.set("seat", propsRef.current.seat);
     game.registry.set("names", propsRef.current.names);
     game.registry.set("isPortrait", isPortrait);
+    // Route owns confirmation and room cleanup; Phaser only requests exit.
+    game.registry.set("onExit", () => propsRef.current.onExit?.());
 
     return () => {
       game.destroy(true);

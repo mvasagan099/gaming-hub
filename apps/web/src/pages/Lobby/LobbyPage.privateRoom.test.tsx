@@ -4,6 +4,7 @@ import type { RoomFull } from '@gaming-hub/shared';
 const fixture = vi.hoisted(() => ({
   slug: 'chess', search: '', refs: [] as any[], refIndex: 0, effects: [] as Array<() => void | (() => void)>, navigate: vi.fn(),
   multiplayer: {} as Record<string, any>,
+  toastError: vi.fn(),
 }));
 vi.mock('react', async original => {
   const actual = await original<typeof import('react')>();
@@ -29,6 +30,7 @@ vi.mock('../../services/api/usePublicProfile', () => ({ usePublicProfile: () => 
 vi.mock('./RoomChat', () => ({ RoomChat: () => null }));
 vi.mock('../../components/ui/ConfirmDialog', () => ({ ConfirmDialog: () => null }));
 vi.mock('../../services/api/client', () => ({ apiClient: { get: vi.fn().mockResolvedValue({ entryFees: [50, 100, 500, 1000], defaultEntryFee: 100 }) } }));
+vi.mock('react-hot-toast', () => ({ default: { error: fixture.toastError, success: vi.fn() } }));
 import { LobbyPage } from './LobbyPage';
 
 beforeEach(() => {
@@ -37,6 +39,38 @@ beforeEach(() => {
     room: null, status: 'connected', matchmaking: { queued: false }, messages: [], emojis: [],
     joinRoom: vi.fn().mockResolvedValue({}), connect: vi.fn(), disconnect: vi.fn(), clearError: vi.fn(),
   };
+});
+
+function button(tree: any, predicate: (props: any) => boolean): any {
+  if (!tree || typeof tree !== 'object') return;
+  if (Array.isArray(tree)) { for (const item of tree) { const found = button(item, predicate); if (found) return found; } return; }
+  if (tree.type === 'button' && predicate(tree.props)) return tree.props;
+  return button(tree.props?.children, predicate);
+}
+
+describe('room action feedback', () => {
+  function waiting() {
+    fixture.multiplayer.room = { id: 'room', code: 'ABC234', gameId: 'chess', status: 'waiting', stake: 100,
+      maxPlayers: 2, spectators: [], settings: {},
+      players: [{ id: 'guest', seat: 0, isHost: true, isReady: true }, { id: 'other', seat: 1, isReady: true }] };
+  }
+  it('sends only one start request while the first is pending', async () => {
+    waiting(); let finish!: () => void;
+    fixture.multiplayer.startGame = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+    const start = button(LobbyPage({}), props => props.title === 'Start the match');
+    const first = start.onClick(), second = start.onClick();
+    expect(fixture.multiplayer.startGame).toHaveBeenCalledOnce();
+    finish(); await Promise.all([first, second]);
+    expect(fixture.toastError).not.toHaveBeenCalled();
+  });
+  it('shows a readiness failure and permits a retry', async () => {
+    waiting(); fixture.multiplayer.setReady = vi.fn().mockRejectedValueOnce(new Error('Room owner unavailable')).mockResolvedValue({});
+    const ready = button(LobbyPage({}), props => typeof props.children === 'string' && props.children.includes('Ready'));
+    await expect(ready.onClick()).resolves.toBeUndefined();
+    expect(fixture.toastError).toHaveBeenCalledExactlyOnceWith('Room owner unavailable');
+    await ready.onClick();
+    expect(fixture.multiplayer.setReady).toHaveBeenCalledTimes(2);
+  });
 });
 function renderRoom(gameId: string, status = 'waiting', matchId: string | null = null) {
   fixture.multiplayer.room = {

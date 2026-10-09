@@ -248,7 +248,8 @@ export default class WinnerPopup {
       this.closeAction();
       return;
     }
-    window.location.href = "/";
+    const requestExit = this.scene.registry.get("onExit");
+    if (typeof requestExit === "function") requestExit();
   }
 }
 

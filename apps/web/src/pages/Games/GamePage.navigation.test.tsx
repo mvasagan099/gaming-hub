@@ -88,30 +88,17 @@ describe('game Exit versus router Back', () => {
     expect(context.navigate).toHaveBeenCalledExactlyOnceWith(-1);
   });
 
-  it.each(GAME_IDS)('%s intercepts browser Back in multiplayer playing and shows confirm dialog', async gameId => {
+  it.each(GAME_IDS)('%s does not intercept browser, gesture or native Back', async gameId => {
     context.gameId = gameId; context.room.gameId = gameId;
     const page = render();
-    for (const effect of context.effects) {
-      effect();
-    }
-    expect(context.shouldBlock).toBe(true);
-    expect(context.nativeHandler).toBeDefined();
-    expect(window.addEventListener).toHaveBeenCalledWith('beforeunload', expect.any(Function));
-
-    // Browser back button triggers blocker -> confirm exit popup shows
-    context.blocker.state = 'blocked';
-    expect(dialog(render()).isOpen).toBe(true);
-
-    // Cancel stays in game and resets blocker
-    dialog(render()).onClose();
-    expect(context.blocker.reset).toHaveBeenCalled();
-    expect(context.leaveRoom).not.toHaveBeenCalled();
-
-    // Confirm exit leaves room and proceeds with blocked navigation
-    context.blocker.state = 'blocked';
-    await dialog(render()).onConfirm();
+    const cleanups = context.effects.map(effect => effect());
+    expect(context.shouldBlock).toBeNull();
+    expect(context.nativeHandler).toBeNull();
+    expect(window.addEventListener).not.toHaveBeenCalledWith('beforeunload', expect.any(Function));
+    expect(dialog(page).isOpen).toBe(false);
+    // Normal route navigation owns one membership cleanup, without a dialog.
+    cleanups.forEach(cleanup => cleanup?.()); await flushCleanup();
     expect(context.leaveRoom).toHaveBeenCalledOnce();
-    expect(context.blocker.proceed).toHaveBeenCalledOnce();
   });
 
   it.each(GAME_IDS)('%s StrictMode replay keeps membership; the eventual real unmount leaves', async gameId => {
@@ -189,13 +176,13 @@ it.each(GAME_IDS)('%s legacy tournament links go to the assigned lobby rather th
 it.each(['?replayMatchId=saved', '?matchId=tournament'])('does not intercept replay or tournament Back: %s', search => {
   context.search = search;
   render();
-  expect(context.shouldBlock).toBe(false);
+  expect(context.shouldBlock).toBeNull();
   expect(context.nativeHandler).toBeNull();
 });
 
 it('ai Back does not block navigation before confirmation', () => {
   context.mode = 'ai';
   expect(dialog(render()).isOpen).toBe(false);
-  expect(context.shouldBlock).toBe(false);
+  expect(context.shouldBlock).toBeNull();
   expect(context.nativeHandler).toBeNull();
 });
