@@ -330,7 +330,7 @@ export async function getDisputeDetail(
         avatarUrl: pBUser?.avatarUrl ?? null,
         score: roundSlot?.playerBScore ?? snapshot?.playerBScore ?? 0,
       },
-      replayAvailable: true,
+      replayAvailable: false,
       replayId: dispute.matchId,
     },
     snapshot,

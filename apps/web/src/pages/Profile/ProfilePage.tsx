@@ -402,7 +402,7 @@ export const ProfilePage: React.FC = () => {
             {activeTab === "security"
               ? "Manage password, two-factor authentication and active sessions."
               : activeTab === "history"
-              ? "View past matches, summaries, and authoritative game replays."
+              ? "View past matches, results, and summary statistics."
               : activeTab === "stats"
               ? "Detailed game-specific statistics, win rates, and duration analytics."
               : "Manage your personal information"}

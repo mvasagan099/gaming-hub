@@ -6,9 +6,6 @@ import type {
   SecurityEventRecord,
   SecurityEventType,
   SecuritySeverity,
-  ReplayEventRecord,
-  ReplaySnapshotRecord,
-  ReplayPackage,
   ResultReason,
 } from "@gaming-hub/shared";
 import {
@@ -19,7 +16,6 @@ import {
   AppError,
 } from "@gaming-hub/shared";
 import { prisma } from "@gaming-hub/db";
-import { createHash } from "node:crypto";
 
 export class GameStateSyncManager {
   private static matchStates = new Map<string, AuthoritativeMatchState>();
@@ -28,7 +24,7 @@ export class GameStateSyncManager {
   private static rateLimitCleanupTimer: ReturnType<typeof setTimeout> | null = null;
   private static cachedActionResults = new Map<string, any>();
   private static securityEvents: SecurityEventRecord[] = [];
-  private static activeReplayPackages = new Map<string, ReplayPackage>();
+  private static activeReplayPackages = new Map<string, any>();
   private static lastSnapshotTimestamps = new Map<string, number>();
 
   /**
@@ -63,33 +59,7 @@ export class GameStateSyncManager {
     this.matchStates.set(matchId, state);
     this.lastSnapshotTimestamps.set(matchId, now);
 
-    const initialClonedState = JSON.parse(JSON.stringify(initialGameState));
-    this.activeReplayPackages.set(matchId, {
-      matchId,
-      gameId,
-      metadata: {
-        players: players.map((p) => ({ id: p.id, username: p.username, seat: p.seat, score: p.score ?? 0 })),
-        startedAt: now,
-        endedAt: 0,
-        durationMs: 0,
-        winnerIds: [],
-        resultReason: "NORMAL",
-        actionCount: 0,
-      },
-      initialState: initialClonedState,
-      events: [],
-      snapshots: [
-        {
-          snapshotId: `snap_${matchId}_0`,
-          matchId,
-          sequence: 0,
-          timestamp: now,
-          stateVersion: 1,
-          state: initialClonedState,
-        },
-      ],
-      finalState: {},
-    });
+    // Replay functionality disabled; no replay package created.
 
     console.log("[STATE] CREATED", {
       matchId,
@@ -177,54 +147,18 @@ export class GameStateSyncManager {
   }
 
   /**
-   * Records an authoritative replay event during gameplay
+   * Authoritative replay recording disabled
    */
   public static recordReplayEvent(
-    matchId: string,
-    playerId: string,
-    eventType: string,
-    actionData: Record<string, unknown> = {},
-    resultData: Record<string, unknown> = {},
-    stateVersion?: number,
-    fullState?: unknown,
-  ): ReplayEventRecord | null {
-    const replayPkg = this.activeReplayPackages.get(matchId);
-    if (!replayPkg) return null;
-
-    const currentSeq = replayPkg.events.length + 1;
-    const now = Date.now();
-
-    const record: ReplayEventRecord = {
-      eventId: `ev_${now}_${Math.random().toString(36).slice(2, 7)}`,
-      matchId,
-      sequence: currentSeq,
-      playerId,
-      eventType,
-      timestamp: now,
-      stateVersion: stateVersion ?? currentSeq,
-      actionData,
-      resultData,
-    };
-
-    replayPkg.events.push(record);
-    replayPkg.metadata.actionCount = replayPkg.events.length;
-
-    // Periodic snapshot: every 30s or every 5 actions
-    const lastSnapTime = this.lastSnapshotTimestamps.get(matchId) ?? 0;
-    if (now - lastSnapTime >= 30000 || replayPkg.events.length % 5 === 0) {
-      this.lastSnapshotTimestamps.set(matchId, now);
-      const snap: ReplaySnapshotRecord = {
-        snapshotId: `snap_${matchId}_${replayPkg.snapshots.length + 1}`,
-        matchId,
-        sequence: currentSeq,
-        timestamp: now,
-        stateVersion: record.stateVersion,
-        state: fullState ? JSON.parse(JSON.stringify(fullState)) : JSON.parse(JSON.stringify(resultData.state ?? resultData)),
-      };
-      replayPkg.snapshots.push(snap);
-    }
-
-    return record;
+    _matchId: string,
+    _playerId: string,
+    _eventType: string,
+    _actionData: Record<string, unknown> = {},
+    _resultData: Record<string, unknown> = {},
+    _stateVersion?: number,
+    _fullState?: unknown,
+  ): null {
+    return null;
   }
 
   /**
@@ -260,53 +194,14 @@ export class GameStateSyncManager {
 
     void this.persistMatchSnapshot(current);
 
-    // Finalize replay package
-    const replayPkg = this.activeReplayPackages.get(matchId);
-    if (replayPkg) {
-      const now = Date.now();
-      replayPkg.finalState = JSON.parse(JSON.stringify(finalGameState));
-      replayPkg.metadata.endedAt = now;
-      replayPkg.metadata.durationMs = Math.max(0, now - replayPkg.metadata.startedAt);
-      replayPkg.metadata.winnerIds = metadata?.winnerIds ?? [];
-      replayPkg.metadata.resultReason = metadata?.resultReason ?? "NORMAL";
-      if (metadata?.entryFee !== undefined) replayPkg.metadata.entryFee = metadata.entryFee;
-      if (metadata?.configurationVersion !== undefined) replayPkg.metadata.configurationVersion = metadata.configurationVersion;
-
-      // SHA-256 Checksum over all events and states
-      const payloadStr = JSON.stringify({
-        matchId,
-        initialState: replayPkg.initialState,
-        events: replayPkg.events,
-        finalState: replayPkg.finalState,
-      });
-      replayPkg.checksum = createHash("sha256").update(payloadStr).digest("hex");
-
-      // Save to database
-      prisma.replay.upsert({
-        where: { matchId },
-        create: {
-          matchId,
-          gameId: replayPkg.gameId,
-          payload: replayPkg as any,
-          sizeBytes: Buffer.byteLength(payloadStr),
-        },
-        update: {
-          payload: replayPkg as any,
-          sizeBytes: Buffer.byteLength(payloadStr),
-        },
-      }).catch((err) => {
-        console.error(`[REPLAY] Failed to persist replay for match ${matchId}:`, err);
-      });
-    }
-
     return current;
   }
 
   /**
-   * Retrieve in-memory replay package
+   * Retrieve in-memory replay package (disabled)
    */
-  public static getReplayPackage(matchId: string): ReplayPackage | null {
-    return this.activeReplayPackages.get(matchId) ?? null;
+  public static getReplayPackage(_matchId: string): null {
+    return null;
   }
 
   /**
