@@ -43,6 +43,9 @@ export const LudoPhaserGame: React.FC<LudoPhaserGameProps> = ({
     };
   }, []);
 
+  // Parent renders create new arrays; only changed contents reset the scene.
+  const namesKey = JSON.stringify(names);
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -72,14 +75,14 @@ export const LudoPhaserGame: React.FC<LudoPhaserGameProps> = ({
     game.registry.set("players", players);
     game.registry.set("online", online);
     game.registry.set("seat", seat);
-    game.registry.set("names", names);
+    game.registry.set("names", JSON.parse(namesKey));
     game.registry.set("isPortrait", isPortrait);
 
     return () => {
       game.destroy(true);
       gameRef.current = null;
     };
-  }, [mode, players, online, seat, names, isPortrait]);
+  }, [mode, players, online, seat, namesKey, isPortrait]);
 
   const landscapeMaxWidth = online
     ? "max-w-[min(100%,calc((100dvh-4.5rem)*1.7))]"

@@ -31,6 +31,9 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [gameInstance, setGameInstance] = React.useState<Phaser.Game | null>(null);
 
+  // Parent renders create new arrays; only changed contents reset the scene.
+  const namesKey = JSON.stringify(names);
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -58,13 +61,13 @@ export const ChessPhaserGame: React.FC<ChessPhaserGameProps> = ({
     game.registry.set("online",  online);
     game.registry.set("players", players);
     game.registry.set("seat",    seat);
-    game.registry.set("names",   names);
+    game.registry.set("names",   JSON.parse(namesKey));
 
     return () => {
       game.destroy(true);
       setGameInstance(null);
     };
-  }, [mode, level, theme, online, players, seat, names]);
+  }, [mode, level, theme, online, players, seat, namesKey]);
 
   useEffect(() => {
     const handleResize = () => {
