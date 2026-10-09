@@ -35,7 +35,7 @@ async function main() {
 
   const chats = await prisma.chatMessage.findMany({ orderBy: { createdAt: "desc" }, take: 5 });
   console.log(`\n=== CHAT === count recent=${chats.length}`);
-  for (const c of chats) console.log(`${c.senderId.slice(0, 8)}: ${c.text}`);
+  for (const c of chats) console.log(`${c.userId?.slice(0, 8) ?? c.senderName}: ${c.body}`);
 
   const users = await prisma.user.findMany({ take: 10, select: { id: true, email: true, username: true, createdAt: true } });
   console.log("\n=== USERS ===");
