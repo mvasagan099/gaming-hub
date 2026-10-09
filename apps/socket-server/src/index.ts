@@ -1071,6 +1071,14 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => void shutdown());
 }
 
+process.on("unhandledRejection", (reason) => {
+  logger.error({ err: reason }, "Unhandled promise rejection in socket server");
+});
+
+process.on("uncaughtException", (error) => {
+  logger.error({ err: error }, "Uncaught exception in socket server");
+});
+
 main().catch((error) => {
   logger.error({ err: error }, "Fatal error starting socket server");
   process.exit(1);

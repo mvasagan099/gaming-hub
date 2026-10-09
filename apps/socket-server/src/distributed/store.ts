@@ -65,7 +65,7 @@ export class PostgresMatchStore {
   }
   async commit(roomId: string, ownerId: string, token: string, expectedRevision: number,
     matchId: string | null, snapshot: DurableSnapshot, result?: DurableResult, closed = false, previousParticipants?: string[]): Promise<number> {
-    return this.db.$transaction(async tx => {
+    const nextRevision = await this.db.$transaction(async tx => {
       const players = (snapshot as { players?: Array<{ id?: string }> }).players ?? [];
       const ids = players.map(p => p.id).filter((id): id is string => typeof id === 'string').sort();
       const stable = previousParticipants != null && ids.length === players.length && new Set(ids).size === ids.length &&
@@ -84,16 +84,36 @@ export class PostgresMatchStore {
       if (result) {
         const existing = await tx.gameResultOutbox.findUnique({ where: { matchId: result.matchId } });
         if (!existing) await tx.gameResultOutbox.create({ data: result });
-        const replay = buildCompletedReplay(snapshot, result);
-        if (replay && await tx.match.findUnique({ where: { id: result.matchId }, select: { id: true } })) {
-          await tx.replay.upsert({ where: { matchId: result.matchId },
-            create: { matchId: result.matchId, gameId: replay.gameId, payload: replay as unknown as Prisma.InputJsonValue,
-              sizeBytes: Buffer.byteLength(JSON.stringify(replay)) }, update: {} });
-        }
         if (existing && (existing.id !== result.id || existing.roomId !== result.roomId || canonical(existing.result) !== canonical(result.result))) throw new Error('CONFLICTING_CANONICAL_RESULT');
       }
       return expectedRevision + 1;
-    });
+    }, { timeout: 45000, maxWait: 10000 });
+
+    if (result) {
+      try {
+        const replay = buildCompletedReplay(snapshot, result);
+        if (replay && await this.db.match.findUnique({ where: { id: result.matchId }, select: { id: true } })) {
+          const payloadStr = JSON.stringify(replay);
+          await this.db.replay.upsert({
+            where: { matchId: result.matchId },
+            create: {
+              matchId: result.matchId,
+              gameId: replay.gameId,
+              payload: replay as unknown as Prisma.InputJsonValue,
+              sizeBytes: Buffer.byteLength(payloadStr),
+            },
+            update: {
+              payload: replay as unknown as Prisma.InputJsonValue,
+              sizeBytes: Buffer.byteLength(payloadStr),
+            },
+          });
+        }
+      } catch (error) {
+        console.warn(`[REPLAY ARCHIVE WARNING] Failed to persist match replay for ${result.matchId}:`, error);
+      }
+    }
+
+    return nextRevision;
   }
 }
 
