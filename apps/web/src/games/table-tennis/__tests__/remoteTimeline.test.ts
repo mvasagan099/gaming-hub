@@ -17,7 +17,7 @@ describe('Table Tennis remote playback', () => {
     timeline.receive(snapshot(1040, 112), 5040);
     expect(timeline.ball(5060)?.x).toBe(106);
     expect(timeline.ball(5070)?.x).toBe(109);
-    expect(timeline.ball(5400)?.x).toBeCloseTo(131.2); // no runaway prediction on connection gaps
+    expect(timeline.ball(5400)?.x).toBeCloseTo(142); // no runaway prediction on connection gaps
   });
   it('bridges late updates without rewinding the same shot', () => {
     const timeline = new TableTennisTimeline();
@@ -37,6 +37,28 @@ describe('Table Tennis remote playback', () => {
     timeline.receive(hit, 5040);
     expect(timeline.ball(5110)?.vx).toBe(-5);
     expect(timeline.ball(5110)!.x).toBeLessThan(561);
+  });
+
+  it.each([38, 562])('waits for the server at the exact paddle contact line %s', x => {
+    const timeline = new TableTennisTimeline();
+    const state = snapshot(1000, x); state.ball!.vx = x === 38 ? -5 : 5;
+    timeline.receive(state, 5000);
+    expect(timeline.ball(5400)?.x).toBe(x);
+  });
+  it('bridges 100 ms of jitter then holds without predicting a point or bounce', () => {
+    const timeline = new TableTennisTimeline(); timeline.receive(snapshot(1000, 100), 5000);
+    expect(timeline.ball(5120)?.x).toBeCloseTo(124);
+    expect(timeline.ball(5140)?.x).toBeCloseTo(130);
+    expect(timeline.ball(9000)?.x).toBeCloseTo(130);
+    expect(timeline.ball(9000)?.touchCount).toBe(0);
+  });
+  it.each([{ y: 398, vy: 2 }, { y: 2, vy: -2 }])('keeps outgoing balls outside the board: %j', ({ y, vy }) => {
+    const timeline = new TableTennisTimeline();
+    const state = snapshot(1000, 100); state.ball!.y = y; state.ball!.vy = vy;
+    timeline.receive(state, 5000);
+    const ball = timeline.ball(5140)!;
+    expect(ball.y).toBeCloseTo(y + vy * 6);
+    expect(state.ball!.y).toBe(y);
   });
   it('clears a finished rally immediately so the previous ball cannot keep moving', () => {
     const timeline = new TableTennisTimeline();

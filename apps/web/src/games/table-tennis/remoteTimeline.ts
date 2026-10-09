@@ -81,12 +81,13 @@ export class TableTennisTimeline {
     if (!b || target >= b.time) {
       const latest = this.samples.at(-1)!;
       // Bridge brief jitter, but never predict a paddle bounce or a new point.
-      const frames = Math.max(0, Math.min(64, target - latest.time)) / (1000 / 60);
+      const frames = Math.max(0, Math.min(100, target - latest.time)) / (1000 / 60);
       ball = { ...latest.ball };
-      const contactX = ball.vx > 0 ? (ball.x < 562 ? 562 : 612) : (ball.x > 38 ? 38 : -12);
+      const contactX = ball.vx > 0 ? (ball.x <= 562 ? 562 : 612) : (ball.x >= 38 ? 38 : -12);
       ball.x = ball.vx > 0 ? Math.min(contactX, ball.x + ball.vx * frames)
         : Math.max(contactX, ball.x + ball.vx * frames);
-      ball.y = Math.max(0, Math.min(400, ball.y + ball.vy * frames));
+      // An off-table shot must remain outside; there are no side cushions.
+      ball.y += ball.vy * frames;
     } else {
       const t = Math.max(0, Math.min(1, (target - a.time) / (b.time - a.time)));
       ball = { ...a.ball, x: a.ball.x + (b.ball.x - a.ball.x) * t, y: a.ball.y + (b.ball.y - a.ball.y) * t };

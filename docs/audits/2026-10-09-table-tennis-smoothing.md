@@ -1,0 +1,7 @@
+# Table Tennis multiplayer smoothing — 2026-10-09
+
+Following the Snake vs Worms review, Table Tennis was checked for catch-up copying, snapshot interpolation, bat contact, off-table rendering, and timer continuity.
+
+Catch-up physics now reuses one detached working state across its fixed 60 Hz steps. Standalone simulation stays immutable, and zero-duration ticks no longer mutate an earlier state through the fractional remainder field. Prediction bridges at most 100 ms of delayed updates and holds at an exact bat contact line until the server confirms a hit or miss. Outgoing balls keep their off-table lateral position instead of being clamped to the board edge. Collision, point scoring, and pause/finish remain authoritative.
+
+Verification: 199 tests passed: 35 Table Tennis engine tests, 43 Table Tennis frontend tests, and 121 shared realtime/gameplay/exit tests. Coverage includes single-copy catch-up, source-state immutability, equivalent delayed/regular ticks, bounded jitter, exact contact on both sides, outgoing side shots, and configured timer behavior. Full workspace typecheck and production build passed. The typecheck was rerun after correcting a source-versus-built-type annotation in an unrelated, untracked archive-recovery test; that file is excluded from this change. No database schema or financial logic changes are required. Production smoothness needs confirmation after deployment during an active match; these checks do not claim a measured live frame-rate improvement.

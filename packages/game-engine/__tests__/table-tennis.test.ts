@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { TableTennisEngine } from "../src/table-tennis/engine";
 import { tableTennisShot } from "../src/table-tennis/shots";
 
@@ -456,5 +456,37 @@ describe('Table Tennis elapsed-time physics', () => {
     const long = rally(), bounded = rally();
     long.tick(5000); bounded.tick(250);
     expect(long.state.ball).toEqual(bounded.state.ball);
+  });
+});
+
+
+describe('Table Tennis catch-up copying', () => {
+  function rally() {
+    const engine = new TableTennisEngine([{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }], undefined, { now: () => 1000 });
+    engine.apply({ type: 'ready' }, 0); engine.apply({ type: 'ready' }, 1);
+    engine.apply({ type: 'serve', angle: 0 }, engine.state.servingSeat);
+    return engine;
+  }
+  it('copies a delayed rally once while preserving its original snapshot', () => {
+    const engine = rally(), prior = engine.state, snapshot = structuredClone(engine.state);
+    const copies = vi.spyOn(engine as unknown as { cloneState(state: unknown): unknown }, 'cloneState');
+    engine.tick(100);
+    expect(copies).toHaveBeenCalledOnce();
+    expect(prior).toEqual(snapshot);
+    expect(engine.state.ball!.x).not.toBe(prior.ball!.x);
+  });
+  it('retains standalone simulation immutability and fractional frame recovery', () => {
+    const engine = rally(), prior = engine.state, snapshot = structuredClone(engine.state);
+    expect(engine.simulatePhysics(prior)).not.toBe(prior);
+    expect(prior).toEqual(snapshot);
+    const regular = rally(), delayed = rally();
+    // Use identical canonical serve state so random serve variation cannot affect comparison.
+    delayed.restoreState(regular.getStateSnapshot());
+    for (let i = 0; i < 6; i++) regular.tick();
+    delayed.tick(100);
+    expect(delayed.state.ball).toEqual(regular.state.ball);
+    const before = structuredClone(delayed.state);
+    delayed.tick(0);
+    expect(before).toEqual(delayed.state);
   });
 });

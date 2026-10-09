@@ -270,8 +270,8 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     const remainder = (this.state as InternalState & { physicsRemainderMs?: number }).physicsRemainderMs ?? 0;
     const available = remainder + (Number.isFinite(elapsedMs) ? Math.max(0, Math.min(250, elapsedMs)) : frameMs);
     const steps = Math.floor((available + 1e-7) / frameMs);
-    let nextState = this.state;
-    for (let i = 0; i < steps && !nextState.finished && nextState.ball?.inPlay; i++) nextState = this.simulatePhysics(nextState);
+    let nextState = this.cloneState(this.state);
+    for (let i = 0; i < steps && !nextState.finished && nextState.ball?.inPlay; i++) nextState = this.advancePhysics(nextState);
     (nextState as InternalState & { physicsRemainderMs?: number }).physicsRemainderMs = available - steps * frameMs;
     this.updateState(nextState);
 
@@ -304,7 +304,11 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     if (state.paused || state.finished) return state;
     if (!state.ball || !state.ball.inPlay || state.phase !== "rally") return state;
 
-    const next = this.cloneState(state);
+    return this.advancePhysics(this.cloneState(state));
+  }
+
+  // Catch-up owns one detached working state; reuse it across fixed steps.
+  private advancePhysics(next: InternalState): InternalState {
     const ball = next.ball!;
 
     ball.x += ball.vx;
