@@ -420,6 +420,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         socket.emit("game:state:ack", {
           roomId: payload.roomId,
           matchId: payload.matchId,
+          sequenceNumber: incomingVersion,
           timestamp: Date.now(),
         });
         if (logUpdate) console.log("[MultiplayerStore] Sent game:state:ack for match", payload.matchId);
@@ -432,8 +433,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         const currentVersion = get().lastStateVersion;
         const incomingVersion = authoritativeState.stateVersion;
 
-        // 1. If incomingStateVersion <= currentStateVersion -> IGNORE
-        if (isStaleStateVersion(incomingVersion, currentVersion)) {
+        // 1. If incomingStateVersion < currentStateVersion -> IGNORE
+        if (incomingVersion < currentVersion) {
           if (import.meta.env.DEV) console.log("[STATE] IGNORED_STALE", {
             incomingVersion,
             currentVersion,
@@ -442,15 +443,15 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           return;
         }
 
-        // 2. If incomingStateVersion === currentStateVersion + 1 -> APPLY
-        if (isSequentialStateVersion(incomingVersion, currentVersion) || currentVersion === 0) {
+        // 2. If incomingStateVersion >= currentStateVersion -> APPLY
+        if (incomingVersion >= currentVersion || currentVersion === 0) {
           if (import.meta.env.DEV) console.log("[STATE] APPLIED", {
             stateVersion: incomingVersion,
             actionSequence: authoritativeState.actionSequence,
             matchId: authoritativeState.matchId,
           });
           set({
-            gameState: authoritativeState.gameState,
+            gameState: unpackCarromState(authoritativeState.gameState),
             authoritativeState,
             lastStateVersion: incomingVersion,
             actionSequence: authoritativeState.actionSequence,
@@ -632,17 +633,15 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         // Publish physics state and its render marker together so drivers never
         // render the previous snapshot before receiving the new one.
         if (envelope.eventType === "GAME_STATE_UPDATED" && envelope.payload?.state) {
-          set({ lastStateVersion: Math.max(currentVersion, envelope.stateVersion),
-            renderKey: (get().renderKey || 0) + 1, gameState: envelope.payload.state,
-            lastEvents: envelope.payload.events || [], matchId: envelope.matchId });
+          set({
+            lastStateVersion: Math.max(currentVersion, envelope.stateVersion),
+            renderKey: (get().renderKey || 0) + 1,
+            gameState: unpackCarromState(envelope.payload.state),
+            lastEvents: envelope.payload.events || [],
+            matchId: envelope.matchId,
+          });
           return;
         }
-
-        // Apply state version
-        set({
-          lastStateVersion: Math.max(currentVersion, envelope.stateVersion),
-          renderKey: (get().renderKey || 0) + 1,
-        });
 
         // Event-specific handling
         if (envelope.eventType === "COUNTDOWN_UPDATED" && envelope.payload?.countdown !== undefined) {

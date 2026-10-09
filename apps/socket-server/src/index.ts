@@ -67,7 +67,7 @@ async function main(): Promise<void> {
   io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents>(undefined as any, {
     cors: { origin: parseOrigins(env.CORS_ORIGIN), credentials: true },
     transports: ["websocket", "polling"],
-    maxHttpBufferSize: 32 * 1024,
+    maxHttpBufferSize: 2 * 1024 * 1024,
   });
 
   const httpServer: HttpServer = createServer((req, res) => {
@@ -472,7 +472,7 @@ async function main(): Promise<void> {
     ...(env.distributedMatches ? {
       countdownDurationMs: 3000,
       requireGameLoadAck: true,
-      executeRoomTask: <T>(roomId: string, task: () => Promise<T>) => distributed!.local(roomId, task),
+      executeRoomTask: <T>(roomId: string, task: () => Promise<T>, lifecycle = false) => distributed!.local(roomId, task, false, lifecycle),
       publish: (room: import("@gaming-hub/multiplayer").RoomRuntime, event: string, payload: unknown, destination: string) => distributed!.publish(room, event, payload, destination),
       persistFinalResult: (room: import("@gaming-hub/multiplayer").RoomRuntime, result: MatchResult) => distributed!.finalResult(room, result),
       persistAbortedResult: (room: import("@gaming-hub/multiplayer").RoomRuntime, reason: string) => distributed!.abortedResult(room, reason),
@@ -766,7 +766,7 @@ async function main(): Promise<void> {
     );
 
     socket.on("game:state:ack", (payload) => {
-      framework.syncManager.handleStateAck(user.userId, payload.roomId, payload.timestamp);
+      framework.syncManager.handleStateAck(user.userId, payload.roomId, payload.sequenceNumber ?? payload.timestamp);
     });
 
     socket.on("game:event:ack", (payload) => {

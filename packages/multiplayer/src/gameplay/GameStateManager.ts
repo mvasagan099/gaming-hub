@@ -18,10 +18,11 @@ import type {
 import type { EngineActionResult, EngineInstance } from "@gaming-hub/game-engine";
 import type { JsonObject } from "@gaming-hub/shared";
 import { StateValidator } from "../utils/StateValidator";
+import { BoundedRoomQueue } from "../utils/BoundedRoomQueue";
 
 export class GameStateManager {
   private readonly framework: MultiplayerFramework;
-  private readonly queues = new Map<string, Promise<void>>();
+  private readonly queues = new BoundedRoomQueue();
 
   constructor(framework: MultiplayerFramework) {
     this.framework = framework;
@@ -32,26 +33,20 @@ export class GameStateManager {
   }
 
   async shutdown(): Promise<void> {
-    this.queues.clear();
+    await this.queues.drain();
   }
 
-  getMemoryStats() { return { pendingRoomQueues: this.queues.size }; }
+  getMemoryStats() { return this.queues.getMemoryStats(); }
 
   /**
    * Run a task after every previously queued task for the same room has
    * settled, guaranteeing per-room serial execution of state mutations.
    */
-  enqueue<T>(roomId: string, task: () => Promise<T>): Promise<T> {
+  enqueue<T>(roomId: string, task: () => Promise<T>, lifecycle = false): Promise<T> {
     // A distributed host owns the only serial queue. Layering two queues can
     // deadlock a timer against an action waiting for the owner transaction.
-    if (this.framework.config.executeRoomTask) return this.framework.config.executeRoomTask(roomId, task);
-    const previous = this.queues.get(roomId) ?? Promise.resolve();
-    const execute = () => task();
-    const next = previous.then(execute, execute);
-    const settled = next.then(() => undefined, () => undefined);
-    this.queues.set(roomId, settled);
-    void settled.then(() => { if (this.queues.get(roomId) === settled) this.queues.delete(roomId); });
-    return next;
+    if (this.framework.config.executeRoomTask) return this.framework.config.executeRoomTask(roomId, task, lifecycle);
+    return this.queues.enqueue(roomId, task, lifecycle);
   }
 
   /** The authoritative engine for a room, if a match is running. */

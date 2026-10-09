@@ -87,7 +87,7 @@ export class TimerManager {
     const scheduledRoom = this.framework.roomManager.getRoom(roomId);
     this.timers.set(timerId, timer);
     this.timerCallbacks.set(timerId, this.framework.config.executeRoomTask
-      ? () => { void this.framework.config.executeRoomTask!(roomId, async () => { if (this.framework.roomManager.getRoom(roomId) === scheduledRoom) await callback(); })
+      ? () => { void this.framework.config.executeRoomTask!(roomId, async () => { if (this.framework.roomManager.getRoom(roomId) === scheduledRoom) await callback(); }, true)
         .catch(error => this.framework.error('Timer owner unavailable', error)); }
       : callback);
     

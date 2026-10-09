@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Redis } from 'ioredis';
 import type { MultiplayerFramework, RoomRuntime } from '@gaming-hub/multiplayer';
 import type { MatchResult } from '@gaming-hub/multiplayer';
+import { BoundedRoomQueue } from '@gaming-hub/multiplayer';
 import type { Prisma } from '@gaming-hub/db';
 import { RedisMatchOwnership } from './ownership';
 import { PostgresMatchStore, type DurableResult } from './store';
@@ -18,10 +19,14 @@ export class DistributedRoomCoordinator {
   readonly instanceId: string;
   private readonly context = new AsyncLocalStorage<TransactionContext>();
   private readonly owned = new Map<string, OwnedRoom>();
-  private readonly queues = new Map<string, Promise<unknown>>();
+  private readonly queues = new BoundedRoomQueue();
   private readonly ownership: RedisMatchOwnership;
   private readonly subscriber: Redis;
   private readonly pending = new Map<string, { resolve(value: unknown): void; reject(error: Error): void }>();
+  private readonly routingPlayers = new Map<string, number>();
+  private routingCount = 0;
+  private recovering = false;
+  private readonly renewing = new Set<string>();
   private storeAvailable = false;
   private started = false;
   private messageHandler?: (channel: string, data: string) => void;
@@ -70,15 +75,23 @@ export class DistributedRoomCoordinator {
     await this.subscriber.subscribe(this.rpcChannel, this.replyChannel);
     this.heartbeat = setInterval(() => {
       for (const [roomId, owner] of this.owned) {
-        void this.renew(roomId, owner).catch(() => { this.storeAvailable = false; this.fenceOff(roomId); });
+        if (this.renewing.has(roomId)) continue;
+        this.renewing.add(roomId);
+        void this.renew(roomId, owner).catch(() => { this.storeAvailable = false; this.fenceOff(roomId); })
+          .finally(() => this.renewing.delete(roomId));
       }
-      void this.recoverExpired().then(() => { this.storeAvailable = true; }, () => { this.storeAvailable = false; this.framework.error('Ownership recovery store unavailable', 'RECOVERY_UNAVAILABLE'); });
+      if (!this.recovering) {
+        this.recovering = true;
+        void this.recoverExpired().then(() => { this.storeAvailable = true; }, () => { this.storeAvailable = false; this.framework.error('Ownership recovery store unavailable', 'RECOVERY_UNAVAILABLE'); })
+          .finally(() => { this.recovering = false; });
+      }
     }, Math.max(100, Math.floor(this.ttlMs / 3)));
     this.heartbeat.unref();
   }
 
-  getMemoryStats() { return { ownedRooms: this.owned.size, ownerQueues: this.queues.size,
-    pendingOwnerRpc: this.pending.size, redisSubscriptionCount: this.started ? 2 : 0 }; }
+  getMemoryStats() { const queue = this.queues.getMemoryStats(); return { ownedRooms: this.owned.size, ownerQueues: queue.pendingRoomQueues, pendingOwnerOperations: queue.pendingOperations,
+    pendingOwnerRpc: this.pending.size, routingOperations: this.routingCount, routingPlayers: this.routingPlayers.size,
+    renewingRooms: this.renewing.size, redisSubscriptionCount: this.started ? 2 : 0 }; }
 
   isReady() { return this.storeAvailable && this.redis.status === "ready" && this.subscriber.status === "ready"; }
 
@@ -134,7 +147,7 @@ export class DistributedRoomCoordinator {
       current.status = 'ended';
       this.context.getStore()!.closed = true;
       this.publish(current, 'room:closed', { roomId: current.id, reason }, current.ioName);
-    });
+    }, false, true);
   }
 
   async abortedResult(room: RoomRuntime, reason: string): Promise<void> {
@@ -167,6 +180,19 @@ export class DistributedRoomCoordinator {
 
   /** The origin has already authenticated playerId; clients never supply this envelope. */
   async route(command: RoutedCommand): Promise<unknown> {
+    const count = this.routingPlayers.get(command.playerId) ?? 0;
+    if (count >= 32 || this.routingCount >= 1024) throw new Error('ROOM_QUEUE_OVERLOADED');
+    this.routingPlayers.set(command.playerId, count + 1); this.routingCount++;
+    try { return await this.routeAdmitted(command); }
+    finally {
+      this.routingCount--;
+      const remaining = this.routingPlayers.get(command.playerId)! - 1;
+      if (remaining === 0) this.routingPlayers.delete(command.playerId);
+      else this.routingPlayers.set(command.playerId, remaining);
+    }
+  }
+
+  private async routeAdmitted(command: RoutedCommand): Promise<unknown> {
     if (command.event === 'room:create') return this.dispatch(command);
     // Routing needs identity only. Do not transfer an ever-growing match history
     // from PostgreSQL on every paddle input; takeover loads the full checkpoint.
@@ -187,6 +213,7 @@ export class DistributedRoomCoordinator {
     const lease = await this.ownership.inspect(stored.id);
     if (!lease || lease.ownerId === this.instanceId) return this.local(stored.id, () => this.dispatch(command), command.event === "carrom:striker-position");
     const requestId = randomUUID();
+    if (this.pending.size >= 256) throw new Error('ROOM_QUEUE_OVERLOADED');
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { this.pending.delete(requestId); reject(new Error('MATCH_OWNER_TEMPORARILY_UNAVAILABLE')); }, 5000);
       this.pending.set(requestId, { resolve: value => { clearTimeout(timer); this.pending.delete(requestId); resolve(value); },
@@ -228,11 +255,10 @@ export class DistributedRoomCoordinator {
     });
   }
 
-  async local<T>(roomId: string, task: () => Promise<T>, presentationOnly = false): Promise<T> {
+  async local<T>(roomId: string, task: () => Promise<T>, presentationOnly = false, lifecycle = false): Promise<T> {
     const transaction = this.context.getStore();
     if (transaction?.active && transaction.roomId === roomId) return task();
-    const previous = this.queues.get(roomId) ?? Promise.resolve();
-    const operation = previous.catch(() => undefined).then(async () => {
+    return this.queues.enqueue(roomId, async () => {
       if (!this.owned.has(roomId)) await this.acquire(roomId, true);
       const owner = this.owned.get(roomId)!;
       await this.ownership.assert(roomId, this.instanceId, owner.token);
@@ -288,11 +314,7 @@ export class DistributedRoomCoordinator {
         }
         finally { this.context.getStore()!.active = false; }
       });
-    });
-    this.queues.set(roomId, operation);
-    const releaseQueue = () => { if (this.queues.get(roomId) === operation) this.queues.delete(roomId); };
-    void operation.then(releaseQueue, releaseQueue);
-    return operation;
+    }, lifecycle);
   }
 
   private async acquire(roomId: string, restore: boolean) {

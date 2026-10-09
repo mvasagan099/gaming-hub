@@ -76,7 +76,7 @@ export interface ClientToServerEvents {
 
   "chat:typing": (payload: { roomId: string }, ack: Ack<{ sent: true }>) => void;
 
-  "game:state:ack": (payload: { roomId: string; matchId: string; timestamp: number }) => void;
+  "game:state:ack": (payload: { roomId: string; matchId: string; timestamp: number; sequenceNumber?: number }) => void;
 
   "game:sync": (
     payload: { roomId: string; matchId: string; lastStateVersion: number },

@@ -45,3 +45,4 @@ export { EventEmitter } from "./utils/EventEmitter";
 export { StateValidator } from "./utils/StateValidator";
 export { PacketSequencer } from "./utils/PacketSequencer";
 export { LatencyCompensator } from "./utils/LatencyCompensator";
+export { BoundedRoomQueue } from "./utils/BoundedRoomQueue";
