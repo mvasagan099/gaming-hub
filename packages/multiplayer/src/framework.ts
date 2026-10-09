@@ -128,7 +128,7 @@ export class MultiplayerFramework {
       endedRoomLingerMs: config.endedRoomLingerMs ?? 120_000,
       maxSpectators: config.maxSpectators ?? 10,
       enableAntiCheat: config.enableAntiCheat ?? true,
-      enableReplay: config.enableReplay ?? true,
+      enableReplay: config.enableReplay ?? false,
       debug: config.debug ?? false,
       onMatchStarting: config.onMatchStarting,
       onMatchFinished: config.onMatchFinished,

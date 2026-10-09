@@ -3,7 +3,6 @@ import {
   Trophy,
   Clock,
   Swords,
-  Play,
   RotateCcw,
   Eye,
   Filter,
@@ -17,7 +16,6 @@ import {
   X,
 } from "lucide-react";
 import { apiClient } from "../../services/api/client";
-import { ReplayModal } from "../Replay/ReplayModal";
 import type {
   MatchHistoryRecord,
   MatchSummaryView,
@@ -50,7 +48,6 @@ export const MatchHistoryView: React.FC<{ userId?: string }> = ({ userId }) => {
 
   // Modal States
   const [selectedSummary, setSelectedSummary] = useState<MatchSummaryView | null>(null);
-  const [selectedReplayMatchId, setSelectedReplayMatchId] = useState<string | null>(null);
 
   const loadHistory = async () => {
     setLoading(true);
@@ -291,13 +288,6 @@ export const MatchHistoryView: React.FC<{ userId?: string }> = ({ userId }) => {
                         <Eye className="w-3.5 h-3.5" />
                         <span>Summary</span>
                       </button>
-                      <button
-                        onClick={() => setSelectedReplayMatchId(item.matchId)}
-                        className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-500/20 transition-colors"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-white" />
-                        <span>Replay</span>
-                      </button>
                     </div>
                   </div>
                 );
@@ -528,15 +518,6 @@ export const MatchHistoryView: React.FC<{ userId?: string }> = ({ userId }) => {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* REPLAY MODAL */}
-      {/* ========================================================================= */}
-      {selectedReplayMatchId && (
-        <ReplayModal
-          matchId={selectedReplayMatchId}
-          onClose={() => setSelectedReplayMatchId(null)}
-        />
-      )}
     </div>
   );
 };

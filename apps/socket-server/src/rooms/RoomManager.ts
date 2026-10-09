@@ -1691,16 +1691,6 @@ export class RoomManager {
 
     this.emitGameState(room, result.events);
 
-    // Record authoritative replay event
-    GameStateSyncManager.recordReplayEvent(
-      room.match.matchId,
-      user.userId,
-      action.type,
-      action as any,
-      { events: result.events },
-      room.match.turnNumber,
-      result.state,
-    );
 
     // Update and broadcast authoritative match state
     const currentSeat = room.match.engine.currentSeat;

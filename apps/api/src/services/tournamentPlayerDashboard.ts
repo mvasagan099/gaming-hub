@@ -549,7 +549,7 @@ export async function getPlayerTournamentDashboard(
       opponentScore: oppScore,
       durationSeconds,
       resultReason: linkedMatch?.resultReason ?? "NORMAL",
-      replayAvailable: Boolean(slot.matchId),
+      replayAvailable: false,
     };
   });
 

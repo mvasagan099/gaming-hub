@@ -18,7 +18,6 @@ import {
   Mail,
   Sparkles,
   Award,
-  Video,
   ChevronRight,
   ChevronLeft,
   TrendingUp,
@@ -944,17 +943,6 @@ export function TournamentDetailPage() {
                           onClick={() => setDisputeTargetMatch({ matchId: m.matchId!, roundNumber: m.roundNumber })}
                         >
                           <ShieldAlert className="size-3.5" /> Report
-                        </Button>
-                      )}
-
-                      {m.replayAvailable && m.matchId && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-slate-700 text-slate-300 hover:bg-slate-800 gap-1.5 text-xs"
-                          onClick={() => navigate(`/game/${tourn.gameId}?replayMatchId=${m.matchId}`)}
-                        >
-                          <Video className="size-3.5" /> Watch Replay
                         </Button>
                       )}
                     </div>
