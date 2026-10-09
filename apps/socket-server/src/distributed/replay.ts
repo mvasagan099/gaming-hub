@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { ReplayPackage, ResultReason } from '@gaming-hub/shared';
+import type { RecordedAction } from '@gaming-hub/multiplayer';
 import type { MatchResult } from '@gaming-hub/multiplayer';
 import type { RoomCheckpoint } from './checkpoint';
 import type { DurableResult, DurableSnapshot } from './store';
@@ -11,13 +12,7 @@ export function buildCompletedReplay(snapshot: DurableSnapshot, result: DurableR
   const match = saved.match;
   if (!outcome || !match || match.matchId !== result.matchId || saved.schemaVersion !== 1) return null;
   const { lastTrajectory: _trajectory, lastAction: _action, ...finalState } = match.engine.state;
-  const events = match.actionHistory.map((record, index) => ({
-    eventId: `${result.matchId}:${index + 1}`, matchId: result.matchId, sequence: index + 1,
-    playerId: record.playerId, eventType: record.action.type, timestamp: record.timestamp,
-    stateVersion: record.turnNumber, actionData: (record.action.payload ?? {}) as Record<string, unknown>,
-    resultData: { events: record.events.filter(event => event.type !== 'carrom:shot-start'),
-      ...(record.replayState ? { state: record.replayState } : {}) },
-  }));
+  const events = match.actionHistory.map(record => replayEvent(record, result.matchId));
   const replay: ReplayPackage = {
     matchId: result.matchId, gameId: saved.room.config.gameId,
     metadata: { players: outcome.players.map(p => ({ id: p.playerId, username: p.playerId, seat: p.seat, score: p.score ?? 0 })),
@@ -30,4 +25,12 @@ export function buildCompletedReplay(snapshot: DurableSnapshot, result: DurableR
   replay.checksum = createHash('sha256').update(JSON.stringify({ matchId: replay.matchId,
     initialState: replay.initialState, events, finalState })).digest('hex');
   return replay;
+}
+
+export function replayEvent(record: RecordedAction, matchId: string) {
+  return { eventId: `${matchId}:${record.turnNumber}`, matchId, sequence: record.turnNumber,
+    playerId: record.playerId, eventType: record.action.type, timestamp: record.timestamp,
+    stateVersion: record.turnNumber, actionData: (record.action.payload ?? {}) as Record<string, unknown>,
+    resultData: { events: record.events.filter(event => event.type !== 'carrom:shot-start'),
+      ...(record.replayState ? { state: record.replayState } : {}) } };
 }

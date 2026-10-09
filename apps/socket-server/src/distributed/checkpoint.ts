@@ -1,3 +1,4 @@
+import { validateArchivedActionFilter } from '@gaming-hub/multiplayer';
 import { serializeEngineState, restoreEngineState, type EngineCheckpoint, type EngineInstance } from '@gaming-hub/game-engine';
 import type { RoomRuntime, PlayerRuntime, MatchRuntime } from '@gaming-hub/multiplayer';
 import type { MultiplayerFramework } from '@gaming-hub/multiplayer';
@@ -68,6 +69,12 @@ export function restoreRoomCheckpoint(framework: MultiplayerFramework, snapshot:
   // Validate reconnect entries before registering any runtime or scheduling callbacks.
   if ((snapshot.reconnectTimers ?? []).some(t => !identities.includes(t.playerId) || !Number.isFinite(t.expiresAt)))
     throw new Error('INVALID_RECONNECT_CHECKPOINT');
+  validateArchivedActionFilter(snapshot.match?.archivedActionFilter);
+  if (snapshot.match?.archivedThroughTurn != null && (
+      !Number.isSafeInteger(snapshot.match.archivedThroughTurn) || snapshot.match.archivedThroughTurn < 0 ||
+      snapshot.match.archivedThroughTurn > snapshot.match.turnNumber ||
+      snapshot.match.actionHistory.some(record => record.turnNumber <= snapshot.match!.archivedThroughTurn!)))
+    throw new Error('INVALID_ARCHIVED_HISTORY_CHECKPOINT');
   const match = snapshot.match ? { ...snapshot.match, engine: restoreEngineState(snapshot.match.engine), stateSnapshots: [] } : null;
   const room: RoomRuntime = { ...snapshot.room, players: new Map(snapshot.players.map(p => [p.id, restorePlayer(p)])),
     spectators: new Map(snapshot.spectators.map(p => [p.id, restorePlayer(p)])), match,

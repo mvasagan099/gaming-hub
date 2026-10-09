@@ -1,4 +1,7 @@
 import { buildCompletedReplay } from './replay';
+import { archiveCompletedReplay } from './archiveReplay';
+import { planHistoryRetention } from '@gaming-hub/multiplayer';
+import type { RoomCheckpoint } from './checkpoint';
 import { prisma, type Prisma } from '@gaming-hub/db';
 
 export type DurableSnapshot = Prisma.InputJsonValue;
@@ -10,8 +13,12 @@ export class PostgresMatchStore {
   async validateSchema(): Promise<void> {
     const rows = await this.db.$queryRaw<Array<{ ready: boolean }>>`SELECT
       to_regclass('public."LiveRoomCheckpoint"') IS NOT NULL AND to_regclass('public."GameResultOutbox"') IS NOT NULL
-      AND to_regclass('public.match_owner_fencing_seq') IS NOT NULL AS ready`;
-    if (!rows[0]?.ready) throw new Error('DURABLE_MATCH_SCHEMA_REQUIRED: LiveRoomCheckpoint, GameResultOutbox and match_owner_fencing_seq must exist in the socket DATABASE_URL database. Complete the read-only migration preflight and apply the approved recovery migrations before restarting.');
+      AND to_regclass('public.match_owner_fencing_seq') IS NOT NULL
+      AND to_regclass('public."MatchActionArchive"') IS NOT NULL AS ready`;
+    if (!rows[0]?.ready) throw new Error('DURABLE_MATCH_SCHEMA_REQUIRED: LiveRoomCheckpoint, GameResultOutbox, match_owner_fencing_seq and MatchActionArchive must exist in the socket DATABASE_URL database. Complete the read-only migration preflight and apply the approved recovery migrations before restarting.');
+  }
+  async hasArchivedAction(roomId: string, matchId: string, playerId: string, actionId: string): Promise<boolean> {
+    return !!await this.db.matchActionArchive.findFirst({ where: { roomId, matchId, playerId, actionId }, select: { turnNumber: true } });
   }
   async nextFencingToken(): Promise<string> {
     const rows = await this.db.$queryRaw<Array<{ token: bigint }>>`SELECT nextval('match_owner_fencing_seq') AS token`;
@@ -65,6 +72,14 @@ export class PostgresMatchStore {
   }
   async commit(roomId: string, ownerId: string, token: string, expectedRevision: number,
     matchId: string | null, snapshot: DurableSnapshot, result?: DurableResult, closed = false, previousParticipants?: string[]): Promise<number> {
+    const original = snapshot as unknown as RoomCheckpoint;
+    const plan = original.match ? planHistoryRetention(original.match) : null;
+    // Terminal commits preserve the entire remaining tail with the result outbox,
+    // even if optional replay-document materialization later fails.
+    const archiveRows = plan ? [...plan.archive, ...(result && original.match?.matchId === result.matchId ? plan.retained : [])] : [];
+    if (archiveRows.length && original.match!.matchId !== matchId) throw new Error("ARCHIVE_MATCH_ID_MISMATCH");
+    const committedSnapshot = plan?.archive.length ? { ...original, match: { ...original.match!,
+      actionHistory: plan.retained, archivedThroughTurn: plan.archivedThroughTurn, archivedActionFilter: plan.archivedActionFilter } } as unknown as DurableSnapshot : snapshot;
     const players = (snapshot as { players?: Array<{ id?: string }> }).players ?? [];
     const ids = players.map(p => p.id).filter((id): id is string => typeof id === 'string').sort();
     const stable = previousParticipants != null && ids.length === players.length && new Set(ids).size === ids.length &&
@@ -73,7 +88,7 @@ export class PostgresMatchStore {
       // Stable membership was reserved by the previous fenced commit. Verify it
       // in this atomic UPDATE instead of an additional SELECT on every frame.
       // Any join/leave still takes the original participant-lock/conflict path.
-      const changed = await tx.$executeRaw`UPDATE "LiveRoomCheckpoint" SET "snapshot"=${JSON.stringify(snapshot)}::jsonb,
+      const changed = await tx.$executeRaw`UPDATE "LiveRoomCheckpoint" SET "snapshot"=${JSON.stringify(committedSnapshot)}::jsonb,
         "closed"=${closed}, "matchId"=${matchId}, "revision"="revision"+1, "updatedAt"=clock_timestamp()
         WHERE "id"=${roomId} AND "ownerId"=${ownerId} AND "fencingToken"=${BigInt(token)}
           AND "revision"=${expectedRevision} AND "leaseExpiresAt">clock_timestamp() AND "closed"=false
@@ -85,11 +100,34 @@ export class PostgresMatchStore {
     // A frame with unchanged membership has exactly one guarded write. PostgreSQL
     // makes that UPDATE atomic without BEGIN/COMMIT network round trips. Result
     // outbox insertion and participant changes still require the full transaction.
-    const nextRevision = stable && !closed && !result
+    const nextRevision = stable && !closed && !result && !archiveRows.length
       ? await writeCheckpoint(this.db)
       : await this.db.$transaction(async tx => {
       if (!closed && !stable) await reserveParticipants(tx, roomId, snapshot);
       const revision = await writeCheckpoint(tx);
+      if (archiveRows.length) {
+        // Compare JSONB inside PostgreSQL. A JSON round trip through Prisma's
+        // floating-point decoder can change coin coordinates by one ULP.
+        const rowsJson = JSON.stringify(archiveRows.map(record => ({
+          roomId, matchId: original.match!.matchId, turnNumber: record.turnNumber,
+          playerId: record.playerId, actionId: typeof record.action.actionId === 'string' ? record.action.actionId : null,
+          record,
+        })));
+        await tx.$executeRaw`INSERT INTO "MatchActionArchive" ("roomId", "matchId", "turnNumber", "playerId", "actionId", "record")
+          SELECT "roomId", "matchId", "turnNumber", "playerId", "actionId", "record"
+          FROM jsonb_to_recordset(${rowsJson}::jsonb) AS incoming("roomId" text, "matchId" text,
+            "turnNumber" integer, "playerId" text, "actionId" text, "record" jsonb)
+          ON CONFLICT DO NOTHING`;
+        const conflicts = await tx.$queryRaw<Array<{ conflict: boolean }>>`SELECT EXISTS (
+          SELECT 1 FROM jsonb_to_recordset(${rowsJson}::jsonb) AS incoming("roomId" text, "matchId" text,
+            "turnNumber" integer, "playerId" text, "actionId" text, "record" jsonb)
+          LEFT JOIN "MatchActionArchive" stored ON stored."matchId"=incoming."matchId" AND stored."turnNumber"=incoming."turnNumber"
+          WHERE stored."roomId" IS DISTINCT FROM incoming."roomId"
+            OR stored."playerId" IS DISTINCT FROM incoming."playerId"
+            OR stored."actionId" IS DISTINCT FROM incoming."actionId"
+            OR stored."record" IS DISTINCT FROM incoming."record") AS conflict`;
+        if (conflicts[0]?.conflict !== false) throw new Error('CONFLICTING_ARCHIVED_ACTION');
+      }
       if (result) {
         const existing = await tx.gameResultOutbox.findUnique({ where: { matchId: result.matchId } });
         if (!existing) await tx.gameResultOutbox.create({ data: result });
@@ -100,7 +138,12 @@ export class PostgresMatchStore {
 
     if (result) {
       try {
-        const replay = buildCompletedReplay(snapshot, result);
+        const saved = committedSnapshot as unknown as RoomCheckpoint;
+        if ((saved.match?.archivedThroughTurn ?? 0) > 0) {
+          await archiveCompletedReplay(this.db, saved, result);
+          return nextRevision;
+        }
+        const replay = buildCompletedReplay(committedSnapshot, result);
         if (replay && await this.db.match.findUnique({ where: { id: result.matchId }, select: { id: true } })) {
           const payloadStr = JSON.stringify(replay);
           await this.db.replay.upsert({

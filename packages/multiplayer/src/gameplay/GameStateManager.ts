@@ -19,6 +19,7 @@ import type { EngineActionResult, EngineInstance } from "@gaming-hub/game-engine
 import type { JsonObject } from "@gaming-hub/shared";
 import { StateValidator } from "../utils/StateValidator";
 
+import { planHistoryRetention, LOCAL_SNAPSHOT_LIMIT } from "../utils/HistoryRetention";
 import { BoundedRoomQueue } from "../utils/BoundedRoomQueue";
 
 export class GameStateManager {
@@ -47,6 +48,15 @@ export class GameStateManager {
     // A distributed host owns the only serial queue; layering queues can deadlock.
     if (this.framework.config.executeRoomTask) return this.framework.config.executeRoomTask(roomId, task, lifecycle);
     return this.queues.enqueue(roomId, task, lifecycle);
+  }
+
+  /** Only the fenced owner calls this after archival/checkpoint commit succeeds. */
+  compactArchivedHistory(room: RoomRuntime): void {
+    if (!room.match) return;
+    const plan = planHistoryRetention(room.match);
+    room.match.actionHistory = plan.retained;
+    room.match.archivedThroughTurn = plan.archivedThroughTurn;
+    room.match.archivedActionFilter = plan.archivedActionFilter;
   }
 
   /** The authoritative engine for a room, if a match is running. */
@@ -124,10 +134,9 @@ export class GameStateManager {
       state: result.state,
       action: recordedAction,
     });
-    if (this.framework.config.executeRoomTask && room.match.stateSnapshots.length > 1) {
-      // Distributed recovery uses its canonical checkpoint and action history.
-      // Keep only the latest verification snapshot instead of all shot frames.
-      room.match.stateSnapshots.splice(0, room.match.stateSnapshots.length - 1);
+    const snapshotLimit = this.framework.config.executeRoomTask ? 1 : LOCAL_SNAPSHOT_LIMIT;
+    if (room.match.stateSnapshots.length > snapshotLimit) {
+      room.match.stateSnapshots.splice(0, room.match.stateSnapshots.length - snapshotLimit);
     }
     return recordedAction;
   }

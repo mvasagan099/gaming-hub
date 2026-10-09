@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-09",
+  "baseCommit": "43d742f5d8acbcbfc8f3fe23889116aa4719034a",
+  "results": {
+    "multiplayer": {
+      "files": 32,
+      "tests": 442,
+      "passed": 442,
+      "failed": 0,
+      "skipped": 0
+    },
+    "web": {
+      "files": 46,
+      "tests": 404,
+      "passed": 404,
+      "failed": 0,
+      "skipped": 0
+    },
+    "game-engine": {
+      "files": 29,
+      "tests": 444,
+      "passed": 444,
+      "failed": 0,
+      "skipped": 0
+    },
+    "selected-api": {
+      "files": 10,
+      "tests": 130,
+      "passed": 130,
+      "failed": 0,
+      "skipped": 0
+    },
+    "final-archive-checkpoint": {
+      "files": 2,
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "apiSubgroups": {
+    "distributedRecovery": 37,
+    "financialAndIdorEconomy": 49,
+    "socketSecurity": 29,
+    "checkpointPerformance": 12,
+    "historyArchive": 3
+  },
+  "typecheck": "PASS: nine workspaces on final source",
+  "build": "PASS; existing frontend chunk-size warning",
+  "migrations": {
+    "freshDisposableApplied": 13,
+    "schemaDiff": "No difference detected",
+    "host": "127.0.0.1",
+    "port": 5540,
+    "database": "gaming_history_20261009_test"
+  },
+  "memory": {
+    "baselineRssMiB": 132.96484375,
+    "baselineHeapMiB": 24.33531951904297,
+    "finalRssMiB": 379.91015625,
+    "finalHeapMiB": 29.870223999023438,
+    "peakRssMiB": 379.91015625,
+    "peakHeapMiB": 167.39228057861328,
+    "scope": "Synthetic local cleanup regression, includes forced GC; not a paced capacity or Render soak test"
+  },
+  "sourceSha256": {
+    "packages/db/prisma/schema.prisma": "bce49fee0a8408ccfacdbbe2a3616fdf26fa60b630df0b6db1d2dfc76a676aeb",
+    "packages/db/prisma/migrations/20261009150000_match_action_archive/migration.sql": "6ae0ea75a76f9ed6ab998f457f8611432057e8ee4fb621371bcbaec24792b999",
+    "packages/multiplayer/src/utils/HistoryRetention.ts": "90ba23bee2502f1e95a47f56653f2fce799da4a5572739bb7a7fdbf76fbcab33",
+    "packages/multiplayer/src/utils/ArchivedActionFilter.ts": "b2423e87fc804d20c670b410dacdb03709ce798390fcf90e1a53f37adc7aa09c",
+    "packages/multiplayer/src/types.ts": "f5e07228442b6e41906382a980385d37477bae54860d46dc353fa801307266be",
+    "packages/multiplayer/src/index.ts": "09207f9151ce88e6c6f2be036d910ea871c0ee34f749b28aa773e1ef34ca3780",
+    "packages/multiplayer/src/framework.ts": "63ed121634099644161a05bbb7c7e7dd6adfb70c781fc75c16962d7140309968",
+    "packages/multiplayer/src/managers/MatchManager.ts": "f56a7de6075fa679086f3af265dec63af42a0db98447d0115dbd379aa64e9371",
+    "packages/multiplayer/src/gameplay/GameStateManager.ts": "81d4510eaa7b5586cb1ffd3ece5344c7438a0dc579df17078f5ee3c6f1d4b745",
+    "packages/multiplayer/__tests__/historyRetention.test.ts": "3a80f03a3e2164ecc5377245a474a5734f534bbb6207ba9096bc62c12f01739b",
+    "apps/socket-server/src/index.ts": "33140d33b12a8ac38325af8bf4e8b24e30442470a9931a6142794eb32d1cd44b",
+    "apps/socket-server/src/distributed/checkpoint.ts": "88c178a074ed4ef2962fa6c32fe4f1461718d4f19319ac72a29d9fca7ee4658f",
+    "apps/socket-server/src/distributed/coordinator.ts": "be109026ca11fea06afe13c0eba0d775f237a1d90f6c2aab8ff36818e6eb1d3f",
+    "apps/socket-server/src/distributed/store.ts": "587717c2b5386edc8350e46e976b270cbd2eccbbb884979007273804b72a0e6c",
+    "apps/socket-server/src/distributed/replay.ts": "90b460317f94a865cbffadc6c90cf9eaab4addbe2f8431b8694bef9aaf011189",
+    "apps/socket-server/src/distributed/archiveReplay.ts": "dd921279e1e55d388bbf66a61ec168bf310c6725caa1322a6dff8f57c32bd154",
+    "apps/api/src/services/__tests__/historyArchiveRecovery.test.ts": "15d1eb01033d0cedf5b57dea2c70ada00728052598086b189565e98f342c40af"
+  },
+  "fullApiAggregation": "NOT RUN",
+  "push": "NOT PERFORMED",
+  "deployment": "NOT PERFORMED",
+  "productionData": "NOT ACCESSED OR MODIFIED by this task"
+}

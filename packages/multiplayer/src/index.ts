@@ -41,6 +41,8 @@ export type {
 export * from "./types";
 
 // Utils
+export { mightContainArchivedAction, validateArchivedActionFilter } from "./utils/ArchivedActionFilter";
+export { planHistoryRetention, LIVE_ACTION_HISTORY_LIMIT, LIVE_ACTION_HISTORY_TAIL, LOCAL_SNAPSHOT_LIMIT } from "./utils/HistoryRetention";
 export { BoundedRoomQueue } from "./utils/BoundedRoomQueue";
 export { EventEmitter } from "./utils/EventEmitter";
 export { StateValidator } from "./utils/StateValidator";

@@ -15,6 +15,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { mightContainArchivedAction } from "../utils/ArchivedActionFilter";
 import type { MultiplayerFramework } from "../framework";
 import type {
   RoomRuntime,
@@ -557,7 +558,11 @@ export class MatchManager {
       // first action has finished and populated its cache entry.
       const cached = this.framework.antiCheatManager.getCachedActionResult(actionScope, actionId);
       if (cached) return cached;
-      if (actionId && match.actionHistory.some(record => record.playerId === playerId && record.action.actionId === actionId)) {
+      if (actionId && (match.archivedThroughTurn ?? 0) > 0 && !this.framework.config.hasArchivedAction) {
+        throw new Error("ARCHIVED_ACTION_LOOKUP_REQUIRED");
+      }
+      if (actionId && (match.actionHistory.some(record => record.playerId === playerId && record.action.actionId === actionId) ||
+        ((match.archivedThroughTurn ?? 0) > 0 && mightContainArchivedAction(match.archivedActionFilter, playerId, actionId) && await this.framework.config.hasArchivedAction?.(roomId, match.matchId, playerId, actionId)))) {
         const engine = match.engine as EngineInstance;
         return { ok: true, state: engine.serialize(), events: [], finished: engine.finished, winnerSeats: engine.winnerSeats };
       }

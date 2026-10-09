@@ -472,6 +472,7 @@ async function main(): Promise<void> {
     ...(env.distributedMatches ? {
       countdownDurationMs: 3000,
       requireGameLoadAck: true,
+      hasArchivedAction: (roomId: string, matchId: string, playerId: string, actionId: string) => durableStore.hasArchivedAction(roomId, matchId, playerId, actionId),
       executeRoomTask: <T>(roomId: string, task: () => Promise<T>, lifecycle = false) => distributed!.local(roomId, task, false, lifecycle),
       publish: (room: import("@gaming-hub/multiplayer").RoomRuntime, event: string, payload: unknown, destination: string) => distributed!.publish(room, event, payload, destination),
       persistFinalResult: (room: import("@gaming-hub/multiplayer").RoomRuntime, result: MatchResult) => distributed!.finalResult(room, result),

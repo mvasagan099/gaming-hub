@@ -2359,7 +2359,21 @@ model RateLimitWindow {
 }
 
 
+model MatchActionArchive {
+  matchId String
+  turnNumber Int
+  roomId String
+  playerId String
+  actionId String?
+  record Json
+  room LiveRoomCheckpoint @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  @@id([matchId, turnNumber])
+  @@unique([matchId, playerId, actionId])
+  @@index([roomId])
+}
+
 model LiveRoomCheckpoint {
+  archivedActions MatchActionArchive[]
   id String @id
   code String @unique
   matchId String? @unique

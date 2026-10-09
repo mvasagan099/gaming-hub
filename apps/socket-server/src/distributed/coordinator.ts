@@ -285,6 +285,7 @@ export class DistributedRoomCoordinator {
             owner.revision = await this.store.commit(roomId, this.instanceId, owner.token, owner.revision,
               room.match?.matchId ?? null, snapshot as unknown as Prisma.InputJsonValue, context.result, context.closed ?? false, stableParticipants);
           }
+          if (!presentationOnly) this.framework.gameStateManager.compactArchivedHistory(room);
           await this.ownership.assert(roomId, this.instanceId, owner.token);
           for (const event of context.publications) this.framework.io.to(event.destination).emit(event.event, event.payload);
           if (context.closed) { this.framework.io.in(room.ioName).socketsLeave(room.ioName); this.fenceOff(roomId); }

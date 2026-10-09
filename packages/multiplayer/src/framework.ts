@@ -69,6 +69,7 @@ export interface MultiplayerFrameworkConfig {
   onMatchFinished?: (room: RoomRuntime, matchResult: MatchResult) => Promise<void>;
   onMatchAborted?: (room: RoomRuntime, reason: string) => Promise<void>;
   /** Optional distributed host. It fences/checkpoints mutations before delivery. */
+  hasArchivedAction?: (roomId: string, matchId: string, playerId: string, actionId: string) => Promise<boolean>;
   executeRoomTask?: <T>(roomId: string, task: () => Promise<T>, lifecycle?: boolean) => Promise<T>;
   publish?: (room: RoomRuntime, event: string, payload: unknown, destination: string) => void;
   persistFinalResult?: (room: RoomRuntime, result: MatchResult) => Promise<void>;
@@ -133,6 +134,7 @@ export class MultiplayerFramework {
       onMatchStarting: config.onMatchStarting,
       onMatchFinished: config.onMatchFinished,
       onMatchAborted: config.onMatchAborted,
+      hasArchivedAction: config.hasArchivedAction,
       executeRoomTask: config.executeRoomTask,
       publish: config.publish,
       persistFinalResult: config.persistFinalResult,

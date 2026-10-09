@@ -143,6 +143,9 @@ export interface RoomSummary {
 
 /** Match runtime state */
 export interface MatchRuntime {
+  /** Prefix safely archived with the fenced checkpoint; never a client value. */
+  archivedThroughTurn?: number;
+  archivedActionFilter?: string;
   matchId: MatchId;
   participants?: Array<{ userId: string; seat: number }>;
   pendingResult?: import("./gameplay/types").MatchResult;
