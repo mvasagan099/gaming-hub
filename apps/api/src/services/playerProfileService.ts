@@ -9,7 +9,7 @@ import {
   type RecentTournamentItem,
   type GameId,
 } from "@gaming-hub/shared";
-import { getPrivacySettings, updatePrivacySettings, canViewProfile } from "./privacyService";
+import { getPrivacySettings, updatePrivacySettings, getProfileAccess } from "./privacyService";
 import { isUserOnline } from "./users";
 
 export class PlayerProfileService {
@@ -33,18 +33,12 @@ export class PlayerProfileService {
       },
     });
 
-    if (!user) {
+    if (!user || user.deletedAt) {
       throw new AppError("NOT_FOUND", "Player not found", 404);
     }
 
     const isOwner = viewerId === userId;
-    const privacy = await getPrivacySettings(userId);
-    const allowed =
-      isOwner ||
-      isAdmin ||
-      (viewerId
-        ? await canViewProfile(viewerId, userId)
-        : privacy.profileVisibility === "EVERYONE");
+    const { privacy, allowed, showStats } = await getProfileAccess(userId, viewerId, isAdmin);
     const isPrivate = privacy.profileVisibility !== "EVERYONE";
 
     const gameDefMap = new Map(GAME_DEFINITIONS.map((g) => [g.id, g]));
@@ -56,13 +50,13 @@ export class PlayerProfileService {
         username: user.username,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
-        bio: user.profile?.bio ?? null,
-        country: user.profile?.country ?? null,
-        level: user.profile?.level ?? 1,
-        xp: user.profile?.xp ?? 0,
+        bio: null,
+        country: null,
+        level: 0,
+        xp: 0,
         joinedAt: user.createdAt.toISOString(),
-        isOnline: isUserOnline(user),
-        lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
+        isOnline: false,
+        lastSeenAt: null,
         isPrivate: true,
         gamesPlayed: 0,
         wins: 0,
@@ -232,7 +226,7 @@ export class PlayerProfileService {
       unlockedAt: ua.unlockedAt.toISOString(),
     }));
 
-    const maskStats = !isOwner && !isAdmin && !privacy.showStats;
+    const maskStats = !showStats;
 
     return {
       userId: user.id,
@@ -241,8 +235,8 @@ export class PlayerProfileService {
       avatarUrl: user.avatarUrl,
       bio: user.profile?.bio ?? null,
       country: user.profile?.country ?? null,
-      level: user.profile?.level ?? 1,
-      xp: user.profile?.xp ?? 0,
+      level: maskStats ? 0 : user.profile?.level ?? 1,
+      xp: maskStats ? 0 : user.profile?.xp ?? 0,
       joinedAt: user.createdAt.toISOString(),
       isOnline: isUserOnline(user),
       lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
@@ -267,9 +261,9 @@ export class PlayerProfileService {
       recentMatches: maskStats ? [] : recentMatches,
       recentTournaments: maskStats ? [] : recentTournaments,
       achievements: {
-        unlockedCount: unlockedAchievements.length,
-        totalCount: totalAchievementsCount,
-        recent: unlockedAchievements.slice(0, 8),
+        unlockedCount: maskStats ? 0 : unlockedAchievements.length,
+        totalCount: maskStats ? 0 : totalAchievementsCount,
+        recent: maskStats ? [] : unlockedAchievements.slice(0, 8),
       },
     };
   }

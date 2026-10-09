@@ -15,7 +15,7 @@ import { isFeatureEnabled } from "./featureFlags";
 import { RateLimitService } from "./rateLimitService";
 import { AppError } from "@gaming-hub/shared";
 
-import { PlayerProfileService } from "./playerProfileService";
+import { getProfileAccess } from "./privacyService";
 import { isUserOnline } from "./users";
 
 export interface SearchInput {
@@ -79,25 +79,21 @@ export class SearchService {
     });
 
     return Promise.all(users.map(async (u) => {
-      const isOwner = requestingUserId === u.id;
-      const isPrivate =
-        (await PlayerProfileService.getProfilePrivacy(u.id) ||
-          Boolean((u.profile as any)?.isPrivate)) &&
-        !isOwner &&
-        !isAdmin;
+      const access = await getProfileAccess(u.id, requestingUserId, isAdmin);
+      const isPrivate = !access.showStats;
 
       return {
         id: u.id,
         username: u.username,
         displayName: u.displayName,
         avatarUrl: u.avatarUrl,
-        isOnline: isUserOnline(u),
-        level: u.profile?.level ?? 1,
-        xp: u.profile?.xp ?? 0,
+        isOnline: access.allowed && isUserOnline(u),
+        level: isPrivate ? 0 : u.profile?.level ?? 1,
+        xp: isPrivate ? 0 : u.profile?.xp ?? 0,
         wins: isPrivate ? 0 : u.profile?.wins ?? 0,
         losses: isPrivate ? 0 : u.profile?.losses ?? 0,
         draws: isPrivate ? 0 : u.profile?.draws ?? 0,
-        globalRating: (u.profile as any)?.globalRating ?? 1200,
+        globalRating: isPrivate ? 0 : (u.profile as any)?.globalRating ?? 1200,
         createdAt: u.createdAt.toISOString(),
       };
     }));

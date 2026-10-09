@@ -47,10 +47,10 @@ export class DisconnectHandler {
       if (config?.turnBased && config?.pauseOnDisconnect && !room.match.pausedAt) {
         room.match.pausedAt = Date.now();
         room.match.pausedBy = player.id;
-        if (room.config.gameId === "snooker") {
-          (room.match.engine as unknown as { pauseClocks(): void }).pauseClocks();
-          await this.framework.syncManager.broadcastGameState(room, []);
-        }
+        room.match.pauseReason = "disconnect";
+        (room.match.engine as EngineInstance).pauseClocks?.();
+        this.framework.timerManager.clearTimer(`${room.id}:clock`);
+        await this.framework.syncManager.broadcastGameState(room, []);
 
         for (const p of room.players.values()) {
           this.framework.playerManager.stopAfkMonitoring(p.id, room.id);
@@ -68,8 +68,7 @@ export class DisconnectHandler {
         );
       }
     };
-    if (["snooker", "snake-vs-worms"].includes(room.config.gameId)) await this.framework.gameStateManager.enqueue(room.id, pause);
-    else await pause();
+    await this.framework.gameStateManager.enqueue(room.id, pause);
 
     // Arm the reconnect grace timer that forfeits on expiry.
     if (config.forfeitOnDisconnect) {

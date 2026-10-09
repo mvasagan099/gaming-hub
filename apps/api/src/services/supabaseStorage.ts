@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
 
 const supabaseUrl = process.env.SUPABASE_URL || "https://placeholder.supabase.co";
 // MEDIUM-3 fix: no silent placeholder fallback — missing key in production is caught
@@ -27,19 +28,18 @@ let bucketEnsured = false;
 
 export async function ensureKycBucketExists(): Promise<void> {
   if (bucketEnsured) return;
-  try {
-    const { data: buckets } = await supabaseAdmin.storage.listBuckets();
+    const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets();
+    if (listError) throw new Error('KYC private bucket inspection failed');
     const exists = buckets?.some((b) => b.name === KYC_BUCKET);
+    if (buckets?.some(b => b.name === KYC_BUCKET && b.public)) throw new Error('KYC bucket must be private');
     if (!exists) {
-      await supabaseAdmin.storage.createBucket(KYC_BUCKET, {
+      const { error } = await supabaseAdmin.storage.createBucket(KYC_BUCKET, {
         public: false,
         fileSizeLimit: 2 * 1024 * 1024,
       });
+      if (error) throw new Error('KYC private bucket creation failed');
     }
     bucketEnsured = true;
-  } catch (err) {
-    console.warn("Notice: Supabase bucket check warning:", err instanceof Error ? err.message : err);
-  }
 }
 
 export interface SupabaseUploadResult {
@@ -66,15 +66,8 @@ export async function uploadKycToSupabase(
   await ensureKycBucketExists();
 
   const ext = originalName.split(".").pop()?.toLowerCase() || "jpg";
-  let objectName = "";
-
-  if (isSelfie) {
-    objectName = `selfie.${ext}`;
-  } else if (side === "back") {
-    objectName = `identity-back.${ext}`;
-  } else {
-    objectName = `identity-front.${ext}`;
-  }
+  const kind = (isSelfie ? 'SELFIE' : documentType ?? 'IDENTITY').replace(/[^A-Z_]/gi, '');
+  const objectName = `${kind}-${side ?? 'front'}-${randomUUID()}.${ext}`;
 
   const fullPath = `${userId}/${objectName}`;
 
@@ -82,7 +75,7 @@ export async function uploadKycToSupabase(
     .from(KYC_BUCKET)
     .upload(fullPath, buffer, {
       contentType: mimeType,
-      upsert: true,
+      upsert: false,
     });
 
   if (error) {

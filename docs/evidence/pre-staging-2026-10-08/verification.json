@@ -1,0 +1,69 @@
+{
+  "baselineCommit": "8564429f6e15da9fa5577a0da0d0308a6727bbe3",
+  "harnessCommit": "a6cc5a34c45aa565efa01fdff9ef5c40cbf425d1",
+  "productionDataTouched": false,
+  "deployed": false,
+  "pushed": false,
+  "localTargets": {
+    "api": {
+      "host": "127.0.0.1",
+      "port": 5540,
+      "database": "gaming_prestaging_20261008_test"
+    },
+    "security": {
+      "host": "127.0.0.1",
+      "port": 5540,
+      "database": "gaming_prestaging_security_test"
+    },
+    "financial": {
+      "host": "127.0.0.1",
+      "port": 5540,
+      "database": "gaming_prestaging_financial_test"
+    },
+    "redis": {
+      "host": "127.0.0.1",
+      "port": 56482,
+      "isolatedContainer": "gaming-prestaging-redis"
+    }
+  },
+  "typecheck": {
+    "exit": 0
+  },
+  "build": {
+    "exit": 0,
+    "warning": "AudioManager chunk 1375.14 kB / gzip 357.75 kB; performance warning, no missing asset/build failure"
+  },
+  "freshLocalMigration": {
+    "applied": 11,
+    "failed": 0,
+    "scope": "New disposable local API test database; no remote migration"
+  },
+  "productionSourceUnchanged": true,
+  "sourceSha256": {
+    "apps/socket-server/src/index.ts": "fd9d5a19fb3c12506d8c450558ab91d7a5f7aa709bf82647f020bfbd6c9662a7",
+    "apps/socket-server/src/distributed/coordinator.ts": "b6019ded2274cc640a0d8690335e0714248cc02267c6acd92da5352e5c596d18",
+    "packages/multiplayer/src/framework.ts": "1e2e431ecd5c87b81830f7c639d60e9835f4be068814ecbeb5fd289bfd1f3ce8",
+    "packages/multiplayer/src/managers/RoomManager.ts": "9b942905ab748cc80662b0ed6141b2db6bce12e4c8e8f6036b6a17c3ff00e2bb",
+    "packages/multiplayer/src/managers/MatchManager.ts": "1ab84c5f7752f6b45e90f308c8e2c89c75f58f93771afe74fa61da7091b990fc",
+    "packages/multiplayer/src/gameplay/GameStateManager.ts": "63541d382560a525800df6908628393386da5102b92c9acf363c08bbe5ac12f1",
+    "packages/game-engine/src/carrom/engine.ts": "b55251efa325ecf18864c1856bc912530a10966f506ab9217860545087194aa3",
+    "packages/game-engine/src/carrom/physics.ts": "9655c0281d401b00a5d7e062b5d39490fac132dbf766d0564f9fd4989ffa46de",
+    "packages/game-engine/src/base/MultiplayerGameEngine.ts": "034cd5cc1297d830a6f63a374d337ec9346888ead4b5337226889633a6c52fea"
+  },
+  "profilerTypecheck": {
+    "exit": 0,
+    "scope": "Independent TypeScript check of diagnostic script; after fixing diagnostic-only type annotations"
+  },
+  "retention": {
+    "workload": "100 lifecycle games, 500 reconnects, 10/25/50 burst rooms",
+    "scope": "No authenticated/distributed/financial runtime. Forced GC retained baseline comparison only."
+  },
+  "verificationToolSha256": {
+    "scripts/prestaging-api-verification.mjs": "202166b1452bcbf4c26f076a712a1726d443f072abe61315ab8ac414d4186bb9",
+    "scripts/multiplayer-paced-profile.ts": "713bc1c298289842f99b951ee1ce71c3173376e315b502bd3341c587e8eb4083"
+  },
+  "artifactScan": {
+    "credentialPatternsFound": [],
+    "scope": "New evidence JSON; targeted patterns, not a complete secret audit"
+  }
+}

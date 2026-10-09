@@ -80,6 +80,20 @@ export class LudoEngine extends MultiplayerGameEngine<
     };
   }
 
+  protected override initState(): LudoServerState {
+    const state = super.initState();
+    this.startTurnTimer(state);
+    return state;
+  }
+
+  protected override applyValidatedAction(action: Parameters<LudoEngine['applyGameAction']>[0], seat: number, state: LudoServerState): EngineActionResult<LudoServerState> {
+    const result = super.applyValidatedAction(action, seat, state);
+    if (result.ok && !result.finished && (action.type === 'roll' || action.type === 'move') && result.state.phase === 'rolling') {
+      this.startTurnTimer(result.state);
+    }
+    return result;
+  }
+
   protected initBaseState(): Omit<LudoServerState, keyof import("../base/MultiplayerGameEngine").BaseState> {
     const colors = colorsForPlayerCount(this.players.length);
     const players: LudoPlayerState[] = this.players.map((p, index) => {
@@ -433,13 +447,19 @@ export class LudoEngine extends MultiplayerGameEngine<
   }
 
   protected override onTurnTimerExpired(seat: number, state: LudoServerState): EngineActionResult<LudoServerState> {
+    let result: EngineActionResult<LudoServerState>;
     if (state.phase === "selecting") {
       const moves = this.legalMovesFor(state, seat, state.dice ?? 0);
       if (moves.length > 0 && moves[0]) {
-        return this.applyChosenMove(state, state.consecutiveSixes, moves[0], []);
+        result = this.applyChosenMove(state, state.consecutiveSixes, moves[0], []);
+      } else {
+        result = this.applyRoll(state, seat);
       }
+    } else {
+      result = this.applyRoll(state, seat);
     }
-    return this.applyRoll(state, seat);
+    if (result.ok && !result.finished) this.startTurnTimer(result.state);
+    return result;
   }
 
   private findOpponentTokenAt(

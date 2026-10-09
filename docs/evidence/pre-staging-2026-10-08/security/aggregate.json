@@ -1,0 +1,59 @@
+{
+  "expectedFiles": 17,
+  "executedFiles": 17,
+  "tests": 188,
+  "passed": 188,
+  "failed": 0,
+  "skipped": 0,
+  "complete": true,
+  "results": [
+    {
+      "group": "01",
+      "expectedFiles": 5,
+      "executedFiles": 5,
+      "tests": 57,
+      "passed": 57,
+      "failed": 0,
+      "skipped": 0,
+      "exit": 0,
+      "durationMs": 38174,
+      "complete": true
+    },
+    {
+      "group": "02",
+      "expectedFiles": 5,
+      "executedFiles": 5,
+      "tests": 26,
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0,
+      "exit": 0,
+      "durationMs": 22716,
+      "complete": true
+    },
+    {
+      "group": "03",
+      "expectedFiles": 5,
+      "executedFiles": 5,
+      "tests": 87,
+      "passed": 87,
+      "failed": 0,
+      "skipped": 0,
+      "exit": 0,
+      "durationMs": 76783,
+      "complete": true
+    },
+    {
+      "group": "04",
+      "expectedFiles": 2,
+      "executedFiles": 2,
+      "tests": 18,
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0,
+      "exit": 0,
+      "durationMs": 30122,
+      "complete": true
+    }
+  ]
+}

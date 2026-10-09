@@ -1,0 +1,65 @@
+[
+  {
+    "rttMs": 40,
+    "inputUpdates": 60,
+    "movementDurationMs": 1000,
+    "requestsDuringMovement": 21,
+    "requestsIncludingFinalFlush": 22,
+    "sendIntervalsMs": [
+      49,
+      41,
+      43,
+      47,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50
+    ]
+  },
+  {
+    "rttMs": 100,
+    "inputUpdates": 60,
+    "movementDurationMs": 1000,
+    "requestsDuringMovement": 10,
+    "requestsIncludingFinalFlush": 11,
+    "sendIntervalsMs": [
+      110,
+      106,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      104
+    ]
+  },
+  {
+    "rttMs": 200,
+    "inputUpdates": 60,
+    "movementDurationMs": 1000,
+    "requestsDuringMovement": 5,
+    "requestsIncludingFinalFlush": 6,
+    "sendIntervalsMs": [
+      210,
+      206,
+      200,
+      200,
+      204
+    ]
+  }
+]

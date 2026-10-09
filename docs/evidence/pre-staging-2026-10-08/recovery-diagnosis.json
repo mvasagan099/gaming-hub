@@ -1,0 +1,53 @@
+{
+  "baseline": "8564429",
+  "failedTests": [
+    {
+      "name": "uniformCountdownRecovery / shared matchmaking / tournamentProvisioningRecovery restores an expired countdown deadline after owner death, funds once and starts once",
+      "error": "Error: websocket error"
+    },
+    {
+      "name": "uniformCountdownRecovery / shared matchmaking / tournamentProvisioningRecovery deduplicates concurrent starts and pauses countdown on disconnect without funding a new match",
+      "error": "Error: websocket error"
+    },
+    {
+      "name": "uniformCountdownRecovery / shared matchmaking / tournamentProvisioningRecovery preserves selected Chess Quick Match settings across replicas, reconnect and rematch",
+      "error": "Error: websocket error"
+    },
+    {
+      "name": "uniformCountdownRecovery / shared matchmaking / tournamentProvisioningRecovery pairs players connected to different replicas into one shared room",
+      "error": "Error: websocket error"
+    },
+    {
+      "name": "uniformCountdownRecovery / shared matchmaking / tournamentProvisioningRecovery keeps a tournament provision retryable while unavailable, then provisions the same bracket identity",
+      "error": "Error: websocket error"
+    },
+    {
+      "name": "network failures with real HTTP and Redis transport refunds a funded intent when its HTTP acknowledgement is lost and the waiting room closes",
+      "error": "Error: websocket error"
+    },
+    {
+      "name": "network failures with real HTTP and Redis transport keeps API 503 results across owner death and retries a lost successful HTTP acknowledgement once",
+      "error": "Error: websocket error"
+    },
+    {
+      "name": "network failures with real HTTP and Redis transport fails closed while real Redis transport is unavailable, then recovers and accepts one delayed duplicate action",
+      "error": "Error: websocket error"
+    }
+  ],
+  "rootCause": "The completed-opponent-departure test kills replica A; the next eight tests connect without restoring it. All eight report Error: websocket error. Shared beforeEach now restores dead replicas; connection listeners/timers are cleaned together.",
+  "assertionsChanged": false,
+  "timeoutsIncreased": false,
+  "productionLogicChanged": false,
+  "afterIndependent": {
+    "tests": 31,
+    "passed": 31,
+    "failed": 0,
+    "skipped": 0
+  },
+  "afterWithinFullApi": {
+    "tests": 31,
+    "passed": 31,
+    "failed": 0,
+    "skipped": 0
+  }
+}

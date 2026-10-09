@@ -1,0 +1,45 @@
+{
+  "discovered": 17,
+  "grouped": 17,
+  "missing": [],
+  "duplicates": [],
+  "groups": [
+    {
+      "id": "01",
+      "files": [
+        "src/services/__tests__/adminSecurityHardeningEngine.test.ts",
+        "src/services/__tests__/deepLinkValidation.unit.test.ts",
+        "src/services/__tests__/gameResultSecurity.test.ts",
+        "src/services/__tests__/globalRateLimitingEngine.test.ts",
+        "src/services/__tests__/idorAndEconomyValidation.test.ts"
+      ]
+    },
+    {
+      "id": "02",
+      "files": [
+        "src/services/__tests__/kycAddressSync.test.ts",
+        "src/services/__tests__/kycSecurityHardening.test.ts",
+        "src/services/__tests__/loginTimeMfa.test.ts",
+        "src/services/__tests__/mfaSessionLifecycle.test.ts",
+        "src/services/__tests__/passwordResetAuthFlow.test.ts"
+      ]
+    },
+    {
+      "id": "03",
+      "files": [
+        "src/services/__tests__/playerProfileSystem.test.ts",
+        "src/services/__tests__/securityAttackSimulation.test.ts",
+        "src/services/__tests__/securityRemediation.unit.test.ts",
+        "src/services/__tests__/securityRemediationHardening.test.ts",
+        "src/services/__tests__/singleActiveSession.test.ts"
+      ]
+    },
+    {
+      "id": "04",
+      "files": [
+        "src/services/__tests__/socketRematchSecurity.test.ts",
+        "src/services/__tests__/totpEncryptionMigration.test.ts"
+      ]
+    }
+  ]
+}

@@ -22,7 +22,10 @@ export default class TableTennisMultiplayerDriver {
   private completed = false;
   private deliveredPoint = -1;
   private moveRequest = 0;
-  private moveInFlight = false;
+  // Reliable ordered actions may overlap RTT, but a stalled link cannot grow the queue.
+  // IDs remain unique across reconnects so old ACKs cannot release current slots.
+  private inFlightMoves = new Set<number>();
+  private readonly maxInFlightMoves = 8;
   private unsubscribe: (() => void) | null = null;
   private physicsInterval: ReturnType<typeof setInterval> | null = null;
   private onStateUpdate: ((state: TableTennisRemoteState, restoreInput: boolean) => void) | null = null;
@@ -52,13 +55,13 @@ export default class TableTennisMultiplayerDriver {
       if (state.status !== prev.status && state.status !== 'connected') {
         this.awaitingReconnect = true;
         this.moveRequest++;
-        this.moveInFlight = false;
+        this.inFlightMoves.clear();
         this.pendingPaddleMove = null;
       }
       if (state.status === 'connected' && prev.status !== 'connected') {
         this.restoreInput = true;
         this.moveRequest++;
-        this.moveInFlight = false;
+        this.inFlightMoves.clear();
         this.pendingServe = false;
         this.pendingPaddleMove = null;
         void state.requestFullStateSync?.().catch(() => undefined);
@@ -69,9 +72,9 @@ export default class TableTennisMultiplayerDriver {
     });
     
     this.physicsInterval = setInterval(() => {
-      if (this.pendingPaddleMove && !this.destroyed && !this.moveInFlight) {
+      if (this.pendingPaddleMove && !this.destroyed && this.inFlightMoves.size < this.maxInFlightMoves) {
         const now = Date.now();
-        if (now - this.lastPaddleSent >= this.paddleSendInterval && !this.moveInFlight) {
+        if (now - this.lastPaddleSent >= this.paddleSendInterval && this.inFlightMoves.size < this.maxInFlightMoves) {
           const move = this.pendingPaddleMove;
           this.pendingPaddleMove = null;
           this.sendPaddleMoveImmediate(move.y, move.velocity);
@@ -89,6 +92,8 @@ export default class TableTennisMultiplayerDriver {
   stop(): void {
 
     this.destroyed = true;
+    this.inFlightMoves.clear();
+    this.pendingPaddleMove = null;
     this.unsubscribe?.();
     this.unsubscribe = null;
     if (this.physicsInterval) {
@@ -168,7 +173,7 @@ export default class TableTennisMultiplayerDriver {
     }
     this.pendingPaddleMove = { y, velocity };
     const now = Date.now();
-    if (now - this.lastPaddleSent >= this.paddleSendInterval && !this.moveInFlight) {
+    if (now - this.lastPaddleSent >= this.paddleSendInterval && this.inFlightMoves.size < this.maxInFlightMoves) {
       this.pendingPaddleMove = null;
       this.sendPaddleMoveImmediate(y, velocity);
       this.lastPaddleSent = now;
@@ -178,15 +183,15 @@ export default class TableTennisMultiplayerDriver {
   private sendPaddleMoveImmediate(y: number, velocity: number): void {
     if (this.mySeat == null || this.destroyed || this.awaitingReconnect || this.lastState?.paused || this.lastState?.finished) return;
     if (Math.abs(y - this.lastSentY) < 0.5) return;
-    this.moveInFlight = true;
     this.lastSentY = y;
     const request = ++this.moveRequest;
+    this.inFlightMoves.add(request);
     const retry = () => { if (!this.destroyed && this.moveRequest === request) this.lastSentY = -999; };
     useMultiplayerStore.getState().sendGameAction({
       type: "paddle-move",
       y,
       velocity,
-    }).then(result => { if (!result.ok) retry(); }).catch(retry).finally(() => { if (this.moveRequest === request) this.moveInFlight = false; });
+    }).then(result => { if (!result.ok) retry(); }).catch(retry).finally(() => { this.inFlightMoves.delete(request); });
   }
   
   sendServe(angle: number = 0, power: number = 5.25): void {

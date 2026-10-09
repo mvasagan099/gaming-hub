@@ -107,6 +107,7 @@ describe("Security Remediation Full Suite", () => {
     });
 
     it("canViewProfile respects NOBODY and EVERYONE settings", async () => {
+      vi.spyOn(prisma.blockedUser, 'findFirst').mockResolvedValue(null);
       // User can always view their own profile
       expect(await canViewProfile("user-self", "user-self")).toBe(true);
 

@@ -122,56 +122,16 @@ export function App() {
       .then(async ({ data: { session } }) => {
         if (!active) return;
         if (isRecoveryTarget()) {
+          useAuthStore.getState().clearAuth();
           setIsPasswordRecovery(true);
           setRecoverySession(session);
           setSession(null);
           setUser(null);
         } else if (session) {
-          const isMfaPending =
-            sessionStorage.getItem('mfa_pending') === 'true' ||
-            window.location.pathname === '/2fa';
-
-          if (isMfaPending) {
-            try {
-              const res = await apiClient.post<{ status: string; requiresTwoFactor?: boolean }>(
-                '/auth/session',
-                { token: session.access_token },
-                session.access_token,
-              );
-              if (res.requiresTwoFactor || res.status === 'mfa_required') {
-                sessionStorage.setItem('mfa_pending', 'true');
-                setIsPasswordRecovery(false);
-                setRecoverySession(null);
-                setSession(null);
-                setUser(null);
-                useAuthStore.getState().setIsMfaRequired(true);
-                useAuthStore.getState().setPendingMfaSession(session);
-                if (window.location.pathname !== '/2fa') {
-                  void router.navigate('/2fa', { replace: true });
-                }
-                return;
-              } else {
-                sessionStorage.removeItem('mfa_pending');
-              }
-            } catch (err) {
-              sessionStorage.setItem('mfa_pending', 'true');
-              setIsPasswordRecovery(false);
-              setRecoverySession(null);
-              setSession(null);
-              setUser(null);
-              useAuthStore.getState().setIsMfaRequired(true);
-              useAuthStore.getState().setPendingMfaSession(session);
-              if (window.location.pathname !== '/2fa') {
-                void router.navigate('/2fa', { replace: true });
-              }
-              return;
-            }
+          const status = await useAuthStore.getState().verifySession(session);
+          if (active && status === 'mfa_pending' && window.location.pathname !== '/2fa') {
+            void router.navigate('/2fa', { replace: true });
           }
-
-          setIsPasswordRecovery(false);
-          setRecoverySession(null);
-          setSession(session);
-          setUser(session?.user ?? null);
         } else {
           setIsPasswordRecovery(false);
           setRecoverySession(null);
@@ -194,6 +154,7 @@ export function App() {
       if (!active) return;
 
       if (event === 'PASSWORD_RECOVERY') {
+        useAuthStore.getState().clearAuth();
         setIsPasswordRecovery(true);
         setRecoverySession(session);
         setSession(null);
@@ -202,40 +163,22 @@ export function App() {
         if (window.location.pathname !== '/reset-password') {
           void router.navigate('/reset-password', { replace: true });
         }
-      } else if (event === 'SIGNED_IN') {
-        // If recovery flow is active or user is on /reset-password, do not treat as standard app login
+      } else if (event === 'SIGNED_OUT') {
+        useAuthStore.getState().clearAuth();
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         if (useAuthStore.getState().isPasswordRecovery || isRecoveryTarget() || window.location.pathname === '/reset-password') {
-          setIsPasswordRecovery(true);
           setRecoverySession(session);
           setSession(null);
           setUser(null);
           setLoading(false);
-        } else if (useAuthStore.getState().isMfaRequired) {
-          // Login-time 2FA is pending: hold the raw Supabase session in
-          // pendingMfaSession WITHOUT promoting it to session. This prevents
-          // PublicOnlyRoute from seeing a live session and redirecting to /.
-          // LoginPage will call setSession(pendingMfaSession) only after TOTP succeeds.
-          useAuthStore.getState().setPendingMfaSession(session);
-          setLoading(false);
         } else {
-          setIsPasswordRecovery(false);
-          setRecoverySession(null);
-          setSession(session);
-          setUser(session?.user ?? null);
-          setLoading(false);
-        }
-      } else if (event === 'SIGNED_OUT') {
-        setIsPasswordRecovery(false);
-        setRecoverySession(null);
-        setSession(null);
-        setUser(null);
-        setLoading(false);
-      } else if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-        if (useAuthStore.getState().isPasswordRecovery) {
-          setRecoverySession(session);
-        } else {
-          setSession(session);
-          setUser(session?.user ?? null);
+          // Run outside the Supabase callback: refreshing SDK state within its
+          // synchronous auth callback can deadlock the provider's internal lock.
+          void Promise.resolve().then(() => active ? useAuthStore.getState().verifySession(session) : 'superseded').then((status) => {
+            if (active && status === 'mfa_pending' && !['/login', '/2fa'].includes(window.location.pathname)) {
+              void router.navigate('/2fa', { replace: true });
+            }
+          }).catch((error) => logAuthError('VerifySession', error));
         }
       }
     });

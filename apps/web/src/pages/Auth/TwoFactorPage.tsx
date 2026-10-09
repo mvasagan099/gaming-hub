@@ -58,10 +58,8 @@ export function TwoFactorPage() {
     } catch {
       // ignore
     }
-    useAuthStore.getState().setSession(session);
-    useAuthStore.getState().setUser(session.user);
-    useAuthStore.getState().setPendingMfaSession(null);
-    useAuthStore.getState().setIsMfaRequired(false);
+    const status = await useAuthStore.getState().verifySession(session);
+    if (status !== 'authenticated') throw new Error('Application session has not completed verification');
 
     const target = stateObj?.next || stateObj?.from?.pathname;
     if (target) {

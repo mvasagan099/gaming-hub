@@ -88,47 +88,18 @@ describe('game Exit versus router Back', () => {
     expect(context.navigate).toHaveBeenCalledExactlyOnceWith(-1);
   });
 
-  it.each(GAME_IDS)('%s browser Back confirms and Cancel retains the game and room', gameId => {
+  it.each(GAME_IDS)('%s lets browser, gesture and native Back navigate without confirmation', async gameId => {
     context.gameId = gameId; context.room.gameId = gameId;
-    render();
-    expect(context.shouldBlock({ currentLocation: { key: 'game' }, nextLocation: { key: 'lobby' }, historyAction: 'POP' })).toBe(true);
-    context.blocker.state = 'blocked';
-    expect(dialog(render()).isOpen).toBe(true);
-    dialog(render()).onClose();
-    expect(context.blocker.reset).toHaveBeenCalledOnce();
-    expect(dialog(render()).isOpen).toBe(false);
-    expect(context.leaveRoom).not.toHaveBeenCalled();
-    expect(context.navigate).not.toHaveBeenCalled();
-    expect(window.history.pushState).not.toHaveBeenCalled();
-  });
-
-  it.each(GAME_IDS)('%s confirmed browser Back leaves once then resumes the blocked destination', async gameId => {
-    context.gameId = gameId; context.room.gameId = gameId;
-    context.blocker.state = 'blocked';
     const page = render();
     const cleanup = context.effects[0]() as () => void;
-    await Promise.all([dialog(page).onConfirm(), dialog(page).onConfirm()]);
+    expect(context.shouldBlock).toBeNull();
+    expect(context.nativeHandler).toBeNull();
+    expect(dialog(page).isOpen).toBe(false);
+    expect(window.addEventListener).not.toHaveBeenCalledWith('beforeunload', expect.anything());
+    // The application's normal Back handler navigates; route unmount leaves once.
     cleanup(); await flushCleanup();
     expect(context.leaveRoom).toHaveBeenCalledOnce();
-    expect(context.blocker.proceed).toHaveBeenCalledOnce();
     expect(context.navigate).not.toHaveBeenCalled();
-  });
-
-  it.each(GAME_IDS)('%s mobile Back opens the same dialog without leaving the game', async gameId => {
-    context.gameId = gameId; context.room.gameId = gameId;
-    render();
-    const cleanup = context.effects[1]() as () => void;
-    expect(context.nativeHandler()).toBe(true);
-    expect(dialog(render()).isOpen).toBe(true);
-    dialog(render()).onClose();
-    expect(context.leaveRoom).not.toHaveBeenCalled();
-    expect(context.navigate).not.toHaveBeenCalled();
-    context.nativeHandler();
-    await dialog(render()).onConfirm();
-    expect(context.leaveRoom).toHaveBeenCalledOnce();
-    expect(context.navigate).toHaveBeenCalledExactlyOnceWith(-1);
-    cleanup();
-    expect(context.unregister).toHaveBeenCalledOnce();
   });
 
   it.each(GAME_IDS)('%s StrictMode replay keeps membership; the eventual real unmount leaves', async gameId => {
@@ -203,50 +174,16 @@ it.each(GAME_IDS)('%s legacy tournament links go to the assigned lobby rather th
   expect(page.props.replace).toBe(true);
 });
 
-it('uses native browser confirmation for leaving the document, with cleanup', () => {
-  render();
-  const cleanup = context.effects[1]() as () => void;
-  const handler = vi.mocked(window.addEventListener).mock.calls.find(call => call[0] === 'beforeunload')![1] as (event: any) => void;
-  const event = { preventDefault: vi.fn(), returnValue: undefined as unknown };
-  handler(event);
-  expect(event.preventDefault).toHaveBeenCalledOnce();
-  expect(event.returnValue).toBe('');
-  cleanup();
-  expect(window.removeEventListener).toHaveBeenCalledWith('beforeunload', handler);
-});
-
-it.each(['?replayMatchId=saved', '?matchId=tournament'])('does not block replay or tournament redirects: %s', search => {
+it.each(['?replayMatchId=saved', '?matchId=tournament'])('does not intercept replay or tournament Back: %s', search => {
   context.search = search;
   render();
-  expect(context.shouldBlock({ currentLocation: { key: 'game' }, nextLocation: { key: 'home' } })).toBe(false);
-  context.effects[1]();
+  expect(context.shouldBlock).toBeNull();
   expect(context.nativeHandler).toBeNull();
 });
 
-it('resumes a browser Back pressed while confirmed room leave is awaiting acknowledgement', async () => {
-  let acknowledge = () => {};
-  context.leaveRoom.mockImplementation(() => new Promise<void>(resolve => { acknowledge = resolve; }));
-  const page = render(); context.effects[0]();
-  const pending = dialog(page).onConfirm();
-  const proceed = vi.fn();
-  context.blocker = { state: 'blocked', proceed, reset: vi.fn() };
-  render();
-  acknowledge(); await pending;
-  expect(context.leaveRoom).toHaveBeenCalledOnce();
-  expect(proceed).toHaveBeenCalledOnce();
-  expect(context.navigate).not.toHaveBeenCalled();
-});
-
-it('AI browser Back also confirms without leaving a multiplayer room', async () => {
-  context.mode = 'ai'; context.blocker.state = 'blocked';
-  const page = render();
-  expect(dialog(page).isOpen).toBe(true);
-  await dialog(page).onConfirm();
-  expect(context.blocker.proceed).toHaveBeenCalledOnce();
-  expect(context.leaveRoom).not.toHaveBeenCalled();
-});
-
-it('completed multiplayer games do not block Back', () => {
-  context.room.status = 'ended'; render();
-  expect(context.shouldBlock({ currentLocation: { key: 'game' }, nextLocation: { key: 'lobby' } })).toBe(false);
+it.each(['ai', 'multiplayer'])('%s Back never opens a dialog before navigation', mode => {
+  context.mode = mode;
+  expect(dialog(render()).isOpen).toBe(false);
+  expect(context.shouldBlock).toBeNull();
+  expect(context.nativeHandler).toBeNull();
 });

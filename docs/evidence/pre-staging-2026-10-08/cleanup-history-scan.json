@@ -1,0 +1,22 @@
+[
+  {
+    "file": "memory-report.json",
+    "commit": "28ae0bd06b83fc2da5248c4345e42e43c42bdf30",
+    "embeddedCredentialPatterns": false
+  },
+  {
+    "file": "scratch/check.ts",
+    "commit": "8564429f6e15da9fa5577a0da0d0308a6727bbe3",
+    "embeddedCredentialPatterns": false
+  },
+  {
+    "file": "scratch/check.ts",
+    "commit": "28ae0bd06b83fc2da5248c4345e42e43c42bdf30",
+    "embeddedCredentialPatterns": false
+  },
+  {
+    "file": "scratch/check2.ts",
+    "commit": "28ae0bd06b83fc2da5248c4345e42e43c42bdf30",
+    "embeddedCredentialPatterns": false
+  }
+]

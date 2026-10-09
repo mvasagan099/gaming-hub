@@ -1,3 +1,29 @@
+# Gaming Hub current pre-staging verification
+
+Date: 2026-10-08. Production-source baseline: `8564429`; local recovery harness repair: `a6cc5a3`.
+
+**Verdict: READY FOR STAGING (local). STAGING NOT VERIFIED.** No push, deployment or production database access/writes. Wallet/security production logic unchanged.
+
+| Current suite | Files | Passed | Failed | Skipped |
+|---|---:|---:|---:|---:|
+| Complete API | 99/99 | 1394 | 0 | 0 |
+| Game engine | 27 | 425 | 0 | 0 |
+| Multiplayer | 27 | 395 | 0 | 0 |
+| Web | 41 | 383 | 0 | 0 |
+| Independent security/IDOR | 17 | 188 | 0 | 0 |
+| Independent financial concurrency/reconciliation | 4 | 48 | 0 | 0 |
+| Independent distributed recovery | 1 | 31 | 0 | 0 |
+
+Recovery also passed 31/31 inside the full API suite. All API files assigned exactly once; zero missing or duplicate files. Subset rows overlap API. Typecheck: PASS, nine workspaces, zero errors. Production build: PASS, with a large AudioManager chunk warning. Fresh disposable local migration: 11 applied, zero failed. No current dependency vulnerability audit was run as part of this verification; historical advisory counts below are not current evidence.
+
+Paced local runs: CPU 17.77–18.80% of one core; event-loop p99 19.25–19.92 ms; peak RSS 180.3–188.3 MiB. Separate unpaced forced-GC retention run: final heap 29.5 MiB, peak RSS 380.8 MiB. These do not prove Render capacity or production OOM resolution.
+
+Only Production services were observed in Render. Isolated staging infrastructure, secrets, test providers and live multiplayer remain unverified. Resource creation/deployment requires approval. See [complete current report](docs/pre-staging-verification-2026-10-08.md), [raw evidence](docs/evidence/pre-staging-2026-10-08/README.md) and [staging preparation](docs/staging-preparation-2026-10-08.md).
+
+---
+
+## Archived 2026-10-03 verification — historical evidence only
+
 # Gaming Hub current security verification
 
 Date: 2026-10-03. Baseline commit: `8507d07234bc307096f266c35a3480e9ab125ec9`, branch `main`. Results below verify the uncommitted readiness fixes on that baseline, not a deployed release.

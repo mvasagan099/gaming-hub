@@ -55,6 +55,18 @@ export class SnakeLadderEngine extends MultiplayerGameEngine<SnakeLadderState, R
     }
   }
 
+  protected override initState(): SnakeLadderState {
+    const state = super.initState();
+    this.startTurnTimer(state);
+    return state;
+  }
+
+  protected override applyValidatedAction(action: Parameters<SnakeLadderEngine['applyGameAction']>[0], seat: number, state: SnakeLadderState): EngineActionResult<SnakeLadderState> {
+    const result = super.applyValidatedAction(action, seat, state);
+    if (result.ok && !result.finished && action.type === 'roll') this.startTurnTimer(result.state);
+    return result;
+  }
+
   protected initBaseState(): Omit<SnakeLadderState, keyof import("../base/MultiplayerGameEngine").BaseState> {
     const players: SnakeLadderPlayerState[] = this.players.map((p) => ({
       seat: p.seat,

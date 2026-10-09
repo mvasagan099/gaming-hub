@@ -1,0 +1,81 @@
+import React from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { GAME_IDS } from '@gaming-hub/shared';
+
+// Exercise the production route's callbacks and effect cleanup without loading
+// Phaser/WebGL. Hook state persists across renders, including StrictMode replay.
+const context = vi.hoisted(() => ({
+  gameId: 'chess', mode: 'multiplayer', search: '', room: null as any,
+  navigate: vi.fn(), leaveRoom: vi.fn(),
+  blocker: null as any, shouldBlock: null as any, nativeHandler: null as any, unregister: vi.fn(),
+  effects: [] as Array<() => void | (() => void)>,
+  states: [] as any[], refs: [] as any[], stateIndex: 0, refIndex: 0,
+}));
+vi.mock('react', async original => {
+  const actual = await original<typeof import('react')>();
+  return { ...actual,
+    useEffect: (effect: () => void | (() => void)) => context.effects.push(effect),
+    useRef: (initial: any) => {
+      const index = context.refIndex++;
+      return context.refs[index] ??= { current: initial };
+    },
+    useState: (initial: any) => {
+      const index = context.stateIndex++;
+      if (!(index in context.states)) context.states[index] = initial;
+      return [context.states[index], (value: any) => { context.states[index] = value; }];
+    },
+  };
+});
+vi.mock('react-router-dom', () => ({
+  useParams: () => ({ slug: context.gameId }),
+  useLocation: () => ({ search: context.search, state: { mode: context.mode, stake: 0 } }),
+  useNavigate: () => context.navigate, Navigate: () => null,
+  useBlocker: (predicate: any) => { context.shouldBlock = predicate; return context.blocker; },
+}));
+vi.mock('../../services/native/capacitorAppService', () => ({
+  registerBackButtonHandler: (handler: any) => { context.nativeHandler = handler; return context.unregister; },
+}));
+vi.mock('../../store/multiplayerStore', () => ({
+  useMultiplayerStore: Object.assign((select: any) => select({ room: context.room, matchId: 'match-1' }), {
+    getState: () => ({ room: context.room, leaveRoom: context.leaveRoom }),
+  }),
+}));
+vi.mock('../../components/ui/ConfirmDialog', () => ({ ConfirmDialog: () => null }));
+import { GamePage } from './GamePage';
+
+function render() {
+  context.stateIndex = context.refIndex = 0;
+  return GamePage({}) as React.ReactElement<any>;
+}
+const dialog = (page: React.ReactElement<any>) => page.props.children[1].props;
+const game = (page: React.ReactElement<any>) => page.props.children[0].props.children.props;
+const flushCleanup = () => new Promise<void>(resolve => queueMicrotask(resolve));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  context.gameId = 'chess'; context.mode = 'multiplayer'; context.search = '';
+  context.states = []; context.refs = []; context.effects = [];
+  context.blocker = { state: 'unblocked', proceed: vi.fn(), reset: vi.fn(() => { context.blocker.state = 'unblocked'; }) };
+  context.shouldBlock = context.nativeHandler = null;
+  context.room = { id: 'room-1', gameId: 'chess', status: 'playing' };
+  context.leaveRoom.mockImplementation(async () => { context.room = null; });
+  vi.stubGlobal('window', {
+    history: { state: { idx: 2 }, pushState: vi.fn() },
+    addEventListener: vi.fn(), removeEventListener: vi.fn(),
+  });
+});
+afterEach(() => vi.unstubAllGlobals());
+
+describe('audit requested Back behavior', () => {
+  it.each(GAME_IDS)('%s browser Back must navigate without an exit modal', gameId => {
+    context.gameId = gameId; context.room.gameId = gameId;
+    render();
+    expect(context.shouldBlock({currentLocation:{key:'game'},nextLocation:{key:'lobby'},historyAction:'POP'})).toBe(false);
+  });
+  it.each(GAME_IDS)('%s native Back must not open or intercept with an exit modal', gameId => {
+    context.gameId = gameId; context.room.gameId = gameId;
+    render(); context.effects[1]();
+    const consumed = context.nativeHandler ? context.nativeHandler() : false;
+    expect({consumed,modalOpen:dialog(render()).isOpen}).toEqual({consumed:false,modalOpen:false});
+  });
+});

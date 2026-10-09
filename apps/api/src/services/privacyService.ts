@@ -7,6 +7,7 @@
  */
 
 import { prisma } from "@gaming-hub/db";
+import { AppError } from "@gaming-hub/shared";
 
 export interface PrivacySettings {
   userId: string;
@@ -51,6 +52,9 @@ export async function updatePrivacySettings(
   }
 
   const safeUpdate: Record<string, unknown> = {};
+  for (const key of ['showEmail', 'showPhone', 'showStats', 'allowFriendRequests', 'allowGameInvites'] as const) {
+    if (patch[key] !== undefined && typeof patch[key] !== 'boolean') throw new AppError('VALIDATION_ERROR', `${key} must be a boolean`, 400);
+  }
   if (patch.profileVisibility !== undefined) safeUpdate.profileVisibility = patch.profileVisibility;
   if (patch.showEmail !== undefined) safeUpdate.showEmail = Boolean(patch.showEmail);
   if (patch.showPhone !== undefined) safeUpdate.showPhone = Boolean(patch.showPhone);
@@ -94,24 +98,21 @@ export async function updatePrivacySettings(
  */
 export async function canViewProfile(viewerId: string, targetUserId: string): Promise<boolean> {
   if (viewerId === targetUserId) return true;
+  return (await getProfileAccess(targetUserId, viewerId)).allowed;
+}
 
+/** Shared public policy. Public serializers never include contact/security fields. */
+export async function getProfileAccess(targetUserId: string, viewerId?: string, isAdmin = false) {
   const privacy = await getPrivacySettings(targetUserId);
-
-  if (privacy.profileVisibility === "EVERYONE") return true;
-  if (privacy.profileVisibility === "NOBODY") return false;
-
-  // FRIENDS: check bidirectional friendship in DB
-  if (privacy.profileVisibility === "FRIENDS") {
-    const friendship = await prisma.friend.findFirst({
-      where: {
-        OR: [
-          { requesterId: viewerId, addresseeId: targetUserId, status: "ACCEPTED" },
-          { requesterId: targetUserId, addresseeId: viewerId, status: "ACCEPTED" },
-        ],
-      },
-    });
-    return Boolean(friendship);
+  const privileged = viewerId === targetUserId || isAdmin;
+  const blocked = !privileged && viewerId ? await prisma.blockedUser.findFirst({ where: { OR: [
+    { blockerId: viewerId, blockedId: targetUserId }, { blockerId: targetUserId, blockedId: viewerId },
+  ] } }) : null;
+  let allowed = privileged || (!blocked && privacy.profileVisibility === 'EVERYONE');
+  if (!allowed && !blocked && viewerId && privacy.profileVisibility === 'FRIENDS') {
+    allowed = !!await prisma.friend.findFirst({ where: { status: 'ACCEPTED', OR: [
+      { requesterId: viewerId, addresseeId: targetUserId }, { requesterId: targetUserId, addresseeId: viewerId },
+    ] } });
   }
-
-  return false;
+  return { privacy, allowed, showStats: allowed && (privileged || privacy.showStats) };
 }

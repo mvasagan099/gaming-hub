@@ -74,6 +74,7 @@ describe("Feature 19: Admin Wallet & Coin Management", () => {
       targetUserId,
       amount: 500,
       reason: "Promotional compensation for server downtime",
+      idempotencyKey: "downtime-compensation",
     });
 
     unsubscribe();
@@ -109,6 +110,7 @@ describe("Feature 19: Admin Wallet & Coin Management", () => {
       targetUserId,
       amount: -300,
       reason: "Adjustment for duplicate reward claim",
+      idempotencyKey: "duplicate-reward-correction",
     });
 
     expect(res.ok).toBe(true);
@@ -131,6 +133,7 @@ describe("Feature 19: Admin Wallet & Coin Management", () => {
         targetUserId,
         amount: -500,
         reason: "Excessive debit attempt",
+        idempotencyKey: "excessive-debit",
       })
     ).rejects.toThrow(/INSUFFICIENT_BALANCE|Cannot debit/i);
 
@@ -194,6 +197,7 @@ describe("Feature 19: Admin Wallet & Coin Management", () => {
       targetUserId,
       amount: 150,
       reason: "Searchable adjustment",
+      idempotencyKey: "search-fixture",
     });
 
     const search = await AdminWalletService.searchAllTransactions({

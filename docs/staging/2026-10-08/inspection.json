@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-08",
+  "baseline": "9b813000599d7abf99734858bcc6e69b356e2dd9",
+  "source": "Fresh signed-in Render read-only dashboard and public Render pricing",
+  "projectId": "prj-db1iq0ad0e5s73fussb0",
+  "environmentsObserved": [
+    "Production"
+  ],
+  "servicesObserved": 5,
+  "api": {
+    "branch": "main",
+    "deployedCommit": "8564429",
+    "plan": "free",
+    "cpu": 0.1,
+    "ramMb": 512
+  },
+  "socket": {
+    "branch": "main",
+    "deployedCommit": "8564429",
+    "plan": "free",
+    "cpu": 0.1,
+    "ramMb": 512,
+    "replicas": 1
+  },
+  "web": {
+    "branch": "main",
+    "deployedCommit": "8564429",
+    "type": "static"
+  },
+  "postgres": {
+    "state": "Suspended by owner",
+    "version": 18,
+    "connected": false
+  },
+  "redis": {
+    "version": "Valkey 8",
+    "computeInspected": false,
+    "connected": false
+  },
+  "secretsViewed": false,
+  "productionDataAccessed": false,
+  "renderSettingsChanged": false,
+  "resourcesCreated": false,
+  "pushed": false,
+  "deployed": false,
+  "stagingIsolationVerified": false,
+  "matrix": {
+    "total": 158,
+    "pass": 4,
+    "fail": 0,
+    "notTested": 154
+  },
+  "sources": [
+    "https://dashboard.render.com/project/prj-db1iq0ad0e5s73fussb0",
+    "https://render.com/pricing",
+    "https://render.com/docs/compute-plans",
+    "https://render.com/docs/blueprint-spec",
+    "https://render.com/docs/key-value"
+  ]
+}

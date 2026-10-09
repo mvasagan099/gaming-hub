@@ -112,6 +112,7 @@ export async function applyTransaction(
   referenceId: string | null,
   meta: Record<string, unknown> = {},
   walletType: WalletBalanceType = "MAIN",
+  ledgerId?: string,
 ): Promise<Wallet> {
   const isDebit = amount < 0;
   const field = BALANCE_FIELD[walletType];
@@ -155,12 +156,12 @@ export async function applyTransaction(
   }
 
   const result = await tx.wallet.updateMany({
-    where: { userId, ...(isDebit ? { [field]: { gte: -amount } } : {}) },
+    where: { userId, ...(isDebit ? { isFrozen: false, [field]: { gte: -amount } } : {}) },
     data: { [field]: { increment: amount } },
   });
 
   if (result.count === 0) {
-    const exists = await tx.wallet.findUnique({ where: { userId }, select: { userId: true } });
+    const exists = await tx.wallet.findUnique({ where: { userId }, select: { userId: true, isFrozen: true } });
     if (!exists) {
       if (!isDebit) {
         await tx.wallet.create({
@@ -173,6 +174,7 @@ export async function applyTransaction(
         throw new AppError("NOT_FOUND", "Wallet not found", 404);
       }
     } else {
+      if (exists.isFrozen && isDebit) throw new AppError("WALLET_FROZEN", "Wallet is frozen; debits are not allowed", 403);
       audit({
         actorType: "user",
         actorId: userId,
@@ -212,6 +214,7 @@ export async function applyTransaction(
 
   const createdTransaction = await tx.transaction.create({
     data: {
+      ...(ledgerId ? { id: ledgerId } : {}),
       userId,
       type: (isDebit ? "DEBIT" : "CREDIT") as TransactionType,
       amount: Math.abs(amount),

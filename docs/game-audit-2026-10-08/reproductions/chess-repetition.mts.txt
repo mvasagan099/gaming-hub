@@ -1,0 +1,18 @@
+import { ChessEngine } from '/Users/lakoffice/Documents/gaming hub/packages/game-engine/src/chess/engine.ts';
+import { createRequire } from 'node:module';
+import { writeFileSync } from 'node:fs';
+const require = createRequire('/Users/lakoffice/Documents/gaming hub/package.json');
+const { Chess } = require('chess.js');
+const engine = new ChessEngine([{userId:'audit-white',seat:0},{userId:'audit-black',seat:1}]);
+const reference = new Chess();
+const cycle = [['g1','f3'],['g8','f6'],['f3','g1'],['f6','g8']];
+for(let i=0;i<8;i++) {
+ const [from,to] = cycle[i%4];
+ const result = engine.apply({type:'move',from,to},i%2);
+ if (!result.ok) throw new Error(result.error);
+ reference.move({from,to});
+}
+const state=engine.serialize();
+const evidence={scenario:'Two repetitions of Nf3 Nf6 Ng1 Ng8; starting position occurs three times',moves:state.history,expected:{threefold:reference.isThreefoldRepetition(),gameOver:reference.isGameOver(),draw:reference.isDraw()},actual:{finished:state.finished,gameOver:state.gameOver,draw:state.draw,endReason:state.endReason},sameFinalFen:state.fen===reference.fen()};
+writeFileSync('/tmp/gaming-games-audit-chess-probe.json',JSON.stringify(evidence,null,2));
+console.log(JSON.stringify(evidence,null,2));

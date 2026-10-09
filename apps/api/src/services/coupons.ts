@@ -160,20 +160,10 @@ export async function verifyCoupon(code: string, userId: string) {
 }
 
 /**
- * H-01: Redeems a coupon using a durable PostgreSQL saga.
- *
- * Saga state machine: PENDING → EXTERNAL_CONFIRMED → COMPLETED (or FAILED)
- *
- * The couponCodeHash unique constraint on CouponRedemption makes the initial
- * INSERT the global serialisation point — only one saga can ever be PENDING
- * or beyond for a given coupon code.
- *
- * Re-entrant / crash recovery:
- *   - PENDING:             CouponVault call has not yet been made. Make it.
- *   - EXTERNAL_CONFIRMED:  CouponVault has already debited the coupon. Skip
- *                          CouponVault; retry the local wallet credit only.
- *   - COMPLETED:           Both steps done. Return idempotently.
- *   - FAILED:              Propagate the stored failure reason.
+ * Coupon redemption saga. Only the creator may make the external request.
+ * A persisted in-flight saga may have committed externally before a crash;
+ * without provider ownership proof it must stay held, never blindly retried.
+ * Confirmed local recovery locks the saga and uses its ID as the ledger PK.
  */
 export async function redeemCoupon(
   userId: string,
@@ -183,251 +173,88 @@ export async function redeemCoupon(
   const { createHash } = await import("node:crypto");
   const codeUpper = code.trim().toUpperCase();
   const couponCodeHash = createHash("sha256").update(codeUpper).digest("hex");
-
-  // ─── STEP 0: Check for an existing saga row (idempotency) ─────────────────
-  const existingSaga = await prisma.couponRedemption.findFirst({
-    where: { couponCodeHash },
-    orderBy: { createdAt: "desc" },
-  });
-
-  if (existingSaga) {
-    if (existingSaga.userId !== userId) {
-      throw new AppError("COUPON_ALREADY_USED", "This coupon has already been redeemed.", 409);
+  let saga = await prisma.couponRedemption.findFirst({ where: { couponCodeHash }, orderBy: { createdAt: "desc" } });
+  const reply = (value: number) => ({ ok: true, success: true, value, code: codeUpper, message: "Coupon redeemed successfully" });
+  // The immutable deposit ledger is also the durable affiliate repair source.
+  const dispatchDeposit = async (couponId: string) => {
+    const deposits = await prisma.transaction.findMany({ where: { userId, type: "CREDIT", walletType: "MAIN", referenceType: "DEPOSIT", referenceId: couponId }, take: 2 });
+    if (deposits.length !== 1) throw new AppError("COUPON_CREDIT_FAILED", "Coupon ledger requires reconciliation", 500);
+    const { WalletTransactionService } = await import("./walletTransactionService");
+    await WalletTransactionService.onDepositCompleted({ transactionId: deposits[0].id });
+  };
+  if (saga) {
+    if (saga.userId !== userId) throw new AppError("COUPON_ALREADY_USED", "This coupon has already been redeemed.", 409);
+    if (saga.sagaStatus === "COMPLETED") {
+      await dispatchDeposit(saga.couponId);
+      return { ...reply(saga.value), message: "Coupon already redeemed — balance is up to date." };
     }
-    if (existingSaga.sagaStatus === "COMPLETED") {
-      return {
-        ok: true,
-        success: true,
-        value: existingSaga.value,
-        code: codeUpper,
-        message: "Coupon already redeemed — balance is up to date.",
-      };
+    if (saga.sagaStatus === "FAILED") throw new AppError("COUPON_CREDIT_FAILED", "Coupon redemption failed. Contact support.", 500);
+    if (!saga.externalConfirmedAt && saga.sagaStatus !== "EXTERNAL_CONFIRMED") {
+      await prisma.couponRedemption.updateMany({ where: { id: saga.id, sagaStatus: "PENDING", externalConfirmedAt: null }, data: { sagaStatus: "NEEDS_RECONCILIATION" } });
+      throw new AppError("COUPON_CREDIT_FAILED", "Redemption outcome requires provider reconciliation. Contact support with reference: " + saga.id, 503);
     }
-    if (existingSaga.sagaStatus === "FAILED") {
-      throw new AppError(
-        "COUPON_CREDIT_FAILED",
-        existingSaga.failureReason ?? "Coupon redemption failed. Contact support.",
-        500,
-      );
-    }
-    // Same user, PENDING or EXTERNAL_CONFIRMED — fall through to resume
-  }
-
-  // ─── STEP 1: Verify coupon on CouponVault (read-only) ─────────────────────
-  const verifyData = await CouponVaultService.verifyCoupon(codeUpper, userId);
-  const amount = Number(verifyData.amount);
-  const couponId = verifyData.couponId;
-
-  if (!amount || amount <= 0) {
-    throw new AppError("COUPON_INVALID", "This coupon has no value", 400);
-  }
-
-  const walletTransactionId = `CPN-${couponId}`;
-
-  let sagaId: string;
-  let shouldCallCouponVault = true;
-
-  if (existingSaga && existingSaga.userId === userId) {
-    sagaId = existingSaga.id;
-    if (existingSaga.sagaStatus === "EXTERNAL_CONFIRMED") {
-      // CouponVault already debited — skip external call, retry local credit
-      shouldCallCouponVault = false;
-    }
-    // PENDING → continue with CouponVault call
   } else {
-    // ─── Ensure shadow coupon exists for foreign key constraint ────────────
-    await prisma.coupon.upsert({
-      where: { code: codeUpper },
-      update: {},
-      create: {
-        id: couponId,
-        code: codeUpper,
-        title: "CouponVault Promotion",
-        discountType: "FIXED",
-        discountValue: amount,
-        maxUses: 1,
-        usedCount: 0,
-        validFrom: new Date(Date.now() - 3600000),
-        validUntil: new Date(Date.now() + 86400000 * 365),
-        status: "ACTIVE",
-      },
-    });
-
-    // ─── Create the PENDING saga row (global lock via unique couponCodeHash) ──
+    const verified = await CouponVaultService.verifyCoupon(codeUpper, userId);
+    const amount = Number(verified.amount), couponId = verified.couponId;
+    if (!Number.isSafeInteger(amount) || amount <= 0 || !couponId) throw new AppError("COUPON_INVALID", "This coupon has no valid value", 400);
+    await prisma.coupon.upsert({ where: { code: codeUpper }, update: {}, create: {
+      id: couponId, code: codeUpper, title: "CouponVault Promotion", discountType: "FIXED", discountValue: amount,
+      maxUses: 1, usedCount: 0, validFrom: new Date(Date.now() - 3600000), validUntil: new Date(Date.now() + 86400000 * 365), status: "ACTIVE",
+    } });
     try {
-      const newSaga = await prisma.couponRedemption.create({
-        data: {
-          couponId,
-          userId,
-          value: amount,
-          couponCodeHash,
-          externalTxId: walletTransactionId,
-          sagaStatus: "PENDING",
-        },
-      });
-      sagaId = newSaga.id;
+      saga = await prisma.couponRedemption.create({ data: { couponId, userId, value: amount, couponCodeHash, externalTxId: `CPN-${couponId}`, sagaStatus: "PENDING" } });
     } catch (err: unknown) {
-      // Unique constraint violation: another concurrent saga started for this code
-      if ((err as { code?: string }).code === "P2002") {
-        throw new AppError("COUPON_ALREADY_USED", "This coupon is already being redeemed.", 409);
+      if ((err as { code?: string }).code === "P2002") throw new AppError("COUPON_ALREADY_USED", "This coupon is already being redeemed.", 409);
+      throw err;
+    }
+    try {
+      await CouponVaultService.redeemCoupon({ couponId, userId, walletTransactionId: saga.externalTxId!, ipAddress: metaParams?.ipAddress, device: metaParams?.device });
+      saga = await prisma.couponRedemption.update({ where: { id: saga.id }, data: { sagaStatus: "EXTERNAL_CONFIRMED", externalConfirmedAt: new Date() } });
+    } catch (err: unknown) {
+      const e = err as AppError;
+      // Timeout, 5xx, malformed acknowledgement, and generic 409 cannot prove
+      // nonprocessing. Only explicit coupon validation rejection is terminal.
+      const definitive = e.code === "COUPON_INVALID" && e.statusCode === 400 && (e.details as { definitiveNonProcessing?: boolean } | undefined)?.definitiveNonProcessing === true;
+      await prisma.couponRedemption.updateMany({ where: { id: saga.id, sagaStatus: { in: ["PENDING", "NEEDS_RECONCILIATION"] }, externalConfirmedAt: null }, data: {
+        sagaStatus: definitive ? "FAILED" : "NEEDS_RECONCILIATION",
+        failureReason: definitive ? "Provider rejected redemption" : "Provider outcome unconfirmed; ownership proof required",
+      } }).catch(() => undefined);
+      throw err;
+    }
+  }
+  const sagaId = saga.id, couponId = saga.couponId, amount = saga.value;
+  let credited = false;
+  try {
+    await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "CouponRedemption" WHERE "id" = ${sagaId} FOR UPDATE`;
+      const current = await tx.couponRedemption.findUniqueOrThrow({ where: { id: sagaId } });
+      if (current.userId !== userId || current.couponId !== couponId || current.value !== amount) throw new AppError("COUPON_CREDIT_FAILED", "Coupon identity mismatch", 409);
+      if (current.sagaStatus === "COMPLETED") return;
+      if (!current.externalConfirmedAt && current.sagaStatus !== "EXTERNAL_CONFIRMED") throw new AppError("COUPON_CREDIT_FAILED", "Provider confirmation required", 503);
+      const ledger = await tx.transaction.findUnique({ where: { id: sagaId } });
+      if (ledger) {
+        if (ledger.userId !== userId || ledger.type !== "CREDIT" || ledger.walletType !== "MAIN" || ledger.referenceType !== "DEPOSIT" || ledger.referenceId !== couponId || ledger.amount !== amount) throw new AppError("COUPON_CREDIT_FAILED", "Coupon ledger identity mismatch", 409);
+      } else {
+        await applyTransaction(tx, userId, amount, "DEPOSIT", couponId, { code: codeUpper, couponId, provider: "COUPONVAULT", source: "COUPONVAULT", walletTransactionId: current.externalTxId, sagaId }, "MAIN", sagaId);
+        await tx.coupon.update({ where: { id: couponId }, data: { usedCount: { increment: 1 } } });
+        credited = true;
       }
-      throw err;
-    }
-  }
-
-  // ─── STEP 2: External CouponVault redemption ────────────────────────────────
-  if (shouldCallCouponVault) {
-    try {
-      await CouponVaultService.redeemCoupon({
-        couponId,
-        userId,
-        walletTransactionId,
-        ipAddress: metaParams?.ipAddress,
-        device: metaParams?.device,
-      });
-      // Mark as EXTERNAL_CONFIRMED — local wallet credit hasn't happened yet
-      await prisma.couponRedemption.update({
-        where: { id: sagaId },
-        data: { sagaStatus: "EXTERNAL_CONFIRMED", externalConfirmedAt: new Date() },
-      });
-    } catch (err: unknown) {
-      const appErr = err as AppError;
-      // A 409 does not prove that the external redemption belongs to this
-      // user and transaction. Keep the saga failed unless CouponVault exposes
-      // an explicit ownership/idempotency proof (which this API does not).
-      await prisma.couponRedemption.update({
-        where: { id: sagaId },
-        data: { sagaStatus: "FAILED", failureReason: appErr.message ?? "CouponVault redemption failed" },
-      }).catch(() => {});
-      throw err;
-    }
-  }
-
-  let createdTxId: string | undefined;
-
-  // ─── STEP 3: Credit local wallet ────────────────────────────────────────────
-  try {
-    await prisma.$transaction(async (tx) => {
-      // Shadow coupon record for relational integrity
-      await tx.coupon.upsert({
-        where: { code: codeUpper },
-        update: { usedCount: { increment: 1 } },
-        create: {
-          id: couponId,
-          code: codeUpper,
-          title: "CouponVault Promotion",
-          discountType: "FIXED",
-          discountValue: amount,
-          maxUses: 1,
-          usedCount: 1,
-          validFrom: new Date(Date.now() - 3600000),
-          validUntil: new Date(Date.now() + 86400000 * 365),
-          status: "ACTIVE",
-        },
-      });
-
-      // Credit MAIN wallet with DEPOSIT referenceType
-      const creditedWallet = await applyTransaction(
-        tx,
-        userId,
-        amount,
-        "DEPOSIT",
-        couponId,
-        {
-          code: codeUpper,
-          couponId,
-          provider: "COUPONVAULT",
-          source: "COUPONVAULT",
-          walletTransactionId,
-          sagaId,
-        },
-        "MAIN",
-      );
-      createdTxId = (creditedWallet as any)._transaction?.id;
-
-      // Mark saga COMPLETED
-      await tx.couponRedemption.update({
-        where: { id: sagaId },
-        data: { sagaStatus: "COMPLETED", completedAt: new Date() },
-      });
+      await tx.couponRedemption.update({ where: { id: sagaId }, data: { sagaStatus: "COMPLETED", completedAt: new Date(), failureReason: null } });
     });
-  } catch (err: unknown) {
-    const dbErr = err as { code?: string; message?: string };
-    if (dbErr?.code === "P2002" || dbErr?.message?.includes("unique")) {
-      // Duplicate credit caught — the saga is already COMPLETED via another path
-      console.warn("WARN: Duplicate coupon credit caught by unique constraint", { userId, couponId, codeUpper });
-      await prisma.couponRedemption.update({
-        where: { id: sagaId },
-        data: { sagaStatus: "COMPLETED", completedAt: new Date() },
-      }).catch(() => {});
-      return { ok: true, success: true, value: amount, code: codeUpper, message: "Coupon already redeemed — balance is up to date." };
-    }
-    console.error("CRITICAL: Coupon redeemed on CouponVault but local wallet credit failed", { userId, couponId, sagaId, err });
-    await prisma.couponRedemption.update({
-      where: { id: sagaId },
-      data: { sagaStatus: "NEEDS_RECONCILIATION", failureReason: "Local wallet credit failed after CouponVault debit. Contact support. Ref: " + sagaId },
-    }).catch(() => {});
-    throw new AppError(
-      "COUPON_CREDIT_FAILED",
-      "Redemption recorded but wallet credit failed. Please contact support with reference: " + sagaId,
-      500,
-    );
+  } catch (err) {
+    await prisma.couponRedemption.updateMany({ where: { id: sagaId, sagaStatus: { not: "COMPLETED" } }, data: { sagaStatus: "NEEDS_RECONCILIATION", failureReason: "Confirmed external redemption; local credit requires recovery" } }).catch(() => undefined);
+    throw new AppError("COUPON_CREDIT_FAILED", "Wallet credit requires recovery. Reference: " + sagaId, 500);
   }
-
-  // ─── STEP 4: Real-time wallet synchronization ────────────────────────────────
-  try {
+  await dispatchDeposit(couponId);
+  if (credited) {
     const { WalletSyncService } = await import("./walletSyncService");
     const { getWallet } = await import("./wallet");
-    const updatedWallet = await getWallet(userId);
-    WalletSyncService.emitWalletUpdate({
-      userId,
-      balance: updatedWallet.balance,
-      bonusBalance: updatedWallet.bonusBalance,
-      lockedBalance: updatedWallet.lockedBalance,
-      rewardBalance: updatedWallet.rewardBalance,
-      cashbackBalance: updatedWallet.cashbackBalance,
-      type: "CREDIT",
-      amount,
-    });
-  } catch (syncErr) {
-    console.warn("Wallet sync event emission failed:", syncErr);
+    const wallet = await getWallet(userId);
+    WalletSyncService.emitWalletUpdate({ userId, balance: wallet.balance, bonusBalance: wallet.bonusBalance, lockedBalance: wallet.lockedBalance, rewardBalance: wallet.rewardBalance, cashbackBalance: wallet.cashbackBalance, type: "CREDIT", amount });
+    audit({ actorType: "user", actorId: userId, action: "coupon.redeemed", category: "wallet", targetType: "coupon", targetId: couponId, meta: { value: amount, provider: "COUPONVAULT", sagaId } });
+    await createNotification(userId, "COUPON", `Coupon redeemed: ${codeUpper}`, `You received ${amount} coins in your main wallet`, { couponId, value: amount });
   }
-
-  // ─── STEP 5: Authoritative Gaming Hub Wallet Deposit Hook ─────────────────────
-  // Decoupled from payment provider: affiliate commission triggers purely from
-  // the Gaming Hub MAIN wallet deposit transaction.
-  if (createdTxId) {
-    try {
-      const { WalletTransactionService } = await import("./walletTransactionService");
-      await WalletTransactionService.onDepositCompleted({
-        userId,
-        amount,
-        transactionId: createdTxId,
-      });
-    } catch (depErr) {
-      console.warn("Wallet deposit completion hook failed:", depErr);
-    }
-  }
-
-  audit({
-    actorType: "user",
-    actorId: userId,
-    action: "coupon.redeemed",
-    category: "wallet",
-    targetType: "coupon",
-    targetId: couponId,
-    meta: { code: codeUpper, value: amount, provider: "COUPONVAULT", sagaId },
-  });
-
-  await createNotification(
-    userId,
-    "COUPON",
-    `Coupon redeemed: ${codeUpper}`,
-    `You received ${amount} coins in your main wallet`,
-    { couponId, value: amount },
-  );
-
-  return { ok: true, success: true, value: amount, code: codeUpper, message: "Coupon redeemed successfully" };
+  return reply(amount);
 }
 
 

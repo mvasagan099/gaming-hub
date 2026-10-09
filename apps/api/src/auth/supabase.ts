@@ -11,6 +11,8 @@ export interface VerifiedSupabaseToken {
   email: string | null;
   emailVerified: boolean;
   issuedAt: number;
+  expiresAt?: Date;
+  providerSessionId?: string;
   /** Raw `user_metadata` claim (e.g. username chosen at signup). */
   userMetadata: Record<string, unknown> | null;
 }
@@ -41,6 +43,7 @@ export async function verifyAccessToken(token: string): Promise<VerifiedSupabase
   const { payload } = await jwtVerify(token, jwks, {
     issuer: `${env.SUPABASE_URL}/auth/v1`,
     audience: "authenticated",
+    requiredClaims: ["exp"],
   });
 
   if (!payload.sub) {
@@ -57,6 +60,8 @@ export async function verifyAccessToken(token: string): Promise<VerifiedSupabase
     email: typeof payload.email === "string" ? payload.email : null,
     emailVerified,
     issuedAt: typeof payload.iat === "number" ? payload.iat : Date.now() / 1000,
+    expiresAt: typeof payload.exp === "number" ? new Date(payload.exp * 1000) : undefined,
+    providerSessionId: typeof payload.session_id === "string" ? payload.session_id : undefined,
     userMetadata:
       typeof payload.user_metadata === "object" && payload.user_metadata !== null
         ? (payload.user_metadata as Record<string, unknown>)

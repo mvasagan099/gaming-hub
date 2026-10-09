@@ -196,7 +196,7 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
 
     // 1. Simulate deposit crediting B's MAIN wallet
     await prisma.$transaction(async (tx) => {
-      await applyTransaction(tx, userB, 1000, "DEPOSIT", sagaId, {}, "MAIN");
+      await applyTransaction(tx, userB, 1000, "DEPOSIT", sagaId, {}, "MAIN", sagaId);
     });
 
     // 2. Authoritative FIRST_DEPOSIT referral qualification triggered
@@ -255,7 +255,7 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
 
     // 1st deposit
     await prisma.$transaction(async (tx) => {
-      await applyTransaction(tx, userB, 1000, "DEPOSIT", sagaId, {}, "MAIN");
+      await applyTransaction(tx, userB, 1000, "DEPOSIT", sagaId, {}, "MAIN", sagaId);
     });
     await ReferralService.evaluateQualification(userB, "FIRST_DEPOSIT", { amount: 1000, sagaId });
     await AffiliateService.processDepositCommission({
@@ -304,7 +304,7 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
 
     // Deposit 1: 1000 MAIN
     await prisma.$transaction(async (tx) => {
-      await applyTransaction(tx, userB, 1000, "DEPOSIT", saga1, {}, "MAIN");
+      await applyTransaction(tx, userB, 1000, "DEPOSIT", saga1, {}, "MAIN", saga1);
     });
     await ReferralService.evaluateQualification(userB, "FIRST_DEPOSIT", { amount: 1000, sagaId: saga1 });
     await AffiliateService.processDepositCommission({
@@ -320,7 +320,7 @@ describe("First-Deposit-Only Referral System & Integrity", () => {
 
     // Deposit 2: 2000 MAIN
     await prisma.$transaction(async (tx) => {
-      await applyTransaction(tx, userB, 2000, "DEPOSIT", saga2, {}, "MAIN");
+      await applyTransaction(tx, userB, 2000, "DEPOSIT", saga2, {}, "MAIN", saga2);
     });
 
     // Referral qualification skips because status is already QUALIFIED

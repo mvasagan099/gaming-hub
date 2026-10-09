@@ -535,6 +535,10 @@ export class MatchManager {
     }
 
     const actionId = (action as any).actionId as string | undefined;
+    // Preserve the existing controls for these realtime engines. Other games
+    // pause only through the server's disconnect/reconnect lifecycle.
+    const clientPauseAllowed = ["table-tennis", "snake-vs-worms"].includes(room.config.gameId);
+    if ((action.type === "pause" || action.type === "resume") && !clientPauseAllowed) return this.createErrorResult(null, "Pause is controlled by the server");
     const match = room.match;
     // Action identities belong to one match and one authenticated player.
     const actionScope = JSON.stringify([roomId, match.matchId, playerId]);
@@ -557,6 +561,7 @@ export class MatchManager {
         return { ok: true, state: engine.serialize(), events: [], finished: engine.finished, winnerSeats: engine.winnerSeats };
       }
       const clientSequence = action.clientSequence;
+      if (match.pausedAt != null && action.type !== "resign" && !(clientPauseAllowed && action.type === "resume" && match.pauseReason === "player")) return this.createErrorResult(null, "Match is paused while a player reconnects");
       if (this.framework.config.executeRoomTask && clientSequence !== undefined &&
         (!Number.isSafeInteger(clientSequence) || Number(clientSequence) <= player.packetSequenceNumber)) {
         return this.createErrorResult((match.engine as EngineInstance).serialize(), "Stale or invalid action sequence");
@@ -634,6 +639,16 @@ export class MatchManager {
       }
       
       if (result.ok) {
+        if (action.type === "pause") {
+          match.pausedAt = Date.now(); match.pausedBy = playerId; match.pauseReason = "player";
+          this.framework.timerManager.clearTimer(`${roomId}:clock`);
+          for (const p of room.players.values()) this.framework.playerManager.stopAfkMonitoring(p.id, roomId);
+          await this.framework.syncManager.broadcastToRoom(room, "match:paused", { roomId, pausedBy: playerId, pausedAt: match.pausedAt, reason: "player" });
+        } else if (action.type === "resume") {
+          match.pausedAt = null; match.pausedBy = null; match.pauseReason = undefined;
+          for (const p of room.players.values()) this.framework.playerManager.startAfkMonitoring(p.id, roomId);
+          await this.framework.syncManager.broadcastToRoom(room, "match:resumed", { roomId, resumedBy: playerId });
+        }
         // Normalize engine events and append to the room event log.
         const events = this.framework.eventDispatcher.toGameEvents(room!, result.events);
         this.framework.eventDispatcher.appendToLog(room!, events);
@@ -689,6 +704,9 @@ export class MatchManager {
     
     room.match.pausedAt = Date.now();
     room.match.pausedBy = playerId;
+    (room.match.engine as EngineInstance).pauseClocks?.();
+    this.framework.timerManager.clearTimer(`${roomId}:clock`);
+    await this.framework.syncManager.broadcastGameState(room, []);
     
     // Stop AFK monitoring
     for (const player of room.players.values()) {
@@ -726,12 +744,11 @@ export class MatchManager {
     const match = room.match;
     const resume = async () => {
       if (!room.match || room.match !== match || room.status !== "playing") return;
-      if (room.config.gameId === "snooker") {
-        (room.match.engine as unknown as { resumeClocks(): void }).resumeClocks();
-        await this.framework.syncManager.broadcastGameState(room, []);
-      }
+      (room.match.engine as EngineInstance).resumeClocks?.();
+      await this.framework.syncManager.broadcastGameState(room, []);
       room.match.pausedAt = null;
       room.match.pausedBy = null;
+      room.match.pauseReason = undefined;
 
       // Restart AFK monitoring
       for (const player of room.players.values()) {
@@ -749,8 +766,7 @@ export class MatchManager {
 
       this.framework.log(`Match resumed in room ${roomId} by ${playerId}`);
     };
-    if (room.config.gameId === "snooker") await this.framework.gameStateManager.enqueue(roomId, resume);
-    else await resume();
+    await this.framework.gameStateManager.enqueue(roomId, resume);
   }
   
   /**
@@ -889,9 +905,10 @@ export class MatchManager {
       // Server-owned forfeits must not depend on turn, input cooldown, packet
       // sequence, or client anti-cheat checks. Keep engine mutations serialized.
       if (match.pausedAt) {
-        engine.apply({ type: "resume" }, player.seat!);
+        engine.resumeClocks?.();
         match.pausedAt = null;
         match.pausedBy = null;
+        match.pauseReason = undefined;
       }
       if (engine.finished) {
         await this.finishMatch(room, { ok: true, state: engine.serialize(), events: [], finished: true, winnerSeats: engine.winnerSeats });
@@ -943,7 +960,7 @@ export class MatchManager {
     }
     if (!room.match || room.match.finishedAt || room.status !== "playing") return;
     this.activeMatches.set(room.match.matchId, room.match);
-    for (const player of room.players.values()) this.framework.playerManager.startAfkMonitoring(player.id, room.id);
+    if (room.match.pausedAt == null) for (const player of room.players.values()) this.framework.playerManager.startAfkMonitoring(player.id, room.id);
     this.startPhysicsLoop(room);
     this.scheduleClockCheck(room);
   }

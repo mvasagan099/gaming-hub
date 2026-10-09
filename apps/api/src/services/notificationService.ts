@@ -1,5 +1,6 @@
 import { prisma, Prisma, NotificationType } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
+import { persistNotification } from './notificationIdentity';
 
 export interface CreateFinancialNotificationInput {
   userId: string;
@@ -31,24 +32,9 @@ export class NotificationService {
    * 1. Idempotent Notification Creation
    */
   static async createNotification(input: CreateFinancialNotificationInput) {
-    // Check if duplicate notification exists for this reference
-    if (input.referenceId && input.referenceType) {
-      const existing = await prisma.appNotification.findFirst({
-        where: {
-          userId: input.userId,
-          type: input.type,
-          referenceId: input.referenceId,
-          tournamentEventType: input.tournamentEventType ?? undefined,
-        },
-      });
-
-      if (existing) {
-        return existing;
-      }
-    }
-
-    const created = await prisma.appNotification.create({
-      data: {
+    const identity = input.referenceId && input.referenceType
+      ? JSON.stringify(['reference', input.userId, input.type, input.referenceId, input.tournamentEventType ?? null]) : undefined;
+    const { notification: created, created: isNew } = await persistNotification({
         userId: input.userId,
         type: input.type,
         title: input.title,
@@ -56,11 +42,10 @@ export class NotificationService {
         referenceId: input.referenceId ?? null,
         tournamentEventType: input.tournamentEventType ?? null,
         data: input.data ? (input.data as Prisma.InputJsonValue) : Prisma.JsonNull,
-      },
-    });
+    }, identity, identity ? { userId: input.userId, type: input.type, referenceId: input.referenceId, tournamentEventType: input.tournamentEventType ?? null } : undefined);
 
     // Dispatch to registered real-time listeners
-    for (const listener of this.listeners) {
+    for (const listener of isNew ? this.listeners : []) {
       try {
         listener({ userId: input.userId, notification: created });
       } catch {

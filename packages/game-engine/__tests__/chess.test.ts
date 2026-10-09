@@ -272,3 +272,33 @@ describe("ChessEngine", () => {
     expect(engine.state.history[engine.state.history.length - 1]).toContain("=");
   });
 });
+
+describe('Chess repetition across snapshots', () => {
+  const players = [{ userId: 'white', seat: 0 }, { userId: 'black', seat: 1 }];
+  const cycle = [['g1','f3'], ['g8','f6'], ['f3','g1'], ['f6','g8']];
+  it.each(['continuous', 'restored', 'legacy'])('%s recognizes the third occurrence exactly once', mode => {
+    let engine = new ChessEngine(players);
+    for (let i = 0; i < 8; i++) {
+      if (i === 4 && mode !== 'continuous') {
+        const snapshot = engine.persistenceState() as typeof engine.state;
+        if (mode === 'legacy') delete snapshot.repetitionPositions;
+        engine = new ChessEngine(players);
+        engine.restoreState(snapshot);
+      }
+      const [from, to] = cycle[i % 4];
+      expect(engine.apply({ type: 'move', from, to }, i % 2).ok).toBe(true);
+      if (i < 7) expect(engine.finished).toBe(false);
+    }
+    expect(engine.state).toMatchObject({ finished: true, gameOver: true, draw: true,
+      endReason: 'repetition', winnerSeats: [], result: '1/2-1/2' });
+    expect(engine.state.history).toEqual(['Nf3','Nf6','Ng1','Ng8','Nf3','Nf6','Ng1','Ng8']);
+    expect(engine.apply({ type: 'move', from: 'g1', to: 'f3' }, 0).ok).toBe(false);
+    expect(engine.state.history).toHaveLength(8);
+  });
+  it('illegal moves do not change repetition counts', () => {
+    const engine = new ChessEngine(players);
+    const before = engine.persistenceState();
+    expect(engine.apply({ type: 'move', from: 'e2', to: 'e5' }, 0).ok).toBe(false);
+    expect(engine.persistenceState()).toEqual(before);
+  });
+});

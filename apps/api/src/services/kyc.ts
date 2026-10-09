@@ -1,4 +1,5 @@
-import { prisma } from "@gaming-hub/db";
+import { prisma, type Prisma, type KycDocument } from "@gaming-hub/db";
+import { createHash, randomUUID } from "node:crypto";
 import {
   KycLevel,
   KycStatus,
@@ -13,6 +14,45 @@ import { SupabaseStorageService } from "./supabaseStorage";
 
 function calculateExpiryDate(): Date | null {
   return null;
+}
+
+async function lockRequest(tx: Prisma.TransactionClient, requestId: string) {
+  await tx.$queryRaw`SELECT "id" FROM "KycRequest" WHERE "id" = ${requestId} FOR UPDATE`;
+  const request = await tx.kycRequest.findUnique({ where: { id: requestId }, select: { userId: true } });
+  if (request) {
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${request.userId} FOR UPDATE`;
+    if ((await tx.user.findUniqueOrThrow({ where: { id: request.userId } })).deletedAt) throw new AppError('NOT_FOUND', 'Account is deleted', 404);
+  }
+}
+function assertEditable(status: string) {
+  if (!(['NOT_STARTED', 'REQUIRES_RESUBMISSION', 'REJECTED', 'EXPIRED'] as string[]).includes(status)) {
+    throw new AppError('INVALID_ACTION', 'Submitted KYC records are locked; request resubmission before editing', 409);
+  }
+}
+function documentDigest(request: { fullName: string | null; country: string | null; mobileNumber: string | null; dateOfBirth: Date | null; streetAddress: string | null; addressLine2: string | null; city: string | null; state: string | null; postalCode: string | null; level: string; documents: KycDocument[] }) {
+  return createHash('sha256').update(JSON.stringify({
+    fullName: request.fullName, country: request.country, mobileNumber: request.mobileNumber, dateOfBirth: request.dateOfBirth,
+    streetAddress: request.streetAddress, addressLine2: request.addressLine2, city: request.city, state: request.state, postalCode: request.postalCode, level: request.level,
+    documents: request.documents.map(d => ({ id: d.id, type: d.documentType, side: d.side, isSelfie: d.isSelfie,
+      path: d.fileUrl, hash: d.fileHash, size: d.fileSize, mime: d.mimeType, documentNumber: d.documentNumber,
+      issueDate: d.issueDate, expiryDate: d.expiryDate, issuingCountry: d.issuingCountry })).sort((a,b) => a.id.localeCompare(b.id)),
+  })).digest('hex');
+}
+async function validateDocumentSet(tx: Prisma.TransactionClient, request: { country: string | null; documents: KycDocument[] }) {
+  const configs = await tx.kycDocumentConfig.findMany({ where: { country: request.country ?? '' } });
+  const identityTypes = COUNTRY_DOCUMENTS[request.country ?? ''] ?? COUNTRY_DOCUMENTS.DEFAULT;
+  if (!request.documents.some(d => identityTypes.includes(d.documentType as KycDocumentType) && !d.isSelfie)) throw new AppError('VALIDATION_ERROR', 'An accepted identity document is required', 400);
+  if (!request.documents.some(d => d.documentType === 'SELFIE' && d.isSelfie && d.mimeType.startsWith('image/'))) throw new AppError('VALIDATION_ERROR', 'An image selfie is required', 400);
+  for (const config of configs) {
+    if (config.isRequired && !request.documents.some(d => d.documentType === config.documentType)) throw new AppError('VALIDATION_ERROR', `Required document missing: ${config.documentType}`, 400);
+  }
+  for (const d of request.documents) {
+    const config = configs.find(c => c.documentType === d.documentType);
+    if (config?.isAccepted === false || d.isSelfie !== (d.documentType === 'SELFIE') || !d.fileHash || d.fileSize <= 0 || d.status === 'REJECTED' || d.status === 'EXPIRED') throw new AppError('VALIDATION_ERROR', 'Document metadata is invalid or rejected', 400);
+    if ((config?.requiresBack || DOCUMENTS_REQUIRING_BACK_SIDE.includes(d.documentType as KycDocumentType)) &&
+      (!request.documents.some(other => other.documentType === d.documentType && other.side === 'front') ||
+       !request.documents.some(other => other.documentType === d.documentType && other.side === 'back'))) throw new AppError('VALIDATION_ERROR', `Front and back required: ${d.documentType}`, 400);
+  }
 }
 
 export const KycComplianceService = {
@@ -95,8 +135,13 @@ export async function createKycRequest(data: CreateKycRequestInput): Promise<Kyc
   }
 
   if (request) {
-    request = await prisma.kycRequest.update({
-      where: { id: request.id },
+    const existingRequestId = request.id;
+    request = await prisma.$transaction(async tx => {
+      await lockRequest(tx, existingRequestId);
+      const current = await tx.kycRequest.findUniqueOrThrow({ where: { id: existingRequestId } });
+      assertEditable(current.status);
+      return tx.kycRequest.update({
+      where: { id: existingRequestId },
       data: {
         level: data.level,
         country: data.country,
@@ -119,6 +164,7 @@ export async function createKycRequest(data: CreateKycRequestInput): Promise<Kyc
           orderBy: { createdAt: "desc" },
         },
       },
+      });
     });
   } else {
     request = await prisma.kycRequest.create({
@@ -145,8 +191,8 @@ export async function createKycRequest(data: CreateKycRequestInput): Promise<Kyc
   }
 
   // Pre-sync entered personal & address information to Profile
-  await prisma.profile.update({
-    where: { userId: data.userId },
+  await prisma.profile.updateMany({
+    where: { userId: data.userId, user: { deletedAt: null } },
     data: {
       phone: data.mobileNumber || undefined,
       dateOfBirth: data.dateOfBirth || undefined,
@@ -173,15 +219,15 @@ export async function uploadKycDocument(data: UploadDocumentInput) {
     throw new Error("Unauthorized to upload documents for this request");
   }
 
-  if (request.status === KycStatus.APPROVED) {
-    throw new Error("Cannot upload documents to an approved KYC request");
-  }
+  assertEditable(request.status);
+  if (!Object.values(KycDocumentType).includes(data.documentType) || (data.side !== undefined && !['front', 'back'].includes(data.side)) ||
+      (data.isSelfie ?? false) !== (data.documentType === KycDocumentType.SELFIE) || (data.isSelfie && !data.mimeType.startsWith('image/'))) throw new AppError('VALIDATION_ERROR', 'Invalid document type, side or selfie metadata', 400);
 
   let fileName = "";
   let fileUrl = "";
   let fileSize = data.fileBuffer.length;
   let mimeType = data.mimeType;
-  let fileHash = "";
+  let fileHash = createHash('sha256').update(data.fileBuffer).digest('hex');
 
   // H-05 fix: run magic-byte + MIME + extension validation BEFORE uploading to
   // any storage backend. A failed validation throws and no upload occurs.
@@ -219,7 +265,14 @@ export async function uploadKycDocument(data: UploadDocumentInput) {
     fileHash = uploaded.fileHash;
   }
 
-  await prisma.kycDocument.deleteMany({
+  try { return await prisma.$transaction(async tx => {
+  await lockRequest(tx, data.requestId);
+  const current = await tx.kycRequest.findUniqueOrThrow({ where: { id: data.requestId } });
+  assertEditable(current.status);
+  if (current.userId !== data.userId || current.updatedAt.getTime() !== request.updatedAt.getTime()) throw new AppError('INVALID_ACTION', 'KYC revision changed during upload; retry after reviewing current status', 409);
+  const replaced = await tx.kycDocument.findMany({ where: { requestId: data.requestId, documentType: data.documentType, side: data.side ?? null, isSelfie: data.isSelfie ?? false } });
+  if (replaced.length) await tx.kycAuditLog.create({ data: { requestId: data.requestId, actorId: data.userId, action: 'DOCUMENT_REPLACED', category: 'DOCUMENT_UPLOAD', metadata: { retainedDocuments: replaced.map(d => ({ id: d.id, path: d.fileUrl, hash: d.fileHash })) } } });
+  await tx.kycDocument.deleteMany({
     where: {
       requestId: data.requestId,
       documentType: data.documentType,
@@ -230,7 +283,7 @@ export async function uploadKycDocument(data: UploadDocumentInput) {
 
   const page = 0;
 
-  const document = await prisma.kycDocument.create({
+  const document = await tx.kycDocument.create({
     data: {
       requestId: data.requestId,
       documentType: data.documentType,
@@ -245,7 +298,8 @@ export async function uploadKycDocument(data: UploadDocumentInput) {
     },
   });
 
-  await prisma.kycAuditLog.create({
+  await tx.kycRequest.update({ where: { id: data.requestId }, data: { updatedAt: new Date() } });
+  await tx.kycAuditLog.create({
     data: {
       requestId: data.requestId,
       actorId: data.userId,
@@ -262,10 +316,17 @@ export async function uploadKycDocument(data: UploadDocumentInput) {
   });
 
   return document;
+  }); } catch (error) {
+    // Preserve the unattached immutable object's identity for controlled retention/cleanup.
+    await prisma.kycAuditLog.create({ data: { requestId: data.requestId, actorId: data.userId, action: 'DOCUMENT_UPLOAD_NOT_ATTACHED', category: 'DOCUMENT_UPLOAD', metadata: { retainedPath: fileUrl, hash: fileHash } } });
+    throw error;
+  }
 }
 
 export async function submitKycRequest(requestId: string, userId: string): Promise<KycRequestWithDocuments> {
-  const request = await prisma.kycRequest.findUnique({
+  return prisma.$transaction(async tx => {
+  await lockRequest(tx, requestId);
+  const request = await tx.kycRequest.findUnique({
     where: { id: requestId },
     include: {
       documents: true,
@@ -284,19 +345,9 @@ export async function submitKycRequest(requestId: string, userId: string): Promi
     throw new Error("Cannot submit request in current status");
   }
 
-  const hasIdentityDoc = request.documents.some(
-    (d) => d.documentType !== KycDocumentType.SELFIE && !d.isSelfie
-  );
-  if (!hasIdentityDoc) {
-    throw new AppError("VALIDATION_ERROR", "Please upload at least one valid identity document", 400);
-  }
+  await validateDocumentSet(tx, request);
 
-  const hasSelfie = request.documents.some((d) => d.isSelfie || d.documentType === KycDocumentType.SELFIE);
-  if (!hasSelfie) {
-    throw new AppError("VALIDATION_ERROR", "Live camera selfie is required before submitting verification", 400);
-  }
-
-  const updated = await prisma.kycRequest.update({
+  const updated = await tx.kycRequest.update({
     where: { id: requestId },
     data: {
       status: KycStatus.PENDING,
@@ -309,17 +360,18 @@ export async function submitKycRequest(requestId: string, userId: string): Promi
     },
   });
 
-  await prisma.kycAuditLog.create({
+  await tx.kycAuditLog.create({
     data: {
       requestId,
       actorId: userId,
       action: "KYC_SUBMITTED",
       category: "STATUS_CHANGE",
-      metadata: { level: request.level, documentCount: request.documents.length },
+      metadata: { revisionId: randomUUID(), documentDigest: documentDigest(request), documents: request.documents.map(d => ({ id: d.id, path: d.fileUrl, hash: d.fileHash })), level: request.level, documentCount: request.documents.length },
     },
   });
 
   return updated as KycRequestWithDocuments;
+  });
 }
 
 export async function getKycRequestByUserId(userId: string): Promise<KycRequestWithDocuments | null> {
@@ -459,7 +511,9 @@ export async function approveKycRequest(
   adminId: string,
   notes?: string,
 ): Promise<KycRequestWithDocuments> {
-  const request = await prisma.kycRequest.findUnique({
+  return prisma.$transaction(async tx => {
+  await lockRequest(tx, requestId);
+  const request = await tx.kycRequest.findUnique({
     where: { id: requestId },
     include: { 
       documents: true,
@@ -477,12 +531,15 @@ export async function approveKycRequest(
     throw new Error("Request is not pending review");
   }
 
-  await prisma.kycDocument.updateMany({
+  await validateDocumentSet(tx, request);
+  const submitted = await tx.kycAuditLog.findFirst({ where: { requestId, action: 'KYC_SUBMITTED' }, orderBy: { createdAt: 'desc' } });
+  if ((submitted?.metadata as { documentDigest?: string } | null)?.documentDigest !== documentDigest(request)) throw new AppError('VALIDATION_ERROR', 'Submitted document revision is missing or changed; request resubmission', 400);
+  await tx.kycDocument.updateMany({
     where: { requestId },
-    data: { status: "VERIFIED" },
+    data: { status: "VERIFIED", verifiedBy: adminId, verifiedAt: new Date() },
   });
 
-  const updated = await prisma.kycRequest.update({
+  const updated = await tx.kycRequest.update({
     where: { id: requestId },
     data: {
       level: KycLevel.LEVEL_2,
@@ -497,7 +554,7 @@ export async function approveKycRequest(
     },
   });
 
-  await prisma.profile.update({
+  await tx.profile.update({
     where: { userId: request.userId },
     data: {
       kycStatus: "approved",
@@ -510,7 +567,7 @@ export async function approveKycRequest(
     },
   });
 
-  await prisma.kycReview.create({
+  await tx.kycReview.create({
     data: {
       requestId,
       reviewerId: adminId,
@@ -519,7 +576,7 @@ export async function approveKycRequest(
     },
   });
 
-  await prisma.kycAuditLog.create({
+  await tx.kycAuditLog.create({
     data: {
       requestId,
       actorId: adminId,
@@ -532,6 +589,7 @@ export async function approveKycRequest(
   });
 
   return updated as KycRequestWithDocuments;
+  });
 }
 
 export async function rejectKycRequest(
@@ -540,7 +598,9 @@ export async function rejectKycRequest(
   rejectionReason: string,
   requireResubmission: boolean = false,
 ): Promise<KycRequestWithDocuments> {
-  const request = await prisma.kycRequest.findUnique({
+  return prisma.$transaction(async tx => {
+  await lockRequest(tx, requestId);
+  const request = await tx.kycRequest.findUnique({
     where: { id: requestId },
   });
 
@@ -554,7 +614,7 @@ export async function rejectKycRequest(
 
   const newStatus = requireResubmission ? KycStatus.REQUIRES_RESUBMISSION : KycStatus.REJECTED;
 
-  const updated = await prisma.kycRequest.update({
+  const updated = await tx.kycRequest.update({
     where: { id: requestId },
     data: {
       status: newStatus,
@@ -567,7 +627,7 @@ export async function rejectKycRequest(
     },
   });
 
-  await prisma.kycReview.create({
+  await tx.kycReview.create({
     data: {
       requestId,
       reviewerId: adminId,
@@ -576,7 +636,7 @@ export async function rejectKycRequest(
     },
   });
 
-  await prisma.kycAuditLog.create({
+  await tx.kycAuditLog.create({
     data: {
       requestId,
       actorId: adminId,
@@ -589,10 +649,13 @@ export async function rejectKycRequest(
   });
 
   return updated as KycRequestWithDocuments;
+  });
 }
 
 export async function startReview(requestId: string, adminId: string): Promise<KycRequestWithDocuments> {
-  const request = await prisma.kycRequest.findUnique({
+  return prisma.$transaction(async tx => {
+  await lockRequest(tx, requestId);
+  const request = await tx.kycRequest.findUnique({
     where: { id: requestId },
   });
 
@@ -604,7 +667,7 @@ export async function startReview(requestId: string, adminId: string): Promise<K
     throw new Error("Request is not pending");
   }
 
-  return (await prisma.kycRequest.update({
+  return (await tx.kycRequest.update({
     where: { id: requestId },
     data: {
       status: KycStatus.UNDER_REVIEW,
@@ -615,6 +678,7 @@ export async function startReview(requestId: string, adminId: string): Promise<K
       documents: { orderBy: { createdAt: "desc" } },
     },
   })) as KycRequestWithDocuments;
+  });
 }
 
 export async function adminOverrideKycLevel(
@@ -623,7 +687,9 @@ export async function adminOverrideKycLevel(
   level: KycLevel,
   reason: string,
 ): Promise<KycRequestWithDocuments> {
-  const request = await prisma.kycRequest.findUnique({
+  return prisma.$transaction(async tx => {
+  await lockRequest(tx, requestId);
+  const request = await tx.kycRequest.findUnique({
     where: { id: requestId },
   });
 
@@ -631,7 +697,7 @@ export async function adminOverrideKycLevel(
     throw new Error("KYC request not found");
   }
 
-  const updated = await prisma.kycRequest.update({
+  const updated = await tx.kycRequest.update({
     where: { id: requestId },
     data: {
       level,
@@ -649,7 +715,7 @@ export async function adminOverrideKycLevel(
     },
   });
 
-  await prisma.profile.update({
+  await tx.profile.update({
     where: { userId: request.userId },
     data: {
       kycStatus: "approved",
@@ -660,9 +726,9 @@ export async function adminOverrideKycLevel(
       postcode: request.postalCode ?? undefined,
       dateOfBirth: request.dateOfBirth ?? undefined,
     },
-  }).catch(() => undefined);
+  });
 
-  await prisma.kycReview.create({
+  await tx.kycReview.create({
     data: {
       requestId,
       reviewerId: adminId,
@@ -672,7 +738,7 @@ export async function adminOverrideKycLevel(
     },
   });
 
-  await prisma.kycAuditLog.create({
+  await tx.kycAuditLog.create({
     data: {
       requestId,
       actorId: adminId,
@@ -685,10 +751,13 @@ export async function adminOverrideKycLevel(
   });
 
   return updated as KycRequestWithDocuments;
+  });
 }
 
 export async function deleteKycDocument(requestId: string, documentId: string, userId: string): Promise<void> {
-  const document = await prisma.kycDocument.findUnique({
+  await prisma.$transaction(async tx => {
+  await lockRequest(tx, requestId);
+  const document = await tx.kycDocument.findUnique({
     where: { id: documentId },
     include: { request: true },
   });
@@ -705,17 +774,15 @@ export async function deleteKycDocument(requestId: string, documentId: string, u
     throw new Error("Document does not belong to this request");
   }
 
-  if (document.request.status === KycStatus.APPROVED) {
-    throw new Error("Cannot delete documents from an approved KYC request");
-  }
-
-  await FileUploadService.delete(document.fileUrl);
-
-  await prisma.kycDocument.delete({
+  assertEditable(document.request.status);
+  // Retain the path in the compliance audit instead of irreversibly losing it.
+  await tx.kycAuditLog.create({ data: { requestId, actorId: userId, action: 'DOCUMENT_RETIRED', category: 'DOCUMENT_UPLOAD', metadata: { retainedPath: document.fileUrl, hash: document.fileHash } } });
+  await tx.kycDocument.delete({
     where: { id: documentId },
   });
 
-  await prisma.kycAuditLog.create({
+  await tx.kycRequest.update({ where: { id: requestId }, data: { updatedAt: new Date() } });
+  await tx.kycAuditLog.create({
     data: {
       requestId,
       actorId: userId,
@@ -725,6 +792,7 @@ export async function deleteKycDocument(requestId: string, documentId: string, u
       targetId: documentId,
       metadata: { documentType: document.documentType },
     },
+  });
   });
 }
 

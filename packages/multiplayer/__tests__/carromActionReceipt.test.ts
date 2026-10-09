@@ -1,3 +1,4 @@
+import { unpackCarromState } from "@gaming-hub/shared";
 import { describe, expect, it, vi } from 'vitest';
 import { CarromEngine } from '@gaming-hub/game-engine';
 import type { MultiplayerFramework } from '../src/framework';
@@ -17,7 +18,7 @@ describe('Carrom owner action receipts', () => {
       match: { matchId: 'match', turnNumber: 1, engine } } as unknown as RoomRuntime;
     await sync.broadcastGameState(room, result.events);
     const shot = emit.mock.calls.at(-1)![1];
-    expect(shot.state.lastTrajectory).toEqual(result.state.lastTrajectory);
+    expect(unpackCarromState(shot.state).lastTrajectory).toEqual(result.state.lastTrajectory);
     expect(shot.events.every((event: any) => !('keyframes' in event))).toBe(true);
     await sync.broadcastGameState(room, [{ type: 'timer-warning' }]);
     const metadata = emit.mock.calls.at(-1)![1];

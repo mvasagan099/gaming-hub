@@ -1,3 +1,4 @@
+import { packCarromTrajectory } from "@gaming-hub/shared";
 import type { EngineActionResult, EngineEvent, EnginePlayer, RandomSource } from "../types";
 import { MultiplayerGameEngine } from "../base/MultiplayerGameEngine";
 import {
@@ -26,11 +27,24 @@ import {
 export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromAction> {
   readonly gameId = "carrom" as const;
 
+  override resumeClocks(): void {
+    const pausedAt = this.state.pausedAtMs;
+    if (!this.state.paused || pausedAt == null) return;
+    const elapsed = Math.max(0, this.now() - pausedAt);
+    super.resumeClocks();
+    if (this.state.turnStartedAt != null) this.state.turnStartedAt += elapsed;
+    if (this.state.turnExpiresAt != null) this.state.turnExpiresAt += elapsed;
+  }
+
   override serialize(): import("@gaming-hub/shared").JsonObject {
     return { ...super.serialize(), serverTimestamp: this.now() };
   }
 
   serializeForSync(includeTrajectory: boolean): import("@gaming-hub/shared").JsonObject {
+    if (includeTrajectory && this.state.lastTrajectory) {
+      return { ...this.serializeWithLiveTimers({ ...this.state, lastTrajectory: null }),
+        serverTimestamp: this.now(), packedCarromTrajectory: packCarromTrajectory(this.state.lastTrajectory) } as unknown as import("@gaming-hub/shared").JsonObject;
+    }
     if (includeTrajectory) return this.serialize();
     // Exclude the settled trajectory before cloning a metadata update, while
     // retaining it in engine state, recovery snapshots and historical replays.

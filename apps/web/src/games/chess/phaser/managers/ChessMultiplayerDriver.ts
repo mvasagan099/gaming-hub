@@ -35,6 +35,7 @@ export interface ChessRemoteState {
     [seat: string]: { remainingMs: number; startedAtMs: number | null };
   } | null;
   lastMoveAtMs?: number | null;
+  paused?: boolean;
   drawOfferedBy?: number | null;
   result?: "1-0" | "0-1" | "1/2-1/2" | "*";
   endReason?:

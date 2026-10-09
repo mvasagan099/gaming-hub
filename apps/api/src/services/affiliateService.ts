@@ -87,50 +87,21 @@ export class AffiliateService {
     sourceId?: string;
     isFirstDeposit?: boolean;
   }) {
-    const rawSourceId = params.transactionId ?? params.sourceId;
-    let referredUserId = params.userId ?? params.referredUserId;
-    let amount = params.amount ?? 0;
-    const sourceType = params.sourceType ?? "GAME_WALLET_DEPOSIT";
-
-    // 0. Authoritative transaction lookup if transactionId/sourceId is present in DB
-    if (rawSourceId) {
-      const dbTx = await prisma.transaction.findUnique({
-        where: { id: rawSourceId },
-      });
-      if (dbTx) {
-        if (
-          dbTx.type !== "CREDIT" ||
-          dbTx.walletType !== "MAIN" ||
-          (dbTx.referenceType !== "DEPOSIT" && dbTx.referenceType !== "COUPON") ||
-          dbTx.amount <= 0
-        ) {
-          logAffiliateMetric("affiliate_commission_skipped", {
-            reason: "ineligible_transaction_record",
-            txId: dbTx.id,
-            type: dbTx.type,
-            walletType: dbTx.walletType,
-            referenceType: dbTx.referenceType,
-            amount: dbTx.amount,
-          });
-          return null;
-        }
-        referredUserId = dbTx.userId;
-        amount = dbTx.amount;
-      }
-    }
-
-    const sourceId = rawSourceId;
-
-    if (!referredUserId || !sourceId || !amount || amount <= 0) {
-      logAffiliateMetric("affiliate_commission_skipped", { reason: "invalid_params", referredUserId, sourceId, amount });
-      return null;
-    }
-
-    // Only legitimate deposits trigger affiliate commissions
-    const ELIGIBLE_DEPOSIT_SOURCES = new Set(["GAME_WALLET_DEPOSIT", "DEPOSIT", "COUPON_REDEMPTION"]);
-    if (!ELIGIBLE_DEPOSIT_SOURCES.has(sourceType)) {
-      logAffiliateMetric("affiliate_commission_skipped", { reason: "ineligible_source_type", sourceType, sourceId });
-      return null;
+    const sourceId = params.transactionId ?? params.sourceId;
+    // A commission must refer to an actual completed MAIN deposit ledger row.
+    if (!sourceId) return null;
+    const deposit = await prisma.transaction.findUnique({ where: { id: sourceId } });
+    if (!deposit || deposit.type !== "CREDIT" || deposit.walletType !== "MAIN" || deposit.referenceType !== "DEPOSIT" || deposit.amount <= 0) return null;
+    const referredUserId = deposit.userId, amount = deposit.amount;
+    if ((params.userId ?? params.referredUserId) && (params.userId ?? params.referredUserId) !== referredUserId) return null;
+    if (params.sourceType && !["GAME_WALLET_DEPOSIT", "DEPOSIT", "COUPON_REDEMPTION"].includes(params.sourceType)) return null;
+    // Provider aliases must not create a second financial identity.
+    const sourceType = "GAME_WALLET_DEPOSIT";
+    // Existing legacy provider-reference commissions require manual review;
+    // do not issue another commission during repair.
+    {
+      const legacy = await prisma.affiliateCommission.findFirst({ where: { referredUserId, sourceId: { in: [sourceId, ...(deposit.referenceId ? [deposit.referenceId] : [])] }, sourceType: { in: ["GAME_WALLET_DEPOSIT", "DEPOSIT", "COUPON_REDEMPTION"] } } });
+      if (legacy) return legacy;
     }
 
     // 1. Verify affiliate system is enabled in settings
@@ -329,13 +300,7 @@ export class AffiliateService {
     try {
       createdCommission = await prisma.$transaction(async (tx) => {
         // Enforce transactional advisory lock per referrer to serialize concurrent cap evaluations
-        try {
-          await tx.$executeRaw(
-            Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('affiliate_commission:' || ${referral.referrerId}))`
-          );
-        } catch {
-          // Gracefully continue if running in an environment without advisory lock support
-        }
+        await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('affiliate_commission:' || ${referral.referrerId}))`);
 
         // Idempotency check inside transaction
         const inTxExisting = await tx.affiliateCommission.findUnique({
@@ -591,6 +556,11 @@ export class AffiliateService {
     const commissionAmount = Number(commission.commissionAmount);
 
     const reversed = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "AffiliateCommission" WHERE "id" = ${commissionId} FOR UPDATE`;
+      const commission = await tx.affiliateCommission.findUniqueOrThrow({ where: { id: commissionId } });
+      if (commission.status === "REVERSED") return commission;
+      if (commission.status !== "COMPLETED" && commission.status !== "PENDING") throw new AppError("VALIDATION_ERROR", "Commission is already processing", 409);
+      const commissionAmount = Number(commission.commissionAmount);
       const updated = await tx.affiliateCommission.update({
         where: { id: commissionId },
         data: {
@@ -1027,7 +997,8 @@ export class AffiliateService {
     const eligibleTxs = await prisma.transaction.findMany({
       where: {
         type: "CREDIT",
-        referenceType: { in: ["DEPOSIT", "COUPON"] },
+        referenceType: "DEPOSIT",
+        walletType: "MAIN",
         createdAt: { gte: since },
         ...(params?.userId ? { userId: params.userId } : {}),
       },
@@ -1057,7 +1028,7 @@ export class AffiliateService {
     const affiliateMode = settings?.affiliateMode ?? "CONTINUOUS";
 
     for (const tx of eligibleTxs) {
-      const sourceId = tx.referenceId || tx.id;
+      const sourceId = tx.id;
       const sourceType = "GAME_WALLET_DEPOSIT";
 
       // Check if user has referrer
@@ -1076,8 +1047,9 @@ export class AffiliateService {
       // Check if commission already exists
       const existingCommissions = await prisma.affiliateCommission.findMany({
         where: {
-          sourceType,
-          sourceId,
+          referredUserId: tx.userId,
+          sourceType: { in: [sourceType, "DEPOSIT", "COUPON_REDEMPTION"] },
+          sourceId: { in: [sourceId, ...(tx.referenceId ? [tx.referenceId] : [])] },
         },
       });
 

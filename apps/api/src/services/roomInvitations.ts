@@ -1,6 +1,7 @@
 import { prisma, type Prisma } from '@gaming-hub/db';
 import { AppError, isGameId } from '@gaming-hub/shared';
 import { notifyUserSocket } from './socketBridge';
+import { getPrivacySettings } from './privacyService';
 
 type InvitationData = { kind: 'PRIVATE_ROOM_INVITE'; roomId: string; senderId: string; senderName: string; expiresAt: string; gameId: string; code: string; stake: number; response: 'PENDING' | 'ACCEPTED' | 'DECLINED' };
 type RoomInfo = { id: string; code: string; gameId: string; stake: number; maxPlayers: number; players: string[]; isPrivate: boolean; status: string; unavailable: boolean };
@@ -38,6 +39,8 @@ async function assertFriends(senderId: string, recipientId: string) {
     ] } }),
   ]);
   if (!friend || blocked) throw new AppError('FORBIDDEN', 'You can only invite your current friends.', 403);
+  const active = await prisma.user.count({ where: { id: { in: [senderId, recipientId] }, deletedAt: null } });
+  if (active !== 2 || !(await getPrivacySettings(recipientId)).allowGameInvites) throw new AppError('FORBIDDEN', 'Game invitations are unavailable for this account.', 403);
 }
 function invitationData(value: Prisma.JsonValue | null): InvitationData | null {
   const data = value as Partial<InvitationData> | null;

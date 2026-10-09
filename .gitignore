@@ -30,3 +30,8 @@ Thumbs.db
 backups/
 packages/db/src/generated/
 apps/web/dist/
+
+# Local diagnostic outputs; reviewed evidence belongs under docs/evidence/
+/memory-report.json
+/scratch/check.ts
+/scratch/check2.ts

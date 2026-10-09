@@ -44,6 +44,8 @@ export type ChessState = JsonObject & {
   moveCount: number;
   /** SAN of every played ply, in order. */
   history: string[];
+  /** Position identities including the initial board; persisted for repetition recovery. */
+  repetitionPositions?: string[];
   players: { userId: string; seat: number; color: ChessColor }[];
   whitePlayerId: string;
   blackPlayerId: string;
@@ -53,6 +55,8 @@ export type ChessState = JsonObject & {
   drawOfferedBy: number | null;
   result: "1-0" | "0-1" | "1/2-1/2" | "*";
   endReason: ChessEndReason;
+  paused?: boolean;
+  pausedAtMs?: number | null;
 };
 
 export type ChessMoveAction = {
@@ -104,10 +108,24 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
   /** Wall-clock timestamp at which the current seat's clock hits zero, or null. */
   get currentClockDeadline(): number | null {
     const state = this.state as ChessState;
-    if (!state.timeControl || !state.clocks || state.finished) return null;
+    if (!state.timeControl || !state.clocks || state.finished || state.paused) return null;
     const clock = state.clocks[state.currentSeat];
     if (!clock || clock.startedAtMs === null) return null;
     return clock.startedAtMs + clock.remainingMs;
+  }
+
+  pauseClocks(): void {
+    if (this.state.finished || this.state.paused) return;
+    this.updateState({ ...this.state, paused: true, pausedAtMs: this.now() });
+  }
+
+  resumeClocks(): void {
+    if (!this.state.paused || this.state.pausedAtMs == null) return;
+    const next = structuredClone(this.state);
+    const elapsed = Math.max(0, this.now() - next.pausedAtMs!);
+    for (const clock of Object.values(next.clocks ?? {})) if (clock.startedAtMs != null) clock.startedAtMs += elapsed;
+    next.paused = false; next.pausedAtMs = null;
+    this.updateState(next);
   }
 
   protected initState(): ChessState {
@@ -154,6 +172,7 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
       lastMove: null,
       moveCount: chess.moveNumber(),
       history: [],
+      repetitionPositions: [this.positionKey(chess)],
       players: this.players.map((p) => ({ userId: p.userId, seat: p.seat, color: p.seat === 0 ? "w" : "b" })),
       whitePlayerId: this.players[0]!.userId,
       blackPlayerId: this.players[1]!.userId,
@@ -184,6 +203,28 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
     };
   }
 
+  private positionKey(chess: Chess): string {
+    // Exclude move counters; retain turn, castling and legal en-passant rights.
+    return chess.fen().split(" ").slice(0, 4).join(" ");
+  }
+
+  private repetitionHistory(state: ChessState): string[] {
+    const current = this.positionKey(new Chess(state.fen));
+    if (state.repetitionPositions?.at(-1) === current) return state.repetitionPositions;
+    // Older snapshots have SAN but no repetition metadata. Recover it only
+    // when replay really reproduces this board (custom FENs remain supported).
+    const replay = new Chess();
+    const positions = [this.positionKey(replay)];
+    try {
+      for (const san of state.history) {
+        replay.move(san);
+        positions.push(this.positionKey(replay));
+      }
+      if (replay.fen() === state.fen) return positions;
+    } catch { /* Custom/legacy snapshot without a reproducible initial position. */ }
+    return [current];
+  }
+
   private startClock(state: ChessState, seat: number, now: number): void {
     if (!state.clocks) return;
     const clock = state.clocks[seat];
@@ -206,7 +247,7 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
   override serialize(): JsonObject {
     const copy = structuredClone(this.state) as ChessState;
     if (copy.clocks) {
-      const now = this.now();
+      const now = copy.pausedAtMs ?? this.now();
       for (const seatKey of Object.keys(copy.clocks)) {
         const clock = copy.clocks[seatKey];
         if (clock && clock.startedAtMs !== null) {
@@ -224,6 +265,7 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
     if (state.finished) {
       return "This match has already finished";
     }
+    if (state.paused && action.type !== "resign") return "Match is paused while a player reconnects";
 
     switch (action.type) {
       case "move": {
@@ -347,6 +389,14 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
     };
     next.moveCount = chess.moveNumber();
     next.history = [...state.history, move.san];
+    const position = this.positionKey(chess);
+    next.repetitionPositions = [...this.repetitionHistory(state), position];
+    if (!next.finished && next.repetitionPositions.filter(key => key === position).length >= 3) {
+      next.finished = next.gameOver = next.draw = true;
+      next.winnerSeats = [];
+      next.result = "1/2-1/2";
+      next.endReason = "repetition";
+    }
     next.timeControl = state.timeControl;
     next.drawOfferedBy = null;
     next.lastMoveAtMs = now;

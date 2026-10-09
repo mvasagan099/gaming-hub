@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "@gaming-hub/db";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, requireMfa } from "../plugins/authenticate";
 import { requirePermission } from "../lib/permissions";
 import { parseSchema, queryParams } from "../lib/http";
 import {
@@ -110,10 +110,10 @@ export async function adminAntiCheatRoutes(app: FastifyInstance) {
   // Ingest security event (e.g. from internal socket server or edge gateway)
   app.post(
     "/api/admin/security/anti-cheat/events",
-    { preHandler: authenticate },
+    { preHandler: [authenticate, requireMfa] },
     async (request) => {
       // MEDIUM-1 fix: gate on admin permission, consistent with the two GET routes above.
-      await requirePermission(request, "admin:games:view", prisma);
+      await requirePermission(request, "admin:games:manage", prisma);
 
       const bodySchema = z.object({
         matchId: z.string().optional(),

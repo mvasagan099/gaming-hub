@@ -121,7 +121,7 @@ describe("Feature 29: Player Profile & Complete Game Statistics", () => {
     });
 
     // Set profile to private
-    PlayerProfileService.setProfilePrivacy(userA, true);
+    await PlayerProfileService.setProfilePrivacy(userA, true);
 
     // Other user viewing private profile
     const masked = await PlayerProfileService.getPublicProfile(userA, viewerId, false);

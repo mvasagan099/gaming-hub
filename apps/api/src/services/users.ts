@@ -191,26 +191,29 @@ export function isUserOnline(user: { isOnline?: boolean; lastSeenAt?: Date | str
   return elapsed < 5 * 60 * 1000 || (Boolean(user.isOnline) && elapsed < 4 * 60 * 60 * 1000);
 }
 
-export function toPublicProfile(
+export async function toPublicProfile(
   user: Prisma.UserGetPayload<{ include: { profile: true } }>,
-): PublicProfile {
+  viewerId?: string,
+): Promise<PublicProfile> {
+  const { getProfileAccess } = await import('./privacyService');
+  const access = await getProfileAccess(user.id, viewerId);
   const profile = user.profile;
   return {
     userId: user.id,
     username: user.username,
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
-    bio: profile?.bio ?? null,
-    country: profile?.country ?? null,
-    coins: profile?.coins ?? 0,
-    gems: profile?.gems ?? 0,
-    xp: profile?.xp ?? 0,
-    level: profile?.level ?? 1,
-    wins: profile?.wins ?? 0,
-    losses: profile?.losses ?? 0,
-    draws: profile?.draws ?? 0,
-    isOnline: isUserOnline(user),
-    lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
+    bio: access.allowed ? profile?.bio ?? null : null,
+    country: access.allowed ? profile?.country ?? null : null,
+    coins: 0,
+    gems: 0,
+    xp: access.showStats ? profile?.xp ?? 0 : 0,
+    level: access.showStats ? profile?.level ?? 1 : 0,
+    wins: access.showStats ? profile?.wins ?? 0 : 0,
+    losses: access.showStats ? profile?.losses ?? 0 : 0,
+    draws: access.showStats ? profile?.draws ?? 0 : 0,
+    isOnline: access.allowed && isUserOnline(user),
+    lastSeenAt: access.allowed ? user.lastSeenAt?.toISOString() ?? null : null,
   };
 }
 
@@ -219,7 +222,7 @@ export async function getPublicProfileById(userId: string): Promise<PublicProfil
     where: { id: userId },
     include: { profile: true },
   });
-  return user ? toPublicProfile(user) : null;
+  return user && !user.deletedAt ? toPublicProfile(user) : null;
 }
 
 export async function getAuthenticatedUserData(user: User, rawToken?: string) {
@@ -383,6 +386,7 @@ export async function updateUserProfile(
 export async function searchUsers(query: string, limit = 12) {
   const users = await prisma.user.findMany({
     where: {
+      deletedAt: null,
       OR: [
         { username: { contains: query, mode: "insensitive" } },
         { displayName: { contains: query, mode: "insensitive" } },
@@ -391,5 +395,5 @@ export async function searchUsers(query: string, limit = 12) {
     take: limit,
     include: { profile: true },
   });
-  return users.map(toPublicProfile);
+  return Promise.all(users.map(user => toPublicProfile(user)));
 }

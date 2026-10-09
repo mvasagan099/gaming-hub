@@ -1,0 +1,38 @@
+import { TableTennisEngine } from '../../../../../../packages/game-engine/src/table-tennis/engine';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+const actions = vi.hoisted(() => ({ send: vi.fn(), state: {} as any, listener: null as any }));
+vi.mock('../../../store/multiplayerStore', () => ({
+  useMultiplayerStore: { subscribe: (listener: any) => { actions.listener = listener; return () => { actions.listener = null; }; }, getState: () => ({ ...actions.state, sendGameAction: actions.send }) },
+}));
+import Driver from '../TableTennisMultiplayerDriver';
+let driver: Driver;
+beforeEach(() => {
+  vi.useFakeTimers(); vi.setSystemTime(1000); vi.clearAllMocks();
+  actions.state = {}; actions.listener = null;
+  actions.send.mockResolvedValue({ ok: true });
+  driver = new Driver(0, []); driver.start();
+});
+afterEach(() => { driver.stop(); vi.useRealTimers(); });
+
+import { writeFileSync } from 'node:fs';
+const measurements: object[] = [];
+describe('paced paddle input under simulated network round trips', () => {
+  it.each([40, 100, 200])('measures input delivery at %i ms RTT', async rtt => {
+    const sentAt: number[] = [];
+    actions.send.mockImplementation(() => {
+      sentAt.push(Date.now());
+      return new Promise(resolve => setTimeout(() => resolve({ ok: true }), rtt));
+    });
+    for (let i = 0; i < 60; i++) {
+      driver.sendPaddleMove(100 + i, 1);
+      await vi.advanceTimersByTimeAsync(1000 / 60);
+    }
+    const countDuringMovement = sentAt.length;
+    await vi.advanceTimersByTimeAsync(rtt + 40);
+    expect(actions.send.mock.calls.at(-1)?.[0].y).toBe(159);
+    measurements.push({ rttMs: rtt, inputUpdates: 60, movementDurationMs: 1000,
+      requestsDuringMovement: countDuringMovement, requestsIncludingFinalFlush: sentAt.length,
+      sendIntervalsMs: sentAt.slice(1).map((at, i) => at - sentAt[i]) });
+    writeFileSync('/tmp/gaming-paddle-rtt.json', JSON.stringify(measurements, null, 2));
+  });
+});

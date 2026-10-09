@@ -266,6 +266,7 @@ export class GameCoinService {
    */
   static async reserveMatchEntry(matchId: string) {
     return prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Match" WHERE "id" = ${matchId} FOR UPDATE`;
       const match = await tx.match.findUnique({
         where: { id: matchId },
         include: { players: true },
@@ -280,7 +281,7 @@ export class GameCoinService {
       }
 
       if (match.stake > 0) {
-        for (const player of match.players) {
+        for (const player of [...match.players].sort((a, b) => a.userId.localeCompare(b.userId))) {
           await WalletTransactionService.createGameEntry(tx, {
             userId: player.userId,
             matchId: match.id,

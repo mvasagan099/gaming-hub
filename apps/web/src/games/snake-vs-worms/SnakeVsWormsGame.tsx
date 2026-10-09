@@ -1,3 +1,4 @@
+import { SnakeWormTimeline } from './remoteTimeline';
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GameWrapper } from '../../components/GameWrapper';
 import { useGameLoop } from '../shared/hooks/useGameLoop';
@@ -74,6 +75,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
   const [mpWinner, setMpWinner] = useState<number | null>(null);
   const driverRef = useRef<SnakeVsWormsMultiplayerDriver | null>(null);
 
+  const remoteTimelineRef = useRef(new SnakeWormTimeline());
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const room = useMultiplayerStore((s) => s.room);
   const matchId = useMultiplayerStore(s => s.matchId);
@@ -190,6 +192,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
     setIsDraw(false);
     multiplayerStateRef.current = null;
     mpRenderStateRef.current.clear();
+    remoteTimelineRef.current = new SnakeWormTimeline();
     inputRef.current.hasPointer = false; inputRef.current.isBoosting = false;
 
     if (mode === 'multiplayer' && roomId && matchId) {
@@ -197,7 +200,8 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
       const driver = new SnakeVsWormsMultiplayerDriver(mySeat, names);
       driverRef.current = driver;
 
-      driver.setOnStateUpdate((state: SnakeVsWormsState) => {
+      driver.setOnStateUpdate((state: SnakeVsWormsState, restored?: boolean) => {
+        remoteTimelineRef.current.receive(state, performance.now(), restored);
         const first = multiplayerStateRef.current === null;
         multiplayerStateRef.current = state;
         const me = state.players.find(p => p.seat === mySeat);
@@ -382,6 +386,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
       // ── Smooth Player Interpolation ──
       const renderMap = mpRenderStateRef.current;
+      const presentedBodies = remoteTimelineRef.current.bodies(performance.now());
       for (const p of mpState.players) {
         if (!p.body || p.body.length === 0) continue;
         let pState = renderMap.get(p.seat);
@@ -395,12 +400,12 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
         while (pState.body.length < p.body.length) pState.body.push({ ...(pState.body.at(-1) ?? p.body[pState.body.length]) });
         pState.body.length = p.body.length;
 
-        const lerpFactor = 1 - Math.exp(-20 * dt);
+        const presented = presentedBodies.get(p.seat) ?? p.body;
         for (let i = 0; i < p.body.length; i++) {
-          const targetPt = p.body[i]!;
+          const targetPt = presented[i] ?? p.body[i]!;
           const currPt = pState.body[i] || { x: targetPt.x, y: targetPt.y };
-          currPt.x += (targetPt.x - currPt.x) * lerpFactor;
-          currPt.y += (targetPt.y - currPt.y) * lerpFactor;
+          currPt.x = targetPt.x;
+          currPt.y = targetPt.y;
           pState.body[i] = currPt;
         }
 

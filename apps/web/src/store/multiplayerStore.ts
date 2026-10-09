@@ -1,3 +1,4 @@
+import { recoverSocketSession } from '../services/socket/sessionRecovery';
 import { create } from "zustand";
 import toast from "react-hot-toast";
 import type {
@@ -13,6 +14,7 @@ import type {
   AuthoritativeMatchState,
 } from "@gaming-hub/shared";
 import {
+  unpackCarromState,
   isStaleStateVersion,
   isSequentialStateVersion,
   isStateVersionGap,
@@ -304,6 +306,15 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("connect_error", (err: any) => {
+        if (['TOKEN_EXPIRED', 'TOKEN_REFRESH', 'MFA_PENDING'].includes(err?.message)) {
+          void recoverSocketSession(err.message).then((status) => {
+            if (get().socket !== socket) return;
+            if (status === 'reconnect') socket.connect();
+            else if (status === 'mfa_pending' && typeof window !== 'undefined') window.location.href = '/2fa';
+            else useAuthStore.getState().signOut().catch(() => {});
+          });
+          return;
+        }
         if (err?.message === "SESSION_REVOKED") {
           socket.disconnect();
           useAuthStore.getState().signOut().catch(() => {});
@@ -315,13 +326,30 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         set({ status: "error", error: "Could not reach the game server" });
       });
 
-      socket.on("auth:session-revoked", ({ reason }) => {
-        console.warn("[MultiplayerStore] auth:session-revoked received:", reason);
+      socket.on('auth:session-revoked', ({ reason }) => {
+        if (get().socket !== socket) return;
+        const queued = get().matchmaking;
+        const requeue = ['TOKEN_REFRESH', 'TOKEN_EXPIRED'].includes(reason)
+          && queued.queued && queued.gameId && queued.stake != null
+          ? { gameId: queued.gameId, stake: queued.stake, settings: queued.settings ?? {} }
+          : null;
         socket.disconnect();
-        useAuthStore.getState().signOut().catch(() => {});
-        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-          window.location.href = "/login?reason=session_revoked";
-        }
+        void recoverSocketSession(reason).then((status) => {
+          if (get().socket !== socket) return;
+          if (status === 'reconnect') {
+            set({ pendingRequeue: requeue });
+            socket.connect();
+            return;
+          }
+          if (status === 'mfa_pending') {
+            if (typeof window !== 'undefined') window.location.href = '/2fa';
+            return;
+          }
+          useAuthStore.getState().signOut().catch(() => {});
+          if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+            window.location.href = '/login?reason=session_revoked';
+          }
+        });
       });
 
 
@@ -373,7 +401,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
         // Always increment renderKey and ensure proper state update
         set({
-          gameState: payload.state,
+          gameState: unpackCarromState(payload.state),
           lastEvents: payload.events,
           matchId: payload.matchId,
           winner: null,
@@ -461,7 +489,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         if (get().matchId && get().matchId !== payload.matchId) return;
         set({
           winner: { winnerSeats: payload.winnerSeats, winnerIds: payload.winnerIds },
-          gameState: payload.state,
+          gameState: unpackCarromState(payload.state),
           lastEvents: [],
           matchId: payload.matchId,
           disconnectGrace: null,
@@ -517,6 +545,11 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("game:match-started" as any, (payload: { matchId: string; startedAt: number; matchDeadline?: number; matchDurationSeconds?: number }) => {
+        const room = get().room;
+        if (!room || room.status !== "playing" || departedRooms.has(room.id) || departedMatches.has(payload.matchId)) return;
+        // room:update is the authoritative identity for first starts/rematches.
+        // Never let a delayed start notification replace a different match.
+        if ((room.matchId ?? get().matchId) !== payload.matchId) return;
         console.log("[MultiplayerStore] game:match-started received", payload);
         set({
           matchId: payload.matchId,
@@ -791,13 +824,6 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         });
       });
 
-      socket.on("game:match-started" as any, () => {
-        set({
-          countdown: null,
-          matchmaking: { ...IDLE_MATCHMAKING },
-          pendingRequeue: null,
-        });
-      });
 
       socket.on("game:match-cancelled" as any, (payload: { reason?: string }) => {
         set({ countdown: null, error: payload?.reason ? `Match cancelled: ${payload.reason}` : "Match was cancelled" });
@@ -1005,7 +1031,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     
     const logAction = !["table-tennis", "fruit-ninja", "snake-vs-worms"].includes(room.gameId);
     if (logAction) console.log("[MultiplayerStore] Client sending game:action to room", room.id, "with action:", action);
-    const actionSocket = ["snooker", "snake-vs-worms"].includes(room.gameId) ? socket.timeout(8000) : socket;
+    const actionSocket = ["snooker", "snake-vs-worms", "table-tennis"].includes(room.gameId) ? socket.timeout(8000) : socket;
     const userId = useAuthStore.getState().user?.id ?? "";
     const scope = `${matchId}:${userId}`;
     const accepted = room.players.find(p => p.id === userId)?.lastAcceptedActionSequence ?? 0;

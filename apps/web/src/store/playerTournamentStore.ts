@@ -1,3 +1,4 @@
+import { recoverSocketSession } from '../services/socket/sessionRecovery';
 import { create } from 'zustand';
 import { createTypedSocket, type TypedSocket } from '@gaming-hub/socket';
 import {
@@ -101,6 +102,15 @@ export const usePlayerTournamentStore = create<PlayerTournamentState>((set, get)
     socket.on('disconnect', () => set({ connected: false }));
 
     socket.on('connect_error', (err: any) => {
+      if (['TOKEN_EXPIRED', 'TOKEN_REFRESH', 'MFA_PENDING'].includes(err?.message)) {
+        void recoverSocketSession(err.message).then((status) => {
+          if (get().socket !== socket) return;
+          if (status === 'reconnect') socket.connect();
+          else if (status === 'mfa_pending' && typeof window !== 'undefined') window.location.href = '/2fa';
+          else useAuthStore.getState().signOut().catch(() => {});
+        });
+        return;
+      }
       if (err?.message === 'SESSION_REVOKED') {
         socket.disconnect();
         useAuthStore.getState().signOut().catch(() => {});
@@ -111,12 +121,20 @@ export const usePlayerTournamentStore = create<PlayerTournamentState>((set, get)
     });
 
     socket.on('auth:session-revoked', ({ reason }) => {
-      console.warn('[PlayerTournamentStore] auth:session-revoked received:', reason);
+      if (get().socket !== socket) return;
       socket.disconnect();
-      useAuthStore.getState().signOut().catch(() => {});
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login?reason=session_revoked';
-      }
+      void recoverSocketSession(reason).then((status) => {
+        if (get().socket !== socket) return;
+        if (status === 'reconnect') { socket.connect(); return; }
+        if (status === 'mfa_pending') {
+          if (typeof window !== 'undefined') window.location.href = '/2fa';
+          return;
+        }
+        useAuthStore.getState().signOut().catch(() => {});
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login?reason=session_revoked';
+        }
+      });
     });
 
 

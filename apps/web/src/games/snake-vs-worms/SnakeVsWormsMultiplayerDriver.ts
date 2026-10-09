@@ -11,7 +11,7 @@ export class SnakeVsWormsMultiplayerDriver {
   private boostingSent = false;
   private boostEpoch = 0;
   private completed = false;
-  private onStateUpdateCb: ((state: SnakeVsWormsState) => void) | null = null;
+  private onStateUpdateCb: ((state: SnakeVsWormsState, restored?: boolean) => void) | null = null;
   private onMatchCompleteCb: ((winnerSeat: number | null) => void) | null = null;
   private readonly scope: { roomId: string | undefined; matchId: string | null };
   private readonly mySeat: number | null;
@@ -35,7 +35,7 @@ export class SnakeVsWormsMultiplayerDriver {
     }
     this.lastState = state; this.awaitingSync = false;
     if (restored && state.players.some(p => p.seat === this.mySeat && p.isBoosting)) this.sendBoostStop();
-    this.onStateUpdateCb?.(state);
+    this.onStateUpdateCb?.(state, restored);
     if (state.finished && !this.completed) {
       this.completed = true;
       this.onMatchCompleteCb?.(state.winnerSeats.length === 1 ? state.winnerSeats[0] : null);
@@ -95,6 +95,6 @@ export class SnakeVsWormsMultiplayerDriver {
     this.sendBoostStop(); this.stopped = true;
     this.unsubscribe?.(); this.unsubscribe = null;
   }
-  setOnStateUpdate(cb: (state: SnakeVsWormsState) => void): void { this.onStateUpdateCb = cb; }
+  setOnStateUpdate(cb: (state: SnakeVsWormsState, restored?: boolean) => void): void { this.onStateUpdateCb = cb; }
   setOnMatchComplete(cb: (winnerSeat: number | null) => void): void { this.onMatchCompleteCb = cb; }
 }

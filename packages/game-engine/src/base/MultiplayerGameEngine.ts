@@ -91,6 +91,25 @@ export abstract class MultiplayerGameEngine<
     return state.turnStartedAtMs + state.turnTimerConfig.turnDurationMs;
   }
 
+  /** Preserve elapsed turn/match time across a server-owned reconnect pause. */
+  pauseClocks(): void {
+    if (this.state.finished || this.state.paused) return;
+    const next = this.cloneState(this.state);
+    next.paused = true;
+    next.pausedAtMs = this.now();
+    this.updateState(next);
+  }
+
+  resumeClocks(): void {
+    if (!this.state.paused || this.state.pausedAtMs == null) return;
+    const next = this.cloneState(this.state);
+    const elapsed = Math.max(0, this.now() - next.pausedAtMs!);
+    if (next.turnStartedAtMs != null) next.turnStartedAtMs += elapsed;
+    if (next.matchStartedAtMs != null) next.matchStartedAtMs += elapsed;
+    next.paused = false; next.pausedAtMs = null; next.pausedBy = null;
+    this.updateState(next);
+  }
+
   override persistenceOptions(): JsonObject {
     return {
       turnTimer: this.state.turnTimerConfig,
@@ -255,7 +274,7 @@ export abstract class MultiplayerGameEngine<
     if (state.finished) {
       return "This match has already finished";
     }
-    if (state.paused && action.type !== "resume" && action.type !== "chat" && action.type !== "emoji") {
+    if (state.paused && action.type !== "resign" && action.type !== "resume" && action.type !== "chat" && action.type !== "emoji") {
       return "Game is paused";
     }
 
@@ -438,15 +457,15 @@ export abstract class MultiplayerGameEngine<
 
   protected serializeWithLiveTimers(state: S): S {
     const copy = this.cloneState(state);
-    const now = this.now();
+    const now = copy.pausedAtMs ?? this.now();
 
-    if (copy.turnTimerConfig && copy.turnStartedAtMs !== null && !copy.paused) {
+    if (copy.turnTimerConfig && copy.turnStartedAtMs !== null) {
       const elapsed = Math.max(0, now - copy.turnStartedAtMs);
       (copy as Record<string, JsonValue>).turnRemainingMs = Math.max(0, copy.turnTimerConfig.turnDurationMs - elapsed);
       copy.turnStartedAtMs = now;
     }
 
-    if (copy.matchTimerConfig && copy.matchStartedAtMs !== null && !copy.paused) {
+    if (copy.matchTimerConfig && copy.matchStartedAtMs !== null) {
       const elapsed = Math.max(0, now - copy.matchStartedAtMs);
       (copy as Record<string, JsonValue>).matchRemainingMs = Math.max(0, copy.matchTimerConfig.matchDurationMs - elapsed);
     }
