@@ -347,8 +347,6 @@ export default class CarromMultiplayerDriver {
       if (!res.ok) {
         return { ok: false, error: res.error ?? "Shot rejected" };
       }
-      // Recover a missing state broadcast after acceptance; never resend a strike.
-      if (beforeTurn != null && (this.lastState?.turnNumber ?? 0) <= beforeTurn) await this.requestStateSync();
       return { ok: true };
     } catch (error) {
       return { ok: false, uncertain: true, error: error instanceof Error ? error.message : "Could not send shot" };

@@ -30,27 +30,39 @@ export class GameSession {
 
     if (result.ok) {
       this.match.turnNumber += 1;
-      await prisma.move.create({
-        data: {
-          matchId: this.match.matchId,
-          userId,
-          seat,
-          turnNumber: this.match.turnNumber,
-          action: action as object,
-        },
-      });
-      await prisma.gameState.upsert({
-        where: { matchId: this.match.matchId },
-        create: {
-          matchId: this.match.matchId,
-          state: result.state as object,
-          turnNumber: this.match.turnNumber,
-        },
-        update: {
-          state: result.state as object,
-          turnNumber: this.match.turnNumber,
-        },
-      });
+      const turnNumber = this.match.turnNumber;
+      const matchId = this.match.matchId;
+
+      // Persist move and state snapshot asynchronously in background so action loop is not blocked by DB latency
+      void (async () => {
+        try {
+          await Promise.all([
+            prisma.move.create({
+              data: {
+                matchId,
+                userId,
+                seat,
+                turnNumber,
+                action: action as object,
+              },
+            }),
+            prisma.gameState.upsert({
+              where: { matchId },
+              create: {
+                matchId,
+                state: result.state as object,
+                turnNumber,
+              },
+              update: {
+                state: result.state as object,
+                turnNumber,
+              },
+            }),
+          ]);
+        } catch (err) {
+          console.error(`[GameSession] Background state persistence failed for match ${matchId}:`, err);
+        }
+      })();
     }
 
     return result;
