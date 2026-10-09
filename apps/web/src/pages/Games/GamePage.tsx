@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { useParams, useLocation, useNavigate, Navigate } from 'react-router-dom';
+import { useParams, useLocation, useNavigate, Navigate, useBlocker } from 'react-router-dom';
 const SnakeLadder = lazy(() => import("../../games/snake-ladder").then(m => ({ default: m.SnakeLadder })));
 const LudoGame = lazy(() => import("../../games/ludo/LudoGame").then(m => ({ default: m.LudoGame })));
 const ChessGame = lazy(() => import("../../games/chess/ChessGame").then(m => ({ default: m.ChessGame })));
@@ -14,6 +14,7 @@ import { useMultiplayerStore } from '../../store/multiplayerStore';
 import { isGameId } from '@gaming-hub/shared';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { goBackOrHome } from '../../utils/navigation';
+import { registerBackButtonHandler } from '../../services/native/capacitorAppService';
 
 export const GamePage: React.FC = () => {
   const params = useParams<{ gameId?: string; slug?: string }>();
@@ -57,6 +58,39 @@ export const GamePage: React.FC = () => {
     };
   }, [gameId, mode]);
 
+  const isMultiplayerPlaying =
+    mode === 'multiplayer' &&
+    !isExiting &&
+    !exitInProgress.current &&
+    !replayMatchId &&
+    !tournamentMatchId &&
+    !!room &&
+    room.gameId === gameId &&
+    (room.status === 'playing' || room.status === 'starting');
+
+  const blocker = useBlocker(Boolean(isMultiplayerPlaying));
+
+  // Native mobile back button handler
+  useEffect(() => {
+    if (!isMultiplayerPlaying) return;
+    return registerBackButtonHandler(() => {
+      setShowExitConfirm(true);
+      return true;
+    });
+  }, [isMultiplayerPlaying]);
+
+  // Tab close or page refresh warning during active match
+  useEffect(() => {
+    if (!isMultiplayerPlaying) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isMultiplayerPlaying]);
+
   if (!gameId || !isGameId(gameId)) {
     return <Navigate to="/" replace />;
   }
@@ -84,7 +118,11 @@ export const GamePage: React.FC = () => {
       // Back may have already navigated while the leave ACK was in flight.
       if (activeRoute.current !== owner) return;
     }
-    goBackOrHome(navigate, mode === 'multiplayer' ? `/lobby/${gameId}` : '/');
+    if (blocker.state === 'blocked') {
+      blocker.proceed();
+    } else {
+      goBackOrHome(navigate, mode === 'multiplayer' ? `/lobby/${gameId}` : '/');
+    }
   };
 
   if (mode === 'multiplayer' && !isExiting) {
@@ -114,9 +152,12 @@ export const GamePage: React.FC = () => {
     <Suspense key={mode === 'multiplayer' ? matchId : gameId} fallback={<div role="status" className="p-10 text-center">Loading game…</div>}>{game}</Suspense>
     <ConfirmDialog
       layer="game"
-      isOpen={showExitConfirm}
+      isOpen={showExitConfirm || blocker.state === 'blocked'}
       onClose={() => {
         setShowExitConfirm(false);
+        if (blocker.state === 'blocked') {
+          blocker.reset();
+        }
       }}
       title="Exit Game?"
       message="Are you sure you want to exit the game?"
