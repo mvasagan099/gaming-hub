@@ -31,3 +31,4 @@ export * from "./deepLink";
 export * from "./emailVerification";
 
 export * from "./carromTrajectory";
+export * from "./uuid";

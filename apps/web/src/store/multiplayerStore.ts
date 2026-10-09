@@ -18,6 +18,7 @@ import {
   isStaleStateVersion,
   isSequentialStateVersion,
   isStateVersionGap,
+  safeRandomUUID,
 } from "@gaming-hub/shared";
 import { createTypedSocket, type RematchUpdate, type TypedSocket } from "@gaming-hub/socket";
 import { useAuthStore } from "./authStore";
@@ -1024,7 +1025,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const accepted = room.players.find(p => p.id === userId)?.lastAcceptedActionSequence ?? 0;
     const sequence = Math.max(actionSequences.get(scope) ?? 0, accepted) + 1;
     actionSequences.set(scope, sequence);
-    const orderedAction = { ...action, actionId: action.actionId ?? crypto.randomUUID(), clientSequence: sequence };
+    const orderedAction = { ...action, actionId: action.actionId ?? safeRandomUUID(), clientSequence: sequence };
     const res = await actionSocket.emitWithAck("game:action", { roomId: room.id, matchId, action: orderedAction });
     
     if (!res.ok) {

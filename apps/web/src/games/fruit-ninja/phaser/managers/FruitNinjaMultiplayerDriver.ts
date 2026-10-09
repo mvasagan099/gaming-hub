@@ -1,5 +1,6 @@
 import { useMultiplayerStore, type WinnerInfo } from "../../../../store/multiplayerStore";
 import type { FruitNinjaState } from "@gaming-hub/game-engine";
+import { safeRandomUUID } from "@gaming-hub/shared";
 
 type BladeInput = "slice-begin" | "slice-move" | "slice-end";
 
@@ -62,6 +63,6 @@ export default class FruitNinjaMultiplayerDriver {
     // Match the server's 40 actions/sec budget while leaving room for begin/end.
     if (type === "slice-move" && now - this.lastMoveAt < 40) return;
     this.lastMoveAt = now;
-    void store.sendGameAction({ type, x, y, time: now + this.clockOffset, actionId: crypto.randomUUID() });
+    void store.sendGameAction({ type, x, y, time: now + this.clockOffset, actionId: safeRandomUUID() });
   }
 }

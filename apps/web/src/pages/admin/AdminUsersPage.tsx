@@ -15,7 +15,7 @@ import toast from 'react-hot-toast';
 import { openMfaModal } from '../../components/auth/MfaVerificationModal';
 import { apiClient } from '../../services/api/client';
 import { adminApi } from '../../services/api/enterprise';
-import type { AdminCustomerDetail } from '@gaming-hub/shared';
+import { safeRandomUUID, type AdminCustomerDetail } from '@gaming-hub/shared';
 
 interface User {
   id: string;
@@ -105,7 +105,7 @@ export function AdminUsersPage() {
     const parsedAmount = parseInt(walletAmount, 10);
     if (!selectedUser || walletReason.trim().length < 3 || isNaN(parsedAmount) || parsedAmount === 0) return;
     const payload = JSON.stringify([selectedUser.id, parsedAmount, walletReason.trim()]);
-    if (walletRetry.current?.payload !== payload) walletRetry.current = { payload, key: crypto.randomUUID() };
+    if (walletRetry.current?.payload !== payload) walletRetry.current = { payload, key: safeRandomUUID() };
     setIsSubmitting(true);
     setModalError(null);
     try {
