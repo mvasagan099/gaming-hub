@@ -6,7 +6,8 @@
  * - Environments without Web Crypto using high-entropy Math.random() fallback
  */
 export function safeRandomUUID(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  // The browser polyfill installs this function as randomUUID; never call ourselves.
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" && crypto.randomUUID !== safeRandomUUID) {
     try {
       return crypto.randomUUID();
     } catch {

@@ -37,6 +37,19 @@ describe("safeRandomUUID", () => {
     expect(id).toMatch(UUID_V4_REGEX);
   });
 
+  it("does not recurse when installed as the crypto.randomUUID polyfill", () => {
+    let reads = 0;
+    const getRandomValues = vi.fn((buffer: Uint8Array) => buffer.fill(17));
+    vi.stubGlobal("crypto", {
+      get randomUUID() { reads++; return safeRandomUUID; },
+      getRandomValues,
+    });
+
+    expect(safeRandomUUID()).toMatch(UUID_V4_REGEX);
+    expect(reads).toBeLessThanOrEqual(2);
+    expect(getRandomValues).toHaveBeenCalledTimes(1);
+  });
+
   it("generates distinct UUIDs across multiple calls", () => {
     const set = new Set<string>();
     for (let i = 0; i < 100; i++) {
