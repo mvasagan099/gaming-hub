@@ -295,6 +295,7 @@ export class RoomManager {
       }
       
       // Reset expiration timer
+      if (room.status === "waiting") room.expiresAt = Date.now() + this.framework.config.roomExpirationMs;
       this.scheduleRoomExpiration(room.id);
       
       // Broadcast update
@@ -388,8 +389,12 @@ export class RoomManager {
     // Clear any disconnect timers
     this.framework.timerManager.clearPlayerTimers(room.id, playerId);
     
-    // Sync full state to reconnected player
-    await this.framework.syncManager.syncFullStateToPlayer(room, playerId, socket);
+    // Use the same lifecycle as reconnect-on-connect, including clock resume.
+    if (room.match && room.status === "playing" && !player.isSpectator) {
+      await this.framework.reconnectHandler.handleReconnect(room, player, socket);
+    } else {
+      await this.framework.syncManager.syncFullStateToPlayer(room, playerId, socket);
+    }
     
     this.framework.log(`Player ${playerId} rejoined room ${room.id}`);
     
@@ -545,6 +550,10 @@ export class RoomManager {
       this.playerRoomMap.set(player.id, room.id);
       this.framework.playerManager.registerRecoveredPlayer(player);
     }
+    if (room.status === "waiting") {
+      room.expiresAt ??= room.createdAt + this.framework.config.roomExpirationMs;
+      this.scheduleRoomExpiration(room.id);
+    }
   }
 
   /**
@@ -622,7 +631,7 @@ export class RoomManager {
   /**
    * Schedule room expiration.
    */
-  private scheduleRoomExpiration(roomId: RoomId): void {
+  private scheduleRoomExpiration(roomId: RoomId, retryDelayMs = 0): void {
     // Clear existing timer
     const existingTimer = this.roomExpirationTimers.get(roomId);
     if (existingTimer) {
@@ -633,16 +642,22 @@ export class RoomManager {
     if (!room) return;
     
     // Don't expire rooms with active matches
-    if (room.status === "playing") return;
+    if (room.status !== "waiting") return;
     
     const timer = setTimeout(() => {
       this.roomExpirationTimers.delete(roomId);
       // Re-check: the room may have started a match (or been reset for a
       // rematch) since the timer was scheduled.
       const current = this.rooms.get(roomId);
-      if (!current || current.status === "playing") return;
-      this.closeRoom(roomId, "expired");
-    }, this.framework.config.roomExpirationMs);
+      if (!current || current !== room || current.status !== "waiting") return;
+      void this.closeRoom(roomId, "expired").catch(error => {
+        this.framework.error("Room expiration failed", error);
+        // A failed durable transition may restore a new runtime for this room.
+        // Retry without extending its TTL or spinning on an overdue timestamp.
+        const restored = this.rooms.get(roomId);
+        if (restored?.status === "waiting") this.scheduleRoomExpiration(roomId, 1000);
+      });
+    }, Math.max(retryDelayMs, (room.expiresAt ?? Date.now() + this.framework.config.roomExpirationMs) - Date.now(), 0));
     
     this.roomExpirationTimers.set(roomId, timer);
   }

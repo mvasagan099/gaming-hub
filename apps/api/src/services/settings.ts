@@ -136,7 +136,12 @@ export async function setCategorySettings<K extends SettingsCategoryName>(
     throw new AppError("VALIDATION_ERROR", `Invalid ${category} settings`, 422, parsed.error.flatten());
   }
 
-  const rows = flattenCategory(parsed.data as Record<string, unknown>).map(([field, value]) => ({
+  // Redacted reads omit secrets. An ordinary save must preserve omitted secret
+  // values; an explicit value (including empty string) still replaces them.
+  const preservedSecrets = [...SECRET_SETTING_KEYS].filter((key) =>
+    key.startsWith(`${category}.`) && !Object.hasOwn(partial, key.slice(category.length + 1)));
+  const rows = flattenCategory(parsed.data as Record<string, unknown>).filter(([field]) =>
+    !preservedSecrets.includes(`${category}.${field}`)).map(([field, value]) => ({
     key: `${category}.${field}`,
     category,
     value: value as Prisma.InputJsonValue,
@@ -145,7 +150,7 @@ export async function setCategorySettings<K extends SettingsCategoryName>(
   }));
 
   await prisma.$transaction([
-    prisma.siteSetting.deleteMany({ where: { category } }),
+    prisma.siteSetting.deleteMany({ where: { category, key: { notIn: preservedSecrets } } }),
     prisma.siteSetting.createMany({ data: rows }),
   ]);
 

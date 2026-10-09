@@ -1,5 +1,3 @@
-import { randomBytes, scrypt } from "node:crypto";
-import { promisify } from "node:util";
 import type { FastifyInstance } from "fastify";
 import { generateSecret, generateURI, verify, NobleCryptoPlugin, ScureBase32Plugin } from "otplib";
 import { prisma } from "@gaming-hub/db";
@@ -10,6 +8,7 @@ import { auditFromRequest } from "../services/audit";
 import { hashToken } from "../services/sessions";
 import { RateLimitService } from "../services/rateLimitService";
 import { encryptTotpSecret, loadTotpSecret, isTotpEncryptionConfigured } from "../lib/crypto";
+import { changeProviderPassword, verifyProviderPassword } from "../auth/password";
 
 // Account attempts share an atomic PostgreSQL budget in production.
 const MAX_2FA_ATTEMPTS = 5;
@@ -37,23 +36,8 @@ function record2FAFailure(_userId: string): void {
 }
 
 
-const scryptAsync = promisify(scrypt);
-
 const cryptoPlugin = new NobleCryptoPlugin();
 const base32Plugin = new ScureBase32Plugin();
-
-async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16).toString("hex");
-  const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
-  return `${salt}:${derivedKey.toString("hex")}`;
-}
-
-async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [salt, hash] = stored.split(":");
-  if (!salt || !hash) return false;
-  const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
-  return derivedKey.toString("hex") === hash;
-}
 
 function generateTOTPSecret(): string {
   return generateSecret();
@@ -87,28 +71,6 @@ export async function securityRoutes(app: FastifyInstance) {
     const user = requireUser(request);
     const data = parseSchema(changePasswordSchema, request.body);
     
-    const profile = await prisma.profile.findUnique({
-      where: { userId: user.id },
-      select: { passwordHash: true },
-    });
-    
-    if (!profile?.passwordHash) {
-      throw new AppError("VALIDATION_ERROR", "Account uses external authentication. Password cannot be changed here.", 400);
-    }
-    
-    if (!(await verifyPassword(data.currentPassword, profile.passwordHash))) {
-      await auditFromRequest(request, {
-        actorType: "user",
-        actorId: user.id,
-        action: "security.password.failed",
-        category: "security",
-        targetType: "user",
-        targetId: user.id,
-        meta: { reason: "invalid_current_password" },
-      });
-      throw new AppError("VALIDATION_ERROR", "Current password is incorrect", 401);
-    }
-    
     if (data.newPassword !== data.confirmPassword) {
       throw new AppError("VALIDATION_ERROR", "New passwords do not match", 400);
     }
@@ -117,11 +79,13 @@ export async function securityRoutes(app: FastifyInstance) {
       throw new AppError("VALIDATION_ERROR", "Password must be at least 8 characters", 400);
     }
     
-    const newPasswordHash = await hashPassword(data.newPassword);
-    
-    await prisma.profile.update({
-      where: { userId: user.id },
-      data: { passwordHash: newPasswordHash },
+    const attempt = await RateLimitService.checkSharedRateLimit(`password:${user.id}`, "AUTH", { maxRequests: 5, windowSeconds: 900 });
+    if (!attempt.allowed) throw new AppError("RATE_LIMITED", "Too many password change attempts", 429);
+    const providerRevoked = await changeProviderPassword(user, data.currentPassword, data.newPassword);
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: user.id }, data: { updatedAt: new Date() } });
+      await tx.profile.update({ where: { userId: user.id }, data: { passwordHash: null } });
+      await tx.loginSession.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date(), isCurrent: false, mfaVerifiedAt: null } });
     });
     
     await auditFromRequest(request, {
@@ -132,11 +96,12 @@ export async function securityRoutes(app: FastifyInstance) {
       targetType: "user",
       targetId: user.id,
     });
+    if (!providerRevoked) throw new AppError("SERVICE_UNAVAILABLE", "Password changed and Gaming Hub sessions revoked, but provider logout could not be confirmed. Sign in again to manage remaining provider sessions.", 503);
     
     return { ok: true };
   });
   
-  app.post("/api/security/2fa/setup", { preHandler: authenticate }, async (request) => {
+  app.post("/api/security/2fa/setup", { preHandler: authenticate }, async (request, reply) => {
     const user = requireUser(request);
     const data = parseSchema(setup2FASchema, request.body);
     
@@ -152,23 +117,12 @@ export async function securityRoutes(app: FastifyInstance) {
     if (profile.twoFactorEnabled && !data.reset) {
       throw new AppError("VALIDATION_ERROR", "2FA is already enabled", 400);
     }
+    if (profile.twoFactorEnabled) await requireMfa(request, reply);
 
-    if (profile.passwordHash) {
-      if (!data.currentPassword) {
-        throw new AppError("VALIDATION_ERROR", "Current password is required to configure 2FA", 400);
-      }
-      if (!(await verifyPassword(data.currentPassword, profile.passwordHash))) {
-        await auditFromRequest(request, {
-          actorType: "user",
-          actorId: user.id,
-          action: "security.2fa.setup_failed",
-          category: "security",
-          targetType: "user",
-          targetId: user.id,
-          meta: { reason: "invalid_current_password" },
-        });
-        throw new AppError("VALIDATION_ERROR", "Current password is incorrect", 401);
-      }
+    if (data.currentPassword) {
+      const attempt = await RateLimitService.checkSharedRateLimit(`factor-setup:${user.id}`, "AUTH", { maxRequests: 5, windowSeconds: 900 });
+      if (!attempt.allowed) throw new AppError("RATE_LIMITED", "Too many verification attempts", 429);
+      await verifyProviderPassword(user, data.currentPassword);
     }
     
     const secret = generateTOTPSecret();

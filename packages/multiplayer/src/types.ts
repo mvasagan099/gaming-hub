@@ -155,6 +155,7 @@ export interface MatchRuntime {
   startedAt: TimestampMs;
   pausedAt: TimestampMs | null;
   pausedBy: PlayerId | null;
+  pauseReason?: "disconnect" | "player";
   finishedAt: TimestampMs | null;
   winnerIds: PlayerId[];
   winnerSeats: number[];

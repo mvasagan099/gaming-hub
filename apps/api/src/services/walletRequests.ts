@@ -180,6 +180,11 @@ export async function verifyWalletOtp(
   db?: Prisma.TransactionClient,
 ): Promise<void> {
   const client = db ?? prisma;
+  const otp = await validateWalletOtp(userId, code, client);
+  await consumeWalletOtp(otp.id, client);
+}
+
+async function validateWalletOtp(userId: string, code: string, client: Prisma.TransactionClient | typeof prisma = prisma) {
   const settings = await getCategorySettings("wallet");
 
   const otp = await client.walletOtp.findFirst({
@@ -205,16 +210,22 @@ export async function verifyWalletOtp(
   const expected = Buffer.from(hash, "hex");
 
   if (candidate.length !== expected.length || !timingSafeEqual(candidate, expected)) {
-    await client.walletOtp.update({
-      where: { id: otp.id },
+    // Persist failed attempts independently of a request transaction that will roll back.
+    await prisma.walletOtp.updateMany({
+      where: { id: otp.id, consumedAt: null, attempts: { lt: settings.otpMaxAttempts }, expiresAt: { gt: new Date() } },
       data: { attempts: { increment: 1 } },
     });
     throw new AppError("OTP_INVALID", "Invalid verification code", 400);
   }
 
-  // Atomic consumption: only updates if consumedAt is still null
+  return otp;
+}
+
+async function consumeWalletOtp(otpId: string, client: Prisma.TransactionClient | typeof prisma) {
+  const settings = await getCategorySettings("wallet");
+  // Consumption still commits atomically with the withdrawal request and debit.
   const consumed = await client.walletOtp.updateMany({
-    where: { id: otp.id, consumedAt: null },
+    where: { id: otpId, consumedAt: null, attempts: { lt: settings.otpMaxAttempts }, expiresAt: { gt: new Date() } },
     data: { attempts: { increment: 1 }, consumedAt: new Date() },
   });
   if (consumed.count === 0) {
@@ -316,7 +327,15 @@ export async function createWithdrawalRequest(
     );
   }
 
-  // ── Phase 1: Validate limits, OTP, create request & debit wallet atomically ──
+  // Persist incorrect attempts before taking a wallet lock. This avoids holding
+  // every pool connection while waiting for an independent OTP-counter write.
+  let verifiedOtpId: string | undefined;
+  if (!profile?.twoFactorEnabled) {
+    if (!otpCode?.trim()) throw new AppError("OTP_REQUIRED", "Verification code is required", 400);
+    verifiedOtpId = (await validateWalletOtp(userId, otpCode.trim())).id;
+  }
+
+  // ── Phase 1: Validate limits, consume OTP, create request & debit atomically ──
   const { request, newBalance } = await prisma.$transaction(async (tx) => {
     await lockWalletRow(tx, userId);
 
@@ -379,10 +398,10 @@ export async function createWithdrawalRequest(
       // and validated server-side. Do NOT require or consume email OTP.
     } else {
       // 2FA disabled: Email OTP is mandatory and atomically consumed.
-      if (!otpCode || !otpCode.trim()) {
+      if (!verifiedOtpId) {
         throw new AppError("OTP_REQUIRED", "Verification code is required", 400);
       }
-      await verifyWalletOtp(userId, otpCode.trim(), tx);
+      await consumeWalletOtp(verifiedOtpId, tx);
     }
 
     const wallet = await getWallet(userId, tx);

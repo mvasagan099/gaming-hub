@@ -50,6 +50,12 @@ vi.mock("../notifications", () => ({
   createNotification: vi.fn().mockResolvedValue({}),
 }));
 
+// This suite validates the local HTTP provider contract. Affiliate accounting
+// is covered by PostgreSQL suites, not this provider's in-memory fixture.
+vi.mock("../walletTransactionService", () => ({
+  WalletTransactionService: { onDepositCompleted: vi.fn().mockResolvedValue(undefined) },
+}));
+
 // Mock Prisma with in-memory state
 const mockStore = {
   wallet: {
@@ -113,6 +119,7 @@ vi.mock("@gaming-hub/db", async (importOriginal) => ({
       findUnique: vi.fn().mockImplementation(async () => ({ ...mockStore.user })),
     },
     transaction: {
+      findMany: vi.fn().mockImplementation(async ({ where }: any) => mockStore.transactions.filter(t => Object.entries(where).every(([key, value]) => t[key] === value))),
       create: vi.fn().mockImplementation(async ({ data }: any) => {
         const row = { id: `tx-${Date.now()}-${Math.random()}`, ...data, createdAt: new Date() };
         mockStore.transactions.push(row);
@@ -185,6 +192,10 @@ vi.mock("@gaming-hub/db", async (importOriginal) => ({
       }),
     },
     couponRedemption: {
+      updateMany: vi.fn().mockImplementation(async ({ where, data }: any) => {
+        const row = mockStore.redemptions.find(r => r.id === where.id && (!where.sagaStatus?.not || r.sagaStatus !== where.sagaStatus.not));
+        if (!row) return { count: 0 }; Object.assign(row, data); return { count: 1 };
+      }),
       findFirst: vi.fn().mockImplementation(async ({ where }: any) =>
         mockStore.redemptions.find((r) => r.couponCodeHash === where?.couponCodeHash) || null),
       update: vi.fn().mockImplementation(async ({ where, data }: any) => {
@@ -204,8 +215,9 @@ vi.mock("@gaming-hub/db", async (importOriginal) => ({
         if (mockStore.redemptions.some((r) => r.couponCodeHash === data.couponCodeHash)) {
           const e: any = new Error("Unique constraint failed on couponCodeHash"); e.code = "P2002"; throw e;
         }
-        mockStore.redemptions.push(data);
-        return data;
+        const row = { id: `saga-${mockStore.redemptions.length}`, externalConfirmedAt: null, ...data };
+        mockStore.redemptions.push(row);
+        return row;
       }),
     },
     $transaction: vi.fn().mockImplementation(async (cb: any) => {
@@ -236,6 +248,7 @@ vi.mock("@gaming-hub/db", async (importOriginal) => ({
             }),
           },
           transaction: {
+            findUnique: vi.fn().mockImplementation(async ({ where }: any) => mockStore.transactions.find(t => t.id === where.id) ?? null),
             create: vi.fn().mockImplementation(async ({ data }: any) => {
               const row = { id: `tx-${Date.now()}-${Math.random()}`, ...data, createdAt: new Date() };
               mockStore.transactions.push(row);
@@ -288,6 +301,11 @@ vi.mock("@gaming-hub/db", async (importOriginal) => ({
             }),
           },
           coupon: {
+            update: vi.fn().mockImplementation(async ({ where, data }: any) => {
+              const row = [...mockStore.coupons.values()].find(c => c.id === where.id);
+              if (!row) throw new Error('Coupon not found');
+              row.usedCount = (row.usedCount ?? 0) + (data.usedCount?.increment ?? 0); return row;
+            }),
             findUnique: vi.fn().mockImplementation(async ({ where }: any) => {
               if (where?.code) return mockStore.coupons.get(where.code) || null;
               return null;
@@ -300,6 +318,10 @@ vi.mock("@gaming-hub/db", async (importOriginal) => ({
             }),
           },
           couponRedemption: {
+            findUniqueOrThrow: vi.fn().mockImplementation(async ({ where }: any) => {
+              const row = mockStore.redemptions.find(r => r.id === where.id);
+              if (!row) throw new Error('Saga not found'); return { ...row };
+            }),
             findFirst: vi.fn().mockImplementation(async ({ where }: any) =>
               mockStore.redemptions.find((r) => r.couponCodeHash === where?.couponCodeHash) || null),
             update: vi.fn().mockImplementation(async ({ where, data }: any) => {

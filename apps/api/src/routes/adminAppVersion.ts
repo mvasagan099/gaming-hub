@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@gaming-hub/db";
 import { AppError, isValidSemver } from "@gaming-hub/shared";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, requireMfa } from "../plugins/authenticate";
 import { requirePermission } from "../lib/permissions";
 import { parseSchema } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
@@ -34,19 +34,17 @@ export async function adminAppVersionRoutes(app: FastifyInstance) {
       });
 
       if (!config) {
-        // Seed a default record if none exists yet.
-        return prisma.appVersionConfig.create({
-          data: {
-            id: APP_VERSION_CONFIG_ID,
-            latestVersion: "1.0",
-            minimumSupportedVersion: "1.0",
-            downloadUrl:
-              "https://play.google.com/store/apps/details?id=com.gaminghub.app",
-            updateMessage:
-              "A new version of Gaming Hub is required. Please update to continue playing.",
-            forceUpdate: false,
-          },
-        });
+        // Return defaults without writing during a read-only request.
+        return {
+          id: APP_VERSION_CONFIG_ID,
+          latestVersion: "1.0",
+          minimumSupportedVersion: "1.0",
+          downloadUrl:
+            "https://play.google.com/store/apps/details?id=com.gaminghub.app",
+          updateMessage:
+            "A new version of Gaming Hub is required. Please update to continue playing.",
+          forceUpdate: false,
+        };
       }
 
       return config;
@@ -59,7 +57,7 @@ export async function adminAppVersionRoutes(app: FastifyInstance) {
    */
   app.put(
     "/api/admin/app/version-config",
-    { preHandler: authenticate },
+    { preHandler: [authenticate, requireMfa] },
     async (request) => {
       const actor = await requirePermission(
         request,

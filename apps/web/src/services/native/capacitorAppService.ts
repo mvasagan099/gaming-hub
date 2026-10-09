@@ -103,6 +103,7 @@ export async function initCapacitorServices(): Promise<void> {
     // Handle Password Recovery deep links
     if (validated.isPasswordRecovery) {
       // Enforce strict password recovery state: NEVER auto-log in
+      useAuthStore.getState().clearAuth();
       useAuthStore.getState().setIsPasswordRecovery(true);
       useAuthStore.getState().setSession(null);
       useAuthStore.getState().setUser(null);
@@ -121,14 +122,12 @@ export async function initCapacitorServices(): Promise<void> {
   CapApp.addListener('appStateChange', (state) => {
     if (state.isActive) {
       // When resuming from background, verify auth session validity
-      void supabase.auth.getSession().then(({ data: { session } }) => {
+      void supabase.auth.getSession().then(async ({ data: { session } }) => {
         if (!useAuthStore.getState().isPasswordRecovery) {
-          useAuthStore.getState().setSession(session);
-          useAuthStore.getState().setUser(session?.user ?? null);
+          const status = await useAuthStore.getState().verifySession(session);
+          if (status === 'authenticated') await useWalletStore.getState().fetchWallet();
         }
-      });
-      // Refresh authoritative wallet balance to catch any offline or background settlements
-      void useWalletStore.getState().fetchWallet();
+      }).catch(() => {});
     }
   });
 }

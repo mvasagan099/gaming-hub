@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createServer as createTcpServer, connect as connectTcp, type Socket as TcpSocket } from 'node:net';
 import { appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -162,6 +163,24 @@ afterAll(async () => {
 });
 
 describe('restartRecovery / crossReplicaOwnership / multiReplicaPaidMatch — real socket processes and HTTP API', () => {
+  it('expires an overdue recovered waiting room and releases its account for a new room', async () => {
+    const player = await createTestUser();
+    const first = await connect(aPort, player.id);
+    const room = await command(first, 'room:create', { gameId: 'chess', stake: 0, maxPlayers: 2 });
+    await kill(a);
+    const stored = await prisma.liveRoomCheckpoint.findUniqueOrThrow({ where: { id: room.id } });
+    const snapshot = stored.snapshot as any;
+    // Controlled disposable fixture: emulate a waiting TTL that elapsed while
+    // its owner was offline. Do not mutate the fencing token or financial data.
+    snapshot.room.expiresAt = Date.now() - 1;
+    await prisma.liveRoomCheckpoint.update({ where: { id: room.id }, data: { snapshot, leaseExpiresAt: new Date(Date.now() - 1) } });
+    await until(async () => (await prisma.liveRoomCheckpoint.findUniqueOrThrow({ where: { id: room.id } })).closed);
+    const second = await connect(bPort, player.id);
+    const next = await command(second, 'room:create', { gameId: 'chess', stake: 0, maxPlayers: 2 });
+    expect(next.id).not.toBe(room.id);
+    expect(await prisma.matchPlayer.count({ where: { userId: player.id } })).toBe(0);
+    await command(second, 'room:leave', { roomId: next.id });
+  }, 60000);
   it('acknowledges a large Carrom shot through the non-owner replica once without losing recovery trajectory', async () => {
     const players = await Promise.all([createTestUser(), createTestUser()]);
     for (const player of players) await prisma.$transaction(tx => WalletTransactionService.createCredit(tx,
@@ -642,4 +661,47 @@ describe('network failures with real HTTP and Redis transport', () => {
       await until(async () => (await prisma.gameResultOutbox.findUnique({ where: { matchId: f.matchId } }))?.status === 'DELIVERED');
     } finally { redisUnavailable = false; f.first.disconnect(); f.second.disconnect(); }
   }, 60000);
+});
+
+describe('active authentication across real socket replicas', () => {
+  async function fixture(role: 'ADMIN' | 'USER' = 'USER') {
+    const id = `auth_replica_${randomUUID()}`;
+    await prisma.user.create({ data: { id, username: id, displayName: 'Auth replica fixture', email: `${id}@test.local`, role, profile: { create: {} }, wallet: { create: {} } } });
+    const { recordLoginSession } = await import('../sessions');
+    await recordLoginSession({ userId: id, token: `test.${id}`, ip: '127.0.0.1', userAgent: 'Replica fixture' });
+    return id;
+  }
+  it.each(['revoked', 'expired', 'banned', 'deleted'] as const)('removes %s eligibility on both replicas and denies reconnect', async (kind) => {
+    const id = await fixture();
+    try {
+      const first = await connect(aPort, id), second = await connect(bPort, id);
+      const disconnected = [socketOnce(first, 'disconnect'), socketOnce(second, 'disconnect')];
+      if (kind === 'revoked') {
+        const { revokeCurrentSession } = await import('../sessions');
+        await revokeCurrentSession(id, `test.${id}`);
+      } else if (kind === 'expired') {
+        await prisma.loginSession.updateMany({ where: { userId: id }, data: { expiresAt: new Date(0) } });
+      } else if (kind === 'banned') {
+        await prisma.playerPenalty.create({ data: { userId: id, type: 'CHEATING', status: 'ACTIVE', reason: 'Isolated socket auth fixture' } });
+      } else {
+        await prisma.user.update({ where: { id }, data: { deletedAt: new Date() } });
+      }
+      await Promise.all(disconnected);
+      expect(first.connected).toBe(false); expect(second.connected).toBe(false);
+      await expect(connect(aPort, id)).rejects.toThrow(/SESSION_REVOKED|ACCOUNT_BANNED|ACCOUNT_DELETED/);
+      await expect(connect(bPort, id)).rejects.toThrow(/SESSION_REVOKED|ACCOUNT_BANNED|ACCOUNT_DELETED/);
+    } finally { await prisma.user.deleteMany({ where: { id } }); }
+  });
+  it('rechecks administrative authority on already connected clients on both replicas', async () => {
+    const id = await fixture('ADMIN');
+    try {
+      const clients = [await connect(aPort, id), await connect(bPort, id)];
+      for (const client of clients) expect((await client.timeout(10000).emitWithAck('admin:analytics:subscribe')).ok).toBe(true);
+      await prisma.user.update({ where: { id }, data: { role: 'USER' } });
+      for (const client of clients) {
+        const response = await client.timeout(10000).emitWithAck('admin:analytics:subscribe');
+        expect(response).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } });
+      }
+    } finally { await prisma.user.deleteMany({ where: { id } }); }
+  });
 });

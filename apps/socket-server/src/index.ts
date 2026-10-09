@@ -26,7 +26,8 @@ import { MultiplayerFramework } from "@gaming-hub/multiplayer";
 import { prisma } from "@gaming-hub/db";
 import pino from "pino";
 import { env } from "./env";
-import { authenticateToken, type AuthenticatedUser } from "./auth";
+import { authenticateToken, revalidateSocketUser, type AuthenticatedUser } from "./auth";
+import { installSessionGuard, evictPreviousSessions } from "./sessionGuard";
 import { assertFeatureEnabled } from "./settings";
 import { requestSocketRematch, declineSocketRematch } from "./rematch";
 import { applySocketGameAction } from "./gameActions";
@@ -587,6 +588,8 @@ async function main(): Promise<void> {
   io.on("connection", (socket) => {
     const user = (socket.data as { user: AuthenticatedUser }).user;
     socket.data.tokenHash = user.tokenHash;
+    installSessionGuard(socket, user, revalidateSocketUser);
+    void evictPreviousSessions(io, socket, user).catch(() => socket.disconnect(true));
 
     prisma.user
       .update({
@@ -622,23 +625,6 @@ async function main(): Promise<void> {
         user: { username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl }, payload: {} }) : undefined)
         .catch(() => logger.info({ userId: user.userId }, "Reconnect recovery waiting for owner lease"));
     }
-
-    // Single-active-session: Evict any existing socket for this user that has an older/different tokenHash
-    const userSockets = io.sockets.adapter.rooms.get(`user:${user.userId}`);
-    if (userSockets) {
-      for (const socketId of userSockets) {
-        if (socketId !== socket.id) {
-          const oldSocket = io.sockets.sockets.get(socketId);
-          if (oldSocket && (oldSocket.data as any)?.tokenHash !== user.tokenHash) {
-            oldSocket.emit("auth:session-revoked", { reason: "NEW_LOGIN" });
-            oldSocket.disconnect(true);
-          }
-        }
-      }
-    }
-
-    // Join a personal room so internal services can target a single user.
-    socket.join(`user:${user.userId}`);
 
     // Handle reconnection - check if user is in an active room
     const activeRoom = framework.roomManager.getPlayerRoom(user.userId);

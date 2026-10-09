@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "@gaming-hub/db";
-import { createKycRequest, approveKycRequest } from "../kyc";
+import { createKycRequest, approveKycRequest, submitKycRequest } from "../kyc";
 import { getAuthenticatedUserData } from "../users";
 import { KycLevel, KycStatus } from "@gaming-hub/shared";
 
@@ -61,7 +61,7 @@ describe("KYC Address Sync to Profile", () => {
       data: {
         userId: testUserId,
         level: KycLevel.LEVEL_1,
-        status: KycStatus.PENDING,
+        status: KycStatus.NOT_STARTED,
         fullName: "Approved Gamer",
         dateOfBirth: new Date("1995-10-20"),
         country: "IN",
@@ -73,6 +73,11 @@ describe("KYC Address Sync to Profile", () => {
       },
     });
 
+    for (const documentType of ['PASSPORT', 'SELFIE'] as const) await prisma.kycDocument.create({ data: {
+      requestId: kyc.id, documentType, isSelfie: documentType === 'SELFIE', fileName: documentType+'.png',
+      fileUrl: testUserId+'/'+documentType+'.png', fileSize: 100, mimeType: 'image/png', fileHash: 'fixture-'+documentType,
+    } });
+    await submitKycRequest(kyc.id, testUserId);
     await approveKycRequest(kyc.id, testUserId, "Auto test approve");
 
     const profile = await prisma.profile.findUnique({

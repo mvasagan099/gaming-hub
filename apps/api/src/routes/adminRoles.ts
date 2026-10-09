@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@gaming-hub/db";
 import { AppError, ALL_PERMISSIONS, clampPagination, type Permission } from "@gaming-hub/shared";
 import { authenticate, requireMfa } from "../plugins/authenticate";
-import { requirePermission } from "../lib/permissions";
+import { requirePermission, assertRoleGrant } from "../lib/permissions";
 import { routeParams, parseSchema, queryParams, queryString } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
 
@@ -85,6 +85,7 @@ export async function adminRolesRoutes(app: FastifyInstance) {
   app.post("/api/admin/roles", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:roles:create", prisma);
     const data = parseSchema(createRoleSchema, request.body);
+    await assertRoleGrant(admin, data.permissions, prisma);
     
     const invalidPermissions = data.permissions.filter(
       (p) => !ALL_PERMISSIONS.includes(p as Permission)
@@ -167,6 +168,8 @@ export async function adminRolesRoutes(app: FastifyInstance) {
     if (role.isSystem) {
       throw new AppError("FORBIDDEN", "Cannot modify system roles", 403);
     }
+    await assertRoleGrant(admin, role.permissions.map((p) => p.permission), prisma);
+    if (data.permissions) await assertRoleGrant(admin, data.permissions, prisma);
     
     if (data.permissions) {
       const invalidPermissions = data.permissions.filter(
@@ -187,24 +190,14 @@ export async function adminRolesRoutes(app: FastifyInstance) {
       data: {
         displayName: data.displayName,
         description: data.description,
+        ...(data.permissions ? { permissions: { deleteMany: {}, create: [...new Set(data.permissions)].map((permission) => ({ permission })) } } : {}),
       },
       include: {
         permissions: { select: { permission: true } },
       },
     });
     
-    if (data.permissions) {
-      await prisma.rolePermission.deleteMany({
-        where: { roleId: id },
-      });
-      
-      await prisma.rolePermission.createMany({
-        data: data.permissions.map((permission) => ({
-          roleId: id,
-          permission,
-        })),
-      });
-    }
+    // Prisma's nested write replaces metadata/permissions in one transaction.
     
     auditFromRequest(request, {
       actorType: "user",
@@ -237,7 +230,7 @@ export async function adminRolesRoutes(app: FastifyInstance) {
     
     const role = await prisma.customRole.findUnique({
       where: { id },
-      include: { _count: { select: { users: true } } },
+      include: { _count: { select: { users: true } }, permissions: true },
     });
     
     if (!role) {
@@ -255,6 +248,7 @@ export async function adminRolesRoutes(app: FastifyInstance) {
         422
       );
     }
+    await assertRoleGrant(admin, role.permissions.map((p) => p.permission), prisma);
     
     await prisma.customRole.delete({ where: { id } });
     

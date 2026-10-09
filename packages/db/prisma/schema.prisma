@@ -1614,6 +1614,8 @@ model LoginSession {
   id         String    @id @default(uuid())
   userId     String
   tokenHash  String    @unique
+  /// Verified Supabase session_id; refresh must not bypass application revocation.
+  providerSessionId String?
   ip         String?
   userAgent  String?
   deviceName String?
@@ -1628,6 +1630,7 @@ model LoginSession {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([userId, providerSessionId])
 }
 
 model SearchHistory {

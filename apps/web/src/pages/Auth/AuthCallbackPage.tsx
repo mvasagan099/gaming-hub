@@ -26,6 +26,8 @@ export function AuthCallbackPage() {
 
   useEffect(() => {
     let mounted = true;
+    let authSubscription: { unsubscribe: () => void } | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
 
     async function handleAuthCallback() {
       try {
@@ -56,46 +58,12 @@ export function AuthCallbackPage() {
           useAuthStore.getState().setIsPasswordRecovery(false);
           useAuthStore.getState().setRecoverySession(null);
 
-          // Always check backend session status and 2FA requirement BEFORE
-          // promoting the session. If 2FA is required, park in pendingMfaSession.
-          try {
-            const sessionRes = await apiClient.post<{
-              status: string;
-              requiresTwoFactor?: boolean;
-              userId?: string;
-              challengeId?: string;
-            }>(
-              "/auth/session",
-              { token: session.access_token },
-              session.access_token
-            );
-            if (
-              (sessionRes.requiresTwoFactor ||
-                sessionRes.status === "mfa_required" ||
-                sessionRes.status === "2fa_required")
-            ) {
-              // Park the Supabase session — do NOT promote to authStore.session
-              useAuthStore.getState().setIsMfaRequired(true);
-              useAuthStore.getState().setPendingMfaSession(session);
-              navigate("/login", {
-                replace: true,
-                state: {
-                  require2FA: true,
-                  userId: sessionRes.userId || sessionRes.challengeId,
-                  next: nextParam || "/",
-                },
-              });
-              return;
-            }
-          } catch (sessionErr) {
-            console.error("Backend auth session check failed", sessionErr);
+          const result = await useAuthStore.getState().verifySession(session);
+          if (!mounted || result === 'superseded') return;
+          if (result === 'mfa_pending') {
+            navigate('/2fa', { replace: true });
+            return;
           }
-
-          // No 2FA required — promote session fully
-          useAuthStore.getState().setIsMfaRequired(false);
-          useAuthStore.getState().setPendingMfaSession(null);
-          useAuthStore.getState().setSession(session);
-          useAuthStore.getState().setUser(session.user);
 
           // If Admin, redirect to /admin by default if nextParam was not explicitly set
           try {
@@ -120,6 +88,7 @@ export function AuthCallbackPage() {
 
           if (mounted) {
             if (isRecovery) {
+              useAuthStore.getState().clearAuth();
               useAuthStore.getState().setIsPasswordRecovery(true);
               useAuthStore.getState().setRecoverySession(data.session);
               useAuthStore.getState().setSession(null);
@@ -145,7 +114,8 @@ export function AuthCallbackPage() {
 
         if (session && mounted) {
           if (isRecovery) {
-            useAuthStore.getState().setIsPasswordRecovery(true);
+            useAuthStore.getState().clearAuth();
+              useAuthStore.getState().setIsPasswordRecovery(true);
             useAuthStore.getState().setRecoverySession(session);
             useAuthStore.getState().setSession(null);
             useAuthStore.getState().setUser(null);
@@ -163,26 +133,31 @@ export function AuthCallbackPage() {
         } = supabase.auth.onAuthStateChange((event, newSession) => {
           if (!mounted) return;
           if (event === "PASSWORD_RECOVERY") {
-            useAuthStore.getState().setIsPasswordRecovery(true);
+            useAuthStore.getState().clearAuth();
+              useAuthStore.getState().setIsPasswordRecovery(true);
             useAuthStore.getState().setRecoverySession(newSession);
             useAuthStore.getState().setSession(null);
             useAuthStore.getState().setUser(null);
             navigate("/reset-password", { replace: true });
           } else if (event === "SIGNED_IN" && newSession) {
             if (isRecovery) {
+              useAuthStore.getState().clearAuth();
               useAuthStore.getState().setIsPasswordRecovery(true);
               useAuthStore.getState().setRecoverySession(newSession);
               useAuthStore.getState().setSession(null);
               useAuthStore.getState().setUser(null);
               navigate("/reset-password", { replace: true });
             } else {
-              void completeAuth(newSession);
+              void completeAuth(newSession).catch((error) => {
+                if (mounted) setErrorMsg(getAuthErrorMessage(error));
+              });
             }
           }
         });
 
+        authSubscription = subscription;
         // Timeout fallback after 4 seconds
-        setTimeout(() => {
+        timeout = setTimeout(() => {
           if (mounted && !useAuthStore.getState().session && !useAuthStore.getState().isPasswordRecovery) {
             subscription.unsubscribe();
             setErrorMsg("Authentication session could not be established. Please try logging in again.");
@@ -200,6 +175,8 @@ export function AuthCallbackPage() {
 
     return () => {
       mounted = false;
+      authSubscription?.unsubscribe();
+      if (timeout) clearTimeout(timeout);
     };
   }, [location, navigate]);
 

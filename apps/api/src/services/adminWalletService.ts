@@ -96,11 +96,12 @@ export class AdminWalletService {
     }
 
     const trimmedReason = params.reason.trim();
-    const key = params.idempotencyKey
-      ? `ADMIN_ADJUST:${params.adminId}:${params.idempotencyKey}`
-      : `ADMIN_ADJUST:${params.adminId}:${params.targetUserId}:${Date.now()}`;
+    if (!params.idempotencyKey || !/^[a-zA-Z0-9_-]{1,128}$/.test(params.idempotencyKey)) {
+      throw new AppError("VALIDATION_ERROR", "A stable idempotency key is required", 400);
+    }
+    const key = `ADMIN_ADJUST:${params.adminId}:${params.idempotencyKey}`;
 
-    return IdempotencyService.executeOnce({
+    const result = await IdempotencyService.executeOnce({
       key,
       operation: "ADMIN_ADJUSTMENT",
       userId: params.adminId,
@@ -165,6 +166,10 @@ export class AdminWalletService {
         };
       },
     });
+    if (result.userId !== params.targetUserId || result.amount !== params.amount || result.reason !== trimmedReason || result.adjustedBy !== params.adminId) {
+      throw new AppError("VALIDATION_ERROR", "Idempotency key was already used for a different adjustment", 409);
+    }
+    return result;
   }
 
   /**

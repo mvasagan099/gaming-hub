@@ -17,6 +17,7 @@ import React, {
   useLayoutEffect,
 } from "react";
 import confetti from "canvas-confetti";
+import { remainingCarromTurnMs } from "./carromClock";
 import toast from "react-hot-toast";
 import { GameWrapper } from "../../components/GameWrapper";
 import { MultiplayerMatchPanel } from "../shared/components/MultiplayerMatchPanel";
@@ -330,6 +331,7 @@ const CarromMultiplayer: React.FC<Props> = ({
   const [strikerOverlap, setStrikerOverlap] = useState(false);
   const serverOffsetRef = useRef<number>(0);
   const turnExpiresAtRef = useRef<number | null>(null);
+  const pausedAtRef = useRef<number | null>(null);
   const turnNumberRef = useRef<number>(0);
   const lastLoggedSecRef = useRef<number>(-1);
   const [turnSecondsRemaining, setTurnSecondsRemaining] = useState<number>(30);
@@ -649,6 +651,7 @@ const CarromMultiplayer: React.FC<Props> = ({
 
       const exp = state.turnExpiresAt ?? (state.turnStartedAtMs ? state.turnStartedAtMs + 30000 : null);
       turnExpiresAtRef.current = exp;
+      pausedAtRef.current = state.paused ? state.pausedAtMs ?? (typeof state.serverTimestamp === "number" ? state.serverTimestamp : Date.now() + serverOffsetRef.current) : null;
       setTurnExpiresAt(exp);
 
       // Initialize mover slider position ONLY when gaining turn or on a new turn
@@ -1233,7 +1236,7 @@ const CarromMultiplayer: React.FC<Props> = ({
     // Update authoritative turn timer
     if (turnExpiresAtRef.current && !isTurnActiveRef.current && !gameOver) {
       const currentServerTime = Date.now() + serverOffsetRef.current;
-      const remMs = Math.max(0, turnExpiresAtRef.current - currentServerTime);
+      const remMs = remainingCarromTurnMs(turnExpiresAtRef.current, currentServerTime, pausedAtRef.current);
       const remSec = Math.ceil(remMs / 1000);
       setTurnSecondsRemaining(remSec);
 

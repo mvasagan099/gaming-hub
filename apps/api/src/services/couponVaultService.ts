@@ -195,6 +195,9 @@ export class CouponVaultService {
       );
     }
 
+    if (response.status >= 500 || response.status === 408 || (response.ok && !data?.success)) {
+      throw new AppError("COUPON_SERVICE_UNAVAILABLE", "Redemption outcome is unconfirmed; reconciliation is required", 503);
+    }
     if (!response.ok || !data?.success) {
       const code: "COUPON_ALREADY_USED" | "COUPON_INVALID" =
         response.status === 409 || data?.code === "REDEEMED" || data?.code === "COUPON_ALREADY_USED"
@@ -202,7 +205,12 @@ export class CouponVaultService {
           : "COUPON_INVALID";
       const message = data?.message || "Coupon could not be redeemed. It may have already been used.";
       const statusCode = response.status === 409 ? 409 : 400;
-      throw new AppError(code, message, statusCode);
+      // This available provider wraps RPC errors, including uncertain upstream
+      // outcomes, in generic 400 REDEEM_FAILED. Only its explicit pre-RPC
+      // country validation rejection proves that redemption did not run.
+      throw new AppError(code, message, statusCode, {
+        definitiveNonProcessing: response.status === 400 && data?.code === "COUNTRY_MISMATCH",
+      });
     }
 
     return { success: true };
@@ -386,4 +394,3 @@ export class CouponVaultService {
     };
   }
 }
-

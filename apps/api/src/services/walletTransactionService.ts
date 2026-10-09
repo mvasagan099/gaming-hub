@@ -187,16 +187,8 @@ export class WalletTransactionService {
     userId?: string;
     amount?: number;
   }): Promise<void> {
-    try {
-      const { AffiliateService } = await import("./affiliateService");
-      await AffiliateService.processDepositCommission({
-        transactionId: params.transactionId,
-        userId: params.userId,
-        amount: params.amount,
-      });
-    } catch (err) {
-      console.error("[WalletTransactionService] Failed to process affiliate commission on deposit:", err);
-    }
+    const { AffiliateService } = await import("./affiliateService");
+    await AffiliateService.processDepositCommission({ transactionId: params.transactionId });
   }
 
   /**

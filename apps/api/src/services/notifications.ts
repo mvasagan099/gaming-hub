@@ -1,5 +1,6 @@
 import { prisma, Prisma } from "@gaming-hub/db";
 import type { NotificationType } from "@gaming-hub/shared";
+import { persistNotification } from './notificationIdentity';
 
 export async function createNotification(
   userId: string,
@@ -13,40 +14,17 @@ export async function createNotification(
     tournamentEventType?: string;
   },
 ) {
-  // Deduplication check: prevent duplicate notifications for same eventId or referenceId
-  if (options?.eventId) {
-    const existing = await prisma.appNotification.findFirst({
-      where: {
-        userId,
-        data: {
-          path: ["eventId"],
-          equals: options.eventId,
-        },
-      },
-    });
-    if (existing) {
-      return existing;
-    }
-  } else if (options?.referenceId) {
-    const existing = await prisma.appNotification.findFirst({
-      where: {
-        userId,
-        type,
-        referenceId: options.referenceId,
-      },
-    });
-    if (existing) {
-      return existing;
-    }
-  }
-
   const mergedData = {
     ...(data ?? {}),
     ...(options?.eventId ? { eventId: options.eventId } : {}),
   };
 
-  return prisma.appNotification.create({
-    data: {
+  const identity = options?.eventId ? JSON.stringify(['event', userId, options.eventId]) : options?.referenceId
+    ? JSON.stringify(['reference', userId, type, options.referenceId, options.tournamentEventType ?? null]) : undefined;
+  const legacyWhere: Prisma.AppNotificationWhereInput | undefined = options?.eventId
+    ? { userId, data: { path: ['eventId'], equals: options.eventId } }
+    : options?.referenceId ? { userId, type, referenceId: options.referenceId, tournamentEventType: options.tournamentEventType ?? null } : undefined;
+  const result = await persistNotification({
       userId,
       type,
       title,
@@ -54,8 +32,8 @@ export async function createNotification(
       data: Object.keys(mergedData).length > 0 ? (mergedData as Prisma.InputJsonValue) : undefined,
       referenceId: options?.referenceId,
       tournamentEventType: options?.tournamentEventType,
-    },
-  });
+  }, identity, legacyWhere);
+  return result.notification;
 }
 
 export async function listNotifications(

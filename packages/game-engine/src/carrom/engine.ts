@@ -27,6 +27,15 @@ import {
 export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromAction> {
   readonly gameId = "carrom" as const;
 
+  override resumeClocks(): void {
+    const pausedAt = this.state.pausedAtMs;
+    if (!this.state.paused || pausedAt == null) return;
+    const elapsed = Math.max(0, this.now() - pausedAt);
+    super.resumeClocks();
+    if (this.state.turnStartedAt != null) this.state.turnStartedAt += elapsed;
+    if (this.state.turnExpiresAt != null) this.state.turnExpiresAt += elapsed;
+  }
+
   override serialize(): import("@gaming-hub/shared").JsonObject {
     return { ...super.serialize(), serverTimestamp: this.now() };
   }

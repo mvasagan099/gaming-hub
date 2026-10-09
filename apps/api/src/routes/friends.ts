@@ -24,15 +24,15 @@ export async function friendsRoutes(app: FastifyInstance) {
       },
     });
 
-    return relationships.map((rel) => {
+    return Promise.all(relationships.filter(rel => !rel.requester.deletedAt && !rel.addressee.deletedAt).map(async (rel) => {
       const other =
         rel.requesterId === user.id ? rel.addressee : rel.requester;
       return {
         id: rel.id,
-        friend: toPublicProfile(other),
+        friend: await toPublicProfile(other, user.id),
         createdAt: rel.createdAt.toISOString(),
       };
-    });
+    }));
   });
 
   app.get("/api/friends/requests", { preHandler: authenticate }, async (request) => {
@@ -43,12 +43,12 @@ export async function friendsRoutes(app: FastifyInstance) {
       include: { requester: { include: { profile: true } } },
       orderBy: { createdAt: "desc" },
     });
-    return incoming.map((r) => ({
+    return Promise.all(incoming.filter(r => !r.requester.deletedAt).map(async (r) => ({
       id: r.id,
-      requester: toPublicProfile(r.requester),
+      requester: await toPublicProfile(r.requester, user.id),
       status: r.status,
       createdAt: r.createdAt.toISOString(),
-    }));
+    })));
   });
 
   app.get("/api/friends/status/:targetId", { preHandler: authenticate }, async (request) => {
@@ -90,12 +90,16 @@ export async function friendsRoutes(app: FastifyInstance) {
     const { username } = parseSchema(sendFriendRequestSchema, request.body);
 
     const target = await prisma.user.findUnique({ where: { username } });
-    if (!target) {
+    if (!target || target.deletedAt) {
       throw new AppError("NOT_FOUND", "User not found", 404);
     }
     if (target.id === user.id) {
       throw new AppError("VALIDATION_ERROR", "You cannot add yourself", 422);
     }
+    const blocked = await prisma.blockedUser.findFirst({ where: { OR: [
+      { blockerId: user.id, blockedId: target.id }, { blockerId: target.id, blockedId: user.id },
+    ] } });
+    if (blocked) throw new AppError('FORBIDDEN', 'Friend request is unavailable', 403);
 
     const targetPrivacy = await getPrivacySettings(target.id);
     if (!targetPrivacy.allowFriendRequests) {
@@ -134,6 +138,10 @@ export async function friendsRoutes(app: FastifyInstance) {
     if (!accept) {
       return prisma.friend.delete({ where: { id: rel.id } });
     }
+    const blocked = await prisma.blockedUser.findFirst({ where: { OR: [
+      { blockerId: rel.requesterId, blockedId: rel.addresseeId }, { blockerId: rel.addresseeId, blockedId: rel.requesterId },
+    ] } });
+    if (blocked) throw new AppError('FORBIDDEN', 'Friend request is unavailable', 403);
 
     await prisma.friend.update({
       where: { id: rel.id },
@@ -155,7 +163,7 @@ export async function friendsRoutes(app: FastifyInstance) {
       ),
     ]);
 
-    return { ok: true, friend: requester ? toPublicProfile(requester) : null };
+    return { ok: true, friend: requester && !requester.deletedAt ? await toPublicProfile(requester, user.id) : null };
   });
 
   app.delete("/api/friends/:friendId", { preHandler: authenticate }, async (request) => {

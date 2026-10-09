@@ -29,7 +29,7 @@ describe("socket rematch security entry point", () => {
     const user = await createTestUser({ email: "rematch-user@test.local" });
     const opponent = await createTestUser();
     userId = user.id;
-    verification.jwtVerify.mockReset().mockResolvedValue({ payload: { sub: userId, email: "rematch-user@test.local", email_verified: true } });
+    verification.jwtVerify.mockReset().mockResolvedValue({ payload: { sub: userId, email: "rematch-user@test.local", email_verified: true, exp: Math.floor(Date.now() / 1000) + 60 } });
     await prisma.loginSession.create({ data: { userId, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 60_000) } });
     const room = await framework.roomManager.createRoom({ gameId: "chess", hostId: userId, hostSocket: makeSocket("s1"), stake: 100, maxPlayers: 2 });
     await framework.roomManager.joinRoom({ roomId: room.id, playerId: opponent.id, socket: makeSocket("s2") });

@@ -35,10 +35,15 @@ export async function recordLoginSession(input: {
   token: string;
   ip: string | null;
   userAgent: string | null;
+  /** Expiration from a verified provider token, never from client input. */
+  expiresAt?: Date;
+  providerSessionId?: string;
 }) {
   const tokenHash = hashToken(input.token);
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
+  if (input.expiresAt && input.expiresAt <= now) throw new AppError("SESSION_REVOKED", "Session has expired", 401);
+  // Retain tombstones for the application session lifetime AND token validity.
+  const expiresAt = new Date(Math.max(now.getTime() + SESSION_TTL_MS, input.expiresAt?.getTime() ?? 0));
 
   return prisma.$transaction(async (tx) => {
     // 0. Take an exclusive row lock on the User row to serialize concurrent login attempts
@@ -46,6 +51,19 @@ export async function recordLoginSession(input: {
       where: { id: input.userId },
       data: { updatedAt: now },
     });
+
+    const existing = await tx.loginSession.findUnique({ where: { tokenHash } });
+    if (existing && (existing.userId !== input.userId || existing.revokedAt || existing.expiresAt <= now)) {
+      throw new AppError("SESSION_REVOKED", "Session has been revoked or expired", 401);
+    }
+    const providerSession = !existing && input.providerSessionId
+      ? await tx.loginSession.findFirst({
+          where: { userId: input.userId, providerSessionId: input.providerSessionId },
+          orderBy: [{ isCurrent: "desc" }, { createdAt: "desc" }],
+        }) : null;
+    if (providerSession && (providerSession.revokedAt || providerSession.expiresAt <= now)) {
+      throw new AppError("SESSION_REVOKED", "Provider session has been revoked or expired", 401);
+    }
 
     // 1. Atomically revoke ALL other existing active sessions for this user
     await tx.loginSession.updateMany({
@@ -65,7 +83,11 @@ export async function recordLoginSession(input: {
     const stale = await tx.loginSession.findMany({
       where: {
         userId: input.userId,
-        OR: [{ revokedAt: { not: null } }, { expiresAt: { lt: now } }],
+        // Revocation tombstones must outlive the credential they invalidate.
+        expiresAt: { lt: now },
+        // Provider identities stay revoked across token refresh. They are retained
+        // until explicit account retention cleanup, not pruned during login.
+        providerSessionId: null,
         NOT: { tokenHash },
       },
       orderBy: { createdAt: "desc" },
@@ -79,17 +101,15 @@ export async function recordLoginSession(input: {
     }
 
     // 3. Upsert the current session as the ONLY active session
-    const existing = await tx.loginSession.findUnique({ where: { tokenHash } });
     if (existing) {
       return tx.loginSession.update({
         where: { id: existing.id },
         data: {
           isCurrent: true,
-          revokedAt: null,
-          expiresAt,
           ip: input.ip ?? existing.ip,
           userAgent: input.userAgent ?? existing.userAgent,
           deviceName: deviceNameFromUserAgent(input.userAgent) ?? existing.deviceName,
+          ...(input.providerSessionId && !existing.providerSessionId ? { providerSessionId: input.providerSessionId } : {}),
         },
       });
     }
@@ -102,8 +122,32 @@ export async function recordLoginSession(input: {
         userAgent: input.userAgent,
         deviceName: deviceNameFromUserAgent(input.userAgent),
         isCurrent: true,
-        expiresAt,
+        expiresAt: providerSession?.expiresAt ?? expiresAt,
+        providerSessionId: input.providerSessionId ?? null,
+        mfaVerifiedAt: providerSession?.mfaVerifiedAt ?? null,
       },
+    });
+  });
+}
+
+export async function revokeCurrentSession(userId: string, token: string, verifiedProviderSessionId?: string, tokenExpiresAt?: Date) {
+  return prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { updatedAt: new Date() } });
+    const session = await tx.loginSession.findUnique({ where: { tokenHash: hashToken(token) } });
+    if (session && session.userId !== userId) return { count: 0 };
+    const providerSessionId = session?.providerSessionId ?? verifiedProviderSessionId;
+    if (!session) {
+      await tx.loginSession.create({ data: {
+        userId, tokenHash: hashToken(token), providerSessionId: providerSessionId ?? null,
+        expiresAt: new Date(Math.max(Date.now() + SESSION_TTL_MS, tokenExpiresAt?.getTime() ?? 0)),
+        revokedAt: new Date(), isCurrent: false,
+      } });
+    } else if (providerSessionId && !session.providerSessionId) {
+      await tx.loginSession.update({ where: { id: session.id }, data: { providerSessionId } });
+    }
+    return tx.loginSession.updateMany({
+      where: { userId, ...(providerSessionId ? { providerSessionId } : { tokenHash: hashToken(token) }), revokedAt: null },
+      data: { revokedAt: new Date(), isCurrent: false, mfaVerifiedAt: null },
     });
   });
 }
@@ -133,26 +177,31 @@ export async function listSessions(userId: string, currentTokenHash?: string) {
 }
 
 export async function revokeSession(userId: string, sessionId: string, currentTokenHash?: string) {
-  const session = await prisma.loginSession.findFirst({
-    where: { id: sessionId, userId },
-  });
-  if (!session) {
-    throw new AppError("NOT_FOUND", "Session not found", 404);
-  }
-  if (currentTokenHash && session.tokenHash === currentTokenHash) {
-    throw new AppError("VALIDATION_ERROR", "You cannot revoke the session you are using", 422);
-  }
-  return prisma.loginSession.update({
-    where: { id: sessionId },
-    data: { revokedAt: new Date(), isCurrent: false },
+  return prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { updatedAt: new Date() } });
+    const session = await tx.loginSession.findFirst({
+      where: { id: sessionId, userId },
+    });
+    if (!session) {
+      throw new AppError("NOT_FOUND", "Session not found", 404);
+    }
+    if (currentTokenHash && session.tokenHash === currentTokenHash) {
+      throw new AppError("VALIDATION_ERROR", "You cannot revoke the session you are using", 422);
+    }
+    return tx.loginSession.updateMany({
+      where: { userId, ...(session.providerSessionId ? { providerSessionId: session.providerSessionId } : { id: sessionId }) },
+      data: { revokedAt: new Date(), isCurrent: false },
+    });
   });
 }
 
 export async function revokeOtherSessions(userId: string, currentTokenHash: string) {
-  const result = await prisma.loginSession.updateMany({
-    where: { userId, revokedAt: null, NOT: { tokenHash: currentTokenHash } },
-    data: { revokedAt: new Date(), isCurrent: false },
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { updatedAt: new Date() } });
+    return tx.loginSession.updateMany({
+      where: { userId, revokedAt: null, NOT: { tokenHash: currentTokenHash } },
+      data: { revokedAt: new Date(), isCurrent: false },
+    });
   });
   return { ok: true, revoked: result.count };
 }
-

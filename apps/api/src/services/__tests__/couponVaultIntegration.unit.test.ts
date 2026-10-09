@@ -27,6 +27,7 @@ import { SettlementService } from "../settlementService";
 import { socketBridge, resetSocketBridge } from "../socketBridge";
 import { prisma } from "@gaming-hub/db";
 import { AppError } from "@gaming-hub/shared";
+import { WalletTransactionService } from "../walletTransactionService";
 
 describe("CouponVault Integration Unit Tests", () => {
   const originalFetch = globalThis.fetch;
@@ -315,14 +316,18 @@ describe("CouponVault Integration Unit Tests", () => {
         completedAt: null,
         createdAt: new Date(),
       } as any);
-      vi.spyOn(prisma.couponRedemption, "update").mockResolvedValue({} as any);
+      vi.spyOn(prisma.couponRedemption, "update").mockResolvedValue({ id: "saga-1", couponId: "cpn-vault-404", userId: "user-redeem-test", value: 1000, externalConfirmedAt: new Date(), sagaStatus: "EXTERNAL_CONFIRMED" } as any);
+      vi.spyOn(prisma.transaction, "findMany").mockResolvedValue([{ id: "saga-1", userId: "user-redeem-test", type: "CREDIT", walletType: "MAIN", referenceType: "DEPOSIT", referenceId: "cpn-vault-404", amount: 1000 }] as any);
+      vi.spyOn(WalletTransactionService, "onDepositCompleted").mockResolvedValue();
       vi.spyOn(prisma.coupon, "upsert").mockResolvedValue({ id: "cpn-vault-404" } as any);
 
       const mockTx = {
+        $queryRaw: vi.fn().mockResolvedValue([]),
         coupon: {
-          upsert: vi.fn().mockResolvedValue({ id: "cpn-vault-404" }),
+          update: vi.fn().mockResolvedValue({ id: "cpn-vault-404" }),
         },
         couponRedemption: {
+          findUniqueOrThrow: vi.fn().mockResolvedValue({ id: "saga-1", couponId: "cpn-vault-404", userId: "user-redeem-test", value: 1000, externalConfirmedAt: new Date(), sagaStatus: "EXTERNAL_CONFIRMED" }),
           create: vi.fn().mockResolvedValue({ id: "redemption-1", value: 1000 }),
           update: vi.fn().mockResolvedValue({ id: "redemption-1", sagaStatus: "COMPLETED" }),
         },
@@ -341,6 +346,7 @@ describe("CouponVault Integration Unit Tests", () => {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
         transaction: {
+          findUnique: vi.fn().mockResolvedValue(null),
           create: vi.fn().mockResolvedValue({ id: "tx-redeem-1" }),
         },
       };
@@ -403,6 +409,8 @@ describe("CouponVault Integration Unit Tests", () => {
       });
 
       const redeemSpy = vi.spyOn(CouponVaultService, "redeemCoupon");
+      vi.spyOn(prisma.transaction, "findMany").mockResolvedValue([{ id: "existing-redemption-id", userId: "user-dup-test", type: "CREDIT", walletType: "MAIN", referenceType: "DEPOSIT", referenceId: "cpn-vault-dup", amount: 500 }] as any);
+      vi.spyOn(WalletTransactionService, "onDepositCompleted").mockResolvedValue();
 
       // The saga returns idempotently for COMPLETED sagas
       const result = await redeemCoupon("user-dup-test", "DUP500");

@@ -116,9 +116,8 @@ export async function accountRoutes(app: FastifyInstance) {
     },
   );
 
-  // GDPR: right to erasure. Soft-delete + anonymize so no personal data
-  // remains identifiable, while preserving referential integrity and the
-  // option to restore (rollback) if required.
+  // Remove public/account identity while preserving restricted compliance and
+  // financial history under the separately approved retention policy.
   app.delete(
     "/api/account",
     { preHandler: [authenticate, requireMfa], config: { rateLimit: DELETE_RATE_LIMIT } },
@@ -142,36 +141,19 @@ export async function accountRoutes(app: FastifyInstance) {
         await tx.profile.update({
           where: { userId: user.id },
           data: {
+            bio: null, gender: null,
             phone: null, dateOfBirth: null, streetAddress: null, city: null,
             state: null, postcode: null, passwordHash: null, twoFactorSecret: null,
             twoFactorSecretEncrypted: null, twoFactorSecretKeyVersion: null,
             totpEncryptedAt: null,
           },
         });
-        const kycReq = await tx.kycRequest.findUnique({ where: { userId: user.id } });
-        if (kycReq) {
-          await tx.kycRequest.update({
-            where: { id: kycReq.id },
-            data: {
-              fullName: "ANONYMIZED",
-              mobileNumber: null,
-              streetAddress: null,
-              addressLine2: null,
-              city: null,
-              state: null,
-              postalCode: null,
-              dateOfBirth: null,
-            },
-          });
-          await tx.kycDocument.updateMany({
-            where: { requestId: kycReq.id },
-            data: {
-              documentNumber: "ANONYMIZED",
-              fileName: "ANONYMIZED",
-              fileUrl: "ANONYMIZED",
-            },
-          });
-        }
+        // Retained compliance records remain restricted to authorized KYC staff.
+        // Preserve storage identities until the approved retention period expires;
+        // erasing paths would make eventual removal impossible to recover.
+        const retainedKyc = await tx.kycRequest.findUnique({ where: { userId: user.id } });
+        if (retainedKyc) await tx.kycAuditLog.create({ data: { requestId: retainedKyc.id, actorId: user.id,
+          action: 'ACCOUNT_DELETED_KYC_RETAINED', category: 'RETENTION', metadata: { accountDeletedAt: deletedAt.toISOString(), retentionPolicy: 'COMPLIANCE_PERIOD_PENDING' } } });
         await tx.loginSession.updateMany({
           where: { userId: user.id, revokedAt: null },
           data: { revokedAt: deletedAt },

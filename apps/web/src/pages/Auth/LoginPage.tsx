@@ -55,11 +55,11 @@ export function LoginPage() {
 
   // Navigate after fully completing login
   const finishLoginNavigation = async (session: import("@supabase/supabase-js").Session) => {
-    // Promote pending session to live authenticated session
-    useAuthStore.getState().setSession(session);
-    useAuthStore.getState().setUser(session.user);
-    useAuthStore.getState().setPendingMfaSession(null);
-    useAuthStore.getState().setIsMfaRequired(false);
+    const status = await useAuthStore.getState().verifySession(session);
+    if (status !== 'authenticated') {
+      if (status === 'mfa_pending') navigate('/2fa', { replace: true });
+      return;
+    }
 
     const target = locationState?.next || from?.pathname;
     if (target) {
@@ -111,33 +111,10 @@ export function LoginPage() {
       const supabaseSession =
         signInData?.session ?? (await supabase.auth.getSession()).data.session;
 
-      if (!supabaseSession) {
-        useAuthStore.getState().setIsMfaRequired(false);
-        await finishLoginNavigation(supabaseSession!);
-        return;
-      }
-
-      // Check backend session — it tells us authoritatively if 2FA is required
-      let requiresTwoFactor = false;
-      try {
-        const result = await apiClient.post<{
-          status: string;
-          requiresTwoFactor?: boolean;
-          userId?: string;
-          challengeId?: string;
-        }>(
-          "/auth/session",
-          { token: supabaseSession.access_token },
-          supabaseSession.access_token
-        );
-
-        requiresTwoFactor =
-          result.requiresTwoFactor === true ||
-          result.status === "mfa_required" ||
-          result.status === "2fa_required";
-      } catch (sessionErr) {
-        console.error("Backend session check failed", sessionErr);
-      }
+      if (!supabaseSession) throw new Error('Authentication session could not be established');
+      const status = await useAuthStore.getState().verifySession(supabaseSession);
+      if (status === 'superseded') return;
+      const requiresTwoFactor = status === 'mfa_pending';
 
       if (requiresTwoFactor) {
         // isMfaRequired was already set true above; App.tsx already stored

@@ -91,24 +91,32 @@ const header = request.headers.authorization;
 
   const user = await ensureUser(verified.sub, verified.email, verified.userMetadata);
 
+  const penalty = await prisma.playerPenalty.findFirst({ where: {
+    userId: user.id, status: "ACTIVE", type: { not: "AFK_WARNING" },
+    OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+  } });
+  if (penalty) throw new AppError("ACCOUNT_BANNED", "Account access is suspended", 403);
+
   // Keep player online presence fresh
   touchUserPresence(user.id);
 
   // Check if this session token was explicitly revoked or expired
   const tokenHash = hashToken(token);
   const existingSession = await prisma.loginSession.findUnique({ where: { tokenHash } });
-  if (existingSession?.revokedAt || (existingSession && existingSession.expiresAt < new Date())) {
+  if (existingSession?.revokedAt || (existingSession && (existingSession.userId !== user.id || existingSession.expiresAt <= new Date()))) {
     throw new AppError("SESSION_REVOKED", "Your session was terminated because your account was signed in on another device", 401);
   }
 
   // Ensure active session is recorded / refreshed in DB (atomically revoking older sessions)
-  if (!existingSession) {
+  if (!existingSession || (verified.providerSessionId && !existingSession.providerSessionId)) {
     await recordLoginSession({
       userId: user.id,
       token,
       ip: request.ip,
       userAgent: (request.headers["user-agent"] as string) ?? null,
-    }).catch(() => {});
+      expiresAt: verified.expiresAt,
+      providerSessionId: verified.providerSessionId,
+    });
   }
 
   // ─── Android Version Enforcement ────────────────────────────────────────────
@@ -165,7 +173,7 @@ const header = request.headers.authorization;
   // endpoint can access the user identity to perform TOTP validation.
   const isMfaVerifyRoute =
     request.method === "POST" &&
-    ["/api/auth/2fa/verify", "/api/security/2fa/verify-login"].includes(request.url.split("?")[0]);
+    ["/api/auth/2fa/verify", "/api/security/2fa/verify-login", "/api/auth/logout"].includes(request.url.split("?")[0]);
 
   if (!isMfaVerifyRoute) {
     // Check profile lazily — only when needed (non-2FA users are unaffected)
@@ -201,6 +209,20 @@ export async function optionalAuthenticate(request: FastifyRequest, _reply: Fast
   } catch {
     Reflect.deleteProperty(request, "user");
   }
+}
+
+/** Logout grants no application access. A signed, already revoked credential
+ * may still revoke its own refresh lineage (for example from an older tab). */
+export async function authenticateLogout(request: FastifyRequest): Promise<void> {
+  const header = request.headers.authorization;
+  const token = header?.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (!token) throw new AppError("UNAUTHORIZED", "Missing bearer token", 401);
+  let verified: Awaited<ReturnType<typeof verifyAccessToken>>;
+  try { verified = await verifyAccessToken(token); }
+  catch { throw new AppError("UNAUTHORIZED", "Invalid or expired token", 401); }
+  const user = await prisma.user.findUnique({ where: { id: verified.sub } });
+  if (!user) throw new AppError("UNAUTHORIZED", "Account not found", 401);
+  request.user = user;
 }
 
 // ─── C-02: requireMfa ────────────────────────────────────────────────────────
@@ -246,7 +268,7 @@ export async function requireMfa(request: FastifyRequest, _reply: FastifyReply):
   const tokenHash = hashToken(rawToken);
 
   const session = await prisma.loginSession.findUnique({ where: { tokenHash } });
-  if (!session?.mfaVerifiedAt) {
+  if (!session?.mfaVerifiedAt || session.userId !== user.id || session.revokedAt || session.expiresAt <= new Date()) {
     throw new AppError(
       "MFA_REQUIRED",
       "This action requires 2FA verification. Please complete 2FA at /api/auth/2fa/verify.",
@@ -257,7 +279,7 @@ export async function requireMfa(request: FastifyRequest, _reply: FastifyReply):
   // Freshness check: mfaVerifiedAt must be within MFA_FRESHNESS_MINUTES
   const freshnessMs = env.MFA_FRESHNESS_MINUTES * 60 * 1000;
   const verifiedAgeMs = Date.now() - session.mfaVerifiedAt.getTime();
-  if (verifiedAgeMs > freshnessMs) {
+  if (verifiedAgeMs < 0 || verifiedAgeMs > freshnessMs) {
     throw new AppError(
       "MFA_REQUIRED",
       `Your 2FA session has expired (older than ${env.MFA_FRESHNESS_MINUTES} minutes). ` +

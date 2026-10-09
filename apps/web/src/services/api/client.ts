@@ -63,8 +63,8 @@ async function refreshAccessToken(): Promise<string | null> {
         useAuthStore.getState().signOut().catch(() => {});
         return null;
       }
-      useAuthStore.getState().setSession(data.session);
-      return data.session.access_token;
+      const status = await useAuthStore.getState().verifySession(data.session);
+      return status === 'authenticated' ? data.session.access_token : null;
     } catch {
       useAuthStore.getState().signOut().catch(() => {});
       return null;
@@ -107,7 +107,7 @@ async function request<T>(path: string, init: RequestInit, tokenOverride?: strin
     } catch {
       // Non-JSON error body.
     }
-    if (response.status === 401) {
+    if (response.status === 401 && path !== '/auth/session' && path !== '/auth/logout') {
       const code = body.error?.code;
       if (
         code === "SESSION_REVOKED" ||
@@ -126,8 +126,11 @@ async function request<T>(path: string, init: RequestInit, tokenOverride?: strin
           retryHeaders.set("Authorization", `Bearer ${freshToken}`);
           return request<T>(path, { ...init, headers: retryHeaders }, freshToken);
         } else {
+          if (useAuthStore.getState().isMfaRequired) {
+            throw new ApiError(403, 'MFA_PENDING', 'Complete two-factor authentication to continue');
+          }
           // Refresh failed or token invalid -> clear stale session
-          useAuthStore.getState().signOut().catch(() => {});
+          if (!useAuthStore.getState().isMfaRequired) useAuthStore.getState().signOut().catch(() => {});
         }
       } else {
         // Already retried once and still 401 -> clear stale session

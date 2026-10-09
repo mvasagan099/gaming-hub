@@ -22,8 +22,9 @@ export function formatClock(ms: number): string {
 export function liveRemainingMs(
   clock: { remainingMs: number; startedAtMs: number | null },
   now: number,
+  paused = false,
 ): number {
-  if (clock.startedAtMs == null) return clock.remainingMs;
+  if (paused || clock.startedAtMs == null) return clock.remainingMs;
   const elapsed = Math.max(0, now - clock.startedAtMs);
   return Math.max(0, clock.remainingMs - elapsed);
 }

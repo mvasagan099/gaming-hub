@@ -81,8 +81,15 @@ export function useMe(): UseMeResult {
       } catch (err: unknown) {
         if (cancelled) return;
 
-        // If 401 or 403, session is invalid, revoked, or unverified -> sign out & reset state
-        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        if (err instanceof ApiError && err.code === 'MFA_PENDING') {
+          const pending = useAuthStore.getState().pendingMfaSession ?? session;
+          useAuthStore.setState({ session: null, user: null, pendingMfaSession: pending, isMfaRequired: true });
+          sessionStorage.setItem('mfa_pending', 'true');
+          setMe(null);
+          setLoading(false);
+          return;
+        }
+        if (err instanceof ApiError && err.status === 401) {
           useAuthStore.getState().signOut().catch(() => {});
           setMe(null);
           setError(err.message);

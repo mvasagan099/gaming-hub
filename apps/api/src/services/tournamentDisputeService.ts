@@ -483,6 +483,9 @@ export async function resolveTournamentDispute(
     newStatus = "RESOLVED";
   }
 
+  let overrideUpdated: Awaited<ReturnType<typeof prisma.tournamentDispute.update>> | undefined;
+  let repeatedOverride = false;
+
   // Handle RESULT_OVERRIDE with authoritative pipeline reconciliation
   if (action === "OVERRIDE_RESULT") {
     if (!justificationReason || justificationReason.trim().length < 5) {
@@ -495,11 +498,26 @@ export async function resolveTournamentDispute(
       throw new AppError("INVALID_ACTION", "New winner must be one of the match participants", 400);
     }
 
-    const oldWinnerId = roundSlot?.winnerId;
-    const oldScoreA = roundSlot?.playerAScore ?? 0;
-    const oldScoreB = roundSlot?.playerBScore ?? 0;
+    let oldWinnerId = roundSlot?.winnerId;
+    let oldScoreA = roundSlot?.playerAScore ?? 0;
+    let oldScoreB = roundSlot?.playerBScore ?? 0;
 
     await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "TournamentDispute" WHERE "id" = ${dispute.id} FOR UPDATE`;
+      const current = await tx.tournamentDispute.findUniqueOrThrow({ where: { id: dispute.id } });
+      // Serialize different disputes against the same result as well as retries.
+      await tx.$queryRaw`SELECT "id" FROM "TournamentRound" WHERE "matchId" = ${dispute.matchId} FOR UPDATE`;
+      const roundSlot = await tx.tournamentRound.findFirst({ where: { matchId: dispute.matchId } });
+      if (!roundSlot || (newWinnerId !== roundSlot.playerAId && newWinnerId !== roundSlot.playerBId)) throw new AppError("INVALID_ACTION", "A valid tournament participant is required", 400);
+      if (["RESOLVED", "REJECTED", "CLOSED"].includes(current.status)) {
+        if (current.resolutionAction !== action || roundSlot.winnerId !== newWinnerId || (newScoreA !== undefined && newScoreA !== roundSlot.playerAScore) || (newScoreB !== undefined && newScoreB !== roundSlot.playerBScore)) throw new AppError("VALIDATION_ERROR", "Dispute has already been resolved with a different result", 409);
+        overrideUpdated = current;
+        repeatedOverride = true;
+        return;
+      }
+      oldWinnerId = roundSlot.winnerId;
+      oldScoreA = roundSlot.playerAScore;
+      oldScoreB = roundSlot.playerBScore;
       // Update round slot
       if (roundSlot) {
         await tx.tournamentRound.update({
@@ -573,13 +591,13 @@ export async function resolveTournamentDispute(
             tx,
             oldWinnerId,
             -oldWinnerPrize.amount,
-            "ADJUST" as any,
-            dispute.tournamentId,
+            "REVERSAL",
+            dispute.id,
             { disputeId: dispute.disputeId, reason: "DISPUTE_RESULT_OVERRIDE_REVERSAL" },
-          ).catch((e) => console.error(`[DISPUTE OVERRIDE] Could not reverse prize from old winner:`, e));
+          );
 
-          // Credit new winner via auditable transaction
-          await applyTransaction(
+          // A failed reversal aborts the entire correction before this credit.
+          const replacementWallet = await applyTransaction(
             tx,
             newWinnerId,
             oldWinnerPrize.amount,
@@ -592,10 +610,11 @@ export async function resolveTournamentDispute(
           const newPlayer = await tx.tournamentPlayer.findUnique({
             where: { tournamentId_userId: { tournamentId: dispute.tournamentId, userId: newWinnerId } },
           });
+          if (!newPlayer) throw new AppError("NOT_FOUND", "Replacement tournament player not found", 404);
           if (newPlayer) {
             await tx.tournamentPrize.update({
               where: { id: oldWinnerPrize.id },
-              data: { userId: newWinnerId, playerId: newPlayer.id },
+              data: { userId: newWinnerId, playerId: newPlayer.id, transactionId: (replacementWallet as any)._transaction.id },
             });
           }
         }
@@ -603,13 +622,15 @@ export async function resolveTournamentDispute(
 
       // Recalculate authoritative tournament leaderboard standings
       const { TournamentLeaderboardService } = await import("./tournamentLeaderboardService");
-      await TournamentLeaderboardService.recalculateTournamentStandings(dispute.tournamentId, tx).catch((e) =>
-        console.error(`[DISPUTE_LEADERBOARD_RECALC_FAILED] Tournament ${dispute.tournamentId}:`, e),
-      );
+      await TournamentLeaderboardService.recalculateTournamentStandings(dispute.tournamentId, tx);
+      overrideUpdated = await tx.tournamentDispute.update({ where: { id: dispute.id }, data: {
+        status: newStatus, resolutionAction: action, adminNotes: adminNotes?.trim() ?? current.adminNotes,
+        resolvedBy: adminId, resolvedAt: new Date(),
+      } });
     });
 
-    // Detailed Audit Log for Override
-    audit({
+    // Replayed corrections do not repeat audit/notification side effects.
+    if (!repeatedOverride) audit({
       actorType: "user",
       actorId: adminId,
       action: "tournament.result.override",
@@ -629,7 +650,7 @@ export async function resolveTournamentDispute(
   }
 
   // Update dispute status
-  const updated = await prisma.tournamentDispute.update({
+  const updated = overrideUpdated ?? await prisma.tournamentDispute.update({
     where: { id: dispute.id },
     data: {
       status: newStatus,
@@ -641,7 +662,7 @@ export async function resolveTournamentDispute(
   });
 
   // Audit Resolution
-  audit({
+  if (!repeatedOverride) audit({
     actorType: "user",
     actorId: adminId,
     action: "tournament.dispute.resolved",
@@ -658,7 +679,7 @@ export async function resolveTournamentDispute(
   });
 
   // Email Notification for Resolution
-  if (newStatus === "RESOLVED" || newStatus === "REJECTED") {
+  if (!repeatedOverride && (newStatus === "RESOLVED" || newStatus === "REJECTED")) {
     await TournamentEmailService.notifyDisputeResolved({
       userId: dispute.userId,
       tournamentId: dispute.tournamentId,

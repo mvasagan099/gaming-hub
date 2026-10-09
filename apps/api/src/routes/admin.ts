@@ -5,11 +5,12 @@ import {
   AppError,
   clampPagination,
   SETTINGS_CATEGORIES,
+  ROLE_PERMISSIONS,
   type SettingsCategoryName,
 } from "@gaming-hub/shared";
 import { authenticate, requireMfa } from "../plugins/authenticate";
 import { requireUser, parseSchema, routeParams, queryParams, queryString } from "../lib/http";
-import { requirePermission } from "../lib/permissions";
+import { requirePermission, assertRoleGrant } from "../lib/permissions";
 import { applyTransaction } from "../services/wallet";
 import { WalletTransactionService } from "../services/walletTransactionService";
 import { auditFromRequest } from "../services/audit";
@@ -20,7 +21,7 @@ import {
   setWalletFrozen,
 } from "../services/walletRequests";
 import {
-  getSettings,
+  getPublicSettings,
   resetSettingsCache,
   setSetting,
   setCategorySettings,
@@ -29,6 +30,7 @@ import {
 const walletAdjustSchema = z.object({
   amount: z.number().int().min(-1_000_000).max(1_000_000),
   reason: z.string().trim().min(1).max(200),
+  idempotencyKey: z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/).optional(),
 });
 
 const roleChangeSchema = z.object({
@@ -125,7 +127,13 @@ export async function adminRoutes(app: FastifyInstance) {
   const handleWalletAdjustment = async (request: FastifyRequest) => {
     const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
     const { id } = routeParams(request);
-    const { amount, reason } = parseSchema(walletAdjustSchema, request.body);
+    const { amount, reason, idempotencyKey: bodyKey } = parseSchema(walletAdjustSchema, request.body);
+    const headerKey = request.headers["idempotency-key"];
+    if (headerKey && bodyKey && headerKey !== bodyKey) throw new AppError("VALIDATION_ERROR", "Conflicting idempotency keys", 400);
+    const idempotencyKey = headerKey ?? bodyKey;
+    if (typeof idempotencyKey !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(idempotencyKey)) {
+      throw new AppError("VALIDATION_ERROR", "A stable idempotency key is required for a wallet adjustment", 400);
+    }
     const { AdminWalletService } = await import("../services/adminWalletService");
 
     return AdminWalletService.adjustWallet({
@@ -133,6 +141,7 @@ export async function adminRoutes(app: FastifyInstance) {
       targetUserId: id,
       amount,
       reason,
+      idempotencyKey,
     });
   };
 
@@ -196,7 +205,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.patch("/api/admin/security/alerts/:id", { preHandler: [authenticate, requireMfa] }, async (request) => {
-    const admin = await requirePermission(request, "admin:wallet:view", prisma);
+    const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
     const { id } = routeParams(request);
     const body = (request.body ?? {}) as { status?: any; adminNotes?: string };
     const { SuspiciousActivityService } = await import("../services/suspiciousActivityService");
@@ -264,7 +273,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // ---- Automated Financial Reconciliation ----------------------------------
   app.post("/api/admin/reconciliation/run", { preHandler: [authenticate, requireMfa] }, async (request) => {
-    await requirePermission(request, "admin:wallet:view", prisma);
+    await requirePermission(request, "admin:wallet:adjust", prisma);
     const body = (request.body ?? {}) as { userId?: string; matchId?: string; tournamentId?: string };
     const { ReconciliationService } = await import("../services/reconciliationService");
 
@@ -304,7 +313,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.patch("/api/admin/reconciliation/issues/:id", { preHandler: [authenticate, requireMfa] }, async (request) => {
-    const admin = await requirePermission(request, "admin:wallet:view", prisma);
+    const admin = await requirePermission(request, "admin:wallet:adjust", prisma);
     const { id } = routeParams(request);
     const body = (request.body ?? {}) as { status?: any; notes?: string };
     const { ReconciliationService } = await import("../services/reconciliationService");
@@ -452,11 +461,21 @@ export async function adminRoutes(app: FastifyInstance) {
 
     if (role === "CUSTOM" && customRoleId) {
       const customRole = await prisma.customRole.findUnique({
-        where: { id: customRoleId },
+        where: { id: customRoleId }, include: { permissions: true },
       });
       if (!customRole) {
         throw new AppError("VALIDATION_ERROR", "Custom role not found", 422);
       }
+      await assertRoleGrant(admin, customRole.permissions.map((p) => p.permission), prisma);
+    }
+    if (role !== "CUSTOM") await assertRoleGrant(admin, ROLE_PERMISSIONS[role], prisma);
+
+    if (target.role === "CUSTOM" && target.customRoleId) {
+      const targetRole = await prisma.customRole.findUnique({ where: { id: target.customRoleId }, include: { permissions: true } });
+      if (!targetRole) throw new AppError("FORBIDDEN", "Cannot administer an invalid role", 403);
+      await assertRoleGrant(admin, targetRole.permissions.map((p) => p.permission), prisma);
+    } else {
+      await assertRoleGrant(admin, ROLE_PERMISSIONS[target.role], prisma);
     }
 
     if (target.role === "ADMIN" && role !== "ADMIN") {
@@ -493,11 +512,10 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // ---- Site settings -------------------------------------------------------
-  // Returns the full validated configuration including secret values. Requires
-  // the read permission; non-admin clients use the public /api/settings route.
+  // Read authority does not grant access to configured provider credentials.
   app.get("/api/admin/settings", { preHandler: authenticate }, async (request) => {
     await requirePermission(request, "admin:settings:view", prisma);
-    return getSettings();
+    return getPublicSettings();
   });
 
   const singleSettingSchema = z.object({
@@ -531,7 +549,7 @@ export async function adminRoutes(app: FastifyInstance) {
   app.put("/api/admin/settings/category", { preHandler: [authenticate, requireMfa] }, async (request) => {
     const admin = await requirePermission(request, "admin:settings:edit", prisma);
     const { category, values } = parseSchema(categoryUpdateSchema, request.body);
-    const saved = await setCategorySettings(category, values, admin.id);
+    await setCategorySettings(category, values, admin.id);
     auditFromRequest(request, {
       actorType: "user",
       actorId: admin.id,
@@ -541,7 +559,8 @@ export async function adminRoutes(app: FastifyInstance) {
       targetId: category,
       meta: { category, fields: Object.keys(values) },
     });
-    return { ok: true, category, values: saved };
+    const publicSettings = await getPublicSettings();
+    return { ok: true, category, values: publicSettings[category] };
   });
 
   // Reset a category back to built-in defaults (deletes all stored rows).

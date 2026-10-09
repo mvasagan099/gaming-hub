@@ -1,3 +1,4 @@
+import { recoverSocketSession } from '../services/socket/sessionRecovery';
 import { create } from "zustand";
 import toast from "react-hot-toast";
 import type {
@@ -305,6 +306,15 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       });
 
       socket.on("connect_error", (err: any) => {
+        if (['TOKEN_EXPIRED', 'TOKEN_REFRESH', 'MFA_PENDING'].includes(err?.message)) {
+          void recoverSocketSession(err.message).then((status) => {
+            if (get().socket !== socket) return;
+            if (status === 'reconnect') socket.connect();
+            else if (status === 'mfa_pending' && typeof window !== 'undefined') window.location.href = '/2fa';
+            else useAuthStore.getState().signOut().catch(() => {});
+          });
+          return;
+        }
         if (err?.message === "SESSION_REVOKED") {
           socket.disconnect();
           useAuthStore.getState().signOut().catch(() => {});
@@ -316,13 +326,30 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         set({ status: "error", error: "Could not reach the game server" });
       });
 
-      socket.on("auth:session-revoked", ({ reason }) => {
-        console.warn("[MultiplayerStore] auth:session-revoked received:", reason);
+      socket.on('auth:session-revoked', ({ reason }) => {
+        if (get().socket !== socket) return;
+        const queued = get().matchmaking;
+        const requeue = ['TOKEN_REFRESH', 'TOKEN_EXPIRED'].includes(reason)
+          && queued.queued && queued.gameId && queued.stake != null
+          ? { gameId: queued.gameId, stake: queued.stake, settings: queued.settings ?? {} }
+          : null;
         socket.disconnect();
-        useAuthStore.getState().signOut().catch(() => {});
-        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-          window.location.href = "/login?reason=session_revoked";
-        }
+        void recoverSocketSession(reason).then((status) => {
+          if (get().socket !== socket) return;
+          if (status === 'reconnect') {
+            set({ pendingRequeue: requeue });
+            socket.connect();
+            return;
+          }
+          if (status === 'mfa_pending') {
+            if (typeof window !== 'undefined') window.location.href = '/2fa';
+            return;
+          }
+          useAuthStore.getState().signOut().catch(() => {});
+          if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+            window.location.href = '/login?reason=session_revoked';
+          }
+        });
       });
 
 

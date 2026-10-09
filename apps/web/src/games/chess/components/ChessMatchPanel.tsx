@@ -111,8 +111,8 @@ export function useChessPanelState(game: Phaser.Game | null | undefined, online:
   const clocks       = s?.clocks;
   const myKey        = String(myPlayer.seat);
   const oppKey       = String(opponent.seat);
-  const myMs         = clocks?.[myKey]  ? liveRemainingMs(clocks[myKey]!,  tick) : Infinity;
-  const oppMs        = clocks?.[oppKey] ? liveRemainingMs(clocks[oppKey]!, tick) : Infinity;
+  const myMs         = clocks?.[myKey]  ? liveRemainingMs(clocks[myKey]!,  tick, s?.paused) : Infinity;
+  const oppMs        = clocks?.[oppKey] ? liveRemainingMs(clocks[oppKey]!, tick, s?.paused) : Infinity;
 
   const isMySeatTurn  = isOnline ? myPlayer.seat >= 0 && s?.currentSeat === myPlayer.seat && s?.turn === myPlayer.color : localStatus.includes("WHITE");
   const isOppTurn     = isOnline ? opponent.seat >= 0 && s?.currentSeat === opponent.seat && s?.turn === opponent.color : localStatus.includes("BLACK");

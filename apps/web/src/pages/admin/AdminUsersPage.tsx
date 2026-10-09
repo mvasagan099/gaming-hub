@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   X,
@@ -46,6 +46,8 @@ export function AdminUsersPage() {
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [walletAmount, setWalletAmount] = useState('');
   const [walletReason, setWalletReason] = useState('');
+  const walletRetry = useRef<{ payload: string; key: string } | null>(null);
+  useEffect(() => { if (!showWalletModal) walletRetry.current = null; }, [showWalletModal]);
   const [newRole, setNewRole] = useState<'USER' | 'MODERATOR' | 'ADMIN'>('USER');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [detail, setDetail] = useState<AdminCustomerDetail | null>(null);
@@ -102,10 +104,13 @@ export function AdminUsersPage() {
   const handleWalletAdjust = async () => {
     const parsedAmount = parseInt(walletAmount, 10);
     if (!selectedUser || walletReason.trim().length < 3 || isNaN(parsedAmount) || parsedAmount === 0) return;
+    const payload = JSON.stringify([selectedUser.id, parsedAmount, walletReason.trim()]);
+    if (walletRetry.current?.payload !== payload) walletRetry.current = { payload, key: crypto.randomUUID() };
     setIsSubmitting(true);
     setModalError(null);
     try {
       await apiClient.post(`/admin/users/${selectedUser.id}/wallet/adjust`, {
+        idempotencyKey: walletRetry.current.key,
         amount: parsedAmount,
         reason: walletReason.trim(),
       });

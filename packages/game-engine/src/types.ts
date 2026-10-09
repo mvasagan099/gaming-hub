@@ -55,6 +55,9 @@ export interface EngineInstance {
   setRandomSource(rng: RandomSource): void;
   /** Wall-clock deadline for the current seat's flag, for clock-capable games. */
   readonly currentClockDeadline?: number | null;
+  /** Server lifecycle controls; these do not authorize client pause requests. */
+  pauseClocks?(): void;
+  resumeClocks?(): void;
   /**
    * Optional wall-clock deadline for the whole match, when the match must end
    * regardless of whose turn it is (e.g. speedrun or timer-constrained modes).

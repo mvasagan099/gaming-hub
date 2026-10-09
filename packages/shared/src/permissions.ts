@@ -124,6 +124,9 @@ export const ROLE_PERMISSIONS: Record<DbUserRole, readonly Permission[]> = {
 };
 
 export const ALL_PERMISSIONS: readonly Permission[] = [
+  "tournaments.disputes.view",
+  "tournaments.disputes.review",
+  "tournaments.results.override",
   "admin:users:view",
   "admin:users:manage",
   "admin:rooms:view",
@@ -187,4 +190,3 @@ export function hasPermission(
   }
   return rolePerms.includes(permission);
 }
-

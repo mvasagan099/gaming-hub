@@ -8,11 +8,11 @@ import { verify as verifyOtp, NobleCryptoPlugin, ScureBase32Plugin } from "otpli
 import { env } from "../env";
 import { verifyAccessToken } from "../auth/supabase";
 import { ensureUser, getAuthenticatedUserData } from "../services/users";
-import { authenticate } from "../plugins/authenticate";
+import { authenticate, authenticateLogout } from "../plugins/authenticate";
 import { requireUser } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
 import { getCategorySettings } from "../services/settings";
-import { recordLoginSession, hashToken } from "../services/sessions";
+import { recordLoginSession, hashToken, revokeCurrentSession } from "../services/sessions";
 import { loadTotpSecret } from "../lib/crypto";
 
 // Failed sign-in lockout: more than this many failed session exchanges for an
@@ -35,6 +35,13 @@ async function isLockedOut(email: string | null): Promise<boolean> {
 }
 
 export async function authRoutes(app: FastifyInstance) {
+  app.post("/api/auth/logout", { preHandler: authenticateLogout }, async (request) => {
+    const user = requireUser(request);
+    const token = request.headers.authorization!.slice(7).trim();
+    const verified = await verifyAccessToken(token);
+    await revokeCurrentSession(user.id, token, verified.providerSessionId, verified.expiresAt);
+    return { ok: true };
+  });
   app.get("/api/auth/me", { preHandler: authenticate }, async (request) => {
     const authHeader = request.headers.authorization as string | undefined;
     const rawToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : undefined;
@@ -119,12 +126,19 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       await ensureUser(verified.sub, verified.email, verified.userMetadata);
+      const penalty = await prisma.playerPenalty.findFirst({ where: {
+        userId: verified.sub, status: "ACTIVE", type: { not: "AFK_WARNING" },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      } });
+      if (penalty) throw new AppError("ACCOUNT_BANNED", "Account access is suspended", 403);
       
       await recordLoginSession({
         userId: verified.sub,
         token,
         ip: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
+        expiresAt: verified.expiresAt,
+        providerSessionId: verified.providerSessionId,
       });
 
       const profile = await prisma.profile.findUnique({

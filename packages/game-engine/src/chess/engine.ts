@@ -55,6 +55,8 @@ export type ChessState = JsonObject & {
   drawOfferedBy: number | null;
   result: "1-0" | "0-1" | "1/2-1/2" | "*";
   endReason: ChessEndReason;
+  paused?: boolean;
+  pausedAtMs?: number | null;
 };
 
 export type ChessMoveAction = {
@@ -106,10 +108,24 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
   /** Wall-clock timestamp at which the current seat's clock hits zero, or null. */
   get currentClockDeadline(): number | null {
     const state = this.state as ChessState;
-    if (!state.timeControl || !state.clocks || state.finished) return null;
+    if (!state.timeControl || !state.clocks || state.finished || state.paused) return null;
     const clock = state.clocks[state.currentSeat];
     if (!clock || clock.startedAtMs === null) return null;
     return clock.startedAtMs + clock.remainingMs;
+  }
+
+  pauseClocks(): void {
+    if (this.state.finished || this.state.paused) return;
+    this.updateState({ ...this.state, paused: true, pausedAtMs: this.now() });
+  }
+
+  resumeClocks(): void {
+    if (!this.state.paused || this.state.pausedAtMs == null) return;
+    const next = structuredClone(this.state);
+    const elapsed = Math.max(0, this.now() - next.pausedAtMs!);
+    for (const clock of Object.values(next.clocks ?? {})) if (clock.startedAtMs != null) clock.startedAtMs += elapsed;
+    next.paused = false; next.pausedAtMs = null;
+    this.updateState(next);
   }
 
   protected initState(): ChessState {
@@ -231,7 +247,7 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
   override serialize(): JsonObject {
     const copy = structuredClone(this.state) as ChessState;
     if (copy.clocks) {
-      const now = this.now();
+      const now = copy.pausedAtMs ?? this.now();
       for (const seatKey of Object.keys(copy.clocks)) {
         const clock = copy.clocks[seatKey];
         if (clock && clock.startedAtMs !== null) {
@@ -249,6 +265,7 @@ export class ChessEngine extends ServerGameEngine<ChessState, ChessAction> {
     if (state.finished) {
       return "This match has already finished";
     }
+    if (state.paused && action.type !== "resign") return "Match is paused while a player reconnects";
 
     switch (action.type) {
       case "move": {

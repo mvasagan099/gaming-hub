@@ -491,6 +491,12 @@ export async function adminTournamentsRoutes(app: FastifyInstance) {
     const admin = await requirePermission(request, "tournaments.disputes.review", prisma);
     const { id } = routeParams(request);
     const body = request.body as any;
+    if (body?.action === "OVERRIDE_RESULT") {
+      await requirePermission(request, "tournaments.results.override", prisma);
+      await requirePermission(request, "admin:wallet:adjust", prisma);
+    } else if (body?.action === "FINANCIAL_CORRECTION") {
+      await requirePermission(request, "admin:wallet:adjust", prisma);
+    }
     const { resolveTournamentDispute } = await import("../services/tournamentDisputeService");
     return resolveTournamentDispute(admin.id, id, body);
   });
