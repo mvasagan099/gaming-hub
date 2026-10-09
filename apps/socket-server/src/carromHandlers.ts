@@ -1,6 +1,6 @@
 import type { Server, Socket } from "socket.io";
 import type { MultiplayerFramework } from "@gaming-hub/multiplayer";
-import { type CarromEngine, isValidStrikerPlacement } from "@gaming-hub/game-engine";
+import { type CarromEngine, BASE_LINE_X_START, BASE_LINE_X_END } from "@gaming-hub/game-engine";
 
 /** Visual previews never mutate the authoritative striker or advance a turn. */
 export function registerCarromPreviewHandler(
@@ -22,7 +22,7 @@ export function registerCarromPreviewHandler(
     const turn = state.turnNumber ?? 0;
     if (payload.turnNumber !== undefined && payload.turnNumber !== turn) return;
     if (!Number.isSafeInteger(payload.sequence) || payload.sequence < 0) return;
-    if (!Number.isFinite(payload.x) || !isValidStrikerPlacement(payload.x, player.seat, state.coins)) return;
+    if (!Number.isFinite(payload.x) || payload.x < BASE_LINE_X_START - 5 || payload.x > BASE_LINE_X_END + 5) return;
     const scope = `${room.match.matchId}:${turn}`;
     if (lastScope === scope && payload.sequence <= lastSequence) return;
     lastScope = scope;

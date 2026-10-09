@@ -304,6 +304,7 @@ const CarromMultiplayer: React.FC<Props> = ({
   const placementInFlightRef = useRef(false);
   const placementRevisionRef = useRef(0);
   const lastAuthoritativeStrikerXRef = useRef<number>(W / 2);
+  const lastPlaceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // UI state
   const [dragState, setDragState] = useState<"idle" | "dragging" | "placing_striker">("idle");
@@ -573,7 +574,6 @@ const CarromMultiplayer: React.FC<Props> = ({
     driver.onStrikerPositionUpdate = (data) => {
       if (data.seat === mySeatRef.current) return;
       if (isMyTurnRef.current) return;
-      if (isTurnActiveRef.current) return;
       const seat = mySeatRef.current;
       // Convert canonical world X to player's local view X
       const viewPos = worldToView(data.x, 0, seat);
@@ -583,6 +583,10 @@ const CarromMultiplayer: React.FC<Props> = ({
     driver.start();
 
     return () => {
+      if (lastPlaceTimerRef.current) {
+        clearTimeout(lastPlaceTimerRef.current);
+        lastPlaceTimerRef.current = null;
+      }
       clearSettleTimeout();
       worker?.terminate();
       previewWorkerRef.current = null;
@@ -629,6 +633,7 @@ const CarromMultiplayer: React.FC<Props> = ({
       if (isNewTurn || state.currentSeat !== seat || state.finished) {
         cancelAim();
         localPlacementDirtyRef.current = false;
+        remoteTargetStrikerXRef.current = null;
       }
       // Sync coins and reposition striker to server-confirmed locations.
       syncCoinsToServer(state, true);
@@ -743,8 +748,16 @@ const CarromMultiplayer: React.FC<Props> = ({
       if (striker) {
         const isMyTurnNow = state.currentSeat === seat;
         if (!isMyTurnNow) {
-          const sx = state.striker?.x;
-          striker.x = sx !== undefined ? mapToClient(sx, 0, seat).x : W / 2;
+          if (state.lastAction?.type === "place-striker" && state.striker?.x !== undefined) {
+            const placedX = mapToClient(state.striker.x, 0, seat).x;
+            remoteTargetStrikerXRef.current = placedX;
+            striker.x = placedX;
+          } else if (remoteTargetStrikerXRef.current !== null) {
+            // Keep tracking live remote preview position without snapping to old server snapshot
+          } else {
+            const sx = state.striker?.x;
+            striker.x = sx !== undefined ? mapToClient(sx, 0, seat).x : W / 2;
+          }
           striker.y = OPPONENT_STRIKER_Y;
         } else {
           if (!localPlacementDirtyRef.current) {
@@ -1389,7 +1402,11 @@ const CarromMultiplayer: React.FC<Props> = ({
             : driverRef.current?.lastState?.striker?.x !== undefined
             ? mapToClient(driverRef.current.lastState.striker.x, 0, mySeatRef.current).x
             : W / 2;
-        striker.x += (targetX - striker.x) * 0.25;
+        if (Math.abs(targetX - striker.x) < 0.5) {
+          striker.x = targetX;
+        } else {
+          striker.x += (targetX - striker.x) * 0.25;
+        }
         striker.y = OPPONENT_STRIKER_Y;
       }
     }
@@ -1624,7 +1641,12 @@ const CarromMultiplayer: React.FC<Props> = ({
     const pullDist = Math.hypot(dx, dy);
 
     // Minimum pull threshold to avoid accidental micro-clicks
-    if (pullDist < 12) return;
+    if (pullDist < 12) {
+      if (localPlacementDirtyRef.current) {
+        void handleMoverRelease();
+      }
+      return;
+    }
 
     if (turnSecondsRemaining <= 0) {
       toast.error("Time's up! Turn expired.", { id: "turn-timeout" });
@@ -1722,11 +1744,25 @@ const CarromMultiplayer: React.FC<Props> = ({
     // Check overlap reactively
     setStrikerOverlap(checkStrikerOverlap());
 
-    // Live 30 FPS network throttled broadcast (~33ms)
+    // Live 30 FPS network throttled broadcast (~33ms) with trailing update
     const now = Date.now();
-    if (now - lastPlaceSentRef.current >= 33 && driverRef.current?.canPlaceStriker()) {
+    const elapsed = now - lastPlaceSentRef.current;
+    if (elapsed >= 33 && driverRef.current?.canPlaceStriker()) {
+      if (lastPlaceTimerRef.current) {
+        clearTimeout(lastPlaceTimerRef.current);
+        lastPlaceTimerRef.current = null;
+      }
       lastPlaceSentRef.current = now;
       driverRef.current.sendLiveStrikerPosition(striker.x);
+    } else if (driverRef.current?.canPlaceStriker()) {
+      if (lastPlaceTimerRef.current) clearTimeout(lastPlaceTimerRef.current);
+      lastPlaceTimerRef.current = setTimeout(() => {
+        lastPlaceTimerRef.current = null;
+        if (!isTurnActiveRef.current && isMyTurnRef.current && driverRef.current?.canPlaceStriker()) {
+          lastPlaceSentRef.current = Date.now();
+          driverRef.current.sendLiveStrikerPosition(W / 2 + strikerPosRef.current);
+        }
+      }, Math.max(35, 35 - elapsed));
     }
   }
 
@@ -1735,6 +1771,10 @@ const CarromMultiplayer: React.FC<Props> = ({
     const striker = coinsRef.current.find((c) => c.type === "striker");
     if (!striker || !driverRef.current?.canPlaceStriker()) return;
 
+    if (lastPlaceTimerRef.current) {
+      clearTimeout(lastPlaceTimerRef.current);
+      lastPlaceTimerRef.current = null;
+    }
     lastPlaceSentRef.current = Date.now();
     driverRef.current.sendLiveStrikerPosition(striker.x);
     const revision = placementRevisionRef.current;
@@ -2029,6 +2069,8 @@ const CarromMultiplayer: React.FC<Props> = ({
                   onChange={(e) => updateStrikerPos(Number(e.target.value))}
                   onPointerUp={handleMoverRelease}
                   onPointerCancel={handleMoverRelease}
+                  onMouseUp={handleMoverRelease}
+                  onTouchEnd={handleMoverRelease}
                   onBlur={handleMoverRelease}
                   className="relative w-full h-full opacity-0 cursor-ew-resize z-10"
                   style={{ WebkitAppearance: "none" }}

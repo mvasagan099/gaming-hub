@@ -154,10 +154,21 @@ export default class CarromMultiplayerDriver {
     const current = useMultiplayerStore.getState();
     if (data.matchId && data.matchId !== current.matchId) return;
     if (data.roomId && data.roomId !== current.room?.id) return;
-    if (data.seat === this.mySeat || data.seat !== this.lastState?.currentSeat) return;
+    if (data.seat === this.mySeat) return;
     if (!Number.isFinite(data.x) || !Number.isSafeInteger(data.sequence) || data.sequence < 0) return;
     const currentTurn = this.lastState?.turnNumber ?? 0;
-    if (typeof data.turnNumber === "number" && data.turnNumber !== currentTurn) {
+    if (typeof data.turnNumber === "number" && data.turnNumber < currentTurn) {
+      return;
+    }
+    if (typeof data.turnNumber === "number" && data.turnNumber > currentTurn + 1) {
+      return;
+    }
+    if (
+      data.turnNumber === currentTurn &&
+      this.lastState &&
+      this.lastState.currentSeat !== undefined &&
+      data.seat !== this.lastState.currentSeat
+    ) {
       return;
     }
     const turnKey = `${current.matchId}:${data.seat}:${data.turnNumber ?? currentTurn}`;

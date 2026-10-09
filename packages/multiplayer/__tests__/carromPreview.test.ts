@@ -37,4 +37,13 @@ describe('Carrom visual preview validation', () => {
     room.players.get('host')!.isSpectator = true; send();
     expect(emit).not.toHaveBeenCalled();
   });
+  it('allows visual previews when striker passes over a coin on the board', () => {
+    const { send, emit, state } = setup();
+    // Place a coin directly on the baseline
+    state.coins[0].x = 280;
+    state.coins[0].y = 507;
+    send({ x: 280, sequence: 1 });
+    expect(emit).toHaveBeenCalledOnce();
+    expect(emit).toHaveBeenCalledWith("carrom:striker-position", expect.objectContaining({ x: 280 }));
+  });
 });
