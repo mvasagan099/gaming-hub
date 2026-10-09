@@ -26,6 +26,7 @@ interface CarromGameProps {
 export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) => {
   const mySeat = useMultiplayerStore((s) => s.mySeat);
   const room = useMultiplayerStore((s) => s.room);
+  const isSpectator = useMultiplayerStore((s) => s.isSpectator);
 
   if (mode === 'multiplayer') {
     const names = (room?.players ?? [])
@@ -35,7 +36,7 @@ export const CarromGame: React.FC<CarromGameProps> = ({ mode, stake, onBack }) =
 
     return (
       <CarromMultiplayer
-        mySeat={mySeat ?? 0}
+        mySeat={isSpectator ? null : mySeat}
         playerNames={names}
         stake={stake}
         onBack={onBack}

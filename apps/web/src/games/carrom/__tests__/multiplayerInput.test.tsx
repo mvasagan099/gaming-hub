@@ -60,10 +60,10 @@ function find(root: any, predicate: (node: any) => boolean): any {
   if (!root?.props) return undefined;
   return predicate(root) ? root : find(root.props.children, predicate);
 }
-function setup(seat = 0) {
-  fixture.seat = seat;
+function setup(seat: number | null = 0) {
+  fixture.seat = seat ?? 0;
   fixture.state = new CarromEngine([{ seat: 0, userId: 'p0' }, { seat: 1, userId: 'p1' }], () => 0.5).state;
-  fixture.state.currentSeat = seat;
+  fixture.state.currentSeat = seat ?? 0;
   fixture.state.striker.y = seat === 0 ? 507 : 93;
   const render = () => {
     fixture.cursor = 0; fixture.effects = [];
@@ -330,4 +330,22 @@ it('recovers an uncertain transport reply without rolling back or resending the 
   expect(fixture.strike).toHaveBeenCalledOnce();
   expect(game.mover()).toBeUndefined();
   fixture.cleanup();
+});
+
+
+it.each([0, 1])('keeps a spectator read-only while seat %s is active', seat => {
+  const game = setup(null);
+  const state = { ...fixture.state, striker: { ...fixture.state.striker, y: seat === 0 ? 507 : 93 }, currentSeat: seat, turnNumber: 1 };
+  fixture.driver.lastState = state; fixture.driver.onStateUpdate(state, 2);
+  expect(game.mover()).toBeUndefined();
+  const tick = frames(); tick(100);
+  expect(striker().y).toBeCloseTo(seat === 0 ? 422.5 : 77.5);
+  const board = game.board();
+  board.onPointerDown(game.pointer(250, 422.5));
+  board.onPointerMove(game.pointer(250, 485)); board.onPointerUp();
+  expect(fixture.place).not.toHaveBeenCalled();
+  expect(fixture.strike).not.toHaveBeenCalled();
+  expect(fixture.live).not.toHaveBeenCalled();
+  fixture.driver.onWin(seat);
+  expect(find(game.render(), node => node.type === 'button' && node.props.disabled === true)).toBeDefined();
 });

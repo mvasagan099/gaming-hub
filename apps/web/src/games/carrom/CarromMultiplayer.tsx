@@ -247,18 +247,21 @@ function drawCoin(
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface Props {
-  mySeat: number;
+  mySeat: number | null;
   playerNames: string[];
   stake: number;
   onBack: () => void;
 }
 
 const CarromMultiplayer: React.FC<Props> = ({
-  mySeat,
+  mySeat: participantSeat,
   playerNames,
   stake,
   onBack,
 }) => {
+  // Spectators use the white camera without acquiring white-player authority.
+  const readOnly = participantSeat === null;
+  const mySeat = participantSeat ?? 0;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const driverRef = useRef<CarromMultiplayerDriver | null>(null);
   const coinsRef = useRef<LocalCoin[]>([]);
@@ -268,6 +271,8 @@ const CarromMultiplayer: React.FC<Props> = ({
   const rafRef = useRef<number>(0);
   const mySeatRef = useRef(mySeat);
   mySeatRef.current = mySeat;
+  const participantSeatRef = useRef(participantSeat);
+  participantSeatRef.current = participantSeat;
   // Safety timeout to force-settle physics if server is slow
   const settleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -348,7 +353,7 @@ const CarromMultiplayer: React.FC<Props> = ({
   // ── Driver setup ──────────────────────────────────────────────────────────
 
   useEffect(() => {
-    const driver = new CarromMultiplayerDriver(mySeat, playerNames);
+    const driver = new CarromMultiplayerDriver(participantSeat, playerNames);
     driverRef.current = driver;
 
     // Full trajectory prediction runs off the UI thread; the first frames use
@@ -566,13 +571,13 @@ const CarromMultiplayer: React.FC<Props> = ({
       setWinnerSeat(seat);
       // Show the result after the final shot has finished playing on the board.
       if (!isTurnActiveRef.current) setGameOver(true);
-      if (seat === mySeat) {
+      if (!readOnly && seat === mySeat) {
         confetti({ particleCount: 140, spread: 85 });
       }
     };
 
     driver.onStrikerPositionUpdate = (data) => {
-      if (data.seat === mySeatRef.current) return;
+      if (!readOnly && data.seat === mySeatRef.current) return;
       if (isMyTurnRef.current) return;
       const seat = mySeatRef.current;
       // Convert canonical world X to player's local view X
@@ -594,7 +599,7 @@ const CarromMultiplayer: React.FC<Props> = ({
       driverRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mySeat]);
+  }, [mySeat, participantSeat]);
 
   // ── Server state application ──────────────────────────────────────────────
 
@@ -652,7 +657,7 @@ const CarromMultiplayer: React.FC<Props> = ({
       setQueenPocketed(qState === "COVERED" || qState === "PENDING_COVER" || !!myPlayer?.queenPocketed);
 
       const prevTurn = isMyTurnRef.current;
-      const myTurn = state.currentSeat === seat;
+      const myTurn = participantSeatRef.current !== null && state.currentSeat === participantSeatRef.current;
       isMyTurnRef.current = myTurn;
       setIsMyTurn(myTurn);
 
@@ -758,7 +763,9 @@ const CarromMultiplayer: React.FC<Props> = ({
             const sx = state.striker?.x;
             striker.x = sx !== undefined ? mapToClient(sx, 0, seat).x : W / 2;
           }
-          striker.y = OPPONENT_STRIKER_Y;
+          striker.y = participantSeatRef.current === null && driverRef.current?.lastState?.striker
+          ? mapToClient(0, driverRef.current.lastState.striker.y, mySeatRef.current).y
+          : OPPONENT_STRIKER_Y;
         } else {
           if (!localPlacementDirtyRef.current) {
             const sx = state.striker?.x;
@@ -1407,7 +1414,9 @@ const CarromMultiplayer: React.FC<Props> = ({
         } else {
           striker.x += (targetX - striker.x) * 0.25;
         }
-        striker.y = OPPONENT_STRIKER_Y;
+        striker.y = participantSeatRef.current === null && driverRef.current?.lastState?.striker
+          ? mapToClient(0, driverRef.current.lastState.striker.y, mySeatRef.current).y
+          : OPPONENT_STRIKER_Y;
       }
     }
 
@@ -1535,7 +1544,7 @@ const CarromMultiplayer: React.FC<Props> = ({
 
     const currentMatchId = useMultiplayerStore.getState().matchId;
     if (currentMatchId && renderedMatchRef.current !== currentMatchId && latestState?.coins.length &&
-        latestState.players.some(p => p.seat === mySeatRef.current)) {
+        (participantSeatRef.current === null || latestState.players.some(p => p.seat === participantSeatRef.current))) {
       renderedMatchRef.current = currentMatchId;
       setRenderedMatchId(currentMatchId);
     }
@@ -1576,7 +1585,7 @@ const CarromMultiplayer: React.FC<Props> = ({
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (gameOver || isTurnActiveRef.current || showRules) return;
-    if (!isMyTurnRef.current) return;
+    if ((participantSeatRef.current === null || !isMyTurnRef.current)) return;
 
     const striker = coinsRef.current.find((c) => c.type === "striker");
     if (!striker || !striker.active) return;
@@ -1605,7 +1614,7 @@ const CarromMultiplayer: React.FC<Props> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (dragStateRef.current !== "dragging" || isTurnActiveRef.current || !isMyTurnRef.current) return;
+    if (dragStateRef.current !== "dragging" || isTurnActiveRef.current || (participantSeatRef.current === null || !isMyTurnRef.current)) return;
 
     const striker = coinsRef.current.find((c) => c.type === "striker");
     if (!striker) return;
@@ -1628,7 +1637,7 @@ const CarromMultiplayer: React.FC<Props> = ({
     dragStateRef.current = "idle";
     setDragState("idle");
 
-    if (gameOver || showRules || isTurnActiveRef.current || !isMyTurnRef.current) return;
+    if (gameOver || showRules || isTurnActiveRef.current || (participantSeatRef.current === null || !isMyTurnRef.current)) return;
 
     const striker = coinsRef.current.find((c) => c.type === "striker");
     if (!striker || !driverRef.current?.canStrike()) return;
@@ -1729,7 +1738,7 @@ const CarromMultiplayer: React.FC<Props> = ({
   // ── Striker Mover (Exclusively for Horizontal Positioning) ──────────────────
 
   function updateStrikerPos(val: number) {
-    if (isTurnActiveRef.current || !isMyTurnRef.current) return;
+    if (isTurnActiveRef.current || (participantSeatRef.current === null || !isMyTurnRef.current)) return;
     localPlacementDirtyRef.current = true;
     placementRevisionRef.current++;
     const clampedVal = Math.max(STRIKER_SLIDER_MIN, Math.min(STRIKER_SLIDER_MAX, val));
@@ -1767,7 +1776,7 @@ const CarromMultiplayer: React.FC<Props> = ({
   }
 
   async function handleMoverRelease() {
-    if (isTurnActiveRef.current || !isMyTurnRef.current || !localPlacementDirtyRef.current || placementInFlightRef.current) return;
+    if (isTurnActiveRef.current || (participantSeatRef.current === null || !isMyTurnRef.current) || !localPlacementDirtyRef.current || placementInFlightRef.current) return;
     const striker = coinsRef.current.find((c) => c.type === "striker");
     if (!striker || !driverRef.current?.canPlaceStriker()) return;
 
@@ -1785,7 +1794,7 @@ const CarromMultiplayer: React.FC<Props> = ({
     placementInFlightRef.current = false;
     // A delayed placement reply must not undo a newer move, a shot, or a turn.
     if (driverRef.current !== driver || revision !== placementRevisionRef.current ||
-        turn !== turnNumberRef.current || isTurnActiveRef.current || !isMyTurnRef.current) return;
+        turn !== turnNumberRef.current || isTurnActiveRef.current || (participantSeatRef.current === null || !isMyTurnRef.current)) return;
     if (!res.ok) {
       console.warn("[CARROM] place-striker rejected, rolling back", res.error);
       const s = driverRef.current.lastState;
@@ -1843,9 +1852,9 @@ const CarromMultiplayer: React.FC<Props> = ({
   // The authoritative score counts assigned coins; covering the queen adds no points.
   const myPocketed = Math.min(9, myScore);
   const oppPocketed = Math.min(9, oppScore);
-  const myName = driverRef.current?.getPlayerName(mySeat) ?? "You";
-  const oppName = driverRef.current?.getPlayerName(1 - mySeat) ?? "Opponent";
-  const isWinner = winnerSeat === mySeat;
+  const myName = driverRef.current?.getPlayerName(mySeat) ?? playerNames[mySeat] ?? (readOnly ? "White" : "You");
+  const oppName = driverRef.current?.getPlayerName(1 - mySeat) ?? playerNames[1 - mySeat] ?? (readOnly ? "Black" : "Opponent");
+  const isWinner = !readOnly && winnerSeat === mySeat;
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
   return (
@@ -1890,7 +1899,8 @@ const CarromMultiplayer: React.FC<Props> = ({
                 </div>
                 <div className="flex gap-3 w-full mt-2">
                   <button
-                    onClick={() => useMultiplayerStore.getState().requestRematch()}
+                    disabled={readOnly}
+                    onClick={() => { if (!readOnly) useMultiplayerStore.getState().requestRematch(); }}
                     className="flex-1 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs uppercase rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5"
                   >
                     <RefreshCw className="w-4 h-4" /> Rematch
@@ -1925,7 +1935,7 @@ const CarromMultiplayer: React.FC<Props> = ({
 
               <ul className="space-y-3 mb-6">
                 {[
-                  <>You play as <strong className="text-white">{myColor === "white" ? "⚪ White" : "⚫ Black"}</strong>. Pocket all 9 of your coins to win.</>,
+                  readOnly ? <>You are spectating. White and Black must pocket all 9 of their coins to win.</> : <>You play as <strong className="text-white">{myColor === "white" ? "⚪ White" : "⚫ Black"}</strong>. Pocket all 9 of your coins to win.</>,
                   <>Position striker along your baseline using the <strong>slider</strong> or direct touch.</>,
                   <>Drag <strong>backwards</strong> from striker to aim with laser trajectory line, release to shoot.</>,
                   <><strong>Queen (🔴):</strong> After pocketing Queen, you MUST pocket your coin on the next shot to cover it.</>,
@@ -1972,7 +1982,7 @@ const CarromMultiplayer: React.FC<Props> = ({
               : "bg-slate-900 text-slate-400 border-slate-800"
           }`}>
             <span className={`w-1.5 h-1.5 rounded-full ${isMyTurn ? "bg-emerald-400 animate-ping" : "bg-slate-500"}`} />
-            <span>{isTurnActive ? "Moving…" : isMyTurn ? "Your Turn" : "Opponent"}</span>
+            <span>{readOnly ? "Spectating" : isTurnActive ? "Moving…" : isMyTurn ? "Your Turn" : "Opponent"}</span>
             {!isTurnActive && !gameOver && (
               <span className={`ml-1 font-mono text-[10px] px-1.5 py-0.5 rounded border shadow-sm ${getTimerVisualClass(turnSecondsRemaining)}`}>
                 {formatTime(turnSecondsRemaining)}
@@ -1985,10 +1995,10 @@ const CarromMultiplayer: React.FC<Props> = ({
               queenState === "COVERED" || queenCovered
                 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                 : queenState === "PENDING_COVER"
-                ? (pendingQueenOwner === mySeat ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-950/40 animate-pulse font-black" : "bg-purple-500/20 text-purple-300 border-purple-500/40 animate-pulse font-bold")
+                ? (!readOnly && pendingQueenOwner === mySeat ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-950/40 animate-pulse font-black" : "bg-purple-500/20 text-purple-300 border-purple-500/40 animate-pulse font-bold")
                 : "bg-slate-800 text-slate-400 border-slate-700"
             }`}>
-              👑 {queenState === "COVERED" || queenCovered ? "Covered" : queenState === "PENDING_COVER" ? (pendingQueenOwner === mySeat ? "COVER IT!" : "Cover Attempt") : "Queen"}
+              👑 {queenState === "COVERED" || queenCovered ? "Covered" : queenState === "PENDING_COVER" ? (!readOnly && pendingQueenOwner === mySeat ? "COVER IT!" : "Cover Attempt") : "Queen"}
             </span>
             <button
               onClick={() => setShowMobileSidebar(true)}
@@ -2135,7 +2145,7 @@ const CarromMultiplayer: React.FC<Props> = ({
               ) : (
                 <>
                   <span className="w-2.5 h-2.5 rounded-full bg-slate-500 animate-pulse" />
-                  <span>OPPONENT&apos;S TURN</span>
+                  <span>{readOnly ? "SPECTATING" : "OPPONENT’S TURN"}</span>
                 </>
               )}
             </div>
@@ -2162,7 +2172,7 @@ const CarromMultiplayer: React.FC<Props> = ({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-xs text-slate-200 font-extrabold truncate flex items-center gap-1.5">
-                  {myName} <span className="text-[9px] text-emerald-400 font-black uppercase">(YOU)</span>
+                  {myName} {!readOnly && <span className="text-[9px] text-emerald-400 font-black uppercase">(YOU)</span>}
                 </div>
                 <div className="text-lg font-black text-amber-400 leading-none mt-0.5">
                   {myPocketed} <span className="text-slate-500 text-xs font-bold">/ 9</span>
@@ -2205,10 +2215,10 @@ const CarromMultiplayer: React.FC<Props> = ({
                 queenState === "COVERED" || queenCovered
                   ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                   : queenState === "PENDING_COVER"
-                  ? (pendingQueenOwner === mySeat ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-950/40 animate-pulse font-black" : "bg-purple-500/20 text-purple-300 border-purple-500/40 animate-pulse font-bold")
+                  ? (!readOnly && pendingQueenOwner === mySeat ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-950/40 animate-pulse font-black" : "bg-purple-500/20 text-purple-300 border-purple-500/40 animate-pulse font-bold")
                   : "bg-slate-800 text-slate-400 border-slate-700"
               }`}>
-                {queenState === "COVERED" || queenCovered ? "Covered ✓" : queenState === "PENDING_COVER" ? (pendingQueenOwner === mySeat ? "COVER IT!" : "Opponent Covering") : "On Board"}
+                {queenState === "COVERED" || queenCovered ? "Covered ✓" : queenState === "PENDING_COVER" ? (!readOnly && pendingQueenOwner === mySeat ? "COVER IT!" : "Opponent Covering") : "On Board"}
               </span>
             </div>
           </div>
@@ -2247,7 +2257,7 @@ const CarromMultiplayer: React.FC<Props> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-center">
-                    <div className="text-[10px] text-slate-400 font-bold uppercase">{myName} (YOU)</div>
+                    <div className="text-[10px] text-slate-400 font-bold uppercase">{myName} {!readOnly && "(YOU)"}</div>
                     <div className="text-xl font-black text-amber-400">{myPocketed}/9</div>
                   </div>
                   <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-center">

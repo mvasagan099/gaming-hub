@@ -176,3 +176,24 @@ it('does not replay previous shot effects when a full-state sync reuses the even
     expect(actions.state.requestFullStateSync).not.toHaveBeenCalled();
     expect(actions.send).toHaveBeenCalledOnce(); driver.stop();
   });
+
+describe('Carrom spectator authority', () => {
+  it.each([0, 1])('renders seat %s updates without acquiring actions or a piece color', async seat => {
+    const socket = { connected: true, emit: vi.fn(), on: vi.fn(), off: vi.fn() };
+    actions.state.socket = socket;
+    const driver = new Driver(null, ['White', 'Black']);
+    const engine = new CarromEngine([{ seat: 0, userId: 'p0' }, { seat: 1, userId: 'p1' }]);
+    engine.state.currentSeat = seat;
+    actions.state.gameState = engine.state;
+    driver.onStateUpdate = vi.fn(); driver.start();
+    expect(driver.onStateUpdate).toHaveBeenCalled();
+    expect(driver.isMyTurn()).toBe(false);
+    expect(driver.canPlaceStriker()).toBe(false); expect(driver.canStrike()).toBe(false);
+    expect(driver.getMyColor()).toBeNull(); expect(driver.getOpponentColor()).toBeNull();
+    expect((await driver.sendPlaceStriker(250)).ok).toBe(false);
+    expect((await driver.sendStrike(0, 0.5, 250)).ok).toBe(false);
+    driver.sendLiveStrikerPosition(250);
+    expect(actions.send).not.toHaveBeenCalled(); expect(socket.emit).not.toHaveBeenCalled();
+    driver.stop();
+  });
+});

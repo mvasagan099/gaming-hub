@@ -99,7 +99,7 @@ export function localAngleToServer(localAngle: number, mySeat: number): number {
 // ─── Driver ──────────────────────────────────────────────────────────────────
 
 export default class CarromMultiplayerDriver {
-  public readonly mySeat: number;
+  public readonly mySeat: number | null;
   public readonly playerNames: string[];
 
   public lastState: CarromRemoteState | null = null;
@@ -129,7 +129,7 @@ export default class CarromMultiplayerDriver {
   private matchId: string | null = null;
   private roomId: string | null = null;
 
-  constructor(mySeat: number, playerNames: string[]) {
+  constructor(mySeat: number | null, playerNames: string[]) {
     this.mySeat = mySeat;
     this.playerNames = playerNames;
   }
@@ -272,11 +272,13 @@ export default class CarromMultiplayerDriver {
     return this.playerNames[seat] ?? `Player ${seat + 1}`;
   }
 
-  getMyColor(): "white" | "black" {
+  getMyColor(): "white" | "black" | null {
+    if (this.mySeat === null) return null;
     return this.mySeat === 0 ? "white" : "black";
   }
 
-  getOpponentColor(): "white" | "black" {
+  getOpponentColor(): "white" | "black" | null {
+    if (this.mySeat === null) return null;
     return this.mySeat === 0 ? "black" : "white";
   }
 
@@ -293,6 +295,7 @@ export default class CarromMultiplayerDriver {
    * @param clientX  X in client canvas coordinates (0–500).
    */
   sendLiveStrikerPosition(clientX: number): void {
+    if (this.mySeat === null) return;
     this.strikerSeq++;
     const serverX = mapToServer(clientX, 0, this.mySeat).x;
     const socket = useMultiplayerStore.getState().socket;
@@ -317,6 +320,7 @@ export default class CarromMultiplayerDriver {
    * @param clientX  X in client canvas coordinates (0–500).
    */
   async sendPlaceStriker(clientX: number): Promise<{ ok: boolean; error?: string }> {
+    if (this.mySeat === null) return { ok: false, error: "Spectators cannot place the striker" };
     const serverX = mapToServer(clientX, 0, this.mySeat).x;
     try {
       const res = await useMultiplayerStore
@@ -342,6 +346,7 @@ export default class CarromMultiplayerDriver {
     power: number,
     clientX?: number
   ): Promise<{ ok: boolean; error?: string; uncertain?: boolean }> {
+    if (this.mySeat === null) return { ok: false, error: "Spectators cannot strike" };
     const beforeTurn = this.lastState?.turnNumber;
     const serverAngle = localAngleToServer(localAngle, this.mySeat);
     const serverX = clientX !== undefined ? mapToServer(clientX, 0, this.mySeat).x : undefined;
