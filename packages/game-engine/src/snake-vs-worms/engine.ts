@@ -263,7 +263,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
       (Number.isFinite(elapsedMs) ? Math.max(0, Math.min(250, elapsedMs)) : 0);
     const steps = Math.floor((total + 1e-6) / frameMs);
     let nextState = this.cloneState(this.state);
-    for (let step = 0; step < steps && !nextState.finished; step++) nextState = this.simulatePhysics(nextState);
+    for (let step = 0; step < steps && !nextState.finished; step++) nextState = this.advancePhysics(nextState);
     nextState.physicsRemainderMs = Math.max(0, total - steps * frameMs);
     this.updateState(nextState);
 
@@ -287,7 +287,12 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
   simulatePhysics(state: InternalState): InternalState {
     if (state.paused || state.finished) return state;
 
-    const next = this.cloneState(state);
+    return this.advancePhysics(this.cloneState(state));
+  }
+
+  // A tick already owns a detached working state. Reuse it across 60 Hz
+  // substeps instead of deep-copying all food and snake bodies every substep.
+  private advancePhysics(next: InternalState): InternalState {
     next.stateVersion++;
 
     // 1. Boost Energy Update & Movement Execution
@@ -497,7 +502,7 @@ export class SnakeVsWormsEngine extends MultiplayerGameEngine<InternalState, Sna
       next.endReason = "PLAYER_ELIMINATED";
     }
 
-    if (next.finished) next.matchRemainingMs = this.remainingTime(state);
+    if (next.finished) next.matchRemainingMs = this.remainingTime(next);
     return next;
   }
 

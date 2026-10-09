@@ -38,9 +38,47 @@ export class SnakeWormTimeline {
           Math.hypot((to.body[0]?.x ?? 0) - (from.body[0]?.x ?? 0), (to.body[0]?.y ?? 0) - (from.body[0]?.y ?? 0)) > 250) {
         result.set(player.seat, player.body.map(p => ({ ...p })));
       } else {
-        result.set(player.seat, from.body.map((p, i) => ({ x: p.x + (to.body[i].x - p.x) * t, y: p.y + (to.body[i].y - p.y) * t })));
+        const body = from.body.map((p, i) => ({ x: p.x + (to.body[i].x - p.x) * t, y: p.y + (to.body[i].y - p.y) * t }));
+        // Bridge short delivery gaps along the known trail. Never predict a
+        // collision, turn, death, growth or respawn; those require server state.
+        if (b && target > b.time && from.direction === to.direction) {
+          const elapsed = b.time - a.time;
+          const dx = to.body[0].x - from.body[0].x, dy = to.body[0].y - from.body[0].y;
+          const length = Math.hypot(dx, dy);
+          if (elapsed > 0 && length > 0) {
+            const speed = Math.min(length / elapsed, (Number.isFinite(to.speed) ? to.speed : 10) * 60 / 1000);
+            const distance = speed * Math.min(100, target - b.time);
+            result.set(player.seat, advanceTrail(body, dx / length, dy / length, distance,
+              latest.gridWidth, latest.gridHeight));
+            continue;
+          }
+        }
+        result.set(player.seat, body);
       }
     }
     return result;
   }
+}
+
+
+/** Shift segments along their existing polyline so prediction preserves bends. */
+function advanceTrail(body: { x: number; y: number }[], vx: number, vy: number, distance: number,
+  width: number, height: number): { x: number; y: number }[] {
+  if (!body.length) return [];
+  const head = body[0];
+  const boundaries = [vx > 0 ? (width - head.x) / vx : vx < 0 ? -head.x / vx : Infinity,
+    vy > 0 ? (height - head.y) / vy : vy < 0 ? -head.y / vy : Infinity];
+  for (const boundary of boundaries) if (Number.isFinite(boundary)) distance = Math.min(distance, Math.max(0, boundary));
+  const lengths = [0];
+  for (let i = 1; i < body.length; i++) lengths.push(lengths[i - 1] + Math.hypot(body[i].x - body[i - 1].x, body[i].y - body[i - 1].y));
+  let segment = 1;
+  return lengths.map(length => {
+    const target = length - distance;
+    if (target <= 0) return { x: head.x - vx * target, y: head.y - vy * target };
+    while (segment < body.length - 1 && lengths[segment] < target) segment++;
+    const from = body[segment - 1], to = body[segment];
+    const span = lengths[segment] - lengths[segment - 1];
+    const fraction = span > 0 ? (target - lengths[segment - 1]) / span : 0;
+    return { x: from.x + (to.x - from.x) * fraction, y: from.y + (to.y - from.y) * fraction };
+  });
 }

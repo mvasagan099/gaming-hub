@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { SnakeVsWormsEngine } from "../src/snake-vs-worms/engine";
 import { seededRandomSource } from '../src/rng';
 
@@ -472,4 +472,24 @@ describe('Snake elapsed-time synchronization', () => {
     expect(stalled.state.players).toEqual(bounded.state.players);
     expect(stalled.state.food.map(({ id, ...food }) => food)).toEqual(bounded.state.food.map(({ id, ...food }) => food));
   });
+  it('copies the world once for a catch-up tick and preserves the prior state', () => {
+    const engine = create();
+    engine.startMatchClock();
+    const prior = engine.state;
+    const snapshot = structuredClone(prior);
+    const copies = vi.spyOn(engine as unknown as { cloneState(state: unknown): unknown }, 'cloneState');
+    engine.tick(100);
+    expect(copies).toHaveBeenCalledOnce();
+    expect(prior).toEqual(snapshot);
+    expect(engine.state.stateVersion).toBe(prior.stateVersion + 6);
+  });
+  it('keeps standalone physics simulation detached from its input', () => {
+    const engine = create();
+    const prior = engine.state, snapshot = structuredClone(prior);
+    const result = engine.simulatePhysics(prior);
+    expect(prior).toEqual(snapshot);
+    expect(result).not.toBe(prior);
+    expect(result.players[0].body[0]).not.toEqual(prior.players[0].body[0]);
+  });
+
 });
