@@ -1,0 +1,54 @@
+[
+  {
+    "url": "https://gaming-hub-frontend.onrender.com/",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8",
+    "headers": {
+      "strict-transport-security": "max-age=315360000; includeSubdomains; preload",
+      "content-security-policy": null,
+      "x-content-type-options": "nosniff",
+      "x-frame-options": null,
+      "permissions-policy": null
+    },
+    "spaEntry": true,
+    "health": null
+  },
+  {
+    "url": "https://gaming-hub-frontend.onrender.com/auth/callback?next=/reset-password",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8",
+    "headers": {
+      "strict-transport-security": "max-age=315360000; includeSubdomains; preload",
+      "content-security-policy": null,
+      "x-content-type-options": "nosniff",
+      "x-frame-options": null,
+      "permissions-policy": null
+    },
+    "spaEntry": true,
+    "health": null
+  },
+  {
+    "url": "https://gaming-hub-frontend.onrender.com/reset-password",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8",
+    "headers": {
+      "strict-transport-security": "max-age=315360000; includeSubdomains; preload",
+      "content-security-policy": null,
+      "x-content-type-options": "nosniff",
+      "x-frame-options": null,
+      "permissions-policy": null
+    },
+    "spaEntry": true,
+    "health": null
+  },
+  {
+    "url": "https://gaming-hub-zqv0.onrender.com/health",
+    "error": "timeout",
+    "status": null
+  },
+  {
+    "url": "https://gaming-hub-socket.onrender.com/health",
+    "error": "timeout",
+    "status": null
+  }
+]

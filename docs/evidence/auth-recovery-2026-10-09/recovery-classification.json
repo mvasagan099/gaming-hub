@@ -1,0 +1,30 @@
+[
+  {
+    "name": "clean reset page after refresh",
+    "pathname": "/reset-password",
+    "search": "",
+    "hash": "",
+    "recoveryDetected": false
+  },
+  {
+    "name": "reset code link",
+    "pathname": "/reset-password",
+    "search": "?code=test-only",
+    "hash": "",
+    "recoveryDetected": true
+  },
+  {
+    "name": "callback recovery link",
+    "pathname": "/auth/callback",
+    "search": "?next=/reset-password",
+    "hash": "",
+    "recoveryDetected": true
+  },
+  {
+    "name": "normal login",
+    "pathname": "/login",
+    "search": "",
+    "hash": "",
+    "recoveryDetected": false
+  }
+]

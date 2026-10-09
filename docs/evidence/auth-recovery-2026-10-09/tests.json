@@ -1,0 +1,69 @@
+{
+  "sourceCommit": "9a02477",
+  "suites": [
+    {
+      "suite": "web",
+      "files": 3,
+      "passed": 30,
+      "failed": 0,
+      "skipped": 0,
+      "executed": [
+        {
+          "file": "apps/web/src/lib/authLinkSession.test.ts",
+          "tests": 9,
+          "status": "passed"
+        },
+        {
+          "file": "apps/web/src/store/authStore.test.ts",
+          "tests": 9,
+          "status": "passed"
+        },
+        {
+          "file": "apps/web/src/services/native/capacitorAppService.back.test.ts",
+          "tests": 12,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "suite": "api",
+      "files": 6,
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0,
+      "executed": [
+        {
+          "file": "apps/api/src/auth/__tests__/providerPassword.unit.test.ts",
+          "tests": 5,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/routes/__tests__/authBoundaries.unit.test.ts",
+          "tests": 15,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/authBoundaryIntegration.test.ts",
+          "tests": 8,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/deepLinkValidation.unit.test.ts",
+          "tests": 25,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/mfaSessionLifecycle.test.ts",
+          "tests": 1,
+          "status": "passed"
+        },
+        {
+          "file": "apps/api/src/services/__tests__/sessionRevocation.unit.test.ts",
+          "tests": 7,
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "productionDataTouched": false
+}
