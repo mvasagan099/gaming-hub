@@ -16,6 +16,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { adminApi, type AdminKycRequest } from '../../services/api/enterprise';
+import { getApiUrl } from '../../services/api/client';
 import { useAuthStore } from '../../store/authStore';
 import { openMfaModal } from '../../components/auth/MfaVerificationModal';
 
@@ -64,7 +65,7 @@ export function AdminKycPage() {
     const token = useAuthStore.getState().session?.access_token;
     if (!token) return;
 
-    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:4000/api';
+    const apiBase = getApiUrl().replace(/\/+$/, "");
 
     selectedRequest.documents.forEach(async (doc) => {
       const rawUrl = doc.fileUrl;

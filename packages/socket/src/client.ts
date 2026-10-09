@@ -7,7 +7,7 @@ import type {
 export type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 export interface CreateSocketOptions {
-  url: string;
+  url?: string;
   /**
    * Static token, or a live getter that returns the most recent token. A
    * getter is recommended so Supabase access-token refreshes are picked up on
@@ -27,7 +27,7 @@ export interface CreateSocketOptions {
  * (refreshed) token is used on every reconnection attempt.
  */
 export function createTypedSocket(options: CreateSocketOptions): TypedSocket {
-  return io(options.url, {
+  return io(options.url || undefined, {
     transports: ["websocket", "polling"],
     autoConnect: false,
     reconnection: true,

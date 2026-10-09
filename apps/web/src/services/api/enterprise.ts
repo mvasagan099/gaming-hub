@@ -714,10 +714,8 @@ export const adminTournamentsApi = {
     if (params.status && params.status !== 'ALL') qs.set('status', params.status);
 
     const token = (await import('../../store/authStore')).useAuthStore.getState().session?.access_token;
-    const envUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000/api';
-    const baseUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-      ? envUrl.replace('localhost', window.location.hostname).replace('127.0.0.1', window.location.hostname)
-      : envUrl;
+    const { getApiUrl } = await import('./client');
+    const baseUrl = getApiUrl().replace(/\/+$/, "");
 
     const res = await fetch(`${baseUrl}/admin/tournaments/reports/export-csv?${qs.toString()}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},

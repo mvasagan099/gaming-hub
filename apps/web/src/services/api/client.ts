@@ -1,24 +1,22 @@
 import { useAuthStore } from "../../store/authStore";
 import { isNativePlatform, getPlatform } from "../native/platform";
 
-function getApiUrl(): string {
-  const envUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000/api";
+/**
+ * Computes the base API URL.
+ * - In Capacitor native shells (Android/iOS): returns VITE_API_URL (fallback: "http://localhost:4000/api").
+ * - In web browsers: if an external absolute URL is explicitly configured (not localhost/127.0.0.1), returns it;
+ *   otherwise returns "/api" so requests use same-origin relative paths (forwarded via Vite proxy in dev or reverse proxy in prod).
+ */
+export function getApiUrl(): string {
   if (isNativePlatform()) {
-    return envUrl;
+    return (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000/api";
   }
-  // Only adapt host for LAN testing if envUrl points to localhost/127.0.0.1
-  if (
-    typeof window !== "undefined" &&
-    (envUrl.includes("localhost") || envUrl.includes("127.0.0.1")) &&
-    window.location.hostname !== "localhost" &&
-    window.location.hostname !== "127.0.0.1"
-  ) {
-    return envUrl.replace("localhost", window.location.hostname).replace("127.0.0.1", window.location.hostname);
+  const envUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+  if (envUrl && /^https?:\/\//i.test(envUrl) && !envUrl.includes("localhost") && !envUrl.includes("127.0.0.1")) {
+    return envUrl.replace(/\/$/, "");
   }
-  return envUrl;
+  return "/api";
 }
-
-const API_URL = getApiUrl();
 
 interface ApiErrorBody {
   error?: { code?: string; message?: string; details?: unknown };
@@ -97,7 +95,9 @@ async function request<T>(path: string, init: RequestInit, tokenOverride?: strin
     }
   }
 
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  const base = getApiUrl().replace(/\/+$/, "");
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const response = await fetch(`${base}${cleanPath}`, { ...init, headers });
 
 
   if (!response.ok) {

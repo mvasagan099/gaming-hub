@@ -2,8 +2,12 @@ import { App } from '@capacitor/app';
 import { isNativePlatform, isAndroid } from './platform';
 import type { AppVersionCheckResult, AppVersionConfigPublic } from '@gaming-hub/shared';
 import { isVersionBelowMinimum } from '@gaming-hub/shared';
+import { getApiUrl } from '../api/client';
 
-const VERSION_CONFIG_URL = `${(import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000/api'}/app/version-config`;
+function getVersionConfigUrl(): string {
+  const base = getApiUrl().replace(/\/+$/, '');
+  return `${base}/app/version-config`;
+}
 
 /**
  * Fetches the version config from the server.
@@ -11,7 +15,7 @@ const VERSION_CONFIG_URL = `${(import.meta.env.VITE_API_URL as string | undefine
  */
 async function fetchVersionConfig(): Promise<AppVersionConfigPublic | null> {
   try {
-    const res = await fetch(VERSION_CONFIG_URL, {
+    const res = await fetch(getVersionConfigUrl(), {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       // 5-second timeout so a slow server doesn't leave the splash screen up forever.

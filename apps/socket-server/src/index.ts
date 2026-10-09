@@ -49,6 +49,30 @@ function parseOrigins(value: string): boolean | string[] {
   return value.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
+function getSocketCorsOrigin(value: string) {
+  const configured = parseOrigins(value);
+  if (env.NODE_ENV === "production" || configured === true) {
+    return configured;
+  }
+  return (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin) return callback(null, true);
+    if (Array.isArray(configured) && configured.includes(origin)) return callback(null, true);
+    try {
+      const hostname = new URL(origin).hostname;
+      const isLocalOrLan =
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname.startsWith("192.168.") ||
+        hostname.startsWith("10.") ||
+        /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
+        hostname.endsWith(".local");
+      callback(null, isLocalOrLan);
+    } catch {
+      callback(null, false);
+    }
+  };
+}
+
 function toErrorPayload(error: unknown): SocketErrorPayload {
   if (error instanceof AppError) {
     return { code: error.code, message: error.message };
@@ -60,12 +84,13 @@ function toErrorPayload(error: unknown): SocketErrorPayload {
 let io!: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents>;
 
 async function main(): Promise<void> {
-  if (!await checkInternalApiAuth(env.API_URL, env.INTERNAL_API_KEY, logger) && env.distributedMatches) {
+  const retries = env.NODE_ENV === "development" ? 10 : 3;
+  if (!await checkInternalApiAuth(env.API_URL, env.INTERNAL_API_KEY, logger, retries, 1000) && env.distributedMatches) {
     throw new Error("INTERNAL_API_AUTH_REQUIRED_FOR_DURABLE_MATCHES");
   }
   // Create Socket.IO server first so it's available for internal API handlers
   io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents>(undefined as any, {
-    cors: { origin: parseOrigins(env.CORS_ORIGIN), credentials: true },
+    cors: { origin: getSocketCorsOrigin(env.CORS_ORIGIN), credentials: true },
     transports: ["websocket", "polling"],
     maxHttpBufferSize: 32 * 1024,
   });

@@ -86,8 +86,38 @@ export function buildApp() {
     referrerPolicy: { policy: "no-referrer" },
   });
 
+  const getAllowedCorsOrigin = () => {
+    if (env.NODE_ENV === "production") {
+      return env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    const configured = env.CORS_ORIGIN === "*" ? [] : env.CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean);
+    return (origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => {
+      if (!origin) {
+        cb(null, true);
+        return;
+      }
+      if (env.CORS_ORIGIN === "*" || configured.includes(origin)) {
+        cb(null, true);
+        return;
+      }
+      try {
+        const { hostname } = new URL(origin);
+        const isLocalOrLan =
+          hostname === "localhost" ||
+          hostname === "127.0.0.1" ||
+          hostname.startsWith("192.168.") ||
+          hostname.startsWith("10.") ||
+          /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
+          hostname.endsWith(".local");
+        cb(null, isLocalOrLan);
+      } catch {
+        cb(null, false);
+      }
+    };
+  };
+
   void app.register(cors, {
-    origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN.split(","),
+    origin: getAllowedCorsOrigin(),
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type", "X-Internal-Key", "X-Requested-With", "X-App-Version", "X-App-Platform"],

@@ -44,4 +44,17 @@ describe("startup internal API authentication check", () => {
     expect(log.warn).toHaveBeenCalledWith({}, expect.stringContaining("INTERNAL_API_AUTH_UNREACHABLE"));
     expect(JSON.stringify(log.warn.mock.calls)).not.toContain(key);
   });
+
+  it("retries on initial network failure and reports OK when API becomes available", async () => {
+    const log = logger();
+    const cancel = vi.fn();
+    const request = vi.fn()
+      .mockRejectedValueOnce(new Error("ECONNREFUSED"))
+      .mockResolvedValueOnce({ status: 200, body: { cancel } });
+    vi.stubGlobal("fetch", request);
+    const result = await checkInternalApiAuth("https://api.example", key, log, 2, 10);
+    expect(result).toBe(true);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(log.info).toHaveBeenCalledWith({ status: 200 }, expect.stringContaining("INTERNAL_API_AUTH_OK"));
+  });
 });

@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, getApiUrl } from "./client";
 
 interface Setup2FAResponse {
   ok: boolean;
@@ -9,20 +9,6 @@ interface Setup2FAResponse {
 interface Verify2FAResponse {
   ok: boolean;
   enabled?: boolean;
-}
-
-/** Compute the same base URL as client.ts — VITE_API_URL already includes /api */
-function getApiBaseUrl(): string {
-  const envUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000/api";
-  if (
-    typeof window !== "undefined" &&
-    (envUrl.includes("localhost") || envUrl.includes("127.0.0.1")) &&
-    window.location.hostname !== "localhost" &&
-    window.location.hostname !== "127.0.0.1"
-  ) {
-    return envUrl.replace("localhost", window.location.hostname).replace("127.0.0.1", window.location.hostname);
-  }
-  return envUrl;
 }
 
 export const twoFactorApi = {
@@ -56,7 +42,8 @@ export const twoFactorApi = {
    * the request and validate the TOTP against the correct user's secret.
    */
   verifyLoginTimeTotp: async (code: string, bearerToken: string): Promise<{ ok: boolean; mfaVerified: boolean }> => {
-    const url = `${getApiBaseUrl()}/auth/2fa/verify`;
+    const base = getApiUrl().replace(/\/+$/, "");
+    const url = `${base}/auth/2fa/verify`;
     const response = await fetch(url, {
       method: "POST",
       headers: {

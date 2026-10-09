@@ -45,6 +45,7 @@ import {
   Inbox,
 } from 'lucide-react';
 import { createTypedSocket, type TypedSocket } from '@gaming-hub/socket';
+import { getSocketUrl } from '../../services/socket/socketUrl';
 import { useAuthStore } from '../../store/authStore';
 import {
   GAME_DEFINITIONS,
@@ -376,13 +377,6 @@ export function AdminTournamentsPage() {
 
   // Socket Connection & Real-Time Analytics Pipeline
   useEffect(() => {
-    function getSocketUrl(): string {
-      const envUrl = (import.meta.env.VITE_SOCKET_URL as string | undefined) || 'http://localhost:4001';
-      if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        return envUrl.replace('localhost', window.location.hostname).replace('127.0.0.1', window.location.hostname);
-      }
-      return envUrl;
-    }
 
     const token = useAuthStore.getState().session?.access_token;
     if (!token) {
