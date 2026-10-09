@@ -12,7 +12,7 @@ import { authenticate, authenticateLogout } from "../plugins/authenticate";
 import { requireUser } from "../lib/http";
 import { auditFromRequest } from "../services/audit";
 import { getCategorySettings } from "../services/settings";
-import { recordLoginSession, hashToken, revokeCurrentSession } from "../services/sessions";
+import { recordLoginSession, hashToken, revokeCurrentSession, revokeAllSessions } from "../services/sessions";
 import { loadTotpSecret } from "../lib/crypto";
 
 // Failed sign-in lockout: more than this many failed session exchanges for an
@@ -35,6 +35,14 @@ async function isLockedOut(email: string | null): Promise<boolean> {
 }
 
 export async function authRoutes(app: FastifyInstance) {
+  // Recovery sessions are allowed to revoke their own sessions without enrolling
+  // or completing Gaming Hub MFA. This endpoint grants no protected access.
+  app.post('/api/auth/logout-all', { preHandler: authenticateLogout, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async request => {
+    const user = requireUser(request);
+    const token = request.headers.authorization!.slice(7).trim();
+    const verified = await verifyAccessToken(token);
+    return revokeAllSessions(user.id, token, verified.providerSessionId, verified.expiresAt);
+  });
   app.post("/api/auth/logout", { preHandler: authenticateLogout }, async (request) => {
     const user = requireUser(request);
     const token = request.headers.authorization!.slice(7).trim();

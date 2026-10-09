@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { RouterProvider } from 'react-router-dom';
 import { router } from './router';
+import { isRecoveryLocation } from './lib/recoveryContext';
 import { supabase } from './services/supabase';
 import { useAuthStore } from './store/authStore';
 import { logAuthError } from './lib/authErrors';
@@ -104,18 +105,7 @@ export function App() {
   useEffect(() => {
     let active = true;
 
-    const isRecoveryTarget = () => {
-      const hash = typeof window !== 'undefined' ? window.location.hash || '' : '';
-      const search = typeof window !== 'undefined' ? window.location.search || '' : '';
-      const pathname = typeof window !== 'undefined' ? window.location.pathname || '' : '';
-      return (
-        hash.includes('type=recovery') ||
-        search.includes('type=recovery') ||
-        search.includes('next=%2Freset-password') ||
-        search.includes('next=/reset-password') ||
-        (pathname === '/reset-password' && (search.includes('code=') || hash.includes('access_token') || hash.includes('type=recovery')))
-      );
-    };
+    const isRecoveryTarget = () => isRecoveryLocation(window.location);
 
     supabase.auth
       .getSession()

@@ -8,6 +8,30 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/** Self-service logout only: never changes passwords or grants recovery/MFA access. */
+export async function revokeAllSessions(userId: string, token: string, providerSessionId?: string, tokenExpiresAt?: Date) {
+  return prisma.$transaction(async tx => {
+    const now = new Date();
+    await tx.user.update({ where: { id: userId }, data: { updatedAt: now } });
+    const tokenHash = hashToken(token);
+    const existing = await tx.loginSession.findUnique({ where: { tokenHash } });
+    if (existing && existing.userId !== userId) throw new AppError('UNAUTHORIZED', 'Invalid session owner', 401);
+    // A replay must not log out a later legitimate login.
+    if (existing?.revokedAt) return { ok: true };
+    if (!existing && providerSessionId) {
+      const prior = await tx.loginSession.findFirst({ where: { userId, providerSessionId }, orderBy: [{ isCurrent: 'desc' }, { createdAt: 'desc' }] });
+      if (prior?.revokedAt) return { ok: true };
+    }
+    if (!existing) await tx.loginSession.create({ data: {
+      userId, tokenHash, providerSessionId: providerSessionId ?? null,
+      expiresAt: new Date(Math.max(now.getTime() + SESSION_TTL_MS, tokenExpiresAt?.getTime() ?? 0)),
+      revokedAt: now, isCurrent: false, mfaVerifiedAt: null,
+    } });
+    await tx.loginSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now, isCurrent: false, mfaVerifiedAt: null } });
+    return { ok: true };
+  });
+}
+
 export function deviceNameFromUserAgent(userAgent: string | null | undefined): string | null {
   if (!userAgent) return null;
   const ua = userAgent;

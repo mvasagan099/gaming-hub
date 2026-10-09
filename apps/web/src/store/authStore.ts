@@ -39,7 +39,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   setUser: (user) => set({ user }),
   setSession: (session) => set({ session }),
   setPendingMfaSession: (pendingMfaSession) => set({ pendingMfaSession }),
-  setIsPasswordRecovery: (isPasswordRecovery) => set({ isPasswordRecovery }),
+  setIsPasswordRecovery: (isPasswordRecovery) => {
+    if (isPasswordRecovery) {
+      authGeneration++;
+      verification = null;
+      set({ isPasswordRecovery, session: null, user: null, pendingMfaSession: null, isMfaRequired: false, isLoading: false });
+    } else set({ isPasswordRecovery });
+  },
   setRecoverySession: (recoverySession) => set({ recoverySession }),
   setIsMfaRequired: (isMfaRequired) => set({ isMfaRequired }),
   setLoading: (isLoading) => set({ isLoading }),
@@ -50,6 +56,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   verifySession: async (session) => {
     if (!session) { useAuthStore.getState().clearAuth(); return 'signed_out'; }
+    if (useAuthStore.getState().isPasswordRecovery) return 'superseded';
     if (verification?.token === session.access_token) return verification.promise;
     const generation = ++authGeneration;
     const current = useAuthStore.getState();

@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Lock, Loader2, KeyRound, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { supabase } from "../../services/supabase";
 import { useAuthStore } from "../../store/authStore";
 import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
+import { completePasswordRecovery } from "../../lib/completePasswordRecovery";
 import { getAuthLinkSession } from "../../lib/authLinkSession";
 import { AuthLayout } from "./AuthLayout";
 import { FullPageLoader } from "../../components/auth/ProtectedRoute";
@@ -12,8 +13,6 @@ import { FullPageLoader } from "../../components/auth/ProtectedRoute";
 export function ResetPasswordPage() {
   const navigate = useNavigate();
   const isLoading = useAuthStore((s) => s.isLoading);
-  const isPasswordRecovery = useAuthStore((s) => s.isPasswordRecovery);
-  const recoverySession = useAuthStore((s) => s.recoverySession);
   const setIsPasswordRecovery = useAuthStore((s) => s.setIsPasswordRecovery);
   const setRecoverySession = useAuthStore((s) => s.setRecoverySession);
 
@@ -21,6 +20,8 @@ export function ResetPasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const checkpoint = useRef({ passwordSaved: false });
+  const [passwordSaved, setPasswordSaved] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [hasValidToken, setHasValidToken] = useState<boolean | null>(null);
 
@@ -47,6 +48,7 @@ export function ResetPasswordPage() {
       const session = await getAuthLinkSession(searchParams.get("code"));
       if (!mounted) return;
 
+      const { isPasswordRecovery, recoverySession } = useAuthStore.getState();
       const hasRecoveryTokens =
         hash.includes("type=recovery") ||
         search.includes("type=recovery") ||
@@ -94,7 +96,7 @@ export function ResetPasswordPage() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [isPasswordRecovery, recoverySession, setIsPasswordRecovery, setRecoverySession]);
+  }, [setIsPasswordRecovery, setRecoverySession]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,15 +115,7 @@ export function ResetPasswordPage() {
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) {
-        logAuthError("ResetPassword", error);
-        toast.error(getAuthErrorMessage(error));
-        return;
-      }
-
-      // Invalidate recovery authorization and clear all session state
-      await supabase.auth.signOut();
+      await completePasswordRecovery(password, checkpoint.current, () => setPasswordSaved(true));
       useAuthStore.getState().setSession(null);
       useAuthStore.getState().setUser(null);
       useAuthStore.getState().setIsPasswordRecovery(false);
@@ -131,7 +125,7 @@ export function ResetPasswordPage() {
       navigate("/login", { replace: true });
     } catch (err) {
       logAuthError("ResetPassword", err);
-      toast.error(getAuthErrorMessage(err));
+      toast.error(checkpoint.current.passwordSaved ? "Password updated, but secure sign-out is incomplete. Please retry." : getAuthErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -167,6 +161,7 @@ export function ResetPasswordPage() {
           <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
           <input
             type={showPassword ? "text" : "password"}
+            disabled={passwordSaved || submitting}
             autoComplete="new-password"
             placeholder="New password (min 8 characters)"
             value={password}
@@ -187,6 +182,7 @@ export function ResetPasswordPage() {
           <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
           <input
             type={showConfirm ? "text" : "password"}
+            disabled={passwordSaved || submitting}
             autoComplete="new-password"
             placeholder="Confirm new password"
             value={confirm}
@@ -209,7 +205,7 @@ export function ResetPasswordPage() {
           className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2"
         >
           {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-          {submitting ? "Updating…" : "UPDATE PASSWORD"}
+          {submitting ? "Updating…" : passwordSaved ? "RETRY SECURE SIGN-OUT" : "UPDATE PASSWORD"}
         </button>
       </form>
     </AuthLayout>

@@ -7,6 +7,22 @@ import type { Session } from '@supabase/supabase-js';
 
 describe('verified application login state', () => {
   const session = { access_token: 'credential', user: { id: 'owner' } } as Session;
+  it('cannot restore normal access while recovery is active', async () => {
+    useAuthStore.getState().setIsPasswordRecovery(true);
+    expect(await useAuthStore.getState().verifySession(session)).toBe('superseded');
+    expect(useAuthStore.getState().session).toBeNull();
+    expect(services.post).not.toHaveBeenCalled();
+  });
+  it('recovery cancels an already running normal verification', async () => {
+    let resolve!: (value: unknown) => void;
+    services.post.mockImplementation(() => new Promise(r => { resolve = r; }));
+    const pending = useAuthStore.getState().verifySession(session);
+    await vi.waitFor(() => expect(resolve).toBeDefined());
+    useAuthStore.getState().setIsPasswordRecovery(true);
+    resolve({ status: 'authenticated' });
+    expect(await pending).toBe('superseded');
+    expect(useAuthStore.getState()).toMatchObject({ isPasswordRecovery: true, session: null, user: null, pendingMfaSession: null });
+  });
   beforeEach(() => {
     vi.resetAllMocks();
     vi.stubGlobal('sessionStorage', { setItem: vi.fn(), removeItem: vi.fn() });

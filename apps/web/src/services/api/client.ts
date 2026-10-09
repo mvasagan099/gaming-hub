@@ -107,7 +107,7 @@ async function request<T>(path: string, init: RequestInit, tokenOverride?: strin
     } catch {
       // Non-JSON error body.
     }
-    if (response.status === 401 && path !== '/auth/session' && path !== '/auth/logout') {
+    if (response.status === 401 && !['/auth/session', '/auth/logout', '/auth/logout-all'].includes(path)) {
       const code = body.error?.code;
       if (
         code === "SESSION_REVOKED" ||
