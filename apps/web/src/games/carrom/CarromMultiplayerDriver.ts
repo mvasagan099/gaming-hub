@@ -347,6 +347,7 @@ export default class CarromMultiplayerDriver {
       if (!res.ok) {
         return { ok: false, error: res.error ?? "Shot rejected" };
       }
+      if (this.lastState?.turnNumber === beforeTurn) await this.requestStateSync();
       return { ok: true };
     } catch (error) {
       return { ok: false, uncertain: true, error: error instanceof Error ? error.message : "Could not send shot" };

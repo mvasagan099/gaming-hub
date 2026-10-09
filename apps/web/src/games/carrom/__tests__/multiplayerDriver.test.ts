@@ -161,3 +161,18 @@ it('does not replay previous shot effects when a full-state sync reuses the even
   expect(driver.onFoul).not.toHaveBeenCalled();
   driver.stop();
 });
+
+ it('does not request a snapshot when the accepted shot already arrived', async () => {
+    const engine = new CarromEngine([{ seat: 0, userId: 'p0' }, { seat: 1, userId: 'p1' }]);
+    actions.state.gameState = engine.state;
+    actions.state.requestFullStateSync = vi.fn();
+    const driver = new Driver(0, []); driver.start();
+    actions.send.mockImplementation(async () => {
+      engine.apply({ type: 'strike', x: 280, angle: 0, power: 0 }, 0);
+      (driver as any)._apply(engine.serialize(), [], null, 2);
+      return { ok: true };
+    });
+    expect((await driver.sendStrike(0, 0, 250)).ok).toBe(true);
+    expect(actions.state.requestFullStateSync).not.toHaveBeenCalled();
+    expect(actions.send).toHaveBeenCalledOnce(); driver.stop();
+  });

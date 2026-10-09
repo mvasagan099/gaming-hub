@@ -41,6 +41,7 @@ export type {
 export * from "./types";
 
 // Utils
+export { BoundedRoomQueue } from "./utils/BoundedRoomQueue";
 export { EventEmitter } from "./utils/EventEmitter";
 export { StateValidator } from "./utils/StateValidator";
 export { PacketSequencer } from "./utils/PacketSequencer";

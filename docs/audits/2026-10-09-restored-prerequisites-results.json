@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-09",
+  "baseCommit": "3c03cedbed3b02f56b6ce1b62bd354bcbf338fae",
+  "environment": "Disposable localhost PostgreSQL 5540 and Redis 56482; dummy external providers",
+  "results": {
+    "targeted": {
+      "files": 3,
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    "multiplayer": {
+      "files": 31,
+      "tests": 433,
+      "passed": 433,
+      "failed": 0,
+      "skipped": 0
+    },
+    "web": {
+      "files": 46,
+      "tests": 396,
+      "passed": 396,
+      "failed": 0,
+      "skipped": 0
+    },
+    "engine": {
+      "files": 29,
+      "tests": 440,
+      "passed": 440,
+      "failed": 0,
+      "skipped": 0
+    },
+    "recovery": {
+      "files": 1,
+      "tests": 37,
+      "passed": 37,
+      "failed": 0,
+      "skipped": 0
+    },
+    "financial-security": {
+      "files": 7,
+      "tests": 78,
+      "passed": 78,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "typecheck": "PASS: 9 workspaces",
+  "build": "PASS; existing frontend chunk-size warning",
+  "sourceSha256": {
+    "apps/socket-server/src/distributed/coordinator.ts": "d5bb238c37e94ff49c630c1c6ab22155c6d8d28d3e8e371e99afbb70d676b5db",
+    "apps/socket-server/src/index.ts": "82bb17aa5bd3cad79bacd607e984a2e08e0d86af3608c3f9a67a4197655e4d0a",
+    "apps/web/src/games/carrom/CarromMultiplayerDriver.ts": "4381bfb3b7920240bfb39acb34d48ec103235d11d5b9eb4f2f410ee36057523e",
+    "apps/web/src/games/carrom/__tests__/multiplayerDriver.test.ts": "314073dd3f6a120a6b0bdf0e3c2ff8fdd172f9721b79633fc3858a721ac85063",
+    "packages/multiplayer/src/framework.ts": "ebe6f497efb84541bc07525befce523d74efac0b97ccf99051ae1035ea7df57d",
+    "packages/multiplayer/src/gameplay/DisconnectHandler.ts": "d477eb11ea8ee12e45d49db74f1eda23f08850978e75cad614db00682f1fb48f",
+    "packages/multiplayer/src/gameplay/GameStateManager.ts": "f17b30862c3c6f6b76d97bf4cebca87220e545f56156c9df002c49e878ee4693",
+    "packages/multiplayer/src/index.ts": "a6c8b3cedbcb3b8658d9673bcaf6a6df559563b8eb40757506641f1bf3cdd8e4",
+    "packages/multiplayer/src/managers/MatchManager.ts": "d096edf7a1dae988cd0a24ef1fda155c6495b0cf9ff414089b41b518bd867bc2",
+    "packages/multiplayer/src/managers/TimerManager.ts": "1e3c09d8a80e11d3951715ea15590edcf96b6b24db8a0932519851408222a0c0",
+    "packages/multiplayer/src/utils/BoundedRoomQueue.ts": "a2b03e8e8467b9b0a65b2983327f9cf20189a9b473a327f495d639c457076026",
+    "packages/multiplayer/__tests__/queueAdmission.test.ts": "a9225e996786c5ea5b38b17ffc5588e84a2ab6b8904401d1dcebb9d5a66b03e8",
+    "packages/multiplayer/__tests__/distributedAdmission.test.ts": "ddf04116942e25a6c551cf2a253ff2af259ae2bd100f37a04ed88661e269ef65",
+    "packages/multiplayer/__tests__/deadlinePolicy.test.ts": "8de5208907bf2a15e9aa5c390ea7f7feb0ba41e326191bb3488b7bd867414c8b"
+  },
+  "fullApiAggregation": "NOT RUN in this prerequisite restoration",
+  "push": "NOT PERFORMED",
+  "deployment": "NOT PERFORMED"
+}

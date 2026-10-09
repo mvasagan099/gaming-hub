@@ -176,6 +176,7 @@ export class MatchManager {
       if (room.config.settings.tournamentId) {
         throw new Error("Tournament matches cannot be rematched in this room");
       }
+      if (room.config.settings.allowRematch === false) throw new Error("Rematches are disabled for this room");
       const participants = [...room.players.values()].filter(p => !p.isSpectator);
       if (participants.length < room.config.minPlayers || participants.some(p => p.connectionStatus !== "connected")) {
         throw new Error("All players must be present and connected for a rematch");
@@ -473,7 +474,7 @@ export class MatchManager {
         const current = this.framework.roomManager.getRoom(room.id);
         if (current !== room || !this.isAwaitingGameLoad(current)) return;
         await this.abortMatch(current, "game_initialization_timeout");
-      }).catch(error => this.framework.error("Game load cancellation requires recovery", error));
+      }, true).catch(error => this.framework.error("Game load cancellation requires recovery", error));
     }, Math.max(0, room.match!.loadDeadline! - Date.now()));
     this.loadTimers.set(room.id, timer);
   }
@@ -493,7 +494,7 @@ export class MatchManager {
           return;
         }
         await this.activateMatch(current);
-      }).catch(error => this.framework.error('Countdown owner unavailable; recovery required', error));
+      }, true).catch(error => this.framework.error('Countdown owner unavailable; recovery required', error));
     }, Math.max(0, room.countdownEndsAt - Date.now()));
     this.countdownTimers.set(room.id, timer);
   }
@@ -566,13 +567,9 @@ export class MatchManager {
         (!Number.isSafeInteger(clientSequence) || Number(clientSequence) <= player.packetSequenceNumber)) {
         return this.createErrorResult((match.engine as EngineInstance).serialize(), "Stale or invalid action sequence");
       }
-      // 10-Minute Hard Match Timer Limit
-      const MATCH_LIMIT_MS = 10 * 60 * 1000;
-      const deadline = ["snooker", "snake-vs-worms"].includes(room.config.gameId)
-        ? (room.match.engine as EngineInstance).currentMatchDeadline
-        : room.match.startedAt ? room.match.startedAt + MATCH_LIMIT_MS : null;
-      if (!(["snooker", "snake-vs-worms"].includes(room.config.gameId) && action.type === "resign") && deadline && Date.now() > deadline) {
-        return this.createErrorResult(null, "Match deadline exceeded (10-minute limit)");
+      const deadline = (match.engine as EngineInstance).currentMatchDeadline;
+      if (action.type !== "resign" && deadline != null && Date.now() > deadline) {
+        return this.createErrorResult(null, "Match deadline exceeded");
       }
 
       // Framework-level pre-validation (turn, spectator, rate limiting).
@@ -766,7 +763,7 @@ export class MatchManager {
 
       this.framework.log(`Match resumed in room ${roomId} by ${playerId}`);
     };
-    await this.framework.gameStateManager.enqueue(roomId, resume);
+    await this.framework.gameStateManager.enqueue(roomId, resume, true);
   }
   
   /**
@@ -923,7 +920,7 @@ export class MatchManager {
       if (this.framework.config.enableReplay) this.framework.replayManager.recordAction(room, recorded);
       await this.framework.syncManager.broadcastGameState(room, result.events);
       await this.finishMatch(room, result);
-    });
+    }, true);
   }
   
   /**
@@ -1016,7 +1013,7 @@ export class MatchManager {
         }
       }
     };
-    if (this.framework.config.executeRoomTask || ["table-tennis", "snooker", "snake-vs-worms"].includes(room.config.gameId)) await this.framework.gameStateManager.enqueue(room.id, expire);
+    if (this.framework.config.executeRoomTask || ["table-tennis", "snooker", "snake-vs-worms"].includes(room.config.gameId)) await this.framework.gameStateManager.enqueue(room.id, expire, true);
     else await expire();
   }
 

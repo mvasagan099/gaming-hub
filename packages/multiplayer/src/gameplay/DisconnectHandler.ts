@@ -68,7 +68,7 @@ export class DisconnectHandler {
         );
       }
     };
-    await this.framework.gameStateManager.enqueue(room.id, pause);
+    await this.framework.gameStateManager.enqueue(room.id, pause, true);
 
     // Arm the reconnect grace timer that forfeits on expiry.
     if (config.forfeitOnDisconnect) {
