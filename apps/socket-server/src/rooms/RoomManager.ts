@@ -1183,6 +1183,7 @@ export class RoomManager {
       participants.map((p) => ({ id: p.userId, username: p.username, seat: p.seat ?? 0 })),
     );
     this.io.to(room.ioName).emit("game:state:authoritative", authoritativeState as any);
+    GameEventBus.setStateVersion(matchId, authoritativeState.stateVersion);
 
     GameEventBus.broadcastEvent(
       this.io,
@@ -1192,7 +1193,7 @@ export class RoomManager {
         turnNumber: 0,
         turnStartedAtMs,
         turnExpiresAtMs,
-      })
+      }, authoritativeState.stateVersion)
     );
 
     const startedBy = room.players.get(starter.userId);
@@ -1222,7 +1223,7 @@ export class RoomManager {
   private emitGameState(room: RoomRuntime, events: { type: string }[]) {
     if (!room.match) return;
     const state = room.match.engine.serialize();
-    const stateVersion = GameEventBus.getStateVersion(room.match.matchId) || 1;
+    const stateVersion = GameStateSyncManager.getMatchState(room.match.matchId)?.stateVersion ?? (GameEventBus.getStateVersion(room.match.matchId) || 1);
     const payload = {
       roomId: room.id,
       matchId: room.match.matchId,
@@ -1234,7 +1235,7 @@ export class RoomManager {
       seat: null,
     };
 
-    // Broadcast standard envelope
+    // Broadcast standard envelope aligned with authoritative stateVersion
     GameEventBus.broadcastEvent(
       this.io,
       room,
@@ -1242,33 +1243,12 @@ export class RoomManager {
         matchId: room.match.matchId,
         state,
         events,
-      })
+      }, stateVersion)
     );
 
-    // Get all active socket IDs for players in this room
-    const targetSocketIds: string[] = [];
-    for (const player of room.players.values()) {
-      for (const socketId of player.socketIds) {
-        const socket = this.io.sockets.sockets.get(socketId);
-        if (socket && socket.connected) {
-          targetSocketIds.push(socketId);
-        }
-      }
-    }
-
-    console.log(`[RoomManager] Emitting game:state to ${targetSocketIds.length} sockets in room ${room.id}`);
-    
-    // Emit directly to each connected socket and log issues
-    for (const socketId of targetSocketIds) {
-      const socket = this.io.sockets.sockets.get(socketId);
-      if (socket) {
-        socket.emit("game:state", payload as any);
-      }
-    }
-    
-    // Also broadcast to room for safety as fallback
+    // Broadcast state once to all connected players in the room
     this.io.to(room.ioName).emit("game:state", payload as any);
-    console.log(`[RoomManager] game:state broadcast to room ${room.ioName} for match ${room.match.matchId}`);
+    console.log(`[RoomManager] game:state broadcast to room ${room.ioName} for match ${room.match.matchId} at version ${stateVersion}`);
   }
 
   // ---------------------------------------------------------------- clock flag
@@ -1658,7 +1638,30 @@ export class RoomManager {
       };
     }
 
-    console.log(`[RoomManager] Action accepted, emitting game:state with ${result.events.length} events`);
+    // Update and broadcast authoritative match state first so all sub-events share this action's stateVersion
+    const currentSeat = room.match.engine.currentSeat;
+    const activePlayer = [...room.players.values()].find((p) => p.seat === currentSeat && !p.isSpectator);
+    const turnStartedAtMs = Date.now();
+    const turnExpiresAtMs = room.match.engine.currentClockDeadline ?? (turnStartedAtMs + 30000);
+
+    const authoritativeState = GameStateSyncManager.applyActionUpdate(
+      room.match.matchId,
+      actionId,
+      result.state,
+      {
+        currentPlayerId: activePlayer?.userId ?? null,
+        turnNumber: room.match.turnNumber,
+        turnStartedAt: turnStartedAtMs,
+        turnExpiresAt: turnExpiresAtMs,
+        status: result.finished ? "finished" : "playing",
+      },
+    );
+    const actionStateVersion = authoritativeState.stateVersion;
+    GameEventBus.setStateVersion(room.match.matchId, actionStateVersion);
+
+    this.io.to(room.ioName).emit("game:state:authoritative", authoritativeState as any);
+
+    console.log(`[RoomManager] Action accepted, emitting game:state with ${result.events.length} events at version ${actionStateVersion}`);
     GameEventBus.broadcastEvent(
       this.io,
       room,
@@ -1666,7 +1669,7 @@ export class RoomManager {
         actionId,
         actionType: action.type,
         playerId: user.userId,
-      })
+      }, actionStateVersion)
     );
 
     // Broadcast individual game-specific events with Carrom pocket deduplication
@@ -1685,32 +1688,11 @@ export class RoomManager {
       GameEventBus.broadcastEvent(
         this.io,
         room,
-        GameEventBus.createEnvelope(ev.type, room.match.matchId, room.gameId, ev)
+        GameEventBus.createEnvelope(ev.type, room.match.matchId, room.gameId, ev, actionStateVersion)
       );
     }
 
     this.emitGameState(room, result.events);
-
-
-    // Update and broadcast authoritative match state
-    const currentSeat = room.match.engine.currentSeat;
-    const activePlayer = [...room.players.values()].find((p) => p.seat === currentSeat && !p.isSpectator);
-    const turnStartedAtMs = Date.now();
-    const turnExpiresAtMs = room.match.engine.currentClockDeadline ?? (turnStartedAtMs + 30000);
-
-    const authoritativeState = GameStateSyncManager.applyActionUpdate(
-      room.match.matchId,
-      actionId,
-      result.state,
-      {
-        currentPlayerId: activePlayer?.userId ?? null,
-        turnNumber: room.match.turnNumber,
-        turnStartedAt: turnStartedAtMs,
-        turnExpiresAt: turnExpiresAtMs,
-        status: result.finished ? "finished" : "playing",
-      },
-    );
-    this.io.to(room.ioName).emit("game:state:authoritative", authoritativeState as any);
 
     // If active turn player changed, emit TURN_CHANGED
     if (currentSeat !== undefined && !result.finished) {
@@ -1724,7 +1706,7 @@ export class RoomManager {
           turnNumber: room.match.turnNumber,
           turnStartedAtMs,
           turnExpiresAtMs,
-        })
+        }, actionStateVersion)
       );
     }
 

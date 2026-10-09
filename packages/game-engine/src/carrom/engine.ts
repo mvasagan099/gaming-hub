@@ -408,7 +408,6 @@ export class CarromEngine extends MultiplayerGameEngine<CarromState, CarromActio
       strikerVelocityWorld: { vx: next.striker.vx, vy: next.striker.vy },
       shotPower: action.power,
       shotDirectionWorld: action.angle,
-      keyframes,
     });
 
     events.push({

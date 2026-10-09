@@ -341,6 +341,8 @@ const CarromMultiplayer: React.FC<Props> = ({
   const room = useMultiplayerStore((s) => s.room);
   const [renderedMatchId, setRenderedMatchId] = useState<string | null>(null);
   const renderedMatchRef = useRef<string | null>(null);
+  const k1PiecesMapRef = useRef<Map<string, any>>(new Map());
+  const k2PiecesMapRef = useRef<Map<string, any>>(new Map());
 
   // ── Driver setup ──────────────────────────────────────────────────────────
 
@@ -842,8 +844,17 @@ const CarromMultiplayer: React.FC<Props> = ({
       const span = k2.frame - k1.frame || 1;
       const alpha = Math.max(0, Math.min(1, (currentSimFrame - k1.frame) / span));
 
-      const k1Map = new Map(k1.pieces.map((p) => [p.id, p]));
-      const k2Map = new Map(k2.pieces.map((p) => [p.id, p]));
+      const k1Map = k1PiecesMapRef.current;
+      k1Map.clear();
+      for (let j = 0; j < k1.pieces.length; j++) {
+        k1Map.set(k1.pieces[j].id, k1.pieces[j]);
+      }
+
+      const k2Map = k2PiecesMapRef.current;
+      k2Map.clear();
+      for (let j = 0; j < k2.pieces.length; j++) {
+        k2Map.set(k2.pieces[j].id, k2.pieces[j]);
+      }
 
       const seat = mySeatRef.current;
 

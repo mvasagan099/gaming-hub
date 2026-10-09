@@ -42,6 +42,14 @@ export class GameEventBus {
   }
 
   /**
+   * Explicitly sets authoritative state version for a match to keep event envelopes
+   * synchronized with GameStateSyncManager.
+   */
+  public static setStateVersion(matchId: string, version: number): void {
+    this.matchStateVersions.set(matchId, version);
+  }
+
+  /**
    * Increments and returns the next authoritative monotonic sequence for a match
    */
   public static nextSequence(matchId: string): number {
