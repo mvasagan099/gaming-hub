@@ -237,8 +237,7 @@ export class DistributedRoomCoordinator {
       const owner = this.owned.get(roomId)!;
       await this.ownership.assert(roomId, this.instanceId, owner.token);
       const originalRoom = this.framework.roomManager.getRoom(roomId)!;
-      const stableParticipants = ["table-tennis", "snake-vs-worms"].includes(originalRoom.config.gameId)
-        ? [...originalRoom.players.keys()].sort() : undefined;
+      const stableParticipants = [...originalRoom.players.keys()].sort();
       const connections = new Map([...originalRoom.players.values(), ...originalRoom.spectators.values()]
         .map(player => [player.id, new Set(player.socketIds)]));
       return this.context.run({ active: true, roomId, publications: [] }, async () => {

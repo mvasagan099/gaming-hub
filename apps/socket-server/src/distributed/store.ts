@@ -65,15 +65,14 @@ export class PostgresMatchStore {
   }
   async commit(roomId: string, ownerId: string, token: string, expectedRevision: number,
     matchId: string | null, snapshot: DurableSnapshot, result?: DurableResult, closed = false, previousParticipants?: string[]): Promise<number> {
-    const nextRevision = await this.db.$transaction(async tx => {
-      const players = (snapshot as { players?: Array<{ id?: string }> }).players ?? [];
-      const ids = players.map(p => p.id).filter((id): id is string => typeof id === 'string').sort();
-      const stable = previousParticipants != null && ids.length === players.length && new Set(ids).size === ids.length &&
-        canonical(ids) === canonical([...previousParticipants].sort());
+    const players = (snapshot as { players?: Array<{ id?: string }> }).players ?? [];
+    const ids = players.map(p => p.id).filter((id): id is string => typeof id === 'string').sort();
+    const stable = previousParticipants != null && ids.length === players.length && new Set(ids).size === ids.length &&
+      canonical(ids) === canonical([...previousParticipants].sort());
+    const writeCheckpoint = async (tx: Pick<Prisma.TransactionClient, '$executeRaw'>) => {
       // Stable membership was reserved by the previous fenced commit. Verify it
       // in this atomic UPDATE instead of an additional SELECT on every frame.
       // Any join/leave still takes the original participant-lock/conflict path.
-      if (!closed && !stable) await reserveParticipants(tx, roomId, snapshot);
       const changed = await tx.$executeRaw`UPDATE "LiveRoomCheckpoint" SET "snapshot"=${JSON.stringify(snapshot)}::jsonb,
         "closed"=${closed}, "matchId"=${matchId}, "revision"="revision"+1, "updatedAt"=clock_timestamp()
         WHERE "id"=${roomId} AND "ownerId"=${ownerId} AND "fencingToken"=${BigInt(token)}
@@ -81,12 +80,22 @@ export class PostgresMatchStore {
           AND (${!stable} OR (jsonb_array_length("snapshot"->'players')=${ids.length}
             AND "snapshot"->'players' @> ${JSON.stringify(ids.map(id => ({ id })))}::jsonb))`;
       if (changed !== 1) throw new Error('STALE_MATCH_OWNER_OR_REVISION');
+      return expectedRevision + 1;
+    };
+    // A frame with unchanged membership has exactly one guarded write. PostgreSQL
+    // makes that UPDATE atomic without BEGIN/COMMIT network round trips. Result
+    // outbox insertion and participant changes still require the full transaction.
+    const nextRevision = stable && !closed && !result
+      ? await writeCheckpoint(this.db)
+      : await this.db.$transaction(async tx => {
+      if (!closed && !stable) await reserveParticipants(tx, roomId, snapshot);
+      const revision = await writeCheckpoint(tx);
       if (result) {
         const existing = await tx.gameResultOutbox.findUnique({ where: { matchId: result.matchId } });
         if (!existing) await tx.gameResultOutbox.create({ data: result });
         if (existing && (existing.id !== result.id || existing.roomId !== result.roomId || canonical(existing.result) !== canonical(result.result))) throw new Error('CONFLICTING_CANONICAL_RESULT');
       }
-      return expectedRevision + 1;
+      return revision;
     }, { timeout: 45000, maxWait: 10000 });
 
     if (result) {
