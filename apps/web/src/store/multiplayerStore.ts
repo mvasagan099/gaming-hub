@@ -631,11 +631,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           return;
         }
 
-        // Apply state version
-        set({
-          lastStateVersion: Math.max(currentVersion, envelope.stateVersion),
-          renderKey: (get().renderKey || 0) + 1,
-        });
+        // Metadata does not contain a gameplay snapshot. Advancing its version
+        // here would discard the matching game:state packet when it arrives.
 
         // Event-specific handling
         if (envelope.eventType === "COUNTDOWN_UPDATED" && envelope.payload?.countdown !== undefined) {

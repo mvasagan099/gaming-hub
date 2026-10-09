@@ -14,6 +14,16 @@ beforeEach(() => {
 });
 afterEach(() => useMultiplayerStore.getState().disconnect());
 describe('finished room cleanup before another game', () => {
+  it('does not let a metadata event suppress the matching gameplay snapshot', () => {
+    useMultiplayerStore.setState({ room: { ...ended, status: 'playing' }, lastStateVersion: 1, gameState: { score: 0 } });
+    socket.listeners.get('game:event')!({ matchId: ended.matchId, eventId: 'countdown-2',
+      eventType: 'COUNTDOWN_UPDATED', stateVersion: 2, payload: { countdown: 1 } });
+    expect(useMultiplayerStore.getState().countdown).toBe(1);
+    socket.listeners.get('game:state')!({ roomId: ended.id, matchId: ended.matchId,
+      sequenceNumber: 2, state: { score: 1 }, events: [] });
+    expect(useMultiplayerStore.getState().gameState).toEqual({ score: 1 });
+    expect(useMultiplayerStore.getState().lastStateVersion).toBe(2);
+  });
   it.each(['carrom', 'table-tennis', 'snake-vs-worms'])('does not replay %s events or render duplicate/older state versions', gameId => {
     useMultiplayerStore.setState({ room: { ...ended, gameId, status: 'playing' }, lastStateVersion: 0 });
     const receive = socket.listeners.get('game:state')!;
