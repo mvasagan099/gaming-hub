@@ -1,0 +1,36 @@
+[
+  {
+    "component": "ChessPhaserGame",
+    "unchangedNamesRerender": {
+      "boardCreations": 2,
+      "boardDestructions": 1
+    },
+    "expected": {
+      "boardCreations": 1,
+      "boardDestructions": 0
+    },
+    "reproduced": true
+  },
+  {
+    "component": "LudoPhaserGame",
+    "unchangedNamesRerender": {
+      "boardCreations": 2,
+      "boardDestructions": 1
+    },
+    "expected": {
+      "boardCreations": 1,
+      "boardDestructions": 0
+    },
+    "reproduced": true
+  },
+  {
+    "component": "CarromGame",
+    "input": {
+      "mySeat": null,
+      "isSpectator": true
+    },
+    "actualChildSeat": 0,
+    "actualChildSpectatorFlag": null,
+    "reproduced": true
+  }
+]
