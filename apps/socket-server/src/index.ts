@@ -1,3 +1,4 @@
+import { createSocketShutdown } from "./shutdown";
 import { startMemoryDiagnostics } from "./memoryDiagnostics";
 import { SharedMatchmaking } from "./distributed/matchmaking";
 import { provisionTournamentRoom } from "./distributed/provision";
@@ -462,6 +463,7 @@ async function main(): Promise<void> {
   io.attach(httpServer);
 
   const adapterRedisClients: Redis[] = [];
+  let shuttingDown = false;
   const presenceTimers = new Map<string, ReturnType<typeof setTimeout>>();
   if (env.REDIS_URL) {
     const pub = new Redis(env.REDIS_URL, {
@@ -1023,6 +1025,8 @@ async function main(): Promise<void> {
 
     // Disconnect
     socket.on("disconnect", () => {
+      // Teardown releases ownership; do not enqueue fresh work after ingress closes.
+      if (shuttingDown) return;
       // Remove from matchmaking
       framework.matchmakingManager.removeFromQueue(user.userId);
       
@@ -1076,25 +1080,37 @@ async function main(): Promise<void> {
     logger.info(`Socket server listening on port ${env.PORT}`);
   });
 
-  const shutdown = async () => {
-    logger.info("Shutting down socket server…");
-    stopMemoryDiagnostics();
-    for (const timer of presenceTimers.values()) clearTimeout(timer);
-    presenceTimers.clear();
-    resultWorker?.stop();
-    if (matchmakingRecovery) clearInterval(matchmakingRecovery);
-    await framework.shutdown();
-    await distributed?.stop();
-    await coordinationRedis?.quit();
-    await Promise.allSettled(adapterRedisClients.map(client => client.quit()));
-    io.close();
-    httpServer.close();
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    process.exit(0);
+  const shutdown = createSocketShutdown([
+    () => {
+      shuttingDown = true;
+      logger.info("Shutting down socket server…");
+      stopMemoryDiagnostics();
+      for (const timer of presenceTimers.values()) clearTimeout(timer);
+      presenceTimers.clear();
+      resultWorker?.stop();
+      if (matchmakingRecovery) clearInterval(matchmakingRecovery);
+    },
+    // RedisAdapter.close issues unsubscribe commands. Keep its clients alive
+    // until Socket.IO has closed its namespaces and stopped accepting traffic.
+    () => new Promise<void>((resolve, reject) => io.close(error => error ? reject(error) : resolve())),
+    () => framework.shutdown(),
+    async () => { await distributed?.stop(); },
+    async () => { if (coordinationRedis && coordinationRedis.status !== "end") await coordinationRedis.quit(); },
+    async () => {
+      const results = await Promise.allSettled(adapterRedisClients.map(client =>
+        client.status === "end" ? Promise.resolve() : client.quit()));
+      const failures = results.filter(result => result.status === "rejected");
+      if (failures.length) throw new AggregateError(failures.map(result => result.reason), "Redis shutdown failed");
+    },
+  ]);
+  const onShutdown = () => {
+    void shutdown().then(() => process.exit(0), error => {
+      logger.error({ err: error }, "Socket shutdown failed");
+      process.exit(1);
+    });
   };
-
-  process.on("SIGINT", () => void shutdown());
-  process.on("SIGTERM", () => void shutdown());
+  process.on("SIGINT", onShutdown);
+  process.on("SIGTERM", onShutdown);
 }
 
 process.on("unhandledRejection", (reason) => {
