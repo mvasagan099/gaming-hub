@@ -5,6 +5,7 @@ import { Lock, Loader2, KeyRound, Eye, EyeOff, AlertCircle } from "lucide-react"
 import { supabase } from "../../services/supabase";
 import { useAuthStore } from "../../store/authStore";
 import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
+import { getAuthLinkSession } from "../../lib/authLinkSession";
 import { AuthLayout } from "./AuthLayout";
 import { FullPageLoader } from "../../components/auth/ProtectedRoute";
 
@@ -42,24 +43,8 @@ export function ResetPasswordPage() {
         return;
       }
 
-      // If PKCE code is present in query parameters, exchange it for a session if needed
-      const code = searchParams.get("code");
-      if (code) {
-        try {
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-          if (!error && data?.session && mounted) {
-            setIsPasswordRecovery(true);
-            setRecoverySession(data.session);
-            setHasValidToken(true);
-            return;
-          }
-        } catch {
-          // Fall through to getSession check
-        }
-      }
-
-      // Check current session from Supabase
-      const { data: { session } } = await supabase.auth.getSession();
+      // Reuse SDK recovery initialization; never exchange a consumed code twice.
+      const session = await getAuthLinkSession(searchParams.get("code"));
       if (!mounted) return;
 
       const hasRecoveryTokens =
@@ -79,20 +64,19 @@ export function ResetPasswordPage() {
         setIsPasswordRecovery(true);
         setRecoverySession(session);
         setHasValidToken(true);
-      } else if (!hash && !search) {
-        // Direct navigation with no tokens/session
+      } else {
+        // SDK initialization completed without an authenticated recovery session
         setHasValidToken(false);
       }
     }
 
-    void checkAuthContext();
-
-    // Fallback: If after 3.5 seconds hasValidToken is still unconfirmed and no session exists, mark invalid
-    const fallbackTimer = setTimeout(() => {
-      if (mounted && hasValidToken === null && !useAuthStore.getState().recoverySession && !useAuthStore.getState().session) {
-        setHasValidToken(false);
-      }
-    }, 3500);
+    void checkAuthContext().catch((error) => {
+      if (!mounted) return;
+      logAuthError("ResetPasswordLink", error);
+      setIsPasswordRecovery(false);
+      setRecoverySession(null);
+      setHasValidToken(false);
+    });
 
     // Also subscribe to auth state changes to capture PASSWORD_RECOVERY or SIGNED_IN events
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -108,7 +92,6 @@ export function ResetPasswordPage() {
 
     return () => {
       mounted = false;
-      clearTimeout(fallbackTimer);
       subscription.unsubscribe();
     };
   }, [isPasswordRecovery, recoverySession, setIsPasswordRecovery, setRecoverySession]);

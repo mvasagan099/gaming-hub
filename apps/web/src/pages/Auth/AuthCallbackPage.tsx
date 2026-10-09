@@ -6,6 +6,7 @@ import { apiClient } from "../../services/api/client";
 import { useAuthStore } from "../../store/authStore";
 import { getAuthErrorMessage, logAuthError } from "../../lib/authErrors";
 import { AuthLayout } from "./AuthLayout";
+import { getAuthLinkSession } from "../../lib/authLinkSession";
 import type { Session } from "@supabase/supabase-js";
 
 /**
@@ -79,38 +80,9 @@ export function AuthCallbackPage() {
           navigate(nextParam || "/", { replace: true });
         };
 
-        // 2. Handle PKCE Code Flow (?code=...)
+        // Supabase initialization may already have consumed the one-time code.
         const code = searchParams.get("code");
-        if (code) {
-          setStatusMsg("Exchanging verification code…");
-          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (exchangeError) throw exchangeError;
-
-          if (mounted) {
-            if (isRecovery) {
-              useAuthStore.getState().clearAuth();
-              useAuthStore.getState().setIsPasswordRecovery(true);
-              useAuthStore.getState().setRecoverySession(data.session);
-              useAuthStore.getState().setSession(null);
-              useAuthStore.getState().setUser(null);
-              navigate("/reset-password", { replace: true });
-              return;
-            }
-
-            if (data.session) {
-              await completeAuth(data.session);
-              return;
-            }
-          }
-        }
-
-        // 3. Handle Implicit Hash Token Flow (#access_token=...) or Existing Session
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-
-        if (sessionError) throw sessionError;
+        const session = await getAuthLinkSession(code);
 
         if (session && mounted) {
           if (isRecovery) {
