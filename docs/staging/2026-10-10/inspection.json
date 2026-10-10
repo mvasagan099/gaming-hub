@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-10",
+  "method": "Signed-in Render dashboard, read-only",
+  "project": "prj-db1iq0ad0e5s73fussb0",
+  "visible_environments": [
+    "Production"
+  ],
+  "staging_present": false,
+  "secrets_opened": false,
+  "database_connections": false,
+  "external_mutations": false,
+  "services": {
+    "api": {
+      "id": "srv-dab6lgp42hec73a1ohtg",
+      "plan": "Free",
+      "branch": "main",
+      "deployed_commit": "9a024773a7cd9af0f098cf45e5011ba8a9745ead"
+    },
+    "socket": {
+      "id": "srv-dab7uk942hec73a5jl5g",
+      "plan": "Free",
+      "cpu": 0.1,
+      "ram_mb": 512,
+      "branch": "main",
+      "deployed_commit": "9a024773a7cd9af0f098cf45e5011ba8a9745ead",
+      "metrics": "Compute page shows no captured data; no OOM resolution conclusion"
+    },
+    "web": {
+      "id": "srv-dab8klid0e5s73dmuht0",
+      "type": "static",
+      "branch": "main",
+      "deployed_commit": "9a024773a7cd9af0f098cf45e5011ba8a9745ead"
+    },
+    "postgres": {
+      "id": "dpg-db08gdtg1s2s73d0r5ug-a",
+      "status": "Suspended by you",
+      "version": 18,
+      "active_application_database": "Not inspected in this turn"
+    },
+    "redis": {
+      "id": "red-dab8euh42hec73a75t9g",
+      "type": "Valkey 8",
+      "plan": "Not inspected in this turn"
+    }
+  },
+  "auto_deploy": "Observed latest deploys triggered automatically for API/socket/web",
+  "prices": {
+    "api": 25,
+    "socket_two_replicas": 50,
+    "db": 19,
+    "redis": 20,
+    "extra_db_storage": 1.2,
+    "optional_pro_workspace": 25,
+    "subtotal_without_upgrade": 115.2,
+    "subtotal_with_upgrade": 140.2,
+    "source": "https://render.com/pricing",
+    "checked": "2026-10-10"
+  },
+  "redis_connections_discrepancy": "Pricing shows 250 for 1g; compute-plan documentation shows 1000; use conservative 250 pending provisioning confirmation."
+}

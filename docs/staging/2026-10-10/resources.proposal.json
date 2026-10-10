@@ -1,0 +1,104 @@
+{
+  "status": "PROPOSAL_ONLY_PENDING_APPROVAL",
+  "baselineCommit": "becbb1412c4f484ca5a9924495a9f6928763d3d7",
+  "region": "singapore",
+  "autoDeploy": false,
+  "proposedEnvironment": "Staging (network isolated)",
+  "stagingResourceIds": {
+    "web": null,
+    "api": null,
+    "socket": null,
+    "postgres": null,
+    "redis": null
+  },
+  "stagingIdentities": {
+    "databaseHost": null,
+    "databaseName": null,
+    "databaseUser": null,
+    "redisHost": null,
+    "supabaseProjectRef": null,
+    "couponVaultTestTenant": null,
+    "emailTestAccount": null
+  },
+  "services": [
+    {
+      "name": "gaming-hub-staging-web",
+      "type": "static",
+      "replicas": 1,
+      "computeUsdMonth": 0,
+      "build": "npm ci && npm run build -w @gaming-hub/web",
+      "publish": "apps/web/dist",
+      "rewrite": {
+        "source": "/*",
+        "destination": "/index.html",
+        "action": "rewrite"
+      }
+    },
+    {
+      "name": "gaming-hub-staging-api",
+      "type": "docker",
+      "dockerfile": "Dockerfile.api",
+      "replicas": 1,
+      "plan": "1c-2g",
+      "cpuEach": 1,
+      "ramGbEach": 2,
+      "computeUsdMonth": 25,
+      "healthCheck": "/health/ready"
+    },
+    {
+      "name": "gaming-hub-staging-socket",
+      "type": "docker",
+      "dockerfile": "Dockerfile.socket",
+      "replicas": 2,
+      "plan": "1c-2g",
+      "cpuEach": 1,
+      "ramGbEach": 2,
+      "computeUsdMonth": 50,
+      "healthCheck": "/health/ready"
+    },
+    {
+      "name": "gaming-hub-staging-db",
+      "type": "postgres",
+      "plan": "0.5c-1g",
+      "cpu": 0.5,
+      "ramGb": 1,
+      "connections": 100,
+      "storageGb": 5,
+      "computeUsdMonth": 19,
+      "extraStorageEstimateUsdMonth": 1.2
+    },
+    {
+      "name": "gaming-hub-staging-redis",
+      "type": "keyvalue",
+      "plan": "1g",
+      "ramGb": 1,
+      "computeUsdMonth": 20,
+      "connectionLimitPlanningCeiling": 250,
+      "connectionLimitNeedsProvisionedConfirmation": true,
+      "evictionPolicy": "noeviction"
+    }
+  ],
+  "costEstimate": {
+    "computeUsdMonth": 114,
+    "additionalWorkspaceProIfRequiredUsdMonth": 25,
+    "extraStorageUsdMonth": 1.2,
+    "renderEstimateUsdMonth": 140.2,
+    "excludes": [
+      "tax",
+      "bandwidth/build overages",
+      "Supabase staging auth/storage",
+      "CouponVault test hosting",
+      "email/provider fees",
+      "domains",
+      "monitoring add-ons"
+    ],
+    "notASpendingAuthorization": true,
+    "renderWithoutWorkspaceUpgradeUsdMonth": 115.2
+  },
+  "migrationCommand": "npx prisma migrate deploy --schema packages/db/prisma/schema.prisma",
+  "migrationRunner": "Single staging API pre-deploy job; image retains root production Prisma dependency. Gate both services until migration succeeds.",
+  "writesAllowedNow": false,
+  "deploymentAllowedNow": false,
+  "delivery": "Pending explicit approval: publish the pinned verified commit through a separate staging-only source without pushing origin/main; no new branch created.",
+  "priceChecked": "2026-10-10"
+}
