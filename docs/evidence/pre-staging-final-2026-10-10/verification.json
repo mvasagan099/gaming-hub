@@ -1,0 +1,81 @@
+{
+  "baseline_commit": "c0fb7f5",
+  "environment": "Disposable local fixtures only; no production/staging writes or deployment",
+  "api": {
+    "expectedFiles": 111,
+    "executedFiles": 111,
+    "tests": 1522,
+    "passed": 1522,
+    "failed": 0,
+    "skipped": 0,
+    "complete": true,
+    "status": "PASS",
+    "missing": 0,
+    "duplicates": 0,
+    "passes_run": 1
+  },
+  "suites": {
+    "web": {
+      "files": 56,
+      "tests": 498,
+      "passed": 498,
+      "failed": 0,
+      "skipped": 0
+    },
+    "multiplayer": {
+      "files": 32,
+      "tests": 451,
+      "passed": 451,
+      "failed": 0,
+      "skipped": 0
+    },
+    "engine": {
+      "files": 29,
+      "tests": 444,
+      "passed": 444,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "typecheck": {
+    "status": "PASS",
+    "workspaces": 9,
+    "errors": 0
+  },
+  "build": {
+    "status": "PASS",
+    "remaining_warnings": "Existing large web chunks"
+  },
+  "migration": {
+    "status": "PASS",
+    "count": 13,
+    "disposable_database": "127.0.0.1:5540/gaming_release_20261010_test",
+    "schema_diff": "No difference detected"
+  },
+  "dependency_audit": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "qr_regression": {
+    "before": {
+      "tests": 2,
+      "failed": 2
+    },
+    "after": {
+      "tests": 8,
+      "passed": 8,
+      "failed": 0
+    },
+    "scanner": "Independent jsQR decode of the rendered SVG modules",
+    "test_key": "Synthetic fixture only"
+  },
+  "tooling_patches": {
+    "shell-quote": "1.9.0 -> 1.11.0",
+    "source-map-js": "1.2.1 -> 1.2.2"
+  },
+  "verified_code_commit": "986f2b6"
+}
