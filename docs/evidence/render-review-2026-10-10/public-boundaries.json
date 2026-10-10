@@ -1,0 +1,267 @@
+[
+  {
+    "check": "anonymous-profile",
+    "status": 401,
+    "seconds": 0.304,
+    "allow_origin": null,
+    "allow_credentials": "true",
+    "response": {
+      "error": {
+        "code": "UNAUTHORIZED",
+        "message": "Missing bearer token"
+      }
+    }
+  },
+  {
+    "check": "anonymous-wallet",
+    "status": 401,
+    "seconds": 0.293,
+    "allow_origin": null,
+    "allow_credentials": "true",
+    "response": {
+      "error": {
+        "code": "UNAUTHORIZED",
+        "message": "Missing bearer token"
+      }
+    }
+  },
+  {
+    "check": "catalog",
+    "status": 200,
+    "seconds": 0.263,
+    "allow_origin": null,
+    "allow_credentials": "true",
+    "catalog": [
+      {
+        "gameId": "snake-ladder",
+        "name": "Snake & Ladder",
+        "category": "Board",
+        "icon": "\ud83d\udc0d",
+        "enabled": true,
+        "onlineEnabled": true,
+        "minPlayers": 2,
+        "maxPlayers": 2,
+        "entryFees": [
+          50,
+          100,
+          500,
+          1000
+        ],
+        "defaultEntryFee": 100,
+        "turnTimerSeconds": 25,
+        "reconnectWindowSeconds": 30,
+        "matchDurationSeconds": 600,
+        "timeoutResolution": "CURRENT_POSITION",
+        "allowDraw": true,
+        "prizeMode": "WINNER_PERCENTAGE",
+        "winnerPercentage": 90
+      },
+      {
+        "gameId": "ludo",
+        "name": "Ludo",
+        "category": "Board",
+        "icon": "\ud83c\udfb2",
+        "enabled": true,
+        "onlineEnabled": true,
+        "minPlayers": 2,
+        "maxPlayers": 2,
+        "entryFees": [
+          50,
+          100,
+          500,
+          1000
+        ],
+        "defaultEntryFee": 100,
+        "turnTimerSeconds": 30,
+        "reconnectWindowSeconds": 30,
+        "matchDurationSeconds": 600,
+        "timeoutResolution": "CURRENT_PROGRESS",
+        "allowDraw": true,
+        "prizeMode": "WINNER_PERCENTAGE",
+        "winnerPercentage": 90
+      },
+      {
+        "gameId": "chess",
+        "name": "Chess",
+        "category": "Board",
+        "icon": "\u265f\ufe0f",
+        "enabled": true,
+        "onlineEnabled": true,
+        "minPlayers": 2,
+        "maxPlayers": 2,
+        "entryFees": [
+          50,
+          100,
+          500,
+          1000
+        ],
+        "defaultEntryFee": 100,
+        "turnTimerSeconds": 60,
+        "reconnectWindowSeconds": 30,
+        "matchDurationSeconds": 600,
+        "timeoutResolution": "CONFIGURED_CHESS_RESOLUTION",
+        "allowDraw": true,
+        "prizeMode": "WINNER_PERCENTAGE",
+        "winnerPercentage": 90
+      },
+      {
+        "gameId": "carrom",
+        "name": "Carrom",
+        "category": "Board",
+        "icon": "\ud83c\udfaf",
+        "enabled": true,
+        "onlineEnabled": true,
+        "minPlayers": 2,
+        "maxPlayers": 2,
+        "entryFees": [
+          50,
+          100,
+          500,
+          1000
+        ],
+        "defaultEntryFee": 100,
+        "turnTimerSeconds": 25,
+        "reconnectWindowSeconds": 30,
+        "matchDurationSeconds": 600,
+        "timeoutResolution": "CURRENT_POINTS",
+        "allowDraw": true,
+        "prizeMode": "WINNER_PERCENTAGE",
+        "winnerPercentage": 90
+      },
+      {
+        "gameId": "fruit-ninja",
+        "name": "Fruit Ninja",
+        "category": "Arcade",
+        "icon": "\ud83c\udf49",
+        "enabled": true,
+        "onlineEnabled": true,
+        "minPlayers": 2,
+        "maxPlayers": 2,
+        "entryFees": [
+          50,
+          100,
+          500,
+          1000
+        ],
+        "defaultEntryFee": 100,
+        "turnTimerSeconds": 0,
+        "reconnectWindowSeconds": 30,
+        "matchDurationSeconds": 600,
+        "timeoutResolution": "CURRENT_SCORE",
+        "allowDraw": true,
+        "prizeMode": "WINNER_PERCENTAGE",
+        "winnerPercentage": 90
+      },
+      {
+        "gameId": "bubble-shooter",
+        "name": "Bubble Shooter",
+        "category": "Arcade",
+        "icon": "\ud83e\udee7",
+        "enabled": true,
+        "onlineEnabled": true,
+        "minPlayers": 2,
+        "maxPlayers": 8,
+        "entryFees": [
+          50,
+          100,
+          500,
+          1000
+        ],
+        "defaultEntryFee": 100,
+        "turnTimerSeconds": 15,
+        "reconnectWindowSeconds": 30,
+        "matchDurationSeconds": 600,
+        "timeoutResolution": "CURRENT_SCORE_PROGRESS",
+        "allowDraw": true,
+        "prizeMode": "WINNER_PERCENTAGE",
+        "winnerPercentage": 90
+      },
+      {
+        "gameId": "table-tennis",
+        "name": "Table Tennis",
+        "category": "Sports",
+        "icon": "\ud83c\udfd3",
+        "enabled": true,
+        "onlineEnabled": true,
+        "minPlayers": 2,
+        "maxPlayers": 2,
+        "entryFees": [
+          50,
+          100,
+          500,
+          1000
+        ],
+        "defaultEntryFee": 100,
+        "turnTimerSeconds": 0,
+        "reconnectWindowSeconds": 30,
+        "matchDurationSeconds": 180,
+        "timeoutResolution": "CURRENT_MATCH_SCORE",
+        "allowDraw": true,
+        "prizeMode": "WINNER_PERCENTAGE",
+        "winnerPercentage": 90
+      },
+      {
+        "gameId": "snake-vs-worms",
+        "name": "Snake vs Worms",
+        "category": "Arcade",
+        "icon": "\ud83d\udc1b",
+        "enabled": true,
+        "onlineEnabled": true,
+        "minPlayers": 2,
+        "maxPlayers": 8,
+        "entryFees": [
+          50,
+          100,
+          500,
+          1000
+        ],
+        "defaultEntryFee": 100,
+        "turnTimerSeconds": 0,
+        "reconnectWindowSeconds": 30,
+        "matchDurationSeconds": 600,
+        "timeoutResolution": "CURRENT_SCORE",
+        "allowDraw": true,
+        "prizeMode": "WINNER_PERCENTAGE",
+        "winnerPercentage": 90
+      },
+      {
+        "gameId": "snooker",
+        "name": "Snooker",
+        "category": "Sports",
+        "icon": "\ud83c\udfb1",
+        "enabled": true,
+        "onlineEnabled": true,
+        "minPlayers": 2,
+        "maxPlayers": 2,
+        "entryFees": [
+          50,
+          100,
+          500,
+          1000
+        ],
+        "defaultEntryFee": 100,
+        "turnTimerSeconds": 30,
+        "reconnectWindowSeconds": 30,
+        "matchDurationSeconds": 600,
+        "timeoutResolution": "CURRENT_FRAME_SCORE",
+        "allowDraw": true,
+        "prizeMode": "WINNER_PERCENTAGE",
+        "winnerPercentage": 90
+      }
+    ]
+  },
+  {
+    "check": "approved-cors",
+    "status": 204,
+    "seconds": 0.171,
+    "allow_origin": "https://gaming-hub-frontend.onrender.com",
+    "allow_credentials": "true"
+  },
+  {
+    "check": "unapproved-cors",
+    "status": 204,
+    "seconds": 0.173,
+    "allow_origin": null,
+    "allow_credentials": "true"
+  }
+]

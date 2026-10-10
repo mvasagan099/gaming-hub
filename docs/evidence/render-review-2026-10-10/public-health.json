@@ -1,0 +1,81 @@
+[
+  {
+    "check": "web",
+    "status": 200,
+    "seconds": 0.269,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8",
+      "strict-transport-security": "max-age=315360000; includeSubdomains; preload",
+      "x-content-type-options": "nosniff"
+    },
+    "body": "SPA"
+  },
+  {
+    "check": "reset",
+    "status": 200,
+    "seconds": 0.277,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8",
+      "strict-transport-security": "max-age=315360000; includeSubdomains; preload",
+      "x-content-type-options": "nosniff"
+    },
+    "body": "SPA"
+  },
+  {
+    "check": "wallet-route",
+    "status": 200,
+    "seconds": 0.262,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8",
+      "strict-transport-security": "max-age=315360000; includeSubdomains; preload",
+      "x-content-type-options": "nosniff"
+    },
+    "body": "SPA"
+  },
+  {
+    "check": "api-live",
+    "status": 200,
+    "seconds": 32.468,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "content-security-policy": "default-src 'none';base-uri 'none';font-src 'self' https: data:;form-action 'self';frame-ancestors 'none';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "body": "{\"status\":\"ok\",\"service\":\"gaming-hub-api\",\"timestamp\":\"2026-10-09T22:16:53.515Z\",\"uptime\":23.150804741}"
+  },
+  {
+    "check": "api-ready",
+    "status": 200,
+    "seconds": 32.476,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "content-security-policy": "default-src 'none';base-uri 'none';font-src 'self' https: data:;form-action 'self';frame-ancestors 'none';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+      "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "body": "{\"status\":\"ready\",\"service\":\"gaming-hub-api\",\"checks\":{\"database\":\"up\"}}"
+  },
+  {
+    "check": "socket-live",
+    "status": 200,
+    "seconds": 42.513,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"status\":\"ok\"}"
+  },
+  {
+    "check": "socket-ready",
+    "status": 200,
+    "seconds": 42.521,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"status\":\"ok\"}"
+  }
+]
