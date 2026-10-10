@@ -3,7 +3,7 @@ import { prisma } from '@gaming-hub/db';
 import { KycLevel, KycStatus } from '@gaming-hub/shared';
 import { buildApp } from '../../app';
 import { createTestUser } from '../../../test/helpers';
-import { createKycRequest, approveKycRequest, adminOverrideKycLevel } from '../kyc';
+import { createKycRequest, submitKycRequest, approveKycRequest, adminOverrideKycLevel } from '../kyc';
 import { PlayerProfileService } from '../playerProfileService';
 import { updateUserProfile, ensureUser } from '../users';
 
@@ -64,7 +64,13 @@ describe('registration country is permanent', () => {
 
   it('preserves registered country when approving an older KYC request with a different country', async () => {
     const request = await prisma.kycRequest.create({ data: { userId: user.id, country: 'US',
-      level: KycLevel.LEVEL_1, status: KycStatus.PENDING, fullName: 'Test', mobileNumber: '1234567890' } });
+      level: KycLevel.LEVEL_1, status: KycStatus.NOT_STARTED, fullName: 'Test', mobileNumber: '1234567890' } });
+    // Historical country mismatch is intentional; approval still needs valid submitted evidence.
+    for (const documentType of ['PASSPORT', 'SELFIE'] as const) await prisma.kycDocument.create({ data: {
+      requestId: request.id, documentType, isSelfie: documentType === 'SELFIE', fileName: documentType+'.png',
+      fileUrl: user.id+'/'+documentType+'.png', fileSize: 100, mimeType: 'image/png', fileHash: 'fixture-'+documentType,
+    } });
+    await submitKycRequest(request.id, user.id);
     await approveKycRequest(request.id, user.id, 'Test approval');
     const profile = await prisma.profile.findUniqueOrThrow({ where: { userId: user.id } });
     expect(profile.country).toBe('IN');
