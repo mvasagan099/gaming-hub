@@ -1,3 +1,4 @@
+import { AuthenticatorQr } from "./AuthenticatorQr";
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { Shield, Check, X, Loader2, ExternalLink, Key } from "lucide-react";
@@ -100,9 +101,8 @@ export const TwoFactorSetup: React.FC = () => {
 
           <div className="flex flex-col items-center gap-4">
             <div className="p-4 bg-white rounded-xl border-2 border-slate-200">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(authUrl)}`}
-                alt="2FA QR Code"
+              <AuthenticatorQr
+                authUrl={authUrl}
                 className="w-48 h-48"
               />
             </div>

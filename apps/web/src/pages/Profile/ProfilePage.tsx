@@ -1,3 +1,4 @@
+import { AuthenticatorQr } from "../../components/settings/AuthenticatorQr";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams, useParams } from "react-router-dom";
 import {
@@ -1040,9 +1041,8 @@ export const ProfilePage: React.FC = () => {
 
                 {twoFactorAuthUrl && (
                   <div className="flex flex-col items-center gap-3 p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(twoFactorAuthUrl)}`}
-                      alt="2FA QR Code"
+                    <AuthenticatorQr
+                      authUrl={twoFactorAuthUrl}
                       className="w-44 h-44 rounded-xl border border-white bg-white p-2 shadow-sm"
                     />
                     <div className="w-full text-center">
