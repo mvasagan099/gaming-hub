@@ -11,6 +11,7 @@ const SnakeVsWormsGame = lazy(() => import("../../games/snake-vs-worms/SnakeVsWo
 const SnookerGame = lazy(() => import("../../games/snooker/SnookerGame").then(m => ({ default: m.SnookerGame })));
 const ReplayModal = lazy(() => import("../../components/Replay/ReplayModal").then(m => ({ default: m.ReplayModal })));
 import { useMultiplayerStore } from '../../store/multiplayerStore';
+import { recoverInitialGameState } from '../../store/recoverInitialGameState';
 import { isGameId } from '@gaming-hub/shared';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { goBackOrHome } from '../../utils/navigation';
@@ -56,6 +57,11 @@ export const GamePage: React.FC = () => {
       });
     };
   }, [gameId, mode]);
+
+  useEffect(() => {
+    if (replayMatchId || mode !== 'multiplayer' || !room || room.gameId !== gameId || room.status !== 'playing' || !room.matchId) return;
+    return recoverInitialGameState(room.id, room.matchId);
+  }, [replayMatchId, mode, gameId, room?.id, room?.matchId, room?.status]);
 
   if (!gameId || !isGameId(gameId)) {
     return <Navigate to="/" replace />;

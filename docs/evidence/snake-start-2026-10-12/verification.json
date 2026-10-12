@@ -1,0 +1,13 @@
+{
+  "web": {
+    "files": 59,
+    "passed": 526,
+    "failed": 0,
+    "skipped": 0
+  },
+  "typecheck": "PASS across 9 workspaces",
+  "build": "PASS; existing large chunk warning",
+  "localMemoryRetention": "PASS; see memory-retention.json",
+  "liveTwoClientStartup": "NOT TESTED",
+  "productionDataModified": false
+}

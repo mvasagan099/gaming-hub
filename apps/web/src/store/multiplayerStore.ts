@@ -1117,28 +1117,37 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   requestFullStateSync: async (matchIdParam?: string) => {
     const socket = get().socket;
     const room = get().room;
-    const matchId = matchIdParam ?? get().matchId;
-    if (!socket || !matchId) return;
+    const matchId = matchIdParam ?? room?.matchId ?? get().matchId;
+    if (!socket || !room || !matchId || (room.matchId && room.matchId !== matchId)) return;
+    const sameMatch = get().matchId === matchId;
 
     console.log("[STATE] SYNC_REQUESTED", { matchId, lastStateVersion: get().lastStateVersion });
 
     try {
-      const res = await socket.emitWithAck("game:state-sync", {
+      const res = await socket.timeout(3000).emitWithAck("game:state-sync", {
         matchId,
-        lastStateVersion: get().lastStateVersion,
-        roomId: room?.id,
+        lastStateVersion: sameMatch ? get().lastStateVersion : 0,
+        roomId: room.id,
       });
 
       if (res.ok && res.data) {
-        if (get().matchId !== matchId || get().room?.id !== room?.id) return;
-        if (res.data.stateVersion < get().lastStateVersion) return;
+        if (get().socket !== socket || get().room?.id !== room.id) return;
+        if ((get().room?.matchId ?? get().matchId) !== matchId) return;
+        if (get().matchId === matchId && res.data.stateVersion < get().lastStateVersion) return;
         const full = res.data.fullState;
         console.log("[STATE] SYNC_COMPLETED", {
           matchId,
           stateVersion: res.data.stateVersion,
           actionSequence: res.data.actionSequence,
         });
+        const newMatch = get().matchId !== matchId;
         set({
+          ...(newMatch ? {
+            winner: null, lastEvents: [], rematchState: null, lastActionId: null,
+            disconnectGrace: null, matchDeadline: null, matchTimeExpired: false,
+            matchTimerWarning: null, countdown: null,
+          } : {}),
+          matchId,
           gameState: full.gameState,
           authoritativeState: full,
           lastStateVersion: res.data.stateVersion,

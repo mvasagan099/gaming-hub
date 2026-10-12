@@ -15,6 +15,29 @@ beforeEach(() => {
 });
 afterEach(() => useMultiplayerStore.getState().disconnect());
 describe('finished room cleanup before another game', () => {
+  it('recovers a missed initial Snake snapshot using the authoritative room match', async () => {
+    const room = { ...ended, status: 'playing', matchId: 'fresh-match' };
+    useMultiplayerStore.setState({ room, matchId: null, gameState: null, winner: { seat: 1 } as any, matchTimeExpired: true, lastStateVersion: 99, status: 'connected' });
+    socket.emitWithAck.mockResolvedValue({ ok: true, data: {
+      stateVersion: 1, actionSequence: 0, fullState: { gameState: { gameId: 'snake-vs-worms', players: [] } },
+    } });
+    await useMultiplayerStore.getState().requestFullStateSync();
+    expect(socket.emitWithAck).toHaveBeenCalledWith('game:state-sync', expect.objectContaining({ matchId: 'fresh-match', lastStateVersion: 0 }));
+    expect(useMultiplayerStore.getState().matchId).toBe('fresh-match');
+    expect(useMultiplayerStore.getState().winner).toBeNull();
+    expect(useMultiplayerStore.getState().matchTimeExpired).toBe(false);
+    expect(useMultiplayerStore.getState().gameState).toEqual({ gameId: 'snake-vs-worms', players: [] });
+  });
+  it('discards initial recovery after leaving the room', async () => {
+    let reply!: (value: any) => void;
+    useMultiplayerStore.setState({ room: { ...ended, status: 'playing' }, matchId: null, gameState: null });
+    socket.emitWithAck.mockImplementation(() => new Promise(resolve => { reply = resolve; }));
+    const pending = useMultiplayerStore.getState().requestFullStateSync('old-match');
+    useMultiplayerStore.setState({ room: null, matchId: null });
+    reply({ ok: true, data: { stateVersion: 1, fullState: { gameState: {} } } });
+    await pending;
+    expect(useMultiplayerStore.getState().gameState).toBeNull();
+  });
   it.each(GAME_IDS)('does not rewind %s gameplay with a delayed countdown start reply', async gameId => {
     let reply!: (value: any) => void;
     const waiting = { ...ended, gameId, status: 'waiting', matchId: null };

@@ -1,0 +1,44 @@
+{
+  "service": {
+    "id": "f87a68ea-e1a2-4d67-8e4d-993d8f760df1",
+    "name": "@gaming-hub/socket-server"
+  },
+  "environment": {
+    "id": "4ae690fc-4104-4225-9682-51d88192eb30",
+    "name": "production"
+  },
+  "metrics": [
+    {
+      "measurement": "CPU_USAGE",
+      "current": 0.005362566666666666,
+      "average": 0.0331864868852459,
+      "min": 0,
+      "max": 0.42265471666666665,
+      "sampleCount": 61
+    },
+    {
+      "measurement": "CPU_LIMIT",
+      "current": 2,
+      "average": 1.9672131147540983,
+      "min": 0,
+      "max": 2,
+      "sampleCount": 61
+    },
+    {
+      "measurement": "MEMORY_USAGE_GB",
+      "current": 0.070455296,
+      "average": 0.08138587488524593,
+      "min": 0,
+      "max": 0.169385984,
+      "sampleCount": 61
+    },
+    {
+      "measurement": "MEMORY_LIMIT_GB",
+      "current": 0.99999744,
+      "average": 0.9836040393442631,
+      "min": 0,
+      "max": 0.99999744,
+      "sampleCount": 61
+    }
+  ]
+}
