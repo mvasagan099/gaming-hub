@@ -1,0 +1,34 @@
+{
+  "before": [
+    {
+      "game": "snake",
+      "maxStep": 5,
+      "p95": 5,
+      "backward": 0,
+      "held": 43
+    },
+    {
+      "game": "tennis",
+      "maxStep": 16.000000000005457,
+      "p95": 5,
+      "backward": 0,
+      "held": 118
+    }
+  ],
+  "after": [
+    {
+      "game": "snake",
+      "maxStep": 5,
+      "p95": 1.6666666666667425,
+      "backward": 0,
+      "held": 8
+    },
+    {
+      "game": "tennis",
+      "maxStep": 5.000000000005457,
+      "p95": 5,
+      "backward": 0,
+      "held": 62
+    }
+  ]
+}

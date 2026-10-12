@@ -1,0 +1,18 @@
+{
+  "baseline": "a28e294",
+  "web": {
+    "files": 58,
+    "passed": 516,
+    "failed": 0,
+    "skipped": 0
+  },
+  "typecheck": "PASS across 9 workspaces",
+  "build": "PASS",
+  "scope": "Local presentation replay; 80 snapshots at 50 ms cadence rendered at 60 Hz. No production traffic, credentials or financial operations. Backends unchanged.",
+  "limits": {
+    "playbackBufferMaxMs": 150,
+    "predictionMaxMs": 100,
+    "timingHistorySamples": 20
+  },
+  "liveSmoothness": "Requires two-client retest after deployment"
+}
