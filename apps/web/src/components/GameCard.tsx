@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
+import { GameThumbnail } from './GameThumbnail';
 
 interface GameCardProps {
   game: GameMetadata;
@@ -53,9 +54,9 @@ export const GameCard: React.FC<GameCardProps> = ({ game, onPlay }) => {
       whileHover={reduceMotion ? undefined : { y: -6 }}
       whileTap={reduceMotion ? undefined : { scale: 0.99 }}
     >
-      <div className={`${game.thumbnailUrl ? 'aspect-[20/13] bg-black' : `h-40 p-4 bg-gradient-to-br ${game.bgGradient}`} flex flex-col justify-between relative overflow-hidden transition-colors duration-300`}>
+      <div className={`${game.thumbnailUrl ? 'aspect-[20/13] bg-white dark:bg-black' : `h-40 p-4 bg-gradient-to-br ${game.bgGradient}`} flex flex-col justify-between relative overflow-hidden transition-colors duration-300`}>
         {game.thumbnailUrl && (
-          <img
+          <GameThumbnail
             src={game.thumbnailUrl}
             alt={game.title}
             className="absolute inset-0 w-full h-full object-contain"
