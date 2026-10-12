@@ -15,6 +15,32 @@ beforeEach(() => {
 });
 afterEach(() => useMultiplayerStore.getState().disconnect());
 describe('finished room cleanup before another game', () => {
+  it.each(GAME_IDS)('does not rewind %s gameplay with a delayed countdown start reply', async gameId => {
+    let reply!: (value: any) => void;
+    const waiting = { ...ended, gameId, status: 'waiting', matchId: null };
+    useMultiplayerStore.setState({ room: waiting, matchId: null });
+    socket.emitWithAck.mockImplementation(() => new Promise(resolve => { reply = resolve; }));
+    const pending = useMultiplayerStore.getState().startGame();
+    const countdown = { ...waiting, status: 'starting', matchId: 'new-match', lifecyclePhase: 'COUNTDOWN', countdownEndsAt: 1000 };
+    socket.listeners.get('room:update')!(countdown);
+    const playing = { ...countdown, status: 'playing', lifecyclePhase: 'PLAYING', countdownEndsAt: null, awaitingGameLoad: false };
+    socket.listeners.get('room:update')!(playing);
+    reply({ ok: true, data: countdown });
+    expect(await pending).toEqual(playing);
+    expect(useMultiplayerStore.getState().room).toEqual(playing);
+  });
+  it.each(['carrom', 'snake-vs-worms'])('%s does not restore board loading after both clients are ready', async gameId => {
+    let reply!: (value: any) => void;
+    const loading = { ...ended, gameId, status: 'playing', lifecyclePhase: 'READY_CHECK', awaitingGameLoad: true };
+    useMultiplayerStore.setState({ room: loading });
+    socket.emitWithAck.mockImplementation(() => new Promise(resolve => { reply = resolve; }));
+    const pending = useMultiplayerStore.getState().setReady(true);
+    const playing = { ...loading, lifecyclePhase: 'PLAYING', awaitingGameLoad: false };
+    socket.listeners.get('room:update')!(playing);
+    reply({ ok: true, data: loading });
+    expect(await pending).toEqual(playing);
+    expect(useMultiplayerStore.getState().room).toEqual(playing);
+  });
   it.each(GAME_IDS)('%s ignores gameplay events after the room has been left', async gameId => {
     useMultiplayerStore.setState({ room: { ...ended, gameId, status: 'playing' } });
     socket.emitWithAck.mockResolvedValue({ ok: true });

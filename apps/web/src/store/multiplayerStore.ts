@@ -176,6 +176,10 @@ function applyRoomReply(set: (partial: Partial<MultiplayerState>) => void, get: 
   if (current?.id === room.id && (
     (current.matchId && current.matchId !== room.matchId) ||
     (current.status !== 'waiting' && room.status === 'waiting') ||
+    // Countdown/load ACKs can arrive after the owner has already started play.
+    // Preserve the newer broadcast; only broadcasts may restart a ready check.
+    (current.status === 'playing' && room.status === 'starting') ||
+    (current.status === 'playing' && current.awaitingGameLoad === false && room.awaitingGameLoad === true) ||
     (current.status === 'ended' && room.status !== 'ended')
   )) return current;
   applyRoom(set, room);
