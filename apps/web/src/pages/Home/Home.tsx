@@ -434,7 +434,7 @@ export const Home: React.FC = () => {
               navigate(`/lobby/${game.id}`, { state: { roomAction: privateRoomAction } });
               setPrivateRoomAction(null);
             }} className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-3 text-left hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors">
-              <img src={game.thumbnailUrl} alt="" className="w-10 h-10 rounded-lg object-cover" />
+              <img src={game.thumbnailUrl} alt="" className="w-10 h-10 rounded-lg bg-black object-contain" />
               <span className="text-sm font-bold text-slate-900 dark:text-white">{game.title}</span>
             </button>
           ))}

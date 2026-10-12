@@ -20,25 +20,8 @@ interface GameCardProps {
 
 export const GameCard: React.FC<GameCardProps> = ({ game, onPlay }) => {
   const reduceMotion = useReducedMotion();
-
-  return (
-    <motion.div
-      className="group relative rounded-2xl overflow-hidden glass-panel border border-slate-200 dark:border-slate-800 hover:border-accent-500/50 cursor-pointer transition-all duration-300"
-      whileHover={reduceMotion ? undefined : { y: -6 }}
-      whileTap={reduceMotion ? undefined : { scale: 0.99 }}
-    >
-      <div className={`h-40 ${game.thumbnailUrl ? 'bg-slate-100 dark:bg-slate-900' : `bg-gradient-to-br ${game.bgGradient}`} p-4 flex flex-col justify-between relative overflow-hidden transition-colors duration-300`}>
-        {game.thumbnailUrl && (
-          <img
-            src={game.thumbnailUrl}
-            alt={game.title}
-            className="absolute inset-0 w-full h-full object-cover opacity-100 dark:opacity-60 dark:group-hover:opacity-80 transition-opacity"
-          />
-        )}
-        {!game.thumbnailUrl && (
-          <Gamepad2 className="absolute -right-4 -bottom-4 w-32 h-32 opacity-10 text-white transform -rotate-12" />
-        )}
-
+  const details = (
+    <div className={game.thumbnailUrl ? 'space-y-2' : 'h-full flex flex-col justify-between'}>
         <div className="flex justify-between items-start z-10">
           <Badge variant="outline" className="bg-black/40 text-white ring-white/20 border-white/10">
             {game.category}
@@ -58,12 +41,35 @@ export const GameCard: React.FC<GameCardProps> = ({ game, onPlay }) => {
         </div>
 
         <div className="z-10">
-          <h3 className="text-xl font-black text-white drop-shadow-md tracking-wide">{game.title}</h3>
-          <p className="text-xs text-slate-200/80 line-clamp-1">{game.description}</p>
+          <h3 className={`text-xl font-black ${game.thumbnailUrl ? 'text-slate-900 dark:text-white' : 'text-white drop-shadow-md'} tracking-wide`}>{game.title}</h3>
+          <p className={`text-xs ${game.thumbnailUrl ? 'text-slate-500 dark:text-slate-400' : 'text-slate-200/80'} line-clamp-1`}>{game.description}</p>
         </div>
+    </div>
+  );
+
+  return (
+    <motion.div
+      className="group relative rounded-2xl overflow-hidden glass-panel border border-slate-200 dark:border-slate-800 hover:border-accent-500/50 cursor-pointer transition-all duration-300"
+      whileHover={reduceMotion ? undefined : { y: -6 }}
+      whileTap={reduceMotion ? undefined : { scale: 0.99 }}
+    >
+      <div className={`${game.thumbnailUrl ? 'aspect-[20/13] bg-black' : `h-40 p-4 bg-gradient-to-br ${game.bgGradient}`} flex flex-col justify-between relative overflow-hidden transition-colors duration-300`}>
+        {game.thumbnailUrl && (
+          <img
+            src={game.thumbnailUrl}
+            alt={game.title}
+            className="absolute inset-0 w-full h-full object-contain"
+          />
+        )}
+        {!game.thumbnailUrl && (
+          <Gamepad2 className="absolute -right-4 -bottom-4 w-32 h-32 opacity-10 text-white transform -rotate-12" />
+        )}
+
+        {!game.thumbnailUrl && details}
       </div>
 
       <div className="p-4 space-y-3">
+        {game.thumbnailUrl && details}
         <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
           <span className="flex items-center gap-1">
             <Swords className="w-3.5 h-3.5 text-accent-400" /> {game.players}
