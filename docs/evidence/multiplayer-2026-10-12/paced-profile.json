@@ -1,0 +1,957 @@
+{
+  "nodeVersion": "v24.20.0",
+  "scope": "Three paced local engine fixtures with six receiving Socket.IO clients; excludes authentication, PostgreSQL, Redis fencing, anti-cheat and settlement. Not a capacity or deployed-OOM claim.",
+  "durationMs": 60026.534501,
+  "seeds": [
+    {
+      "game": "carrom",
+      "seed": 20261008,
+      "nextRoundSeedIncrement": 100
+    },
+    {
+      "game": "table-tennis",
+      "seed": 20261009,
+      "nextRoundSeedIncrement": 100
+    },
+    {
+      "game": "snake-vs-worms",
+      "seed": 20261010,
+      "nextRoundSeedIncrement": 100
+    }
+  ],
+  "completedGames": [
+    {
+      "game": "snake-vs-worms",
+      "generation": 0,
+      "winnerSeats": [
+        0
+      ],
+      "atMs": 17056.387182
+    },
+    {
+      "game": "snake-vs-worms",
+      "generation": 1,
+      "winnerSeats": [],
+      "atMs": 22018.313552
+    },
+    {
+      "game": "snake-vs-worms",
+      "generation": 2,
+      "winnerSeats": [],
+      "atMs": 25181.119637
+    },
+    {
+      "game": "snake-vs-worms",
+      "generation": 3,
+      "winnerSeats": [],
+      "atMs": 29827.030118
+    },
+    {
+      "game": "snake-vs-worms",
+      "generation": 4,
+      "winnerSeats": [
+        0
+      ],
+      "atMs": 34060.613888
+    },
+    {
+      "game": "snake-vs-worms",
+      "generation": 5,
+      "winnerSeats": [
+        0
+      ],
+      "atMs": 38043.16885
+    },
+    {
+      "game": "snake-vs-worms",
+      "generation": 6,
+      "winnerSeats": [
+        0
+      ],
+      "atMs": 42025.75711
+    },
+    {
+      "game": "snake-vs-worms",
+      "generation": 7,
+      "winnerSeats": [],
+      "atMs": 45072.051546
+    },
+    {
+      "game": "snake-vs-worms",
+      "generation": 8,
+      "winnerSeats": [],
+      "atMs": 49986.698694
+    },
+    {
+      "game": "snake-vs-worms",
+      "generation": 9,
+      "winnerSeats": [],
+      "atMs": 53142.226142
+    },
+    {
+      "game": "snake-vs-worms",
+      "generation": 10,
+      "winnerSeats": [],
+      "atMs": 58006.410591
+    }
+  ],
+  "activeDurationMs": {
+    "carrom": 59984.66164500001,
+    "table-tennis": 59984.66164500001,
+    "snake-vs-worms": 59984.66164500001
+  },
+  "cpuPercentOfOneCore": 15.842305538797309,
+  "cpu": {
+    "user": 8660017,
+    "system": 849570
+  },
+  "peakRss": 204267520,
+  "peakHeap": 73951912,
+  "eventLoopDelayMs": {
+    "p50": 10.469375,
+    "p95": 14.721023,
+    "p99": 19.300351
+  },
+  "actionLatencyMs": {
+    "table-tennis": {
+      "count": 1071,
+      "p50": 0.05068300000129966,
+      "p95": 0.11347100000057253,
+      "p99": 0.24638899999990826
+    },
+    "snake-vs-worms": {
+      "count": 1082,
+      "p50": 0.36695699999836506,
+      "p95": 0.656899000001431,
+      "p99": 1.4628309999970952
+    },
+    "carrom": {
+      "count": 40,
+      "p50": 11.148047999999108,
+      "p95": 27.179831000001286,
+      "p99": 41.26009299999987
+    }
+  },
+  "actionPipelineLatencyMs": {
+    "table-tennis": {
+      "count": 1071,
+      "p50": 0.155825999998342,
+      "p95": 0.3436099999998987,
+      "p99": 0.6303689999986091
+    },
+    "snake-vs-worms": {
+      "count": 1082,
+      "p50": 1.2406449999980396,
+      "p95": 1.9801399999996647,
+      "p99": 2.5750669999979436
+    },
+    "carrom": {
+      "count": 40,
+      "p50": 13.823663000002853,
+      "p95": 31.798041999994894,
+      "p99": 45.728620999999976
+    }
+  },
+  "physicsPipelineLatencyMs": {
+    "table-tennis": {
+      "count": 1582,
+      "p50": 0.3429689999998118,
+      "p95": 0.6221289999994042,
+      "p99": 0.970047999999224
+    },
+    "snake-vs-worms": {
+      "count": 1582,
+      "p50": 2.0029150000045775,
+      "p95": 3.4363180000000284,
+      "p99": 4.45267800000147
+    }
+  },
+  "queueWaitMs": {
+    "count": 5357,
+    "p50": 0.005323999999745865,
+    "p95": 0.014350000004924368,
+    "p99": 0.03194500000245171
+  },
+  "physicsLatencyMs": {
+    "table-tennis": {
+      "count": 1582,
+      "p50": 0.073406999999861,
+      "p95": 0.1461120000021765,
+      "p99": 0.2277040000008128
+    },
+    "snake-vs-worms": {
+      "count": 1582,
+      "p50": 0.9415929999995569,
+      "p95": 1.7929540000004636,
+      "p99": 2.4427680000007967
+    },
+    "carrom": {
+      "count": 20,
+      "p50": 13.280273000003945,
+      "p95": 41.26009299999987,
+      "p99": 41.26009299999987
+    }
+  },
+  "rejectedActions": 0,
+  "queueDepth": {
+    "peakPending": 1,
+    "finalPending": 0,
+    "scope": "Instrumented local serial tasks, excludes distributed RPC backlog"
+  },
+  "broadcastCount": 5357,
+  "expectedDeliveries": 10714,
+  "broadcastsPerSecond": 89.24386597581702,
+  "receivedCount": 10714,
+  "costs": {
+    "carrom": {
+      "bytes": 242720,
+      "shotWireBytes": 93571,
+      "shotWireSerializationMs": {
+        "count": 100,
+        "p50": 0.14264800000091782,
+        "p95": 0.2730389999996987,
+        "p99": 1.0873349999965285
+      },
+      "jsonCloneMs": {
+        "count": 100,
+        "p50": 2.5489760000054957,
+        "p95": 2.8914049999948475,
+        "p99": 3.327043000004778
+      },
+      "structuredCloneMs": {
+        "count": 100,
+        "p50": 3.9694260000032955,
+        "p95": 4.520221999999194,
+        "p99": 7.229497000000265
+      },
+      "serializationMs": {
+        "count": 100,
+        "p50": 2.5719970000063768,
+        "p95": 3.046148000001267,
+        "p99": 3.6126960000037798
+      },
+      "jsonEncodeMs": {
+        "count": 100,
+        "p50": 1.0668320000040694,
+        "p95": 1.2735480000046664,
+        "p99": 4.865172999998322
+      },
+      "hashMs": {
+        "count": 100,
+        "p50": 2.769392999995034,
+        "p95": 3.0412230000001728,
+        "p99": 4.25392699999793
+      }
+    },
+    "table-tennis": {
+      "bytes": 1358,
+      "shotWireBytes": 1358,
+      "shotWireSerializationMs": {
+        "count": 100,
+        "p50": 0.01280399999814108,
+        "p95": 0.017663999999058433,
+        "p99": 0.04932199999893783
+      },
+      "jsonCloneMs": {
+        "count": 100,
+        "p50": 0.013090000000374857,
+        "p95": 0.025522000003547873,
+        "p99": 0.10246199999528471
+      },
+      "structuredCloneMs": {
+        "count": 100,
+        "p50": 0.016007999998691957,
+        "p95": 0.05010800000309246,
+        "p99": 0.18415100000129314
+      },
+      "serializationMs": {
+        "count": 100,
+        "p50": 0.012794999995094258,
+        "p95": 0.022882999997818843,
+        "p99": 0.04524999999557622
+      },
+      "jsonEncodeMs": {
+        "count": 100,
+        "p50": 0.005472999997437,
+        "p95": 0.005584999998973217,
+        "p99": 0.007442000001901761
+      },
+      "hashMs": {
+        "count": 100,
+        "p50": 0.018679000000702217,
+        "p95": 0.03065500000229804,
+        "p99": 0.08735300000262214
+      }
+    },
+    "snake-vs-worms": {
+      "bytes": 20348,
+      "shotWireBytes": 20348,
+      "shotWireSerializationMs": {
+        "count": 100,
+        "p50": 0.2177880000017467,
+        "p95": 0.315628000003926,
+        "p99": 0.42158999999810476
+      },
+      "jsonCloneMs": {
+        "count": 100,
+        "p50": 0.21782900000107475,
+        "p95": 0.33512299999711104,
+        "p99": 0.4319030000042403
+      },
+      "structuredCloneMs": {
+        "count": 100,
+        "p50": 0.2933179999963613,
+        "p95": 0.40090500000223983,
+        "p99": 0.47737299999425886
+      },
+      "serializationMs": {
+        "count": 100,
+        "p50": 0.21758699999918463,
+        "p95": 0.36584700000094017,
+        "p99": 0.42894199999864213
+      },
+      "jsonEncodeMs": {
+        "count": 100,
+        "p50": 0.09446000000025379,
+        "p95": 0.14811100000224542,
+        "p99": 0.7656149999966146
+      },
+      "hashMs": {
+        "count": 100,
+        "p50": 0.2295360000061919,
+        "p95": 0.30769400000281166,
+        "p99": 0.37102500000037253
+      }
+    }
+  },
+  "activeCounts": {
+    "activeRoomCount": 3,
+    "roomTimers": 0,
+    "activeMatchCount": 0,
+    "physicsIntervals": 0,
+    "countdownTimers": 0,
+    "loadTimers": 0,
+    "pendingRealtimeStates": 0,
+    "pendingCarromShots": 0,
+    "trackedPlayers": 6,
+    "afkIntervals": 0,
+    "playerPingIntervals": 0,
+    "statePayloadBytes": {
+      "table-tennis": 1358,
+      "snake-vs-worms": 20348,
+      "carrom": 93571
+    },
+    "syncRooms": 3,
+    "ackScopes": 0,
+    "syncPingIntervals": 0,
+    "matchTimers": 0,
+    "spectatorTimers": 0,
+    "spectatorBuffers": 0,
+    "spectators": 0,
+    "matchmakingIntervals": 1,
+    "queuedPlayers": 0,
+    "replayTimers": 0,
+    "replayRecords": 0,
+    "cachedActionResults": 0,
+    "idleSecurityProfiles": 22,
+    "pendingRoomQueues": 0,
+    "pendingOperations": 0,
+    "activeTimers": 0,
+    "activeIntervals": 1
+  },
+  "samples": [
+    {
+      "atMs": 65.80562299999997,
+      "rss": 159264768,
+      "heapTotal": 105574400,
+      "heapUsed": 55632168,
+      "external": 8411298,
+      "arrayBuffers": 4252191,
+      "pending": 0
+    },
+    {
+      "atMs": 1045.807099,
+      "rss": 164868096,
+      "heapTotal": 105836544,
+      "heapUsed": 53676416,
+      "external": 10159201,
+      "arrayBuffers": 6000054,
+      "pending": 0
+    },
+    {
+      "atMs": 2070.8565280000003,
+      "rss": 173371392,
+      "heapTotal": 105836544,
+      "heapUsed": 55268800,
+      "external": 10256729,
+      "arrayBuffers": 6097582,
+      "pending": 0
+    },
+    {
+      "atMs": 3088.819497,
+      "rss": 179638272,
+      "heapTotal": 106098688,
+      "heapUsed": 37404976,
+      "external": 8441711,
+      "arrayBuffers": 4282564,
+      "pending": 0
+    },
+    {
+      "atMs": 4122.211793,
+      "rss": 179724288,
+      "heapTotal": 106098688,
+      "heapUsed": 40389616,
+      "external": 8921541,
+      "arrayBuffers": 4762394,
+      "pending": 0
+    },
+    {
+      "atMs": 5151.7169300000005,
+      "rss": 179707904,
+      "heapTotal": 106360832,
+      "heapUsed": 44198616,
+      "external": 9266323,
+      "arrayBuffers": 5107176,
+      "pending": 0
+    },
+    {
+      "atMs": 6160.371996,
+      "rss": 181149696,
+      "heapTotal": 106852352,
+      "heapUsed": 53143080,
+      "external": 10342913,
+      "arrayBuffers": 6183766,
+      "pending": 0
+    },
+    {
+      "atMs": 7196.543801,
+      "rss": 180940800,
+      "heapTotal": 106360832,
+      "heapUsed": 59583360,
+      "external": 11554513,
+      "arrayBuffers": 7395366,
+      "pending": 0
+    },
+    {
+      "atMs": 8231.265882,
+      "rss": 179998720,
+      "heapTotal": 106360832,
+      "heapUsed": 40105680,
+      "external": 9028469,
+      "arrayBuffers": 4869322,
+      "pending": 0
+    },
+    {
+      "atMs": 9255.609671,
+      "rss": 181362688,
+      "heapTotal": 107114496,
+      "heapUsed": 55834040,
+      "external": 10471507,
+      "arrayBuffers": 6312360,
+      "pending": 0
+    },
+    {
+      "atMs": 10289.576133,
+      "rss": 181571584,
+      "heapTotal": 106622976,
+      "heapUsed": 64156176,
+      "external": 12200141,
+      "arrayBuffers": 8040994,
+      "pending": 0
+    },
+    {
+      "atMs": 11319.968821999999,
+      "rss": 180371456,
+      "heapTotal": 107147264,
+      "heapUsed": 46620824,
+      "external": 9982663,
+      "arrayBuffers": 5823516,
+      "pending": 0
+    },
+    {
+      "atMs": 12349.767816,
+      "rss": 183644160,
+      "heapTotal": 107638784,
+      "heapUsed": 63613120,
+      "external": 11393265,
+      "arrayBuffers": 7234118,
+      "pending": 0
+    },
+    {
+      "atMs": 13384.088015,
+      "rss": 183984128,
+      "heapTotal": 107409408,
+      "heapUsed": 46774648,
+      "external": 10224367,
+      "arrayBuffers": 6065220,
+      "pending": 0
+    },
+    {
+      "atMs": 14392.487406999999,
+      "rss": 184422400,
+      "heapTotal": 107671552,
+      "heapUsed": 55802672,
+      "external": 11287557,
+      "arrayBuffers": 7128410,
+      "pending": 0
+    },
+    {
+      "atMs": 15405.006997,
+      "rss": 184487936,
+      "heapTotal": 107933696,
+      "heapUsed": 45558856,
+      "external": 10167515,
+      "arrayBuffers": 6008368,
+      "pending": 0
+    },
+    {
+      "atMs": 16421.013793,
+      "rss": 185094144,
+      "heapTotal": 107933696,
+      "heapUsed": 56813296,
+      "external": 11231141,
+      "arrayBuffers": 7071994,
+      "pending": 0
+    },
+    {
+      "atMs": 17449.750429,
+      "rss": 190017536,
+      "heapTotal": 108195840,
+      "heapUsed": 63928360,
+      "external": 10459547,
+      "arrayBuffers": 6300400,
+      "pending": 0
+    },
+    {
+      "atMs": 18454.077699999998,
+      "rss": 190603264,
+      "heapTotal": 108195840,
+      "heapUsed": 42942648,
+      "external": 9804969,
+      "arrayBuffers": 5645822,
+      "pending": 0
+    },
+    {
+      "atMs": 19485.084418,
+      "rss": 190529536,
+      "heapTotal": 108720128,
+      "heapUsed": 45146688,
+      "external": 9995407,
+      "arrayBuffers": 5836260,
+      "pending": 0
+    },
+    {
+      "atMs": 20519.055407,
+      "rss": 190619648,
+      "heapTotal": 108720128,
+      "heapUsed": 47912568,
+      "external": 10370223,
+      "arrayBuffers": 6211076,
+      "pending": 0
+    },
+    {
+      "atMs": 21541.209920999998,
+      "rss": 191467520,
+      "heapTotal": 108982272,
+      "heapUsed": 52372480,
+      "external": 10823701,
+      "arrayBuffers": 6664554,
+      "pending": 0
+    },
+    {
+      "atMs": 22564.302745,
+      "rss": 191647744,
+      "heapTotal": 109768704,
+      "heapUsed": 50713808,
+      "external": 10655193,
+      "arrayBuffers": 6496046,
+      "pending": 0
+    },
+    {
+      "atMs": 23579.401356,
+      "rss": 191750144,
+      "heapTotal": 109768704,
+      "heapUsed": 52416576,
+      "external": 10863799,
+      "arrayBuffers": 6704652,
+      "pending": 0
+    },
+    {
+      "atMs": 24594.128483,
+      "rss": 193470464,
+      "heapTotal": 110260224,
+      "heapUsed": 60617592,
+      "external": 11534872,
+      "arrayBuffers": 7375725,
+      "pending": 0
+    },
+    {
+      "atMs": 25602.245219,
+      "rss": 193073152,
+      "heapTotal": 109768704,
+      "heapUsed": 57244856,
+      "external": 10958259,
+      "arrayBuffers": 6799112,
+      "pending": 0
+    },
+    {
+      "atMs": 26613.594291999998,
+      "rss": 193933312,
+      "heapTotal": 109768704,
+      "heapUsed": 57317584,
+      "external": 11669155,
+      "arrayBuffers": 7510008,
+      "pending": 0
+    },
+    {
+      "atMs": 27640.95266,
+      "rss": 194998272,
+      "heapTotal": 110260224,
+      "heapUsed": 66366448,
+      "external": 12371555,
+      "arrayBuffers": 8212408,
+      "pending": 0
+    },
+    {
+      "atMs": 28642.539481,
+      "rss": 194560000,
+      "heapTotal": 109768704,
+      "heapUsed": 67202984,
+      "external": 12926591,
+      "arrayBuffers": 8767444,
+      "pending": 0
+    },
+    {
+      "atMs": 29650.784422,
+      "rss": 193478656,
+      "heapTotal": 110292992,
+      "heapUsed": 42325520,
+      "external": 10121449,
+      "arrayBuffers": 5962302,
+      "pending": 0
+    },
+    {
+      "atMs": 30676.846513,
+      "rss": 195641344,
+      "heapTotal": 110784512,
+      "heapUsed": 69416120,
+      "external": 12407931,
+      "arrayBuffers": 8248784,
+      "pending": 0
+    },
+    {
+      "atMs": 31689.478173999996,
+      "rss": 194019328,
+      "heapTotal": 110817280,
+      "heapUsed": 42370888,
+      "external": 10317967,
+      "arrayBuffers": 6158820,
+      "pending": 0
+    },
+    {
+      "atMs": 32697.078322,
+      "rss": 194191360,
+      "heapTotal": 110817280,
+      "heapUsed": 43662352,
+      "external": 10443999,
+      "arrayBuffers": 6284852,
+      "pending": 0
+    },
+    {
+      "atMs": 33714.747401,
+      "rss": 194904064,
+      "heapTotal": 110817280,
+      "heapUsed": 50485832,
+      "external": 11349513,
+      "arrayBuffers": 7190366,
+      "pending": 0
+    },
+    {
+      "atMs": 34729.126688,
+      "rss": 194949120,
+      "heapTotal": 110817280,
+      "heapUsed": 45924048,
+      "external": 10747413,
+      "arrayBuffers": 6588266,
+      "pending": 0
+    },
+    {
+      "atMs": 35762.861644,
+      "rss": 196911104,
+      "heapTotal": 110817280,
+      "heapUsed": 47242400,
+      "external": 10927241,
+      "arrayBuffers": 6768094,
+      "pending": 0
+    },
+    {
+      "atMs": 36796.387558,
+      "rss": 197345280,
+      "heapTotal": 111079424,
+      "heapUsed": 54818592,
+      "external": 11875975,
+      "arrayBuffers": 7716828,
+      "pending": 0
+    },
+    {
+      "atMs": 37796.823419,
+      "rss": 197279744,
+      "heapTotal": 111341568,
+      "heapUsed": 56287080,
+      "external": 12070513,
+      "arrayBuffers": 7911366,
+      "pending": 0
+    },
+    {
+      "atMs": 38818.256231,
+      "rss": 197324800,
+      "heapTotal": 111341568,
+      "heapUsed": 51022544,
+      "external": 11521095,
+      "arrayBuffers": 7361948,
+      "pending": 0
+    },
+    {
+      "atMs": 39832.659975,
+      "rss": 198377472,
+      "heapTotal": 111341568,
+      "heapUsed": 56690560,
+      "external": 12218915,
+      "arrayBuffers": 8059768,
+      "pending": 0
+    },
+    {
+      "atMs": 40860.405697,
+      "rss": 198119424,
+      "heapTotal": 111341568,
+      "heapUsed": 58232664,
+      "external": 12439689,
+      "arrayBuffers": 8280542,
+      "pending": 0
+    },
+    {
+      "atMs": 41878.951157999996,
+      "rss": 198201344,
+      "heapTotal": 111341568,
+      "heapUsed": 59263784,
+      "external": 12609743,
+      "arrayBuffers": 8450596,
+      "pending": 0
+    },
+    {
+      "atMs": 42914.449591,
+      "rss": 198762496,
+      "heapTotal": 112128000,
+      "heapUsed": 58101888,
+      "external": 12528169,
+      "arrayBuffers": 8369022,
+      "pending": 0
+    },
+    {
+      "atMs": 43943.486435,
+      "rss": 199000064,
+      "heapTotal": 112652288,
+      "heapUsed": 58366480,
+      "external": 12528107,
+      "arrayBuffers": 8368960,
+      "pending": 0
+    },
+    {
+      "atMs": 44967.876594,
+      "rss": 199303168,
+      "heapTotal": 112652288,
+      "heapUsed": 60178176,
+      "external": 12760623,
+      "arrayBuffers": 8601476,
+      "pending": 0
+    },
+    {
+      "atMs": 45983.842348,
+      "rss": 199708672,
+      "heapTotal": 112652288,
+      "heapUsed": 60978496,
+      "external": 12977223,
+      "arrayBuffers": 8818076,
+      "pending": 0
+    },
+    {
+      "atMs": 46988.680508,
+      "rss": 199933952,
+      "heapTotal": 113176576,
+      "heapUsed": 61194976,
+      "external": 13169455,
+      "arrayBuffers": 9010308,
+      "pending": 0
+    },
+    {
+      "atMs": 48025.852986,
+      "rss": 200495104,
+      "heapTotal": 113176576,
+      "heapUsed": 63493816,
+      "external": 13309161,
+      "arrayBuffers": 9150014,
+      "pending": 0
+    },
+    {
+      "atMs": 49025.5801,
+      "rss": 200880128,
+      "heapTotal": 113963008,
+      "heapUsed": 67204304,
+      "external": 13743693,
+      "arrayBuffers": 9584546,
+      "pending": 0
+    },
+    {
+      "atMs": 50079.926639,
+      "rss": 200204288,
+      "heapTotal": 113963008,
+      "heapUsed": 68146296,
+      "external": 11626093,
+      "arrayBuffers": 7466946,
+      "pending": 0
+    },
+    {
+      "atMs": 51118.775634,
+      "rss": 201203712,
+      "heapTotal": 113963008,
+      "heapUsed": 67273176,
+      "external": 13815637,
+      "arrayBuffers": 9656490,
+      "pending": 0
+    },
+    {
+      "atMs": 52148.370572,
+      "rss": 202207232,
+      "heapTotal": 113963008,
+      "heapUsed": 68484608,
+      "external": 14124403,
+      "arrayBuffers": 9965256,
+      "pending": 0
+    },
+    {
+      "atMs": 53237.612921,
+      "rss": 201015296,
+      "heapTotal": 113963008,
+      "heapUsed": 68009792,
+      "external": 11824201,
+      "arrayBuffers": 7665054,
+      "pending": 0
+    },
+    {
+      "atMs": 54251.762619,
+      "rss": 201670656,
+      "heapTotal": 114225152,
+      "heapUsed": 64651464,
+      "external": 13628339,
+      "arrayBuffers": 9469192,
+      "pending": 0
+    },
+    {
+      "atMs": 55271.118472,
+      "rss": 202932224,
+      "heapTotal": 114225152,
+      "heapUsed": 71292968,
+      "external": 14491625,
+      "arrayBuffers": 10332478,
+      "pending": 0
+    },
+    {
+      "atMs": 56301.380703,
+      "rss": 202788864,
+      "heapTotal": 114487296,
+      "heapUsed": 73951912,
+      "external": 14811905,
+      "arrayBuffers": 10652758,
+      "pending": 0
+    },
+    {
+      "atMs": 57308.998992,
+      "rss": 201674752,
+      "heapTotal": 114487296,
+      "heapUsed": 48312192,
+      "external": 12004217,
+      "arrayBuffers": 7845070,
+      "pending": 0
+    },
+    {
+      "atMs": 58318.68961,
+      "rss": 202403840,
+      "heapTotal": 115535872,
+      "heapUsed": 54953816,
+      "external": 12799269,
+      "arrayBuffers": 8640122,
+      "pending": 0
+    },
+    {
+      "atMs": 59320.92954,
+      "rss": 202534912,
+      "heapTotal": 115535872,
+      "heapUsed": 53976160,
+      "external": 12835407,
+      "arrayBuffers": 8676260,
+      "pending": 0
+    },
+    {
+      "atMs": 60026.431728,
+      "rss": 204267520,
+      "heapTotal": 115535872,
+      "heapUsed": 72905472,
+      "external": 15061113,
+      "arrayBuffers": 10901966,
+      "pending": 0
+    }
+  ],
+  "retention": {
+    "forcedGcAvailable": false,
+    "forcedGcMs": 0.03147000000171829,
+    "beforeGc": {
+      "rss": 204316672,
+      "heapTotal": 116305920,
+      "heapUsed": 48220472,
+      "external": 12116611,
+      "arrayBuffers": 7957464
+    },
+    "afterGc": {
+      "rss": 204316672,
+      "heapTotal": 116305920,
+      "heapUsed": 48222208,
+      "external": 12116611,
+      "arrayBuffers": 7957464
+    },
+    "cleanupCounts": {
+      "activeRoomCount": 0,
+      "roomTimers": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "pendingRealtimeStates": 0,
+      "pendingCarromShots": 0,
+      "trackedPlayers": 0,
+      "afkIntervals": 0,
+      "playerPingIntervals": 0,
+      "statePayloadBytes": {
+        "table-tennis": 1358,
+        "snake-vs-worms": 20348,
+        "carrom": 93571
+      },
+      "syncRooms": 0,
+      "ackScopes": 0,
+      "syncPingIntervals": 0,
+      "matchTimers": 0,
+      "spectatorTimers": 0,
+      "spectatorBuffers": 0,
+      "spectators": 0,
+      "matchmakingIntervals": 1,
+      "queuedPlayers": 0,
+      "replayTimers": 0,
+      "replayRecords": 0,
+      "cachedActionResults": 0,
+      "idleSecurityProfiles": 28,
+      "pendingRoomQueues": 0,
+      "pendingOperations": 0,
+      "activeTimers": 0,
+      "activeIntervals": 1
+    }
+  }
+}

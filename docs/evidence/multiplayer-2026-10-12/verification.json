@@ -1,0 +1,42 @@
+{
+  "suites": {
+    "web": {
+      "files": 56,
+      "passed": 509,
+      "failed": 0,
+      "skipped": 0
+    },
+    "multiplayer": {
+      "files": 32,
+      "passed": 451,
+      "failed": 0,
+      "skipped": 0
+    },
+    "engine": {
+      "files": 29,
+      "passed": 444,
+      "failed": 0,
+      "skipped": 0
+    },
+    "race-before": {
+      "files": 1,
+      "passed": 40,
+      "failed": 11,
+      "skipped": 0
+    },
+    "race-after": {
+      "files": 1,
+      "passed": 51,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "typecheck": "PASS across 9 workspaces",
+  "build": "PASS; existing large chunks remain",
+  "fullApi": "Not rerun; no API/financial logic changed",
+  "harness": "Web tests use temporary Node WebSocket setup and synthetic Supabase values; local profile binds loopback only",
+  "sourceChanges": [
+    "apps/web/src/store/multiplayerStore.ts",
+    "apps/web/src/store/multiplayerStore.roomLifecycle.test.ts"
+  ]
+}

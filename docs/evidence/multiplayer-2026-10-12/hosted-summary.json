@@ -1,0 +1,989 @@
+{
+  "reviewDate": "2026-10-12",
+  "baselineCommit": "d925f7a",
+  "scope": "Read-only hosted telemetry; local fixtures only. No production account/financial/database writes or load generation.",
+  "railwayMetrics": [
+    {
+      "measurement": "CPU_USAGE",
+      "current": 0,
+      "average": 0.011940651239669422,
+      "min": 0,
+      "max": 0.27607634999999997,
+      "sampleCount": 121
+    },
+    {
+      "measurement": "CPU_LIMIT",
+      "current": 2,
+      "average": 0.8099173553719008,
+      "min": 0,
+      "max": 2,
+      "sampleCount": 121
+    },
+    {
+      "measurement": "MEMORY_USAGE_GB",
+      "current": 0.072019968,
+      "average": 0.02522518214876034,
+      "min": 0,
+      "max": 0.090021888,
+      "sampleCount": 121
+    },
+    {
+      "measurement": "MEMORY_LIMIT_GB",
+      "current": 0.99999744,
+      "average": 0.40495764099173587,
+      "min": 0,
+      "max": 0.99999744,
+      "sampleCount": 121
+    },
+    {
+      "measurement": "NETWORK_RX_GB",
+      "current": 0,
+      "average": 0.00012575095041322316,
+      "min": 0,
+      "max": 0.003729334,
+      "sampleCount": 121
+    },
+    {
+      "measurement": "NETWORK_TX_GB",
+      "current": 0,
+      "average": 0.0012244794710743801,
+      "min": 0,
+      "max": 0.050866959,
+      "sampleCount": 121
+    }
+  ],
+  "railwayRuntimeSamples": [
+    {
+      "timestamp": "2026-10-12T08:29:44.696163077Z",
+      "rss": 128364544,
+      "heapUsed": 34494040,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 1.2019387068298988,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.430271,
+        "p99": 24.559615
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:30:50.259529382Z",
+      "rss": 129937408,
+      "heapUsed": 34492352,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 0.808250774991885,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.970943,
+        "p99": 25.493503
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:31:41.676644961Z",
+      "rss": 129937408,
+      "heapUsed": 34467680,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 0.8130528898795798,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.626879,
+        "p99": 25.001983
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:32:46.366723291Z",
+      "rss": 129937408,
+      "heapUsed": 34375400,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 0.8760280491939239,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 22.216703,
+        "p99": 25.870335
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:33:39.286105641Z",
+      "rss": 129937408,
+      "heapUsed": 35000560,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 0.8149610255005025,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.643263,
+        "p99": 25.608191
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:34:43.527526126Z",
+      "rss": 129937408,
+      "heapUsed": 34904504,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 0.8596736804241523,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.446655,
+        "p99": 24.346623
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:35:45.776566977Z",
+      "rss": 129937408,
+      "heapUsed": 34795928,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 0.7505618973514846,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.577727,
+        "p99": 24.739839
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:36:47.729007074Z",
+      "rss": 130330624,
+      "heapUsed": 35412408,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 0.7525395458453419,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.397503,
+        "p99": 24.051711
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:37:49.353805663Z",
+      "rss": 130723840,
+      "heapUsed": 35332944,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 0.7881481537091571,
+      "eventLoopDelayMs": {
+        "p50": 20.135935,
+        "p95": 21.397503,
+        "p99": 24.084479
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:38:40.851146956Z",
+      "rss": 130723840,
+      "heapUsed": 35452152,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 0.8079155043897221,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.397503,
+        "p99": 23.937023
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:39:45.989673683Z",
+      "rss": 131117056,
+      "heapUsed": 35359976,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 0.8057987148916743,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.184511,
+        "p99": 22.888447
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:40:41.312127971Z",
+      "rss": 131117056,
+      "heapUsed": 36009848,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 0.7569415554899204,
+      "eventLoopDelayMs": {
+        "p50": 20.135935,
+        "p95": 21.430271,
+        "p99": 24.363007
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:41:45.332660720Z",
+      "rss": 131117056,
+      "heapUsed": 35887392,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 0.76663923548369,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 22.102015,
+        "p99": 26.886143
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:42:39.842193751Z",
+      "rss": 132902912,
+      "heapUsed": 36942672,
+      "connectedSocketCount": 1,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 1.5097534351239215,
+      "eventLoopDelayMs": {
+        "p50": 20.135935,
+        "p95": 21.397503,
+        "p99": 23.445503
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:43:45.215222713Z",
+      "rss": 134017024,
+      "heapUsed": 37450720,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 1.763019307221863,
+      "eventLoopDelayMs": {
+        "p50": 20.135935,
+        "p95": 21.200895,
+        "p99": 23.265279
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:44:48.623829091Z",
+      "rss": 157315072,
+      "heapUsed": 45533176,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 1,
+      "activeMatchCount": 1,
+      "physicsIntervals": 1,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 1,
+      "ownerQueues": 1,
+      "pendingOwnerOperations": 3,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 24.17500082217228,
+      "eventLoopDelayMs": {
+        "p50": 20.234239,
+        "p95": 24.838143,
+        "p99": 38.404095
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:45:40.187611303Z",
+      "rss": 161718272,
+      "heapUsed": 41850672,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 1,
+      "activeMatchCount": 1,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 1,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 39.48758775610719,
+      "eventLoopDelayMs": {
+        "p50": 20.479999,
+        "p95": 26.247167,
+        "p99": 34.406399
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:46:43.348757036Z",
+      "rss": 135143424,
+      "heapUsed": 31792608,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 1,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 1,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 4.248554615865699,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 22.085631,
+        "p99": 27.820031
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:47:45.930256909Z",
+      "rss": 134946816,
+      "heapUsed": 32173768,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 2.7609905144790847,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.610495,
+        "p99": 23.920639
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:48:38.938374598Z",
+      "rss": 144441344,
+      "heapUsed": 32312448,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 1,
+      "activeMatchCount": 1,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 1,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 17.438933334688095,
+      "eventLoopDelayMs": {
+        "p50": 20.168703,
+        "p95": 22.921215,
+        "p99": 27.574271
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:49:39.067819014Z",
+      "rss": 146063360,
+      "heapUsed": 34261160,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 3.965115534322647,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.643263,
+        "p99": 25.477119
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:50:43.251750957Z",
+      "rss": 145580032,
+      "heapUsed": 35399192,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 1,
+      "activeMatchCount": 1,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 1,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 3.298113222228584,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.610495,
+        "p99": 24.936447
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:51:47.565612816Z",
+      "rss": 145895424,
+      "heapUsed": 37347088,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 1,
+      "activeMatchCount": 1,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 1,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 2.9540067810049973,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.643263,
+        "p99": 25.198591
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:52:40.566930182Z",
+      "rss": 146259968,
+      "heapUsed": 38858448,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 1,
+      "activeMatchCount": 1,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 1,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 2.901716976663646,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 22.003711,
+        "p99": 25.116671
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:53:44.989377385Z",
+      "rss": 145780736,
+      "heapUsed": 32039800,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 1,
+      "activeMatchCount": 1,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 1,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 2.773346164958183,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.659647,
+        "p99": 25.346047
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:54:46.843342509Z",
+      "rss": 145633280,
+      "heapUsed": 35114584,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 1,
+      "activeMatchCount": 1,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 1,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 2.9769771461478665,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.610495,
+        "p99": 24.739839
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:55:40.282561720Z",
+      "rss": 144539648,
+      "heapUsed": 37620248,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 1,
+      "activeMatchCount": 1,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 1,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 0,
+      "cpuPercent": 3.016410448047298,
+      "eventLoopDelayMs": {
+        "p50": 20.135935,
+        "p95": 21.430271,
+        "p99": 23.527423
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:56:45.531988153Z",
+      "rss": 145305600,
+      "heapUsed": 33679400,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 3.328399641549055,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.561343,
+        "p99": 24.428543
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:57:39.436578957Z",
+      "rss": 145567744,
+      "heapUsed": 35660336,
+      "connectedSocketCount": 2,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 2.767907159047094,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.463039,
+        "p99": 24.018943
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:58:43.402339034Z",
+      "rss": 143572992,
+      "heapUsed": 36209056,
+      "connectedSocketCount": 1,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 2.085768246519687,
+      "eventLoopDelayMs": {
+        "p50": 20.135935,
+        "p95": 21.266431,
+        "p99": 23.199743
+      }
+    },
+    {
+      "timestamp": "2026-10-12T08:59:39.985176577Z",
+      "rss": 143888384,
+      "heapUsed": 36677496,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 1.70060362619289,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.446655,
+        "p99": 24.477695
+      }
+    },
+    {
+      "timestamp": "2026-10-12T09:00:48.529013797Z",
+      "rss": 143872000,
+      "heapUsed": 36622528,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 0.8234344644206405,
+      "eventLoopDelayMs": {
+        "p50": 20.168703,
+        "p95": 22.839295,
+        "p99": 29.736959
+      }
+    },
+    {
+      "timestamp": "2026-10-12T09:01:43.796879258Z",
+      "rss": 144617472,
+      "heapUsed": 36657448,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 0.8632121380955879,
+      "eventLoopDelayMs": {
+        "p50": 20.168703,
+        "p95": 22.200319,
+        "p99": 26.525695
+      }
+    },
+    {
+      "timestamp": "2026-10-12T09:02:47.440802403Z",
+      "rss": 144617472,
+      "heapUsed": 36629816,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 0.820181359136395,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 22.347775,
+        "p99": 25.755647
+      }
+    },
+    {
+      "timestamp": "2026-10-12T09:03:41.119645726Z",
+      "rss": 144617472,
+      "heapUsed": 36675472,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 0.7727610464699339,
+      "eventLoopDelayMs": {
+        "p50": 20.168703,
+        "p95": 22.315007,
+        "p99": 25.903103
+      }
+    },
+    {
+      "timestamp": "2026-10-12T09:04:38.639855391Z",
+      "rss": 145797120,
+      "heapUsed": 37113752,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 1.0406373669358893,
+      "eventLoopDelayMs": {
+        "p50": 20.168703,
+        "p95": 21.987327,
+        "p99": 24.395775
+      }
+    },
+    {
+      "timestamp": "2026-10-12T09:05:47.149792435Z",
+      "rss": 145797120,
+      "heapUsed": 37097616,
+      "connectedSocketCount": 0,
+      "activeRoomCount": 0,
+      "activeMatchCount": 0,
+      "physicsIntervals": 0,
+      "countdownTimers": 0,
+      "loadTimers": 0,
+      "ownedRooms": 0,
+      "ownerQueues": 0,
+      "pendingOwnerOperations": 0,
+      "pendingOwnerRpc": 0,
+      "idleSecurityProfiles": 2,
+      "cpuPercent": 0.8045796973908097,
+      "eventLoopDelayMs": {
+        "p50": 20.152319,
+        "p95": 21.708799,
+        "p99": 25.362431
+      }
+    }
+  ],
+  "railwayHttp": {
+    "service": {
+      "id": "f87a68ea-e1a2-4d67-8e4d-993d8f760df1",
+      "name": "@gaming-hub/socket-server"
+    },
+    "environment": {
+      "id": "4ae690fc-4104-4225-9682-51d88192eb30",
+      "name": "production"
+    },
+    "window": {
+      "hoursBack": 2,
+      "bucketCount": 9
+    },
+    "totals": {
+      "2xx": 75,
+      "3xx": 0,
+      "4xx": 2,
+      "5xx": 4,
+      "total": 81
+    },
+    "samples": [
+      {
+        "ts": 1791789480,
+        "2xx": 0,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 2,
+        "total": 2
+      },
+      {
+        "ts": 1791790200,
+        "2xx": 0,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 1,
+        "total": 1
+      },
+      {
+        "ts": 1791790920,
+        "2xx": 0,
+        "3xx": 0,
+        "4xx": 1,
+        "5xx": 0,
+        "total": 1
+      },
+      {
+        "ts": 1791792000,
+        "2xx": 0,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 1,
+        "total": 1
+      },
+      {
+        "ts": 1791794160,
+        "2xx": 1,
+        "3xx": 0,
+        "4xx": 1,
+        "5xx": 0,
+        "total": 2
+      },
+      {
+        "ts": 1791794520,
+        "2xx": 10,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 0,
+        "total": 10
+      },
+      {
+        "ts": 1791794880,
+        "2xx": 13,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 0,
+        "total": 13
+      },
+      {
+        "ts": 1791795240,
+        "2xx": 5,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 0,
+        "total": 5
+      },
+      {
+        "ts": 1791795600,
+        "2xx": 46,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 0,
+        "total": 46
+      }
+    ]
+  },
+  "confirmedLogEvents": [
+    {
+      "at": "2026-10-12T08:44:15Z",
+      "message": "Matchmaking provision remains retryable"
+    },
+    {
+      "at": "2026-10-12T08:47:45Z",
+      "message": "Matchmaking provision remains retryable"
+    },
+    {
+      "at": "2026-10-12T08:49:20Z",
+      "message": "Disconnect/reconnect waiting for owner recovery"
+    },
+    {
+      "at": "2026-10-12T08:59:37Z",
+      "message": "LoginSession lookup failed: database server unreachable"
+    }
+  ],
+  "variablesRedacted": true,
+  "renderOldSocketStillActive": true,
+  "leakVerdict": "No unbounded retained match state demonstrated; samples and local workload are not a sustained production soak.",
+  "capacityVerdict": "Railway sampled current limits 2 CPU, 1 GB; sampled resource exhaustion not demonstrated.",
+  "trafficVerdict": "81 HTTP requests/2h, 2 concurrent sockets maximum in returned runtime samples; socket event traffic spike not established."
+}
