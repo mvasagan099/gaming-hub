@@ -1,35 +1,39 @@
 import type { SnakeVsWormsState } from '@gaming-hub/game-engine';
+import { NetworkPlaybackClock } from '../shared/rendering/NetworkPlaybackClock';
 
 /** Presentation only. Authoritative collision, input and scoring use the latest state. */
 export class SnakeWormTimeline {
   private samples: { time: number; state: SnakeVsWormsState }[] = [];
-  private offset: number | null = null;
+  private readonly playbackClock = new NetworkPlaybackClock(60);
   private version = -1;
 
   receive(state: SnakeVsWormsState, receivedAt: number, restored = false): void {
-    if (restored) { this.samples = []; this.offset = null; this.version = -1; }
+    if (restored) { this.samples = []; this.playbackClock.reset(); this.version = -1; }
     if (state.stateVersion <= this.version) return;
     this.version = state.stateVersion;
     const time = state.serverTimestamp || receivedAt;
     if (state.paused || state.finished || (this.samples.at(-1)?.time ?? -Infinity) > time) {
       this.samples = [];
-      this.offset = null;
+      this.playbackClock.reset();
     }
-    this.offset = Math.min(this.offset ?? Infinity, receivedAt - time);
+    this.playbackClock.observe(time, receivedAt);
     if (this.samples.at(-1)?.time === time) this.samples.pop();
     this.samples.push({ time, state });
     if (this.samples.length > 12) this.samples.shift();
   }
 
-  bodies(now: number): Map<number, { x: number; y: number }[]> {
-    const target = now - (this.offset ?? 0) - 60;
+  bodies(now: number, localSeat?: number | null): Map<number, { x: number; y: number }[]> {
+    const target = this.playbackClock.target(now);
     while (this.samples.length > 2 && this.samples[1].time <= target) this.samples.shift();
-    const a = this.samples[0], b = this.samples[1];
-    if (!a) return new Map();
+    if (!this.samples.length) return new Map();
     const latest = this.samples.at(-1)!.state;
-    const t = b ? Math.max(0, Math.min(1, (target - a.time) / (b.time - a.time))) : 0;
     const result = new Map<number, { x: number; y: number }[]>();
     for (const player of latest.players) {
+      const playbackTarget = player.seat === localSeat ? this.playbackClock.baseTarget(now) : target;
+      let index = 0;
+      while (index < this.samples.length - 2 && this.samples[index + 1].time <= playbackTarget) index++;
+      const a = this.samples[index], b = this.samples[index + 1];
+      const t = b ? Math.max(0, Math.min(1, (playbackTarget - a.time) / (b.time - a.time))) : 0;
       const from = a.state.players.find(p => p.seat === player.seat);
       const to = b?.state.players.find(p => p.seat === player.seat) ?? from;
       // Death, respawn, growth/shrink and teleport are authoritative discontinuities.
@@ -41,13 +45,13 @@ export class SnakeWormTimeline {
         const body = from.body.map((p, i) => ({ x: p.x + (to.body[i].x - p.x) * t, y: p.y + (to.body[i].y - p.y) * t }));
         // Bridge short delivery gaps along the known trail. Never predict a
         // collision, turn, death, growth or respawn; those require server state.
-        if (b && target > b.time && from.direction === to.direction) {
+        if (b && playbackTarget > b.time && from.direction === to.direction) {
           const elapsed = b.time - a.time;
           const dx = to.body[0].x - from.body[0].x, dy = to.body[0].y - from.body[0].y;
           const length = Math.hypot(dx, dy);
           if (elapsed > 0 && length > 0) {
             const speed = Math.min(length / elapsed, (Number.isFinite(to.speed) ? to.speed : 10) * 60 / 1000);
-            const distance = speed * Math.min(100, target - b.time);
+            const distance = speed * Math.min(100, playbackTarget - b.time);
             result.set(player.seat, advanceTrail(body, dx / length, dy / length, distance,
               latest.gridWidth, latest.gridHeight));
             continue;

@@ -1,4 +1,5 @@
 import type { TableTennisBall, TableTennisState } from '@gaming-hub/game-engine';
+import { NetworkPlaybackClock } from '../shared/rendering/NetworkPlaybackClock';
 
 /** Render a short buffered history, instead of rewinding local prediction on every packet. */
 export class TableTennisTimeline {
@@ -6,7 +7,7 @@ export class TableTennisTimeline {
   private latestPaddles: number[] = [160, 160];
   private heldBall: TableTennisBall | null = null;
   private rendered: TableTennisBall | null = null;
-  private offset: number | null = null;
+  private readonly playbackClock = new NetworkPlaybackClock(40);
   private remainingMs = 0;
   private clockReceivedAt = 0;
   private paused = false;
@@ -18,7 +19,7 @@ export class TableTennisTimeline {
     if (timestamp < this.latestTimestamp) return;
     this.latestTimestamp = timestamp;
     // Keep the smallest observed transit delay; packet jitter must not move the playback clock.
-    this.offset = Math.min(this.offset ?? Infinity, receivedAt - timestamp);
+    this.playbackClock.observe(timestamp, receivedAt);
     const remaining = state.matchRemainingMs;
     this.remainingMs = typeof remaining === 'number' ? remaining : Math.max(0,
       (state.matchTimerConfig?.matchDurationMs ?? 180000) -
@@ -57,7 +58,7 @@ export class TableTennisTimeline {
 
   paddles(now: number): number[] {
     if (!this.samples.length) return [...this.latestPaddles];
-    const target = now - (this.offset ?? 0) - 40;
+    const target = this.playbackClock.target(now);
     let a = this.samples[0];
     for (const b of this.samples.slice(1)) {
       if (target < b.time) {
@@ -73,7 +74,7 @@ export class TableTennisTimeline {
 
   ball(now: number): TableTennisBall | null {
     if (!this.samples.length) return this.heldBall ? { ...this.heldBall } : null;
-    const target = now - (this.offset ?? 0) - 40;
+    const target = this.playbackClock.target(now);
     while (this.samples.length > 2 && this.samples[1].time <= target) this.samples.shift();
     const a = this.samples[0];
     const b = this.samples[1];

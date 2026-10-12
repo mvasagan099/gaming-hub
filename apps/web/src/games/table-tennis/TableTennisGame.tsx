@@ -610,6 +610,10 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
     const playbackPaddles = mode === 'multiplayer'
       ? remoteTimelineRef.current.paddles(performance.now()) : [p1.y, p2.y];
+    // Jitter buffering belongs to the opponent. Keep the local input preview
+    // responsive; the server still decides every paddle contact and point.
+    if (mode === 'multiplayer' && mySeat === 0) playbackPaddles[0] = p1.y;
+    if (mode === 'multiplayer' && mySeat === 1) playbackPaddles[1] = p2.y;
     const nearY = isP2View ? (LOGICAL_HEIGHT - PADDLE_HEIGHT) - playbackPaddles[1] : playbackPaddles[0];
     const nearVy = isP2View ? -p2.vy : p1.vy;
     const farY = isP2View ? (LOGICAL_HEIGHT - PADDLE_HEIGHT) - playbackPaddles[0] : playbackPaddles[1];

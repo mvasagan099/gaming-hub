@@ -386,7 +386,7 @@ export const SnakeVsWormsGame: React.FC<SnakeVsWormsProps> = ({ mode, stake, onB
 
       // ── Smooth Player Interpolation ──
       const renderMap = mpRenderStateRef.current;
-      const presentedBodies = remoteTimelineRef.current.bodies(performance.now());
+      const presentedBodies = remoteTimelineRef.current.bodies(performance.now(), mySeat);
       for (const p of mpState.players) {
         if (!p.body || p.body.length === 0) continue;
         let pState = renderMap.get(p.seat);
