@@ -42,7 +42,7 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     winByTwo: true,
     maxSpeed: 10.0,
     minSpeed: 5.0,
-    speedIncreasePerTouch: 0.35,
+    speedIncreasePerTouch: 0.70,
   };
 
   private physicsInterval: ReturnType<typeof setInterval> | null = null;
@@ -66,6 +66,9 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     if (options?.rules) {
       if (options.rules.pointsPerSet) this.rules.pointsPerSet = options.rules.pointsPerSet;
       if (options.rules.setsToWin) this.rules.setsToWin = options.rules.setsToWin;
+      if (typeof (options.rules as any).speedIncreasePerTouch === "number") {
+        this.rules.speedIncreasePerTouch = (options.rules as any).speedIncreasePerTouch;
+      }
     }
   }
 

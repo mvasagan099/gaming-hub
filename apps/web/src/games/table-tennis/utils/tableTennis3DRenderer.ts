@@ -802,17 +802,24 @@ export class TableTennis3DRenderer {
     const { x, y, scale, tableY } = this.project(ball.x, ball.y, ballZ);
     const ballR = Math.max(4, TABLE_TENNIS_VISUAL_CONFIG.ballRadius * scale);
 
-    // ── 1. Motion Trail (Subtle speed blur) ──
+    // ── 1. Motion Trail (Progressive speed blur & streak) ──
     if (ball.inPlay && trail.length > 1) {
+      const speed = (ball as any).speed ?? Math.hypot(ball.vx, ball.vy);
+      const speedRatio = Math.max(1, speed / 5.0);
+      const isHighSpeed = speedRatio >= 1.5;
+
       ctx.save();
       for (let i = 0; i < trail.length; i++) {
         const pt = trail[i]!;
         const pz = this.calculateBallZ({ ...ball, x: pt.x, y: pt.y });
         const proj = this.project(pt.x, pt.y, pz);
-        const alpha = (i / trail.length) * 0.32;
+        const baseAlpha = (i / trail.length) * 0.32;
+        const alpha = Math.min(0.65, baseAlpha * (1 + (speedRatio - 1) * 0.6));
         const trailR = ballR * (0.5 + (i / trail.length) * 0.5);
 
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.fillStyle = isHighSpeed
+          ? `rgba(254, 215, 170, ${alpha})`
+          : `rgba(255, 255, 255, ${alpha})`;
         ctx.beginPath();
         ctx.arc(proj.x, proj.y, trailR, 0, Math.PI * 2);
         ctx.fill();

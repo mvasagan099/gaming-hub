@@ -78,6 +78,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
   const [endReason, setEndReason] = useState<string | null>(null);
   const [rallyCount, setRallyCount] = useState(0);
   const rallyCountRef = useRef(0);
+  const [ballSpeed, setBallSpeed] = useState(5.0);
   const remoteTimelineRef = useRef(new TableTennisTimeline());
   const matchStartedAtMsRef = useRef<number | null>(null);
 
@@ -231,6 +232,9 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
           rallyCountRef.current = state.rallyCount;
           setRallyCount(state.rallyCount);
         }
+        if (typeof state.ball?.speed === 'number') {
+          setBallSpeed(state.ball.speed);
+        }
 
         remoteTimelineRef.current.receive(state, performance.now());
         setRemainingTime(remoteTimelineRef.current.secondsRemaining(performance.now()));
@@ -372,7 +376,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       const direction: 1 | -1 = state.server === 1 ? 1 : -1;
       ball.x = state.server === 1 ? 44 : LOGICAL_WIDTH - 44;
       ball.y = (state.server === 1 ? p1Ref.current.y : p2Ref.current.y) + 40;
-      ball.speed = 5.8;
+      ball.speed = 5.0;
+      setBallSpeed(5.0);
       ball.vx = state.server === 1 ? ball.speed : -ball.speed;
 
       if (state.server === 1) {
@@ -419,6 +424,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
     setP2Score(state.p2Score);
     rallyCountRef.current = 0;
     setRallyCount(0);
+    setBallSpeed(5.0);
 
     setPointAnimation({ winner: player === 1 ? 0 : 1, reason: 'POINT' });
     setTimeout(() => {
@@ -475,6 +481,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
     ballRef.current.inPlay = false;
     rallyCountRef.current = 0;
     setRallyCount(0);
+    setBallSpeed(5.0);
     matchStartedAtMsRef.current = Date.now();
     setRemainingTime(180);
   }, []);
@@ -532,8 +539,10 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
       if (state.gameState === 'playing' && ball.inPlay && ball.vx > 0) {
         const targetY = ball.y - 40;
-        if (p2.y < targetY - 10) p2.y += paddleSpeed * 0.85;
-        else if (p2.y > targetY + 10) p2.y -= paddleSpeed * 0.85;
+        const currentSpeedRatio = Math.max(1, (ball.speed || 5.0) / 5.0);
+        const aiTrackingSpeed = paddleSpeed * Math.min(1.35, 0.85 * (1 + (currentSpeedRatio - 1) * 0.45));
+        if (p2.y < targetY - 10) p2.y += aiTrackingSpeed;
+        else if (p2.y > targetY + 10) p2.y -= aiTrackingSpeed;
       } else {
         const centerY = LOGICAL_HEIGHT / 2 - 40;
         if (p2.y < centerY - 10) p2.y += paddleSpeed * 0.5;
@@ -663,7 +672,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         ball.y <= p1.y + 80 + ballRadius + 6
       ) {
         ball.x = 36 + ballRadius;
-        ball.speed = Math.min(ball.speed + 0.35, 10.0);
+        ball.speed = Math.min(ball.speed + 0.70, 10.0);
+        setBallSpeed(ball.speed);
 
         const hitPos = (ball.y - (p1.y + 40)) / 40;
         const shot = tableTennisShot(ball.x, ball.y, 1, ball.speed,
@@ -678,7 +688,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         ball.bounceCountAfterHit = 0;
         ball.bounceCount = 0;
         ball.currentRallyState = 'rally';
-        spawnParticles(ball.x, ball.y, '#f43f5e', 12);
+        const hitCount = Math.round(12 * Math.min(2, ball.speed / 5.0));
+        spawnParticles(ball.x, ball.y, '#f43f5e', hitCount, ball.speed / 5.0);
         rallyCountRef.current++;
         setRallyCount(rallyCountRef.current);
       }
@@ -692,7 +703,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         ball.y <= p2.y + 80 + ballRadius + 6
       ) {
         ball.x = LOGICAL_WIDTH - 36 - ballRadius;
-        ball.speed = Math.min(ball.speed + 0.35, 10.0);
+        ball.speed = Math.min(ball.speed + 0.70, 10.0);
+        setBallSpeed(ball.speed);
 
         const hitPos = (ball.y - (p2.y + 40)) / 40;
         const shot = tableTennisShot(ball.x, ball.y, -1, ball.speed, hitPos * 0.3);
@@ -706,7 +718,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         ball.bounceCountAfterHit = 0;
         ball.bounceCount = 0;
         ball.currentRallyState = 'rally';
-        spawnParticles(ball.x, ball.y, '#3b82f6', 12);
+        const hitCount = Math.round(12 * Math.min(2, ball.speed / 5.0));
+        spawnParticles(ball.x, ball.y, '#3b82f6', hitCount, ball.speed / 5.0);
         rallyCountRef.current++;
         setRallyCount(rallyCountRef.current);
       }
@@ -1028,6 +1041,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
               isServing={gameState === 'serving' && (mode !== 'multiplayer' || (connectionStatus === 'connected' && !driverRef.current?.getLatestState()?.paused))}
               currentServer={currentServer}
               rallyCount={rallyCount}
+              ballSpeed={ballSpeed}
               onServe={handleCanvasClick}
               onReplay={mode === 'multiplayer' ? () => void useMultiplayerStore.getState().rematch() : resetGame}
               onExit={onBack}

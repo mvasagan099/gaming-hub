@@ -17,6 +17,7 @@ interface TableTennisOverlaysProps {
   isServing: boolean;
   currentServer: 1 | 2;
   rallyCount?: number;
+  ballSpeed?: number;
   onServe?: () => void;
   onReplay: () => void;
   onExit: () => void;
@@ -38,6 +39,7 @@ export const TableTennisOverlays: React.FC<TableTennisOverlaysProps> = ({
   isServing,
   currentServer,
   rallyCount = 0,
+  ballSpeed = 5.0,
   onServe,
   onReplay,
   onExit,
@@ -48,17 +50,37 @@ export const TableTennisOverlays: React.FC<TableTennisOverlaysProps> = ({
 
   return (
     <>
-      {/* ── 1. Floating Rally Counter (Appears during long rallies >= 4) ── */}
-      {rallyCount >= 4 && !isGameOver && !isServing && (
-        <div className="absolute top-16 lg:top-4 left-1/2 -translate-x-1/2 pointer-events-none z-20 animate-in fade-in zoom-in-95 duration-200">
-          <div className="bg-slate-900/85 border border-sky-500/50 backdrop-blur-md px-4 py-1 rounded-full shadow-[0_0_20px_rgba(14,165,233,0.3)] flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
-            <span className="text-xs font-black text-sky-300 uppercase tracking-widest font-mono">
-              RALLY {rallyCount}
-            </span>
+      {/* ── 1. Floating Rally Counter & Progressive Speed Badge (Appears during rallies >= 3) ── */}
+      {rallyCount >= 3 && !isGameOver && !isServing && (() => {
+        const speed = ballSpeed ?? 5.0;
+        const multiplier = Math.max(1.0, speed / 5.0);
+        const isHighSpeed = multiplier >= 1.5;
+        const isMaxSpeed = speed >= 9.8;
+        return (
+          <div className="absolute top-16 lg:top-4 left-1/2 -translate-x-1/2 pointer-events-none z-20 animate-in fade-in zoom-in-95 duration-200">
+            <div className={`backdrop-blur-md px-4 py-1.5 rounded-full flex items-center gap-2 border shadow-lg transition-all duration-300 ${
+              isHighSpeed
+                ? 'bg-gradient-to-r from-amber-950/90 via-rose-950/90 to-amber-950/90 border-amber-500/70 shadow-[0_0_24px_rgba(245,158,11,0.45)]'
+                : 'bg-slate-900/90 border-sky-400/60 shadow-[0_0_20px_rgba(56,189,248,0.35)]'
+            }`}>
+              {isHighSpeed ? (
+                <Flame className="w-4 h-4 text-amber-400 animate-bounce" />
+              ) : (
+                <Zap className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
+              )}
+              <span className="text-xs font-black text-sky-200 uppercase tracking-widest font-mono">
+                RALLY {rallyCount}
+              </span>
+              <span className="text-slate-500 text-xs font-mono">•</span>
+              <span className={`text-xs font-black font-mono tracking-wider ${
+                isHighSpeed ? 'text-amber-300' : 'text-sky-300'
+              }`}>
+                {isMaxSpeed ? 'MAX SPEED ⚡' : `${multiplier.toFixed(1)}x SPEED`}
+              </span>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── 2. Match Point / Deuce Floating Badges ── */}
       {isMatchPoint && !isGameOver && (

@@ -192,7 +192,7 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
 
     let state = serveRes.state;
 
-    // Simulate 10 paddle touches
+    // Simulate 10 paddle touches (with 0.70 increase per touch, capped at max speed 10.0)
     for (let touch = 1; touch <= 10; touch++) {
       const isLeft = touch % 2 === 1;
       state = {
@@ -206,10 +206,10 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
       };
       state = eng.simulatePhysics(state);
       expect(state.ball?.touchCount).toBe(touch);
-      expect(state.ball?.speed).toBeCloseTo(5.0 + touch * 0.35);
+      expect(state.ball?.speed).toBeCloseTo(Math.min(5.0 + touch * 0.70, 10.0));
     }
     expect(state.ball?.touchCount).toBe(10);
-    expect(state.ball?.speed).toBeCloseTo(8.5);
+    expect(state.ball?.speed).toBe(10.0);
 
     // Continue to touch 15 (capped at max speed 10.0)
     for (let touch = 11; touch <= 15; touch++) {
@@ -225,7 +225,7 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
       };
       state = eng.simulatePhysics(state);
       expect(state.ball?.touchCount).toBe(touch);
-      expect(state.ball?.speed).toBeCloseTo(Math.min(5.0 + touch * 0.35, 10.0));
+      expect(state.ball?.speed).toBe(10.0);
     }
     expect(state.ball?.touchCount).toBe(15);
     expect(state.ball?.speed).toBe(10.0);
