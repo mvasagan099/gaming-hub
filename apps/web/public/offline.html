@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Gaming Hub — Offline</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    body {
+      background: radial-gradient(circle at 50% 20%, #111b33 0%, #070b14 70%, #03060a 100%);
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      overflow: hidden;
+    }
+    .container {
+      max-width: 380px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      animation: fadeIn 0.4s ease-out;
+    }
+    .icon-wrapper {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .glow {
+      position: absolute;
+      inset: -12px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(239, 68, 68, 0.25) 0%, transparent 70%);
+      animation: pulse 2.5s infinite ease-in-out;
+    }
+    .icon-box {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      border-radius: 24px;
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .icon-svg {
+      width: 40px;
+      height: 40px;
+      stroke: #f87171;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+      color: #ffffff;
+    }
+    p {
+      font-size: 14px;
+      line-height: 1.5;
+      color: #94a3b8;
+      margin-bottom: 28px;
+    }
+    .btn {
+      width: 100%;
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: #ffffff;
+      border: none;
+      border-radius: 14px;
+      padding: 14px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .btn:active {
+      transform: scale(0.97);
+      background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+    }
+    .btn.loading {
+      opacity: 0.8;
+      pointer-events: none;
+    }
+    .spinner {
+      display: none;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .btn.loading .spinner {
+      display: inline-block;
+    }
+    .btn.loading .btn-text {
+      opacity: 0.8;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 20px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      font-size: 12px;
+      color: #64748b;
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #f87171;
+    }
+    .dot.online {
+      background: #34d399;
+      box-shadow: 0 0 8px #34d399;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.1); }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon-wrapper">
+      <div class="glow"></div>
+      <div class="icon-box">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+          <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+          <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+          <path d="M10.71 5.05A16 16 0 0 1 22.56 9"></path>
+          <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+          <line x1="12" y1="20" x2="12.01" y2="20"></line>
+        </svg>
+      </div>
+    </div>
+
+    <h1>No Internet Connection</h1>
+    <p>Gaming Hub requires an active internet connection to load multiplayer matches and games.</p>
+
+    <button id="retryBtn" class="btn" onclick="retryConnection()">
+      <span class="spinner"></span>
+      <span class="btn-text">Retry Connection</span>
+    </button>
+
+    <div class="status-badge">
+      <span id="statusDot" class="dot"></span>
+      <span id="statusText">Waiting for connection...</span>
+    </div>
+  </div>
+
+  <script>
+    const APP_URL = "https://gaming-hub-frontend.onrender.com/";
+    const retryBtn = document.getElementById("retryBtn");
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+
+    function retryConnection() {
+      retryBtn.classList.add("loading");
+      statusText.textContent = "Connecting to Gaming Hub...";
+
+      // Attempt to load the app URL
+      setTimeout(() => {
+        window.location.href = APP_URL;
+      }, 400);
+
+      // Reset loading state after 6 seconds if navigation did not occur
+      setTimeout(() => {
+        retryBtn.classList.remove("loading");
+        statusText.textContent = "Still offline. Please check network.";
+      }, 6000);
+    }
+
+    // Auto-reconnect when device comes back online
+    window.addEventListener("online", () => {
+      statusDot.classList.add("online");
+      statusText.textContent = "Connected! Loading...";
+      setTimeout(() => {
+        window.location.href = APP_URL;
+      }, 500);
+    });
+
+    window.addEventListener("offline", () => {
+      statusDot.classList.remove("online");
+      statusText.textContent = "Waiting for connection...";
+    });
+  </script>
+</body>
+</html>
