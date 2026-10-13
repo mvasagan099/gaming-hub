@@ -800,7 +800,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 
   return (
     <GameWrapper title="Snooker 3D" gameId="snooker" mode={mode} stake={stake} onBack={onBack} isFullscreen isGameOver={frameStatus === "MATCH_END"} hideFloatingExitOnMobile hideFloatingExitOnDesktop>
-      <div className="relative h-full w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-between p-2 sm:p-3 select-none overflow-hidden">
+      <div className="relative h-full w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-between p-1 sm:p-2.5 md:p-3 select-none overflow-hidden">
         {/* Top Snooker Championship Broadcast HUD */}
         <SnookerHUD
           player1Name={player1Name}
@@ -850,11 +850,11 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
         )}
 
         {/* Main Snooker Arena */}
-        <div className="w-full flex-1 min-h-0 flex items-center justify-center max-w-7xl px-1 sm:px-2 my-auto overflow-hidden">
-          {/* Snooker Table Container & Mobile Side Power Slider */}
-          <div className="relative flex items-center justify-center gap-1.5 sm:gap-4 w-full h-full min-h-0 max-w-[min(98vw,calc((100dvh-9.5rem)*2),1340px)]">
+        <div className="w-full flex-1 min-h-0 flex items-center justify-center max-w-7xl px-0.5 sm:px-2 my-auto overflow-hidden">
+          {/* Snooker Table Container & Side Power Slider */}
+          <div className="relative flex items-center justify-center gap-1.5 sm:gap-4 w-full h-full min-h-0 max-w-[min(98vw,calc((100dvh-7.5rem)*2),1340px)]">
             {/* Snooker Table Main Canvas Container */}
-            <div className={`relative ${isRotated ? 'aspect-[620/1100] h-full max-h-full w-auto' : 'aspect-[1100/620] w-full max-w-[min(94vw,calc((100dvh-9.5rem)*2),1300px)] max-h-[calc(100dvh-9.5rem)]'} flex items-center justify-center`}>
+            <div className={`relative ${isRotated ? 'aspect-[620/1100] h-full max-h-full w-auto' : 'aspect-[1100/620] w-full max-w-[min(92vw,calc((100dvh-8rem)*2),1240px)] max-h-[calc(100dvh-8rem)]'} flex items-center justify-center`}>
               <canvas
                 ref={canvasRef}
                 width={isRotated ? 480 + TABLE_PAD * 2 : 960 + TABLE_PAD * 2}
@@ -899,24 +899,22 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
               )}
             </div>
 
-            {/* Mobile Vertical Shot Power Level Meter (Side Drag Level & Release to Strike) */}
-            {isRotated && (
-              <div className="flex flex-col items-center justify-center shrink-0 animate-in fade-in slide-in-from-right-2">
-                <SnookerMobilePowerMeter
-                  power={cuePower}
-                  setPower={(p) => {
-                    setCuePower(p);
-                    if (mode === "multiplayer" && driverRef.current) driverRef.current.sendAim(aimAngle, p);
-                  }}
-                  onShoot={(p) => {
-                    if (isMyTurn && !isSimulating && !cueBallInHand) {
-                      executeShotWithAnimation(p);
-                    }
-                  }}
-                  disabled={!isMyTurn || isSimulating || cueBallInHand}
-                />
-              </div>
-            )}
+            {/* Vertical Shot Power Level Meter (Available in BOTH Mobile & PC Views) */}
+            <div className="flex flex-col items-center justify-center shrink-0 animate-in fade-in slide-in-from-right-2 z-20">
+              <SnookerMobilePowerMeter
+                power={cuePower}
+                setPower={(p) => {
+                  setCuePower(p);
+                  if (mode === "multiplayer" && driverRef.current) driverRef.current.sendAim(aimAngle, p);
+                }}
+                onShoot={(p) => {
+                  if (isMyTurn && !isSimulating && !cueBallInHand) {
+                    executeShotWithAnimation(p);
+                  }
+                }}
+                disabled={!isMyTurn || isSimulating || cueBallInHand}
+              />
+            </div>
           </div>
         </div>
 
@@ -942,7 +940,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 
         {/* ═══ MOBILE BOTTOM CONTROLS BAR (Fine Aim Adjust + Spin & Quick Strike) ═══ */}
         {isMyTurn && !isSimulating && !cueBallInHand && (
-          <div className="flex sm:hidden items-center justify-between gap-2.5 w-full max-w-sm px-3.5 py-2 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl z-20 shrink-0">
+          <div className="flex sm:hidden items-center justify-between gap-2 w-full max-w-sm px-2.5 py-1 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-xl shadow-2xl z-20 shrink-0">
             {/* Fine-tune Aim buttons */}
             <div className="flex items-center gap-1">
               <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5">Aim:</span>
@@ -953,7 +951,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
                   setAimAngle(newAngle);
                   if (mode === "multiplayer" && driverRef.current) driverRef.current.sendAim(newAngle, cuePower);
                 }}
-                className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 active:bg-indigo-600 text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer shadow-sm active:scale-95"
+                className="w-6 h-6 rounded-lg bg-slate-800 border border-slate-700 active:bg-indigo-600 text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer shadow-sm active:scale-95"
                 title="Fine-tune Aim Left"
                 aria-label="Fine-tune Aim Left"
               >
@@ -966,7 +964,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
                   setAimAngle(newAngle);
                   if (mode === "multiplayer" && driverRef.current) driverRef.current.sendAim(newAngle, cuePower);
                 }}
-                className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 active:bg-indigo-600 text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer shadow-sm active:scale-95"
+                className="w-6 h-6 rounded-lg bg-slate-800 border border-slate-700 active:bg-indigo-600 text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer shadow-sm active:scale-95"
                 title="Fine-tune Aim Right"
                 aria-label="Fine-tune Aim Right"
               >
@@ -980,14 +978,14 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
                 setSpinX(0);
                 setSpinY(0);
               }}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800/80 border border-slate-700 cursor-pointer active:scale-95"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-slate-800/80 border border-slate-700 cursor-pointer active:scale-95"
               title="Reset Cue Ball Spin"
             >
-              <div className="relative w-5 h-5 rounded-full bg-gradient-to-tr from-slate-200 to-white border border-slate-400 shadow-inner flex items-center justify-center">
+              <div className="relative w-4 h-4 rounded-full bg-gradient-to-tr from-slate-200 to-white border border-slate-400 shadow-inner flex items-center justify-center">
                 <div
                   className="w-1 h-1 rounded-full bg-rose-500 shadow-sm transition-all"
                   style={{
-                    transform: `translate(${spinX * 6}px, ${spinY * 6}px)`,
+                    transform: `translate(${spinX * 5}px, ${spinY * 5}px)`,
                   }}
                 />
               </div>
@@ -998,7 +996,7 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
             <button
               type="button"
               onClick={() => handleDirectShoot()}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer flex items-center gap-1 shrink-0"
+              className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-[11px] uppercase tracking-wider shadow-md active:scale-95 transition-all cursor-pointer flex items-center gap-1 shrink-0"
               aria-label="Strike Cue Ball"
             >
               ⚡ SHOOT
@@ -1008,9 +1006,9 @@ export const SnookerGame: React.FC<SnookerGameProps> = ({
 
         {/* Bottom Control Helpers (Desktop PC View) */}
         <div className="hidden sm:flex text-[11px] text-slate-500 font-medium items-center gap-4 sm:gap-6 pb-1">
-          <span>● Drag cloth to Aim</span>
-          <span>● Pull back cue to charge Shot Level</span>
-          <span>● Release mouse to Strike</span>
+          <span>● Move mouse to Aim</span>
+          <span>● Drag side power bar or pull back cue to shoot</span>
+          <span>● Release to Strike</span>
         </div>
 
         {/* Frame / Match Over Modal */}

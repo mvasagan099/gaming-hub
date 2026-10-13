@@ -105,62 +105,146 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
   const targetCfg = targetConfigMap[targetBall] || targetConfigMap.RED;
 
   return (
-    <div className="relative z-30 w-full shrink-0 flex flex-col gap-2 pointer-events-none select-none">
+    <div className="relative z-30 w-full shrink-0 flex flex-col gap-1 sm:gap-2 pointer-events-none select-none">
       {/* ── 1. Top Broadcast TV Scoreboard ───────────────────────────────── */}
-      <div className="w-full bg-slate-900/95 backdrop-blur-xl border border-slate-700/60 rounded-2xl p-2 sm:p-2.5 shadow-[0_10px_30px_rgba(0,0,0,0.5)] pointer-events-auto">
-        {/* Mobile Toolbar (Header Top Row) */}
-        <div className="flex items-center justify-between gap-1.5 pb-1.5 mb-1.5 border-b border-slate-800 md:hidden">
-          <div className="flex items-center gap-1.5">
-            {mode !== "multiplayer" && <button
-              onClick={onBack}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 active:scale-95"
-              title="Leave Match"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Exit</span>
-            </button>}
+      <div className="w-full bg-slate-900/95 backdrop-blur-xl border border-slate-700/60 rounded-xl sm:rounded-2xl p-1 sm:p-2.5 shadow-[0_10px_30px_rgba(0,0,0,0.5)] pointer-events-auto">
+        {/* MOBILE VIEW (< md): Ultra-compact broadcast strip */}
+        <div className="flex flex-col gap-1 md:hidden">
+          {/* Mobile Top Row: Controls (Left) + Match Status/Timer (Center) + Utilities (Right) */}
+          <div className="flex items-center justify-between gap-1 w-full">
+            {/* Left: Exit & Rotate */}
+            <div className="flex items-center gap-1 shrink-0">
+              {mode !== "multiplayer" && (
+                <button
+                  onClick={onBack}
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-[10px] font-semibold border border-slate-700/60 active:scale-95"
+                  title="Leave Match"
+                >
+                  <ArrowLeft className="w-3 h-3" />
+                  <span>Exit</span>
+                </button>
+              )}
 
-            {onToggleRotate && (
+              {onToggleRotate && (
+                <button
+                  onClick={onToggleRotate}
+                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg transition-all text-[10px] font-bold border active:scale-95 ${
+                    isRotated
+                      ? "bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm"
+                      : "bg-slate-800/90 text-slate-300 border-slate-700/60 hover:bg-slate-700"
+                  }`}
+                  title="Rotate Table Orientation"
+                >
+                  <RotateCw className="w-3 h-3 text-amber-400" />
+                  <span>{isRotated ? "Vert" : "Horiz"}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Center: Frame, Turn Indicator, and Timer Countdown */}
+            <div className="flex items-center gap-1.5 bg-slate-950/70 px-2 py-0.5 rounded-full border border-slate-800/80 shrink-0">
+              <span className="text-[9px] font-black tracking-wide text-slate-400">
+                F{frameNumber}{totalFrames > 1 ? `/${totalFrames}` : ""}
+              </span>
+              <span className="text-slate-600 font-bold text-[9px]">•</span>
+              {isMyTurn ? (
+                <span className="text-emerald-400 flex items-center gap-1 font-black text-[10px] animate-pulse">
+                  <Sparkles className="w-2.5 h-2.5 text-emerald-400" /> YOUR TURN
+                </span>
+              ) : (
+                <span className="text-rose-400 flex items-center gap-1 font-bold text-[10px]">
+                  <Clock className="w-2.5 h-2.5 text-rose-400" /> OPPONENT
+                </span>
+              )}
+              <span className="text-slate-600 font-bold text-[9px]">•</span>
+              <span className={`text-[10px] font-mono font-black ${
+                timeLeft <= 5 ? "text-rose-400 animate-pulse" : timeLeft <= 10 ? "text-amber-400" : "text-emerald-400"
+              }`}>
+                {timeLeft}s
+              </span>
+            </div>
+
+            {/* Right: Details (if MP) & Sound */}
+            <div className="flex items-center gap-1 shrink-0">
+              {showMobileMatchPanelButton && onOpenMobileMatchPanel && (
+                <button
+                  onClick={onOpenMobileMatchPanel}
+                  className="px-1.5 py-0.5 rounded-lg bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold hover:bg-indigo-600/40 active:scale-95 flex items-center gap-1"
+                  title="Match Details & Chat"
+                >
+                  <Users className="w-3 h-3" />
+                  <span>Info</span>
+                </button>
+              )}
               <button
-                onClick={onToggleRotate}
-                className={`flex items-center gap-1 px-2 py-1 rounded-lg transition-all text-xs font-bold border active:scale-95 ${
-                  isRotated
-                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm"
-                    : "bg-slate-800/80 text-slate-300 border-slate-700/60 hover:bg-slate-700"
-                }`}
-                title="Rotate Table Orientation (Vertical / Horizontal)"
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                className="p-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white transition-all border border-slate-700/60 active:scale-95"
+                title={soundEnabled ? "Mute Audio" : "Unmute Audio"}
               >
-                <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-                <span>{isRotated ? "Vertical" : "Horizontal"}</span>
+                {soundEnabled ? <Volume2 className="w-3 h-3 text-emerald-400" /> : <VolumeX className="w-3 h-3 text-slate-500" />}
               </button>
-            )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {showMobileMatchPanelButton && onOpenMobileMatchPanel && (
-              <button
-                onClick={onOpenMobileMatchPanel}
-                className="px-2 py-1 rounded-lg bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold hover:bg-indigo-600/40 active:scale-95 flex items-center gap-1"
-                title="Match Details & Chat"
-              >
-                <Users className="w-3 h-3" />
-                <span>Details</span>
-              </button>
-            )}
-            <button
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all border border-slate-700/60 active:scale-95"
-              title={soundEnabled ? "Mute Audio" : "Unmute Audio"}
-            >
-              {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
-            </button>
+          {/* Mobile Bottom Row: Streamlined Broadcast Score Ribbon */}
+          <div className="flex items-center justify-between gap-1 w-full bg-slate-950/60 rounded-xl px-1.5 py-0.5 border border-slate-800/80">
+            {/* Player 1 Pill */}
+            <div className={`flex items-center gap-1.5 min-w-0 flex-1 px-1.5 py-0.5 rounded-lg transition-all ${
+              currentSeat === 0
+                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
+                : "text-slate-300"
+            }`}>
+              {currentSeat === 0 && (
+                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-full w-full bg-amber-400" />
+                </span>
+              )}
+              <span className="text-[10px] font-bold truncate max-w-[65px]">
+                {mySeat === 0 ? (player1Name ? `${player1Name} (You)` : "You") : (player1Name || "Player 1")}
+              </span>
+              <span className="text-[9px] text-amber-400 font-mono font-semibold">
+                F:{player1FramesWon}
+              </span>
+              <span className="ml-auto text-base font-black font-mono text-white px-0.5">
+                {player1Score}
+              </span>
+            </div>
+
+            {/* Center Separator */}
+            <div className="px-1 text-slate-600 font-mono font-bold text-[10px] shrink-0">
+              -
+            </div>
+
+            {/* Player 2 Pill */}
+            <div className={`flex items-center gap-1.5 min-w-0 flex-1 px-1.5 py-0.5 rounded-lg transition-all justify-end ${
+              currentSeat === 1
+                ? "bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm"
+                : "text-slate-300"
+            }`}>
+              <span className="mr-auto text-base font-black font-mono text-white px-0.5">
+                {player2Score}
+              </span>
+              <span className="text-[9px] text-blue-400 font-mono font-semibold">
+                F:{player2FramesWon}
+              </span>
+              <span className="text-[10px] font-bold truncate max-w-[65px] text-right">
+                {mySeat === 1 ? (player2Name ? `${player2Name} (You)` : "You") : mode === "ai" ? "AI Bot" : (player2Name || "Player 2")}
+              </span>
+              {currentSeat === 1 && (
+                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-full w-full bg-blue-400" />
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Main Scoreboard Layout */}
-        <div className="grid grid-cols-2 items-center gap-x-2 gap-y-1.5 sm:gap-4 md:flex md:justify-between md:gap-8">
-          {/* Desktop Toolbar (Hidden on mobile) */}
-          <div className="hidden md:flex items-center gap-2">
+        {/* DESKTOP VIEW (md:flex): Spacious Championship Broadcast HUD */}
+        <div className="hidden md:flex md:items-center md:justify-between md:gap-8">
+          {/* Desktop Toolbar */}
+          <div className="flex items-center gap-2">
             {mode !== "multiplayer" && <button
               onClick={onBack}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold border border-slate-700/60 hover:scale-105 active:scale-95"
@@ -188,57 +272,57 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
 
           {/* Player 1 Card */}
           <div
-            className={`order-2 md:order-none min-w-0 flex items-center gap-1.5 sm:gap-3 p-1.5 sm:px-4 sm:py-2 rounded-xl transition-all duration-300 md:flex-initial ${
+            className={`min-w-0 flex items-center gap-1.5 sm:gap-3 px-4 py-2 rounded-xl transition-all duration-300 flex-initial ${
               currentSeat === 0
                 ? "bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-slate-900/40 border-2 border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.25)]"
                 : "bg-slate-800/40 border border-slate-700/50 opacity-85"
             }`}
           >
-            <div className="hidden sm:flex w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 items-center justify-center font-black text-white shadow-md text-[10px] sm:text-xs border border-amber-300/40 shrink-0">
+            <div className="flex w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 items-center justify-center font-black text-white shadow-md text-xs border border-amber-300/40 shrink-0">
               P1
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1">
-                <span className="text-[11px] sm:text-xs font-bold text-slate-100 truncate max-w-[70px] sm:max-w-[110px]">
+                <span className="text-xs font-bold text-slate-100 truncate max-w-[110px]">
                   {mySeat === 0 ? (player1Name ? `${player1Name} (You)` : "You") : (player1Name || "Player 1")}
                 </span>
                 {currentSeat === 0 && (
-                  <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2 shrink-0">
+                  <span className="relative flex h-2 w-2 shrink-0">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-full w-full bg-amber-400"></span>
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 text-[9px] sm:text-[10px] text-slate-400 font-semibold">
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold">
                 <span className="text-amber-400 font-bold">F:{player1FramesWon}</span>
-                {player1HighestBreak > 0 && <span className="hidden sm:inline">H:{player1HighestBreak}</span>}
+                {player1HighestBreak > 0 && <span>H:{player1HighestBreak}</span>}
               </div>
             </div>
-            <div className="text-xl sm:text-3xl font-black text-white px-1 font-mono shrink-0">
+            <div className="text-3xl font-black text-white px-1 font-mono shrink-0">
               {player1Score}
             </div>
           </div>
 
           {/* Center Match Frame & Countdown Hub */}
-          <div className="order-1 col-span-2 justify-self-center md:order-none md:col-span-1 flex flex-col items-center justify-center shrink-0 px-1">
-            <div className="text-[9px] sm:text-[10px] font-black tracking-wider text-slate-400 uppercase whitespace-nowrap">
+          <div className="flex flex-col items-center justify-center shrink-0 px-1">
+            <div className="text-[10px] font-black tracking-wider text-slate-400 uppercase whitespace-nowrap">
               FRAME {frameNumber}{totalFrames > 1 ? `/${totalFrames}` : ""}
             </div>
 
-            <div className="flex items-center gap-1 text-[10px] sm:text-xs font-bold mt-0.5">
+            <div className="flex items-center gap-1 text-xs font-bold mt-0.5">
               {isMyTurn ? (
-                <span className="text-emerald-400 flex items-center gap-1 animate-pulse font-extrabold tracking-wide text-[10px] sm:text-xs">
+                <span className="text-emerald-400 flex items-center gap-1 animate-pulse font-extrabold tracking-wide text-xs">
                   <Sparkles className="w-3 h-3 text-emerald-400" /> YOUR TURN
                 </span>
               ) : (
-                <span className="text-rose-400 flex items-center gap-1 font-bold text-[10px] sm:text-xs">
+                <span className="text-rose-400 flex items-center gap-1 font-bold text-xs">
                   <Clock className="w-3 h-3 text-rose-400" /> OPPONENT
                 </span>
               )}
             </div>
 
             {/* Countdown Progress Bar */}
-            <div className="w-16 sm:w-28 h-1.5 bg-slate-950 rounded-full mt-1 overflow-hidden border border-slate-700/80">
+            <div className="w-28 h-1.5 bg-slate-950 rounded-full mt-1 overflow-hidden border border-slate-700/80">
               <div
                 className={`h-full transition-all duration-300 rounded-full ${
                   timeLeft <= 5
@@ -250,46 +334,46 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
                 style={{ width: `${timeRatio * 100}%` }}
               />
             </div>
-            <span className="text-[9px] sm:text-[10px] font-mono font-bold text-slate-400 mt-0.5">
+            <span className="text-[10px] font-mono font-bold text-slate-400 mt-0.5">
               {timeLeft}s
             </span>
           </div>
 
           {/* Player 2 Card */}
           <div
-            className={`order-3 md:order-none min-w-0 flex items-center gap-1.5 sm:gap-3 p-1.5 sm:px-4 sm:py-2 rounded-xl transition-all duration-300 md:flex-initial justify-end ${
+            className={`min-w-0 flex items-center gap-1.5 sm:gap-3 px-4 py-2 rounded-xl transition-all duration-300 flex-initial justify-end ${
               currentSeat === 1
                 ? "bg-gradient-to-l from-blue-500/20 via-blue-500/10 to-slate-900/40 border-2 border-blue-400 shadow-[0_0_25px_rgba(59,130,246,0.25)]"
                 : "bg-slate-800/40 border border-slate-700/50 opacity-85"
             }`}
           >
-            <div className="text-xl sm:text-3xl font-black text-white px-1 font-mono shrink-0">
+            <div className="text-3xl font-black text-white px-1 font-mono shrink-0">
               {player2Score}
             </div>
             <div className="min-w-0 flex-1 text-right">
               <div className="flex items-center justify-end gap-1">
                 {currentSeat === 1 && (
-                  <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2 shrink-0">
+                  <span className="relative flex h-2 w-2 shrink-0">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-full w-full bg-blue-400"></span>
                   </span>
                 )}
-                <span className="text-[11px] sm:text-xs font-bold text-slate-100 truncate max-w-[70px] sm:max-w-[110px]">
+                <span className="text-xs font-bold text-slate-100 truncate max-w-[110px]">
                   {mySeat === 1 ? (player2Name ? `${player2Name} (You)` : "You") : mode === "ai" ? "AI Bot" : (player2Name || "Player 2")}
                 </span>
               </div>
-              <div className="flex items-center justify-end gap-1.5 text-[9px] sm:text-[10px] text-slate-400 font-semibold">
-                {player2HighestBreak > 0 && <span className="hidden sm:inline">H:{player2HighestBreak}</span>}
+              <div className="flex items-center justify-end gap-1.5 text-[10px] text-slate-400 font-semibold">
+                {player2HighestBreak > 0 && <span>H:{player2HighestBreak}</span>}
                 <span className="text-blue-400 font-bold">F:{player2FramesWon}</span>
               </div>
             </div>
-            <div className="hidden sm:flex w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-gradient-to-tr from-blue-600 to-blue-400 items-center justify-center font-black text-white shadow-md text-[10px] sm:text-xs border border-blue-300/40 shrink-0">
+            <div className="flex w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-blue-400 items-center justify-center font-black text-white shadow-md text-xs border border-blue-300/40 shrink-0">
               {mode === "ai" ? "AI" : "P2"}
             </div>
           </div>
 
-          {/* Desktop Audio & Details Toggle (Hidden on mobile) */}
-          <div className="hidden md:flex items-center gap-2">
+          {/* Desktop Audio & Details Toggle */}
+          <div className="flex items-center gap-2">
             {showMobileMatchPanelButton && onOpenMobileMatchPanel && (
               <button
                 onClick={onOpenMobileMatchPanel}
@@ -312,48 +396,48 @@ export const SnookerHUD: React.FC<SnookerHUDProps> = ({
       </div>
 
       {/* ── 2. Compact Centered Target & Break Strip ──────────────────────── */}
-      <div className="flex items-center justify-center gap-2 flex-wrap">
+      <div className="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
         {/* Authoritative Target Ball Badge */}
-        <div className={`px-3.5 py-1.5 rounded-full bg-gradient-to-r ${targetCfg.bg} border ${targetCfg.border} backdrop-blur-md shadow-md flex items-center gap-2 text-xs font-black tracking-wide uppercase`}>
-          <span className={`w-2.5 h-2.5 rounded-full ${targetCfg.dot}`} />
+        <div className={`px-2 sm:px-3.5 py-0.5 sm:py-1.5 rounded-full bg-gradient-to-r ${targetCfg.bg} border ${targetCfg.border} backdrop-blur-md shadow-sm sm:shadow-md flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-black tracking-wide uppercase`}>
+          <span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full ${targetCfg.dot}`} />
           <span>TARGET: {targetCfg.label}</span>
-          <span className="text-[10px] opacity-80 font-normal">({targetCfg.pts})</span>
+          <span className="text-[9px] sm:text-[10px] opacity-80 font-normal">({targetCfg.pts})</span>
         </div>
 
         {/* Current Break Counter */}
         {currentBreak > 0 && (
-          <div className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-slate-950 font-black text-xs shadow-lg uppercase tracking-wider flex items-center gap-1.5 animate-pulse">
-            <Flame className="w-3.5 h-3.5 fill-current text-slate-950" />
+          <div className="px-2 sm:px-3.5 py-0.5 sm:py-1.5 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-slate-950 font-black text-[10px] sm:text-xs shadow-md uppercase tracking-wider flex items-center gap-1 sm:gap-1.5 animate-pulse">
+            <Flame className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-current text-slate-950" />
             <span>BREAK: {currentBreak}</span>
           </div>
         )}
 
         {/* Reds Remaining Pill */}
-        <div className="px-3 py-1.5 rounded-full bg-slate-900/80 backdrop-blur-md border border-slate-800 text-slate-300 font-bold text-xs shadow-md flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-red-500" />
+        <div className="px-2 sm:px-3 py-0.5 sm:py-1.5 rounded-full bg-slate-900/80 backdrop-blur-md border border-slate-800 text-slate-300 font-bold text-[10px] sm:text-xs shadow-sm sm:shadow-md flex items-center gap-1 sm:gap-1.5">
+          <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-red-500" />
           <span>{redsRemaining > 0 ? `${redsRemaining} Reds Left` : "Clearance Phase"}</span>
         </div>
 
         {/* Ball in Hand Notification */}
         {cueBallInHand && (
-          <div className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black text-xs shadow-lg uppercase tracking-wider flex items-center gap-1.5 animate-bounce">
-            <Sparkles className="w-3.5 h-3.5" />
+          <div className="px-2 sm:px-3.5 py-0.5 sm:py-1.5 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black text-[10px] sm:text-xs shadow-md uppercase tracking-wider flex items-center gap-1 sm:gap-1.5 animate-bounce">
+            <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             <span>Ball in Hand (Tap inside 'D')</span>
           </div>
         )}
 
         {/* Free Ball Notification */}
         {freeBallAvailable && (
-          <div className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-black text-xs shadow-lg uppercase tracking-wider flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5" />
+          <div className="px-2 sm:px-3.5 py-0.5 sm:py-1.5 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-black text-[10px] sm:text-xs shadow-md uppercase tracking-wider flex items-center gap-1 sm:gap-1.5">
+            <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             <span>Free Ball Nominated</span>
           </div>
         )}
 
         {/* Foul Compact Banner (Auto-Dismissable) */}
         {lastFoul && dismissedFoul !== lastFoul && (
-          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 max-w-[calc(100vw-1rem)] whitespace-nowrap px-3.5 py-1.5 rounded-full bg-rose-900/90 border border-rose-500/80 text-rose-200 font-bold text-xs shadow-lg flex items-center gap-1.5 animate-in fade-in slide-in-from-top-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-0.5 max-w-[calc(100vw-1rem)] whitespace-nowrap px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-rose-900/90 border border-rose-500/80 text-rose-200 font-bold text-[10px] sm:text-xs shadow-lg flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1">
+            <AlertTriangle className="w-3 h-3 text-rose-400" />
             <span className="max-w-[220px] truncate">{lastFoul}</span>
             <span className="text-amber-300 font-mono font-black">(+{foulPoints})</span>
           </div>
@@ -537,16 +621,16 @@ export const SnookerMobilePowerMeter: React.FC<SnookerMobilePowerMeterProps> = (
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={() => { isDraggingRef.current = false; }}
-      className={`w-6 sm:w-7 h-[min(36vh,250px)] bg-slate-950/95 rounded-xl border transition-all ${
+      className={`w-6 sm:w-8 md:w-9 h-[min(36vh,260px)] sm:h-[min(50vh,340px)] bg-slate-950/95 rounded-xl border transition-all ${
         disabled
           ? "border-slate-800 opacity-40 cursor-not-allowed"
           : "border-slate-700/80 hover:border-amber-400 shadow-[0_0_15px_rgba(0,0,0,0.8)] cursor-pointer active:scale-95"
-      } flex flex-col items-center justify-between p-0.5 relative select-none touch-none overflow-hidden`}
-      title="Drag down to set Shot Power and release to Strike"
-      aria-label="Mobile Shot Power Level Meter"
+      } flex flex-col items-center justify-between p-0.5 sm:p-1 relative select-none touch-none overflow-hidden`}
+      title="Drag down to set Shot Power and release to Strike (or pull back cue)"
+      aria-label="Shot Power Level Meter"
     >
       {/* Background Level Meter with Segmented Rainbow Gradient */}
-      <div className="absolute inset-0.5 rounded-lg bg-slate-900/90 overflow-hidden flex flex-col justify-start">
+      <div className="absolute inset-0.5 sm:inset-1 rounded-lg bg-slate-900/90 overflow-hidden flex flex-col justify-start">
         {/* Dynamic Power Fill Bar (Top to Bottom) */}
         <div
           className="w-full transition-[height] duration-75 ease-out relative shadow-[0_0_10px_rgba(245,158,11,0.5)]"
@@ -556,7 +640,7 @@ export const SnookerMobilePowerMeter: React.FC<SnookerMobilePowerMeterProps> = (
           }}
         >
           {/* Active Tip Glow Indicator */}
-          <div className="absolute bottom-0 inset-x-0 h-1 bg-white shadow-[0_0_6px_#ffffff] rounded-full" />
+          <div className="absolute bottom-0 inset-x-0 h-1 sm:h-1.5 bg-white shadow-[0_0_6px_#ffffff] rounded-full" />
         </div>
 
         {/* Segmented Tick Overlay (10 Ticks) */}
@@ -571,14 +655,14 @@ export const SnookerMobilePowerMeter: React.FC<SnookerMobilePowerMeterProps> = (
       </div>
 
       {/* Top Header: Power % Badge */}
-      <div className="z-10 bg-slate-950/90 backdrop-blur-md px-1 py-0.5 rounded border border-slate-700/80 shadow-sm mt-0.5">
-        <span className="text-[8px] font-mono font-black text-amber-400">
+      <div className="z-10 bg-slate-950/90 backdrop-blur-md px-1 sm:px-1.5 py-0.5 rounded border border-slate-700/80 shadow-sm mt-0.5">
+        <span className="text-[8px] sm:text-[10px] font-mono font-black text-amber-400">
           {Math.round(power * 100)}%
         </span>
       </div>
 
       {/* Bottom Label */}
-      <div className="z-10 text-[7px] font-black tracking-widest text-slate-300 uppercase py-0.5">
+      <div className="z-10 text-[7px] sm:text-[9px] font-black tracking-widest text-slate-300 uppercase py-0.5">
         PWR
       </div>
     </div>
