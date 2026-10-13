@@ -1,7 +1,10 @@
-import { Home, Trophy, User, Settings, Wallet, Gift, Megaphone, MessageCircle, Swords, LifeBuoy, Bell, Users, Medal, X, Gamepad2, Sun, Moon } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Home, Trophy, User, Settings, Wallet, Gift, Megaphone, MessageCircle, Swords, LifeBuoy, Bell, Users, Medal, X, Gamepad2, Sun, Moon, Smartphone } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useFeatureFlagsStore } from "../../store/featureFlagsStore";
 import { useTheme } from "../../contexts/ThemeProvider";
+import { useAppVersionStore } from "../../store/appVersionStore";
+import { AppDownloadModal } from "./AppDownloadModal";
 
 const menus = [
   { name: "Home", icon: Home, path: "/", flag: null },
@@ -26,8 +29,20 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isExpanded, isMobileOpen = false, onCloseMobile }: SidebarProps) {
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const flags = useFeatureFlagsStore((s) => s.flags);
   const { setTheme, effectiveTheme } = useTheme();
+  const versionConfig = useAppVersionStore((s) => s.config);
+  const fetchConfig = useAppVersionStore((s) => s.fetchConfig);
+
+  useEffect(() => {
+    void fetchConfig();
+  }, [fetchConfig]);
+
+  const latestVersion = versionConfig?.latestVersion || "1.1";
+  const downloadUrl =
+    versionConfig?.downloadUrl ||
+    "https://zgwuopwujzxcdqhbpsvo.supabase.co/storage/v1/object/public/app%20version/gaming%20hub%20v1.1..apk";
 
   const toggleTheme = () => {
     const nextTheme = effectiveTheme === "dark" ? "light" : "dark";
@@ -60,6 +75,27 @@ export default function Sidebar({ isExpanded, isMobileOpen = false, onCloseMobil
               {isExpanded && <span className="text-xs">{menu.name}</span>}
             </NavLink>
           ))}
+
+          {/* Desktop App Download Option with Latest Version */}
+          <button
+            type="button"
+            onClick={() => setIsDownloadModalOpen(true)}
+            className={`w-full flex items-center rounded-xl p-3 transition-colors duration-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium cursor-pointer ${
+              isExpanded ? 'gap-3 justify-between' : 'justify-center'
+            }`}
+            title={!isExpanded ? `Download App (v${latestVersion})` : undefined}
+            aria-label={`Download App (v${latestVersion})`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <Smartphone size={20} className="shrink-0 text-emerald-500" />
+              {isExpanded && <span className="text-xs font-semibold">Download App</span>}
+            </div>
+            {isExpanded && (
+              <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+                v{latestVersion}
+              </span>
+            )}
+          </button>
         </nav>
 
         {/* Desktop Theme Change Button */}
@@ -143,6 +179,25 @@ export default function Sidebar({ isExpanded, isMobileOpen = false, onCloseMobil
                   <span>{menu.name}</span>
                 </NavLink>
               ))}
+
+              {/* Mobile App Download Option with Latest Version */}
+              <button
+                type="button"
+                onClick={() => {
+                  onCloseMobile?.();
+                  setIsDownloadModalOpen(true);
+                }}
+                className="w-full flex items-center justify-between rounded-xl px-3.5 py-3 text-xs font-bold transition-colors text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                aria-label={`Download App (v${latestVersion})`}
+              >
+                <div className="flex items-center gap-3">
+                  <Smartphone size={18} className="shrink-0 text-emerald-500" />
+                  <span>Download App</span>
+                </div>
+                <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  v{latestVersion}
+                </span>
+              </button>
             </nav>
 
             {/* Mobile Theme Change Button */}
@@ -169,6 +224,14 @@ export default function Sidebar({ isExpanded, isMobileOpen = false, onCloseMobil
           </div>
         </div>
       )}
+
+      {/* App Download Modal */}
+      <AppDownloadModal
+        isOpen={isDownloadModalOpen}
+        onClose={() => setIsDownloadModalOpen(false)}
+        latestVersion={latestVersion}
+        downloadUrl={downloadUrl}
+      />
     </>
   );
 }

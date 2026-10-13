@@ -13,7 +13,7 @@ function getVersionConfigUrl(): string {
  * Fetches the version config from the server.
  * Returns null on network failure (treated as permissive — don't block the app).
  */
-async function fetchVersionConfig(): Promise<AppVersionConfigPublic | null> {
+export async function fetchVersionConfig(): Promise<AppVersionConfigPublic | null> {
   try {
     const res = await fetch(getVersionConfigUrl(), {
       method: 'GET',

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { AppVersionConfigPublic } from '@gaming-hub/shared';
-import { checkAppVersion } from '../services/native/appVersionService';
+import { checkAppVersion, fetchVersionConfig } from '../services/native/appVersionService';
 
 export type AppVersionStatus =
   | 'idle'        // not yet checked
@@ -15,12 +15,27 @@ interface AppVersionState {
   installedVersion: string | null;
   /** Run the version check (no-op on web). Safe to call multiple times. */
   check: () => Promise<void>;
+  /** Fetch public app version configuration for web and native shells. */
+  fetchConfig: () => Promise<AppVersionConfigPublic | null>;
 }
 
 export const useAppVersionStore = create<AppVersionState>((set, get) => ({
   status: 'idle',
   config: null,
   installedVersion: null,
+
+  fetchConfig: async () => {
+    if (get().config) return get().config;
+    try {
+      const config = await fetchVersionConfig();
+      if (config) {
+        set({ config });
+      }
+      return config;
+    } catch {
+      return null;
+    }
+  },
 
   check: async () => {
     // Prevent concurrent or duplicate checks.
