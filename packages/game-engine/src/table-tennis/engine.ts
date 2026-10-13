@@ -17,6 +17,7 @@ import {
   TABLE_SURFACE_Z,
   GRAVITY,
   BOUNCE_RESTITUTION,
+  getEffectiveGravity,
   computeRallyLaunchVz,
   computeServeLaunchVz,
 } from "./shots";
@@ -40,9 +41,9 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     pointsPerSet: 5,
     setsToWin: 1,
     winByTwo: true,
-    maxSpeed: 10.0,
+    maxSpeed: 15.0,
     minSpeed: 5.0,
-    speedIncreasePerTouch: 0.70,
+    speedIncreasePerTouch: 0.80,
   };
 
   private physicsInterval: ReturnType<typeof setInterval> | null = null;
@@ -66,6 +67,9 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     if (options?.rules) {
       if (options.rules.pointsPerSet) this.rules.pointsPerSet = options.rules.pointsPerSet;
       if (options.rules.setsToWin) this.rules.setsToWin = options.rules.setsToWin;
+      if (typeof (options.rules as any).maxSpeed === "number") {
+        this.rules.maxSpeed = (options.rules as any).maxSpeed;
+      }
       if (typeof (options.rules as any).speedIncreasePerTouch === "number") {
         this.rules.speedIncreasePerTouch = (options.rules as any).speedIncreasePerTouch;
       }
@@ -363,10 +367,11 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
       ball.netCrossed = ball.lastHitter === 0 ? prevX >= NET_X : prevX <= NET_X;
     }
 
-    // 1. Advance position & apply vertical gravity
+    // 1. Advance position & apply vertical gravity with topspin descent at high speed
     ball.x += ball.vx;
     ball.y += ball.vy;
-    ball.vz -= GRAVITY;
+    const effGravity = ball.currentRallyState === "rally" ? getEffectiveGravity(ball.speed) : GRAVITY;
+    ball.vz -= effGravity;
     ball.z += ball.vz;
 
     // 2. Net crossing & net collision check
@@ -473,8 +478,8 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
       const isLeftPaddle = player.seat === 0;
       const paddleX = isLeftPaddle ? PADDLE_MARGIN : CANVAS_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH;
 
-      const paddleLeft = paddleX;
-      const paddleRight = paddleX + PADDLE_WIDTH;
+      const paddleLeft = isLeftPaddle ? paddleX - 10 : paddleX;
+      const paddleRight = isLeftPaddle ? paddleX + PADDLE_WIDTH : paddleX + PADDLE_WIDTH + 10;
       const paddleTop = player.paddleY;
       const paddleBottom = player.paddleY + PADDLE_HEIGHT;
 

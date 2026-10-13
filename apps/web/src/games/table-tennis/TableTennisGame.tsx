@@ -9,6 +9,7 @@ import {
   tableTennisShot,
   computeRallyLaunchVz,
   computeServeLaunchVz,
+  getEffectiveGravity,
   type TableTennisState,
 } from '@gaming-hub/game-engine';
 import { TABLE_TENNIS_VISUAL_CONFIG, type CameraState } from './constants/tableTennisVisualConfig';
@@ -540,7 +541,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       if (state.gameState === 'playing' && ball.inPlay && ball.vx > 0) {
         const targetY = ball.y - 40;
         const currentSpeedRatio = Math.max(1, (ball.speed || 5.0) / 5.0);
-        const aiTrackingSpeed = paddleSpeed * Math.min(1.35, 0.85 * (1 + (currentSpeedRatio - 1) * 0.45));
+        const aiTrackingSpeed = paddleSpeed * Math.min(1.85, 0.85 * (1 + (currentSpeedRatio - 1) * 0.55));
         if (p2.y < targetY - 10) p2.y += aiTrackingSpeed;
         else if (p2.y > targetY + 10) p2.y -= aiTrackingSpeed;
       } else {
@@ -577,7 +578,8 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
       ball.x += ball.vx * (dt * 60);
       ball.y += ball.vy * (dt * 60);
-      ball.vz -= 0.08 * (dt * 60);
+      const effGravity = ball.currentRallyState === 'rally' ? getEffectiveGravity(ball.speed) : 0.08;
+      ball.vz -= effGravity * (dt * 60);
       ball.z += ball.vz * (dt * 60);
 
       // Net crossing & net collision check
@@ -672,7 +674,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         ball.y <= p1.y + 80 + ballRadius + 6
       ) {
         ball.x = 36 + ballRadius;
-        ball.speed = Math.min(ball.speed + 0.70, 10.0);
+        ball.speed = Math.min(ball.speed + 0.80, 15.0);
         setBallSpeed(ball.speed);
 
         const hitPos = (ball.y - (p1.y + 40)) / 40;
@@ -703,7 +705,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         ball.y <= p2.y + 80 + ballRadius + 6
       ) {
         ball.x = LOGICAL_WIDTH - 36 - ballRadius;
-        ball.speed = Math.min(ball.speed + 0.70, 10.0);
+        ball.speed = Math.min(ball.speed + 0.80, 15.0);
         setBallSpeed(ball.speed);
 
         const hitPos = (ball.y - (p2.y + 40)) / 40;

@@ -1,4 +1,5 @@
 import type { TableTennisBall, TableTennisState } from '@gaming-hub/game-engine';
+import { getEffectiveGravity } from '@gaming-hub/game-engine';
 import { NetworkPlaybackClock } from '../shared/rendering/NetworkPlaybackClock';
 
 /** Render a short buffered history, instead of rewinding local prediction on every packet. */
@@ -96,7 +97,8 @@ export class TableTennisTimeline {
       // An off-table shot must remain outside; there are no side cushions.
       ball.y += ball.vy * frames;
       if (typeof ball.z === 'number' && typeof ball.vz === 'number') {
-        ball.vz -= 0.08 * frames;
+        const effGravity = ball.currentRallyState === 'rally' ? getEffectiveGravity(ball.speed ?? 5.0) : 0.08;
+        ball.vz -= effGravity * frames;
         ball.z = Math.max(0, ball.z + ball.vz * frames);
       }
     } else {

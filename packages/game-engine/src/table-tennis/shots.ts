@@ -27,39 +27,51 @@ export const GRAVITY = TT_GRAVITY;
 export const BOUNCE_RESTITUTION = 0.78;
 
 /**
+ * Computes effective downward vertical acceleration (gravity + aerodynamic topspin).
+ * In table tennis, higher-velocity rally shots feature forward topspin that induces downward Magnus force,
+ * allowing balls up to high speeds to dip over the net and stay on the table.
+ */
+export function getEffectiveGravity(speed: number): number {
+  if (speed <= 5.0) return TT_GRAVITY;
+  const ratio = (speed - 5.0) / 5.0;
+  return TT_GRAVITY * (1 + 0.85 * ratio * ratio);
+}
+
+/**
  * Computes launch vertical velocity (vz) for a rally shot such that:
  * 1. The ball ascends towards the net and clears net height (NET_HEIGHT + margin).
  * 2. The ball does NOT bounce on the shooter's side.
  * 3. The ball lands and bounces first on the opponent's side of the table.
  */
 export function computeRallyLaunchVz(x0: number, vx: number, direction: 1 | -1, speed: number): number {
+  const g = getEffectiveGravity(speed);
   const distToNet = Math.max(1, direction === 1 ? NET_X - x0 : x0 - NET_X);
   const tNet = distToNet / Math.max(0.1, Math.abs(vx));
-  const targetNetZ = Math.min(56, Math.max(46, 48 + (speed - 5.0) * 1.2));
-  let vz = (targetNetZ - PADDLE_CONTACT_Z + 0.5 * GRAVITY * tNet * (tNet + 1)) / tNet;
+  const targetNetZ = Math.min(50, Math.max(40, 44 + (speed - 5.0) * 0.4));
+  let vz = (targetNetZ - PADDLE_CONTACT_Z + 0.5 * g * tNet * (tNet + 1)) / tNet;
 
   // Discrete trajectory landing estimation:
-  // z(t) = PADDLE_CONTACT_Z + vz * t - 0.5 * GRAVITY * t * (t + 1) = 0
-  const b = 0.5 * GRAVITY - vz;
-  const disc = b * b + 2 * GRAVITY * PADDLE_CONTACT_Z;
-  const tLand = (-b + Math.sqrt(Math.max(0, disc))) / GRAVITY;
+  // z(t) = PADDLE_CONTACT_Z + vz * t - 0.5 * g * t * (t + 1) = 0
+  const b = 0.5 * g - vz;
+  const disc = b * b + 2 * g * PADDLE_CONTACT_Z;
+  const tLand = (-b + Math.sqrt(Math.max(0, disc))) / g;
   const xLand = x0 + direction * Math.abs(vx) * tLand;
 
-  const maxLandingX = 520;
-  const minLandingX = 80;
+  const maxLandingX = 550;
+  const minLandingX = 50;
 
   if (direction === 1 && xLand > maxLandingX) {
     const tLandMax = (maxLandingX - x0) / Math.max(0.1, Math.abs(vx));
-    const vzAdjusted = (0.5 * GRAVITY * tLandMax * (tLandMax + 1) - PADDLE_CONTACT_Z) / tLandMax;
-    const zAtNet = PADDLE_CONTACT_Z + vzAdjusted * tNet - 0.5 * GRAVITY * tNet * (tNet + 1);
-    if (zAtNet >= NET_HEIGHT + 1.5) {
+    const vzAdjusted = (0.5 * g * tLandMax * (tLandMax + 1) - PADDLE_CONTACT_Z) / tLandMax;
+    const zAtNet = PADDLE_CONTACT_Z + vzAdjusted * tNet - 0.5 * g * tNet * (tNet + 1);
+    if (zAtNet >= NET_HEIGHT + 2.0) {
       vz = vzAdjusted;
     }
   } else if (direction === -1 && xLand < minLandingX) {
     const tLandMax = (x0 - minLandingX) / Math.max(0.1, Math.abs(vx));
-    const vzAdjusted = (0.5 * GRAVITY * tLandMax * (tLandMax + 1) - PADDLE_CONTACT_Z) / tLandMax;
-    const zAtNet = PADDLE_CONTACT_Z + vzAdjusted * tNet - 0.5 * GRAVITY * tNet * (tNet + 1);
-    if (zAtNet >= NET_HEIGHT + 1.5) {
+    const vzAdjusted = (0.5 * g * tLandMax * (tLandMax + 1) - PADDLE_CONTACT_Z) / tLandMax;
+    const zAtNet = PADDLE_CONTACT_Z + vzAdjusted * tNet - 0.5 * g * tNet * (tNet + 1);
+    if (zAtNet >= NET_HEIGHT + 2.0) {
       vz = vzAdjusted;
     }
   }

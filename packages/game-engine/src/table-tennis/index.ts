@@ -8,6 +8,7 @@ export {
   TABLE_SURFACE_Z,
   TT_GRAVITY,
   BOUNCE_RESTITUTION,
+  getEffectiveGravity,
   computeRallyLaunchVz,
   computeServeLaunchVz,
 } from "./shots";

@@ -177,7 +177,7 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
     expect(res.state.endReason).toBe("TIME_EXPIRED");
   });
 
-  it("progressively increases ball speed on paddle touch and caps at 10.0", () => {
+  it("progressively increases ball speed on paddle touch and caps at 15.0", () => {
     const eng = new TableTennisEngine([p0, p1]);
     eng.apply({ type: "ready" }, 0);
     eng.apply({ type: "ready" }, 1);
@@ -192,8 +192,8 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
 
     let state = serveRes.state;
 
-    // Simulate 10 paddle touches (with 0.70 increase per touch, capped at max speed 10.0)
-    for (let touch = 1; touch <= 10; touch++) {
+    // Simulate 12 paddle touches (with 0.80 increase per touch, up to 14.6)
+    for (let touch = 1; touch <= 12; touch++) {
       const isLeft = touch % 2 === 1;
       state = {
         ...state,
@@ -206,13 +206,13 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
       };
       state = eng.simulatePhysics(state);
       expect(state.ball?.touchCount).toBe(touch);
-      expect(state.ball?.speed).toBeCloseTo(Math.min(5.0 + touch * 0.70, 10.0));
+      expect(state.ball?.speed).toBeCloseTo(Math.min(5.0 + touch * 0.80, 15.0));
     }
-    expect(state.ball?.touchCount).toBe(10);
-    expect(state.ball?.speed).toBe(10.0);
+    expect(state.ball?.touchCount).toBe(12);
+    expect(state.ball?.speed).toBeCloseTo(14.6);
 
-    // Continue to touch 15 (capped at max speed 10.0)
-    for (let touch = 11; touch <= 15; touch++) {
+    // Continue to touch 15 (capped at max speed 15.0)
+    for (let touch = 13; touch <= 15; touch++) {
       const isLeft = touch % 2 === 1;
       state = {
         ...state,
@@ -225,10 +225,10 @@ describe("TableTennisEngine - Winning Score and Time Management", () => {
       };
       state = eng.simulatePhysics(state);
       expect(state.ball?.touchCount).toBe(touch);
-      expect(state.ball?.speed).toBe(10.0);
+      expect(state.ball?.speed).toBe(15.0);
     }
     expect(state.ball?.touchCount).toBe(15);
-    expect(state.ball?.speed).toBe(10.0);
+    expect(state.ball?.speed).toBe(15.0);
   });
 
   it("resets speed to 5.0 and touchCount to 0 after point scored", () => {
@@ -720,7 +720,7 @@ describe('Table Tennis 3D Trajectory, Bounce Logic & Rules Regression', () => {
     expect(bouncedOnOpponentSide).toBe(true);
   });
 
-  it('powerful shot (max speed 10.0) clears net and stays within opponent baseline', () => {
+  it('powerful shot (max speed 15.0) clears net and stays within opponent baseline', () => {
     const engine = new TableTennisEngine(players);
     engine.apply({ type: 'ready' }, 0);
     engine.apply({ type: 'ready' }, 1);
@@ -732,10 +732,10 @@ describe('Table Tennis 3D Trajectory, Bounce Logic & Rules Regression', () => {
         x: 30,
         y: 200,
         z: 32,
-        vx: -10.0,
+        vx: -15.0,
         vy: 0,
         vz: 0,
-        speed: 9.65,
+        speed: 14.5,
         touchCount: 14,
         served: false,
         servedBySeat: 0,
@@ -752,7 +752,7 @@ describe('Table Tennis 3D Trajectory, Bounce Logic & Rules Regression', () => {
     };
 
     state = engine.simulatePhysics(state);
-    expect(state.ball!.speed).toBe(10.0);
+    expect(state.ball!.speed).toBe(15.0);
     let bouncedOnOpponentSide = false;
     let landingX = 0;
 

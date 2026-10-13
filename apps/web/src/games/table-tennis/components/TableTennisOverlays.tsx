@@ -54,8 +54,8 @@ export const TableTennisOverlays: React.FC<TableTennisOverlaysProps> = ({
       {rallyCount >= 3 && !isGameOver && !isServing && (() => {
         const speed = ballSpeed ?? 5.0;
         const multiplier = Math.max(1.0, speed / 5.0);
-        const isHighSpeed = multiplier >= 1.5;
-        const isMaxSpeed = speed >= 9.8;
+        const isHighSpeed = multiplier >= 1.6;
+        const isMaxSpeed = speed >= 14.7;
         return (
           <div className="absolute top-16 lg:top-4 left-1/2 -translate-x-1/2 pointer-events-none z-20 animate-in fade-in zoom-in-95 duration-200">
             <div className={`backdrop-blur-md px-4 py-1.5 rounded-full flex items-center gap-2 border shadow-lg transition-all duration-300 ${
