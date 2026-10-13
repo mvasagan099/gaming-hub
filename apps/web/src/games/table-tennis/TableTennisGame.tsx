@@ -5,7 +5,12 @@ import { MultiplayerMatchPanel } from '../shared/components/MultiplayerMatchPane
 import { useMultiplayerStore } from '../../store/multiplayerStore';
 import TableTennisMultiplayerDriver from './TableTennisMultiplayerDriver';
 import { TableTennisTimeline } from './remoteTimeline';
-import { tableTennisShot, type TableTennisState } from '@gaming-hub/game-engine';
+import {
+  tableTennisShot,
+  computeRallyLaunchVz,
+  computeServeLaunchVz,
+  type TableTennisState,
+} from '@gaming-hub/game-engine';
 import { TABLE_TENNIS_VISUAL_CONFIG, type CameraState } from './constants/tableTennisVisualConfig';
 import { TableTennis3DRenderer } from './utils/tableTennis3DRenderer';
 import { TableTennisOverlays } from './components/TableTennisOverlays';
@@ -87,7 +92,22 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
   const p1Ref = useRef({ y: 160, vy: 0, targetY: 160 });
   const p2Ref = useRef({ y: 160, vy: 0 });
   const p2TargetYRef = useRef(160);
-  const ballRef = useRef({ x: 300, y: 200, vx: 0, vy: 0, speed: 5, inPlay: false });
+  const ballRef = useRef({
+    x: 300,
+    y: 200,
+    z: 32,
+    vx: 0,
+    vy: 0,
+    vz: 0,
+    speed: 5,
+    inPlay: false,
+    bounceCount: 0,
+    lastHitter: null as number | null,
+    ballSide: 0 as 0 | 1,
+    netCrossed: false,
+    bounceCountAfterHit: 0,
+    currentRallyState: 'serve' as 'serve' | 'rally' | 'dead',
+  });
   const trailRef = useRef<Array<{ x: number; y: number }>>([]);
   const particlesRef = useRef<Particle[]>([]);
   const keysRef = useRef({ w: false, s: false, up: false, down: false, space: false });
@@ -349,6 +369,7 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       state.gameState = 'playing';
       setGameState('playing');
       const ball = ballRef.current;
+      const direction: 1 | -1 = state.server === 1 ? 1 : -1;
       ball.x = state.server === 1 ? 44 : LOGICAL_WIDTH - 44;
       ball.y = (state.server === 1 ? p1Ref.current.y : p2Ref.current.y) + 40;
       ball.speed = 5.8;
@@ -362,8 +383,17 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
         ball.vy = (Math.random() - 0.5) * 3.5;
       }
 
-      Object.assign(ball, tableTennisShot(ball.x, ball.y, state.server === 1 ? 1 : -1,
-        ball.speed, ball.vy / ball.speed));
+      const shot = tableTennisShot(ball.x, ball.y, direction, ball.speed, ball.vy / ball.speed);
+      ball.vx = shot.vx;
+      ball.vy = shot.vy;
+      ball.z = 32;
+      ball.vz = computeServeLaunchVz(ball.x, ball.vx, direction);
+      ball.lastHitter = state.server === 1 ? 0 : 1;
+      ball.ballSide = state.server === 1 ? 0 : 1;
+      ball.netCrossed = false;
+      ball.bounceCountAfterHit = 0;
+      ball.bounceCount = 0;
+      ball.currentRallyState = 'serve';
       ball.inPlay = true;
       trailRef.current = [];
       rallyCountRef.current = 0;
@@ -531,12 +561,95 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       trailRef.current.push({ x: ball.x, y: ball.y });
       if (trailRef.current.length > 8) trailRef.current.shift();
 
+      const prevX = ball.x;
+      const prevY = ball.y;
+      const prevZ = ball.z;
+      const hitter = ball.lastHitter ?? (state.server === 1 ? 0 : 1);
+
       ball.x += ball.vx * (dt * 60);
       ball.y += ball.vy * (dt * 60);
+      ball.vz -= 0.08 * (dt * 60);
+      ball.z += ball.vz * (dt * 60);
+
+      // Net crossing & net collision check
+      const crossedNet = (prevX < 300 && ball.x >= 300) || (prevX > 300 && ball.x <= 300);
+      if (crossedNet) {
+        const frac = Math.abs(ball.x - prevX) > 1e-6 ? Math.abs(300 - prevX) / Math.abs(ball.x - prevX) : 0.5;
+        const zAtNet = prevZ + (ball.z - prevZ) * frac;
+        if (zAtNet <= 34) {
+          handleScore(hitter === 0 ? 2 : 1);
+          return;
+        }
+        ball.netCrossed = true;
+      }
+      ball.ballSide = (ball.x < 300 ? 0 : 1) as 0 | 1;
 
       // Side exits end the rally; a table has no walls to return the ball.
       if (ball.y < 0 || ball.y > LOGICAL_HEIGHT) {
-        handleScore(ball.vx > 0 ? 2 : 1);
+        handleScore(hitter === 0 ? 2 : 1);
+        return;
+      }
+
+      // Table bounce check (z <= 0)
+      if (ball.z <= 0) {
+        const frac = Math.abs(ball.z - prevZ) > 1e-6 ? Math.max(0, Math.min(1, (0 - prevZ) / (ball.z - prevZ))) : 1;
+        const bounceX = prevX + (ball.x - prevX) * frac;
+        const bounceY = prevY + (ball.y - prevY) * frac;
+        const bounceSide = (bounceX < 300 ? 0 : 1) as 0 | 1;
+        const isOnTable = bounceX >= 0 && bounceX <= LOGICAL_WIDTH && bounceY >= 0 && bounceY <= LOGICAL_HEIGHT;
+
+        if (isOnTable) {
+          ball.z = 0;
+          if (ball.currentRallyState === 'serve') {
+            if (ball.bounceCountAfterHit === 0) {
+              if (bounceSide === hitter) {
+                ball.bounceCountAfterHit = 1;
+                ball.bounceCount++;
+                const distToNet = Math.max(1, Math.abs(300 - bounceX));
+                const tNet = distToNet / Math.max(0.1, Math.abs(ball.vx));
+                ball.vz = (50 + 0.5 * 0.08 * tNet * tNet) / tNet;
+              } else {
+                handleScore(hitter === 0 ? 2 : 1);
+                return;
+              }
+            } else if (ball.bounceCountAfterHit === 1) {
+              if (ball.netCrossed && bounceSide === (1 - hitter)) {
+                ball.bounceCountAfterHit = 2;
+                ball.bounceCount++;
+                ball.currentRallyState = 'rally';
+                ball.vz = Math.max(2.0, Math.abs(ball.vz) * 0.78);
+              } else {
+                handleScore(hitter === 0 ? 2 : 1);
+                return;
+              }
+            } else {
+              handleScore(hitter === 0 ? 1 : 2);
+              return;
+            }
+          } else {
+            // Normal rally shot!
+            if (!ball.netCrossed || bounceSide === hitter) {
+              // Bounced on shooter's side before crossing net!
+              handleScore(hitter === 0 ? 2 : 1);
+              return;
+            }
+            if (ball.bounceCountAfterHit === 0) {
+              ball.bounceCountAfterHit = 1;
+              ball.bounceCount++;
+              ball.vz = Math.max(1.8, Math.abs(ball.vz) * 0.78);
+            } else {
+              handleScore(hitter === 0 ? 1 : 2);
+              return;
+            }
+          }
+        } else {
+          if (ball.bounceCountAfterHit === 0) {
+            handleScore(hitter === 0 ? 2 : 1);
+          } else {
+            handleScore(hitter === 0 ? 1 : 2);
+          }
+          return;
+        }
       }
 
       const ballRadius = 6;
@@ -551,11 +664,20 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       ) {
         ball.x = 36 + ballRadius;
         ball.speed = Math.min(ball.speed + 0.35, 10.0);
-        ball.vx = Math.abs(ball.speed);
 
         const hitPos = (ball.y - (p1.y + 40)) / 40;
-        Object.assign(ball, tableTennisShot(ball.x, ball.y, 1, ball.speed,
-          hitPos * 0.3 + Math.max(-0.06, Math.min(0.06, p1.vy * 0.01))));
+        const shot = tableTennisShot(ball.x, ball.y, 1, ball.speed,
+          hitPos * 0.3 + Math.max(-0.06, Math.min(0.06, p1.vy * 0.01)));
+        ball.vx = shot.vx;
+        ball.vy = shot.vy;
+        ball.z = 32;
+        ball.vz = computeRallyLaunchVz(ball.x, shot.vx, 1, ball.speed);
+        ball.lastHitter = 0;
+        ball.ballSide = 0;
+        ball.netCrossed = false;
+        ball.bounceCountAfterHit = 0;
+        ball.bounceCount = 0;
+        ball.currentRallyState = 'rally';
         spawnParticles(ball.x, ball.y, '#f43f5e', 12);
         rallyCountRef.current++;
         setRallyCount(rallyCountRef.current);
@@ -571,10 +693,19 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
       ) {
         ball.x = LOGICAL_WIDTH - 36 - ballRadius;
         ball.speed = Math.min(ball.speed + 0.35, 10.0);
-        ball.vx = -Math.abs(ball.speed);
 
         const hitPos = (ball.y - (p2.y + 40)) / 40;
-        Object.assign(ball, tableTennisShot(ball.x, ball.y, -1, ball.speed, hitPos * 0.3));
+        const shot = tableTennisShot(ball.x, ball.y, -1, ball.speed, hitPos * 0.3);
+        ball.vx = shot.vx;
+        ball.vy = shot.vy;
+        ball.z = 32;
+        ball.vz = computeRallyLaunchVz(ball.x, shot.vx, -1, ball.speed);
+        ball.lastHitter = 1;
+        ball.ballSide = 1;
+        ball.netCrossed = false;
+        ball.bounceCountAfterHit = 0;
+        ball.bounceCount = 0;
+        ball.currentRallyState = 'rally';
         spawnParticles(ball.x, ball.y, '#3b82f6', 12);
         rallyCountRef.current++;
         setRallyCount(rallyCountRef.current);
@@ -621,10 +752,13 @@ export const TableTennisGame: React.FC<TableTennisProps> = ({ mode, stake, onBac
 
     const renderBall = isP2View
       ? {
+          ...ball,
           x: LOGICAL_WIDTH - ball.x,
           y: LOGICAL_HEIGHT - ball.y,
           vx: -ball.vx,
           vy: -ball.vy,
+          z: ball.z,
+          vz: ball.vz,
           speed: ball.speed,
           inPlay: ball.inPlay,
         }

@@ -9,7 +9,17 @@ import type {
   TableTennisPhase,
 } from "./types";
 
-import { tableTennisShot } from "./shots";
+import {
+  tableTennisShot,
+  NET_X,
+  NET_HEIGHT,
+  PADDLE_CONTACT_Z,
+  TABLE_SURFACE_Z,
+  GRAVITY,
+  BOUNCE_RESTITUTION,
+  computeRallyLaunchVz,
+  computeServeLaunchVz,
+} from "./shots";
 
 const CANVAS_WIDTH = 600;
 const CANVAS_HEIGHT = 400;
@@ -142,6 +152,7 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
       canServe: false,
       waitingForServe: true,
       pointStartTime: null,
+      currentRallyState: "serve",
     };
   }
 
@@ -199,12 +210,17 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
         
         const baseSpeed = 5.0;
         const angle = Math.max(-15, Math.min(15, action.angle)) * Math.PI / 180;
-        const shot = tableTennisShot(startX, paddleCenterY, seat === 0 ? 1 : -1, baseSpeed, Math.tan(angle));
+        const direction: 1 | -1 = seat === 0 ? 1 : -1;
+        const shot = tableTennisShot(startX, paddleCenterY, direction, baseSpeed, Math.tan(angle));
+        const vz = computeServeLaunchVz(startX, shot.vx, direction);
         
         next.ball = {
           x: startX,
           y: paddleCenterY,
-          ...shot,
+          z: PADDLE_CONTACT_Z,
+          vx: shot.vx,
+          vy: shot.vy,
+          vz,
           speed: baseSpeed,
           touchCount: 0,
           served: true,
@@ -213,9 +229,15 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
           bounceCount: 0,
           inPlay: true,
           spin: 0,
+          lastHitter: seat,
+          ballSide: seat as 0 | 1,
+          netCrossed: false,
+          bounceCountAfterHit: 0,
+          currentRallyState: "serve",
         };
 
         next.phase = "rally";
+        next.currentRallyState = "serve";
         next.rallyCount = 0;
         next.waitingForServe = false;
         next.pointStartTime = now;
@@ -311,19 +333,143 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
   private advancePhysics(next: InternalState): InternalState {
     const ball = next.ball!;
 
-    ball.x += ball.vx;
-    ball.y += ball.vy;
+    const prevX = ball.x;
+    const prevY = ball.y;
+    const prevZ = ball.z ?? PADDLE_CONTACT_Z;
 
-    // There are no side cushions on a table tennis table. An off-table shot
-    // loses the point for the last hitter instead of bouncing back into play.
-    if (ball.y < 0 || ball.y > CANVAS_HEIGHT) {
-      return this.awardPoint(next, 1 - (ball.lastHitSeat ?? ball.servedBySeat), "out");
+    // Default tracking fields if missing from snapshot/mock
+    if (ball.z === undefined) ball.z = PADDLE_CONTACT_Z;
+    if (ball.vz === undefined) ball.vz = 0;
+    const hitter: number = typeof ball.lastHitSeat === "number"
+      ? ball.lastHitSeat
+      : typeof ball.lastHitter === "number"
+        ? ball.lastHitter
+        : (ball.servedBySeat ?? 0);
+    ball.lastHitter = hitter;
+
+    if (ball.ballSide === undefined) {
+      ball.ballSide = (ball.x < NET_X ? 0 : 1) as 0 | 1;
+    }
+    if (ball.currentRallyState === undefined) {
+      ball.currentRallyState = (ball.served && (ball.touchCount ?? 0) === 0) ? "serve" : "rally";
+    }
+    if (ball.bounceCountAfterHit === undefined) {
+      ball.bounceCountAfterHit = ball.bounceCount ?? 0;
+    }
+    if (ball.netCrossed === undefined) {
+      ball.netCrossed = ball.lastHitter === 0 ? prevX >= NET_X : prevX <= NET_X;
     }
 
+    // 1. Advance position & apply vertical gravity
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+    ball.vz -= GRAVITY;
+    ball.z += ball.vz;
+
+    // 2. Net crossing & net collision check
+    const crossedNet = (prevX < NET_X && ball.x >= NET_X) || (prevX > NET_X && ball.x <= NET_X);
+    if (crossedNet) {
+      const frac = Math.abs(ball.x - prevX) > 1e-6 ? Math.abs(NET_X - prevX) / Math.abs(ball.x - prevX) : 0.5;
+      const zAtNet = prevZ + (ball.z - prevZ) * frac;
+
+      if (zAtNet <= NET_HEIGHT) {
+        // Hit the net! Cannot clear net
+        ball.inPlay = false;
+        ball.x = NET_X;
+        ball.z = Math.min(NET_HEIGHT, zAtNet);
+        return this.awardPoint(next, 1 - hitter, "net");
+      }
+      ball.netCrossed = true;
+    }
+
+    // Update current table side
+    ball.ballSide = (ball.x < NET_X ? 0 : 1) as 0 | 1;
+
+    // 3. Side exits (lateral out-of-bounds)
+    if (ball.y < 0 || ball.y > CANVAS_HEIGHT) {
+      ball.inPlay = false;
+      return this.awardPoint(next, 1 - hitter, "out");
+    }
+
+    // 4. Table bounce collision (ball.z <= TABLE_SURFACE_Z)
+    if (ball.z <= TABLE_SURFACE_Z) {
+      const frac = Math.abs(ball.z - prevZ) > 1e-6
+        ? Math.max(0, Math.min(1, (TABLE_SURFACE_Z - prevZ) / (ball.z - prevZ)))
+        : 1;
+      const bounceX = prevX + (ball.x - prevX) * frac;
+      const bounceY = prevY + (ball.y - prevY) * frac;
+      const bounceSide = (bounceX < NET_X ? 0 : 1) as 0 | 1;
+      const isOnTable = bounceX >= 0 && bounceX <= CANVAS_WIDTH && bounceY >= 0 && bounceY <= CANVAS_HEIGHT;
+
+      if (isOnTable) {
+        ball.z = TABLE_SURFACE_Z;
+        if (ball.currentRallyState === "serve") {
+          if (ball.bounceCountAfterHit === 0) {
+            // First bounce of serve: MUST be on server's half
+            if (bounceSide === hitter) {
+              ball.bounceCountAfterHit = 1;
+              ball.bounceCount = (ball.bounceCount || 0) + 1;
+              const distToNet = Math.max(1, Math.abs(NET_X - bounceX));
+              const tNet = distToNet / Math.max(0.1, Math.abs(ball.vx));
+              ball.vz = (50 + 0.5 * GRAVITY * tNet * tNet) / tNet;
+            } else {
+              // Fault: Serve failed to bounce on server's side first
+              ball.inPlay = false;
+              return this.awardPoint(next, 1 - hitter, "miss");
+            }
+          } else if (ball.bounceCountAfterHit === 1) {
+            // Second bounce of serve: MUST have crossed net and land on receiver's half
+            if (ball.netCrossed && bounceSide === (1 - hitter)) {
+              ball.bounceCountAfterHit = 2;
+              ball.bounceCount = (ball.bounceCount || 0) + 1;
+              ball.currentRallyState = "rally";
+              ball.vz = Math.max(2.0, Math.abs(ball.vz) * BOUNCE_RESTITUTION);
+            } else {
+              // Fault: Did not cross net or hit server's side again
+              ball.inPlay = false;
+              return this.awardPoint(next, 1 - hitter, "miss");
+            }
+          } else {
+            // 3rd bounce on table without receiver returning it -> Receiver missed!
+            ball.inPlay = false;
+            return this.awardPoint(next, hitter, "miss");
+          }
+        } else {
+          // Normal rally shot!
+          if (!ball.netCrossed || bounceSide === hitter) {
+            // Rule 7: Bounced on shooter's half before crossing net! Invalid rally shot
+            ball.inPlay = false;
+            return this.awardPoint(next, 1 - hitter, "miss");
+          }
+
+          // Landed on opponent's half
+          if (ball.bounceCountAfterHit === 0) {
+            // Legal first bounce on opponent's side!
+            ball.bounceCountAfterHit = 1;
+            ball.bounceCount = (ball.bounceCount || 0) + 1;
+            ball.vz = Math.max(1.8, Math.abs(ball.vz) * BOUNCE_RESTITUTION);
+          } else {
+            // Double bounce on opponent's half without returning -> Opponent missed!
+            ball.inPlay = false;
+            return this.awardPoint(next, hitter, "miss");
+          }
+        }
+      } else {
+        // Landed below table level outside table bounds
+        ball.inPlay = false;
+        if (ball.bounceCountAfterHit === 0) {
+          return this.awardPoint(next, 1 - hitter, "out");
+        } else {
+          return this.awardPoint(next, hitter, "miss");
+        }
+      }
+    }
+
+    // 5. Paddle Collision Handling
     for (const player of next.players) {
       const isLeftPaddle = player.seat === 0;
       const paddleX = isLeftPaddle ? PADDLE_MARGIN : CANVAS_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH;
-      
+
       const paddleLeft = paddleX;
       const paddleRight = paddleX + PADDLE_WIDTH;
       const paddleTop = player.paddleY;
@@ -335,7 +481,7 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
       const ballBottom = ball.y + BALL_RADIUS;
 
       const ballMovingTowardPaddle = isLeftPaddle ? ball.vx < 0 : ball.vx > 0;
-      
+
       if (
         ballMovingTowardPaddle &&
         ballRight >= paddleLeft &&
@@ -346,27 +492,44 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
         const hitPosition = (ball.y - (player.paddleY + PADDLE_HEIGHT / 2)) / (PADDLE_HEIGHT / 2);
         const maxAngle = Math.PI / 9;
         const angle = Math.max(-1, Math.min(1, hitPosition)) * maxAngle;
-        
+
         const touchCount = (ball.touchCount || 0) + 1;
         const newSpeed = Math.min(ball.speed + this.rules.speedIncreasePerTouch, this.rules.maxSpeed);
-        
+
         ball.x = isLeftPaddle ? paddleRight + BALL_RADIUS + 1 : paddleLeft - BALL_RADIUS - 1;
-        const shot = tableTennisShot(ball.x, ball.y, isLeftPaddle ? 1 : -1, newSpeed,
-          Math.tan(angle) + Math.max(-0.06, Math.min(0.06, player.paddleVelocity * 0.02)));
+        const direction: 1 | -1 = isLeftPaddle ? 1 : -1;
+        const shot = tableTennisShot(
+          ball.x,
+          ball.y,
+          direction,
+          newSpeed,
+          Math.tan(angle) + Math.max(-0.06, Math.min(0.06, player.paddleVelocity * 0.02))
+        );
+
         ball.touchCount = touchCount;
         ball.speed = newSpeed;
         ball.vx = shot.vx;
         ball.vy = shot.vy;
+        ball.z = PADDLE_CONTACT_Z;
+        ball.vz = computeRallyLaunchVz(ball.x, shot.vx, direction, newSpeed);
+
         ball.lastHitSeat = player.seat;
-        next.rallyCount++;
+        ball.lastHitter = player.seat;
+        ball.ballSide = player.seat as 0 | 1;
+        ball.netCrossed = false;
+        ball.bounceCountAfterHit = 0;
         ball.bounceCount = 0;
+        ball.currentRallyState = "rally";
+        next.rallyCount++;
       }
     }
 
     if (ball.x < -BALL_RADIUS * 2) {
+      ball.inPlay = false;
       return this.awardPoint(next, 1, "miss");
     }
     if (ball.x > CANVAS_WIDTH + BALL_RADIUS * 2) {
+      ball.inPlay = false;
       return this.awardPoint(next, 0, "miss");
     }
 
@@ -447,6 +610,7 @@ export class TableTennisEngine extends MultiplayerGameEngine<InternalState, Tabl
     next.canServe = true;
     next.rallyCount = 0;
     next.pointStartTime = null;
+    next.currentRallyState = "serve";
 
     return next;
   }

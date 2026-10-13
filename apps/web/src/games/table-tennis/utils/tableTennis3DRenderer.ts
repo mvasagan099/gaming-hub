@@ -89,24 +89,100 @@ export class TableTennis3DRenderer {
 
   /**
    * Computes realistic parabolic bounce height (Z) for the ball during play.
+   * Prioritizes authoritative physical ball.z when provided.
+   * For fallback keyframe interpolation:
+   * - A normal rally shot clears the net and bounces ONLY on the opponent's side.
+   * - An official serve bounces on the server's own side first, clears the net, then bounces on the receiver's side.
    */
-  static calculateBallZ(ball: { x: number; y: number; vx: number; vy: number; inPlay: boolean }): number {
+  static calculateBallZ(ball: {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    inPlay: boolean;
+    z?: number;
+    served?: boolean;
+    bounceCount?: number;
+    currentRallyState?: string;
+  }): number {
     const farBat = this.farPaddlePose(200);
     const farContactZ = this.project(562, 200).tableY - farBat.y;
     if (!ball.inPlay) return ball.x > 300 ? farContactZ : 32;
 
-    // Paddle contact stays at bat height; the ball rises over the net between
-    // table bounces. A crest at each baseline made confirmed hits look airborne.
-    const keys = [[0, 32], [38, 32], [90, 50], [150, 12], [300, 80],
-      [450, 12], [510, 50], [562, farContactZ], [600, farContactZ]];
-    for (let i = 1; i < keys.length; i++) {
-      if (ball.x <= keys[i][0]) {
-        const t = Math.max(0, (ball.x - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0]));
-        const blend = (1 - Math.cos(Math.PI * t)) / 2;
-        return keys[i - 1][1] + (keys[i][1] - keys[i - 1][1]) * blend;
-      }
+    if (typeof ball.z === 'number' && Number.isFinite(ball.z)) {
+      return Math.max(0, ball.z);
     }
-    return farContactZ;
+
+    const isServe = ball.currentRallyState === 'serve' || (ball.served && (ball.bounceCount ?? 0) === 0);
+    const movingRight = ball.vx >= 0;
+
+    if (isServe) {
+      // Official serve: bounce on own side first, clear net, bounce on opponent side
+      const keys = movingRight
+        ? [[0, 32], [38, 32], [90, 36], [150, 4], [225, 45], [300, 58], [380, 40], [450, 4], [510, 32], [562, farContactZ], [600, farContactZ]]
+        : [[0, 32], [38, 32], [90, 32], [150, 4], [220, 40], [300, 58], [375, 45], [450, 4], [510, 36], [562, farContactZ], [600, farContactZ]];
+      for (let i = 1; i < keys.length; i++) {
+        if (ball.x <= keys[i][0]) {
+          const t = Math.max(0, (ball.x - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0]));
+          const blend = (1 - Math.cos(Math.PI * t)) / 2;
+          return keys[i - 1][1] + (keys[i][1] - keys[i - 1][1]) * blend;
+        }
+      }
+      return farContactZ;
+    }
+
+    // Normal rally shot:
+    // Paddle hit -> passes above net -> lands and bounces first on opponent's half -> rises to opponent bat.
+    // The ball must NOT bounce on the shooter's side!
+    if (movingRight) {
+      // Shooter is near side (x ~ 38), shooting toward far side (x ~ 562).
+      // Near half (0..300): rises continuously from 32 over the net (height 55). NEVER drops to table!
+      // Far half (300..600): descends to table at 450 (opponent side bounce), then rises to farContactZ at 562.
+      const keys = [
+        [0, 32],
+        [38, 32],
+        [150, 48],
+        [240, 64],
+        [300, 55],
+        [380, 35],
+        [450, 4],
+        [510, 26],
+        [562, farContactZ],
+        [600, farContactZ],
+      ];
+      for (let i = 1; i < keys.length; i++) {
+        if (ball.x <= keys[i][0]) {
+          const t = Math.max(0, (ball.x - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0]));
+          const blend = (1 - Math.cos(Math.PI * t)) / 2;
+          return keys[i - 1][1] + (keys[i][1] - keys[i - 1][1]) * blend;
+        }
+      }
+      return farContactZ;
+    } else {
+      // Shooter is far side (x ~ 562), shooting toward near side (x ~ 38).
+      // Far half (600..300): rises continuously from farContactZ over the net (height 55). NEVER drops to table!
+      // Near half (300..0): descends to table at 150 (opponent side bounce), then rises to 32 at 38.
+      const keys = [
+        [0, 32],
+        [38, 32],
+        [90, 26],
+        [150, 4],
+        [220, 35],
+        [300, 55],
+        [360, 64],
+        [450, 48],
+        [562, farContactZ],
+        [600, farContactZ],
+      ];
+      for (let i = 1; i < keys.length; i++) {
+        if (ball.x <= keys[i][0]) {
+          const t = Math.max(0, (ball.x - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0]));
+          const blend = (1 - Math.cos(Math.PI * t)) / 2;
+          return keys[i - 1][1] + (keys[i][1] - keys[i - 1][1]) * blend;
+        }
+      }
+      return farContactZ;
+    }
   }
 
   /**

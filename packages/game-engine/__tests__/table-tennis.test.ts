@@ -490,3 +490,449 @@ describe('Table Tennis catch-up copying', () => {
     expect(before).toEqual(delayed.state);
   });
 });
+
+describe('Table Tennis 3D Trajectory, Bounce Logic & Rules Regression', () => {
+  const players = [{ userId: 'a', seat: 0 }, { userId: 'b', seat: 1 }];
+
+  it('Player 1 normal shot clears net, bounces first on opponent half, and never bounces on shooter half', () => {
+    const engine = new TableTennisEngine(players);
+    engine.apply({ type: 'ready' }, 0);
+    engine.apply({ type: 'ready' }, 1);
+
+    // Setup rally ball hitting P0 paddle at x=38
+    let state = {
+      ...engine.state,
+      phase: 'rally' as const,
+      players: [
+        { ...engine.state.players[0], paddleY: 160 },
+        { ...engine.state.players[1], paddleY: 160 },
+      ],
+      ball: {
+        x: 30,
+        y: 200,
+        z: 32,
+        vx: -5.0,
+        vy: 0,
+        vz: 0,
+        speed: 6.0,
+        touchCount: 1,
+        served: false,
+        servedBySeat: 0,
+        lastHitSeat: 1,
+        bounceCount: 1,
+        inPlay: true,
+        spin: 0,
+        lastHitter: 1,
+        ballSide: 0 as const,
+        netCrossed: true,
+        bounceCountAfterHit: 1,
+        currentRallyState: 'rally' as const,
+      },
+    };
+
+    // Simulate physics through P0 paddle hit
+    state = engine.simulatePhysics(state);
+    expect(state.ball).not.toBeNull();
+    const ball = state.ball!;
+    expect(ball.lastHitter).toBe(0);
+    expect(ball.lastHitSeat).toBe(0);
+    expect(ball.vx).toBeGreaterThan(0); // Traveling toward P1
+    expect(ball.netCrossed).toBe(false);
+    expect(ball.bounceCountAfterHit).toBe(0);
+    expect(ball.currentRallyState).toBe('rally');
+
+    let crossedNet = false;
+    let netHeightObserved = 0;
+    let bounceCountOnP0Side = 0;
+    let bounceCountOnP1Side = 0;
+    let firstBounceX = -1;
+
+    for (let frame = 0; frame < 150 && state.ball && state.ball.inPlay; frame++) {
+      const prevX = state.ball.x;
+      const prevZ = state.ball.z;
+      state = engine.simulatePhysics(state);
+      if (!state.ball) break;
+
+      // Net crossing check
+      if (prevX < 300 && state.ball.x >= 300) {
+        crossedNet = true;
+        netHeightObserved = (prevZ + state.ball.z) / 2;
+      }
+
+      // Check for bounce (z <= 0)
+      if (state.ball.z <= 0.05 && prevZ > state.ball.z) {
+        if (state.ball.lastHitter === 0) {
+          if (state.ball.x < 300) {
+            bounceCountOnP0Side++;
+          } else {
+            bounceCountOnP1Side++;
+            if (firstBounceX === -1) firstBounceX = state.ball.x;
+            break;
+          }
+        }
+      }
+    }
+
+    // REQUIRED CHECKS:
+    expect(crossedNet).toBe(true);
+    expect(netHeightObserved).toBeGreaterThan(34); // Cleared net of height 34
+    expect(bounceCountOnP0Side).toBe(0); // MUST NOT bounce on shooter's side!
+    expect(bounceCountOnP1Side).toBeGreaterThanOrEqual(1); // Bounced on opponent's side!
+    expect(firstBounceX).toBeGreaterThan(300); // Landed beyond the net on opponent half
+    expect(firstBounceX).toBeLessThan(560); // Landed inside table
+  });
+
+  it('Player 2 normal shot clears net, bounces first on opponent half, and never bounces on shooter half', () => {
+    const engine = new TableTennisEngine(players);
+    engine.apply({ type: 'ready' }, 0);
+    engine.apply({ type: 'ready' }, 1);
+
+    // Setup rally ball hitting P1 paddle at x=570
+    let state = {
+      ...engine.state,
+      phase: 'rally' as const,
+      players: [
+        { ...engine.state.players[0], paddleY: 160 },
+        { ...engine.state.players[1], paddleY: 160 },
+      ],
+      ball: {
+        x: 570,
+        y: 200,
+        z: 32,
+        vx: 5.0,
+        vy: 0,
+        vz: 0,
+        speed: 6.0,
+        touchCount: 2,
+        served: false,
+        servedBySeat: 0,
+        lastHitSeat: 0,
+        bounceCount: 1,
+        inPlay: true,
+        spin: 0,
+        lastHitter: 0,
+        ballSide: 1 as const,
+        netCrossed: true,
+        bounceCountAfterHit: 1,
+        currentRallyState: 'rally' as const,
+      },
+    };
+
+    // Simulate physics through P1 paddle hit
+    state = engine.simulatePhysics(state);
+    expect(state.ball).not.toBeNull();
+    const ball = state.ball!;
+    expect(ball.lastHitter).toBe(1);
+    expect(ball.lastHitSeat).toBe(1);
+    expect(ball.vx).toBeLessThan(0); // Traveling toward P0
+    expect(ball.netCrossed).toBe(false);
+    expect(ball.bounceCountAfterHit).toBe(0);
+    expect(ball.currentRallyState).toBe('rally');
+
+    let crossedNet = false;
+    let netHeightObserved = 0;
+    let bounceCountOnP1Side = 0;
+    let bounceCountOnP0Side = 0;
+    let firstBounceX = -1;
+
+    for (let frame = 0; frame < 150 && state.ball && state.ball.inPlay; frame++) {
+      const prevX = state.ball.x;
+      const prevZ = state.ball.z;
+      state = engine.simulatePhysics(state);
+      if (!state.ball) break;
+
+      if (prevX > 300 && state.ball.x <= 300) {
+        crossedNet = true;
+        netHeightObserved = (prevZ + state.ball.z) / 2;
+      }
+
+      if (state.ball.z <= 0.05 && prevZ > state.ball.z) {
+        if (state.ball.lastHitter === 1) {
+          if (state.ball.x > 300) {
+            bounceCountOnP1Side++;
+          } else {
+            bounceCountOnP0Side++;
+            if (firstBounceX === -1) firstBounceX = state.ball.x;
+            break;
+          }
+        }
+      }
+    }
+
+    // REQUIRED CHECKS:
+    expect(crossedNet).toBe(true);
+    expect(netHeightObserved).toBeGreaterThan(34); // Cleared net
+    expect(bounceCountOnP1Side).toBe(0); // MUST NOT bounce on shooter's side!
+    expect(bounceCountOnP0Side).toBeGreaterThanOrEqual(1); // Bounced on opponent's side!
+    expect(firstBounceX).toBeLessThan(300); // Landed on Player 0's half
+    expect(firstBounceX).toBeGreaterThan(40); // Landed inside table
+  });
+
+  it('gentle shot (min speed 5.0) stays on table, clears net, and lands on opponent side', () => {
+    const engine = new TableTennisEngine(players);
+    engine.apply({ type: 'ready' }, 0);
+    engine.apply({ type: 'ready' }, 1);
+
+    let state = {
+      ...engine.state,
+      phase: 'rally' as const,
+      ball: {
+        x: 30,
+        y: 200,
+        z: 32,
+        vx: -5.0,
+        vy: 0,
+        vz: 0,
+        speed: 5.0,
+        touchCount: 0,
+        served: false,
+        servedBySeat: 0,
+        lastHitSeat: 1,
+        bounceCount: 0,
+        inPlay: true,
+        spin: 0,
+        lastHitter: 1,
+        ballSide: 0 as const,
+        netCrossed: true,
+        bounceCountAfterHit: 1,
+        currentRallyState: 'rally' as const,
+      },
+    };
+
+    state = engine.simulatePhysics(state);
+    let bouncedOnOpponentSide = false;
+    let netHeight = 0;
+
+    for (let f = 0; f < 120 && state.ball && state.ball.inPlay; f++) {
+      const prevX = state.ball.x;
+      state = engine.simulatePhysics(state);
+      if (!state.ball) break;
+      if (prevX < 300 && state.ball.x >= 300) {
+        netHeight = state.ball.z;
+      }
+      if (state.ball.z <= 0.05 && state.ball.x > 300) {
+        bouncedOnOpponentSide = true;
+        break;
+      }
+    }
+
+    expect(netHeight).toBeGreaterThan(34);
+    expect(bouncedOnOpponentSide).toBe(true);
+  });
+
+  it('powerful shot (max speed 10.0) clears net and stays within opponent baseline', () => {
+    const engine = new TableTennisEngine(players);
+    engine.apply({ type: 'ready' }, 0);
+    engine.apply({ type: 'ready' }, 1);
+
+    let state = {
+      ...engine.state,
+      phase: 'rally' as const,
+      ball: {
+        x: 30,
+        y: 200,
+        z: 32,
+        vx: -10.0,
+        vy: 0,
+        vz: 0,
+        speed: 9.65,
+        touchCount: 14,
+        served: false,
+        servedBySeat: 0,
+        lastHitSeat: 1,
+        bounceCount: 0,
+        inPlay: true,
+        spin: 0,
+        lastHitter: 1,
+        ballSide: 0 as const,
+        netCrossed: true,
+        bounceCountAfterHit: 1,
+        currentRallyState: 'rally' as const,
+      },
+    };
+
+    state = engine.simulatePhysics(state);
+    expect(state.ball!.speed).toBe(10.0);
+    let bouncedOnOpponentSide = false;
+    let landingX = 0;
+
+    for (let f = 0; f < 100 && state.ball && state.ball.inPlay; f++) {
+      state = engine.simulatePhysics(state);
+      if (!state.ball) break;
+      if (state.ball.z <= 0.05 && state.ball.x > 300) {
+        bouncedOnOpponentSide = true;
+        landingX = state.ball.x;
+        break;
+      }
+    }
+
+    expect(bouncedOnOpponentSide).toBe(true);
+    expect(landingX).toBeLessThanOrEqual(560); // In bounds
+    expect(landingX).toBeGreaterThan(300); // Past net
+  });
+
+  it('net collision: ball hitting net below net height awards point with reason net', () => {
+    const engine = new TableTennisEngine(players);
+    engine.apply({ type: 'ready' }, 0);
+    engine.apply({ type: 'ready' }, 1);
+
+    // Ball traveling right toward net at x=298 with z=20 (below net height 34)
+    (engine as any).updateState({
+      ...engine.state,
+      phase: 'rally',
+      ball: {
+        x: 295,
+        y: 200,
+        z: 20,
+        vx: 8,
+        vy: 0,
+        vz: -0.5,
+        speed: 8,
+        touchCount: 1,
+        served: false,
+        servedBySeat: 0,
+        lastHitSeat: 0,
+        bounceCount: 0,
+        inPlay: true,
+        spin: 0,
+        lastHitter: 0,
+        ballSide: 0,
+        netCrossed: false,
+        bounceCountAfterHit: 0,
+        currentRallyState: 'rally',
+      },
+    });
+
+    const result = engine.tick();
+    expect(result.events).toContainEqual({
+      type: 'point-scored',
+      winnerSeat: 1, // Opponent gets point
+      reason: 'net',
+    });
+    expect(result.state.ball).toBeNull();
+  });
+
+  it('invalid rally shot: bouncing on shooter side before crossing net awards point to opponent', () => {
+    const engine = new TableTennisEngine(players);
+    engine.apply({ type: 'ready' }, 0);
+    engine.apply({ type: 'ready' }, 1);
+
+    // Ball shot by P0, but descending onto P0 own half at x=150
+    (engine as any).updateState({
+      ...engine.state,
+      phase: 'rally',
+      ball: {
+        x: 148,
+        y: 200,
+        z: 0.5,
+        vx: 5,
+        vy: 0,
+        vz: -2.0, // landing on table on shooter half
+        speed: 5,
+        touchCount: 1,
+        served: false,
+        servedBySeat: 0,
+        lastHitSeat: 0,
+        bounceCount: 0,
+        inPlay: true,
+        spin: 0,
+        lastHitter: 0,
+        ballSide: 0,
+        netCrossed: false,
+        bounceCountAfterHit: 0,
+        currentRallyState: 'rally',
+      },
+    });
+
+    const result = engine.tick();
+    expect(result.events).toContainEqual({
+      type: 'point-scored',
+      winnerSeat: 1, // Opponent gets point for illegal rally shot
+      reason: 'miss',
+    });
+    expect(result.state.ball).toBeNull();
+  });
+
+  it('opponent miss: double bounce on opponent half awards point to shooter', () => {
+    const engine = new TableTennisEngine(players);
+    engine.apply({ type: 'ready' }, 0);
+    engine.apply({ type: 'ready' }, 1);
+
+    // Ball already bounced once on P1 side (bounceCountAfterHit = 1), now landing again
+    (engine as any).updateState({
+      ...engine.state,
+      phase: 'rally',
+      ball: {
+        x: 480,
+        y: 200,
+        z: 0.5,
+        vx: 3,
+        vy: 0,
+        vz: -1.5,
+        speed: 5,
+        touchCount: 1,
+        served: false,
+        servedBySeat: 0,
+        lastHitSeat: 0,
+        bounceCount: 1,
+        inPlay: true,
+        spin: 0,
+        lastHitter: 0,
+        ballSide: 1,
+        netCrossed: true,
+        bounceCountAfterHit: 1,
+        currentRallyState: 'rally',
+      },
+    });
+
+    const result = engine.tick();
+    expect(result.events).toContainEqual({
+      type: 'point-scored',
+      winnerSeat: 0, // Shooter gets point because opponent missed return
+      reason: 'miss',
+    });
+    expect(result.state.ball).toBeNull();
+  });
+
+  it('valid official serve: bounces on server side first, clears net, and bounces on receiver side', () => {
+    const engine = new TableTennisEngine(players);
+    (engine as any).updateState({ ...engine.state, servingSeat: 0 });
+    engine.apply({ type: 'ready' }, 0);
+    engine.apply({ type: 'ready' }, 1);
+
+    const serveResult = engine.apply({ type: 'serve', angle: 0 }, 0);
+    expect(serveResult.ok).toBe(true);
+    let state = serveResult.state;
+    expect(state.ball!.currentRallyState).toBe('serve');
+    expect(state.ball!.lastHitter).toBe(0);
+
+    let firstBounceX = -1;
+    let netCleared = false;
+    let secondBounceX = -1;
+
+    for (let f = 0; f < 100 && state.ball && state.ball.inPlay; f++) {
+      const prevX = state.ball.x;
+      const prevBounce = state.ball.bounceCountAfterHit;
+      state = engine.simulatePhysics(state);
+      if (!state.ball) break;
+
+      if (prevBounce === 0 && state.ball.bounceCountAfterHit === 1) {
+        firstBounceX = state.ball.x;
+      }
+      if (prevX < 300 && state.ball.x >= 300) {
+        netCleared = true;
+      }
+      if (prevBounce === 1 && state.ball.bounceCountAfterHit === 2) {
+        secondBounceX = state.ball.x;
+      }
+    }
+
+    // Official serve requirements:
+    expect(firstBounceX).toBeGreaterThan(0);
+    expect(firstBounceX).toBeLessThan(300); // 1st bounce on server's own half
+    expect(netCleared).toBe(true); // Cleared the net
+    expect(secondBounceX).toBeGreaterThan(300); // 2nd bounce on receiver's half
+    expect(secondBounceX).toBeLessThan(560);
+  });
+});
+

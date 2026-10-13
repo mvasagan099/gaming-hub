@@ -5,8 +5,10 @@ import type { BaseState } from "../base/MultiplayerGameEngine";
 export interface TableTennisBall extends JsonObject {
   x: number;
   y: number;
+  z: number;
   vx: number;
   vy: number;
+  vz: number;
   speed: number;
   touchCount: number;
   served: boolean;
@@ -15,6 +17,11 @@ export interface TableTennisBall extends JsonObject {
   bounceCount: number;
   inPlay: boolean;
   spin: number;
+  lastHitter: number | null;
+  ballSide: 0 | 1;
+  netCrossed: boolean;
+  bounceCountAfterHit: number;
+  currentRallyState: "serve" | "rally" | "dead";
 }
 
 export interface TableTennisPlayer extends JsonObject {
@@ -64,6 +71,7 @@ export interface TableTennisState extends BaseState {
   canServe: boolean;
   waitingForServe: boolean;
   pointStartTime: number | null;
+  currentRallyState: "serve" | "rally" | "dead";
 }
 
 export type TableTennisAction =

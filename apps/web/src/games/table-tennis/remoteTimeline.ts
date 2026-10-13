@@ -44,7 +44,13 @@ export class TableTennisTimeline {
       const fraction = Math.max(0.05, Math.min(0.95,
         Math.abs((x - previous.ball.x) / previous.ball.vx) * (1000 / 60) / (timestamp - previous.time)));
       this.samples.push({ time: previous.time + (timestamp - previous.time) * fraction,
-        ball: { ...sample.ball, x, y: previous.ball.y + (x - previous.ball.x) * previous.ball.vy / previous.ball.vx },
+        ball: {
+          ...sample.ball,
+          x,
+          y: previous.ball.y + (x - previous.ball.x) * previous.ball.vy / previous.ball.vx,
+          z: sample.ball.z ?? 32,
+          vz: sample.ball.vz ?? 0,
+        },
         paddles: [...sample.paddles] });
     }
     if (this.samples.at(-1)?.time === timestamp) this.samples.pop();
@@ -89,9 +95,25 @@ export class TableTennisTimeline {
         : Math.max(contactX, ball.x + ball.vx * frames);
       // An off-table shot must remain outside; there are no side cushions.
       ball.y += ball.vy * frames;
+      if (typeof ball.z === 'number' && typeof ball.vz === 'number') {
+        ball.vz -= 0.08 * frames;
+        ball.z = Math.max(0, ball.z + ball.vz * frames);
+      }
     } else {
       const t = Math.max(0, Math.min(1, (target - a.time) / (b.time - a.time)));
-      ball = { ...a.ball, x: a.ball.x + (b.ball.x - a.ball.x) * t, y: a.ball.y + (b.ball.y - a.ball.y) * t };
+      const z = (typeof a.ball.z === 'number' && typeof b.ball.z === 'number')
+        ? a.ball.z + (b.ball.z - a.ball.z) * t
+        : (a.ball.z ?? b.ball.z);
+      const vz = (typeof a.ball.vz === 'number' && typeof b.ball.vz === 'number')
+        ? a.ball.vz + (b.ball.vz - a.ball.vz) * t
+        : (a.ball.vz ?? b.ball.vz);
+      ball = {
+        ...a.ball,
+        x: a.ball.x + (b.ball.x - a.ball.x) * t,
+        y: a.ball.y + (b.ball.y - a.ball.y) * t,
+        ...(z !== undefined ? { z } : {}),
+        ...(vz !== undefined ? { vz } : {}),
+      };
     }
     // A late snapshot must not rewind a ball still travelling on the same shot.
     // A confirmed contact changes touchCount/direction and releases this guard.
