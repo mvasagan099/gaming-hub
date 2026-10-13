@@ -324,10 +324,9 @@ export function AdminAppVersionPage() {
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-slate-200">Force Update (All Users)</p>
+              <p className="text-sm font-semibold text-slate-200">Force Update to Latest Version</p>
               <p className="text-xs text-slate-400 mt-0.5">
-                When ON, <strong className="text-orange-300">all</strong> Android users see the
-                hard-lock screen regardless of their installed version.
+                When ON, users running older versions are strictly required to update to the latest version before playing. Users already on the latest version are unaffected.
               </p>
             </div>
           </div>

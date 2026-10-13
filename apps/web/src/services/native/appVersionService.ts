@@ -83,13 +83,19 @@ export async function checkAppVersion(): Promise<AppVersionCheckResult> {
     installedVersion,
     config.minimumSupportedVersion,
   );
+  const isBelowLatest = isVersionBelowMinimum(
+    installedVersion,
+    config.latestVersion,
+  );
 
-  // Hard lock when: installed is below minimum OR force update is enabled.
-  const isHardLocked = isBelowMinimum || config.forceUpdate;
+  // Hard lock when:
+  // 1. Installed version is strictly below the minimum supported version, OR
+  // 2. Installed version is below the latest version AND force update is enabled.
+  // Users on or above the latest version (and meeting minimum) are NEVER locked out.
+  const isHardLocked = isBelowMinimum || (config.forceUpdate && isBelowLatest);
 
   // Soft prompt when: not hard locked but a newer version exists.
-  const isSoftPrompt =
-    !isHardLocked && isVersionBelowMinimum(installedVersion, config.latestVersion);
+  const isSoftPrompt = !isHardLocked && isBelowLatest;
 
   return {
     isHardLocked,
