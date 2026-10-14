@@ -20,6 +20,10 @@ const updateRoleSchema = z.object({
   permissions: z.array(z.string()).optional(),
 });
 
+const assignRoleUserSchema = z.object({
+  userId: z.string().min(1),
+});
+
 export async function adminRolesRoutes(app: FastifyInstance) {
   app.get("/api/admin/roles", { preHandler: authenticate }, async (request) => {
     await requirePermission(request, "admin:roles:view", prisma);
@@ -314,5 +318,105 @@ export async function adminRolesRoutes(app: FastifyInstance) {
       page,
       pageSize,
     };
+  });
+
+  app.post("/api/admin/roles/:id/users", { preHandler: [authenticate, requireMfa] }, async (request) => {
+    const admin = await requirePermission(request, "admin:roles:edit", prisma);
+    const { id } = routeParams(request);
+    const { userId } = parseSchema(assignRoleUserSchema, request.body);
+
+    const role = await prisma.customRole.findUnique({
+      where: { id },
+      include: { permissions: true },
+    });
+    if (!role) {
+      throw new AppError("NOT_FOUND", "Role not found", 404);
+    }
+
+    if (userId === admin.id) {
+      throw new AppError("FORBIDDEN", "You cannot change your own role", 403);
+    }
+
+    const target = await prisma.user.findUnique({ where: { id: userId } });
+    if (!target) {
+      throw new AppError("NOT_FOUND", "User not found", 404);
+    }
+
+    if (target.role === "ADMIN" && admin.role !== "ADMIN") {
+      throw new AppError("FORBIDDEN", "Only administrators can modify an administrator's role", 403);
+    }
+
+    await assertRoleGrant(admin, role.permissions.map((p) => p.permission), prisma);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        role: "CUSTOM",
+        customRoleId: id,
+      },
+    });
+
+    auditFromRequest(request, {
+      actorType: "user",
+      actorId: admin.id,
+      action: "admin.user.role.assigned",
+      category: "admin",
+      targetType: "user",
+      targetId: userId,
+      meta: {
+        roleId: id,
+        roleName: role.name,
+      },
+    });
+
+    return { ok: true };
+  });
+
+  app.delete("/api/admin/roles/:id/users/:userId", { preHandler: [authenticate, requireMfa] }, async (request) => {
+    const admin = await requirePermission(request, "admin:roles:edit", prisma);
+    const { id, userId } = routeParams(request);
+
+    const role = await prisma.customRole.findUnique({ where: { id } });
+    if (!role) {
+      throw new AppError("NOT_FOUND", "Role not found", 404);
+    }
+
+    if (userId === admin.id) {
+      throw new AppError("FORBIDDEN", "You cannot change your own role", 403);
+    }
+
+    const target = await prisma.user.findUnique({ where: { id: userId } });
+    if (!target) {
+      throw new AppError("NOT_FOUND", "User not found", 404);
+    }
+
+    if (target.role === "ADMIN" && admin.role !== "ADMIN") {
+      throw new AppError("FORBIDDEN", "Only administrators can modify an administrator's role", 403);
+    }
+
+    if (target.customRoleId === id) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          role: "USER",
+          customRoleId: null,
+        },
+      });
+
+      auditFromRequest(request, {
+        actorType: "user",
+        actorId: admin.id,
+        action: "admin.user.role.unassigned",
+        category: "admin",
+        targetType: "user",
+        targetId: userId,
+        meta: {
+          roleId: id,
+          roleName: role.name,
+        },
+      });
+    }
+
+    return { ok: true };
   });
 }

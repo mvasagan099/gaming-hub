@@ -1,5 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Shield, Plus, Edit2, Trash2, CheckCircle2, XCircle, Loader2, Sparkles, Lock, Users, ShieldAlert } from 'lucide-react';
+import {
+  Shield,
+  Plus,
+  Edit2,
+  Trash2,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Sparkles,
+  Lock,
+  Users,
+  ShieldAlert,
+  UserPlus,
+  UserMinus,
+  Search,
+  X,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { apiClient } from '../../services/api/client';
 import { adminApi, type CustomRoleView } from '../../services/api/enterprise';
 import { ALL_PERMISSIONS, type Permission } from '@gaming-hub/shared';
 
@@ -59,6 +77,19 @@ export function AdminRolesPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingRole, setEditingRole] = useState<CustomRoleView | null>(null);
+
+  // Members Modal State
+  const [selectedRoleForMembers, setSelectedRoleForMembers] = useState<CustomRoleView | null>(null);
+  const [roleMembers, setRoleMembers] = useState<
+    Array<{ id: string; username: string; displayName: string; email: string | null; isOnline: boolean; createdAt: string }>
+  >([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [candidateUsers, setCandidateUsers] = useState<
+    Array<{ id: string; username: string; displayName: string; email: string | null }>
+  >([]);
+  const [candidateLoading, setCandidateLoading] = useState(false);
+  const [actionUserId, setActionUserId] = useState<string | null>(null);
 
   // Form State
   const [roleName, setRoleName] = useState('');
@@ -166,6 +197,81 @@ export function AdminRolesPage() {
     }
   };
 
+  const openMembersModal = async (role: CustomRoleView) => {
+    setSelectedRoleForMembers(role);
+    setMembersLoading(true);
+    setMemberSearchQuery('');
+    setCandidateUsers([]);
+    try {
+      const res = await adminApi.roleUsers(role.id);
+      setRoleMembers(res.users || []);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to load assigned users');
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  const handleAssignUserToRole = async (userId: string) => {
+    if (!selectedRoleForMembers) return;
+    setActionUserId(userId);
+    try {
+      await adminApi.assignRoleUser(selectedRoleForMembers.id, userId);
+      toast.success(`User assigned to ${selectedRoleForMembers.displayName}`);
+      const res = await adminApi.roleUsers(selectedRoleForMembers.id);
+      setRoleMembers(res.users || []);
+      setMemberSearchQuery('');
+      setCandidateUsers([]);
+      void loadRoles();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to assign role');
+    } finally {
+      setActionUserId(null);
+    }
+  };
+
+  const handleRemoveUserFromRole = async (userId: string) => {
+    if (!selectedRoleForMembers) return;
+    setActionUserId(userId);
+    try {
+      await adminApi.removeRoleUser(selectedRoleForMembers.id, userId);
+      toast.success(`User removed from ${selectedRoleForMembers.displayName}`);
+      const res = await adminApi.roleUsers(selectedRoleForMembers.id);
+      setRoleMembers(res.users || []);
+      void loadRoles();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to remove user from role');
+    } finally {
+      setActionUserId(null);
+    }
+  };
+
+  const searchUsersForRole = async (query: string) => {
+    setMemberSearchQuery(query);
+    if (!query.trim() || query.trim().length < 2) {
+      setCandidateUsers([]);
+      return;
+    }
+    setCandidateLoading(true);
+    try {
+      const res = await apiClient.get<{ items: Array<{ id: string; username: string; displayName: string; email: string | null }> }>(
+        '/admin/users?pageSize=20',
+      );
+      const q = query.toLowerCase();
+      const filtered = (res.items || []).filter(
+        (u) =>
+          u.username.toLowerCase().includes(q) ||
+          u.displayName.toLowerCase().includes(q) ||
+          (u.email ?? '').toLowerCase().includes(q),
+      );
+      setCandidateUsers(filtered);
+    } catch {
+      // non-fatal
+    } finally {
+      setCandidateLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -243,10 +349,14 @@ export function AdminRolesPage() {
               <div className="space-y-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-slate-400">Assigned Users</span>
-                  <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5 text-indigo-500" />
-                    {role.userCount ?? 0}
-                  </span>
+                  <button
+                    onClick={() => void openMembersModal(role)}
+                    className="font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 flex items-center gap-1 transition-colors"
+                    title="Click to view and manage assigned users"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>{role.userCount ?? 0} {role.userCount === 1 ? 'user' : 'users'}</span>
+                  </button>
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-slate-400">Permissions</span>
@@ -256,21 +366,30 @@ export function AdminRolesPage() {
                 </div>
 
                 {!role.isSystem && (
-                  <div className="flex items-center gap-2 pt-2">
+                  <div className="space-y-2 pt-2">
                     <button
-                      onClick={() => handleOpenEdit(role)}
-                      className="w-full py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                      onClick={() => void openMembersModal(role)}
+                      className="w-full py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 border border-indigo-500/20"
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      <span>Edit Role</span>
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span>Manage Assigned Users</span>
                     </button>
-                    <button
-                      onClick={() => void handleDeleteRole(role.id)}
-                      className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 text-xs font-bold transition-colors"
-                      title="Delete Custom Role"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleOpenEdit(role)}
+                        className="w-full py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>Edit Role</span>
+                      </button>
+                      <button
+                        onClick={() => void handleDeleteRole(role.id)}
+                        className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 text-xs font-bold transition-colors"
+                        title="Delete Custom Role"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -405,6 +524,163 @@ export function AdminRolesPage() {
                 className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-lg shadow-indigo-600/30 disabled:opacity-50"
               >
                 {isSubmitting ? 'Saving...' : editingRole ? 'Save Role Changes' : 'Create Role'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Role Members Modal */}
+      {selectedRoleForMembers && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-xl my-8 rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-8 shadow-2xl space-y-6 text-slate-900 dark:text-white max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center font-black shrink-0">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black flex items-center gap-2">
+                    <span>Assigned Users</span>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 font-extrabold border border-indigo-500/20">
+                      {selectedRoleForMembers.displayName}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Assign or remove users for the <code className="font-mono text-indigo-400">@{selectedRoleForMembers.name}</code> custom role.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedRoleForMembers(null)}
+                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 transition-colors shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quick Assign Search Input */}
+            <div className="space-y-2 shrink-0">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <UserPlus className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Assign User to this Role</span>
+              </label>
+              <div className="flex items-center w-full rounded-2xl bg-slate-50 dark:bg-slate-800 px-4 py-2.5 border border-slate-200 dark:border-slate-700">
+                <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                <input
+                  value={memberSearchQuery}
+                  onChange={(e) => void searchUsersForRole(e.target.value)}
+                  placeholder="Type username, display name, or email to find user..."
+                  className="ml-3 w-full bg-transparent outline-none text-xs text-slate-900 dark:text-white placeholder-slate-400"
+                />
+                {candidateLoading && <Loader2 className="w-4 h-4 animate-spin text-indigo-500 shrink-0" />}
+              </div>
+
+              {/* Search Candidates Dropdown / List */}
+              {candidateUsers.length > 0 && (
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/70 p-2 space-y-1.5 max-h-48 overflow-y-auto">
+                  {candidateUsers.map((u) => {
+                    const isAlreadyMember = roleMembers.some((m) => m.id === u.id);
+                    return (
+                      <div
+                        key={u.id}
+                        className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60 text-xs"
+                      >
+                        <div className="truncate mr-2">
+                          <span className="font-bold text-slate-900 dark:text-white">{u.displayName}</span>
+                          <span className="text-slate-400 ml-1.5 text-[11px]">@{u.username}</span>
+                          {u.email && <span className="text-slate-400 ml-1 text-[11px]">({u.email})</span>}
+                        </div>
+                        {isAlreadyMember ? (
+                          <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shrink-0">
+                            Already Assigned
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => void handleAssignUserToRole(u.id)}
+                            disabled={actionUserId === u.id}
+                            className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shrink-0 flex items-center gap-1.5 disabled:opacity-50"
+                          >
+                            {actionUserId === u.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+                            <span>Assign</span>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Current Role Members */}
+            <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
+                <span>Currently Assigned Users ({roleMembers.length})</span>
+              </div>
+
+              {membersLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+                </div>
+              ) : roleMembers.length === 0 ? (
+                <div className="text-center py-10 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-6 space-y-2">
+                  <Users className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
+                  <p className="text-xs font-bold text-slate-500">No users assigned to this role yet.</p>
+                  <p className="text-[11px] text-slate-400">Use the search box above or go to the User Directory to assign users.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {roleMembers.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60"
+                    >
+                      <div className="flex items-center gap-3 truncate mr-2">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center font-bold text-xs shrink-0">
+                          {member.displayName.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="truncate">
+                          <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                            {member.displayName}
+                          </div>
+                          <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                            <span>@{member.username}</span>
+                            {member.email && <span>· {member.email}</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => void handleRemoveUserFromRole(member.id)}
+                        disabled={actionUserId === member.id}
+                        className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 text-xs font-bold transition-colors flex items-center gap-1 shrink-0 disabled:opacity-50"
+                        title="Remove role from this user"
+                      >
+                        {actionUserId === member.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <UserMinus className="w-3.5 h-3.5" />
+                        )}
+                        <span>Unassign</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
+              <a
+                href="/admin/users"
+                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                Go to User Directory →
+              </a>
+              <button
+                onClick={() => setSelectedRoleForMembers(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors"
+              >
+                Close
               </button>
             </div>
           </div>

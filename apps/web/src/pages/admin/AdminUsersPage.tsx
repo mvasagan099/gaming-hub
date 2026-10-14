@@ -14,7 +14,7 @@ import {
 import toast from 'react-hot-toast';
 import { openMfaModal } from '../../components/auth/MfaVerificationModal';
 import { apiClient } from '../../services/api/client';
-import { adminApi } from '../../services/api/enterprise';
+import { adminApi, type CustomRoleView } from '../../services/api/enterprise';
 import { safeRandomUUID, type AdminCustomerDetail } from '@gaming-hub/shared';
 
 interface User {
@@ -22,7 +22,13 @@ interface User {
   username: string;
   displayName: string;
   email: string | null;
-  role: 'USER' | 'MODERATOR' | 'ADMIN';
+  role: 'USER' | 'MODERATOR' | 'ADMIN' | 'CUSTOM';
+  customRoleId?: string | null;
+  customRole?: {
+    id: string;
+    name: string;
+    displayName: string;
+  } | null;
   isOnline: boolean;
   coins: number;
   level: number;
@@ -48,7 +54,8 @@ export function AdminUsersPage() {
   const [walletReason, setWalletReason] = useState('');
   const walletRetry = useRef<{ payload: string; key: string } | null>(null);
   useEffect(() => { if (!showWalletModal) walletRetry.current = null; }, [showWalletModal]);
-  const [newRole, setNewRole] = useState<'USER' | 'MODERATOR' | 'ADMIN'>('USER');
+  const [availableRoles, setAvailableRoles] = useState<CustomRoleView[]>([]);
+  const [selectedRoleOption, setSelectedRoleOption] = useState<string>('USER');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [detail, setDetail] = useState<AdminCustomerDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -89,9 +96,33 @@ export function AdminUsersPage() {
     }
   };
 
+  const loadRoles = async () => {
+    try {
+      const data = await adminApi.roles();
+      setAvailableRoles(data || []);
+    } catch {
+      // non-fatal
+    }
+  };
+
   useEffect(() => {
     void loadUsers();
+    void loadRoles();
   }, []);
+
+  const getUserRoleOptionValue = (u: User) => {
+    if (u.role === 'CUSTOM' && u.customRoleId) {
+      return `CUSTOM:${u.customRoleId}`;
+    }
+    return u.role;
+  };
+
+  const getRoleDisplayName = (u: User) => {
+    if (u.role === 'CUSTOM') {
+      return u.customRole?.displayName || availableRoles.find((r) => r.id === u.customRoleId)?.displayName || 'Custom Role';
+    }
+    return u.role;
+  };
 
   const userIdParam = searchParams.get('userId');
 
@@ -146,13 +177,30 @@ export function AdminUsersPage() {
     setIsSubmitting(true);
     setModalError(null);
     try {
+      let targetRole: 'USER' | 'MODERATOR' | 'ADMIN' | 'CUSTOM' = 'USER';
+      let targetCustomRoleId: string | undefined = undefined;
+
+      if (selectedRoleOption.startsWith('CUSTOM:')) {
+        targetRole = 'CUSTOM';
+        targetCustomRoleId = selectedRoleOption.replace('CUSTOM:', '');
+      } else {
+        targetRole = selectedRoleOption as 'USER' | 'MODERATOR' | 'ADMIN';
+      }
+
       await apiClient.patch(`/admin/users/${selectedUser.id}/role`, {
-        role: newRole,
+        role: targetRole,
+        customRoleId: targetCustomRoleId,
       });
-      toast.success(`Role updated to ${newRole} for ${selectedUser.displayName}`);
+
+      const roleLabel = targetRole === 'CUSTOM'
+        ? availableRoles.find((r) => r.id === targetCustomRoleId)?.displayName || 'Custom Role'
+        : targetRole;
+
+      toast.success(`Role updated to ${roleLabel} for ${selectedUser.displayName}`);
       setShowRoleModal(false);
       setModalError(null);
       await loadUsers();
+      void loadRoles();
       if (detail && detail.user.id === selectedUser.id) {
         void openDetail(selectedUser.id);
       }
@@ -265,10 +313,12 @@ export function AdminUsersPage() {
                             ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20'
                             : user.role === 'MODERATOR'
                               ? 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20'
-                              : 'bg-slate-500/10 text-slate-400 border border-slate-500/20'
+                              : user.role === 'CUSTOM'
+                                ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                : 'bg-slate-500/10 text-slate-400 border border-slate-500/20'
                         }`}
                       >
-                        {user.role}
+                        {getRoleDisplayName(user)}
                       </span>
                     </td>
                     <td className="px-6 py-4 font-extrabold text-slate-900 dark:text-white">
@@ -319,7 +369,7 @@ export function AdminUsersPage() {
                         <button
                           onClick={() => {
                             setSelectedUser(user);
-                            setNewRole(user.role);
+                            setSelectedRoleOption(getUserRoleOptionValue(user));
                             setModalError(null);
                             setShowRoleModal(true);
                           }}
@@ -410,7 +460,8 @@ export function AdminUsersPage() {
           <div className="w-full max-w-md rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4">
             <h2 className="text-lg font-black text-slate-900 dark:text-white">Change User Role</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              User: <span className="font-bold text-slate-900 dark:text-white">{selectedUser.displayName} (@{selectedUser.username})</span> (Current Role: <span className="font-bold text-indigo-500">{selectedUser.role}</span>)
+              User: <span className="font-bold text-slate-900 dark:text-white">{selectedUser.displayName} (@{selectedUser.username})</span> (Current Role:{' '}
+              <span className="font-bold text-indigo-500">{getRoleDisplayName(selectedUser)}</span>)
             </p>
 
             {modalError && (
@@ -423,16 +474,27 @@ export function AdminUsersPage() {
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Select New Role</label>
               <select
-                value={newRole}
+                value={selectedRoleOption}
                 onChange={(e) => {
-                  setNewRole(e.target.value as 'USER' | 'MODERATOR' | 'ADMIN');
+                  setSelectedRoleOption(e.target.value);
                   setModalError(null);
                 }}
                 className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-900 dark:text-white outline-none cursor-pointer"
               >
-                <option value="USER">User (Standard Access)</option>
-                <option value="MODERATOR">Moderator (Match & Room Management)</option>
-                <option value="ADMIN">Admin (Full System Access)</option>
+                <optgroup label="System Roles">
+                  <option value="USER">User (Standard Access)</option>
+                  <option value="MODERATOR">Moderator (Match & Room Management)</option>
+                  <option value="ADMIN">Admin (Full System Access)</option>
+                </optgroup>
+                {availableRoles.length > 0 && (
+                  <optgroup label="Custom Roles">
+                    {availableRoles.map((role) => (
+                      <option key={role.id} value={`CUSTOM:${role.id}`}>
+                        {role.displayName} ({role.name})
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
             <div className="flex justify-end gap-2 pt-2">
@@ -447,7 +509,7 @@ export function AdminUsersPage() {
               </button>
               <button
                 onClick={handleRoleChange}
-                disabled={isSubmitting || newRole === selectedUser.role}
+                disabled={isSubmitting || selectedRoleOption === getUserRoleOptionValue(selectedUser)}
                 className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5"
               >
                 {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -478,7 +540,9 @@ export function AdminUsersPage() {
                   </div>
                   <div className="flex items-center gap-2 mt-1.5">
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 uppercase">
-                      {detail.user.role}
+                      {detail.user.role === 'CUSTOM'
+                        ? availableRoles.find((r) => r.id === (detail.user as any).customRoleId)?.displayName || 'Custom Role'
+                        : detail.user.role}
                     </span>
                     <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${detail.user.isOnline ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-500/10 text-slate-400'}`}>
                       {detail.user.isOnline ? 'Online' : 'Offline'}

@@ -1140,6 +1140,16 @@ export const adminApi = {
   referralLeaderboard: () => apiClient.get<ReferralLeaderboardEntry[]>('/admin/referrals/leaderboard'),
 
   roles: () => apiClient.get<CustomRoleView[]>('/admin/roles'),
+  roleUsers: (id: string, page = 1, pageSize = 50) =>
+    apiClient.get<{
+      role: { id: string; name: string; displayName: string };
+      users: Array<{ id: string; username: string; displayName: string; email: string | null; isOnline: boolean; createdAt: string }>;
+      total: number;
+    }>(`/admin/roles/${id}/users?page=${page}&pageSize=${pageSize}`),
+  assignRoleUser: (roleId: string, userId: string) =>
+    apiClient.post<{ ok: boolean }>(`/admin/roles/${roleId}/users`, { userId }),
+  removeRoleUser: (roleId: string, userId: string) =>
+    apiClient.delete<{ ok: boolean }>(`/admin/roles/${roleId}/users/${userId}`),
   createRole: (input: { name: string; displayName: string; description?: string; permissions: string[] }) =>
     apiClient.post<CustomRoleView>('/admin/roles', input),
   updateRole: (id: string, input: { displayName?: string; description?: string; permissions?: string[] }) =>

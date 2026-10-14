@@ -61,7 +61,7 @@ export async function adminRoutes(app: FastifyInstance) {
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        include: { profile: true, wallet: true, _count: { select: { roomPlayers: true } } },
+        include: { profile: true, wallet: true, customRole: true, _count: { select: { roomPlayers: true } } },
       }),
       prisma.user.count(),
     ]);
@@ -74,6 +74,13 @@ export async function adminRoutes(app: FastifyInstance) {
         email: u.email,
         role: u.role,
         customRoleId: u.customRoleId,
+        customRole: u.customRole
+          ? {
+              id: u.customRole.id,
+              name: u.customRole.name,
+              displayName: u.customRole.displayName,
+            }
+          : null,
         isOnline: u.isOnline,
         coins: u.wallet?.balance ?? 0,
         level: u.profile?.level ?? 1,
@@ -459,7 +466,10 @@ export async function adminRoutes(app: FastifyInstance) {
       throw new AppError("FORBIDDEN", "Only administrators can modify an administrator's role", 403);
     }
 
-    if (role === "CUSTOM" && customRoleId) {
+    if (role === "CUSTOM") {
+      if (!customRoleId) {
+        throw new AppError("VALIDATION_ERROR", "Custom role ID is required for CUSTOM role", 422);
+      }
       const customRole = await prisma.customRole.findUnique({
         where: { id: customRoleId }, include: { permissions: true },
       });
@@ -467,8 +477,9 @@ export async function adminRoutes(app: FastifyInstance) {
         throw new AppError("VALIDATION_ERROR", "Custom role not found", 422);
       }
       await assertRoleGrant(admin, customRole.permissions.map((p) => p.permission), prisma);
+    } else {
+      await assertRoleGrant(admin, ROLE_PERMISSIONS[role], prisma);
     }
-    if (role !== "CUSTOM") await assertRoleGrant(admin, ROLE_PERMISSIONS[role], prisma);
 
     if (target.role === "CUSTOM" && target.customRoleId) {
       const targetRole = await prisma.customRole.findUnique({ where: { id: target.customRoleId }, include: { permissions: true } });
@@ -485,11 +496,14 @@ export async function adminRoutes(app: FastifyInstance) {
       }
     }
 
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { id },
       data: {
         role,
         customRoleId: role === "CUSTOM" ? customRoleId : null,
+      },
+      include: {
+        customRole: true,
       },
     });
 
@@ -508,7 +522,21 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     });
 
-    return { ok: true, user: { id, role, customRoleId: role === "CUSTOM" ? customRoleId : null } };
+    return {
+      ok: true,
+      user: {
+        id,
+        role: updatedUser.role,
+        customRoleId: updatedUser.customRoleId,
+        customRole: updatedUser.customRole
+          ? {
+              id: updatedUser.customRole.id,
+              name: updatedUser.customRole.name,
+              displayName: updatedUser.customRole.displayName,
+            }
+          : null,
+      },
+    };
   });
 
   // ---- Site settings -------------------------------------------------------
