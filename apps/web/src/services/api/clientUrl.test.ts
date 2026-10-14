@@ -54,4 +54,13 @@ describe("getApiUrl and getSocketUrl routing", () => {
     vi.stubEnv("VITE_SOCKET_URL", "https://socket.gaminghub.com");
     expect(getSocketUrl()).toBe("https://socket.gaminghub.com");
   });
+
+  it("returns production fallback URLs on native platform when env vars are unset", async () => {
+    const { isNativePlatform } = await import("../native/platform");
+    vi.mocked(isNativePlatform).mockReturnValue(true);
+    vi.stubEnv("VITE_API_URL", "");
+    vi.stubEnv("VITE_SOCKET_URL", "");
+    expect(getApiUrl()).toBe("https://gaming-hub-zqv0.onrender.com/api");
+    expect(getSocketUrl()).toBe("https://gaming-hub-socket.onrender.com");
+  });
 });
